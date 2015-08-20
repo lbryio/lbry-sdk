@@ -1,0 +1,25 @@
+"""
+Some network wide and also application specific parameters
+"""
+
+
+import os
+
+
+MAX_HANDSHAKE_SIZE = 2**16
+MAX_REQUEST_SIZE = 2**16
+MAX_BLOB_REQUEST_SIZE = 2**16
+MAX_RESPONSE_INFO_SIZE = 2**16
+MAX_BLOB_INFOS_TO_REQUEST = 20
+BLOBFILES_DIR = ".blobfiles"
+BLOB_SIZE = 2**21
+MIN_BLOB_DATA_PAYMENT_RATE = .5  # points/megabyte
+MIN_BLOB_INFO_PAYMENT_RATE = 2.0  # points/1000 infos
+MIN_VALUABLE_BLOB_INFO_PAYMENT_RATE = 5.0  # points/1000 infos
+MIN_VALUABLE_BLOB_HASH_PAYMENT_RATE = 5.0  # points/1000 infos
+MAX_CONNECTIONS_PER_STREAM = 5
+
+POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2424'
+#POINTTRADER_SERVER = 'http://127.0.0.1:2424'
+
+CRYPTSD_FILE_EXTENSION = ".cryptsd"

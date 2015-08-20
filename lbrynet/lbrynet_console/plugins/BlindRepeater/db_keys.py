@@ -1,0 +1,3 @@
+BLOB_INFO_TYPE = 'b'
+SETTING_TYPE = 's'
+PEER_TYPE = 'p'
