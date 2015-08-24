@@ -37,7 +37,7 @@ from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
 
 class LBRYConsole():
     """A class which can upload and download file streams to and from the network"""
-    def __init__(self, peer_port, dht_node_port, known_dht_nodes, control_class, wallet_type, lbrycrd_rpc_port,
+    def __init__(self, peer_port, dht_node_port, known_dht_nodes, control_class, wallet_type, lbrycrd_conf,
                  use_upnp, conf_dir, data_dir):
         """
         @param peer_port: the network port on which to listen for peers
@@ -50,7 +50,7 @@ class LBRYConsole():
         self.dht_node_port = dht_node_port
         self.known_dht_nodes = known_dht_nodes
         self.wallet_type = wallet_type
-        self.wallet_rpc_port = lbrycrd_rpc_port
+        self.lbrycrd_conf = lbrycrd_conf
         self.use_upnp = use_upnp
         self.lbry_server_port = None
         self.control_class = control_class
@@ -136,26 +136,66 @@ class LBRYConsole():
         d = self.settings.save_lbryid(self.lbryid)
         return d
 
-    def _get_session(self):
-        d = self.settings.get_default_data_payment_rate()
+    def _get_lbrycrd_settings(self):
+        settings = {"username": "rpcuser",
+                    "password": "rpcpassword",
+                    "rpc_port": 8332}
+        if os.path.exists(self.lbrycrd_conf):
+            lbrycrd_conf = open(self.lbrycrd_conf)
+            for l in lbrycrd_conf:
+                if l.startswith("rpcuser="):
+                    settings["username"] = l[8:-1]
+                if l.startswith("rpcpassword="):
+                    settings["password"] = l[12:-1]
+                if l.startswith("rpcport="):
+                    settings["rpc_port"] = int(l[8:-1])
+        return settings
 
-        def create_session(default_data_payment_rate):
-            if default_data_payment_rate is None:
-                default_data_payment_rate = MIN_BLOB_DATA_PAYMENT_RATE
+    def _get_session(self):
+        def get_default_data_rate():
+            d = self.settings.get_default_data_payment_rate()
+            d.addCallback(lambda rate: {"default_data_payment_rate": rate if rate is not None else MIN_BLOB_DATA_PAYMENT_RATE})
+            return d
+
+        def create_lbrycrd_wallet(lbrycrd_options):
+            return LBRYcrdWallet(lbrycrd_options['username'], lbrycrd_options['password'], "127.0.0.1",
+                                 lbrycrd_options['rpc_port'])
+
+        def get_wallet():
             if self.wallet_type == "lbrycrd":
-                wallet = LBRYcrdWallet("rpcuser", "rpcpassword", "127.0.0.1", self.wallet_rpc_port)
+                d = threads.deferToThread(self._get_lbrycrd_settings)
+                d.addCallback(create_lbrycrd_wallet)
             else:
-                wallet = PTCWallet(self.conf_dir)
-            self.session = LBRYSession(default_data_payment_rate, db_dir=self.conf_dir, lbryid=self.lbryid,
+                d = defer.succeed(PTCWallet(self.conf_dir))
+            d.addCallback(lambda wallet: {"wallet": wallet})
+            return d
+
+        d1 = get_default_data_rate()
+        d2 = get_wallet()
+
+        def combine_results(results):
+            r = {}
+            for success, result in results:
+                if success is True:
+                    r.update(result)
+            return r
+
+        def create_session(results):
+
+            self.session = LBRYSession(results['default_data_payment_rate'], db_dir=self.conf_dir, lbryid=self.lbryid,
                                        blob_dir=self.data_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
-                                       use_upnp=self.use_upnp, wallet=wallet)
+                                       use_upnp=self.use_upnp, wallet=results['wallet'])
 
-        d.addCallback(create_session)
+        dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
 
-        d.addCallback(lambda _: self.session.setup())
+        dl.addCallback(combine_results)
 
-        return d
+        dl.addCallback(create_session)
+
+        dl.addCallback(lambda _: self.session.setup())
+
+        return dl
 
     def _setup_lbry_file_manager(self):
         self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.conf_dir)
@@ -338,9 +378,9 @@ def launch_lbry_console():
     parser.add_argument("--wallet_type",
                         help="Either 'lbrycrd' or 'ptc'.",
                         type=str, default="lbrycrd")
-    parser.add_argument("--lbrycrd_wallet_rpc_port",
-                        help="The rpc port on which the LBRYcrd wallet is listening",
-                        type=int, default=8332)
+    parser.add_argument("--lbrycrd_wallet_conf",
+                        help="The configuration file for the LBRYcrd wallet. Default: ~/.lbrycrd",
+                        type=str)
     parser.add_argument("--no_dht_bootstrap",
                         help="Don't try to connect to the DHT",
                         action="store_true")
@@ -394,12 +434,18 @@ def launch_lbry_console():
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
 
+    if args.lbrycrd_wallet_conf:
+        lbrycrd_conf = args.lbrycrd_wallet_conf
+    else:
+        lbrycrd_conf = os.path.join(os.path.expanduser("~"), ".lbrycrd", "lbrycrd.conf")
+
+
     log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
     logging.basicConfig(level=logging.DEBUG, filename=os.path.join(conf_dir, "console.log"),
                         format=log_format)
 
     console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, StdIOControl, wallet_type=args.wallet_type,
-                          lbrycrd_rpc_port=args.lbrycrd_wallet_rpc_port, use_upnp=args.use_upnp,
+                          lbrycrd_conf=lbrycrd_conf, use_upnp=args.use_upnp,
                           conf_dir=conf_dir, data_dir=data_dir)
 
     d = task.deferLater(reactor, 0, console.start)
