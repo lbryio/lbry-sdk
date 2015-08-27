@@ -1,5 +1,4 @@
 import binascii
-from lbrynet.core.DownloadOption import DownloadOption
 from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader
 from zope.interface import implements
 from lbrynet.lbrylive.client.LiveStreamMetadataHandler import LiveStreamMetadataHandler
@@ -9,6 +8,9 @@ from lbrynet.lbrylive.StreamDescriptor import save_sd_info
 from lbrynet.lbrylive.PaymentRateManager import LiveStreamPaymentRateManager
 from twisted.internet import defer, threads  # , process
 from lbrynet.interfaces import IStreamDownloaderFactory
+from lbrynet.lbrylive.PaymentRateManager import BaseLiveStreamPaymentRateManager
+from lbrynet.conf import MIN_BLOB_INFO_PAYMENT_RATE
+from lbrynet.lbrylive.StreamDescriptor import LiveStreamType
 
 
 class LiveStreamDownloader(CryptStreamDownloader):
@@ -138,28 +140,8 @@ class FullLiveStreamDownloaderFactory(object):
         self.wallet = wallet
         self.default_payment_rate_manager = default_payment_rate_manager
 
-    def get_downloader_options(self, sd_validator, payment_rate_manager):
-        options = [
-            DownloadOption(
-                [float, None],
-                "rate which will be paid for data (None means use application default)",
-                "data payment rate",
-                None
-            ),
-            DownloadOption(
-                [float, None],
-                "rate which will be paid for metadata (None means use application default)",
-                "metadata payment rate",
-                None
-            ),
-            DownloadOption(
-                [bool],
-                "allow reuploading data downloaded for this file",
-                "allow upload",
-                True
-            ),
-        ]
-        return options
+    def can_download(self, sd_validator):
+        return True
 
     def make_downloader(self, sd_validator, options, payment_rate_manager):
         # TODO: check options for payment rate manager parameters
@@ -178,3 +160,14 @@ class FullLiveStreamDownloaderFactory(object):
 
         d.addCallback(create_downloader)
         return d
+
+
+def add_full_live_stream_downloader_to_sd_identifier(session, stream_info_manager, sd_identifier,
+                                                     base_live_stream_payment_rate_manager):
+    downloader_factory = FullLiveStreamDownloaderFactory(session.peer_finder,
+                                                         session.rate_limiter,
+                                                         session.blob_manager,
+                                                         stream_info_manager,
+                                                         session.wallet,
+                                                         base_live_stream_payment_rate_manager)
+    sd_identifier.add_stream_downloader_factory(LiveStreamType, downloader_factory)

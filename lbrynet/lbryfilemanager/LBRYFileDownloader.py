@@ -2,7 +2,6 @@
 Download LBRY Files from LBRYnet and save them to disk.
 """
 
-from lbrynet.core.DownloadOption import DownloadOption
 from zope.interface import implements
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaver, LBRYFileDownloader
@@ -117,22 +116,8 @@ class ManagedLBRYFileDownloaderFactory(object):
     def __init__(self, lbry_file_manager):
         self.lbry_file_manager = lbry_file_manager
 
-    def get_downloader_options(self, sd_validator, payment_rate_manager):
-        options = [
-            DownloadOption(
-                [float, None],
-                "rate which will be paid for data (None means use application default)",
-                "data payment rate",
-                None
-            ),
-            DownloadOption(
-                [bool],
-                "allow reuploading data downloaded for this file",
-                "allow upload",
-                True
-            ),
-        ]
-        return options
+    def can_download(self, sd_validator):
+        return True
 
     def make_downloader(self, sd_validator, options, payment_rate_manager):
         data_rate = options[0]

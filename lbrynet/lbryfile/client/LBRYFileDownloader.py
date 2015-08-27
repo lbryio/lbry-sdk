@@ -3,7 +3,6 @@ import binascii
 
 from zope.interface import implements
 
-from lbrynet.core.DownloadOption import DownloadOption
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
 from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
@@ -11,6 +10,7 @@ from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.client.LBRYFileMetadataHandler import LBRYFileMetadataHandler
 import os
 from twisted.internet import defer, threads, reactor
+from distutils.spawn import find_executable
 
 
 class LBRYFileDownloader(CryptStreamDownloader):
@@ -94,26 +94,11 @@ class LBRYFileDownloaderFactory(object):
         self.stream_info_manager = stream_info_manager
         self.wallet = wallet
 
-    def get_downloader_options(self, sd_validator, payment_rate_manager):
-        options = [
-            DownloadOption(
-                [float, None],
-                "rate which will be paid for data (None means use application default)",
-                "data payment rate",
-                None
-            ),
-            DownloadOption(
-                [bool],
-                "allow reuploading data downloaded for this file",
-                "allow upload",
-                True
-            ),
-        ]
-        return options
+    def can_download(self, sd_validator):
+        return True
 
     def make_downloader(self, sd_validator, options, payment_rate_manager, **kwargs):
-        if options[0] is not None:
-            payment_rate_manager.float(options[0])
+        payment_rate_manager.min_blob_data_payment_rate = options[0]
         upload_allowed = options[1]
 
         def create_downloader(stream_hash):
@@ -276,6 +261,9 @@ class LBRYFileOpener(LBRYFileDownloader):
 
 
 class LBRYFileOpenerFactory(LBRYFileDownloaderFactory):
+    def can_download(self, sd_validator):
+        return bool(find_executable('vlc'))
+
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info, upload_allowed):
         return LBRYFileOpener(stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager,
                               self.stream_info_manager, payment_rate_manager, self.wallet, upload_allowed)

@@ -15,6 +15,7 @@ from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerF
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.PTCWallet import PTCWallet
+from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileOpenerFactory
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
@@ -77,6 +78,7 @@ class LBRYConsole():
         d = threads.deferToThread(self._create_directory)
         d.addCallback(lambda _: self._get_settings())
         d.addCallback(lambda _: self._get_session())
+        d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_lbry_file_manager())
         d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_control_handlers())

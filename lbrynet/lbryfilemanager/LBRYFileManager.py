@@ -7,7 +7,6 @@ import json
 
 import leveldb
 
-from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamDescriptorValidator
 import os
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
@@ -98,7 +97,6 @@ class LBRYFileManager(object):
 
     def _add_to_sd_identifier(self):
         downloader_factory = ManagedLBRYFileDownloaderFactory(self)
-        self.sd_identifier.add_stream_info_validator(LBRYFileStreamType, LBRYFileStreamDescriptorValidator)
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
 
     def _start_lbry_files(self):

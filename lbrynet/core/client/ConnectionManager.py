@@ -7,49 +7,55 @@ from lbrynet.core.client.ClientProtocol import ClientProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError
 
 
+class PeerConnectionHandler(object):
+    def __init__(self, request_creators, factory):
+        self.request_creators = request_creators
+        self.factory = factory
+        self.connection = None
+
+
 class ConnectionManager(object):
     implements(interfaces.IConnectionManager)
 
     def __init__(self, downloader, rate_limiter, primary_request_creators, secondary_request_creators):
         self.downloader = downloader
         self.rate_limiter = rate_limiter
-        self.primary_request_creators = primary_request_creators
-        self.secondary_request_creators = secondary_request_creators
-        self.peer_connections = {}  # {Peer: {'connection': connection,
-                                    #         'request_creators': [IRequestCreator if using this connection]}}
-        self.connections_closing = {}  # {Peer: deferred (fired when the connection is closed)}
-        self.next_manage_call = None
+        self._primary_request_creators = primary_request_creators
+        self._secondary_request_creators = secondary_request_creators
+        self._peer_connections = {}  # {Peer: PeerConnectionHandler}
+        self._connections_closing = {}  # {Peer: deferred (fired when the connection is closed)}
+        self._next_manage_call = None
 
     def start(self):
         from twisted.internet import reactor
 
-        if self.next_manage_call is not None and self.next_manage_call.active() is True:
-            self.next_manage_call.cancel()
-        self.next_manage_call = reactor.callLater(0, self._manage)
+        if self._next_manage_call is not None and self._next_manage_call.active() is True:
+            self._next_manage_call.cancel()
+        self._next_manage_call = reactor.callLater(0, self._manage)
         return defer.succeed(True)
 
     def stop(self):
-        if self.next_manage_call is not None and self.next_manage_call.active() is True:
-            self.next_manage_call.cancel()
-        self.next_manage_call = None
+        if self._next_manage_call is not None and self._next_manage_call.active() is True:
+            self._next_manage_call.cancel()
+        self._next_manage_call = None
         closing_deferreds = []
-        for peer in self.peer_connections.keys():
+        for peer in self._peer_connections.keys():
 
             def close_connection(p):
                 logging.info("Abruptly closing a connection to %s due to downloading being paused",
                              str(p))
 
-                if self.peer_connections[p]['factory'].p is not None:
-                    d = self.peer_connections[p]['factory'].p.cancel_requests()
+                if self._peer_connections[p].factory.p is not None:
+                    d = self._peer_connections[p].factory.p.cancel_requests()
                 else:
                     d = defer.succeed(True)
 
                 def disconnect_peer():
-                    self.peer_connections[p]['connection'].disconnect()
-                    if p in self.peer_connections:
-                        del self.peer_connections[p]
                     d = defer.Deferred()
-                    self.connections_closing[p] = d
+                    self._connections_closing[p] = d
+                    self._peer_connections[p].connection.disconnect()
+                    if p in self._peer_connections:
+                        del self._peer_connections[p]
                     return d
 
                 d.addBoth(lambda _: disconnect_peer())
@@ -62,7 +68,7 @@ class ConnectionManager(object):
 
         logging.debug("Trying to get the next request for peer %s", str(peer))
 
-        if not peer in self.peer_connections:
+        if not peer in self._peer_connections:
             logging.debug("The peer has already been told to shut down.")
             return defer.succeed(False)
 
@@ -75,11 +81,11 @@ class ConnectionManager(object):
 
         def check_if_request_sent(request_sent, request_creator):
             if request_sent is False:
-                if request_creator in self.peer_connections[peer]['request_creators']:
-                    self.peer_connections[peer]['request_creators'].remove(request_creator)
+                if request_creator in self._peer_connections[peer].request_creators:
+                    self._peer_connections[peer].request_creators.remove(request_creator)
             else:
-                if not request_creator in self.peer_connections[peer]['request_creators']:
-                    self.peer_connections[peer]['request_creators'].append(request_creator)
+                if not request_creator in self._peer_connections[peer].request_creators:
+                    self._peer_connections[peer].request_creators.append(request_creator)
             return request_sent
 
         def check_requests(requests):
@@ -89,7 +95,7 @@ class ConnectionManager(object):
         def get_secondary_requests_if_necessary(have_request):
             if have_request is True:
                 ds = []
-                for s_r_c in self.secondary_request_creators:
+                for s_r_c in self._secondary_request_creators:
                     d = s_r_c.send_next_request(peer, protocol)
                     ds.append(d)
                 dl = defer.DeferredList(ds)
@@ -100,7 +106,7 @@ class ConnectionManager(object):
 
         ds = []
 
-        for p_r_c in self.primary_request_creators:
+        for p_r_c in self._primary_request_creators:
             d = p_r_c.send_next_request(peer, protocol)
             d.addErrback(handle_error)
             d.addCallback(check_if_request_sent, p_r_c)
@@ -112,11 +118,11 @@ class ConnectionManager(object):
         return dl
 
     def protocol_disconnected(self, peer, protocol):
-        if peer in self.peer_connections:
-            del self.peer_connections[peer]
-        if peer in self.connections_closing:
-            d = self.connections_closing[peer]
-            del self.connections_closing[peer]
+        if peer in self._peer_connections:
+            del self._peer_connections[peer]
+        if peer in self._connections_closing:
+            d = self._connections_closing[peer]
+            del self._connections_closing[peer]
             d.callback(True)
 
     def _rank_request_creator_connections(self):
@@ -125,9 +131,9 @@ class ConnectionManager(object):
             connections open that it likes
         """
         def count_peers(request_creator):
-            return len([p for p in self.peer_connections.itervalues() if request_creator in p['request_creators']])
+            return len([p for p in self._peer_connections.itervalues() if request_creator in p.request_creators])
 
-        return sorted(self.primary_request_creators, key=count_peers)
+        return sorted(self._primary_request_creators, key=count_peers)
 
     def _connect_to_peer(self, peer):
 
@@ -136,10 +142,10 @@ class ConnectionManager(object):
         if peer is not None:
             logging.debug("Trying to connect to %s", str(peer))
             factory = ClientProtocolFactory(peer, self.rate_limiter, self)
+            self._peer_connections[peer] = PeerConnectionHandler(self._primary_request_creators[:],
+                                                                factory)
             connection = reactor.connectTCP(peer.host, peer.port, factory)
-            self.peer_connections[peer] = {'connection': connection,
-                                           'request_creators': self.primary_request_creators[:],
-                                           'factory': factory}
+            self._peer_connections[peer].connection = connection
 
     def _manage(self):
 
@@ -162,16 +168,16 @@ class ConnectionManager(object):
             if peers is None:
                 return None
             for peer in peers:
-                if not peer in self.peer_connections:
+                if not peer in self._peer_connections:
                     logging.debug("Got a good peer. Returning peer %s", str(peer))
                     return peer
             logging.debug("Couldn't find a good peer to connect to")
             return None
 
-        if len(self.peer_connections) < MAX_CONNECTIONS_PER_STREAM:
+        if len(self._peer_connections) < MAX_CONNECTIONS_PER_STREAM:
             ordered_request_creators = self._rank_request_creator_connections()
             d = get_new_peers(ordered_request_creators)
             d.addCallback(pick_best_peer)
             d.addCallback(self._connect_to_peer)
 
-        self.next_manage_call = reactor.callLater(1, self._manage)
+        self._next_manage_call = reactor.callLater(1, self._manage)

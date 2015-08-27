@@ -13,6 +13,10 @@ class InvalidChoiceError(Exception):
     pass
 
 
+class InvalidValueError(Exception):
+    pass
+
+
 class ControlHandlerFactory(object):
     implements(IControlHandlerFactory)
 
@@ -235,9 +239,11 @@ class AddStream(ControlHandler):
         self.factories = None
         self.factory = None
         self.info_validator = None
+        self.options = None
         self.options_left = []
         self.options_chosen = []
         self.current_option = None
+        self.current_choice = None
         self.downloader = None
         self.got_options_response = False
         self.loading_failed = False
@@ -274,18 +280,31 @@ class AddStream(ControlHandler):
                 return False, defer.succeed(self._show_factory_choices())
         if self.got_options_response is False:
             self.got_options_response = True
-            if line == 'y' or line == 'Y':
-                if self.options_left:
-                    return False, defer.succeed(self._get_next_option_prompt())
-            self.options_chosen = [option.default for option in self.options_left]
-            self.options_left = []
-            return False, defer.succeed(self.line_prompt3)
+            if line == 'y' or line == 'Y' and self.options_left:
+                return False, defer.succeed(self._get_next_option_prompt())
+            else:
+                self.options_chosen = [option.default_value for option in self.options_left]
+                self.options_left = []
+                return False, defer.succeed(self.line_prompt3)
         if self.current_option is not None:
-            try:
-                choice = self._get_choice_from_input(line)
-            except InvalidChoiceError:
-                return False, defer.succeed(self._get_next_option_prompt(invalid_response=True))
-            self.options_chosen.append(choice)
+            if self.current_choice is None:
+                try:
+                    self.current_choice = self._get_choice_from_input(line)
+                except InvalidChoiceError:
+                    return False, defer.succeed(self._get_next_option_prompt(invalid_choice=True))
+                choice = self.current_option.option_types[self.current_choice]
+                if choice.value == float or choice.value == bool:
+                    return False, defer.succeed(self._get_choice_value_prompt())
+                else:
+                    value = choice.value
+            else:
+                try:
+                    value = self._get_value_for_choice(line)
+                except InvalidValueError:
+                    return False, defer.succeed(self._get_choice_value_prompt(invalid_value=True))
+            self.options_chosen.append(value)
+            self.current_choice = None
+            self.current_option = None
             self.options_left = self.options_left[1:]
             if self.options_left:
                 return False, defer.succeed(self._get_next_option_prompt())
@@ -299,23 +318,13 @@ class AddStream(ControlHandler):
         return True, d
 
     def _get_choice_from_input(self, line):
-        if line == "":
-            return self.current_option.default
-        for option_type in self.current_option.option_types:
-            if option_type == float:
-                try:
-                    return float(line)
-                except ValueError:
-                    pass
-            if option_type is None:
-                if line.lower() == "none":
-                    return None
-            if option_type == bool:
-                if line.lower() == "true" or line.lower() == "t":
-                    return True
-                if line.lower() == "false" or line.lower() == "f":
-                    return False
-        raise InvalidChoiceError(line)
+        try:
+            choice_num = int(line)
+        except ValueError:
+            raise InvalidChoiceError()
+        if 0 <= choice_num < len(self.current_option.option_types):
+            return choice_num
+        raise InvalidChoiceError()
 
     def _load_info_and_factories(self, sd_file):
         return defer.fail(NotImplementedError())
@@ -333,7 +342,7 @@ class AddStream(ControlHandler):
 
     def _choose_factory(self, info_and_factories):
         self.loading_info_and_factories_deferred = None
-        self.info_validator, self.factories = info_and_factories
+        self.info_validator, self.options, self.factories = info_and_factories
         if len(self.factories) == 1:
             self.factory = self.factories[0]
             return self._show_info_and_options()
@@ -346,38 +355,71 @@ class AddStream(ControlHandler):
         return str(prompt)
 
     def _show_info_and_options(self):
-        self.options_left = self.factory.get_downloader_options(self.info_validator,
+        self.options_left = self.options.get_downloader_options(self.info_validator,
                                                                 self.payment_rate_manager)
         prompt = "Stream info:\n"
         for info_line in self.info_validator.info_to_show():
             prompt += info_line[0] + ": " + info_line[1] + "\n"
         prompt += "\nOptions:\n"
         for option in self.options_left:
-            prompt += option.long_description + ": " + str(option.default) + "\n"
+            prompt += option.long_description + ": " + str(option.default_value_description) + "\n"
         prompt += "\nModify options? (y/n)"
         return str(prompt)
 
-    def _get_option_type_description(self, option_type):
-        if option_type == float:
-            return "floating point number (e.g. 1.0)"
-        if option_type == bool:
-            return "True or False"
-        if option_type is None:
-            return "None"
+    def _get_list_of_option_types(self):
+        options_string = ""
+        for i, option_type in enumerate(self.current_option.option_types):
+            options_string += "[%s] %s\n" % (str(i), option_type.long_description)
+        options_string += "Enter choice:"
+        return options_string
 
-    def _get_next_option_prompt(self, invalid_response=False):
-        assert len(self.options_left), "Something went wrong. There were no options left"
-        choice = self.options_left[0]
+    def _get_choice_value_prompt(self, invalid_value=False):
+        choice = self.current_option.option_types[self.current_choice]
         choice_string = ""
-        if invalid_response is True:
+        if invalid_value is True:
+            "Invalid value entered. Try again.\n"
+        if choice.short_description is not None:
+            choice_string += choice.short_description + "\n"
+        if choice.value == float:
+            choice_string += "Enter floating point number (e.g. 1.0):"
+        elif choice.value == bool:
+            true_string = "Yes"
+            false_string = "No"
+            if choice.bool_options_description is not None:
+                true_string, false_string = choice.bool_options_description
+            choice_string += "[0] %s\n[1] %s\nEnter choice:" % (true_string, false_string)
+        else:
+            NotImplementedError()
+        return choice_string
+
+    def _get_value_for_choice(self, input):
+        choice = self.current_option.option_types[self.current_choice]
+        if choice.value == float:
+            try:
+                return float(input)
+            except ValueError:
+                raise InvalidValueError()
+        elif choice.value == bool:
+            if input == "0":
+                return True
+            elif input == "1":
+                return False
+            raise InvalidValueError()
+        raise NotImplementedError()
+
+    def _get_next_option_prompt(self, invalid_choice=False):
+        assert len(self.options_left), "Something went wrong. There were no options left"
+        self.current_option = self.options_left[0]
+        choice_string = ""
+        if invalid_choice is True:
             choice_string += "Invalid response entered. Try again.\n"
-        choice_string += choice.long_description + "\n"
-        choice_string += "Valid inputs:\n"
-        for option_type in choice.option_types:
-            choice_string += "\t" +  self._get_option_type_description(option_type) + "\n"
-        choice_string += "Leave blank for default (" + str(choice.default) + ")\n"
-        choice_string += "Enter choice:"
-        self.current_option = choice
+
+        choice_string += self.current_option.long_description + "\n"
+        if len(self.current_option.option_types) > 1:
+            choice_string += self._get_list_of_option_types()
+        elif len(self.current_option.option_types) == 1:
+            self.current_choice = 0
+            choice_string += self._get_choice_value_prompt()
         return choice_string
 
     def _start_download(self):

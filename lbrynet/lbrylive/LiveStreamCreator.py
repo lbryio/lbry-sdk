@@ -1,15 +1,12 @@
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter
-from lbrynet.lbrylive.StreamDescriptor import get_sd_info, LiveStreamType, LBRYLiveStreamDescriptorValidator
+from lbrynet.lbrylive.StreamDescriptor import get_sd_info
 from lbrynet.cryptstream.CryptStreamCreator import CryptStreamCreator
 from lbrynet.lbrylive.LiveBlob import LiveStreamBlobMaker
-from lbrynet.lbrylive.PaymentRateManager import BaseLiveStreamPaymentRateManager
 from lbrynet.core.cryptoutils import get_lbry_hash_obj, get_pub_key, sign_with_pass_phrase
 from Crypto import Random
 import binascii
 import logging
 from lbrynet.conf import CRYPTSD_FILE_EXTENSION
-from lbrynet.conf import MIN_BLOB_INFO_PAYMENT_RATE
-from lbrynet.lbrylive.client.LiveStreamDownloader import FullLiveStreamDownloaderFactory
 from twisted.internet import interfaces, defer
 from twisted.protocols.basic import FileSender
 from zope.interface import implements
@@ -174,16 +171,3 @@ class StdinStreamProducer(object):
 
     def childConnectionLost(self, fd, reason):
         self.stopProducing()
-
-
-def add_live_stream_to_sd_identifier(session, stream_info_manager, sd_identifier):
-    downloader_factory = FullLiveStreamDownloaderFactory(session.peer_finder,
-                                                         session.rate_limiter,
-                                                         session.blob_manager,
-                                                         stream_info_manager,
-                                                         session.wallet,
-                                                         BaseLiveStreamPaymentRateManager(
-                                                             MIN_BLOB_INFO_PAYMENT_RATE
-                                                         ))
-    sd_identifier.add_stream_info_validator(LiveStreamType, LBRYLiveStreamDescriptorValidator)
-    sd_identifier.add_stream_downloader_factory(LiveStreamType, downloader_factory)

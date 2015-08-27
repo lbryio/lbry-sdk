@@ -17,7 +17,8 @@ from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import TempLBRYFileMetadataManager
 from lbrynet.core import StreamDescriptor
-from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType, LBRYFileStreamDescriptorValidator
+from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 import requests
 
 
@@ -101,7 +102,7 @@ class LBRYDownloader(object):
         return defer.succeed(True)
 
     def _setup_stream_identifier(self):
-        self.sd_identifier.add_stream_info_validator(LBRYFileStreamType, LBRYFileStreamDescriptorValidator)
+        add_lbry_file_to_sd_identifier(self.sd_identifier)
         file_saver_factory = LBRYFileSaverFactory(self.session.peer_finder, self.session.rate_limiter,
                                                   self.session.blob_manager, self.stream_info_manager,
                                                   self.session.wallet, self.download_directory)
@@ -184,7 +185,7 @@ class LBRYDownloader(object):
             return stream_name, stream_size
 
         def choose_download_factory(info_and_factories):
-            info_validator, factories = info_and_factories
+            info_validator, options, factories = info_and_factories
             stream_name, stream_size = get_info_from_validator(info_validator)
             if isinstance(stream_size, (int, long)):
                 price = payment_rate_manager.get_effective_min_blob_data_payment_rate()
@@ -192,26 +193,30 @@ class LBRYDownloader(object):
             else:
                 estimated_cost = "unknown"
 
-            stream_frame.show_stream_metadata(stream_name, stream_size, estimated_cost)
+            stream_frame.show_stream_metadata(stream_name, stream_size)
+
+            available_options = options.get_downloader_options(info_validator, payment_rate_manager)
+
+            stream_frame.show_download_options(available_options)
 
             get_downloader_d = defer.Deferred()
 
-            def create_downloader(f):
+            def create_downloader(f, chosen_options):
 
                 def fire_get_downloader_d(downloader):
                     if not get_downloader_d.called:
                         get_downloader_d.callback(downloader)
 
                 stream_frame.disable_download_buttons()
-                download_options = [o.default for o in f.get_downloader_options(info_validator, payment_rate_manager)]
-                d = f.make_downloader(info_validator, download_options,
+                d = f.make_downloader(info_validator, chosen_options,
                                       payment_rate_manager)
                 d.addCallback(fire_get_downloader_d)
 
             for factory in factories:
 
                 def choose_factory(f=factory):
-                    create_downloader(f)
+                    chosen_options = stream_frame.get_chosen_options()
+                    create_downloader(f, chosen_options)
 
                 stream_frame.add_download_factory(factory, choose_factory)
 
@@ -301,9 +306,9 @@ class StreamFrame(object):
         self.uri_label.grid(row=0, column=0, sticky=tk.W)
 
         if os.name == "nt":
-            close_cursor = ""
+            self.button_cursor = ""
         else:
-            close_cursor = "hand1"
+            self.button_cursor = "hand1"
         
         close_file_name = "close2.gif"
         try:
@@ -316,7 +321,7 @@ class StreamFrame(object):
             file=close_file
         )
         self.close_button = ttk.Button(
-            self.stream_frame_header, command=self.cancel, style="Stop.TButton", cursor=close_cursor
+            self.stream_frame_header, command=self.cancel, style="Stop.TButton", cursor=self.button_cursor
         )
         self.close_button.config(image=self.close_picture)
         self.close_button.grid(row=0, column=1, sticky=tk.E + tk.N)
@@ -334,26 +339,50 @@ class StreamFrame(object):
 
         self.stream_frame_body.grid_columnconfigure(0, weight=1)
 
-        self.info_frame = ttk.Frame(self.stream_frame_body, style="D.TFrame")
-        self.info_frame.grid(sticky=tk.W + tk.E, row=1)
-        self.info_frame.grid_columnconfigure(0, weight=1)
-
-        self.metadata_frame = ttk.Frame(self.info_frame, style="E.TFrame")
-        self.metadata_frame.grid(sticky=tk.W + tk.E)
+        self.metadata_frame = ttk.Frame(self.stream_frame_body, style="D.TFrame")
+        self.metadata_frame.grid(sticky=tk.W + tk.E, row=1)
         self.metadata_frame.grid_columnconfigure(0, weight=1)
 
-        self.outer_button_frame = ttk.Frame(self.stream_frame_body, style="D.TFrame")
-        self.outer_button_frame.grid(sticky=tk.W + tk.E, row=2)
+        self.options_frame = ttk.Frame(self.stream_frame_body, style="D.TFrame")
 
-        self.button_frame = ttk.Frame(self.outer_button_frame, style="E.TFrame")
-        self.button_frame.pack(side=tk.TOP)
+        self.outer_button_frame = ttk.Frame(self.stream_frame_body, style="D.TFrame")
+        self.outer_button_frame.grid(sticky=tk.W + tk.E, row=4)
+
+        show_options_picture_file_name = "show_options.gif"
+        try:
+            show_options_picture_file = os.path.join(os.path.dirname(__file__),
+                                                     show_options_picture_file_name)
+        except NameError:
+            show_options_picture_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
+                                                     "lbrynet", "lbrynet_downloader_gui",
+                                                     show_options_picture_file_name)
+
+        self.show_options_picture = tk.PhotoImage(
+            file=show_options_picture_file
+        )
+
+        hide_options_picture_file_name = "hide_options.gif"
+        try:
+            hide_options_picture_file = os.path.join(os.path.dirname(__file__),
+                                                     hide_options_picture_file_name)
+        except NameError:
+            hide_options_picture_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
+                                                     "lbrynet", "lbrynet_downloader_gui",
+                                                     hide_options_picture_file_name)
+
+        self.hide_options_picture = tk.PhotoImage(
+            file=hide_options_picture_file
+        )
+
+        self.show_options_button = None
 
         self.status_label = None
         self.name_label = None
         self.bytes_downloaded_label = None
         self.bytes_outputted_label = None
-
+        self.button_frame = None
         self.download_buttons = []
+        self.option_frames = []
         self.name_font = None
         self.description_label = None
         self.file_name_frame = None
@@ -416,7 +445,7 @@ class StreamFrame(object):
             return "%.1f %s" % (round((stream_size * 1.0 / factor), 1), units)
         return stream_size
 
-    def show_stream_metadata(self, stream_name, stream_size, estimated_cost):
+    def show_stream_metadata(self, stream_name, stream_size):
         if self.status_label is not None:
             self.status_label.destroy()
 
@@ -436,19 +465,6 @@ class StreamFrame(object):
         )
         file_name_label.grid(row=0, column=3)
 
-        self.outer_button_frame = ttk.Frame(self.stream_frame_body, style="D.TFrame")
-        self.outer_button_frame.grid(sticky=tk.W + tk.E, row=2)
-
-        self.cost_frame = ttk.Frame(self.outer_button_frame, style="F.TFrame")
-        self.cost_frame.grid(row=0, column=0, sticky=tk.W+tk.N, pady=(0, 12))
-
-        self.cost_label = ttk.Label(
-            self.cost_frame,
-            text=locale.format_string("%.2f LBC", (round(estimated_cost, 2),), grouping=True),
-            foreground="red"
-        )
-        self.cost_label.grid(row=0, column=1, padx=(1, 0))
-
         self.button_frame = ttk.Frame(self.outer_button_frame, style="E.TFrame")
         self.button_frame.grid(row=0, column=1)
 
@@ -457,13 +473,9 @@ class StreamFrame(object):
         self.outer_button_frame.grid_columnconfigure(2, weight=1, uniform="buttons")
 
     def add_download_factory(self, factory, download_func):
-        if os.name == "nt":
-            button_cursor = ""
-        else:
-            button_cursor = "hand1"
         download_button = ttk.Button(
             self.button_frame, text=factory.get_description(), command=download_func,
-            style='LBRY.TButton', cursor=button_cursor
+            style='LBRY.TButton', cursor=self.button_cursor
         )
         self.download_buttons.append(download_button)
         download_button.grid(row=0, column=len(self.download_buttons) - 1, padx=5, pady=(1, 2))
@@ -477,11 +489,160 @@ class StreamFrame(object):
             download_button.destroy()
         self.download_buttons = []
 
+    def get_option_widget(self, option_type, option_frame):
+        if option_type.value == float:
+            entry_frame = ttk.Frame(
+                option_frame,
+                style="H.TFrame"
+            )
+            entry_frame.grid()
+            col = 0
+            if option_type.short_description is not None:
+                entry_label = ttk.Label(
+                    entry_frame,
+                    #text=option_type.short_description
+                    text=""
+                )
+                entry_label.grid(row=0, column=0, sticky=tk.W)
+                col = 1
+            entry = ttk.Entry(
+                entry_frame,
+                width=10,
+                style="Float.TEntry"
+            )
+            entry_frame.entry = entry
+            entry.grid(row=0, column=col, sticky=tk.W)
+            return entry_frame
+        if option_type.value == bool:
+            bool_frame = ttk.Frame(
+                option_frame,
+                style="H.TFrame"
+            )
+            bool_frame.chosen_value = tk.BooleanVar()
+            true_text = "True"
+            false_text = "False"
+            if option_type.bool_options_description is not None:
+                true_text, false_text = option_type.bool_options_description
+            true_radio_button = ttk.Radiobutton(
+                bool_frame, text=true_text, variable=bool_frame.chosen_value, value=True
+            )
+            true_radio_button.grid(row=0, sticky=tk.W)
+            false_radio_button = ttk.Radiobutton(
+                bool_frame, text=false_text, variable=bool_frame.chosen_value, value=False
+            )
+            false_radio_button.grid(row=1, sticky=tk.W)
+            return bool_frame
+        label = ttk.Label(
+            option_frame,
+            text=""
+        )
+        return label
+
+    def show_download_options(self, options):
+        left_padding = 20
+        for option in options:
+            f = ttk.Frame(
+                self.options_frame,
+                style="E.TFrame"
+            )
+            f.grid(sticky=tk.W + tk.E, padx=left_padding)
+            self.option_frames.append((option, f))
+            description_label = ttk.Label(
+                f,
+                text=option.long_description
+            )
+            description_label.grid(row=0, sticky=tk.W)
+            if len(option.option_types) > 1:
+                f.chosen_type = tk.IntVar()
+                choices_frame = ttk.Frame(
+                    f,
+                    style="F.TFrame"
+                )
+                f.choices_frame = choices_frame
+                choices_frame.grid(row=1, sticky=tk.W, padx=left_padding)
+                choices_frame.choices = []
+                for i, option_type in enumerate(option.option_types):
+                    choice_frame = ttk.Frame(
+                        choices_frame,
+                        style="G.TFrame"
+                    )
+                    choice_frame.grid(sticky=tk.W)
+                    option_text = ""
+                    if option_type.short_description is not None:
+                        option_text = option_type.short_description
+                    option_radio_button = ttk.Radiobutton(
+                        choice_frame, text=option_text, variable=f.chosen_type, value=i
+                    )
+                    option_radio_button.grid(row=0, column=0, sticky=tk.W)
+                    option_widget = self.get_option_widget(option_type, choice_frame)
+                    option_widget.grid(row=0, column=1, sticky=tk.W)
+                    choices_frame.choices.append(option_widget)
+                    if i == 0:
+                        option_radio_button.invoke()
+            else:
+                choice_frame = ttk.Frame(
+                    f,
+                    style="F.TFrame"
+                )
+                choice_frame.grid(sticky=tk.W, padx=left_padding)
+                option_widget = self.get_option_widget(option.option_types[0], choice_frame)
+                option_widget.grid(row=0, column=0, sticky=tk.W)
+                f.option_widget = option_widget
+        self.show_options_button = ttk.Button(
+            self.stream_frame_body, command=self._toggle_show_options, style="Stop.TButton",
+            cursor=self.button_cursor
+        )
+        self.show_options_button.config(image=self.show_options_picture)
+        self.show_options_button.grid(sticky=tk.W, row=2, column=0)
+
+    def _get_chosen_option(self, option_type, option_widget):
+        if option_type.value == float:
+            return float(option_widget.entry.get())
+        if option_type.value == bool:
+            return option_widget.chosen_value.get()
+        return option_type.value
+
+    def get_chosen_options(self):
+        chosen_options = []
+        for o, f in self.option_frames:
+            if len(o.option_types) > 1:
+                chosen_index = f.chosen_type.get()
+                option_type = o.option_types[chosen_index]
+                option_widget = f.choices_frame.choices[chosen_index]
+                chosen_options.append(self._get_chosen_option(option_type, option_widget))
+            else:
+                option_type = o.option_types[0]
+                option_widget = f.option_widget
+                chosen_options.append(self._get_chosen_option(option_type, option_widget))
+        return chosen_options
+
+    def _toggle_show_options(self):
+        if self.options_frame.winfo_ismapped():
+            self.show_options_button.config(image=self.show_options_picture)
+            self.options_frame.grid_forget()
+        else:
+            self.show_options_button.config(image=self.hide_options_picture)
+            self.options_frame.grid(sticky=tk.W + tk.E, row=3)
+
     def show_progress(self, total_bytes, bytes_left_to_download, bytes_left_to_output, points_paid,
                       points_remaining):
         if self.bytes_outputted_label is None:
             self.remove_download_buttons()
             self.button_frame.destroy()
+            for option, frame in self.option_frames:
+                frame.destroy()
+            self.options_frame.destroy()
+            self.show_options_button.destroy()
+
+            self.cost_frame = ttk.Frame(self.outer_button_frame, style="F.TFrame")
+            self.cost_frame.grid(row=0, column=0, sticky=tk.W+tk.N, pady=(0, 12))
+
+            self.cost_label = ttk.Label(
+                self.cost_frame,
+                text="",
+                foreground="red"
+            )
+            self.cost_label.grid(row=0, column=1, padx=(1, 0))
             self.outer_button_frame.grid_columnconfigure(2, weight=0, uniform="")
 
             self.bytes_outputted_label = ttk.Label(
@@ -667,6 +828,7 @@ class App(object):
         ttk.Style().configure("Lookup.LBRY.TButton", padding=lookup_button_padding)
         ttk.Style().configure("Stop.TButton", padding=1, background="#FFFFFF", relief="flat", borderwidth=0)
         ttk.Style().configure("TEntry", padding=11)
+        ttk.Style().configure("Float.TEntry", padding=2)
         #ttk.Style().configure("A.TFrame", background="red")
         #ttk.Style().configure("B.TFrame", background="green")
         #ttk.Style().configure("B2.TFrame", background="#80FF80")
@@ -674,6 +836,8 @@ class App(object):
         #ttk.Style().configure("D.TFrame", background="blue")
         #ttk.Style().configure("E.TFrame", background="yellow")
         #ttk.Style().configure("F.TFrame", background="#808080")
+        #ttk.Style().configure("G.TFrame", background="#FF80FF")
+        #ttk.Style().configure("H.TFrame", background="#0080FF")
         #ttk.Style().configure("LBRY.TProgressbar", background="#104639", orient="horizontal", thickness=5)
         #ttk.Style().configure("LBRY.TProgressbar")
         #ttk.Style().layout("Horizontal.LBRY.TProgressbar", ttk.Style().layout("Horizontal.TProgressbar"))

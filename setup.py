@@ -36,6 +36,8 @@ setup(name='lbrynet',
                'lbrynet/lbrynet_downloader_gui/lbry-dark-icon.xbm',
                'lbrynet/lbrynet_downloader_gui/lbry-dark-icon.ico',
                'lbrynet/lbrynet_downloader_gui/drop_down.gif',
+               'lbrynet/lbrynet_downloader_gui/show_options.gif',
+               'lbrynet/lbrynet_downloader_gui/hide_options.gif',
            ]
            )
       ]

@@ -9,7 +9,7 @@ from Crypto import Random
 from Crypto.Hash import MD5
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
 from lbrynet.conf import MIN_BLOB_INFO_PAYMENT_RATE
-from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator, add_live_stream_to_sd_identifier
+from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
 from lbrynet.lbrylive.PaymentRateManager import BaseLiveStreamPaymentRateManager
 from lbrynet.lbrylive.PaymentRateManager import LiveStreamPaymentRateManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
@@ -24,6 +24,7 @@ from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
+from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from twisted.internet import defer, threads, task
 from twisted.trial.unittest import TestCase
@@ -35,6 +36,8 @@ from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerF
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.lbrylive.server.LiveBlobInfoQueryHandler import CryptBlobInfoQueryHandlerFactory
+from lbrynet.lbrylive.client.LiveStreamOptions import add_live_stream_to_sd_identifier
+from lbrynet.lbrylive.client.LiveStreamDownloader import add_full_live_stream_downloader_to_sd_identifier
 
 
 log_format = "%(funcName)s(): %(message)s"
@@ -248,6 +251,7 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event):
     def start_all():
 
         d = session.setup()
+        d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
         d.addCallback(lambda _: lbry_file_manager.setup())
         d.addCallback(lambda _: start_server())
         d.addCallback(lambda _: create_stream())
@@ -437,7 +441,12 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
         return d
 
     def enable_live_stream():
-        return add_live_stream_to_sd_identifier(session, stream_info_manager, sd_identifier)
+        base_live_stream_payment_rate_manager = BaseLiveStreamPaymentRateManager(
+            MIN_BLOB_INFO_PAYMENT_RATE
+        )
+        add_live_stream_to_sd_identifier(sd_identifier, base_live_stream_payment_rate_manager)
+        add_full_live_stream_downloader_to_sd_identifier(session, stream_info_manager, sd_identifier,
+                                                         base_live_stream_payment_rate_manager)
 
     def run_server():
         d = session.setup()
@@ -670,9 +679,9 @@ class TestTransfer(TestCase):
         self.lbry_file_manager = LBRYFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         def make_downloader(info_and_factories, prm):
-            info_validator, factories = info_and_factories
-            options = [o.default for o in factories[0].get_downloader_options(info_validator, prm)]
-            return factories[0].make_downloader(info_validator, options, prm)
+            info_validator, options, factories = info_and_factories
+            chosen_options = [o.default_value for o in options.get_downloader_options(info_validator, prm)]
+            return factories[0].make_downloader(info_validator, chosen_options, prm)
 
         def download_file(sd_hash):
             prm = PaymentRateManager(self.session.base_payment_rate_manager)
@@ -693,6 +702,7 @@ class TestTransfer(TestCase):
             logging.debug("Starting the transfer")
 
             d = self.session.setup()
+            d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
             d.addCallback(lambda _: self.lbry_file_manager.setup())
             d.addCallback(lambda _: download_file(sd_hash))
             d.addCallback(lambda _: check_md5_sum())
@@ -750,9 +760,9 @@ class TestTransfer(TestCase):
         d = self.wait_for_hash_from_queue(sd_hash_queue)
 
         def create_downloader(info_and_factories, prm):
-            info_validator, factories = info_and_factories
-            options = [o.default for o in factories[0].get_downloader_options(info_validator, prm)]
-            return factories[0].make_downloader(info_validator, options, prm)
+            info_validator, options, factories = info_and_factories
+            chosen_options = [o.default_value for o in options.get_downloader_options(info_validator, prm)]
+            return factories[0].make_downloader(info_validator, chosen_options, prm)
 
         def start_lbry_file(lbry_file):
             lbry_file = lbry_file
@@ -776,7 +786,14 @@ class TestTransfer(TestCase):
             return d
 
         def enable_live_stream():
-            return add_live_stream_to_sd_identifier(self.session, self.stream_info_manager, sd_identifier)
+            base_live_stream_payment_rate_manager = BaseLiveStreamPaymentRateManager(
+                MIN_BLOB_INFO_PAYMENT_RATE
+            )
+            add_live_stream_to_sd_identifier(sd_identifier,
+                                             base_live_stream_payment_rate_manager)
+            add_full_live_stream_downloader_to_sd_identifier(self.session, self.stream_info_manager,
+                                                             sd_identifier,
+                                                             base_live_stream_payment_rate_manager)
 
         d.addCallback(do_download)
 
@@ -941,6 +958,7 @@ class TestStreamify(TestCase):
 
         d = self.session.setup()
         d.addCallback(lambda _: self.stream_info_manager.setup())
+        d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
         d.addCallback(lambda _: self.lbry_file_manager.setup())
 
         def verify_equal(sd_info):
@@ -1017,6 +1035,7 @@ class TestStreamify(TestCase):
 
         d = self.session.setup()
         d.addCallback(lambda _: self.stream_info_manager.setup())
+        d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
         d.addCallback(lambda _: self.lbry_file_manager.setup())
         d.addCallback(lambda _: create_stream())
         d.addCallback(combine_stream)

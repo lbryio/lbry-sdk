@@ -110,9 +110,10 @@ class StreamDescriptorIdentifier(object):
     """
     def __init__(self):
         self._sd_info_validators = {}  # {stream_type: IStreamDescriptorValidator}
+        self._stream_options = {}  # {stream_type: IStreamOptions}
         self._stream_downloader_factories = defaultdict(list)  # {stream_type: [IStreamDownloaderFactory]}
 
-    def add_stream_info_validator(self, stream_type, sd_info_validator):
+    def add_stream_type(self, stream_type, sd_info_validator, stream_options):
         """
         This is how the StreamDescriptorIdentifier learns about new types of stream descriptors.
 
@@ -126,9 +127,13 @@ class StreamDescriptorIdentifier(object):
             will then be called. If the validation step fails, an exception will be thrown, preventing the stream
             descriptor from being further processed.
 
+        @param stream_options: A class implementing the IStreamOptions interface. This class's constructor will be
+            passed the sd_info_validator object containing the raw metadata from the stream descriptor file.
+
         @return: None
         """
         self._sd_info_validators[stream_type] = sd_info_validator
+        self._stream_options[stream_type] = stream_options
 
     def add_stream_downloader_factory(self, stream_type, factory):
         """
@@ -167,14 +172,23 @@ class StreamDescriptorIdentifier(object):
         assert stream_type in self._sd_info_validators, "Unrecognized stream type: " + str(stream_type)
         return self._sd_info_validators[stream_type]
 
+    def _get_options(self, stream_type):
+        assert stream_type in self._sd_info_validators, "Unrecognized stream type: " + str(stream_type)
+        return self._stream_options[stream_type]
+
     def _return_info_and_factories(self, sd_info):
         assert 'stream_type' in sd_info, 'Invalid stream descriptor. No stream_type parameter.'
         stream_type = sd_info['stream_type']
-        factories = self._get_factories(stream_type)
         validator = self._get_validator(stream_type)(sd_info)
+        factories = [f for f in self._get_factories(stream_type) if f.can_download(validator)]
+
         d = validator.validate()
 
-        d.addCallback(lambda _: (validator, factories))
+        def get_options():
+            options = self._get_options(stream_type)
+            return validator, options, factories
+
+        d.addCallback(lambda _: get_options())
         return d
 
 

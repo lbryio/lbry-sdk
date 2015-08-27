@@ -445,10 +445,7 @@ class IQueryHandlerFactory(Interface):
         """
 
 
-class IStreamDownloaderFactory(Interface):
-    """
-    Construct IStreamDownloaders and provide options that will be passed to those IStreamDownloaders.
-    """
+class IStreamDownloaderOptions(Interface):
     def get_downloader_options(self, sd_validator, payment_rate_manager):
         """
         Return the list of options that can be used to modify IStreamDownloader behavior
@@ -459,8 +456,28 @@ class IStreamDownloaderFactory(Interface):
         @param payment_rate_manager: The payment rate manager currently in effect for the downloader
         @type payment_rate_manager: PaymentRateManager
 
-        @return: [(option_description, default)]
-        @rtype: [(string, string)]
+        @return: [DownloadOption]
+        @rtype: [DownloadOption]
+        """
+
+
+class IStreamDownloaderFactory(Interface):
+    """
+    Construct IStreamDownloaders and provide options that will be passed to those IStreamDownloaders.
+    """
+
+    def can_download(self, sd_validator, payment_rate_manager):
+        """
+        Decide whether the downloaders created by this factory can download the stream described by sd_validator
+
+        @param sd_validator: object containing stream metadata
+        @type sd_validator: object which implements IStreamDescriptorValidator interface
+
+        @param payment_rate_manager: The payment rate manager currently in effect for the downloader
+        @type payment_rate_manager: PaymentRateManager
+
+        @return: True if the downloaders can download the stream, False otherwise
+        @rtype: bool
         """
 
     def make_downloader(self, sd_validator, options, payment_rate_manager):
@@ -470,10 +487,10 @@ class IStreamDownloaderFactory(Interface):
         @param sd_validator: object containing stream metadata which will be given to the IStreamDownloader
         @type sd_validator: object which implements IStreamDescriptorValidator interface
 
-        @param options: a list of strings that will be used by the IStreamDownloaderFactory to
+        @param options: a list of values that will be used by the IStreamDownloaderFactory to
             construct the IStreamDownloader. the options are in the same order as they were given
             by get_downloader_options.
-        @type options: [string]
+        @type options: [Object]
 
         @param payment_rate_manager: the PaymentRateManager which the IStreamDownloader should use.
         @type payment_rate_manager: PaymentRateManager
