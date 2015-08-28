@@ -262,7 +262,15 @@ class LBRYFileOpener(LBRYFileDownloader):
 
 class LBRYFileOpenerFactory(LBRYFileDownloaderFactory):
     def can_download(self, sd_validator):
-        return bool(which('vlc'))
+        if which('vlc'):
+            return True
+        elif os.name == "nt":
+            paths = [r'C:\Program Files\VideoLAN\VLC\vlc.exe',
+                     r'C:\Program Files (x86)\VideoLAN\VLC\vlc.exe']
+            for p in paths:
+                if os.path.exists(p):
+                    return True
+        return False
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info, upload_allowed):
         return LBRYFileOpener(stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager,
