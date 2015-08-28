@@ -10,7 +10,7 @@ from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.client.LBRYFileMetadataHandler import LBRYFileMetadataHandler
 import os
 from twisted.internet import defer, threads, reactor
-from distutils.spawn import find_executable
+from twisted.python.procutils import which
 
 
 class LBRYFileDownloader(CryptStreamDownloader):
@@ -262,7 +262,7 @@ class LBRYFileOpener(LBRYFileDownloader):
 
 class LBRYFileOpenerFactory(LBRYFileDownloaderFactory):
     def can_download(self, sd_validator):
-        return bool(find_executable('vlc'))
+        return bool(which('vlc'))
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info, upload_allowed):
         return LBRYFileOpener(stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager,
