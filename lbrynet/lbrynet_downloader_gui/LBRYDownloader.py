@@ -8,6 +8,9 @@ from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
+from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
+from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
+from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.lbryfile.LBRYFileMetadataManager import TempLBRYFileMetadataManager
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
@@ -25,6 +28,9 @@ class LBRYDownloader(object):
         self.data_dir = os.path.join(self.conf_dir, "blobfiles")
         self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
+        self.peer_port = 3333
+        self.dht_node_port = 4444
+        self.run_server = True
         self.first_run = False
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -37,12 +43,18 @@ class LBRYDownloader(object):
         self.wallet_rpc_port = 8332
         self.download_deferreds = []
         self.stream_frames = []
+        self.default_blob_data_payment_rate = MIN_BLOB_DATA_PAYMENT_RATE
+        self.use_upnp = False
+        self.start_lbrycrdd = True
+        self.blob_request_payment_rate_manager = None
 
     def start(self):
-        d = threads.deferToThread(self._create_directory)
+        d = self._load_configuration_file()
+        d.addCallback(lambda _: threads.deferToThread(self._create_directory))
         d.addCallback(lambda _: self._get_session())
         d.addCallback(lambda _: self._setup_stream_info_manager())
         d.addCallback(lambda _: self._setup_stream_identifier())
+        d.addCallback(lambda _: self.start_server())
         return d
 
     def stop(self):
@@ -50,11 +62,124 @@ class LBRYDownloader(object):
         for stream_frame in self.stream_frames:
             stream_frame.cancel_func()
         if self.session is not None:
+            dl.addBoth(lambda _: self.stop_server())
             dl.addBoth(lambda _: self.session.shut_down())
         return dl
 
     def get_new_address(self):
         return self.session.wallet.get_new_address()
+
+    def _load_configuration_file(self):
+
+        def get_configuration():
+            if not os.path.exists("lbry.conf"):
+                logging.debug("Could not read lbry.conf")
+                return ""
+            else:
+                lbry_conf = open("lbry.conf")
+                logging.debug("Loading configuration options from lbry.conf")
+                lines = lbry_conf.readlines()
+                logging.debug("lbry.conf file contents:\n%s", str(lines))
+                return lines
+
+        d = threads.deferToThread(get_configuration)
+
+        def load_configuration(conf):
+            for line in conf:
+                if len(line.strip()) and line.strip()[0] != "#":
+                    try:
+                        field_name, field_value = map(lambda x: x.strip(), line.strip().split("=", 1))
+                        field_name = field_name.lower()
+                    except ValueError:
+                        raise ValueError("Invalid configuration line: %s" % line)
+                    if field_name == "known_dht_nodes":
+                        known_nodes = []
+                        nodes = field_value.split(",")
+                        for n in nodes:
+                            if n.strip():
+                                try:
+                                    ip_address, port_string = map(lambda x: x.strip(), n.split(":"))
+                                    ip_numbers = ip_address.split(".")
+                                    assert len(ip_numbers) == 4
+                                    for ip_num in ip_numbers:
+                                        num = int(ip_num)
+                                        assert 0 <= num <= 255
+                                    known_nodes.append((ip_address, int(port_string)))
+                                except (ValueError, AssertionError):
+                                    raise ValueError("Expected known nodes in format 192.168.1.1:4000,192.168.1.2:4001. Got %s" % str(field_value))
+                        logging.debug("Setting known_dht_nodes to %s", str(known_nodes))
+                        self.known_dht_nodes = known_nodes
+                    elif field_name == "run_server":
+                        if field_value.lower() == "true":
+                            run_server = True
+                        elif field_value.lower() == "false":
+                            run_server = False
+                        else:
+                            raise ValueError("run_server must be set to True or False. Got %s" % field_value)
+                        logging.debug("Setting run_server to %s", str(run_server))
+                        self.run_server = run_server
+                    elif field_name == "db_dir":
+                        logging.debug("Setting conf_dir to %s", str(field_value))
+                        self.conf_dir = field_value
+                    elif field_name == "data_dir":
+                        logging.debug("Setting data_dir to %s", str(field_value))
+                        self.data_dir = field_value
+                    elif field_name == "wallet_dir":
+                        logging.debug("Setting wallet_dir to %s", str(field_value))
+                        self.wallet_dir = field_value
+                    elif field_name == "wallet_conf":
+                        logging.debug("Setting wallet_conf to %s", str(field_value))
+                        self.wallet_conf = field_value
+                    elif field_name == "peer_port":
+                        try:
+                            peer_port = int(field_value)
+                            assert 0 <= peer_port <= 65535
+                            logging.debug("Setting peer_port to %s", str(peer_port))
+                            self.peer_port = peer_port
+                        except (ValueError, AssertionError):
+                            raise ValueError("peer_port must be set to an integer between 1 and 65535. Got %s" % field_value)
+                    elif field_name == "dht_port":
+                        try:
+                            dht_port = int(field_value)
+                            assert 0 <= dht_port <= 65535
+                            logging.debug("Setting dht_node_port to %s", str(dht_port))
+                            self.dht_node_port = dht_port
+                        except (ValueError, AssertionError):
+                            raise ValueError("dht_port must be set to an integer between 1 and 65535. Got %s" % field_value)
+                    elif field_name == "use_upnp":
+                        if field_value.lower() == "true":
+                            use_upnp = True
+                        elif field_value.lower() == "false":
+                            use_upnp = False
+                        else:
+                            raise ValueError("use_upnp must be set to True or False. Got %s" % str(field_value))
+                        logging.debug("Setting use_upnp to %s", str(use_upnp))
+                        self.use_upnp = use_upnp
+                    elif field_name == "default_blob_data_payment_rate":
+                        try:
+                            rate = float(field_value)
+                            assert rate >= 0.0
+                            logging.debug("Setting default_blob_data_payment_rate to %s", str(rate))
+                            self.default_blob_data_payment_rate = rate
+                        except (ValueError, AssertionError):
+                            raise ValueError("default_blob_data_payment_rate must be a positive floating point number, e.g. 0.5. Got %s" % str(field_value))
+                    elif field_name == "start_lbrycrdd":
+                        if field_value.lower() == "true":
+                            start_lbrycrdd = True
+                        elif field_value.lower() == "false":
+                            start_lbrycrdd = False
+                        else:
+                            raise ValueError("start_lbrycrdd must be set to True or False. Got %s" % field_value)
+                        logging.debug("Setting start_lbrycrdd to %s", str(start_lbrycrdd))
+                        self.start_lbrycrdd = start_lbrycrdd
+                    elif field_name == "download_directory":
+                        logging.debug("Setting download_directory to %s", str(field_value))
+                        self.download_directory = field_value
+                    else:
+                        logging.warning("Got unknown configuration field: %s", field_name)
+
+        d.addCallback(load_configuration)
+        return d
 
     def _create_directory(self):
         if not os.path.exists(self.conf_dir):
@@ -86,15 +211,49 @@ class LBRYDownloader(object):
 
     def _get_session(self):
         wallet = LBRYcrdWallet(self.wallet_user, self.wallet_password, "127.0.0.1", self.wallet_rpc_port,
-                               start_lbrycrdd=True, wallet_dir=self.wallet_dir, wallet_conf=self.wallet_conf)
-        self.session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=self.conf_dir, blob_dir=self.data_dir,
-                                   use_upnp=False, wallet=wallet,
-                                   known_dht_nodes=self.known_dht_nodes, dht_node_port=4447)
+                               start_lbrycrdd=self.start_lbrycrdd, wallet_dir=self.wallet_dir,
+                               wallet_conf=self.wallet_conf)
+        peer_port = None
+        if self.run_server:
+            peer_port = self.peer_port
+        self.session = LBRYSession(self.default_blob_data_payment_rate, db_dir=self.conf_dir,
+                                   blob_dir=self.data_dir, use_upnp=self.use_upnp, wallet=wallet,
+                                   known_dht_nodes=self.known_dht_nodes, dht_node_port=self.dht_node_port,
+                                   peer_port=peer_port)
         return self.session.setup()
 
     def _setup_stream_info_manager(self):
         self.stream_info_manager = TempLBRYFileMetadataManager()
         return defer.succeed(True)
+
+    def start_server(self):
+
+        if self.run_server:
+            self.blob_request_payment_rate_manager = PaymentRateManager(
+                self.session.base_payment_rate_manager,
+                self.default_blob_data_payment_rate
+            )
+            handlers = [
+                BlobAvailabilityHandlerFactory(self.session.blob_manager),
+                self.session.wallet.get_wallet_info_query_handler_factory(),
+                BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
+                                          self.blob_request_payment_rate_manager)
+            ]
+
+            server_factory = ServerProtocolFactory(self.session.rate_limiter,
+                                                   handlers,
+                                                   self.session.peer_manager)
+            from twisted.internet import reactor
+            self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
+
+        return defer.succeed(True)
+
+    def stop_server(self):
+        if self.lbry_server_port is not None:
+            self.lbry_server_port, p = None, self.lbry_server_port
+            return defer.maybeDeferred(p.stopListening)
+        else:
+            return defer.succeed(True)
 
     def _setup_stream_identifier(self):
         add_lbry_file_to_sd_identifier(self.sd_identifier)
