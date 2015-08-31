@@ -189,7 +189,8 @@ class DownloaderApp(object):
 
         self.entry_font = tkFont.Font(size=11)
 
-        self.uri_entry = ttk.Entry(self.uri_frame, width=50, foreground="#222222", font=self.entry_font)
+        self.uri_entry = ttk.Entry(self.uri_frame, width=50, foreground="#222222", font=self.entry_font,
+                                   state=tk.DISABLED)
         self.uri_entry.grid(row=0, column=1, padx=2, pady=2)
 
         def copy_command():
@@ -261,6 +262,7 @@ class DownloaderApp(object):
 
     def _enable_lookup(self):
         self.uri_entry.bind('<Return>', self._open_stream)
+        self.uri_entry.config(state=tk.NORMAL)
 
     def _open_stream(self, event=None):
         if self.streams_frame is None:
