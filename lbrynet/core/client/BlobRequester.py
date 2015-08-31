@@ -5,6 +5,7 @@ from twisted.python.failure import Failure
 from zope.interface import implements
 from lbrynet.core.Error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
 from lbrynet.core.Error import InvalidResponseError, RequestCanceledError, NoResponseError
+from lbrynet.core.Error import ConnectionClosedBeforeResponseError
 from lbrynet.core.client.ClientRequest import ClientRequest, ClientBlobRequest
 from lbrynet.interfaces import IRequestCreator
 
@@ -304,4 +305,8 @@ class BlobRequester(object):
             peer.update_score(-10.0)
         else:
             peer.update_score(-2.0)
+        if reason.check(ConnectionClosedBeforeResponseError):
+            return
+        # Only unexpected errors should be returned, as they are indicative of real problems
+        # and may be shown to the user.
         return reason

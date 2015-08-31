@@ -9,7 +9,7 @@ from lbrynet.lbrylive.LiveBlob import LiveBlobInfo
 from lbrynet.core.cryptoutils import get_lbry_hash_obj, verify_signature
 from lbrynet.interfaces import IRequestCreator, IMetadataHandler
 from lbrynet.core.Error import InsufficientFundsError, InvalidResponseError, RequestCanceledError
-from lbrynet.core.Error import NoResponseError
+from lbrynet.core.Error import NoResponseError, ConnectionClosedBeforeResponseError
 
 
 class LiveStreamMetadataHandler(object):
@@ -339,4 +339,8 @@ class LiveStreamMetadataHandler(object):
         logging.warning("Crypt stream info finder: a request failed. Reason: %s", reason.getErrorMessage())
         self._update_local_score(peer, -5.0)
         peer.update_score(-10.0)
+        if reason.check(ConnectionClosedBeforeResponseError):
+            return
+        # Only unexpected errors should be returned, as they are indicative of real problems
+        # and may be shown to the user.
         return reason

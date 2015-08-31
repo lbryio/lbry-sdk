@@ -2,7 +2,7 @@ from zope.interface import implements
 from lbrynet.interfaces import IMetadataHandler, IRequestCreator
 from lbrynet.core.client.ClientRequest import ClientRequest, ClientPaidRequest
 from lbrynet.core.Error import InsufficientFundsError, InvalidResponseError, RequestCanceledError
-from lbrynet.core.Error import NoResponseError
+from lbrynet.core.Error import NoResponseError, ConnectionClosedBeforeResponseError
 from ValuableBlobInfo import ValuableBlobInfo
 import datetime
 import logging
@@ -292,6 +292,10 @@ class BlindMetadataHandler(object):
                         str(request_type), str(reason.getErrorMessage()))
         self._update_local_score(peer, -10.0)
         peer.update_score(-5.0)
+        if reason.check(ConnectionClosedBeforeResponseError):
+            return
+        # Only unexpected errors should be returned, as they are indicative of real problems
+        # and may be shown to the user.
         return reason
 
     def _search_for_peers(self):
