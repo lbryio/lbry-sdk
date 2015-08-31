@@ -32,8 +32,9 @@ class DHTPeerFinder(object):
         bin_hash = binascii.unhexlify(blob_hash)
 
         def filter_peers(peer_list):
+            peers = set(peer_list)
             good_peers = []
-            for host, port in peer_list:
+            for host, port in peers:
                 peer = self.peer_manager.get_peer(host, port)
                 if peer.is_available() is True:
                     good_peers.append(peer)
