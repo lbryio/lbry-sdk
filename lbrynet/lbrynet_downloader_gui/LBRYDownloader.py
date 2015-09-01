@@ -4,6 +4,8 @@ import tkMessageBox
 from Crypto import Random
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
 from lbrynet.core import StreamDescriptor
+from lbrynet.core.Error import UnknownNameError, UnknownStreamTypeError, InvalidStreamDescriptorError
+from lbrynet.core.Error import InvalidStreamInfoError
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.Session import LBRYSession
@@ -46,6 +48,7 @@ class LBRYDownloader(object):
         self.default_blob_data_payment_rate = MIN_BLOB_DATA_PAYMENT_RATE
         self.use_upnp = False
         self.start_lbrycrdd = True
+        self.delete_blobs_on_remove = True
         self.blob_request_payment_rate_manager = None
 
     def start(self):
@@ -175,6 +178,13 @@ class LBRYDownloader(object):
                     elif field_name == "download_directory":
                         logging.debug("Setting download_directory to %s", str(field_value))
                         self.download_directory = field_value
+                    elif field_name == "delete_blobs_on_stream_remove":
+                        if field_value.lower() == "true":
+                            self.delete_blobs_on_remove = True
+                        elif field_value.lower() == "false":
+                            self.delete_blobs_on_remove = False
+                        else:
+                            raise ValueError("delete_blobs_on_stream_remove must be set to True or False")
                     else:
                         logging.warning("Got unknown configuration field: %s", field_name)
 
@@ -312,7 +322,7 @@ class LBRYDownloader(object):
         def get_sd_hash(value):
             if 'stream_hash' in value:
                 return value['stream_hash']
-            raise ValueError("Invalid stream")
+            raise UnknownNameError(uri)
 
         def get_sd_blob(sd_hash):
             stream_frame.show_metadata_status("name resolved, fetching metadata...")
@@ -393,6 +403,7 @@ class LBRYDownloader(object):
             return arg
 
         def start_download(downloader):
+            stream_frame.stream_hash = downloader.stream_hash
             l = task.LoopingCall(show_stream_status, downloader)
             l.start(1)
             d = downloader.start()
@@ -424,8 +435,38 @@ class LBRYDownloader(object):
             logging.error(err.getErrorMessage())
             stream_frame.show_download_done(payment_rate_manager.points_paid)
 
-        resolve_d.addErrback(lambda err: err.trap(defer.CancelledError))
+        resolve_d.addErrback(lambda err: err.trap(defer.CancelledError, UnknownNameError,
+                                                  UnknownStreamTypeError, InvalidStreamDescriptorError,
+                                                  InvalidStreamInfoError))
         resolve_d.addErrback(show_err)
+
+        def delete_associated_blobs():
+            if stream_frame.stream_hash is None or self.delete_blobs_on_remove is False:
+                return defer.succeed(True)
+            d1 = self.stream_info_manager.get_blobs_for_stream(stream_frame.stream_hash)
+
+            def get_blob_hashes(blob_infos):
+                return [b[0] for b in blob_infos if b[0] is not None]
+
+            d1.addCallback(get_blob_hashes)
+            d2 = self.stream_info_manager.get_sd_blob_hashes_for_stream(stream_frame.stream_hash)
+
+            def combine_blob_hashes(results):
+                blob_hashes = []
+                for success, result in results:
+                    if success is True:
+                        blob_hashes.extend(result)
+                return blob_hashes
+
+            def delete_blobs(blob_hashes):
+                return self.session.blob_manager.delete_blobs(blob_hashes)
+
+            dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
+            dl.addCallback(combine_blob_hashes)
+            dl.addCallback(delete_blobs)
+            return dl
+
+        resolve_d.addCallback(lambda _: delete_associated_blobs())
         self._add_download_deferred(resolve_d, stream_frame)
 
     def _add_download_deferred(self, d, stream_frame):

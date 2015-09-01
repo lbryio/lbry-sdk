@@ -146,7 +146,7 @@ class LBRYFileSaver(LBRYFileDownloader):
 
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading, self.blob_manager, download_manager,
-                                         delete_blob_after_finished=True)
+                                         delete_blob_after_finished=not self.upload_allowed)
 
     def _setup_output(self):
         def open_file():
@@ -216,7 +216,7 @@ class LBRYFileOpener(LBRYFileDownloader):
 
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading, self.blob_manager, download_manager,
-                                         delete_blob_after_finished=True)
+                                         delete_blob_after_finished=not self.upload_allowed)
 
     def _setup_output(self):
         def start_process():

@@ -3,7 +3,7 @@ import logging
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 from twisted.internet import defer
-from lbrynet.core.Error import DuplicateStreamHashError
+from lbrynet.core.Error import DuplicateStreamHashError, InvalidStreamDescriptorError
 
 
 LBRYFileStreamType = "lbryfile"
@@ -88,11 +88,10 @@ class LBRYFileStreamDescriptorValidator(object):
             stream_hash = self.raw_info['stream_hash']
             blobs = self.raw_info['blobs']
         except KeyError as e:
-            raise ValueError("Invalid stream descriptor. Missing '%s'" % (e.args[0]))
+            raise InvalidStreamDescriptorError("Missing '%s'" % (e.args[0]))
         for c in hex_suggested_file_name:
             if c not in '0123456789abcdef':
-                raise ValueError("Invalid stream descriptor: "
-                                 "suggested file name is not a hex-encoded string")
+                raise InvalidStreamDescriptorError("Suggested file name is not a hex-encoded string")
         h = get_lbry_hash_obj()
         h.update(hex_stream_name)
         h.update(key)
@@ -118,10 +117,10 @@ class LBRYFileStreamDescriptorValidator(object):
         for blob in blobs:
             blobs_hashsum.update(get_blob_hashsum(blob))
         if blobs[-1]['length'] != 0:
-            raise ValueError("Improperly formed stream descriptor. Must end with a zero-length blob.")
+            raise InvalidStreamDescriptorError("Does not end with a zero-length blob.")
         h.update(blobs_hashsum.digest())
         if h.hexdigest() != stream_hash:
-            raise ValueError("Stream hash does not match stream metadata")
+            raise InvalidStreamDescriptorError("Stream hash does not match stream metadata")
         return defer.succeed(True)
 
     def info_to_show(self):

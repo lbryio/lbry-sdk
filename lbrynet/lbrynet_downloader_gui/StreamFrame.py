@@ -10,6 +10,7 @@ class StreamFrame(object):
     def __init__(self, app, uri):
         self.app = app
         self.uri = uri
+        self.stream_hash = None
         self.cancel_func = None
 
         self.stream_frame = ttk.Frame(self.app.streams_frame, style="B.TFrame")

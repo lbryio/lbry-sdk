@@ -26,10 +26,28 @@ class UnknownNameError(Exception):
     def __init__(self, name):
         self.name = name
 
+    def __str__(self):
+        return repr(self.name)
+
+
+class UnknownStreamTypeError(Exception):
+    def __init__(self, stream_type):
+        self.stream_type = stream_type
+
+    def __str__(self):
+        return repr(self.stream_type)
+
+
+class InvalidStreamDescriptorError(Exception):
+    pass
+
 
 class InvalidStreamInfoError(Exception):
     def __init__(self, name):
         self.name = name
+
+    def __str__(self):
+        return repr(self.name)
 
 
 class MisbehavingPeerError(Exception):

@@ -2,7 +2,7 @@ import binascii
 import logging
 from lbrynet.core.cryptoutils import get_lbry_hash_obj, verify_signature
 from twisted.internet import defer, threads
-from lbrynet.core.Error import DuplicateStreamHashError
+from lbrynet.core.Error import DuplicateStreamHashError, InvalidStreamDescriptorError
 from lbrynet.lbrylive.LiveBlob import LiveBlobInfo
 from lbrynet.interfaces import IStreamDescriptorValidator
 from zope.interface import implements
@@ -98,7 +98,7 @@ class LBRYLiveStreamDescriptorValidator(object):
         h.update(public_key)
         h.update(key)
         if h.hexdigest() != stream_hash:
-            raise ValueError("Stream hash does not match stream metadata")
+            raise InvalidStreamDescriptorError("Stream hash does not match stream metadata")
         blobs = self.raw_info['blobs']
 
         def check_blob_signatures():
@@ -121,7 +121,7 @@ class LBRYLiveStreamDescriptorValidator(object):
                 hashsum.update(iv)
                 hashsum.update(str(length))
                 if not verify_signature(hashsum.digest(), signature, public_key):
-                    raise ValueError("Invalid signature in stream descriptor")
+                    raise InvalidStreamDescriptorError("Invalid signature in stream descriptor")
 
         return threads.deferToThread(check_blob_signatures)
 

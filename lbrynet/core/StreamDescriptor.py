@@ -3,6 +3,7 @@ import json
 import logging
 from twisted.internet import threads
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
+from lbrynet.core.Error import UnknownStreamTypeError, InvalidStreamDescriptorError
 
 
 class StreamDescriptorReader(object):
@@ -165,19 +166,23 @@ class StreamDescriptorIdentifier(object):
         return d
 
     def _get_factories(self, stream_type):
-        assert stream_type in self._stream_downloader_factories, "Unrecognized stream type: " + str(stream_type)
+        if not stream_type in self._stream_downloader_factories:
+            raise UnknownStreamTypeError(stream_type)
         return self._stream_downloader_factories[stream_type]
 
     def _get_validator(self, stream_type):
-        assert stream_type in self._sd_info_validators, "Unrecognized stream type: " + str(stream_type)
+        if not stream_type in self._stream_downloader_factories:
+            raise UnknownStreamTypeError(stream_type)
         return self._sd_info_validators[stream_type]
 
     def _get_options(self, stream_type):
-        assert stream_type in self._sd_info_validators, "Unrecognized stream type: " + str(stream_type)
+        if not stream_type in self._stream_downloader_factories:
+            raise UnknownStreamTypeError(stream_type)
         return self._stream_options[stream_type]
 
     def _return_info_and_factories(self, sd_info):
-        assert 'stream_type' in sd_info, 'Invalid stream descriptor. No stream_type parameter.'
+        if not 'stream_type' in sd_info:
+            raise InvalidStreamDescriptorError('No stream_type parameter in stream descriptor.')
         stream_type = sd_info['stream_type']
         validator = self._get_validator(stream_type)(sd_info)
         factories = [f for f in self._get_factories(stream_type) if f.can_download(validator)]
