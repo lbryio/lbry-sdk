@@ -31,11 +31,11 @@ class StreamFrame(object):
             self.button_cursor = "hand1"
 
         close_file_name = "close2.gif"
-        try:
-            close_file = os.path.join(os.path.dirname(__file__), close_file_name)
-        except NameError:
+        if os.name == "nt":
             close_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "lbrynet",
                                       "lbrynet_downloader_gui", close_file_name)
+        else:
+            close_file = os.path.join(os.path.dirname(__file__), close_file_name)
 
         self.close_picture = tk.PhotoImage(
             file=close_file
@@ -69,12 +69,12 @@ class StreamFrame(object):
         self.outer_button_frame.grid(sticky=tk.W + tk.E, row=4)
 
         show_options_picture_file_name = "show_options.gif"
-        try:
-            show_options_picture_file = os.path.join(os.path.dirname(__file__),
-                                                     show_options_picture_file_name)
-        except NameError:
+        if os.name == "nt":
             show_options_picture_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
                                                      "lbrynet", "lbrynet_downloader_gui",
+                                                     show_options_picture_file_name)
+        else:
+            show_options_picture_file = os.path.join(os.path.dirname(__file__),
                                                      show_options_picture_file_name)
 
         self.show_options_picture = tk.PhotoImage(
@@ -82,12 +82,12 @@ class StreamFrame(object):
         )
 
         hide_options_picture_file_name = "hide_options.gif"
-        try:
-            hide_options_picture_file = os.path.join(os.path.dirname(__file__),
-                                                     hide_options_picture_file_name)
-        except NameError:
+        if os.name == "nt":
             hide_options_picture_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
                                                      "lbrynet", "lbrynet_downloader_gui",
+                                                     hide_options_picture_file_name)
+        else:
+            hide_options_picture_file = os.path.join(os.path.dirname(__file__),
                                                      hide_options_picture_file_name)
 
         self.hide_options_picture = tk.PhotoImage(

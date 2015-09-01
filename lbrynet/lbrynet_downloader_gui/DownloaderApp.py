@@ -107,11 +107,11 @@ class DownloaderApp(object):
         self.frame.grid(padx=20, pady=20)
 
         logo_file_name = "lbry-dark-242x80.gif"
-        try:
-            logo_file = os.path.join(os.path.dirname(__file__), logo_file_name)
-        except NameError:
+        if os.name == "nt":
             logo_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "lbrynet",
                                      "lbrynet_downloader_gui", logo_file_name)
+        else:
+            logo_file = os.path.join(os.path.dirname(__file__), logo_file_name)
 
         self.logo_picture = tk.PhotoImage(file=logo_file)
 
@@ -138,11 +138,11 @@ class DownloaderApp(object):
         self.wallet_balance.grid(row=0, column=0)
 
         dropdown_file_name = "drop_down.gif"
-        try:
-            dropdown_file = os.path.join(os.path.dirname(__file__), dropdown_file_name)
-        except NameError:
+        if os.name == "nt":
             dropdown_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "lbrynet",
                                          "lbrynet_downloader_gui", dropdown_file_name)
+        else:
+            dropdown_file = os.path.join(os.path.dirname(__file__), dropdown_file_name)
 
         self.dropdown_picture = tk.PhotoImage(
             file=dropdown_file
