@@ -52,8 +52,7 @@ class LBRYcrdWallet(object):
         def make_connection():
             if self.start_lbrycrdd is True:
                 self._start_daemon()
-            logging.info("Trying to connect to %s", self.rpc_conn_string)
-            self.rpc_conn = AuthServiceProxy(self.rpc_conn_string)
+            self._get_info()
             logging.info("Connected!")
 
         def start_manage():
@@ -66,6 +65,10 @@ class LBRYcrdWallet(object):
         return d
 
     def stop(self):
+
+        def log_stop_error(err):
+            logging.error("An error occurred stopping the wallet. %s", err.getTraceback())
+
         self.stopped = True
         # If self.next_manage_call is None, then manage is currently running or else
         # start has not been called, so set stopped and do nothing else.
@@ -74,8 +77,10 @@ class LBRYcrdWallet(object):
             self.next_manage_call = None
 
         d = self.manage()
+        d.addErrback(log_stop_error)
         if self.start_lbrycrdd is True:
-            d.addBoth(lambda _: self._stop_daemon())
+            d.addCallback(lambda _: self._stop_daemon())
+            d.addErrback(log_stop_error)
         return d
 
     def manage(self):
@@ -248,6 +253,18 @@ class LBRYcrdWallet(object):
     def get_new_address(self):
         return threads.deferToThread(self._get_new_address)
 
+    def _get_rpc_conn(self):
+        return AuthServiceProxy(self.rpc_conn_string)
+
+    def _catch_connection_error(f):
+        def w(*args):
+            try:
+                return f(*args)
+            except socket.error:
+                raise ValueError("Unable to connect to an lbrycrd server. Make sure an lbrycrd server " +
+                                 "is running and that this application can connect to it.")
+        return w
+
     def _start_daemon(self):
 
         if os.name == "nt":
@@ -264,7 +281,7 @@ class LBRYcrdWallet(object):
         tries = 0
         while tries < 5:
             try:
-                rpc_conn = AuthServiceProxy(self.rpc_conn_string)
+                rpc_conn = self._get_rpc_conn()
                 rpc_conn.getinfo()
                 break
             except (socket.error, JSONRPCException):
@@ -329,8 +346,9 @@ class LBRYcrdWallet(object):
         dl.addCallback(handle_checks)
         return dl
 
+    @_catch_connection_error
     def _check_expected_balance(self, expected_balance):
-        rpc_conn = AuthServiceProxy(self.rpc_conn_string)
+        rpc_conn = self._get_rpc_conn()
         logging.info("Checking balance of address %s", str(expected_balance[1]))
         balance = rpc_conn.getreceivedbyaddress(expected_balance[1])
         logging.debug("received balance: %s", str(balance))
@@ -341,7 +359,7 @@ class LBRYcrdWallet(object):
         logging.info("Trying to send payments, if there are any to be sent")
 
         def do_send(payments):
-            rpc_conn = AuthServiceProxy(self.rpc_conn_string)
+            rpc_conn = self._get_rpc_conn()
             rpc_conn.sendmany("", payments)
 
         payments_to_send = {}
@@ -357,24 +375,34 @@ class LBRYcrdWallet(object):
         logging.info("There were no payments to send")
         return defer.succeed(True)
 
+    @_catch_connection_error
+    def _get_info(self):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.getinfo()
+
+    @_catch_connection_error
     def _get_wallet_balance(self):
-        rpc_conn = AuthServiceProxy(self.rpc_conn_string)
+        rpc_conn = self._get_rpc_conn()
         return rpc_conn.getbalance("")
 
+    @_catch_connection_error
     def _get_new_address(self):
-        rpc_conn = AuthServiceProxy(self.rpc_conn_string)
+        rpc_conn = self._get_rpc_conn()
         return rpc_conn.getnewaddress()
 
+    @_catch_connection_error
     def _get_value_for_name(self, name):
-        rpc_conn = AuthServiceProxy(self.rpc_conn_string)
+        rpc_conn = self._get_rpc_conn()
         return rpc_conn.getvalueforname(name)
 
+    @_catch_connection_error
     def _claim_name(self, name, value, amount):
-        rpc_conn = AuthServiceProxy(self.rpc_conn_string)
+        rpc_conn = self._get_rpc_conn()
         return str(rpc_conn.claimname(name, value, amount))
 
+    @_catch_connection_error
     def _rpc_stop(self):
-        rpc_conn = AuthServiceProxy(self.rpc_conn_string)
+        rpc_conn = self._get_rpc_conn()
         rpc_conn.stop()
         self.lbrycrdd.wait()
 

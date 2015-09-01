@@ -86,7 +86,12 @@ class LBRYConsole():
         d.addCallback(lambda _: self._load_plugins())
         d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: self._start_controller())
+        d.addErrback(self._show_start_error)
         return d
+
+    def _show_start_error(self, error):
+        print error.getErrorMessage()
+        return error
 
     def shut_down(self):
         """Stop the session, all currently running streams, and stop the server"""
@@ -348,10 +353,13 @@ class LBRYConsole():
 
     def _shut_down(self):
         self.plugin_manager = None
-        d1 = self.lbry_file_metadata_manager.stop()
-        d1.addCallback(lambda _: self.lbry_file_manager.stop())
-        d2 = self.stop_server()
-        dl = defer.DeferredList([d1, d2])
+        ds = []
+        if self.lbry_file_metadata_manager is not None:
+            d = self.lbry_file_metadata_manager.stop()
+            d.addCallback(lambda _: self.lbry_file_manager.stop())
+            ds.append(d)
+        ds.append(self.stop_server())
+        dl = defer.DeferredList(ds)
         return dl
 
 
@@ -451,5 +459,8 @@ def launch_lbry_console():
                           conf_dir=conf_dir, data_dir=data_dir)
 
     d = task.deferLater(reactor, 0, console.start)
+
+    d.addErrback(lambda _: reactor.stop())
+
     reactor.addSystemEventTrigger('before', 'shutdown', console.shut_down)
     reactor.run()

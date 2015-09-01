@@ -381,11 +381,10 @@ class LBRYDownloader(object):
         def show_stream_status(downloader):
             total_bytes = downloader.get_total_bytes()
             bytes_left_to_download = downloader.get_bytes_left_to_download()
-            bytes_left_to_output = downloader.get_bytes_left_to_output()
             points_paid = payment_rate_manager.points_paid
             payment_rate = payment_rate_manager.get_effective_min_blob_data_payment_rate()
             points_remaining = 1.0 * bytes_left_to_download * payment_rate / 2**20
-            stream_frame.show_progress(total_bytes, bytes_left_to_download, bytes_left_to_output,
+            stream_frame.show_progress(total_bytes, bytes_left_to_download,
                                        points_paid, points_remaining)
 
         def show_finished(arg, downloader):

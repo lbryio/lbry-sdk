@@ -230,7 +230,11 @@ class LBRYSession(object):
         self.rate_limiter.tick()
         d1 = self.blob_manager.setup()
         d2 = self.wallet.start()
-        return defer.DeferredList([d1, d2], fireOnOneErrback=True)
+
+        dl = defer.DeferredList([d1, d2], fireOnOneErrback=True, consumeErrors=True)
+
+        dl.addErrback(lambda err: err.value.subFailure)
+        return dl
 
     def _unset_upnp(self):
 

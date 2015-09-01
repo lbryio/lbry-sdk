@@ -27,7 +27,7 @@ class ConsoleControl(basic.LineReceiver):
                 self.sendLine(response)
 
         def show_error(err):
-            self.sendLine(err.getTraceback())
+            self.sendLine(err.getErrorMessage())
 
         if self.current_handler is None:
             try:

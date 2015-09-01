@@ -99,7 +99,6 @@ class StreamFrame(object):
         self.status_label = None
         self.name_label = None
         self.bytes_downloaded_label = None
-        self.bytes_outputted_label = None
         self.button_frame = None
         self.download_buttons = []
         self.option_frames = []
@@ -111,6 +110,7 @@ class StreamFrame(object):
         self.remaining_cost_description = None
         self.cost_label = None
         self.remaining_cost_label = None
+        self.progress_frame = None
 
     def cancel(self):
         if self.cancel_func is not None:
@@ -344,9 +344,9 @@ class StreamFrame(object):
             self.show_options_button.config(image=self.hide_options_picture)
             self.options_frame.grid(sticky=tk.W + tk.E, row=3)
 
-    def show_progress(self, total_bytes, bytes_left_to_download, bytes_left_to_output, points_paid,
+    def show_progress(self, total_bytes, bytes_left_to_download, points_paid,
                       points_remaining):
-        if self.bytes_outputted_label is None:
+        if self.bytes_downloaded_label is None:
             self.remove_download_buttons()
             self.button_frame.destroy()
             for option, frame in self.option_frames:
@@ -354,8 +354,17 @@ class StreamFrame(object):
             self.options_frame.destroy()
             self.show_options_button.destroy()
 
+            self.progress_frame = ttk.Frame(self.outer_button_frame, style="F.TFrame")
+            self.progress_frame.grid(row=0, column=0, sticky=tk.W, pady=(0, 8))
+
+            self.bytes_downloaded_label = ttk.Label(
+                self.progress_frame,
+                text=""
+            )
+            self.bytes_downloaded_label.grid(row=0, column=0)
+
             self.cost_frame = ttk.Frame(self.outer_button_frame, style="F.TFrame")
-            self.cost_frame.grid(row=0, column=0, sticky=tk.W+tk.N, pady=(0, 12))
+            self.cost_frame.grid(row=1, column=0, sticky=tk.W, pady=(0, 7))
 
             self.cost_label = ttk.Label(
                 self.cost_frame,
@@ -365,25 +374,13 @@ class StreamFrame(object):
             self.cost_label.grid(row=0, column=1, padx=(1, 0))
             self.outer_button_frame.grid_columnconfigure(2, weight=0, uniform="")
 
-            self.bytes_outputted_label = ttk.Label(
-                self.file_name_frame,
-                text=""
-            )
-            self.bytes_outputted_label.grid(row=0, column=0)
-
-            self.bytes_downloaded_label = ttk.Label(
-                self.file_name_frame,
-                text=""
-            )
-            self.bytes_downloaded_label.grid(row=0, column=1)
-
-        if self.bytes_outputted_label.winfo_exists():
-            self.bytes_outputted_label.config(
-                text=self.get_formatted_stream_size(total_bytes - bytes_left_to_output) + " / "
-            )
         if self.bytes_downloaded_label.winfo_exists():
+            percent_done = 0
+            if total_bytes > 0:
+                percent_done = 100.0 * (total_bytes - bytes_left_to_download) / total_bytes
+            percent_done_string = locale.format_string("  (%.2f%%)", percent_done)
             self.bytes_downloaded_label.config(
-                text=self.get_formatted_stream_size(total_bytes - bytes_left_to_download) + " / "
+                text=self.get_formatted_stream_size(total_bytes - bytes_left_to_download) + percent_done_string
             )
         if self.cost_label.winfo_exists():
             total_points = points_remaining + points_paid
@@ -392,8 +389,6 @@ class StreamFrame(object):
                                                              grouping=True))
 
     def show_download_done(self, total_points_paid):
-        if self.bytes_outputted_label is not None and self.bytes_outputted_label.winfo_exists():
-            self.bytes_outputted_label.destroy()
         if self.bytes_downloaded_label is not None and self.bytes_downloaded_label.winfo_exists():
             self.bytes_downloaded_label.destroy()
         if self.cost_label is not None and self.cost_label.winfo_exists():
