@@ -1,7 +1,5 @@
-import leveldb
-import os
 from lbrynet.lbrynet_console import LBRYPlugin
-from twisted.internet import defer, threads
+from twisted.internet import defer
 from lbrynet.conf import MIN_VALUABLE_BLOB_HASH_PAYMENT_RATE, MIN_VALUABLE_BLOB_INFO_PAYMENT_RATE
 from BlindRepeater import BlindRepeater
 from BlindInfoManager import BlindInfoManager
@@ -26,14 +24,12 @@ class BlindRepeaterPlugin(LBRYPlugin.LBRYPlugin):
         self.control_handlers = None
         self.payment_rate_manager = None
         self.settings = None
-        self.db = None
 
     def setup(self, lbry_console):
         lbry_session = lbry_console.session
-        d = threads.deferToThread(self._setup_db, lbry_session.db_dir)
-        d.addCallback(lambda _: self._setup_settings())
+        d = self._setup_settings(lbry_session.db_dir)
         d.addCallback(lambda _: self._get_payment_rate_manager(lbry_session.base_payment_rate_manager))
-        d.addCallback(lambda _: self._setup_blind_info_manager(lbry_session.peer_manager))
+        d.addCallback(lambda _: self._setup_blind_info_manager(lbry_session.peer_manager, lbry_session.db_dir))
         d.addCallback(lambda _: self._setup_blind_repeater(lbry_session))
         d.addCallback(lambda _: self._setup_valuable_blob_query_handler(lbry_session))
         d.addCallback(lambda _: self._create_control_handlers(lbry_session))
@@ -41,11 +37,12 @@ class BlindRepeaterPlugin(LBRYPlugin.LBRYPlugin):
         d.addCallback(lambda _: self._add_to_lbry_console(lbry_console))
         return d
 
-    def _setup_db(self, db_dir):
-        self.db = leveldb.LevelDB(os.path.join(db_dir, "valuable_blobs.db"))
+    def stop(self):
+        return self.settings.stop()
 
-    def _setup_settings(self):
-        self.settings = BlindRepeaterSettings(self.db)
+    def _setup_settings(self, db_dir):
+        self.settings = BlindRepeaterSettings(db_dir)
+        return self.settings.setup()
 
     def _get_payment_rate_manager(self, default_payment_rate_manager):
         d1 = self.settings.get_data_payment_rate()
@@ -67,8 +64,8 @@ class BlindRepeaterPlugin(LBRYPlugin.LBRYPlugin):
         dl.addCallback(get_payment_rate_manager)
         return dl
 
-    def _setup_blind_info_manager(self, peer_manager):
-        self.blind_info_manager = BlindInfoManager(self.db, peer_manager)
+    def _setup_blind_info_manager(self, peer_manager, db_dir):
+        self.blind_info_manager = BlindInfoManager(db_dir, peer_manager)
         return self.blind_info_manager.setup()
 
     def _setup_valuable_blob_query_handler(self, lbry_session):

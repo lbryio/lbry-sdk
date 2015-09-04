@@ -34,6 +34,7 @@ class LBRYDownloader(object):
         self.dht_node_port = 4444
         self.run_server = True
         self.first_run = False
+        self.current_db_revision = 1
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
             self.download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
@@ -54,6 +55,7 @@ class LBRYDownloader(object):
     def start(self):
         d = self._load_configuration_file()
         d.addCallback(lambda _: threads.deferToThread(self._create_directory))
+        d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_session())
         d.addCallback(lambda _: self._setup_stream_info_manager())
         d.addCallback(lambda _: self._setup_stream_identifier())
@@ -71,6 +73,37 @@ class LBRYDownloader(object):
 
     def get_new_address(self):
         return self.session.wallet.get_new_address()
+
+    def _check_db_migration(self):
+        old_revision = 0
+        db_revision_file = os.path.join(self.conf_dir, "db_revision")
+        if os.path.exists(db_revision_file):
+            old_revision = int(open(db_revision_file).read().strip())
+        if old_revision < self.current_db_revision:
+            if os.name == "nt":
+                import subprocess
+                import sys
+
+                def run_migrator():
+                    migrator_exe = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
+                                                "dmigrator", "migrator.exe")
+                    print "trying to find the migrator at", migrator_exe
+                    si = subprocess.STARTUPINFO
+                    si.dwFlags = subprocess.STARTF_USESHOWWINDOW
+                    si.wShowWindow = subprocess.SW_HIDE
+                    print "trying to run the migrator"
+                    migrator_proc = subprocess.Popen([migrator_exe, self.conf_dir, old_revision,
+                                                      self.current_db_revision], startupinfo=si)
+                    print "started the migrator"
+                    migrator_proc.wait()
+                    print "migrator has returned"
+
+                return threads.deferToThread(run_migrator)
+            else:
+                from lbrynet.db_migrator import dbmigrator
+                return threads.deferToThread(dbmigrator.migrate_db, self.conf_dir, old_revision,
+                                             self.current_db_revision)
+        return defer.succeed(True)
 
     def _load_configuration_file(self):
 
@@ -194,6 +227,9 @@ class LBRYDownloader(object):
     def _create_directory(self):
         if not os.path.exists(self.conf_dir):
             os.makedirs(self.conf_dir)
+            db_revision = open(os.path.join(self.conf_dir, "db_revision"), mode='w')
+            db_revision.write(str(self.current_db_revision))
+            db_revision.close()
             logging.debug("Created the configuration directory: %s", str(self.conf_dir))
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)

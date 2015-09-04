@@ -1,7 +1,7 @@
 from collections import defaultdict
 import logging
-import leveldb
 import os
+import unqlite
 import time
 from Crypto.Hash import SHA512
 from Crypto.PublicKey import RSA
@@ -71,7 +71,7 @@ class PTCWallet(object):
 
         def save_key(success, private_key):
             if success is True:
-                threads.deferToThread(self.save_private_key,  private_key.exportKey())
+                self._save_private_key(private_key.exportKey())
                 return True
             return False
 
@@ -95,8 +95,8 @@ class PTCWallet(object):
         def start_manage():
             self.manage()
             return True
-        d = threads.deferToThread(self._open_db)
-        d.addCallback(lambda _: threads.deferToThread(self.get_wallet_private_key))
+        d = self._open_db()
+        d.addCallback(lambda _: self._get_wallet_private_key())
         d.addCallback(ensure_private_key_exists)
         d.addCallback(lambda _: start_manage())
         return d
@@ -211,16 +211,21 @@ class PTCWallet(object):
                                 str(peer), self.peer_pub_keys[peer], str(min_expected_balance), str(received_balance))
 
     def _open_db(self):
-        self.db = leveldb.LevelDB(os.path.join(self.db_dir, "ptcwallet.db"))
+        def open_db():
+            self.db = unqlite.UnQLite(os.path.join(self.db_dir, "ptcwallet.db"))
+        return threads.deferToThread(open_db)
 
-    def save_private_key(self, private_key):
-        self.db.Put("private_key", private_key)
+    def _save_private_key(self, private_key):
+        def save_key():
+            self.db['private_key'] = private_key
+        return threads.deferToThread(save_key)
 
-    def get_wallet_private_key(self):
-        try:
-            return self.db.Get("private_key")
-        except KeyError:
+    def _get_wallet_private_key(self):
+        def get_key():
+            if 'private_key' in self.db:
+                return self.db['private_key']
             return None
+        return threads.deferToThread(get_key)
 
 
 class PointTraderKeyExchanger(object):

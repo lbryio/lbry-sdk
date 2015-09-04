@@ -59,6 +59,8 @@ class LBRYConsole():
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
         self.conf_dir = conf_dir
+        self.created_db_dir = False
+        self.current_db_revision = 1
         self.data_dir = data_dir
         self.plugin_manager = PluginManager()
         self.plugin_manager.setPluginPlaces([
@@ -72,10 +74,13 @@ class LBRYConsole():
         self.blob_request_payment_rate_manager = None
         self.lbryid = None
         self.sd_identifier = StreamDescriptorIdentifier()
+        self.plugin_objects = []
+        self.db_migration_revisions = None
 
     def start(self):
         """Initialize the session and restore everything to its saved state"""
         d = threads.deferToThread(self._create_directory)
+        d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
         d.addCallback(lambda _: self._get_session())
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
@@ -95,7 +100,10 @@ class LBRYConsole():
 
     def shut_down(self):
         """Stop the session, all currently running streams, and stop the server"""
-        d = self.session.shut_down()
+        if self.session is not None:
+            d = self.session.shut_down()
+        else:
+            d = defer.succeed(True)
         d.addCallback(lambda _: self._shut_down())
         return d
 
@@ -121,10 +129,37 @@ class LBRYConsole():
     def _create_directory(self):
         if not os.path.exists(self.conf_dir):
             os.makedirs(self.conf_dir)
+            db_revision = open(os.path.join(self.conf_dir, "db_revision"), mode='w')
+            db_revision.write(str(self.current_db_revision))
+            db_revision.close()
             logging.debug("Created the configuration directory: %s", str(self.conf_dir))
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
             logging.debug("Created the data directory: %s", str(self.data_dir))
+
+    def _check_db_migration(self):
+        old_revision = 0
+        db_revision_file = os.path.join(self.conf_dir, "db_revision")
+        if os.path.exists(db_revision_file):
+            old_revision = int(open(db_revision_file).read().strip())
+        if old_revision < self.current_db_revision:
+            from lbrynet.db_migrator import dbmigrator
+            print "Upgrading your databases..."
+            d = threads.deferToThread(dbmigrator.migrate_db, self.conf_dir, old_revision, self.current_db_revision)
+
+            def print_success(old_dirs):
+                success_string = "Finished upgrading the databases. It is now safe to delete the"
+                success_string += " following directories, if you feel like it. It won't make any"
+                success_string += " difference.\nAnyway here they are: "
+                for i, old_dir in enumerate(old_dirs):
+                    success_string += old_dir
+                    if i + 1 < len(old_dir):
+                        success_string += ", "
+                print success_string
+
+            d.addCallback(print_success)
+            return d
+        return defer.succeed(True)
 
     def _get_settings(self):
         d = self.settings.start()
@@ -312,11 +347,18 @@ class LBRYConsole():
         def setup_plugins():
             ds = []
             for plugin in self.plugin_manager.getAllPlugins():
+                self.plugin_objects.append(plugin.plugin_object)
                 ds.append(plugin.plugin_object.setup(self))
             return defer.DeferredList(ds)
 
         d.addCallback(lambda _: setup_plugins())
         return d
+
+    def _stop_plugins(self):
+        ds = []
+        for plugin_object in self.plugin_objects:
+            ds.append(defer.maybeDeferred(plugin_object.stop))
+        return defer.DeferredList(ds)
 
     def _setup_server(self):
 
@@ -359,6 +401,7 @@ class LBRYConsole():
             d.addCallback(lambda _: self.lbry_file_manager.stop())
             ds.append(d)
         ds.append(self.stop_server())
+        ds.append(self._stop_plugins())
         dl = defer.DeferredList(ds)
         return dl
 

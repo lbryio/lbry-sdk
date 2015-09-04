@@ -1,6 +1,6 @@
 import binascii
 import json
-import leveldb
+import unqlite
 import logging
 import os
 from twisted.internet import threads, defer
@@ -12,7 +12,7 @@ class LBRYSettings(object):
         self.db = None
 
     def start(self):
-        return threads.deferToThread(self._open_db)
+        return self._open_db()
 
     def stop(self):
         self.db = None
@@ -20,21 +20,22 @@ class LBRYSettings(object):
 
     def _open_db(self):
         logging.debug("Opening %s as the settings database", str(os.path.join(self.db_dir, "settings.db")))
-        self.db = leveldb.LevelDB(os.path.join(self.db_dir, "settings.db"))
+        self.db = unqlite.UnQLite(os.path.join(self.db_dir, "settings.db"))
+        return defer.succeed(True)
 
     def save_lbryid(self, lbryid):
 
         def save_lbryid():
-            self.db.Put("lbryid", binascii.hexlify(lbryid), sync=True)
+            self.db['lbryid'] = binascii.hexlify(lbryid)
 
         return threads.deferToThread(save_lbryid)
 
     def get_lbryid(self):
 
         def get_lbryid():
-            try:
-                return binascii.unhexlify(self.db.Get("lbryid"))
-            except KeyError:
+            if 'lbryid' in self.db:
+                return binascii.unhexlify(self.db['lbryid'])
+            else:
                 return None
 
         return threads.deferToThread(get_lbryid)
@@ -42,9 +43,9 @@ class LBRYSettings(object):
     def get_server_running_status(self):
 
         def get_status():
-            try:
-                return json.loads(self.db.Get("server_running"))
-            except KeyError:
+            if 'server_running' in self.db:
+                return json.loads(self.db['server_running'])
+            else:
                 return True
 
         return threads.deferToThread(get_status)
@@ -52,7 +53,7 @@ class LBRYSettings(object):
     def save_server_running_status(self, running):
 
         def save_status():
-            self.db.Put("server_running", json.dumps(running), sync=True)
+            self.db['server_running'] = json.dumps(running)
 
         return threads.deferToThread(save_status)
 
@@ -77,9 +78,9 @@ class LBRYSettings(object):
     def _get_payment_rate(self, rate_type):
 
         def get_rate():
-            try:
-                return json.loads(self.db.Get(rate_type))
-            except KeyError:
+            if rate_type in self.db:
+                return json.loads(self.db['rate_type'])
+            else:
                 return None
 
         return threads.deferToThread(get_rate)
@@ -88,18 +89,18 @@ class LBRYSettings(object):
 
         def save_rate():
             if rate is not None:
-                self.db.Put(rate_type, json.dumps(rate), sync=True)
-            else:
-                self.db.Delete(rate_type, sync=True)
+                self.db[rate_type] = json.dumps(rate)
+            elif rate_type in self.db:
+                del self.db[rate_type]
 
         return threads.deferToThread(save_rate)
 
     def get_query_handler_status(self, query_identifier):
 
         def get_status():
-            try:
-                return json.loads(self.db.Get(json.dumps(('q_h', query_identifier))))
-            except KeyError:
+            if json.dumps(('q_h', query_identifier)) in self.db:
+                return json.loads(self.db[(json.dumps(('q_h', query_identifier)))])
+            else:
                 return True
 
         return threads.deferToThread(get_status)
@@ -112,5 +113,5 @@ class LBRYSettings(object):
 
     def _set_query_handler_status(self, query_identifier, status):
         def set_status():
-            self.db.Put(json.dumps(('q_h', query_identifier)), json.dumps(status), sync=True)
+            self.db[json.dumps(('q_h', query_identifier))] = json.dumps(status)
         return threads.deferToThread(set_status)

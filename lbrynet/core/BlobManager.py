@@ -1,14 +1,16 @@
 import logging
 import os
-import leveldb
 import time
-import json
+import sqlite3
 from twisted.internet import threads, defer, reactor, task
 from twisted.python.failure import Failure
+from twisted.enterprise import adbapi
 from lbrynet.core.HashBlob import BlobFile, TempBlob, BlobFileCreator, TempBlobCreator
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
 from lbrynet.core.utils import is_valid_blobhash
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
+from lbrynet.core.Error import NoSuchBlobError
+from lbrynet.core.sqlite_helpers import rerun_if_locked
 
 
 class BlobManager(DHTHashSupplier):
@@ -68,8 +70,8 @@ class DiskBlobManager(BlobManager):
     def __init__(self, hash_announcer, blob_dir, db_dir):
         BlobManager.__init__(self, hash_announcer)
         self.blob_dir = blob_dir
-        self.db_dir = db_dir
-        self.db = None
+        self.db_file = os.path.join(db_dir, "blobs.db")
+        self.db_conn = None
         self.blob_type = BlobFile
         self.blob_creator_type = BlobFileCreator
         self.blobs = {}
@@ -77,7 +79,7 @@ class DiskBlobManager(BlobManager):
         self._next_manage_call = None
 
     def setup(self):
-        d = threads.deferToThread(self._open_db)
+        d = self._open_db()
         d.addCallback(lambda _: self._manage())
         return d
 
@@ -85,7 +87,8 @@ class DiskBlobManager(BlobManager):
         if self._next_manage_call is not None and self._next_manage_call.active():
             self._next_manage_call.cancel()
             self._next_manage_call = None
-        self.db = None
+        #d = self.db_conn.close()
+        self.db_conn = None
         return defer.succeed(True)
 
     def get_blob(self, blob_hash, upload_allowed, length=None):
@@ -101,7 +104,7 @@ class DiskBlobManager(BlobManager):
     def _make_new_blob(self, blob_hash, upload_allowed, length=None):
         blob = self.blob_type(self.blob_dir, blob_hash, upload_allowed, length)
         self.blobs[blob_hash] = blob
-        d = threads.deferToThread(self._completed_blobs, [blob_hash])
+        d = self._completed_blobs([blob_hash])
 
         def check_completed(completed_blobs):
 
@@ -110,7 +113,7 @@ class DiskBlobManager(BlobManager):
 
             if len(completed_blobs) == 1 and completed_blobs[0] == blob_hash:
                 blob.verified = True
-                inner_d = threads.deferToThread(self._get_blob_length, blob_hash)
+                inner_d = self._get_blob_length(blob_hash)
                 inner_d.addCallback(set_length)
                 inner_d.addCallback(lambda _: blob)
             else:
@@ -123,15 +126,15 @@ class DiskBlobManager(BlobManager):
     def blob_completed(self, blob, next_announce_time=None):
         if next_announce_time is None:
             next_announce_time = time.time()
-        return threads.deferToThread(self._add_completed_blob, blob.blob_hash, blob.length,
-                                     time.time(), next_announce_time)
+        return self._add_completed_blob(blob.blob_hash, blob.length,
+                                        time.time(), next_announce_time)
 
     def completed_blobs(self, blobs_to_check):
-        return threads.deferToThread(self._completed_blobs, blobs_to_check)
+        return self._completed_blobs(blobs_to_check)
 
     def hashes_to_announce(self):
         next_announce_time = time.time() + self.hash_reannounce_time
-        return threads.deferToThread(self._get_blobs_to_announce, next_announce_time)
+        return self._get_blobs_to_announce(next_announce_time)
 
     def creator_finished(self, blob_creator):
         logging.debug("blob_creator.blob_hash: %s", blob_creator.blob_hash)
@@ -155,18 +158,18 @@ class DiskBlobManager(BlobManager):
                 self.blob_hashes_to_delete[blob_hash] = False
 
     def update_all_last_verified_dates(self, timestamp):
-        return threads.deferToThread(self._update_all_last_verified_dates, timestamp)
+        return self._update_all_last_verified_dates(timestamp)
 
     def immediate_announce_all_blobs(self):
-        d = threads.deferToThread(self._get_all_verified_blob_hashes)
+        d = self._get_all_verified_blob_hashes()
         d.addCallback(self.hash_announcer.immediate_announce)
         return d
 
     def get_blob_length(self, blob_hash):
-        return threads.deferToThread(self._get_blob_length, blob_hash)
+        return self._get_blob_length(blob_hash)
 
     def check_consistency(self):
-        return threads.deferToThread(self._check_consistency)
+        return self._check_consistency()
 
     def _manage(self):
         from twisted.internet import reactor
@@ -192,7 +195,7 @@ class DiskBlobManager(BlobManager):
         def delete_from_db(result):
             b_hs = [r[1] for r in result if r[0] is True]
             if b_hs:
-                d = threads.deferToThread(self._delete_blobs_from_db, b_hs)
+                d = self._delete_blobs_from_db(b_hs)
             else:
                 d = defer.succeed(True)
 
@@ -221,72 +224,127 @@ class DiskBlobManager(BlobManager):
     ######### database calls #########
 
     def _open_db(self):
-        self.db = leveldb.LevelDB(os.path.join(self.db_dir, "blobs.db"))
+        # check_same_thread=False is solely to quiet a spurious error that appears to be due
+        # to a bug in twisted, where the connection is closed by a different thread than the
+        # one that opened it. The individual connections in the pool are not used in multiple
+        # threads.
+        self.db_conn = adbapi.ConnectionPool('sqlite3', self.db_file, check_same_thread=False)
+        return self.db_conn.runQuery("create table if not exists blobs (" +
+                                     "    blob_hash text primary key, " +
+                                     "    blob_length integer, " +
+                                     "    last_verified_time real, " +
+                                     "    next_announce_time real"
+                                     ")")
 
+    @rerun_if_locked
     def _add_completed_blob(self, blob_hash, length, timestamp, next_announce_time=None):
         logging.debug("Adding a completed blob. blob_hash=%s, length=%s", blob_hash, str(length))
         if next_announce_time is None:
             next_announce_time = timestamp
-        self.db.Put(blob_hash, json.dumps((length, timestamp, next_announce_time)), sync=True)
+        d = self.db_conn.runQuery("insert into blobs values (?, ?, ?, ?)",
+                                  (blob_hash, length, timestamp, next_announce_time))
+        d.addErrback(lambda err: err.trap(sqlite3.IntegrityError))
+        return d
 
+    @rerun_if_locked
     def _completed_blobs(self, blobs_to_check):
-        blobs = []
-        for b in blobs_to_check:
-            if is_valid_blobhash(b):
-                try:
-                    length, verified_time, next_announce_time = json.loads(self.db.Get(b))
-                except KeyError:
-                    continue
+        blobs_to_check = filter(is_valid_blobhash, blobs_to_check)
+
+        def get_blobs_in_db(db_transaction):
+            blobs_in_db = []  # [(blob_hash, last_verified_time)]
+            for b in blobs_to_check:
+                result = db_transaction.execute("select last_verified_time from blobs where blob_hash = ?",
+                                                (b,))
+                row = result.fetchone()
+                if row is not None:
+                    blobs_in_db.append((b, row[0]))
+            return blobs_in_db
+
+        def get_valid_blobs(blobs_in_db):
+
+            def check_blob_verified_date(b, verified_time):
                 file_path = os.path.join(self.blob_dir, b)
                 if os.path.isfile(file_path):
                     if verified_time > os.path.getctime(file_path):
-                        blobs.append(b)
-        return blobs
+                        return True
+                return False
 
+            def return_valid_blobs(results):
+                valid_blobs = []
+                for (b, verified_date), (success, result) in zip(blobs_in_db, results):
+                    if success is True and result is True:
+                        valid_blobs.append(b)
+                return valid_blobs
+
+            ds = []
+            for b, verified_date in blobs_in_db:
+                ds.append(threads.deferToThread(check_blob_verified_date, b, verified_date))
+            dl = defer.DeferredList(ds)
+            dl.addCallback(return_valid_blobs)
+            return dl
+
+        d = self.db_conn.runInteraction(get_blobs_in_db)
+        d.addCallback(get_valid_blobs)
+        return d
+
+    @rerun_if_locked
     def _get_blob_length(self, blob):
-        length, verified_time, next_announce_time = json.loads(self.db.Get(blob))
-        return length
+        d = self.db_conn.runQuery("select blob_length from blobs where blob_hash = ?", (blob,))
+        d.addCallback(lambda r: r[0] if len(r) else Failure(NoSuchBlobError(blob)))
+        return d
 
+        #length, verified_time, next_announce_time = json.loads(self.db.Get(blob))
+        #return length
+
+    @rerun_if_locked
     def _update_blob_verified_timestamp(self, blob, timestamp):
-        length, old_verified_time, next_announce_time = json.loads(self.db.Get(blob))
-        self.db.Put(blob, json.dumps((length, timestamp, next_announce_time)), sync=True)
+        return self.db_conn.runQuery("update blobs set last_verified_time = ? where blob_hash = ?",
+                                     (blob, timestamp))
 
+    @rerun_if_locked
     def _get_blobs_to_announce(self, next_announce_time):
-        # TODO: See if the following would be better for handling announce times:
-        # TODO:    Have a separate db for them, and read the whole thing into memory
-        # TODO:    on startup, and then write changes to db when they happen
-        blobs = []
-        batch = leveldb.WriteBatch()
-        current_time = time.time()
-        for blob_hash, blob_info in self.db.RangeIter():
-            length, verified_time, announce_time = json.loads(blob_info)
-            if announce_time < current_time:
-                batch.Put(blob_hash, json.dumps((length, verified_time, next_announce_time)))
-                blobs.append(blob_hash)
-        self.db.Write(batch, sync=True)
-        return blobs
 
+        def get_and_update(transaction):
+            timestamp = time.time()
+            r = transaction.execute("select blob_hash from blobs " +
+                                    "where next_announce_time < ? and blob_hash is not null",
+                                    (timestamp,))
+            blobs = [b for b, in r.fetchall()]
+            transaction.execute("update blobs set next_announce_time = ? where next_announce_time < ?",
+                                (next_announce_time, timestamp))
+            return blobs
+
+        return self.db_conn.runInteraction(get_and_update)
+
+    @rerun_if_locked
     def _update_all_last_verified_dates(self, timestamp):
-        batch = leveldb.WriteBatch()
-        for blob_hash, blob_info in self.db.RangeIter():
-            length, verified_time, announce_time = json.loads(blob_info)
-            batch.Put(blob_hash, json.dumps((length, timestamp, announce_time)))
-        self.db.Write(batch, sync=True)
+        return self.db_conn.runQuery("update blobs set last_verified_date = ?", (timestamp,))
 
+    @rerun_if_locked
     def _delete_blobs_from_db(self, blob_hashes):
-        batch = leveldb.WriteBatch()
-        for blob_hash in blob_hashes:
-            batch.Delete(blob_hash)
-        self.db.Write(batch, sync=True)
 
+        def delete_blobs(transaction):
+            for b in blob_hashes:
+                transaction.execute("delete from blobs where blob_hash = ?", (b,))
+
+        return self.db_conn.runInteraction(delete_blobs)
+
+    @rerun_if_locked
     def _check_consistency(self):
-        batch = leveldb.WriteBatch()
+
+        ALREADY_VERIFIED = 1
+        NEWLY_VERIFIED = 2
+        INVALID = 3
+
         current_time = time.time()
-        for blob_hash, blob_info in self.db.RangeIter():
-            length, verified_time, announce_time = json.loads(blob_info)
+        d = self.db_conn.runQuery("select blob_hash, blob_length, last_verified_time from blobs")
+
+        def check_blob(blob_hash, blob_length, verified_time):
             file_path = os.path.join(self.blob_dir, blob_hash)
             if os.path.isfile(file_path):
-                if verified_time < os.path.getctime(file_path):
+                if verified_time >= os.path.getctime(file_path):
+                    return ALREADY_VERIFIED
+                else:
                     h = get_lbry_hash_obj()
                     len_so_far = 0
                     f = open(file_path)
@@ -296,19 +354,63 @@ class DiskBlobManager(BlobManager):
                             break
                         h.update(data)
                         len_so_far += len(data)
-                    if len_so_far == length and h.hexdigest() == blob_hash:
-                        batch.Put(blob_hash, json.dumps((length, current_time, announce_time)))
-        self.db.Write(batch, sync=True)
+                    if len_so_far == blob_length and h.hexdigest() == blob_hash:
+                        return NEWLY_VERIFIED
+            return INVALID
 
+        def do_check(blobs):
+            already_verified = []
+            newly_verified = []
+            invalid = []
+            for blob_hash, blob_length, verified_time in blobs:
+                status = check_blob(blob_hash, blob_length, verified_time)
+                if status == ALREADY_VERIFIED:
+                    already_verified.append(blob_hash)
+                elif status == NEWLY_VERIFIED:
+                    newly_verified.append(blob_hash)
+                else:
+                    invalid.append(blob_hash)
+            return already_verified, newly_verified, invalid
+
+        def update_newly_verified(transaction, blobs):
+            for b in blobs:
+                transaction.execute("update blobs set last_verified_time = ? where blob_hash = ?",
+                                    (current_time, b))
+
+        def check_blobs(blobs):
+
+            @rerun_if_locked
+            def update_and_return(status_lists):
+
+                already_verified, newly_verified, invalid = status_lists
+
+                d = self.db_conn.runInteraction(update_newly_verified, newly_verified)
+                d.addCallback(lambda _: status_lists)
+                return d
+
+            d = threads.deferToThread(do_check, blobs)
+
+            d.addCallback(update_and_return)
+            return d
+
+        d.addCallback(check_blobs)
+        return d
+
+    @rerun_if_locked
     def _get_all_verified_blob_hashes(self):
-        blob_hashes = []
-        for blob_hash, blob_info in self.db.RangeIter():
-            length, verified_time, announce_time = json.loads(blob_info)
-            file_path = os.path.join(self.blob_dir, blob_hash)
-            if os.path.isfile(file_path):
-                if verified_time > os.path.getctime(file_path):
-                    blob_hashes.append(blob_hash)
-        return blob_hashes
+        d = self.db_conn.runQuery("select blob_hash, last_verified_time from blobs")
+
+        def get_verified_blobs(blobs):
+            verified_blobs = []
+            for blob_hash, verified_time in blobs:
+                file_path = os.path.join(self.blob_dir, blob_hash)
+                if os.path.isfile(file_path):
+                    if verified_time > os.path.getctime(file_path):
+                        verified_blobs.append(blob_hash)
+            return verified_blobs
+
+        d.addCallback(lambda blobs: threads.deferToThread(get_verified_blobs, blobs))
+        return d
 
 
 class TempBlobManager(BlobManager):
@@ -389,7 +491,7 @@ class TempBlobManager(BlobManager):
         if blob_hash in self.blobs:
             if self.blobs[blob_hash].length is not None:
                 return defer.succeed(self.blobs[blob_hash].length)
-        return defer.fail(ValueError("No such blob hash is known"))
+        return defer.fail(NoSuchBlobError(blob_hash))
 
     def immediate_announce_all_blobs(self):
         return self.hash_announcer.immediate_announce(self.blobs.iterkeys())
@@ -432,7 +534,7 @@ class TempBlobManager(BlobManager):
                     ds.append(d)
                 else:
                     remove_from_list(blob_hash)
-                    d = defer.fail(Failure(ValueError("No such blob known")))
+                    d = defer.fail(Failure(NoSuchBlobError(blob_hash)))
                     logging.warning("Blob %s cannot be deleted because it is unknown")
                     ds.append(d)
         return defer.DeferredList(ds)

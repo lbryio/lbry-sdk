@@ -1,11 +1,13 @@
 import time
 import logging
-import leveldb
-import json
+from twisted.enterprise import adbapi
 import os
+import sqlite3
 from twisted.internet import threads, defer
+from twisted.python.failure import Failure
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
-from lbrynet.core.Error import DuplicateStreamHashError
+from lbrynet.core.Error import DuplicateStreamHashError, NoSuchStreamHashError
+from lbrynet.core.sqlite_helpers import rerun_if_locked
 
 
 class DBLiveStreamMetadataManager(DHTHashSupplier):
@@ -14,26 +16,22 @@ class DBLiveStreamMetadataManager(DHTHashSupplier):
     def __init__(self, db_dir, hash_announcer):
         DHTHashSupplier.__init__(self, hash_announcer)
         self.db_dir = db_dir
-        self.stream_info_db = None
-        self.stream_blob_db = None
-        self.stream_desc_db = None
+        self.db_conn = None
 
     def setup(self):
-        return threads.deferToThread(self._open_db)
+        return self._open_db()
 
     def stop(self):
-        self.stream_info_db = None
-        self.stream_blob_db = None
-        self.stream_desc_db = None
+        self.db_conn = None
         return defer.succeed(True)
 
     def get_all_streams(self):
-        return threads.deferToThread(self._get_all_streams)
+        return self._get_all_streams()
 
     def save_stream(self, stream_hash, pub_key, file_name, key, blobs):
         next_announce_time = time.time() + self.hash_reannounce_time
-        d = threads.deferToThread(self._store_stream, stream_hash, pub_key, file_name, key,
-                                  next_announce_time=next_announce_time)
+        d = self._store_stream(stream_hash, pub_key, file_name, key,
+                               next_announce_time=next_announce_time)
 
         def save_blobs():
             return self.add_blobs_to_stream(stream_hash, blobs)
@@ -48,169 +46,229 @@ class DBLiveStreamMetadataManager(DHTHashSupplier):
         return d
 
     def get_stream_info(self, stream_hash):
-        return threads.deferToThread(self._get_stream_info, stream_hash)
+        return self._get_stream_info(stream_hash)
 
     def check_if_stream_exists(self, stream_hash):
-        return threads.deferToThread(self._check_if_stream_exists, stream_hash)
+        return self._check_if_stream_exists(stream_hash)
 
     def delete_stream(self, stream_hash):
-        return threads.deferToThread(self._delete_stream, stream_hash)
+        return self._delete_stream(stream_hash)
 
     def add_blobs_to_stream(self, stream_hash, blobs):
-
-        def add_blobs():
-            self._add_blobs_to_stream(stream_hash, blobs, ignore_duplicate_error=True)
-
-        return threads.deferToThread(add_blobs)
+        return self._add_blobs_to_stream(stream_hash, blobs, ignore_duplicate_error=True)
 
     def get_blobs_for_stream(self, stream_hash, start_blob=None, end_blob=None, count=None, reverse=False):
         logging.info("Getting blobs for a stream. Count is %s", str(count))
 
         def get_positions_of_start_and_end():
             if start_blob is not None:
-                start_num = self._get_blob_num_by_hash(stream_hash, start_blob)
+                d1 = self._get_blob_num_by_hash(stream_hash, start_blob)
             else:
-                start_num = None
+                d1 = defer.succeed(None)
             if end_blob is not None:
-                end_num = self._get_blob_num_by_hash(stream_hash, end_blob)
+                d2 = self._get_blob_num_by_hash(stream_hash, end_blob)
             else:
+                d2 = defer.succeed(None)
+
+            dl = defer.DeferredList([d1, d2])
+
+            def get_positions(results):
+                start_num = None
                 end_num = None
-            return start_num, end_num
+                if results[0][0] is True:
+                    start_num = results[0][1]
+                if results[1][0] is True:
+                    end_num = results[1][1]
+                return start_num, end_num
+
+            dl.addCallback(get_positions)
+            return dl
 
         def get_blob_infos(nums):
             start_num, end_num = nums
-            return threads.deferToThread(self._get_further_blob_infos, stream_hash, start_num, end_num,
-                                         count, reverse)
+            return self._get_further_blob_infos(stream_hash, start_num, end_num,
+                                                count, reverse)
 
-        d = threads.deferToThread(get_positions_of_start_and_end)
+        d = get_positions_of_start_and_end()
         d.addCallback(get_blob_infos)
         return d
 
     def get_stream_of_blob(self, blob_hash):
-        return threads.deferToThread(self._get_stream_of_blobhash, blob_hash)
+        return self._get_stream_of_blobhash(blob_hash)
 
     def save_sd_blob_hash_to_stream(self, stream_hash, sd_blob_hash):
-        return threads.deferToThread(self._save_sd_blob_hash_to_stream, stream_hash, sd_blob_hash)
+        return self._save_sd_blob_hash_to_stream(stream_hash, sd_blob_hash)
 
     def get_sd_blob_hashes_for_stream(self, stream_hash):
-        return threads.deferToThread(self._get_sd_blob_hashes_for_stream, stream_hash)
+        return self._get_sd_blob_hashes_for_stream(stream_hash)
 
     def hashes_to_announce(self):
         next_announce_time = time.time() + self.hash_reannounce_time
-        return threads.deferToThread(self._get_streams_to_announce, next_announce_time)
+        return self._get_streams_to_announce(next_announce_time)
 
     ######### database calls #########
 
     def _open_db(self):
-        self.stream_info_db = leveldb.LevelDB(os.path.join(self.db_dir, "stream_info.db"))
-        self.stream_blob_db = leveldb.LevelDB(os.path.join(self.db_dir, "stream_blob.db"))
-        self.stream_desc_db = leveldb.LevelDB(os.path.join(self.db_dir, "stream_desc.db"))
+        # check_same_thread=False is solely to quiet a spurious error that appears to be due
+        # to a bug in twisted, where the connection is closed by a different thread than the
+        # one that opened it. The individual connections in the pool are not used in multiple
+        # threads.
+        self.db_conn = adbapi.ConnectionPool('sqlite3', os.path.join(self.db_dir, "live_stream.db"),
+                                             check_same_thread=False)
 
+        def create_tables(transaction):
+            transaction.execute("create table if not exists live_streams (" +
+                                "    stream_hash text primary key, " +
+                                "    public_key text, " +
+                                "    key text, " +
+                                "    stream_name text, " +
+                                "    next_announce_time real" +
+                                ")")
+            transaction.execute("create table if not exists live_stream_blobs (" +
+                                "    blob_hash text, " +
+                                "    stream_hash text, " +
+                                "    position integer, " +
+                                "    revision integer, " +
+                                "    iv text, " +
+                                "    length integer, " +
+                                "    signature text, " +
+                                "    foreign key(stream_hash) references live_streams(stream_hash)" +
+                                ")")
+            transaction.execute("create table if not exists live_stream_descriptors (" +
+                                "    sd_blob_hash TEXT PRIMARY KEY, " +
+                                "    stream_hash TEXT, " +
+                                "    foreign key(stream_hash) references live_streams(stream_hash)" +
+                                ")")
+
+        return self.db_conn.runInteraction(create_tables)
+
+    @rerun_if_locked
     def _delete_stream(self, stream_hash):
-        desc_batch = leveldb.WriteBatch()
-        for sd_blob_hash, s_h in self.stream_desc_db.RangeIter():
-            if stream_hash == s_h:
-                desc_batch.Delete(sd_blob_hash)
-        self.stream_desc_db.Write(desc_batch, sync=True)
 
-        blob_batch = leveldb.WriteBatch()
-        for blob_hash_stream_hash, blob_info in self.stream_blob_db.RangeIter():
-            b_h, s_h = json.loads(blob_hash_stream_hash)
-            if stream_hash == s_h:
-                blob_batch.Delete(blob_hash_stream_hash)
-        self.stream_blob_db.Write(blob_batch, sync=True)
+        d = self.db_conn.runQuery("select stream_hash from live_streams where stream_hash = ?", (stream_hash,))
+        d.addCallback(lambda result: result[0][0] if len(result) else Failure(NoSuchStreamHashError(stream_hash)))
 
-        stream_batch = leveldb.WriteBatch()
-        for s_h, stream_info in self.stream_info_db.RangeIter():
-            if stream_hash == s_h:
-                stream_batch.Delete(s_h)
-        self.stream_info_db.Write(stream_batch, sync=True)
+        def do_delete(transaction, s_h):
+            transaction.execute("delete from live_streams where stream_hash = ?", (s_h,))
+            transaction.execute("delete from live_stream_blobs where stream_hash = ?", (s_h,))
+            transaction.execute("delete from live_stream_descriptors where stream_hash = ?", (s_h,))
 
+        d.addCallback(lambda s_h: self.db_conn.runInteraction(do_delete, s_h))
+        return d
+
+    @rerun_if_locked
     def _store_stream(self, stream_hash, public_key, name, key, next_announce_time=None):
-        try:
-            self.stream_info_db.Get(stream_hash)
-            raise DuplicateStreamHashError("Stream hash %s already exists" % stream_hash)
-        except KeyError:
-            pass
-        self.stream_info_db.Put(stream_hash, json.dumps((public_key, key, name, next_announce_time)), sync=True)
+        d = self.db_conn.runQuery("insert into live_streams values (?, ?, ?, ?, ?)",
+                                  (stream_hash, public_key, key, name, next_announce_time))
 
+        def check_duplicate(err):
+            if err.check(sqlite3.IntegrityError):
+                raise DuplicateStreamHashError(stream_hash)
+            return err
+
+        d.addErrback(check_duplicate)
+        return d
+
+    @rerun_if_locked
     def _get_all_streams(self):
-        return [stream_hash for stream_hash, stream_info in self.stream_info_db.RangeIter()]
+        d = self.db_conn.runQuery("select stream_hash from live_streams")
+        d.addCallback(lambda results: [r[0] for r in results])
+        return d
 
+    @rerun_if_locked
     def _get_stream_info(self, stream_hash):
-        return json.loads(self.stream_info_db.Get(stream_hash))[:3]
+        d = self.db_conn.runQuery("select public_key, key, stream_name from live_streams where stream_hash = ?",
+                                  (stream_hash,))
+        d.addCallback(lambda result: result[0] if len(result) else Failure(NoSuchStreamHashError(stream_hash)))
+        return d
 
+    @rerun_if_locked
     def _check_if_stream_exists(self, stream_hash):
-        try:
-            self.stream_info_db.Get(stream_hash)
-            return True
-        except KeyError:
-            return False
+        d = self.db_conn.runQuery("select stream_hash from live_streams where stream_hash = ?", (stream_hash,))
+        d.addCallback(lambda r: True if len(r) else False)
+        return d
 
+    @rerun_if_locked
     def _get_streams_to_announce(self, next_announce_time):
-        # TODO: See if the following would be better for handling announce times:
-        # TODO:    Have a separate db for them, and read the whole thing into memory
-        # TODO:    on startup, and then write changes to db when they happen
-        stream_hashes = []
-        batch = leveldb.WriteBatch()
-        current_time = time.time()
-        for stream_hash, stream_info in self.stream_info_db.RangeIter():
-            public_key, key, name, announce_time = json.loads(stream_info)
-            if announce_time < current_time:
-                batch.Put(stream_hash, json.dumps((public_key, key, name, next_announce_time)))
-                stream_hashes.append(stream_hash)
-        self.stream_info_db.Write(batch, sync=True)
-        return stream_hashes
 
+        def get_and_update(transaction):
+            timestamp = time.time()
+            r = transaction.execute("select stream_hash from live_streams where" +
+                                    "    (next_announce_time is null or next_announce_time < ?) " +
+                                    "    and stream_hash is not null", (timestamp, ))
+            s_hs = [s_h for s_h, in r.fetchall()]
+            transaction.execute("update live_streams set next_announce_time = ? where " +
+                                "    (next_announce_time is null or next_announce_time < ?)",
+                                (next_announce_time, timestamp))
+            return s_hs
+
+        return self.db_conn.runInteraction(get_and_update)
+
+    @rerun_if_locked
     def _get_blob_num_by_hash(self, stream_hash, blob_hash):
-        blob_hash_stream_hash = json.dumps((blob_hash, stream_hash))
-        return json.loads(self.stream_blob_db.Get(blob_hash_stream_hash))[0]
+        d = self.db_conn.runQuery("select position from live_stream_blobs where stream_hash = ? and blob_hash = ?",
+                                  (stream_hash, blob_hash))
+        d.addCallback(lambda r: r[0][0] if len(r) else None)
+        return d
 
+    @rerun_if_locked
     def _get_further_blob_infos(self, stream_hash, start_num, end_num, count=None, reverse=False):
-        blob_infos = []
-        for blob_hash_stream_hash, blob_info in self.stream_blob_db.RangeIter():
-            b_h, s_h = json.loads(blob_hash_stream_hash)
-            if stream_hash == s_h:
-                position, revision, iv, length, signature = json.loads(blob_info)
-                if (start_num is None) or (position > start_num):
-                    if (end_num is None) or (position < end_num):
-                        blob_infos.append((b_h, position, revision, iv, length, signature))
-        blob_infos.sort(key=lambda i: i[1], reverse=reverse)
+        params = []
+        q_string = "select * from ("
+        q_string += "  select blob_hash, position, revision, iv, length, signature from live_stream_blobs "
+        q_string += "    where stream_hash = ? "
+        params.append(stream_hash)
+        if start_num is not None:
+            q_string += "    and position > ? "
+            params.append(start_num)
+        if end_num is not None:
+            q_string += "    and position < ? "
+            params.append(end_num)
+        q_string += "    order by position "
+        if reverse is True:
+            q_string += "   DESC "
         if count is not None:
-            blob_infos = blob_infos[:count]
-        return blob_infos
+            q_string += "    limit ? "
+            params.append(count)
+        q_string += ") order by position"
+        # Order by position is done twice so that it always returns them from lowest position to
+        # greatest, but the limit by clause can select the 'count' greatest or 'count' least
+        return self.db_conn.runQuery(q_string, tuple(params))
 
+    @rerun_if_locked
     def _add_blobs_to_stream(self, stream_hash, blob_infos, ignore_duplicate_error=False):
-        batch = leveldb.WriteBatch()
-        for blob_info in blob_infos:
-            blob_hash_stream_hash = json.dumps((blob_info.blob_hash, stream_hash))
-            try:
-                self.stream_blob_db.Get(blob_hash_stream_hash)
-                if ignore_duplicate_error is False:
-                    raise KeyError()  # TODO: change this to DuplicateStreamBlobError?
-                continue
-            except KeyError:
-                pass
-            batch.Put(blob_hash_stream_hash,
-                      json.dumps((blob_info.blob_num,
-                                  blob_info.revision,
-                                  blob_info.iv,
-                                  blob_info.length,
-                                  blob_info.signature)))
-        self.stream_blob_db.Write(batch, sync=True)
 
+        def add_blobs(transaction):
+            for blob_info in blob_infos:
+                try:
+                    transaction.execute("insert into live_stream_blobs values (?, ?, ?, ?, ?, ?, ?)",
+                                        (blob_info.blob_hash, stream_hash, blob_info.blob_num,
+                                         blob_info.revision, blob_info.iv, blob_info.length,
+                                         blob_info.signature))
+                except sqlite3.IntegrityError:
+                    if ignore_duplicate_error is False:
+                        raise
+
+        return self.db_conn.runInteraction(add_blobs)
+
+    @rerun_if_locked
     def _get_stream_of_blobhash(self, blob_hash):
-        for blob_hash_stream_hash, blob_info in self.stream_blob_db.RangeIter():
-            b_h, s_h = json.loads(blob_hash_stream_hash)
-            if blob_hash == b_h:
-                return s_h
-        return None
+        d = self.db_conn.runQuery("select stream_hash from live_stream_blobs where blob_hash = ?",
+                                  (blob_hash,))
+        d.addCallback(lambda r: r[0][0] if len(r) else None)
+        return d
 
+    @rerun_if_locked
     def _save_sd_blob_hash_to_stream(self, stream_hash, sd_blob_hash):
-        self.stream_desc_db.Put(sd_blob_hash, stream_hash)
+        return self.db_conn.runQuery("insert into live_stream_descriptors values (?, ?)",
+                                     (sd_blob_hash, stream_hash))
 
+    @rerun_if_locked
     def _get_sd_blob_hashes_for_stream(self, stream_hash):
-        return [sd_blob_hash for sd_blob_hash, s_h in self.stream_desc_db.RangeIter() if stream_hash == s_h]
+        d = self.db_conn.runQuery("select sd_blob_hash from live_stream_descriptors where stream_hash = ?",
+                                  (stream_hash,))
+        d.addCallback(lambda results: [r[0] for r in results])
+        return d
 
 
 class TempLiveStreamMetadataManager(DHTHashSupplier):

@@ -8,3 +8,6 @@ class LBRYPlugin(IPlugin):
 
     def setup(self, lbry_console):
         raise NotImplementedError
+
+    def stop(self):
+        raise NotImplementedError

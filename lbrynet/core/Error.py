@@ -64,3 +64,11 @@ class NoResponseError(MisbehavingPeerError):
 
 class InvalidResponseError(MisbehavingPeerError):
     pass
+
+
+class NoSuchBlobError(Exception):
+    pass
+
+
+class NoSuchStreamHashError(Exception):
+    pass

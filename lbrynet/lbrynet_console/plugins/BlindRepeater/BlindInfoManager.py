@@ -1,25 +1,43 @@
-from twisted.internet import threads, defer
+from twisted.internet import defer
 from ValuableBlobInfo import ValuableBlobInfo
-from db_keys import BLOB_INFO_TYPE
-import json
-import leveldb
+import os
+import sqlite3
+from twisted.enterprise import adbapi
+from lbrynet.core.sqlite_helpers import rerun_if_locked
 
 
 class BlindInfoManager(object):
 
-    def __init__(self, db, peer_manager):
-        self.db = db
+    def __init__(self, db_dir, peer_manager):
+        self.db_dir = db_dir
+        self.db_conn = None
         self.peer_manager = peer_manager
 
     def setup(self):
-        return defer.succeed(True)
+        # check_same_thread=False is solely to quiet a spurious error that appears to be due
+        # to a bug in twisted, where the connection is closed by a different thread than the
+        # one that opened it. The individual connections in the pool are not used in multiple
+        # threads.
+        self.db_conn = adbapi.ConnectionPool('sqlite3', os.path.join(self.db_dir, "blind_info.db"),
+                                             check_same_thread=False)
+
+        def set_up_table(transaction):
+            transaction.execute("create table if not exists valuable_blobs (" +
+                                "    blob_hash text primary key, " +
+                                "    blob_length integer, " +
+                                "    reference text, " +
+                                "    peer_host text, " +
+                                "    peer_port integer, " +
+                                "    peer_score text" +
+                                ")")
+        return self.db_conn.runInteraction(set_up_table)
 
     def stop(self):
         self.db = None
         return defer.succeed(True)
 
     def get_all_blob_infos(self):
-        d = threads.deferToThread(self._get_all_blob_infos)
+        d = self._get_all_blob_infos()
 
         def make_blob_infos(blob_data):
             blob_infos = []
@@ -42,21 +60,19 @@ class BlindInfoManager(object):
             peer_port = blob_info.peer.port
             peer_score = blob_info.peer_score
             blobs.append((blob_hash, length, reference, peer_host, peer_port, peer_score))
-        return threads.deferToThread(self._save_blob_infos, blobs)
+        return self._save_blob_infos(blobs)
 
+    @rerun_if_locked
     def _get_all_blob_infos(self):
-        blob_infos = []
-        for key, blob_info in self.db.RangeIter():
-            key_type, blob_hash = json.loads(key)
-            if key_type == BLOB_INFO_TYPE:
-                blob_infos.append([blob_hash] + json.loads(blob_info))
-        return blob_infos
+        return self.db_conn.runQuery("select * from valuable_blobs")
 
+    @rerun_if_locked
     def _save_blob_infos(self, blobs):
-        batch = leveldb.WriteBatch()
-        for blob in blobs:
-            try:
-                self.db.Get(json.dumps((BLOB_INFO_TYPE, blob[0])))
-            except KeyError:
-                batch.Put(json.dumps((BLOB_INFO_TYPE, blob[0])), json.dumps(blob[1:]))
-        self.db.Write(batch, sync=True)
+        def save_infos(transaction):
+            for blob in blobs:
+                try:
+                    transaction.execute("insert into valuable_blobs values (?, ?, ?, ?, ?, ?)",
+                                        blob)
+                except sqlite3.IntegrityError:
+                    pass
+        return self.db_conn.runInteraction(save_infos)
