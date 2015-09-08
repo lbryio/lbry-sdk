@@ -4,6 +4,9 @@ from zope.interface import implements
 from lbrynet.interfaces import IQueryHandlerFactory, IQueryHandler
 
 
+log = logging.getLogger(__name__)
+
+
 class BlobAvailabilityHandlerFactory(object):
     implements(IQueryHandlerFactory)
 
@@ -37,7 +40,7 @@ class BlobAvailabilityHandler(object):
 
     def handle_queries(self, queries):
         if self.query_identifiers[0] in queries:
-            logging.debug("Received the client's list of requested blobs")
+            log.debug("Received the client's list of requested blobs")
             d = self._get_available_blobs(queries[self.query_identifiers[0]])
 
             def set_field(available_blobs):

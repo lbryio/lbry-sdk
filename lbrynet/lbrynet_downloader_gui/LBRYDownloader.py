@@ -22,6 +22,9 @@ import requests
 from twisted.internet import threads, defer, task
 
 
+log = logging.getLogger(__name__)
+
+
 class LBRYDownloader(object):
     def __init__(self):
         self.session = None
@@ -109,13 +112,13 @@ class LBRYDownloader(object):
 
         def get_configuration():
             if not os.path.exists("lbry.conf"):
-                logging.debug("Could not read lbry.conf")
+                log.debug("Could not read lbry.conf")
                 return ""
             else:
                 lbry_conf = open("lbry.conf")
-                logging.debug("Loading configuration options from lbry.conf")
+                log.debug("Loading configuration options from lbry.conf")
                 lines = lbry_conf.readlines()
-                logging.debug("lbry.conf file contents:\n%s", str(lines))
+                log.debug("lbry.conf file contents:\n%s", str(lines))
                 return lines
 
         d = threads.deferToThread(get_configuration)
@@ -143,7 +146,7 @@ class LBRYDownloader(object):
                                     known_nodes.append((ip_address, int(port_string)))
                                 except (ValueError, AssertionError):
                                     raise ValueError("Expected known nodes in format 192.168.1.1:4000,192.168.1.2:4001. Got %s" % str(field_value))
-                        logging.debug("Setting known_dht_nodes to %s", str(known_nodes))
+                        log.debug("Setting known_dht_nodes to %s", str(known_nodes))
                         self.known_dht_nodes = known_nodes
                     elif field_name == "run_server":
                         if field_value.lower() == "true":
@@ -152,25 +155,25 @@ class LBRYDownloader(object):
                             run_server = False
                         else:
                             raise ValueError("run_server must be set to True or False. Got %s" % field_value)
-                        logging.debug("Setting run_server to %s", str(run_server))
+                        log.debug("Setting run_server to %s", str(run_server))
                         self.run_server = run_server
                     elif field_name == "db_dir":
-                        logging.debug("Setting conf_dir to %s", str(field_value))
+                        log.debug("Setting conf_dir to %s", str(field_value))
                         self.conf_dir = field_value
                     elif field_name == "data_dir":
-                        logging.debug("Setting data_dir to %s", str(field_value))
+                        log.debug("Setting data_dir to %s", str(field_value))
                         self.data_dir = field_value
                     elif field_name == "wallet_dir":
-                        logging.debug("Setting wallet_dir to %s", str(field_value))
+                        log.debug("Setting wallet_dir to %s", str(field_value))
                         self.wallet_dir = field_value
                     elif field_name == "wallet_conf":
-                        logging.debug("Setting wallet_conf to %s", str(field_value))
+                        log.debug("Setting wallet_conf to %s", str(field_value))
                         self.wallet_conf = field_value
                     elif field_name == "peer_port":
                         try:
                             peer_port = int(field_value)
                             assert 0 <= peer_port <= 65535
-                            logging.debug("Setting peer_port to %s", str(peer_port))
+                            log.debug("Setting peer_port to %s", str(peer_port))
                             self.peer_port = peer_port
                         except (ValueError, AssertionError):
                             raise ValueError("peer_port must be set to an integer between 1 and 65535. Got %s" % field_value)
@@ -178,7 +181,7 @@ class LBRYDownloader(object):
                         try:
                             dht_port = int(field_value)
                             assert 0 <= dht_port <= 65535
-                            logging.debug("Setting dht_node_port to %s", str(dht_port))
+                            log.debug("Setting dht_node_port to %s", str(dht_port))
                             self.dht_node_port = dht_port
                         except (ValueError, AssertionError):
                             raise ValueError("dht_port must be set to an integer between 1 and 65535. Got %s" % field_value)
@@ -189,13 +192,13 @@ class LBRYDownloader(object):
                             use_upnp = False
                         else:
                             raise ValueError("use_upnp must be set to True or False. Got %s" % str(field_value))
-                        logging.debug("Setting use_upnp to %s", str(use_upnp))
+                        log.debug("Setting use_upnp to %s", str(use_upnp))
                         self.use_upnp = use_upnp
                     elif field_name == "default_blob_data_payment_rate":
                         try:
                             rate = float(field_value)
                             assert rate >= 0.0
-                            logging.debug("Setting default_blob_data_payment_rate to %s", str(rate))
+                            log.debug("Setting default_blob_data_payment_rate to %s", str(rate))
                             self.default_blob_data_payment_rate = rate
                         except (ValueError, AssertionError):
                             raise ValueError("default_blob_data_payment_rate must be a positive floating point number, e.g. 0.5. Got %s" % str(field_value))
@@ -206,10 +209,10 @@ class LBRYDownloader(object):
                             start_lbrycrdd = False
                         else:
                             raise ValueError("start_lbrycrdd must be set to True or False. Got %s" % field_value)
-                        logging.debug("Setting start_lbrycrdd to %s", str(start_lbrycrdd))
+                        log.debug("Setting start_lbrycrdd to %s", str(start_lbrycrdd))
                         self.start_lbrycrdd = start_lbrycrdd
                     elif field_name == "download_directory":
-                        logging.debug("Setting download_directory to %s", str(field_value))
+                        log.debug("Setting download_directory to %s", str(field_value))
                         self.download_directory = field_value
                     elif field_name == "delete_blobs_on_stream_remove":
                         if field_value.lower() == "true":
@@ -219,7 +222,7 @@ class LBRYDownloader(object):
                         else:
                             raise ValueError("delete_blobs_on_stream_remove must be set to True or False")
                     else:
-                        logging.warning("Got unknown configuration field: %s", field_name)
+                        log.warning("Got unknown configuration field: %s", field_name)
 
         d.addCallback(load_configuration)
         return d
@@ -230,10 +233,10 @@ class LBRYDownloader(object):
             db_revision = open(os.path.join(self.conf_dir, "db_revision"), mode='w')
             db_revision.write(str(self.current_db_revision))
             db_revision.close()
-            logging.debug("Created the configuration directory: %s", str(self.conf_dir))
+            log.debug("Created the configuration directory: %s", str(self.conf_dir))
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
-            logging.debug("Created the data directory: %s", str(self.data_dir))
+            log.debug("Created the data directory: %s", str(self.data_dir))
         if not os.path.exists(self.wallet_dir):
             os.makedirs(self.wallet_dir)
         if not os.path.exists(self.wallet_conf):
@@ -323,7 +326,7 @@ class LBRYDownloader(object):
                 return 0.0
 
             def log_error(err):
-                logging.warning("unable to request free credits. %s", err.getErrorMessage())
+                log.warning("unable to request free credits. %s", err.getErrorMessage())
                 return 0.0
 
             def request_credits(address):
@@ -468,7 +471,7 @@ class LBRYDownloader(object):
 
         def show_err(err):
             tkMessageBox.showerror(title="Download Error", message=err.getErrorMessage())
-            logging.error(err.getErrorMessage())
+            log.error(err.getErrorMessage())
             stream_frame.show_download_done(payment_rate_manager.points_paid)
 
         resolve_d.addErrback(lambda err: err.trap(defer.CancelledError, UnknownNameError,

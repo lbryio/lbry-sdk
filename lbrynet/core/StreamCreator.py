@@ -3,6 +3,9 @@ from twisted.internet import interfaces, defer
 from zope.interface import implements
 
 
+log = logging.getLogger(__name__)
+
+
 class StreamCreator(object):
     """Classes which derive from this class create a 'stream', which can be any
         collection of associated blobs and associated metadata. These classes
@@ -42,7 +45,7 @@ class StreamCreator(object):
 
     def stop(self):
         """Stop creating the stream. Create the terminating zero-length blob."""
-        logging.debug("stop has been called for StreamCreator")
+        log.debug("stop has been called for StreamCreator")
         self.stopped = True
         if self.current_blob is not None:
             current_blob = self.current_blob

@@ -12,6 +12,9 @@ from lbrynet.core.Error import InsufficientFundsError, InvalidResponseError, Req
 from lbrynet.core.Error import NoResponseError, ConnectionClosedBeforeResponseError
 
 
+log = logging.getLogger(__name__)
+
+
 class LiveStreamMetadataHandler(object):
     implements(IRequestCreator, IMetadataHandler)
 
@@ -79,7 +82,7 @@ class LiveStreamMetadataHandler(object):
         r = None
         if self._finished_discovery() is False:
             r = self.stream_hash
-        logging.debug("Info finder peer search response for stream %s: %s", str(self.stream_hash), str(r))
+        log.debug("Info finder peer search response for stream %s: %s", str(self.stream_hash), str(r))
         return defer.succeed(r)
 
     def _find_peers_for_hash(self, h):
@@ -101,7 +104,7 @@ class LiveStreamMetadataHandler(object):
             if blob_hash is not None:
                 infos.append(LiveBlobInfo(blob_hash, blob_num, length, iv, revision, signature))
             else:
-                logging.debug("Setting _final_blob_num to %s", str(blob_num - 1))
+                log.debug("Setting _final_blob_num to %s", str(blob_num - 1))
                 self._final_blob_num = blob_num - 1
         return infos
 
@@ -134,7 +137,7 @@ class LiveStreamMetadataHandler(object):
                 further_blobs_request['count'] = count
             else:
                 further_blobs_request['count'] = MAX_BLOB_INFOS_TO_REQUEST
-            logging.debug("Requesting %s blob infos from %s", str(further_blobs_request['count']), str(peer))
+            log.debug("Requesting %s blob infos from %s", str(further_blobs_request['count']), str(peer))
             r_dict = {'further_blobs': further_blobs_request}
             response_identifier = 'further_blobs'
             request = ClientPaidRequest(r_dict, response_identifier, further_blobs_request['count'])
@@ -142,7 +145,7 @@ class LiveStreamMetadataHandler(object):
         return None
 
     def _get_discovery_params(self):
-        logging.debug("In _get_discovery_params")
+        log.debug("In _get_discovery_params")
         stream_position = self.download_manager.stream_position()
         blobs = self.download_manager.blobs
         if blobs:
@@ -153,7 +156,7 @@ class LiveStreamMetadataHandler(object):
         if final_blob_num is not None:
             last_blob_num = final_blob_num
         if self.download_whole is False:
-            logging.debug("download_whole is False")
+            log.debug("download_whole is False")
             if final_blob_num is not None:
                 for i in xrange(stream_position, final_blob_num + 1):
                     if not i in blobs:
@@ -171,7 +174,7 @@ class LiveStreamMetadataHandler(object):
                     return self.stream_hash, blobs[last_blob_num].blob_hash, 'end', -1 * self.max_before_skip_ahead
                 else:
                     return self.stream_hash, None, 'end', -1 * self.max_before_skip_ahead
-        logging.debug("download_whole is True")
+        log.debug("download_whole is True")
         beginning = None
         end = None
         for i in xrange(stream_position, last_blob_num + 1):
@@ -187,17 +190,17 @@ class LiveStreamMetadataHandler(object):
                     break
         if beginning is None:
             if final_blob_num is not None:
-                logging.debug("Discovery is finished. stream_position: %s, last_blob_num + 1: %s", str(stream_position),
-                              str(last_blob_num + 1))
+                log.debug("Discovery is finished. stream_position: %s, last_blob_num + 1: %s", str(stream_position),
+                          str(last_blob_num + 1))
                 return None
             else:
-                logging.debug("Discovery is not finished. final blob num is unknown.")
+                log.debug("Discovery is not finished. final blob num is unknown.")
                 if last_blob_num != -1:
                     return self.stream_hash, blobs[last_blob_num].blob_hash, None, None
                 else:
                     return self.stream_hash, 'beginning', None, None
         else:
-            logging.info("Discovery is not finished. Not all blobs are known.")
+            log.info("Discovery is not finished. Not all blobs are known.")
             return self.stream_hash, beginning, end, None
 
     def _price_settled(self, protocol):
@@ -244,7 +247,7 @@ class LiveStreamMetadataHandler(object):
         if response == "RATE_ACCEPTED":
             return True
         else:
-            logging.info("Rate offer has been rejected by %s", str(peer))
+            log.info("Rate offer has been rejected by %s", str(peer))
             del self._protocol_prices[protocol]
             self._price_disagreements.append(peer)
         return True
@@ -263,8 +266,8 @@ class LiveStreamMetadataHandler(object):
         if not 'blob_infos' in response:
             return InvalidResponseError("Missing the required field 'blob_infos'")
         raw_blob_infos = response['blob_infos']
-        logging.info("Handling %s further blobs from %s", str(len(raw_blob_infos)), str(peer))
-        logging.debug("blobs: %s", str(raw_blob_infos))
+        log.info("Handling %s further blobs from %s", str(len(raw_blob_infos)), str(peer))
+        log.debug("blobs: %s", str(raw_blob_infos))
         for raw_blob_info in raw_blob_infos:
             length = raw_blob_info['length']
             if length != 0:
@@ -276,10 +279,10 @@ class LiveStreamMetadataHandler(object):
             iv = raw_blob_info['iv']
             signature = raw_blob_info['signature']
             blob_info = LiveBlobInfo(blob_hash, num, length, iv, revision, signature)
-            logging.debug("Learned about a potential blob: %s", str(blob_hash))
+            log.debug("Learned about a potential blob: %s", str(blob_hash))
             if self._verify_blob(blob_info):
                 if blob_hash is None:
-                    logging.info("Setting _final_blob_num to %s", str(num - 1))
+                    log.info("Setting _final_blob_num to %s", str(num - 1))
                     self._final_blob_num = num - 1
                 else:
                     blob_infos.append(blob_info)
@@ -289,7 +292,7 @@ class LiveStreamMetadataHandler(object):
 
         def add_blobs_to_download_manager():
             blob_nums = [b.blob_num for b in blob_infos]
-            logging.info("Adding the following blob nums to the download manager: %s", str(blob_nums))
+            log.info("Adding the following blob nums to the download manager: %s", str(blob_nums))
             self.download_manager.add_blobs_to_download(blob_infos)
 
         d.addCallback(lambda _: add_blobs_to_download_manager())
@@ -308,12 +311,12 @@ class LiveStreamMetadataHandler(object):
         return d
 
     def _verify_blob(self, blob):
-        logging.debug("Got an unverified blob to check:")
-        logging.debug("blob_hash: %s", blob.blob_hash)
-        logging.debug("blob_num: %s", str(blob.blob_num))
-        logging.debug("revision: %s", str(blob.revision))
-        logging.debug("iv: %s", blob.iv)
-        logging.debug("length: %s", str(blob.length))
+        log.debug("Got an unverified blob to check:")
+        log.debug("blob_hash: %s", blob.blob_hash)
+        log.debug("blob_num: %s", str(blob.blob_num))
+        log.debug("revision: %s", str(blob.revision))
+        log.debug("iv: %s", blob.iv)
+        log.debug("length: %s", str(blob.length))
         hashsum = get_lbry_hash_obj()
         hashsum.update(self.stream_hash)
         if blob.length != 0:
@@ -322,12 +325,12 @@ class LiveStreamMetadataHandler(object):
         hashsum.update(str(blob.revision))
         hashsum.update(blob.iv)
         hashsum.update(str(blob.length))
-        logging.debug("hexdigest to be verified: %s", hashsum.hexdigest())
+        log.debug("hexdigest to be verified: %s", hashsum.hexdigest())
         if verify_signature(hashsum.digest(), blob.signature, self.stream_pub_key):
-            logging.debug("Blob info is valid")
+            log.debug("Blob info is valid")
             return True
         else:
-            logging.debug("The blob info is invalid")
+            log.debug("The blob info is invalid")
             return False
 
     def _request_failed(self, reason, peer):
@@ -336,7 +339,7 @@ class LiveStreamMetadataHandler(object):
         if reason.check(NoResponseError):
             self._incompatible_peers.append(peer)
             return
-        logging.warning("Crypt stream info finder: a request failed. Reason: %s", reason.getErrorMessage())
+        log.warning("Crypt stream info finder: a request failed. Reason: %s", reason.getErrorMessage())
         self._update_local_score(peer, -5.0)
         peer.update_score(-10.0)
         if reason.check(ConnectionClosedBeforeResponseError):

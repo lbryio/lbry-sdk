@@ -6,6 +6,9 @@ import os
 from twisted.internet import threads, defer
 
 
+log = logging.getLogger(__name__)
+
+
 class LBRYSettings(object):
     def __init__(self, db_dir):
         self.db_dir = db_dir
@@ -19,7 +22,7 @@ class LBRYSettings(object):
         return defer.succeed(True)
 
     def _open_db(self):
-        logging.debug("Opening %s as the settings database", str(os.path.join(self.db_dir, "settings.db")))
+        log.debug("Opening %s as the settings database", str(os.path.join(self.db_dir, "settings.db")))
         self.db = unqlite.UnQLite(os.path.join(self.db_dir, "settings.db"))
         return defer.succeed(True)
 

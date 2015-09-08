@@ -10,6 +10,9 @@ from lbrynet.core.client.ClientRequest import ClientRequest, ClientBlobRequest
 from lbrynet.interfaces import IRequestCreator
 
 
+log = logging.getLogger(__name__)
+
+
 class BlobRequester(object):
     implements(IRequestCreator)
 
@@ -85,7 +88,7 @@ class BlobRequester(object):
     ######### internal calls #########
 
     def _download_succeeded(self, arg, peer, blob):
-        logging.info("Blob %s has been successfully downloaded from %s", str(blob), str(peer))
+        log.info("Blob %s has been successfully downloaded from %s", str(blob), str(peer))
         self._update_local_score(peer, 5.0)
         peer.update_stats('blobs_downloaded', 1)
         peer.update_score(5.0)
@@ -106,8 +109,8 @@ class BlobRequester(object):
 
     def _handle_download_error(self, err, peer, blob_to_download):
         if not err.check(DownloadCanceledError, PriceDisagreementError, RequestCanceledError):
-            logging.warning("An error occurred while downloading %s from %s. Error: %s",
-                            blob_to_download.blob_hash, str(peer), err.getTraceback())
+            log.warning("An error occurred while downloading %s from %s. Error: %s",
+                        blob_to_download.blob_hash, str(peer), err.getTraceback())
         if err.check(PriceDisagreementError):
             # Don't kill the whole connection just because a price couldn't be agreed upon.
             # Other information might be desired by other request creators at a better rate.
@@ -124,7 +127,7 @@ class BlobRequester(object):
             else:
                 blob_hash = blobs_without_sources[0].blob_hash
             r = blob_hash
-        logging.debug("Blob requester peer search response: %s", str(r))
+        log.debug("Blob requester peer search response: %s", str(r))
         return defer.succeed(r)
 
     def _find_peers_for_hash(self, h):
@@ -202,7 +205,7 @@ class BlobRequester(object):
                     request = ClientBlobRequest(request_dict, response_identifier, counting_write_func, d,
                                                 cancel_func, blob_to_download)
 
-                    logging.info("Requesting blob %s from %s", str(blob_to_download), str(peer))
+                    log.info("Requesting blob %s from %s", str(blob_to_download), str(peer))
         return request
 
     def _price_settled(self, protocol):
@@ -239,11 +242,11 @@ class BlobRequester(object):
     def _handle_availability(self, response_dict, peer, request):
         if not request.response_identifier in response_dict:
             raise InvalidResponseError("response identifier not in response")
-        logging.debug("Received a response to the availability request")
+        log.debug("Received a response to the availability request")
         blob_hashes = response_dict[request.response_identifier]
         for blob_hash in blob_hashes:
             if blob_hash in request.request_dict['requested_blobs']:
-                logging.debug("The server has indicated it has the following blob available: %s", blob_hash)
+                log.debug("The server has indicated it has the following blob available: %s", blob_hash)
                 self._available_blobs[peer].append(blob_hash)
                 if blob_hash in self._unavailable_blobs[peer]:
                     self._unavailable_blobs[peer].remove(blob_hash)
@@ -298,8 +301,8 @@ class BlobRequester(object):
         if reason.check(NoResponseError):
             self._incompatible_peers.append(peer)
             return
-        logging.warning("Blob requester: a request of type '%s' failed. Reason: %s, Error type: %s",
-                        str(request_type), reason.getErrorMessage(), reason.type)
+        log.warning("Blob requester: a request of type '%s' failed. Reason: %s, Error type: %s",
+                    str(request_type), reason.getErrorMessage(), reason.type)
         self._update_local_score(peer, -10.0)
         if isinstance(reason, InvalidResponseError):
             peer.update_score(-10.0)

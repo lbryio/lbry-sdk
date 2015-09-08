@@ -6,6 +6,9 @@ from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloade
 from lbrynet.core.Error import UnknownStreamTypeError, InvalidStreamDescriptorError
 
 
+log = logging.getLogger(__name__)
+
+
 class StreamDescriptorReader(object):
     """Classes which derive from this class read a stream descriptor file return
        a dictionary containing the fields in the file"""
@@ -82,7 +85,7 @@ class PlainStreamDescriptorWriter(StreamDescriptorWriter):
     def _write_stream_descriptor(self, raw_data):
 
         def write_file():
-            logging.debug("Writing the sd file to disk")
+            log.debug("Writing the sd file to disk")
             with open(self.sd_file_name, 'w') as sd_file:
                 sd_file.write(raw_data)
             return self.sd_file_name
@@ -97,10 +100,10 @@ class BlobStreamDescriptorWriter(StreamDescriptorWriter):
         self.blob_manager = blob_manager
 
     def _write_stream_descriptor(self, raw_data):
-        logging.debug("Creating the new blob for the stream descriptor")
+        log.debug("Creating the new blob for the stream descriptor")
         blob_creator = self.blob_manager.get_blob_creator()
         blob_creator.write(raw_data)
-        logging.debug("Wrote the data to the new blob")
+        log.debug("Wrote the data to the new blob")
         return blob_creator.close()
 
 

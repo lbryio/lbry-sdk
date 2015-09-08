@@ -15,6 +15,9 @@ from twisted.python.failure import Failure
 from lbrynet.core.LBRYcrdWallet import ReservedPoints
 
 
+log = logging.getLogger(__name__)
+
+
 class PTCWallet(object):
     """This class sends payments to peers and also ensures that expected payments are received.
        This class is only intended to be used for testing."""
@@ -160,8 +163,8 @@ class PTCWallet(object):
                 ds.append(d)
                 del self.queued_payments[peer]
             else:
-                logging.warning("Don't have a payment address for peer %s. Can't send %s points.",
-                                str(peer), str(points))
+                log.warning("Don't have a payment address for peer %s. Can't send %s points.",
+                            str(peer), str(points))
         return defer.DeferredList(ds)
 
     def get_balance(self):
@@ -207,8 +210,8 @@ class PTCWallet(object):
             if self.peer_pub_keys[peer] in self.received_payments:
                 received_balance = sum([a[0] for a in self.received_payments[self.peer_pub_keys[peer]]])
             if min_expected_balance > received_balance:
-                logging.warning("Account in bad standing: %s (pub_key: %s), expected amount = %s, received_amount = %s",
-                                str(peer), self.peer_pub_keys[peer], str(min_expected_balance), str(received_balance))
+                log.warning("Account in bad standing: %s (pub_key: %s), expected amount = %s, received_amount = %s",
+                            str(peer), self.peer_pub_keys[peer], str(min_expected_balance), str(received_balance))
 
     def _open_db(self):
         def open_db():
@@ -261,8 +264,8 @@ class PointTraderKeyExchanger(object):
 
     def _request_failed(self, err, peer):
         if not err.check(RequestCanceledError):
-            logging.warning("A peer failed to send a valid public key response. Error: %s, peer: %s",
-                            err.getErrorMessage(), str(peer))
+            log.warning("A peer failed to send a valid public key response. Error: %s, peer: %s",
+                        err.getErrorMessage(), str(peer))
             #return err
 
 
@@ -306,15 +309,15 @@ class PointTraderKeyQueryHandler(object):
             try:
                 RSA.importKey(new_encoded_pub_key)
             except (ValueError, TypeError, IndexError):
-                logging.warning("Client sent an invalid public key.")
+                log.warning("Client sent an invalid public key.")
                 return defer.fail(Failure(ValueError("Client sent an invalid public key")))
             self.public_key = new_encoded_pub_key
             self.wallet.set_public_key_for_peer(self.peer, self.public_key)
-            logging.debug("Received the client's public key: %s", str(self.public_key))
+            log.debug("Received the client's public key: %s", str(self.public_key))
             fields = {'public_key': self.wallet.encoded_public_key}
             return defer.succeed(fields)
         if self.public_key is None:
-            logging.warning("Expected a public key, but did not receive one")
+            log.warning("Expected a public key, but did not receive one")
             return defer.fail(Failure(ValueError("Expected but did not receive a public key")))
         else:
             return defer.succeed({})

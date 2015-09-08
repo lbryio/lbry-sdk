@@ -7,6 +7,9 @@ import logging
 import json
 
 
+log = logging.getLogger(__name__)
+
+
 known_dbs = ['lbryfile_desc.db', 'lbryfiles.db', 'valuable_blobs.db', 'blobs.db',
              'lbryfile_blob.db', 'lbryfile_info.db', 'settings.db', 'blind_settings.db',
              'blind_peers.db', 'blind_info.db', 'lbryfile_info.db', 'lbryfile_manager.db',
@@ -17,33 +20,33 @@ def do_move(from_dir, to_dir):
     for known_db in known_dbs:
         known_db_path = os.path.join(from_dir, known_db)
         if os.path.exists(known_db_path):
-            logging.debug("Moving %s to %s",
-                          os.path.abspath(known_db_path),
-                          os.path.abspath(os.path.join(to_dir, known_db)))
+            log.debug("Moving %s to %s",
+                      os.path.abspath(known_db_path),
+                      os.path.abspath(os.path.join(to_dir, known_db)))
             shutil.move(known_db_path, os.path.join(to_dir, known_db))
         else:
-            logging.debug("Did not find %s", os.path.abspath(known_db_path))
+            log.debug("Did not find %s", os.path.abspath(known_db_path))
 
 
 def do_migration(db_dir):
     old_dir = os.path.join(db_dir, "_0_to_1_old")
     new_dir = os.path.join(db_dir, "_0_to_1_new")
     try:
-        logging.info("Moving dbs from the real directory to %s", os.path.abspath(old_dir))
+        log.info("Moving dbs from the real directory to %s", os.path.abspath(old_dir))
         os.makedirs(old_dir)
         do_move(db_dir, old_dir)
     except:
-        logging.error("An error occurred moving the old db files.")
+        log.error("An error occurred moving the old db files.")
         raise
     try:
-        logging.info("Creating the new directory in %s", os.path.abspath(new_dir))
+        log.info("Creating the new directory in %s", os.path.abspath(new_dir))
         os.makedirs(new_dir)
 
     except:
-        logging.error("An error occurred creating the new directory.")
+        log.error("An error occurred creating the new directory.")
         raise
     try:
-        logging.info("Doing the migration")
+        log.info("Doing the migration")
         migrate_blob_db(old_dir, new_dir)
         migrate_lbryfile_db(old_dir, new_dir)
         migrate_livestream_db(old_dir, new_dir)
@@ -51,20 +54,20 @@ def do_migration(db_dir):
         migrate_lbryfile_manager_db(old_dir, new_dir)
         migrate_settings_db(old_dir, new_dir)
         migrate_repeater_db(old_dir, new_dir)
-        logging.info("Migration succeeded")
+        log.info("Migration succeeded")
     except:
-        logging.error("An error occurred during the migration. Restoring.")
+        log.error("An error occurred during the migration. Restoring.")
         do_move(old_dir, db_dir)
         raise
     try:
-        logging.info("Moving dbs in the new directory to the real directory")
+        log.info("Moving dbs in the new directory to the real directory")
         do_move(new_dir, db_dir)
         db_revision = open(os.path.join(db_dir, 'db_revision'), mode='w+')
         db_revision.write("1")
         db_revision.close()
         os.rmdir(new_dir)
     except:
-        logging.error("An error occurred moving the new db files.")
+        log.error("An error occurred moving the new db files.")
         raise
     return old_dir
 

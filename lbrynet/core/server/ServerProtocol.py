@@ -6,6 +6,9 @@ from zope.interface import implements
 from lbrynet.core.server.ServerRequestHandler import ServerRequestHandler
 
 
+log = logging.getLogger(__name__)
+
+
 class ServerProtocol(Protocol):
     """ServerProtocol needs to:
 
@@ -26,7 +29,7 @@ class ServerProtocol(Protocol):
     #Protocol stuff
 
     def connectionMade(self):
-        logging.debug("Got a connection")
+        log.debug("Got a connection")
         peer_info = self.transport.getPeer()
         self.peer = self.factory.peer_manager.get_peer(peer_info.host, peer_info.port)
         self.request_handler = ServerRequestHandler(self)
@@ -34,7 +37,7 @@ class ServerProtocol(Protocol):
             if enabled is True:
                 query_handler = query_handler_factory.build_query_handler()
                 query_handler.register_with_request_handler(self.request_handler, self.peer)
-        logging.debug("Setting the request handler")
+        log.debug("Setting the request handler")
         self.factory.rate_limiter.register_protocol(self)
 
     def connectionLost(self, reason=failure.Failure(error.ConnectionDone())):
@@ -42,10 +45,10 @@ class ServerProtocol(Protocol):
             self.request_handler.stopProducing()
         self.factory.rate_limiter.unregister_protocol(self)
         if not reason.check(error.ConnectionDone):
-            logging.warning("Closing a connection. Reason: %s", reason.getErrorMessage())
+            log.warning("Closing a connection. Reason: %s", reason.getErrorMessage())
 
     def dataReceived(self, data):
-        logging.debug("Receiving %s bytes of data from the transport", str(len(data)))
+        log.debug("Receiving %s bytes of data from the transport", str(len(data)))
         self.factory.rate_limiter.report_dl_bytes(len(data))
         if self.request_handler is not None:
             self.request_handler.data_received(data)
@@ -53,7 +56,7 @@ class ServerProtocol(Protocol):
     #IConsumer stuff
 
     def registerProducer(self, producer, streaming):
-        logging.debug("Registering the producer")
+        log.debug("Registering the producer")
         assert streaming is True
 
     def unregisterProducer(self):
@@ -61,7 +64,7 @@ class ServerProtocol(Protocol):
         self.transport.loseConnection()
 
     def write(self, data):
-        logging.debug("Writing %s bytes of data to the transport", str(len(data)))
+        log.debug("Writing %s bytes of data to the transport", str(len(data)))
         self.transport.write(data)
         self.factory.rate_limiter.report_ul_bytes(len(data))
 

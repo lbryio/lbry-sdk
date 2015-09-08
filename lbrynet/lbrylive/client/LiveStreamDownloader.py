@@ -8,8 +8,6 @@ from lbrynet.lbrylive.StreamDescriptor import save_sd_info
 from lbrynet.lbrylive.PaymentRateManager import LiveStreamPaymentRateManager
 from twisted.internet import defer, threads  # , process
 from lbrynet.interfaces import IStreamDownloaderFactory
-from lbrynet.lbrylive.PaymentRateManager import BaseLiveStreamPaymentRateManager
-from lbrynet.conf import MIN_BLOB_INFO_PAYMENT_RATE
 from lbrynet.lbrylive.StreamDescriptor import LiveStreamType
 
 

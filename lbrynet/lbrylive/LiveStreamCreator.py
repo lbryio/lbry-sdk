@@ -12,6 +12,9 @@ from twisted.protocols.basic import FileSender
 from zope.interface import implements
 
 
+log = logging.getLogger(__name__)
+
+
 class LiveStreamCreator(CryptStreamCreator):
     def __init__(self, blob_manager, stream_info_manager, name=None, key=None, iv_generator=None,
                  delete_after_num=None, secret_pass_phrase=None):
@@ -30,8 +33,8 @@ class LiveStreamCreator(CryptStreamCreator):
         return d
 
     def _blob_finished(self, blob_info):
-        logging.debug("In blob_finished")
-        logging.debug("length: %s", str(blob_info.length))
+        log.debug("In blob_finished")
+        log.debug("length: %s", str(blob_info.length))
         sig_hash = get_lbry_hash_obj()
         sig_hash.update(self.stream_hash)
         if blob_info.length != 0:
@@ -48,11 +51,11 @@ class LiveStreamCreator(CryptStreamCreator):
         d = self.stream_info_manager.add_blobs_to_stream(self.stream_hash, [blob_info])
 
         def log_add_error(err):
-            logging.error("An error occurred adding a blob info to the stream info manager: %s", err.getErrorMessage())
+            log.error("An error occurred adding a blob info to the stream info manager: %s", err.getErrorMessage())
             return err
 
         d.addErrback(log_add_error)
-        logging.debug("returning from blob_finished")
+        log.debug("returning from blob_finished")
         return d
 
     def setup(self):

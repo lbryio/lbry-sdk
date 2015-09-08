@@ -13,6 +13,9 @@ from lbrynet.core.PaymentRateManager import BasePaymentRateManager
 from twisted.internet import threads, defer
 
 
+log = logging.getLogger(__name__)
+
+
 class LBRYSession(object):
     """This class manages all important services common to any application that uses the network:
     the hash announcer, which informs other peers that this peer is associated with some hash. Usually,
@@ -104,7 +107,7 @@ class LBRYSession(object):
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
 
-        logging.debug("Setting up the lbry session")
+        log.debug("Setting up the lbry session")
 
         if self.lbryid is None:
             self.lbryid = generate_id()
@@ -124,7 +127,7 @@ class LBRYSession(object):
             d.addCallback(lambda _: self._setup_dht())
         else:
             if self.hash_announcer is None and self.peer_port is not None:
-                logging.warning("The server has no way to advertise its available blobs.")
+                log.warning("The server has no way to advertise its available blobs.")
                 self.hash_announcer = DummyHashAnnouncer()
 
         d.addCallback(lambda _: self._setup_other_components())
@@ -146,11 +149,11 @@ class LBRYSession(object):
 
     def _try_upnp(self):
 
-        logging.debug("In _try_upnp")
+        log.debug("In _try_upnp")
 
         def threaded_try_upnp():
             if self.use_upnp is False:
-                logging.debug("Not using upnp")
+                log.debug("Not using upnp")
                 return False
             u = miniupnpc.UPnP()
             num_devices_found = u.discover()
@@ -169,7 +172,7 @@ class LBRYSession(object):
             return False
 
         def upnp_failed(err):
-            logging.warning("UPnP failed. Reason: %s", err.getErrorMessage())
+            log.warning("UPnP failed. Reason: %s", err.getErrorMessage())
             return False
 
         d = threads.deferToThread(threaded_try_upnp)
@@ -180,7 +183,7 @@ class LBRYSession(object):
 
         from twisted.internet import reactor
 
-        logging.debug("Starting the dht")
+        log.debug("Starting the dht")
 
         def match_port(h, p):
             return h, p
@@ -216,7 +219,7 @@ class LBRYSession(object):
         return dl
 
     def _setup_other_components(self):
-        logging.debug("Setting up the rest of the components")
+        log.debug("Setting up the rest of the components")
 
         if self.rate_limiter is None:
             self.rate_limiter = RateLimiter()

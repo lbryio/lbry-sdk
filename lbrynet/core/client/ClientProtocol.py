@@ -11,6 +11,9 @@ from lbrynet.interfaces import IRequestSender, IRateLimited
 from zope.interface import implements
 
 
+log = logging.getLogger(__name__)
+
+
 class ClientProtocol(Protocol):
     implements(IRequestSender, IRateLimited)
 
@@ -39,7 +42,7 @@ class ClientProtocol(Protocol):
         else:
             self._response_buff += data
             if len(self._response_buff) > MAX_RESPONSE_SIZE:
-                logging.warning("Response is too large. Size %s", len(self._response_buff))
+                log.warning("Response is too large. Size %s", len(self._response_buff))
                 self.transport.loseConnection()
             response, extra_data = self._get_valid_response(self._response_buff)
             if response is not None:
@@ -55,7 +58,7 @@ class ClientProtocol(Protocol):
         else:
             err = reason
         #if self._response_deferreds:
-        #    logging.warning("Lost connection with active response deferreds. %s", str(self._response_deferreds))
+        #    log.warning("Lost connection with active response deferreds. %s", str(self._response_deferreds))
         for key, d in self._response_deferreds.items():
             del self._response_deferreds[key]
             d.errback(err)
@@ -70,7 +73,7 @@ class ClientProtocol(Protocol):
             return defer.fail(failure.Failure(ValueError("There is already a request for that response active")))
         self._next_request.update(request.request_dict)
         d = defer.Deferred()
-        logging.debug("Adding a request. Request: %s", str(request))
+        log.debug("Adding a request. Request: %s", str(request))
         self._response_deferreds[request.response_identifier] = d
         return d
 
@@ -102,8 +105,8 @@ class ClientProtocol(Protocol):
     ######### Internal request handling #########
 
     def _handle_request_error(self, err):
-        logging.error("An unexpected error occurred creating or sending a request to %s. Error message: %s",
-                      str(self.peer), err.getTraceback())
+        log.error("An unexpected error occurred creating or sending a request to %s. Error message: %s",
+                  str(self.peer), err.getTraceback())
         self.transport.loseConnection()
 
     def _ask_for_request(self):
@@ -117,7 +120,7 @@ class ClientProtocol(Protocol):
                 self._send_request_message(request_msg)
             else:
                 # The connection manager has indicated that this connection should be terminated
-                logging.info("Closing the connection to %s due to having no further requests to send", str(self.peer))
+                log.info("Closing the connection to %s due to having no further requests to send", str(self.peer))
                 self.transport.loseConnection()
 
         d = self._connection_manager.get_next_request(self.peer, self)
@@ -153,14 +156,14 @@ class ClientProtocol(Protocol):
         # If an error gets to this point, log it and kill the connection.
         if not err.check(MisbehavingPeerError, ConnectionClosedBeforeResponseError, DownloadCanceledError,
                          RequestCanceledError):
-            logging.error("The connection to %s is closing due to an unexpected error: %s", str(self.peer),
-                          err.getErrorMessage())
+            log.error("The connection to %s is closing due to an unexpected error: %s", str(self.peer),
+                      err.getErrorMessage())
         if not err.check(RequestCanceledError):
             self.transport.loseConnection()
 
     def _handle_response(self, response):
         ds = []
-        logging.debug("Handling a response. Current expected responses: %s", str(self._response_deferreds))
+        log.debug("Handling a response. Current expected responses: %s", str(self._response_deferreds))
         for key, val in response.items():
             if key in self._response_deferreds:
                 d = self._response_deferreds[key]
@@ -183,7 +186,7 @@ class ClientProtocol(Protocol):
         dl.addCallback(lambda _: self._ask_for_request())
 
     def _downloading_finished(self, arg):
-        logging.debug("The blob has finished downloading")
+        log.debug("The blob has finished downloading")
         self._blob_download_request = None
         self._downloading_blob = False
         return arg
@@ -194,8 +197,8 @@ class ClientProtocol(Protocol):
             # TODO: always be this way. it's done this way now because the client has no other way
             # TODO: of telling the server it wants the download to stop. It would be great if the
             # TODO: protocol had such a mechanism.
-            logging.info("Closing the connection to %s because the download of blob %s was canceled",
-                         str(self.peer), str(self._blob_download_request.blob))
+            log.info("Closing the connection to %s because the download of blob %s was canceled",
+                     str(self.peer), str(self._blob_download_request.blob))
             #self.transport.loseConnection()
             #return True
         return err

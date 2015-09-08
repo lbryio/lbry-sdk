@@ -12,6 +12,9 @@ from twisted.python.failure import Failure
 from collections import defaultdict
 
 
+log = logging.getLogger(__name__)
+
+
 class BlindMetadataHandler(object):
     implements(IMetadataHandler, IRequestCreator)
 
@@ -195,7 +198,7 @@ class BlindMetadataHandler(object):
         if not 'valuable_blob_hashes' in response:
             return InvalidResponseError("Missing the required field 'valuable_blob_hashes'")
         hashes = response['valuable_blob_hashes']
-        logging.info("Handling %s valuable blob hashes from %s", str(len(hashes)), str(peer))
+        log.info("Handling %s valuable blob hashes from %s", str(len(hashes)), str(peer))
         expire_time = datetime.datetime.now() + datetime.timedelta(minutes=10)
         reference = None
         unique_hashes = set()
@@ -230,8 +233,8 @@ class BlindMetadataHandler(object):
         if not 'blob_lengths' in response:
             return InvalidResponseError("Missing the required field 'blob_lengths'")
         raw_blob_lengths = response['blob_lengths']
-        logging.info("Handling %s blob lengths from %s", str(len(raw_blob_lengths)), str(peer))
-        logging.debug("blobs: %s", str(raw_blob_lengths))
+        log.info("Handling %s blob lengths from %s", str(len(raw_blob_lengths)), str(peer))
+        log.debug("blobs: %s", str(raw_blob_lengths))
         infos = []
         unique_hashes = set()
         for blob_hash, length in raw_blob_lengths:
@@ -288,8 +291,8 @@ class BlindMetadataHandler(object):
         if reason.check(NoResponseError):
             self._incompatible_peers.append(peer)
             return
-        logging.warning("Valuable blob info requester: a request of type %s has failed. Reason: %s",
-                        str(request_type), str(reason.getErrorMessage()))
+        log.warning("Valuable blob info requester: a request of type %s has failed. Reason: %s",
+                    str(request_type), str(reason.getErrorMessage()))
         self._update_local_score(peer, -10.0)
         peer.update_score(-5.0)
         if reason.check(ConnectionClosedBeforeResponseError):

@@ -5,6 +5,9 @@ from zope.interface import implements
 from lbrynet.interfaces import IRequestHandler
 
 
+log = logging.getLogger(__name__)
+
+
 class ServerRequestHandler(object):
     """This class handles requests from clients. It can upload blobs and return request for information about
     more blobs that are associated with streams"""
@@ -52,7 +55,7 @@ class ServerRequestHandler(object):
             chunk = self.response_buff[:self.CHUNK_SIZE]
             self.response_buff = self.response_buff[self.CHUNK_SIZE:]
             if chunk != '':
-                logging.debug("writing %s bytes to the client", str(len(chunk)))
+                log.debug("writing %s bytes to the client", str(len(chunk)))
                 self.consumer.write(chunk)
                 reactor.callLater(0, self._produce_more)
 
@@ -76,7 +79,7 @@ class ServerRequestHandler(object):
 
         def get_more_data():
             if self.producer is not None:
-                logging.debug("Requesting more data from the producer")
+                log.debug("Requesting more data from the producer")
                 self.producer.resumeProducing()
 
         reactor.callLater(0, get_more_data)
@@ -84,8 +87,8 @@ class ServerRequestHandler(object):
     #From Protocol
 
     def data_received(self, data):
-        logging.debug("Received data")
-        logging.debug("%s", str(data))
+        log.debug("Received data")
+        log.debug("%s", str(data))
         if self.request_received is False:
             self.request_buff = self.request_buff + data
             msg = self.try_to_parse_request(self.request_buff)
@@ -96,10 +99,10 @@ class ServerRequestHandler(object):
                     d.addCallback(lambda _: self.blob_sender.send_blob_if_requested(self))
                 d.addCallbacks(lambda _: self.finished_response(), self.request_failure_handler)
             else:
-                logging.info("Request buff not a valid json message")
-                logging.info("Request buff: %s", str(self.request_buff))
+                log.info("Request buff not a valid json message")
+                log.info("Request buff: %s", str(self.request_buff))
         else:
-            logging.warning("The client sent data when we were uploading a file. This should not happen")
+            log.warning("The client sent data when we were uploading a file. This should not happen")
 
     ######### IRequestHandler #########
 
@@ -112,7 +115,7 @@ class ServerRequestHandler(object):
     #response handling
 
     def request_failure_handler(self, err):
-        logging.warning("An error occurred handling a request. Error: %s", err.getErrorMessage())
+        log.warning("An error occurred handling a request. Error: %s", err.getErrorMessage())
         self.stopProducing()
         return err
 
@@ -122,15 +125,15 @@ class ServerRequestHandler(object):
 
     def send_response(self, msg):
         m = json.dumps(msg)
-        logging.info("Sending a response of length %s", str(len(m)))
-        logging.debug("Response: %s", str(m))
+        log.info("Sending a response of length %s", str(len(m)))
+        log.debug("Response: %s", str(m))
         self.response_buff = self.response_buff + m
         self._produce_more()
         return True
 
     def handle_request(self, msg):
-        logging.debug("Handling a request")
-        logging.debug(str(msg))
+        log.debug("Handling a request")
+        log.debug(str(msg))
 
         def create_response_message(results):
             response = {}
@@ -140,11 +143,11 @@ class ServerRequestHandler(object):
                 else:
                     # result is a Failure
                     return result
-            logging.debug("Finished making the response message. Response: %s", str(response))
+            log.debug("Finished making the response message. Response: %s", str(response))
             return response
 
         def log_errors(err):
-            logging.warning("An error occurred handling a client request. Error message: %s", err.getErrorMessage())
+            log.warning("An error occurred handling a client request. Error message: %s", err.getErrorMessage())
             return err
 
         def send_response(response):

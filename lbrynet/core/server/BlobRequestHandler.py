@@ -6,6 +6,9 @@ from zope.interface import implements
 from lbrynet.interfaces import IQueryHandlerFactory, IQueryHandler, IBlobSender
 
 
+log = logging.getLogger(__name__)
+
+
 class BlobRequestHandlerFactory(object):
     implements(IQueryHandlerFactory)
 
@@ -58,7 +61,7 @@ class BlobRequestHandler(object):
                 response['blob_data_payment_rate'] = 'RATE_ACCEPTED'
 
         if self.query_identifiers[1] in queries:
-            logging.debug("Received the client's request to send a blob")
+            log.debug("Received the client's request to send a blob")
             response_fields = {}
             response['incoming_blob'] = response_fields
 
@@ -75,11 +78,11 @@ class BlobRequestHandler(object):
                         if read_handle is not None:
                             self.currently_uploading = blob
                             self.read_handle = read_handle
-                            logging.debug("Sending %s to client", str(blob))
+                            log.debug("Sending %s to client", str(blob))
                             response_fields['blob_hash'] = blob.blob_hash
                             response_fields['length'] = blob.length
                             return response
-                    logging.debug("We can not send %s", str(blob))
+                    log.debug("We can not send %s", str(blob))
                     response_fields['error'] = "BLOB_UNAVAILABLE"
                     return response
 
@@ -129,13 +132,13 @@ class BlobRequestHandler(object):
 
         def start_transfer():
             self.file_sender = FileSender()
-            logging.info("Starting the file upload")
+            log.info("Starting the file upload")
             assert self.read_handle is not None, "self.read_handle was None when trying to start the transfer"
             d = self.file_sender.beginFileTransfer(self.read_handle, consumer, count_bytes)
             return d
 
         def set_expected_payment():
-            logging.info("Setting expected payment")
+            log.info("Setting expected payment")
             if self.blob_bytes_uploaded != 0 and self.blob_data_payment_rate is not None:
                 self.wallet.add_expected_payment(self.peer,
                                                  self.currently_uploading.length * 1.0 *
@@ -151,6 +154,6 @@ class BlobRequestHandler(object):
                 self.currently_uploading = None
             self.file_sender = None
             if reason is not None and isinstance(reason, Failure):
-                logging.warning("Upload has failed. Reason: %s", reason.getErrorMessage())
+                log.warning("Upload has failed. Reason: %s", reason.getErrorMessage())
 
         return _send_file()

@@ -11,6 +11,9 @@ import os
 from twisted.internet import defer, reactor, tksupport, task
 
 
+log = logging.getLogger(__name__)
+
+
 class DownloaderApp(object):
     def __init__(self):
         self.master = None
@@ -27,7 +30,7 @@ class DownloaderApp(object):
         d.addCallback(lambda _: self._enable_lookup())
 
         def show_error_and_stop(err):
-            logging.error(err.getErrorMessage())
+            log.error(err.getErrorMessage())
             tkMessageBox.showerror(title="Start Error", message=err.getErrorMessage())
             return self.stop()
 
@@ -37,7 +40,7 @@ class DownloaderApp(object):
     def stop(self):
 
         def log_error(err):
-            logging.error(err.getErrorMessage())
+            log.error(err.getErrorMessage())
 
         if self.downloader is not None:
             d = self.downloader.stop()

@@ -2,7 +2,7 @@ import logging
 import os
 import time
 import sqlite3
-from twisted.internet import threads, defer, reactor, task
+from twisted.internet import threads, defer
 from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
 from lbrynet.core.HashBlob import BlobFile, TempBlob, BlobFileCreator, TempBlobCreator
@@ -11,6 +11,9 @@ from lbrynet.core.utils import is_valid_blobhash
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from lbrynet.core.Error import NoSuchBlobError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
+
+
+log = logging.getLogger(__name__)
 
 
 class BlobManager(DHTHashSupplier):
@@ -137,7 +140,7 @@ class DiskBlobManager(BlobManager):
         return self._get_blobs_to_announce(next_announce_time)
 
     def creator_finished(self, blob_creator):
-        logging.debug("blob_creator.blob_hash: %s", blob_creator.blob_hash)
+        log.debug("blob_creator.blob_hash: %s", blob_creator.blob_hash)
         assert blob_creator.blob_hash is not None
         assert blob_creator.blob_hash not in self.blobs
         assert blob_creator.length is not None
@@ -188,7 +191,7 @@ class DiskBlobManager(BlobManager):
             return b_h
 
         def set_not_deleting(err, b_h):
-            logging.warning("Failed to delete blob %s. Reason: %s", str(b_h), err.getErrorMessage())
+            log.warning("Failed to delete blob %s. Reason: %s", str(b_h), err.getErrorMessage())
             self.blob_hashes_to_delete[b_h] = False
             return err
 
@@ -200,7 +203,7 @@ class DiskBlobManager(BlobManager):
                 d = defer.succeed(True)
 
             def log_error(err):
-                logging.warning("Failed to delete completed blobs from the db: %s", err.getErrorMessage())
+                log.warning("Failed to delete completed blobs from the db: %s", err.getErrorMessage())
 
             d.addErrback(log_error)
             return d
@@ -238,7 +241,7 @@ class DiskBlobManager(BlobManager):
 
     @rerun_if_locked
     def _add_completed_blob(self, blob_hash, length, timestamp, next_announce_time=None):
-        logging.debug("Adding a completed blob. blob_hash=%s, length=%s", blob_hash, str(length))
+        log.debug("Adding a completed blob. blob_hash=%s, length=%s", blob_hash, str(length))
         if next_announce_time is None:
             next_announce_time = timestamp
         d = self.db_conn.runQuery("insert into blobs values (?, ?, ?, ?)",
@@ -502,7 +505,7 @@ class TempBlobManager(BlobManager):
         d = self._delete_blobs_marked_for_deletion()
 
         def set_next_manage_call():
-            logging.info("Setting the next manage call in %s", str(self))
+            log.info("Setting the next manage call in %s", str(self))
             self._next_manage_call = reactor.callLater(1, self._manage)
 
         d.addCallback(lambda _: set_next_manage_call())
@@ -511,11 +514,11 @@ class TempBlobManager(BlobManager):
 
         def remove_from_list(b_h):
             del self.blob_hashes_to_delete[b_h]
-            logging.info("Deleted blob %s", blob_hash)
+            log.info("Deleted blob %s", blob_hash)
             return b_h
 
         def set_not_deleting(err, b_h):
-            logging.warning("Failed to delete blob %s. Reason: %s", str(b_h), err.getErrorMessage())
+            log.warning("Failed to delete blob %s. Reason: %s", str(b_h), err.getErrorMessage())
             self.blob_hashes_to_delete[b_h] = False
             return b_h
 
@@ -524,7 +527,7 @@ class TempBlobManager(BlobManager):
             if being_deleted is False:
                 if blob_hash in self.blobs:
                     self.blob_hashes_to_delete[blob_hash] = True
-                    logging.info("Found a blob marked for deletion: %s", blob_hash)
+                    log.info("Found a blob marked for deletion: %s", blob_hash)
                     blob = self.blobs[blob_hash]
                     d = blob.delete()
 
@@ -535,6 +538,6 @@ class TempBlobManager(BlobManager):
                 else:
                     remove_from_list(blob_hash)
                     d = defer.fail(Failure(NoSuchBlobError(blob_hash)))
-                    logging.warning("Blob %s cannot be deleted because it is unknown")
+                    log.warning("Blob %s cannot be deleted because it is unknown")
                     ds.append(d)
         return defer.DeferredList(ds)

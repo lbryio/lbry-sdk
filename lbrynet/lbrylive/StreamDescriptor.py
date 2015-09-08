@@ -8,11 +8,14 @@ from lbrynet.interfaces import IStreamDescriptorValidator
 from zope.interface import implements
 
 
+log = logging.getLogger(__name__)
+
+
 LiveStreamType = "lbrylive"
 
 
 def save_sd_info(stream_info_manager, sd_info, ignore_duplicate=False):
-    logging.debug("Saving info for %s", str(sd_info['stream_name']))
+    log.debug("Saving info for %s", str(sd_info['stream_name']))
     hex_stream_name = sd_info['stream_name']
     public_key = sd_info['public_key']
     key = sd_info['key']
@@ -30,7 +33,7 @@ def save_sd_info(stream_info_manager, sd_info, ignore_duplicate=False):
         iv = blob['iv']
         signature = blob['signature']
         crypt_blobs.append(LiveBlobInfo(blob_hash, blob_num, length, iv, revision, signature))
-    logging.debug("Trying to save stream info for %s", str(hex_stream_name))
+    log.debug("Trying to save stream info for %s", str(hex_stream_name))
     d = stream_info_manager.save_stream(stream_hash, public_key, hex_stream_name,
                                         key, crypt_blobs)
 
@@ -88,7 +91,7 @@ class LBRYLiveStreamDescriptorValidator(object):
         self.raw_info = raw_info
 
     def validate(self):
-        logging.debug("Trying to validate stream descriptor for %s", str(self.raw_info['stream_name']))
+        log.debug("Trying to validate stream descriptor for %s", str(self.raw_info['stream_name']))
         hex_stream_name = self.raw_info['stream_name']
         public_key = self.raw_info['public_key']
         key = self.raw_info['key']

@@ -22,6 +22,9 @@ from hashwatcher import HashWatcher
 import logging
 
 
+log = logging.getLogger(__name__)
+
+
 def rpcmethod(func):
     """ Decorator to expose Node methods as remote procedure calls
     
@@ -231,12 +234,12 @@ class Node(object):
         known_nodes = {}
 
         def log_error(err, n):
-            logging.error("error storing blob_hash %s at %s", binascii.hexlify(blob_hash), str(n))
-            logging.error(binascii.hexlify(err.getErrorMessage()))
-            logging.error(err.getTraceback())
+            log.error("error storing blob_hash %s at %s", binascii.hexlify(blob_hash), str(n))
+            log.error(binascii.hexlify(err.getErrorMessage()))
+            log.error(err.getTraceback())
 
         def log_success(res):
-            logging.debug("Response to store request: %s", str(res))
+            log.debug("Response to store request: %s", str(res))
             return res
 
         def announce_to_peer(responseTuple):
@@ -332,7 +335,7 @@ class Node(object):
     #         originalPublisherID = self.id
     #
     #     def log_error(err):
-    #         logging.error(err.getErrorMessage())
+    #         log.error(err.getErrorMessage())
     #
     #     # Prepare a callback for doing "STORE" RPC calls
     #     def executeStoreRPCs(nodes):
@@ -756,7 +759,7 @@ class Node(object):
                 searchIteration()
 
         def log_error(err):
-            logging.error(err.getErrorMessage())
+            log.error(err.getErrorMessage())
 
         # Send parallel, asynchronous FIND_NODE RPCs to the shortlist of contacts
         def searchIteration():

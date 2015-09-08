@@ -122,4 +122,4 @@ class BlindRepeaterPlugin(LBRYPlugin.LBRYPlugin):
     def _add_to_lbry_console(self, lbry_console):
         lbry_console.add_control_handlers(self.control_handlers)
         lbry_console.add_query_handlers([self.valuable_blob_length_query_handler,
-                                       self.valuable_blob_hash_query_handler])
+                                         self.valuable_blob_hash_query_handler])

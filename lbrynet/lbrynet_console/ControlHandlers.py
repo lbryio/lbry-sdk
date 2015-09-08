@@ -9,6 +9,9 @@ from lbrynet.core.StreamDescriptor import download_sd_blob
 from twisted.internet import defer
 
 
+log = logging.getLogger(__name__)
+
+
 class InvalidChoiceError(Exception):
     pass
 
@@ -335,7 +338,7 @@ class AddStream(ControlHandler):
 
     def _handle_load_failed(self, err):
         self.loading_failed = True
-        logging.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
+        log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
         return defer.succeed("Encountered a problem while loading the stream descriptor: %s\n"
                              "See console.log for further details.\n"
                              "Press enter to continue" % err.getErrorMessage())

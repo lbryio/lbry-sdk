@@ -42,7 +42,6 @@ from lbrynet.lbrylive.client.LiveStreamDownloader import add_full_live_stream_do
 
 log_format = "%(funcName)s(): %(message)s"
 logging.basicConfig(level=logging.WARNING, format=log_format)
-logging.debug("test")
 
 
 class FakeNode(object):

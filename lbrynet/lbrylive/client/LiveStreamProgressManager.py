@@ -3,6 +3,9 @@ from lbrynet.core.client.StreamProgressManager import StreamProgressManager
 from twisted.internet import defer
 
 
+log = logging.getLogger(__name__)
+
+
 class LiveStreamProgressManager(StreamProgressManager):
     def __init__(self, finished_callback, blob_manager, download_manager, delete_blob_after_finished=False,
                  download_whole=True, max_before_skip_ahead=5):
@@ -52,9 +55,9 @@ class LiveStreamProgressManager(StreamProgressManager):
             return
 
         blobs = self.download_manager.blobs
-        logging.info("In _output_loop. last_blob_outputted: %s", str(self.last_blob_outputted))
+        log.info("In _output_loop. last_blob_outputted: %s", str(self.last_blob_outputted))
         if blobs:
-            logging.debug("Newest blob number: %s", str(max(blobs.iterkeys())))
+            log.debug("Newest blob number: %s", str(max(blobs.iterkeys())))
         if self.outputting_d is None:
             self.outputting_d = defer.Deferred()
 
@@ -71,15 +74,15 @@ class LiveStreamProgressManager(StreamProgressManager):
                 reactor.callLater(0, self._output_loop)
 
         if current_blob_num in blobs and blobs[current_blob_num].is_validated():
-            logging.info("Outputting blob %s", str(current_blob_num))
+            log.info("Outputting blob %s", str(current_blob_num))
             self.provided_blob_nums.append(current_blob_num)
             d = self.download_manager.handle_blob(current_blob_num)
             d.addCallback(lambda _: finished_outputting_blob())
             d.addCallback(lambda _: self._finished_with_blob(current_blob_num))
         elif blobs and max(blobs.iterkeys()) > self.last_blob_outputted + self.max_before_skip_ahead - 1:
             self.last_blob_outputted += 1
-            logging.info("Skipping blob number %s due to knowing about blob number %s",
-                         str(self.last_blob_outputted), str(max(blobs.iterkeys())))
+            log.info("Skipping blob number %s due to knowing about blob number %s",
+                     str(self.last_blob_outputted), str(max(blobs.iterkeys())))
             self._finished_with_blob(current_blob_num)
             reactor.callLater(0, self._output_loop)
         else:

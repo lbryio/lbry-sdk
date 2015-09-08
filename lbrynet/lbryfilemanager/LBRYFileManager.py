@@ -3,7 +3,6 @@ Keep track of which LBRY Files are downloading and store their LBRY File specifi
 """
 
 import logging
-import json
 
 from twisted.enterprise import adbapi
 
@@ -12,10 +11,13 @@ from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.core.PaymentRateManager import PaymentRateManager
-from twisted.internet import threads, defer, task, reactor
+from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError, CurrentlyStoppingError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
+
+
+log = logging.getLogger(__name__)
 
 
 class LBRYFileManager(object):
@@ -70,7 +72,7 @@ class LBRYFileManager(object):
         return self._set_lbry_file_payment_rate(stream_hash, new_rate)
 
     def change_lbry_file_status(self, stream_hash, status):
-        logging.debug("Changing status of %s to %s", stream_hash, status)
+        log.debug("Changing status of %s to %s", stream_hash, status)
         return self._change_file_status(stream_hash, status)
 
     def get_lbry_file_status_reports(self):
@@ -100,7 +102,7 @@ class LBRYFileManager(object):
             return d
 
         def log_error(err):
-            logging.error("An error occurred while starting a lbry file: %s", err.getErrorMessage())
+            log.error("An error occurred while starting a lbry file: %s", err.getErrorMessage())
 
         def start_lbry_files(stream_hashes_and_options):
             for stream_hash, options in stream_hashes_and_options:

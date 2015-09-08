@@ -36,6 +36,9 @@ from lbrynet.lbrynet_console.ControlHandlers import PeerStatsAndSettingsChooserF
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
 
 
+log = logging.getLogger(__name__)
+
+
 class LBRYConsole():
     """A class which can upload and download file streams to and from the network"""
     def __init__(self, peer_port, dht_node_port, known_dht_nodes, control_class, wallet_type, lbrycrd_conf,
@@ -132,10 +135,10 @@ class LBRYConsole():
             db_revision = open(os.path.join(self.conf_dir, "db_revision"), mode='w')
             db_revision.write(str(self.current_db_revision))
             db_revision.close()
-            logging.debug("Created the configuration directory: %s", str(self.conf_dir))
+            log.debug("Created the configuration directory: %s", str(self.conf_dir))
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
-            logging.debug("Created the data directory: %s", str(self.data_dir))
+            log.debug("Created the data directory: %s", str(self.data_dir))
 
     def _check_db_migration(self):
         old_revision = 0
@@ -494,8 +497,14 @@ def launch_lbry_console():
 
 
     log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
-    logging.basicConfig(level=logging.DEBUG, filename=os.path.join(conf_dir, "console.log"),
-                        format=log_format)
+    formatter = logging.Formatter(log_format)
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    file_handler = logging.FileHandler(os.path.join(conf_dir, "console.log"))
+    file_handler.setFormatter(formatter)
+    file_handler.addFilter(logging.Filter("lbrynet"))
+    logger.addHandler(file_handler)
 
     console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, StdIOControl, wallet_type=args.wallet_type,
                           lbrycrd_conf=lbrycrd_conf, use_upnp=args.use_upnp,

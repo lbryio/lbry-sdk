@@ -3,11 +3,14 @@ import logging
 from twisted.enterprise import adbapi
 import os
 import sqlite3
-from twisted.internet import threads, defer
+from twisted.internet import defer
 from twisted.python.failure import Failure
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
 from lbrynet.core.Error import DuplicateStreamHashError, NoSuchStreamHashError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
+
+
+log = logging.getLogger(__name__)
 
 
 class DBLiveStreamMetadataManager(DHTHashSupplier):
@@ -58,7 +61,7 @@ class DBLiveStreamMetadataManager(DHTHashSupplier):
         return self._add_blobs_to_stream(stream_hash, blobs, ignore_duplicate_error=True)
 
     def get_blobs_for_stream(self, stream_hash, start_blob=None, end_blob=None, count=None, reverse=False):
-        logging.info("Getting blobs for a stream. Count is %s", str(count))
+        log.info("Getting blobs for a stream. Count is %s", str(count))
 
         def get_positions_of_start_and_end():
             if start_blob is not None:

@@ -6,11 +6,14 @@ from twisted.internet import defer
 from lbrynet.core.Error import DuplicateStreamHashError, InvalidStreamDescriptorError
 
 
+log = logging.getLogger(__name__)
+
+
 LBRYFileStreamType = "lbryfile"
 
 
 def save_sd_info(stream_info_manager, sd_info, ignore_duplicate=False):
-    logging.debug("Saving info for %s", str(sd_info['stream_name']))
+    log.debug("Saving info for %s", str(sd_info['stream_name']))
     hex_stream_name = sd_info['stream_name']
     key = sd_info['key']
     stream_hash = sd_info['stream_hash']
@@ -26,7 +29,7 @@ def save_sd_info(stream_info_manager, sd_info, ignore_duplicate=False):
         blob_num = blob['blob_num']
         iv = blob['iv']
         crypt_blobs.append(CryptBlobInfo(blob_hash, blob_num, length, iv))
-    logging.debug("Trying to save stream info for %s", str(hex_stream_name))
+    log.debug("Trying to save stream info for %s", str(hex_stream_name))
     d = stream_info_manager.save_stream(stream_hash, hex_stream_name, key,
                                         suggested_file_name, crypt_blobs)
 
@@ -80,7 +83,7 @@ class LBRYFileStreamDescriptorValidator(object):
         self.raw_info = raw_info
 
     def validate(self):
-        logging.debug("Trying to validate stream descriptor for %s", str(self.raw_info['stream_name']))
+        log.debug("Trying to validate stream descriptor for %s", str(self.raw_info['stream_name']))
         try:
             hex_stream_name = self.raw_info['stream_name']
             key = self.raw_info['key']

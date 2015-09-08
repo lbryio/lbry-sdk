@@ -4,6 +4,9 @@ from twisted.internet import defer
 from zope.interface import implements
 
 
+log = logging.getLogger(__name__)
+
+
 class StreamProgressManager(object):
     implements(IProgressManager)
 
@@ -61,18 +64,18 @@ class StreamProgressManager(object):
         return defer.succeed(None)
 
     def _finished_with_blob(self, blob_num):
-        logging.debug("In _finished_with_blob, blob_num = %s", str(blob_num))
+        log.debug("In _finished_with_blob, blob_num = %s", str(blob_num))
         if self.delete_blob_after_finished is True:
-            logging.debug("delete_blob_after_finished is True")
+            log.debug("delete_blob_after_finished is True")
             blobs = self.download_manager.blobs
             if blob_num in blobs:
-                logging.debug("Telling the blob manager, %s,  to delete blob %s", str(self.blob_manager),
-                              blobs[blob_num].blob_hash)
+                log.debug("Telling the blob manager, %s,  to delete blob %s", str(self.blob_manager),
+                          blobs[blob_num].blob_hash)
                 self.blob_manager.delete_blobs([blobs[blob_num].blob_hash])
             else:
-                logging.debug("Blob number %s was not in blobs", str(blob_num))
+                log.debug("Blob number %s was not in blobs", str(blob_num))
         else:
-            logging.debug("delete_blob_after_finished is False")
+            log.debug("delete_blob_after_finished is False")
 
 
 class FullStreamProgressManager(StreamProgressManager):
@@ -126,14 +129,14 @@ class FullStreamProgressManager(StreamProgressManager):
         current_blob_num = self.last_blob_outputted + 1
 
         if current_blob_num in blobs and blobs[current_blob_num].is_validated():
-            logging.info("Outputting blob %s", str(self.last_blob_outputted + 1))
+            log.info("Outputting blob %s", str(self.last_blob_outputted + 1))
             self.provided_blob_nums.append(self.last_blob_outputted + 1)
             d = self.download_manager.handle_blob(self.last_blob_outputted + 1)
             d.addCallback(lambda _: finished_outputting_blob())
             d.addCallback(lambda _: self._finished_with_blob(current_blob_num))
 
             def log_error(err):
-                logging.warning("Error occurred in the output loop. Error: %s", err.getErrorMessage())
+                log.warning("Error occurred in the output loop. Error: %s", err.getErrorMessage())
 
             d.addErrback(log_error)
         else:

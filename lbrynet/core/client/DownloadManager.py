@@ -5,6 +5,9 @@ from zope.interface import implements
 from lbrynet import interfaces
 
 
+log = logging.getLogger(__name__)
+
+
 class DownloadManager(object):
     implements(interfaces.IDownloadManager)
 
@@ -24,7 +27,7 @@ class DownloadManager(object):
 
     def start_downloading(self):
         d = self.blob_info_finder.get_initial_blobs()
-        logging.debug("Requested the initial blobs from the info finder")
+        log.debug("Requested the initial blobs from the info finder")
         d.addCallback(self.add_blobs_to_download)
         d.addCallback(lambda _: self.resume_downloading())
         return d
@@ -33,7 +36,7 @@ class DownloadManager(object):
 
         def check_start(result, manager):
             if isinstance(result, failure.Failure):
-                logging.error("Failed to start the %s: %s", manager, result.getErrorMessage())
+                log.error("Failed to start the %s: %s", manager, result.getErrorMessage())
                 return False
             return True
 
@@ -49,7 +52,7 @@ class DownloadManager(object):
 
         def check_stop(result, manager):
             if isinstance(result, failure.Failure):
-                logging.error("Failed to stop the %s: %s", manager. result.getErrorMessage())
+                log.error("Failed to stop the %s: %s", manager. result.getErrorMessage())
                 return False
             return True
 
@@ -63,21 +66,21 @@ class DownloadManager(object):
 
     def add_blobs_to_download(self, blob_infos):
 
-        logging.debug("Adding %s to blobs", str(blob_infos))
+        log.debug("Adding %s to blobs", str(blob_infos))
 
         def add_blob_to_list(blob, blob_num):
             self.blobs[blob_num] = blob
-            logging.info("Added blob (hash: %s, number %s) to the list", str(blob.blob_hash), str(blob_num))
+            log.info("Added blob (hash: %s, number %s) to the list", str(blob.blob_hash), str(blob_num))
 
         def error_during_add(err):
-            logging.warning("An error occurred adding the blob to blobs. Error:%s", err.getErrorMessage())
+            log.warning("An error occurred adding the blob to blobs. Error:%s", err.getErrorMessage())
             return err
 
         ds = []
         for blob_info in blob_infos:
             if not blob_info.blob_num in self.blobs:
                 self.blob_infos[blob_info.blob_num] = blob_info
-                logging.debug("Trying to get the blob associated with blob hash %s", str(blob_info.blob_hash))
+                log.debug("Trying to get the blob associated with blob hash %s", str(blob_info.blob_hash))
                 d = self.blob_manager.get_blob(blob_info.blob_hash, self.upload_allowed, blob_info.length)
                 d.addCallback(add_blob_to_list, blob_info.blob_num)
                 d.addErrback(error_during_add)

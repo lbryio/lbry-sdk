@@ -13,6 +13,9 @@ from lbrynet.core.Error import DownloadCanceledError, InvalidDataError
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 
+log = logging.getLogger(__name__)
+
+
 class HashBlobReader(object):
     implements(interfaces.IConsumer)
 
@@ -84,7 +87,7 @@ class HashBlob(object):
         if self.length is None and 0 <= length <= BLOB_SIZE:
             self.length = length
             return True
-        logging.warning("Got an invalid length. Previous length: %s, Invalid length: %s", str(self.length), str(length))
+        log.warning("Got an invalid length. Previous length: %s, Invalid length: %s", str(self.length), str(length))
         return False
 
     def get_length(self):
@@ -126,8 +129,8 @@ class HashBlob(object):
                     finished_deferred.callback(self)
                     del self.writers[p]
                     return True
-            logging.warning("Somehow, the writer that was accepted as being valid was already removed. writer: %s",
-                            str(writer))
+            log.warning("Somehow, the writer that was accepted as being valid was already removed. writer: %s",
+                        str(writer))
             return False
 
         def errback_finished_deferred(err):
@@ -199,14 +202,14 @@ class BlobFile(HashBlob):
 
     def open_for_writing(self, peer):
         if not peer in self.writers:
-            logging.debug("Opening %s to be written by %s", str(self), str(peer))
+            log.debug("Opening %s to be written by %s", str(self), str(peer))
             write_file = tempfile.NamedTemporaryFile(delete=False, dir=self.blob_dir)
             finished_deferred = defer.Deferred()
             writer = HashBlobWriter(write_file, self.get_length, self.writer_finished)
 
             self.writers[peer] = (writer, finished_deferred)
             return finished_deferred, writer.write, writer.cancel
-        logging.warning("Tried to download the same file twice simultaneously from the same peer")
+        log.warning("Tried to download the same file twice simultaneously from the same peer")
         return None, None, None
 
     def open_for_reading(self):
@@ -232,7 +235,7 @@ class BlobFile(HashBlob):
             d = threads.deferToThread(delete_from_file_system)
 
             def log_error(err):
-                logging.warning("An error occurred deleting %s: %s", str(self.file_path), err.getErrorMessage())
+                log.warning("An error occurred deleting %s: %s", str(self.file_path), err.getErrorMessage())
                 return err
 
             d.addErrback(log_error)
@@ -247,7 +250,7 @@ class BlobFile(HashBlob):
 
     def _close_writer(self, writer):
         if writer.write_handle is not None:
-            logging.debug("Closing %s", str(self))
+            log.debug("Closing %s", str(self))
             name = writer.write_handle.name
             writer.write_handle.close()
             threads.deferToThread(os.remove, name)

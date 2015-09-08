@@ -4,6 +4,9 @@ from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 from lbrynet.interfaces import IMetadataHandler
 
 
+log = logging.getLogger(__name__)
+
+
 class LBRYFileMetadataHandler(object):
     implements(IMetadataHandler)
 
@@ -31,6 +34,6 @@ class LBRYFileMetadataHandler(object):
             if blob_hash is not None:
                 infos.append(CryptBlobInfo(blob_hash, blob_num, length, iv))
             else:
-                logging.debug("Setting _final_blob_num to %s", str(blob_num - 1))
+                log.debug("Setting _final_blob_num to %s", str(blob_num - 1))
                 self._final_blob_num = blob_num - 1
         return infos

@@ -5,6 +5,9 @@ from lbrynet.conf import BLOB_SIZE
 from lbrynet.core.BlobInfo import BlobInfo
 
 
+log = logging.getLogger(__name__)
+
+
 class CryptBlobInfo(BlobInfo):
     def __init__(self, blob_hash, blob_num, length, iv):
         BlobInfo.__init__(self, blob_hash, blob_num, length)
@@ -78,12 +81,12 @@ class CryptStreamBlobMaker(object):
         return done, num_bytes_to_write
 
     def close(self):
-        logging.debug("closing blob %s with plaintext len %s", str(self.blob_num), str(self.length))
+        log.debug("closing blob %s with plaintext len %s", str(self.blob_num), str(self.length))
         if self.length != 0:
             self._close_buffer()
         d = self.blob.close()
         d.addCallback(self._return_info)
-        logging.debug("called the finished_callback from CryptStreamBlobMaker.close")
+        log.debug("called the finished_callback from CryptStreamBlobMaker.close")
         return d
 
     def _write_buffer(self):

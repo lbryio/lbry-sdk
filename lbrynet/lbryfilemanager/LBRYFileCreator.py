@@ -14,6 +14,9 @@ from twisted.protocols.basic import FileSender
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 
 
+log = logging.getLogger(__name__)
+
+
 class LBRYFileStreamCreator(CryptStreamCreator):
     """
     A CryptStreamCreator which adds itself and its additional metadata to an LBRYFileManager
@@ -30,7 +33,7 @@ class LBRYFileStreamCreator(CryptStreamCreator):
         self.blob_infos = []
 
     def _blob_finished(self, blob_info):
-        logging.debug("length: %s", str(blob_info.length))
+        log.debug("length: %s", str(blob_info.length))
         self.blob_infos.append(blob_info)
 
     def _save_lbry_file_info(self):
@@ -128,11 +131,11 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
     """
 
     def stop_file(creator):
-        logging.debug("the file sender has triggered its deferred. stopping the stream writer")
+        log.debug("the file sender has triggered its deferred. stopping the stream writer")
         return creator.stop()
 
     def make_stream_desc_file(stream_hash):
-        logging.debug("creating the stream descriptor file")
+        log.debug("creating the stream descriptor file")
         descriptor_writer = PlainStreamDescriptorWriter(file_name + conf.CRYPTSD_FILE_EXTENSION)
 
         d = get_sd_info(lbry_file_manager.stream_info_manager, stream_hash, True)

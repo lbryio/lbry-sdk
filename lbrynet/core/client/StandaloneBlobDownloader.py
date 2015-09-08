@@ -8,6 +8,9 @@ from lbrynet.core.client.DownloadManager import DownloadManager
 from twisted.internet import defer
 
 
+log = logging.getLogger(__name__)
+
+
 class SingleBlobMetadataHandler(object):
     implements(interfaces.IMetadataHandler)
 
@@ -18,7 +21,7 @@ class SingleBlobMetadataHandler(object):
     ######## IMetadataHandler #########
 
     def get_initial_blobs(self):
-        logging.debug("Returning the blob info")
+        log.debug("Returning the blob info")
         return defer.succeed([BlobInfo(self.blob_hash, 0, None)])
 
     def final_blob_num(self):
@@ -72,7 +75,7 @@ class SingleProgressManager(object):
 
         from twisted.internet import reactor
 
-        logging.debug("The blob %s has been downloaded. Calling the finished callback", str(blob))
+        log.debug("The blob %s has been downloaded. Calling the finished callback", str(blob))
         if self.finished is False:
             self.finished = True
             reactor.callLater(0, self.finished_callback, blob)

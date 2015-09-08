@@ -12,6 +12,9 @@ from lbrynet.core.StreamCreator import StreamCreator
 from lbrynet.cryptstream.CryptBlob import CryptStreamBlobMaker
 
 
+log = logging.getLogger(__name__)
+
+
 class CryptStreamCreator(StreamCreator):
     """Create a new stream with blobs encrypted by a symmetric cipher.
 
@@ -57,18 +60,18 @@ class CryptStreamCreator(StreamCreator):
         return defer.succeed(True)
 
     def _finalize(self):
-        logging.debug("_finalize has been called")
+        log.debug("_finalize has been called")
         self.blob_count += 1
         iv = self.iv_generator.next()
         final_blob_creator = self.blob_manager.get_blob_creator()
-        logging.debug("Created the finished_deferred")
+        log.debug("Created the finished_deferred")
         final_blob = self._get_blob_maker(iv, final_blob_creator)
-        logging.debug("Created the final blob")
-        logging.debug("Calling close on final blob")
+        log.debug("Created the final blob")
+        log.debug("Calling close on final blob")
         d = final_blob.close()
         d.addCallback(self._blob_finished)
         self.finished_deferreds.append(d)
-        logging.debug("called close on final blob, returning from make_final_blob")
+        log.debug("called close on final blob, returning from make_final_blob")
         return d
 
     def _write(self, data):

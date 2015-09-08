@@ -4,6 +4,9 @@ from zope.interface import implements
 from lbrynet.interfaces import IQueryHandlerFactory, IQueryHandler
 
 
+log = logging.getLogger(__name__)
+
+
 class CryptBlobInfoQueryHandlerFactory(object):
     implements(IQueryHandlerFactory)
 
@@ -54,7 +57,7 @@ class CryptBlobInfoQueryHandler(object):
 
         if self.query_identifiers[1] in queries:
             further_blobs_request = queries[self.query_identifiers[1]]
-            logging.debug("Received the client's request for additional blob information")
+            log.debug("Received the client's request for additional blob information")
 
             if self.blob_info_payment_rate is None:
                 response['further_blobs'] = {'error': 'RATE_UNSET'}
@@ -62,7 +65,7 @@ class CryptBlobInfoQueryHandler(object):
 
             def count_and_charge(blob_infos):
                 if len(blob_infos) != 0:
-                    logging.info("Responding with %s infos", str(len(blob_infos)))
+                    log.info("Responding with %s infos", str(len(blob_infos)))
                     expected_payment = 1.0 * len(blob_infos) * self.blob_info_payment_rate / 1000.0
                     self.wallet.add_expected_payment(self.peer, expected_payment)
                     self.peer.update_stats('uploaded_crypt_blob_infos', len(blob_infos))

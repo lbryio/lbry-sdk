@@ -6,6 +6,9 @@ import sys
 from lbrynet.core.utils import generate_id
 
 
+log = logging.getLogger(__name__)
+
+
 def print_usage():
     print "Usage:\n%s UDP_PORT KNOWN_NODE_IP KNOWN_NODE_PORT HASH"
 
@@ -13,15 +16,15 @@ def print_usage():
 def join_network(udp_port, known_nodes):
     lbryid = generate_id()
 
-    logging.info('Creating Node...')
+    log.info('Creating Node...')
     node = Node(udpPort=udp_port, lbryid=lbryid)
 
-    logging.info('Joining network...')
+    log.info('Joining network...')
     d = node.joinNetwork(known_nodes)
 
     def log_network_size():
-        logging.info("Approximate number of nodes in DHT: %s", str(node.getApproximateTotalDHTNodes()))
-        logging.info("Approximate number of blobs in DHT: %s", str(node.getApproximateTotalHashes()))
+        log.info("Approximate number of nodes in DHT: %s", str(node.getApproximateTotalDHTNodes()))
+        log.info("Approximate number of blobs in DHT: %s", str(node.getApproximateTotalHashes()))
 
     d.addCallback(lambda _: log_network_size())
 
@@ -36,7 +39,7 @@ def get_hosts(node, h):
         print "Hosts returned from the DHT: "
         print hosts
 
-    logging.info("Looking up %s", h)
+    log.info("Looking up %s", h)
     d = node.getPeersForBlob(h)
     d.addCallback(print_hosts)
     return d
@@ -48,9 +51,9 @@ def announce_hash(node, h):
     def log_results(results):
         for success, result in results:
             if success:
-                logging.info("Succeeded: %s", str(result))
+                log.info("Succeeded: %s", str(result))
             else:
-                logging.info("Failed: %s", str(result.getErrorMessage()))
+                log.info("Failed: %s", str(result.getErrorMessage()))
 
     d.addCallback(log_results)
     return d
@@ -80,11 +83,11 @@ def run_dht_script(dht_func):
     d.addCallback(run_dht_func)
 
     def log_err(err):
-        logging.error("An error occurred: %s", err.getTraceback())
+        log.error("An error occurred: %s", err.getTraceback())
         return err
 
     def shut_down():
-        logging.info("Shutting down")
+        log.info("Shutting down")
         reactor.stop()
 
     d.addErrback(log_err)

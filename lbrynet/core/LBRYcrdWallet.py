@@ -16,6 +16,9 @@ import time
 import os
 
 
+log = logging.getLogger(__name__)
+
+
 class ReservedPoints(object):
     def __init__(self, identifier, amount):
         self.identifier = identifier
@@ -53,7 +56,7 @@ class LBRYcrdWallet(object):
             if self.start_lbrycrdd is True:
                 self._start_daemon()
             self._get_info()
-            logging.info("Connected!")
+            log.info("Connected!")
 
         def start_manage():
             self.stopped = False
@@ -67,7 +70,7 @@ class LBRYcrdWallet(object):
     def stop(self):
 
         def log_stop_error(err):
-            logging.error("An error occurred stopping the wallet. %s", err.getTraceback())
+            log.error("An error occurred stopping the wallet. %s", err.getTraceback())
 
         self.stopped = True
         # If self.next_manage_call is None, then manage is currently running or else
@@ -84,7 +87,7 @@ class LBRYcrdWallet(object):
         return d
 
     def manage(self):
-        logging.info("Doing manage")
+        log.info("Doing manage")
         self.next_manage_call = None
         have_set_manage_running = [False]
 
@@ -123,7 +126,7 @@ class LBRYcrdWallet(object):
         d.addCallback(lambda _: set_next_manage_call())
 
         def log_error(err):
-            logging.error("Something went wrong during manage. Error message: %s", err.getErrorMessage())
+            log.error("Something went wrong during manage. Error message: %s", err.getErrorMessage())
             return err
 
         d.addErrback(log_error)
@@ -191,8 +194,8 @@ class LBRYcrdWallet(object):
         self.queued_payments[self.peer_addresses[peer]] += rounded_amount
         # make any unused points available
         self.total_reserved_points -= (reserved_points.amount - rounded_amount)
-        logging.info("ordering that %s points be sent to %s", str(rounded_amount),
-                     str(self.peer_addresses[peer]))
+        log.info("ordering that %s points be sent to %s", str(rounded_amount),
+                 str(self.peer_addresses[peer]))
         peer.update_stats('points_sent', amount)
         return defer.succeed(True)
 
@@ -201,7 +204,7 @@ class LBRYcrdWallet(object):
         rounded_amount = Decimal(str(round(amount, 8)))
         assert(peer in self.current_address_given_to_peer)
         address = self.current_address_given_to_peer[peer]
-        logging.info("expecting a payment at address %s in the amount of %s", str(address), str(rounded_amount))
+        log.info("expecting a payment at address %s in the amount of %s", str(address), str(rounded_amount))
         self.expected_balances[address] += rounded_amount
         expected_balance = self.expected_balances[address]
         expected_time = datetime.datetime.now() + self.max_expected_payment_time
@@ -286,12 +289,12 @@ class LBRYcrdWallet(object):
                 break
             except (socket.error, JSONRPCException):
                 tries += 1
-                logging.warning("Failed to connect to lbrycrdd.")
+                log.warning("Failed to connect to lbrycrdd.")
                 if tries < 5:
                     time.sleep(2 ** tries)
-                    logging.warning("Trying again in %d seconds", 2 ** tries)
+                    log.warning("Trying again in %d seconds", 2 ** tries)
                 else:
-                    logging.warning("Giving up.")
+                    log.warning("Giving up.")
         else:
             self.lbrycrdd.terminate()
             raise ValueError("Couldn't open lbrycrdd")
@@ -338,10 +341,10 @@ class LBRYcrdWallet(object):
                             peer.update_score(balance[5])
                         peer.update_stats('points_received', balance[5])
                 else:
-                    logging.warning("Something went wrong checking a balance. Peer: %s, account: %s,"
-                                    "expected balance: %s, expected time: %s, count: %s, error: %s",
-                                    str(balance[0]), str(balance[1]), str(balance[2]), str(balance[3]),
-                                    str(balance[4]), str(result.getErrorMessage()))
+                    log.warning("Something went wrong checking a balance. Peer: %s, account: %s,"
+                                "expected balance: %s, expected time: %s, count: %s, error: %s",
+                                str(balance[0]), str(balance[1]), str(balance[2]), str(balance[3]),
+                                str(balance[4]), str(result.getErrorMessage()))
 
         dl.addCallback(handle_checks)
         return dl
@@ -349,14 +352,14 @@ class LBRYcrdWallet(object):
     @_catch_connection_error
     def _check_expected_balance(self, expected_balance):
         rpc_conn = self._get_rpc_conn()
-        logging.info("Checking balance of address %s", str(expected_balance[1]))
+        log.info("Checking balance of address %s", str(expected_balance[1]))
         balance = rpc_conn.getreceivedbyaddress(expected_balance[1])
-        logging.debug("received balance: %s", str(balance))
-        logging.debug("expected balance: %s", str(expected_balance[2]))
+        log.debug("received balance: %s", str(balance))
+        log.debug("expected balance: %s", str(expected_balance[2]))
         return balance >= expected_balance[2]
 
     def _send_payments(self):
-        logging.info("Trying to send payments, if there are any to be sent")
+        log.info("Trying to send payments, if there are any to be sent")
 
         def do_send(payments):
             rpc_conn = self._get_rpc_conn()
@@ -364,15 +367,15 @@ class LBRYcrdWallet(object):
 
         payments_to_send = {}
         for address, points in self.queued_payments.items():
-            logging.info("Should be sending %s points to %s", str(points), str(address))
+            log.info("Should be sending %s points to %s", str(points), str(address))
             payments_to_send[address] = float(points)
             self.total_reserved_points -= points
             self.wallet_balance -= points
             del self.queued_payments[address]
         if payments_to_send:
-            logging.info("Creating a transaction with outputs %s", str(payments_to_send))
+            log.info("Creating a transaction with outputs %s", str(payments_to_send))
             return threads.deferToThread(do_send, payments_to_send)
-        logging.info("There were no payments to send")
+        log.info("There were no payments to send")
         return defer.succeed(True)
 
     @_catch_connection_error
@@ -439,8 +442,8 @@ class LBRYcrdAddressRequester(object):
 
     def _request_failed(self, err, peer):
         if not err.check(RequestCanceledError):
-            logging.warning("A peer failed to send a valid public key response. Error: %s, peer: %s",
-                            err.getErrorMessage(), str(peer))
+            log.warning("A peer failed to send a valid public key response. Error: %s, peer: %s",
+                        err.getErrorMessage(), str(peer))
             #return err
 
 
@@ -490,7 +493,7 @@ class LBRYcrdAddressQueryHandler(object):
             d.addCallback(create_response)
             return d
         if self.address is None:
-            logging.warning("Expected a request for an address, but did not receive one")
+            log.warning("Expected a request for an address, but did not receive one")
             return defer.fail(Failure(ValueError("Expected but did not receive an address request")))
         else:
             return defer.succeed({})
