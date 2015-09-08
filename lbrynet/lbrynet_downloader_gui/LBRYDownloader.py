@@ -86,14 +86,14 @@ class LBRYDownloader(object):
 
                 def run_migrator():
                     migrator_exe = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
-                                                "dmigrator", "migrator.exe")
+                                                "dbmigrator", "migrator.exe")
                     print "trying to find the migrator at", migrator_exe
                     si = subprocess.STARTUPINFO
                     si.dwFlags = subprocess.STARTF_USESHOWWINDOW
                     si.wShowWindow = subprocess.SW_HIDE
                     print "trying to run the migrator"
-                    migrator_proc = subprocess.Popen([migrator_exe, self.conf_dir, old_revision,
-                                                      self.current_db_revision], startupinfo=si)
+                    migrator_proc = subprocess.Popen([migrator_exe, self.conf_dir, str(old_revision),
+                                                      str(self.current_db_revision)], startupinfo=si)
                     print "started the migrator"
                     migrator_proc.wait()
                     print "migrator has returned"

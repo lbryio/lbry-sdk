@@ -1,3 +1,6 @@
+import logging
+
+
 def migrate_db(db_dir, start, end):
     current = start
     old_dirs = []
@@ -11,4 +14,12 @@ def migrate_db(db_dir, start, end):
 
 def run_migration_script():
     import sys
-    migrate_db(sys.argv[1], sys.argv[2], sys.argv[3])
+    log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
+    logging.basicConfig(level=logging.DEBUG, format=log_format, filename="migrator.log")
+    sys.stdout = open("migrator.out.log", 'w')
+    sys.stderr = open("migrator.err.log", 'w')
+    migrate_db(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]))
+    
+    
+if __name__ == "__main__":
+    run_migration_script()
