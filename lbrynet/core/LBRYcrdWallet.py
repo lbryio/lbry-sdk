@@ -405,9 +405,12 @@ class LBRYcrdWallet(object):
 
     @_catch_connection_error
     def _rpc_stop(self):
-        rpc_conn = self._get_rpc_conn()
-        rpc_conn.stop()
-        self.lbrycrdd.wait()
+        # check if our lbrycrdd is actually running, or if we connected to one that was already
+        # running and ours failed to start
+        if self.lbrycrdd.poll() is None:
+            rpc_conn = self._get_rpc_conn()
+            rpc_conn.stop()
+            self.lbrycrdd.wait()
 
 
 class LBRYcrdAddressRequester(object):
