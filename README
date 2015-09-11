@@ -1,12 +1,10 @@
-LBRYnet
-=======
+# LBRYnet
 
 LBRYnet is a fully decentralized network for distributing data. It consists of peers uploading
 and downloading data from other peers, possibly in exchange for payments, and a distributed hash
 table, used by peers to discover other peers.
 
-Overview
---------
+## Overview
 
 On LBRYnet, data is broken into chunks, and each chunk is specified by its sha384 hash sum. This
 guarantees that peers can verify the correctness of each chunk without having to know anything
@@ -20,8 +18,7 @@ help peers find each other. For example, an application for which clients don't 
 necessary chunks may use some identifier, chosen by the application, to find clients which do
 know all of the necessary chunks.
 
-Running
--------
+## Running
 
 LBRYnet comes with an file sharing application, called 'lbrynet-console', which breaks
 files into chunks, encrypts them with a symmetric key, computes their sha384 hash sum, generates
@@ -33,25 +30,21 @@ chunks into the original file, according to the metadata included in the 'stream
 
 To install and use this client, see INSTALL and RUNNING
 
-Installation
-------------
+## Installation
 
 See INSTALL
 
-Developers
-----------
+## Developers
 
 Documentation: doc.lbry.io
 Source code: trac.lbry.io/browser
 
 To contribute to the development of LBRYnet or lbrynet-console, contact jimmy@lbry.io
 
-Support
--------
+## Support
 
 Send all support requests to jimmy@lbry.io
 
-License
--------
+## License
 
 See LICENSE
