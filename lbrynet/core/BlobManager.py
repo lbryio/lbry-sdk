@@ -293,7 +293,7 @@ class DiskBlobManager(BlobManager):
     @rerun_if_locked
     def _get_blob_length(self, blob):
         d = self.db_conn.runQuery("select blob_length from blobs where blob_hash = ?", (blob,))
-        d.addCallback(lambda r: r[0] if len(r) else Failure(NoSuchBlobError(blob)))
+        d.addCallback(lambda r: r[0][0] if len(r) else Failure(NoSuchBlobError(blob)))
         return d
 
         #length, verified_time, next_announce_time = json.loads(self.db.Get(blob))
