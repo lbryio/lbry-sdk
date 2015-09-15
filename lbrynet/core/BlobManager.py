@@ -82,11 +82,14 @@ class DiskBlobManager(BlobManager):
         self._next_manage_call = None
 
     def setup(self):
+        log.info("Setting up the DiskBlobManager. blob_dir: %s, db_file: %s", str(self.blob_dir),
+                 str(self.db_file))
         d = self._open_db()
         d.addCallback(lambda _: self._manage())
         return d
 
     def stop(self):
+        log.info("Stopping the DiskBlobManager")
         if self._next_manage_call is not None and self._next_manage_call.active():
             self._next_manage_call.cancel()
             self._next_manage_call = None

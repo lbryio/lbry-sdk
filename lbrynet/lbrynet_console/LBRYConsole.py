@@ -103,11 +103,9 @@ class LBRYConsole():
 
     def shut_down(self):
         """Stop the session, all currently running streams, and stop the server"""
+        d = self._shut_down()
         if self.session is not None:
-            d = self.session.shut_down()
-        else:
-            d = defer.succeed(True)
-        d.addCallback(lambda _: self._shut_down())
+            d.addCallback(lambda _: self.session.shut_down())
         return d
 
     def add_control_handlers(self, control_handlers):

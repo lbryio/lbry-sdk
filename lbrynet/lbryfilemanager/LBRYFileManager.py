@@ -59,6 +59,9 @@ class LBRYFileManager(object):
         d.addCallback(get_options)
         return d
 
+    def save_lbry_file(self, stream_hash, data_payment_rate):
+        return self._save_lbry_file(stream_hash, data_payment_rate)
+
     def get_lbry_file_status(self, stream_hash):
         return self._get_lbry_file_status(stream_hash)
 
@@ -97,7 +100,7 @@ class LBRYFileManager(object):
 
         def set_options_and_restore(stream_hash, options):
             payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager)
-            d = self.add_lbry_file(stream_hash, payment_rate_manager, blob_data_rate=options[0])
+            d = self.start_lbry_file(stream_hash, payment_rate_manager, blob_data_rate=options[0])
             d.addCallback(lambda downloader: downloader.restore())
             return d
 
@@ -114,7 +117,7 @@ class LBRYFileManager(object):
         d.addCallback(start_lbry_files)
         return d
 
-    def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True):
+    def start_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True):
         payment_rate_manager.min_blob_data_payment_rate = blob_data_rate
         lbry_file_downloader = ManagedLBRYFileDownloader(stream_hash, self.session.peer_finder,
                                                          self.session.rate_limiter, self.session.blob_manager,
@@ -123,9 +126,13 @@ class LBRYFileManager(object):
                                                          self.download_directory,
                                                          upload_allowed)
         self.lbry_files.append(lbry_file_downloader)
-        d = self.set_lbry_file_data_payment_rate(stream_hash, blob_data_rate)
-        d.addCallback(lambda _: lbry_file_downloader.set_stream_info())
+        d = lbry_file_downloader.set_stream_info()
         d.addCallback(lambda _: lbry_file_downloader)
+        return d
+
+    def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True):
+        d = self._save_lbry_file(stream_hash, blob_data_rate)
+        d.addCallback(lambda _: self.start_lbry_file(stream_hash, payment_rate_manager, blob_data_rate, upload_allowed))
         return d
 
     def delete_lbry_file(self, stream_hash):
@@ -206,14 +213,18 @@ class LBRYFileManager(object):
         # threads.
         self.sql_db = adbapi.ConnectionPool("sqlite3", os.path.join(self.session.db_dir, "lbryfile_info.db"),
                                             check_same_thread=False)
-        #self.unql_db = unqlite.UnQLite(os.path.join(self.session.db_dir, "lbryfile_manager.db"))
-
         return self.sql_db.runQuery("create table if not exists lbry_file_options (" +
                                     "    blob_data_rate real, " +
                                     "    status text," +
                                     "    stream_hash text,"
                                     "    foreign key(stream_hash) references lbry_files(stream_hash)" +
                                     ")")
+
+    @rerun_if_locked
+    def _save_lbry_file(self, stream_hash, data_payment_rate):
+        return self.sql_db.runQuery("insert into lbry_file_options values (?, ?, ?)",
+                                    (data_payment_rate, ManagedLBRYFileDownloader.STATUS_STOPPED,
+                                     stream_hash))
 
     @rerun_if_locked
     def _get_lbry_file_options(self, stream_hash):

@@ -28,9 +28,12 @@ class ConnectionManager(object):
         self._peer_connections = {}  # {Peer: PeerConnectionHandler}
         self._connections_closing = {}  # {Peer: deferred (fired when the connection is closed)}
         self._next_manage_call = None
+        self.stopped = True
 
     def start(self):
         from twisted.internet import reactor
+
+        self.stopped = False
 
         if self._next_manage_call is not None and self._next_manage_call.active() is True:
             self._next_manage_call.cancel()
@@ -38,6 +41,7 @@ class ConnectionManager(object):
         return defer.succeed(True)
 
     def stop(self):
+        self.stopped = True
         if self._next_manage_call is not None and self._next_manage_call.active() is True:
             self._next_manage_call.cancel()
         self._next_manage_call = None
@@ -71,7 +75,7 @@ class ConnectionManager(object):
 
         log.debug("Trying to get the next request for peer %s", str(peer))
 
-        if not peer in self._peer_connections:
+        if not peer in self._peer_connections or self.stopped is True:
             log.debug("The peer has already been told to shut down.")
             return defer.succeed(False)
 
@@ -142,7 +146,7 @@ class ConnectionManager(object):
 
         from twisted.internet import reactor
 
-        if peer is not None:
+        if peer is not None and self.stopped is False:
             log.debug("Trying to connect to %s", str(peer))
             factory = ClientProtocolFactory(peer, self.rate_limiter, self)
             self._peer_connections[peer] = PeerConnectionHandler(self._primary_request_creators[:],
