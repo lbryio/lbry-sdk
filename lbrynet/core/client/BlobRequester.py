@@ -141,6 +141,12 @@ class BlobRequester(object):
                 return [p for p in peers if not p in bad_peers]
 
             d.addCallback(choose_best_peers)
+
+            def lookup_failed(err):
+                log.error("An error occurred looking up peers for a hash: %s", err.getTraceback())
+                return []
+
+            d.addErrback(lookup_failed)
             return d
 
     def _should_send_request_to(self, peer):

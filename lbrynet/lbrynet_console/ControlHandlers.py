@@ -6,6 +6,7 @@ from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from lbrynet.lbrynet_console.interfaces import IControlHandler, IControlHandlerFactory
 from lbrynet.core.StreamDescriptor import download_sd_blob
+from lbrynet.core.Error import UnknownNameError, InvalidBlobHashError
 from twisted.internet import defer
 
 
@@ -164,8 +165,9 @@ class GetWalletBalances(ControlHandler):
         d = self.wallet.get_balance()
 
         def format_balance(balance):
-            balance_string = "id: 1\n"
-            balance_string += "balance: " + str(balance) + "\n"
+            if balance == 0:
+                balance = 0
+            balance_string = "balance: " + str(balance) + " LBC\n"
             return balance_string
 
         d.addCallback(format_balance)
@@ -231,7 +233,7 @@ class LBRYFileStatusFactory(ControlHandlerFactory):
 class AddStream(ControlHandler):
     prompt_description = None
     line_prompt = None
-    cancel_prompt = "Trying to locate the stream descriptor. Type \"cancel\" to cancel."
+    cancel_prompt = "Trying to locate the stream's metadata. Type \"cancel\" to cancel..."
     canceled_message = "Canceled locating the stream descriptor"
     line_prompt2 = "Modify options? (y/n)"
     line_prompt3 = "Start download? (y/n)"
@@ -339,8 +341,8 @@ class AddStream(ControlHandler):
     def _handle_load_failed(self, err):
         self.loading_failed = True
         log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
-        return defer.succeed("Encountered a problem while loading the stream descriptor: %s\n"
-                             "See console.log for further details.\n"
+        return defer.succeed("An unexpected error occurred attempting to load the stream's metadata.\n"
+                             "See console.log for further details.\n\n"
                              "Press enter to continue" % err.getErrorMessage())
 
     def _choose_factory(self, info_and_factories):
@@ -460,6 +462,12 @@ class AddStreamFromHash(AddStream):
         d.addCallback(self.sd_identifier.get_info_and_factories_for_sd_blob)
         return d
 
+    def _handle_load_failed(self, err):
+        err.trap(InvalidBlobHashError)
+        self.loading_failed = True
+        return defer.succeed("The hash you entered is invalid. It must be 96 characters long and "
+                             "contain only hex characters.\n\nPress enter to continue")
+
 
 class AddStreamFromHashFactory(ControlHandlerFactory):
     control_handler_class = AddStreamFromHash
@@ -484,6 +492,16 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
         d = self.name_resolver.get_stream_info_for_name(name)
         d.addCallback(get_name_from_info)
         return d
+
+    def _handle_load_failed(self, err):
+        err.trap(UnknownNameError, InvalidBlobHashError)
+        self.loading_failed = True
+        if err.check(UnknownNameError):
+            return defer.succeed("The name %s could not be found.\n\n"
+                                 "Press enter to continue" % err.getErrorMessage())
+        else:
+            return defer.succeed("The metadata for this name is invalid. The stream cannot be downloaded.\n\n" +
+                                 "Press enter to continue")
 
 
 class AddStreamFromLBRYcrdNameFactory(ControlHandlerFactory):

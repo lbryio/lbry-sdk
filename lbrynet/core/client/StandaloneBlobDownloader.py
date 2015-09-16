@@ -5,6 +5,9 @@ from lbrynet.core.BlobInfo import BlobInfo
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.ConnectionManager import ConnectionManager
 from lbrynet.core.client.DownloadManager import DownloadManager
+from lbrynet.core.Error import InvalidBlobHashError
+from lbrynet.core.utils import is_valid_blobhash
+from twisted.python.failure import Failure
 from twisted.internet import defer
 
 
@@ -102,6 +105,9 @@ class StandaloneBlobDownloader(object):
         self.finished_deferred = None
 
     def download(self):
+        if not is_valid_blobhash(self.blob_hash):
+            return defer.fail(Failure(InvalidBlobHashError(self.blob_hash)))
+
         def cancel_download(d):
             self.stop()
 

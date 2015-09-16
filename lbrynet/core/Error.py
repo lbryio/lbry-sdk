@@ -72,3 +72,7 @@ class NoSuchBlobError(Exception):
 
 class NoSuchStreamHashError(Exception):
     pass
+
+
+class InvalidBlobHashError(Exception):
+    pass
