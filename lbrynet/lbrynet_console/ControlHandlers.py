@@ -178,6 +178,23 @@ class GetWalletBalancesFactory(ControlHandlerFactory):
     control_handler_class = GetWalletBalances
 
 
+class GetNewWalletAddress(ControlHandler):
+    prompt_description = "Get a new LBRYcrd address"
+
+    def __init__(self, wallet):
+        self.wallet = wallet
+
+    def handle_line(self, line):
+        assert line is None, "Get new LBRYcrd address should not be passed any arguments"
+        d = self.wallet.get_new_address()
+        d.addCallback(lambda address: str(address))
+        return True, d
+
+
+class GetNewWalletAddressFactory(ControlHandlerFactory):
+    control_handler_class = GetNewWalletAddress
+
+
 class ShutDown(ControlHandler):
     prompt_description = "Shut down"
 

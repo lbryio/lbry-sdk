@@ -29,7 +29,7 @@ from lbrynet.lbrynet_console.ControlHandlers import ShowPublishedSDHashesChooser
 from lbrynet.lbrynet_console.ControlHandlers import CreatePlainStreamDescriptorChooserFactory
 from lbrynet.lbrynet_console.ControlHandlers import ShowLBRYFileStreamHashChooserFactory, AddStreamFromHashFactory
 from lbrynet.lbrynet_console.ControlHandlers import AddStreamFromSDFactory, AddStreamFromLBRYcrdNameFactory
-from lbrynet.lbrynet_console.ControlHandlers import ClaimNameFactory
+from lbrynet.lbrynet_console.ControlHandlers import ClaimNameFactory, GetNewWalletAddressFactory
 from lbrynet.lbrynet_console.ControlHandlers import ShowServerStatusFactory, ModifyServerSettingsFactory
 from lbrynet.lbrynet_console.ControlHandlers import ModifyLBRYFileOptionsChooserFactory
 from lbrynet.lbrynet_console.ControlHandlers import PeerStatsAndSettingsChooserFactory
@@ -307,6 +307,8 @@ class LBRYConsole():
                                                  self.session.wallet)),
                 ('General',
                  ClaimNameFactory(self.session.wallet)),
+                ('General',
+                 GetNewWalletAddressFactory(self.session.wallet))
             ]
             self.add_control_handlers(lbrycrd_handlers)
         if self.peer_port is not None:
