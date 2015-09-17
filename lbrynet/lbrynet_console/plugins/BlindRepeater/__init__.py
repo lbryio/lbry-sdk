@@ -17,6 +17,7 @@ class BlindRepeaterPlugin(LBRYPlugin.LBRYPlugin):
 
     def __init__(self):
         LBRYPlugin.LBRYPlugin.__init__(self)
+        self.enabled = False
         self.blind_info_manager = None
         self.valuable_blob_length_query_handler = None
         self.valuable_blob_hash_query_handler = None
@@ -26,6 +27,8 @@ class BlindRepeaterPlugin(LBRYPlugin.LBRYPlugin):
         self.settings = None
 
     def setup(self, lbry_console):
+        if not self.enabled:
+            return defer.succeed(True)
         lbry_session = lbry_console.session
         d = self._setup_settings(lbry_session.db_dir)
         d.addCallback(lambda _: self._get_payment_rate_manager(lbry_session.base_payment_rate_manager))
@@ -38,7 +41,9 @@ class BlindRepeaterPlugin(LBRYPlugin.LBRYPlugin):
         return d
 
     def stop(self):
-        return self.settings.stop()
+        if self.settings is not None:
+            return self.settings.stop()
+        return defer.succeed(True)
 
     def _setup_settings(self, db_dir):
         self.settings = BlindRepeaterSettings(db_dir)
