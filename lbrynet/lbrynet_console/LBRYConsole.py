@@ -42,7 +42,7 @@ log = logging.getLogger(__name__)
 class LBRYConsole():
     """A class which can upload and download file streams to and from the network"""
     def __init__(self, peer_port, dht_node_port, known_dht_nodes, control_class, wallet_type, lbrycrd_conf,
-                 use_upnp, conf_dir, data_dir):
+                 use_upnp, conf_dir, data_dir, created_conf_dir):
         """
         @param peer_port: the network port on which to listen for peers
 
@@ -62,9 +62,9 @@ class LBRYConsole():
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
         self.conf_dir = conf_dir
-        self.created_db_dir = False
         self.current_db_revision = 1
         self.data_dir = data_dir
+        self.created_conf_dir = created_conf_dir
         self.plugin_manager = PluginManager()
         self.plugin_manager.setPluginPlaces([
             os.path.join(self.conf_dir, "plugins"),
@@ -82,7 +82,7 @@ class LBRYConsole():
 
     def start(self):
         """Initialize the session and restore everything to its saved state"""
-        d = threads.deferToThread(self._create_directory)
+        d = threads.deferToThread(self._setup_conf_directory)
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
         d.addCallback(lambda _: self._get_session())
@@ -127,16 +127,12 @@ class LBRYConsole():
         dl.addCallback(_set_query_handlers)
         return dl
 
-    def _create_directory(self):
-        if not os.path.exists(self.conf_dir):
-            os.makedirs(self.conf_dir)
+    def _setup_conf_directory(self):
+        if self.created_conf_dir:
             db_revision = open(os.path.join(self.conf_dir, "db_revision"), mode='w')
             db_revision.write(str(self.current_db_revision))
             db_revision.close()
-            log.debug("Created the configuration directory: %s", str(self.conf_dir))
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
-            log.debug("Created the data directory: %s", str(self.data_dir))
+            log.debug("Created the db revision file: %s", str(os.path.join(self.conf_dir, "db_revision")))
 
     def _check_db_migration(self):
         old_revision = 0
@@ -477,12 +473,14 @@ def launch_lbry_console():
     else:
         dht_node_port = args.dht_node_port
 
+    created_conf_dir = False
     if not args.conf_dir:
         conf_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
     else:
         conf_dir = args.conf_dir
     if not os.path.exists(conf_dir):
         os.mkdir(conf_dir)
+        created_conf_dir = True
     if not args.data_dir:
         data_dir = os.path.join(conf_dir, "blobfiles")
     else:
@@ -508,7 +506,7 @@ def launch_lbry_console():
 
     console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, StdIOControl, wallet_type=args.wallet_type,
                           lbrycrd_conf=lbrycrd_conf, use_upnp=args.use_upnp,
-                          conf_dir=conf_dir, data_dir=data_dir)
+                          conf_dir=conf_dir, data_dir=data_dir, created_conf_dir=created_conf_dir)
 
     d = task.deferLater(reactor, 0, console.start)
 
