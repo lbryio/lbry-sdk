@@ -136,7 +136,10 @@ class StandaloneBlobDownloader(object):
 
     def _blob_downloaded(self, blob):
         self.stop()
-        self.finished_deferred.callback(blob)
+        if not self.finished_deferred.called:
+            self.finished_deferred.callback(blob)
 
-    def insufficient_funds(self):
-        return self.stop()
+    def insufficient_funds(self, err):
+        self.stop()
+        if not self.finished_deferred.called:
+            self.finished_deferred.errback(err)

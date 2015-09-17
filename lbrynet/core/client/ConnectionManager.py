@@ -80,13 +80,14 @@ class ConnectionManager(object):
             return defer.succeed(False)
 
         def handle_error(err):
-            if err.check(InsufficientFundsError):
-                self.downloader.insufficient_funds()
-                return False
-            else:
-                return err
+            err.trap(InsufficientFundsError)
+            self.downloader.insufficient_funds(err)
+            return False
 
         def check_if_request_sent(request_sent, request_creator):
+            if peer not in self._peer_connections:
+                # This can happen if the connection is told to close
+                return False
             if request_sent is False:
                 if request_creator in self._peer_connections[peer].request_creators:
                     self._peer_connections[peer].request_creators.remove(request_creator)

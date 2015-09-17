@@ -43,12 +43,12 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
         d.addCallback(restore_status)
         return d
 
-    def stop(self, change_status=True):
+    def stop(self, err=None, change_status=True):
 
         def set_saving_status_done():
             self.saving_status = False
 
-        d = LBRYFileDownloader.stop(self)  # LBRYFileSaver deletes metadata when it's stopped. We don't want that here.
+        d = LBRYFileDownloader.stop(self, err=err)  # LBRYFileSaver deletes metadata when it's stopped. We don't want that here.
         if change_status is True:
             self.saving_status = True
             d.addCallback(lambda _: self._save_status())

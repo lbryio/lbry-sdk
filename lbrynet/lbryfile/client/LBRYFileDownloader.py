@@ -40,9 +40,9 @@ class LBRYFileDownloader(CryptStreamDownloader):
         else:
             return defer.succeed(True)
 
-    def stop(self):
+    def stop(self, err=None):
         d = self._close_output()
-        d.addCallback(lambda _: CryptStreamDownloader.stop(self))
+        d.addCallback(lambda _: CryptStreamDownloader.stop(self, err=err))
         return d
 
     def _get_progress_manager(self, download_manager):
@@ -139,8 +139,8 @@ class LBRYFileSaver(LBRYFileDownloader):
         d.addCallback(lambda _: set_file_name())
         return d
 
-    def stop(self):
-        d = LBRYFileDownloader.stop(self)
+    def stop(self, err=None):
+        d = LBRYFileDownloader.stop(self, err=err)
         d.addCallback(lambda _: self._delete_from_info_manager())
         return d
 
@@ -209,8 +209,8 @@ class LBRYFileOpener(LBRYFileDownloader):
         self.process = None
         self.process_log = None
 
-    def stop(self):
-        d = LBRYFileDownloader.stop(self)
+    def stop(self, err=None):
+        d = LBRYFileDownloader.stop(self, err=err)
         d.addCallback(lambda _: self._delete_from_info_manager())
         return d
 

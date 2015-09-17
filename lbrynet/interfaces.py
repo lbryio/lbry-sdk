@@ -521,7 +521,7 @@ class IStreamDownloader(Interface):
         @rtype: Deferred which fires with anything
         """
 
-    def insufficient_funds(self):
+    def insufficient_funds(self, err):
         """
         this function informs the stream downloader that funds are too low to finish downloading.
 

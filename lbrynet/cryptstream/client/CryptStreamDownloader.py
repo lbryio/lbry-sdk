@@ -96,7 +96,7 @@ class CryptStreamDownloader(object):
         d.addCallback(lambda _: set_finished_deferred())
         return d
 
-    def stop(self):
+    def stop(self, err=None):
 
         def check_if_stop_succeeded(success):
             self.stopping = False
@@ -112,7 +112,7 @@ class CryptStreamDownloader(object):
         assert self.download_manager is not None
         self.stopping = True
         d = self.download_manager.stop_downloading()
-        self._fire_completed_deferred()
+        self._fire_completed_deferred(err)
         d.addCallback(check_if_stop_succeeded)
         return d
 
@@ -196,10 +196,13 @@ class CryptStreamDownloader(object):
                                  self._get_primary_request_creators(download_manager),
                                  self._get_secondary_request_creators(download_manager))
 
-    def _fire_completed_deferred(self):
+    def _fire_completed_deferred(self, err=None):
         self.finished_deferred, d = None, self.finished_deferred
         if d is not None:
-            d.callback(self._get_finished_deferred_callback_value())
+            if err is not None:
+                d.errback(err)
+            else:
+                d.callback(self._get_finished_deferred_callback_value())
 
     def _get_finished_deferred_callback_value(self):
         return None
@@ -209,5 +212,5 @@ class CryptStreamDownloader(object):
             self.completed = True
         return self.stop()
 
-    def insufficient_funds(self):
-        return self.stop()
+    def insufficient_funds(self, err):
+        return self.stop(err=err)

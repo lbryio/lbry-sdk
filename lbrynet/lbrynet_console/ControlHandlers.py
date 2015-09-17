@@ -6,7 +6,7 @@ from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from lbrynet.lbrynet_console.interfaces import IControlHandler, IControlHandlerFactory
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.core.Error import UnknownNameError, InvalidBlobHashError
+from lbrynet.core.Error import UnknownNameError, InvalidBlobHashError, InsufficientFundsError
 from twisted.internet import defer
 
 
@@ -234,7 +234,7 @@ class AddStream(ControlHandler):
     prompt_description = None
     line_prompt = None
     cancel_prompt = "Trying to locate the stream's metadata. Type \"cancel\" to cancel..."
-    canceled_message = "Canceled locating the stream descriptor"
+    canceled_message = "Canceled locating the stream's metadata."
     line_prompt2 = "Modify options? (y/n)"
     line_prompt3 = "Start download? (y/n)"
 
@@ -343,7 +343,7 @@ class AddStream(ControlHandler):
         log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
         return defer.succeed("An unexpected error occurred attempting to load the stream's metadata.\n"
                              "See console.log for further details.\n\n"
-                             "Press enter to continue" % err.getErrorMessage())
+                             "Press enter to continue")
 
     def _choose_factory(self, info_and_factories):
         self.loading_info_and_factories_deferred = None
@@ -430,7 +430,15 @@ class AddStream(ControlHandler):
     def _start_download(self):
         d = self._make_downloader()
         d.addCallback(lambda stream_downloader: stream_downloader.start())
+        d.addErrback(self._handle_download_error)
         return d
+
+    def _handle_download_error(self, err):
+        if err.check(InsufficientFundsError):
+            return "Download stopped due to insufficient funds."
+        else:
+            log.error("An unexpected error has caused the download to stop: %s" % err.getTraceback())
+            return "An unexpected error has caused the download to stop. See console.log for details."
 
     def _make_downloader(self):
         return self.factory.make_downloader(self.info_validator, self.options_chosen,
@@ -463,10 +471,13 @@ class AddStreamFromHash(AddStream):
         return d
 
     def _handle_load_failed(self, err):
-        err.trap(InvalidBlobHashError)
         self.loading_failed = True
-        return defer.succeed("The hash you entered is invalid. It must be 96 characters long and "
-                             "contain only hex characters.\n\nPress enter to continue")
+        if err.check(InvalidBlobHashError):
+            return defer.succeed("The hash you entered is invalid. It must be 96 characters long and "
+                                 "contain only hex characters.\n\nPress enter to continue")
+        if err.check(InsufficientFundsError):
+            return defer.succeed("Insufficient funds to download the metadata blob.\n\nPress enter to continue")
+        return AddStream._handle_load_failed(self, err)
 
 
 class AddStreamFromHashFactory(ControlHandlerFactory):
@@ -494,14 +505,14 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
         return d
 
     def _handle_load_failed(self, err):
-        err.trap(UnknownNameError, InvalidBlobHashError)
         self.loading_failed = True
         if err.check(UnknownNameError):
             return defer.succeed("The name %s could not be found.\n\n"
                                  "Press enter to continue" % err.getErrorMessage())
-        else:
+        elif err.check(InvalidBlobHashError):
             return defer.succeed("The metadata for this name is invalid. The stream cannot be downloaded.\n\n" +
                                  "Press enter to continue")
+        return AddStreamFromHash._handle_load_failed(self, err)
 
 
 class AddStreamFromLBRYcrdNameFactory(ControlHandlerFactory):
@@ -640,7 +651,15 @@ class ToggleLBRYFileRunning(ControlHandler):
 
     def handle_line(self, line):
         d = self.lbry_file_manager.toggle_lbry_file_running(self.lbry_file.stream_hash)
+        d.addErrback(self._handle_download_error)
         return True, d
+
+    def _handle_download_error(self, err):
+        if err.check(InsufficientFundsError):
+            return "Download stopped due to insufficient funds."
+        else:
+            log.error("An unexpected error occurred due to toggling an LBRY file running. %s", err.getTraceback())
+            return "An unexpected error occurred. See console.log for details."
 
 
 class ToggleLBRYFileRunningFactory(LBRYFileChooserFactory):

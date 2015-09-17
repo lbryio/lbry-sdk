@@ -109,5 +109,5 @@ class BlindRepeater(object):
     def _update_status(self, stopped=True):
         self.stopped = stopped
 
-    def insufficient_funds(self):
+    def insufficient_funds(self, err):
         return self.stop()

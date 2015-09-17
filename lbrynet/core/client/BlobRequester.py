@@ -72,6 +72,7 @@ class BlobRequester(object):
                     sent_request = True
                 else:
                     d_r.cancel(InsufficientFundsError())
+                    d_r.finished_deferred.addErrback(lambda _: True)
                     return defer.fail(InsufficientFundsError())
             if sent_request is True:
                 if p_r is not None:
