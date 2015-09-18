@@ -42,7 +42,7 @@ log = logging.getLogger(__name__)
 class LBRYConsole():
     """A class which can upload and download file streams to and from the network"""
     def __init__(self, peer_port, dht_node_port, known_dht_nodes, control_class, wallet_type, lbrycrd_conf,
-                 use_upnp, conf_dir, data_dir, created_conf_dir):
+                 use_upnp, data_dir, created_data_dir):
         """
         @param peer_port: the network port on which to listen for peers
 
@@ -61,19 +61,19 @@ class LBRYConsole():
         self.session = None
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
-        self.conf_dir = conf_dir
+        self.db_dir = data_dir
         self.current_db_revision = 1
-        self.data_dir = data_dir
-        self.created_conf_dir = created_conf_dir
+        self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
+        self.created_data_dir = created_data_dir
         self.plugin_manager = PluginManager()
         self.plugin_manager.setPluginPlaces([
-            os.path.join(self.conf_dir, "plugins"),
+            os.path.join(self.db_dir, "plugins"),
             os.path.join(os.path.dirname(__file__), "plugins"),
         ])
         self.control_handlers = []
         self.query_handlers = {}
 
-        self.settings = LBRYSettings(self.conf_dir)
+        self.settings = LBRYSettings(self.db_dir)
         self.blob_request_payment_rate_manager = None
         self.lbryid = None
         self.sd_identifier = StreamDescriptorIdentifier()
@@ -82,7 +82,7 @@ class LBRYConsole():
 
     def start(self):
         """Initialize the session and restore everything to its saved state"""
-        d = threads.deferToThread(self._setup_conf_directory)
+        d = threads.deferToThread(self._setup_data_directory)
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
         d.addCallback(lambda _: self._get_session())
@@ -127,22 +127,22 @@ class LBRYConsole():
         dl.addCallback(_set_query_handlers)
         return dl
 
-    def _setup_conf_directory(self):
-        if self.created_conf_dir:
-            db_revision = open(os.path.join(self.conf_dir, "db_revision"), mode='w')
+    def _setup_data_directory(self):
+        if self.created_data_dir:
+            db_revision = open(os.path.join(self.db_dir, "db_revision"), mode='w')
             db_revision.write(str(self.current_db_revision))
             db_revision.close()
-            log.debug("Created the db revision file: %s", str(os.path.join(self.conf_dir, "db_revision")))
+            log.debug("Created the db revision file: %s", str(os.path.join(self.db_dir, "db_revision")))
 
     def _check_db_migration(self):
         old_revision = 0
-        db_revision_file = os.path.join(self.conf_dir, "db_revision")
+        db_revision_file = os.path.join(self.db_dir, "db_revision")
         if os.path.exists(db_revision_file):
             old_revision = int(open(db_revision_file).read().strip())
         if old_revision < self.current_db_revision:
             from lbrynet.db_migrator import dbmigrator
             print "Upgrading your databases..."
-            d = threads.deferToThread(dbmigrator.migrate_db, self.conf_dir, old_revision, self.current_db_revision)
+            d = threads.deferToThread(dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision)
 
             def print_success(old_dirs):
                 success_string = "Finished upgrading the databases. It is now safe to delete the"
@@ -205,7 +205,7 @@ class LBRYConsole():
                 d = threads.deferToThread(self._get_lbrycrd_settings)
                 d.addCallback(create_lbrycrd_wallet)
             else:
-                d = defer.succeed(PTCWallet(self.conf_dir))
+                d = defer.succeed(PTCWallet(self.db_dir))
             d.addCallback(lambda wallet: {"wallet": wallet})
             return d
 
@@ -221,8 +221,8 @@ class LBRYConsole():
 
         def create_session(results):
 
-            self.session = LBRYSession(results['default_data_payment_rate'], db_dir=self.conf_dir, lbryid=self.lbryid,
-                                       blob_dir=self.data_dir, dht_node_port=self.dht_node_port,
+            self.session = LBRYSession(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
+                                       blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
                                        use_upnp=self.use_upnp, wallet=results['wallet'])
 
@@ -237,7 +237,7 @@ class LBRYConsole():
         return dl
 
     def _setup_lbry_file_manager(self):
-        self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.conf_dir)
+        self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.db_dir)
         d = self.lbry_file_metadata_manager.setup()
 
         def set_lbry_file_manager():
@@ -447,13 +447,9 @@ def launch_lbry_console():
     parser.add_argument("--use_upnp",
                         help="Try to use UPnP to enable incoming connections through the firewall",
                         action="store_true")
-    parser.add_argument("--conf_dir",
-                        help=("The full path to the directory in which to store configuration "
-                              "options and user added plugins. Default: ~/.lbrynet"),
-                        type=str)
     parser.add_argument("--data_dir",
-                        help=("The full path to the directory in which to store data chunks "
-                              "downloaded from lbrynet. Default: <conf_dir>/blobfiles"),
+                        help=("The full path to the directory in which lbrynet data and metadata will be stored. "
+                              "Default: ~/.lbrynet"),
                         type=str)
 
     args = parser.parse_args()
@@ -473,20 +469,14 @@ def launch_lbry_console():
     else:
         dht_node_port = args.dht_node_port
 
-    created_conf_dir = False
-    if not args.conf_dir:
-        conf_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-    else:
-        conf_dir = args.conf_dir
-    if not os.path.exists(conf_dir):
-        os.mkdir(conf_dir)
-        created_conf_dir = True
+    created_data_dir = False
     if not args.data_dir:
-        data_dir = os.path.join(conf_dir, "blobfiles")
+        data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
     else:
         data_dir = args.data_dir
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
+        created_data_dir = True
 
     if args.lbrycrd_wallet_conf:
         lbrycrd_conf = args.lbrycrd_wallet_conf
@@ -499,14 +489,14 @@ def launch_lbry_console():
 
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
-    file_handler = logging.FileHandler(os.path.join(conf_dir, "console.log"))
+    file_handler = logging.FileHandler(os.path.join(data_dir, "console.log"))
     file_handler.setFormatter(formatter)
     file_handler.addFilter(logging.Filter("lbrynet"))
     logger.addHandler(file_handler)
 
     console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, StdIOControl, wallet_type=args.wallet_type,
                           lbrycrd_conf=lbrycrd_conf, use_upnp=args.use_upnp,
-                          conf_dir=conf_dir, data_dir=data_dir, created_conf_dir=created_conf_dir)
+                          data_dir=data_dir, created_data_dir=created_data_dir)
 
     d = task.deferLater(reactor, 0, console.start)
 
