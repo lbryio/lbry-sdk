@@ -3,6 +3,7 @@ from zope.interface import implements
 from lbrynet.core.StreamDescriptor import PlainStreamDescriptorWriter, BlobStreamDescriptorWriter
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
+from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from lbrynet.lbrynet_console.interfaces import IControlHandler, IControlHandlerFactory
 from lbrynet.core.StreamDescriptor import download_sd_blob
@@ -703,7 +704,13 @@ class CreateLBRYFile(ControlHandler):
     def add_to_lbry_files(self, stream_hash):
         prm = PaymentRateManager(self.session.base_payment_rate_manager)
         d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
-        d.addCallback(lambda lbry_file_downloader: lbry_file_downloader.restore())
+        d.addCallback(self.set_status, stream_hash)
+        return d
+
+    def set_status(self, lbry_file_downloader, stream_hash):
+        d = self.lbry_file_manager.change_lbry_file_status(stream_hash,
+                                                           ManagedLBRYFileDownloader.STATUS_FINISHED)
+        d.addCallback(lambda _: lbry_file_downloader.restore())
         return d
 
 
