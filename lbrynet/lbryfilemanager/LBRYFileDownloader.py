@@ -22,10 +22,8 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
                  file_name=None):
         LBRYFileSaver.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
                                stream_info_manager, payment_rate_manager, wallet, download_directory,
-                               upload_allowed)
+                               upload_allowed, file_name)
         self.lbry_file_manager = lbry_file_manager
-        self.file_name = file_name
-        self.file_handle = None
         self.saving_status = False
 
     def restore(self):

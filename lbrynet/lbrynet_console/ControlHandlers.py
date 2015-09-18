@@ -9,6 +9,7 @@ from lbrynet.lbrynet_console.interfaces import IControlHandler, IControlHandlerF
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.core.Error import UnknownNameError, InvalidBlobHashError, InsufficientFundsError
 from twisted.internet import defer
+import os
 
 
 log = logging.getLogger(__name__)
@@ -826,11 +827,22 @@ class CreatePlainStreamDescriptor(ControlHandler):
         return True, self._create_sd()
 
     def _create_sd(self):
-        if not self.sd_file_name:
-            self.sd_file_name = None
-        descriptor_writer = PlainStreamDescriptorWriter(self.sd_file_name)
+        if self.sd_file_name:
+            file_name = self.sd_file_name
+        else:
+            file_name = self.lbry_file.file_name
+            if not file_name:
+                file_name = "_"
+            file_name += ".cryptsd"
+            if os.path.exists(file_name):
+                ext_num = 1
+                while os.path.exists(file_name + "_" + str(ext_num)):
+                    ext_num += 1
+                file_name = file_name + "_" + str(ext_num)
+        descriptor_writer = PlainStreamDescriptorWriter(file_name)
         d = get_sd_info(self.lbry_file_manager.stream_info_manager, self.lbry_file.stream_hash, True)
         d.addCallback(descriptor_writer.create_descriptor)
+        d.addCallback(lambda sd_file_name: "Wrote stream metadata to " + sd_file_name)
         return d
 
 
