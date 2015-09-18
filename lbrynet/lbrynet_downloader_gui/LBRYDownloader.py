@@ -29,8 +29,8 @@ class LBRYDownloader(object):
     def __init__(self):
         self.session = None
         self.known_dht_nodes = [('104.236.42.182', 4000)]
-        self.conf_dir = os.path.join(os.path.expanduser("~"), ".lbrydownloader")
-        self.data_dir = os.path.join(self.conf_dir, "blobfiles")
+        self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrydownloader")
+        self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
         self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.peer_port = 3333
@@ -79,7 +79,7 @@ class LBRYDownloader(object):
 
     def _check_db_migration(self):
         old_revision = 0
-        db_revision_file = os.path.join(self.conf_dir, "db_revision")
+        db_revision_file = os.path.join(self.db_dir, "db_revision")
         if os.path.exists(db_revision_file):
             old_revision = int(open(db_revision_file).read().strip())
         if old_revision < self.current_db_revision:
@@ -95,7 +95,7 @@ class LBRYDownloader(object):
                     si.dwFlags = subprocess.STARTF_USESHOWWINDOW
                     si.wShowWindow = subprocess.SW_HIDE
                     print "trying to run the migrator"
-                    migrator_proc = subprocess.Popen([migrator_exe, self.conf_dir, str(old_revision),
+                    migrator_proc = subprocess.Popen([migrator_exe, self.db_dir, str(old_revision),
                                                       str(self.current_db_revision)], startupinfo=si)
                     print "started the migrator"
                     migrator_proc.wait()
@@ -104,7 +104,7 @@ class LBRYDownloader(object):
                 return threads.deferToThread(run_migrator)
             else:
                 from lbrynet.db_migrator import dbmigrator
-                return threads.deferToThread(dbmigrator.migrate_db, self.conf_dir, old_revision,
+                return threads.deferToThread(dbmigrator.migrate_db, self.db_dir, old_revision,
                                              self.current_db_revision)
         return defer.succeed(True)
 
@@ -157,12 +157,10 @@ class LBRYDownloader(object):
                             raise ValueError("run_server must be set to True or False. Got %s" % field_value)
                         log.debug("Setting run_server to %s", str(run_server))
                         self.run_server = run_server
-                    elif field_name == "db_dir":
-                        log.debug("Setting conf_dir to %s", str(field_value))
-                        self.conf_dir = field_value
                     elif field_name == "data_dir":
                         log.debug("Setting data_dir to %s", str(field_value))
-                        self.data_dir = field_value
+                        self.db_dir = field_value
+                        self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
                     elif field_name == "wallet_dir":
                         log.debug("Setting wallet_dir to %s", str(field_value))
                         self.wallet_dir = field_value
@@ -228,15 +226,15 @@ class LBRYDownloader(object):
         return d
 
     def _create_directory(self):
-        if not os.path.exists(self.conf_dir):
-            os.makedirs(self.conf_dir)
-            db_revision = open(os.path.join(self.conf_dir, "db_revision"), mode='w')
+        if not os.path.exists(self.db_dir):
+            os.makedirs(self.db_dir)
+            db_revision = open(os.path.join(self.db_dir, "db_revision"), mode='w')
             db_revision.write(str(self.current_db_revision))
             db_revision.close()
-            log.debug("Created the configuration directory: %s", str(self.conf_dir))
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
-            log.debug("Created the data directory: %s", str(self.data_dir))
+            log.debug("Created the configuration directory: %s", str(self.db_dir))
+        if not os.path.exists(self.blobfile_dir):
+            os.makedirs(self.blobfile_dir)
+            log.debug("Created the data directory: %s", str(self.blobfile_dir))
         if not os.path.exists(self.wallet_dir):
             os.makedirs(self.wallet_dir)
         if not os.path.exists(self.wallet_conf):
@@ -265,8 +263,8 @@ class LBRYDownloader(object):
         peer_port = None
         if self.run_server:
             peer_port = self.peer_port
-        self.session = LBRYSession(self.default_blob_data_payment_rate, db_dir=self.conf_dir,
-                                   blob_dir=self.data_dir, use_upnp=self.use_upnp, wallet=wallet,
+        self.session = LBRYSession(self.default_blob_data_payment_rate, db_dir=self.db_dir,
+                                   blob_dir=self.blobfile_dir, use_upnp=self.use_upnp, wallet=wallet,
                                    known_dht_nodes=self.known_dht_nodes, dht_node_port=self.dht_node_port,
                                    peer_port=peer_port)
         return self.session.setup()
