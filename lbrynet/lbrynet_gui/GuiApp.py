@@ -4,8 +4,8 @@ import sys
 import tkFont
 import tkMessageBox
 import ttk
-from lbrynet.lbrynet_downloader_gui.LBRYDownloader import LBRYDownloader
-from lbrynet.lbrynet_downloader_gui.StreamFrame import StreamFrame
+from lbrynet.lbrynet_gui.LBRYGui import LBRYDownloader
+from lbrynet.lbrynet_gui.StreamFrame import StreamFrame
 import locale
 import os
 from twisted.internet import defer, reactor, tksupport, task

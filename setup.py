@@ -18,7 +18,7 @@ setup(name='lbrynet',
               'lbrynet-launch-node = lbrynet.dht.node:main',
               'lbrynet-launch-rpc-node = lbrynet.rpc_node:main',
               'lbrynet-rpc-node-cli = lbrynet.node_rpc_cli:main',
-              'lbrynet-gui = lbrynet.lbrynet_downloader_gui.downloader:start_downloader',
+              'lbrynet-gui = lbrynet.lbrynet_gui.gui:start_gui',
               'lbrynet-lookup-hosts-for-hash = lbrynet.dht_scripts:get_hosts_for_hash_in_dht',
               'lbrynet-announce_hash_to_dht = lbrynet.dht_scripts:announce_hash_to_dht',
           ]
@@ -29,15 +29,15 @@ setup(name='lbrynet',
                'lbrynet/lbrynet_console/plugins/blindrepeater.yapsy-plugin',
            ]
            ),
-          ('lbrynet/lbrynet_downloader_gui',
+          ('lbrynet/lbrynet_gui',
            [
-               'lbrynet/lbrynet_downloader_gui/close2.gif',
-               'lbrynet/lbrynet_downloader_gui/lbry-dark-242x80.gif',
-               'lbrynet/lbrynet_downloader_gui/lbry-dark-icon.xbm',
-               'lbrynet/lbrynet_downloader_gui/lbry-dark-icon.ico',
-               'lbrynet/lbrynet_downloader_gui/drop_down.gif',
-               'lbrynet/lbrynet_downloader_gui/show_options.gif',
-               'lbrynet/lbrynet_downloader_gui/hide_options.gif',
+               'lbrynet/lbrynet_gui/close2.gif',
+               'lbrynet/lbrynet_gui/lbry-dark-242x80.gif',
+               'lbrynet/lbrynet_gui/lbry-dark-icon.xbm',
+               'lbrynet/lbrynet_gui/lbry-dark-icon.ico',
+               'lbrynet/lbrynet_gui/drop_down.gif',
+               'lbrynet/lbrynet_gui/show_options.gif',
+               'lbrynet/lbrynet_gui/hide_options.gif',
            ]
            )
       ]
