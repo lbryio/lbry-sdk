@@ -223,11 +223,20 @@ class DBLBRYFileMetadataManager(object):
 
     @rerun_if_locked
     def _save_sd_blob_hash_to_stream(self, stream_hash, sd_blob_hash):
-        return self.db_conn.runQuery("insert into lbry_file_descriptors values (?, ?)",
-                                     (sd_blob_hash, stream_hash))
+        log.info("Saving sd blob hash %s to stream hash %s", str(sd_blob_hash), str(stream_hash))
+        d = self.db_conn.runQuery("insert into lbry_file_descriptors values (?, ?)",
+                                  (sd_blob_hash, stream_hash))
+
+        def ignore_duplicate(err):
+            err.trap(sqlite3.IntegrityError)
+            log.info("sd blob hash already known")
+
+        d.addErrback(ignore_duplicate)
+        return d
 
     @rerun_if_locked
     def _get_sd_blob_hashes_for_stream(self, stream_hash):
+        log.info("Looking up sd blob hashes for stream hash %s", str(stream_hash))
         d = self.db_conn.runQuery("select sd_blob_hash from lbry_file_descriptors where stream_hash = ?",
                                   (stream_hash,))
         d.addCallback(lambda results: [r[0] for r in results])

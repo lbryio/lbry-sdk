@@ -305,7 +305,8 @@ class LBRYConsole():
                  AddStreamFromLBRYcrdNameFactory(self.sd_identifier, self.session,
                                                  self.session.wallet)),
                 ('General',
-                 ClaimNameFactory(self.session.wallet)),
+                 ClaimNameFactory(self.session. wallet, self.lbry_file_manager,
+                                  self.session.blob_manager, self.sd_identifier)),
                 ('General',
                  GetNewWalletAddressFactory(self.session.wallet))
             ]

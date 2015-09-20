@@ -6,9 +6,9 @@ from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from lbrynet.lbrynet_console.interfaces import IControlHandler, IControlHandlerFactory
-from lbrynet.core.StreamDescriptor import download_sd_blob
+from lbrynet.core.StreamDescriptor import download_sd_blob, BlobStreamDescriptorReader
 from lbrynet.core.Error import UnknownNameError, InvalidBlobHashError, InsufficientFundsError
-from twisted.internet import defer
+from twisted.internet import defer, threads
 import os
 
 
@@ -54,7 +54,7 @@ class RecursiveControlHandler(ControlHandler):
         self._set_control_handlers()
 
     def _get_control_handler_factories(self):
-        pass
+        raise NotImplementedError()
 
     def _set_control_handlers(self):
         self.control_handlers = {i + 1: handler for i, handler in enumerate(self._get_control_handler_factories())}
@@ -813,7 +813,6 @@ class CreatePlainStreamDescriptorChooserFactory(ControlHandlerFactory):
 
 class CreatePlainStreamDescriptor(ControlHandler):
     prompt_description = "Create a plain stream descriptor file for an LBRY File"
-    line_prompt = "Stream Descriptor file name (blank for default):"
 
     def __init__(self, lbry_file, lbry_file_manager):
         self.lbry_file = lbry_file
@@ -822,11 +821,20 @@ class CreatePlainStreamDescriptor(ControlHandler):
 
     def handle_line(self, line):
         if line is None:
-            return False, defer.succeed(self.line_prompt)
+            return False, self._get_file_name_prompt()
         self.sd_file_name = line
-        return True, self._create_sd()
+        d = threads.deferToThread(self._get_file_name)
+        d.addCallback(self._create_sd)
+        return True, d
 
-    def _create_sd(self):
+    def _get_file_name_prompt(self):
+        file_name = self.lbry_file.file_name
+        if not file_name:
+            file_name = "_"
+        file_name += ".cryptsd"
+        return defer.succeed("Stream Descriptor file name (blank for default, %s):" % file_name)
+
+    def _get_file_name(self):
         if self.sd_file_name:
             file_name = self.sd_file_name
         else:
@@ -839,6 +847,9 @@ class CreatePlainStreamDescriptor(ControlHandler):
                 while os.path.exists(file_name + "_" + str(ext_num)):
                     ext_num += 1
                 file_name = file_name + "_" + str(ext_num)
+        return file_name
+
+    def _create_sd(self, file_name):
         descriptor_writer = PlainStreamDescriptorWriter(file_name)
         d = get_sd_info(self.lbry_file_manager.stream_info_manager, self.lbry_file.stream_hash, True)
         d.addCallback(descriptor_writer.create_descriptor)
@@ -937,31 +948,191 @@ class ModifyLBRYFileOptionsFactory(LBRYFileChooserFactory):
 
 
 class ClaimName(ControlHandler):
-    prompt_description = "Associate a short name with a stream descriptor hash"
-    line_prompt = "Stream descriptor hash:"
-    line_prompt_2 = "Short name:"
-    line_prompt_3 = "Amount:"
+    prompt_description = "Publish to an lbry:// address"
+    other_hash_prompt = "Enter the hash you would like to publish:"
+    stream_length_prompt = "Enter the total length of the stream, or leave blank if not applicable:"
+    short_desc_prompt = "Enter a short description:"
+    sd_failure_message = "Unable to find a stream descriptor for that file.\n\nPress enter to continue"
+    requested_price_prompt = "Enter the fee others should pay for the decryption key for this stream. Leave blank for no fee:"
+    lbrycrd_address_prompt = "Enter the LBRYcrd address to which the key fee should be sent. If left blank a new address will be used from the wallet:"
+    bid_amount_prompt = "Enter the number of credits you wish to use to support your bid for the name:"
+    choose_name_prompt = "Enter the name to which you would like to publish:"
 
-    def __init__(self, name_resolver):
-        self.name_resolver = name_resolver
+    def __init__(self, wallet, lbry_file_manager, blob_manager, sd_identifier):
+        self.wallet = wallet
+        self.lbry_file_manager = lbry_file_manager
+        self.blob_manager = blob_manager
+        self.sd_identifier = sd_identifier
+        self.file_type_options = []
+        self.file_type_chosen = None
+        self.lbry_file_list = []
         self.sd_hash = None
-        self.short_name = None
-        self.amount = None
+        self.stream_length = None
+        self.stream_length_chosen = False
+        self.key_fee = None
+        self.key_fee_chosen = False
+        self.need_address = True
+        self.chosen_address = None
+        self.bid_amount = None
+        self.chosen_name = None
+        self.failed = False
+        self.short_description = None
+        self.verified = False
 
     def handle_line(self, line):
         if line is None:
-            return False, defer.succeed(self.line_prompt)
+            return False, defer.succeed(self._get_file_type_options())
+        if self.failed is True:
+            return True, defer.succeed(None)
+        if self.file_type_chosen is None:
+            try:
+                choice = int(line)
+            except ValueError:
+                choice = -1
+            if choice < 0 or choice >= len(self.file_type_options):
+                return False, defer.succeed("You must enter a valid number.\n\n%s" % self._get_file_type_options())
+            if self.file_type_options[choice] is None:
+                return True, defer.succeed("Publishing canceled.")
+            self.file_type_chosen = self.file_type_options[choice][0]
+            if self.file_type_chosen == "hash":
+                return False, defer.succeed(self.other_hash_prompt)
+            else:
+                return False, self._set_length_and_get_desc_prompt()
         if self.sd_hash is None:
             self.sd_hash = line
-            return False, defer.succeed(self.line_prompt_2)
-        if self.short_name is None:
-            self.short_name = line
-            return False, defer.succeed(self.line_prompt_3)
-        self.amount = line
-        return True, self._claim_name()
+            return False, defer.succeed(self.stream_length_prompt)
+        if self.stream_length_chosen is False:
+            if line:
+                try:
+                    self.stream_length = int(line)
+                except ValueError:
+                    return False, defer.succeed("You must enter an integer or leave blank.\n\n%s" % self.stream_length_prompt)
+            else:
+                self.stream_length = None
+                self.stream_length_chosen = True
+            return False, defer.succeed(self.short_desc_prompt)
+        if self.short_description is None:
+            self.short_description = line
+            return False, defer.succeed(self.requested_price_prompt)
+        if self.key_fee_chosen is False:
+            if line:
+                try:
+                    self.key_fee = float(line)
+                except ValueError:
+                    return False, defer.succeed("Leave blank or enter a floating point number.\n\n%s" % self.requested_price_prompt)
+            self.key_fee_chosen = True
+            if self.key_fee is None or self.key_fee <= 0:
+                self.need_address = False
+                return False, defer.succeed(self.bid_amount_prompt)
+            return False, defer.succeed(self.lbrycrd_address_prompt)
+        if self.need_address is True:
+            if line:
+                self.chosen_address = line
+                d = defer.succeed(None)
+            else:
+                d = self._get_new_address()
+            self.need_address = False
+            d.addCallback(lambda _: self.bid_amount_prompt)
+            return False, d
+        if self.bid_amount is None:
+            try:
+                self.bid_amount = float(line)
+            except ValueError:
+                return False, defer.succeed("Must be a floating point number.\n\n%s" % self.bid_amount_prompt)
+            return False, defer.succeed(self.choose_name_prompt)
+        if self.chosen_name is None:
+            self.chosen_name = line
+            return False, defer.succeed(self._get_verification_prompt())
+        if self.verified is False:
+            if line.lower() == "yes":
+                return True, self._claim_name()
+            else:
+                return True, defer.succeed("Claim canceled")
+
+    def _get_file_type_options(self):
+        options = []
+        for lbry_file in self.lbry_file_manager.lbry_files:
+            options.append((lbry_file, lbry_file.file_name))
+        options.append(("hash", "Enter a hash"))
+        options.append((None, "Cancel"))
+        self.file_type_options = options
+        prompt_string = "What would you like to publish?\n"
+        for i, option in enumerate(options):
+            prompt_string += "[%d] %s\n" % (i, option[1])
+        return prompt_string
+
+    def _try_to_get_length_from_sd_hash(self):
+        d = self.blob_manager.get_blob(self.sd_hash, upload_allowed=True)
+
+        def log_error(err):
+            self.failed = True
+            log.error("An error occurred getting the length from an sd blob: %s", err.getTraceback())
+            return False
+
+        def get_validator_for_blob(blob):
+            if not blob.verified:
+                return None
+            d = self.sd_identifier.get_info_and_factories_for_sd_blob(blob)
+            d.addCallback(lambda v_o_f: v_o_f[0])
+
+            return d
+
+        d.addCallback(get_validator_for_blob)
+
+        def get_length_from_validator(validator):
+            if validator is not None:
+                self.stream_length = validator.get_length_of_stream()
+            return True
+
+        d.addCallback(get_length_from_validator)
+        d.addErrback(log_error)
+        return d
+
+    def _choose_sd(self, sd_blob_hashes):
+        if not sd_blob_hashes:
+            self.failed = True
+            return defer.succeed(False)
+        self.sd_hash = sd_blob_hashes[0]
+        self.stream_length_chosen = True
+        return self._try_to_get_length_from_sd_hash()
+
+    def _set_length_and_get_desc_prompt(self):
+        d = self.lbry_file_manager.stream_info_manager.get_sd_blob_hashes_for_stream(self.file_type_chosen.stream_hash)
+        d.addCallback(self._choose_sd)
+        d.addCallback(lambda success: self.short_desc_prompt if success else self.sd_failure_message)
+        return d
+
+    def _get_new_address(self):
+        d = self.wallet.get_new_address()
+
+        def set_address(address):
+            self.chosen_address = address
+
+        d.addCallback(set_address)
+        return d
+
+    def _get_verification_prompt(self):
+        v_string = "Ensure the following details are correct:\n"
+        if self.file_type_chosen != "hash":
+            v_string += "File name: %s\n" % str(self.file_type_chosen.file_name)
+        v_string += "Hash: %s\n" % str(self.sd_hash)
+        v_string += "Length: %s\n" % str(self.stream_length)
+        v_string += "Description: %s\n" % str(self.short_description)
+        v_string += "Key fee: %s\n" % str(self.key_fee)
+        if self.chosen_address is not None:
+            v_string += "Key fee address: %s\n" % str(self.chosen_address)
+        v_string += "Bid amount: %s\n" % str(self.bid_amount)
+        v_string += "Name: %s\n" % str(self.chosen_name)
+        v_string += "\nIf this is correct, type 'yes'. Otherwise, type 'no' and the bid will be aborted:"
+        return v_string
 
     def _claim_name(self):
-        return self.name_resolver.claim_name(self.sd_hash, self.short_name, float(self.amount))
+        d = self.wallet.claim_name(self.chosen_name, self.sd_hash, float(self.bid_amount),
+                                   stream_length=self.stream_length,
+                                   description=self.short_description, key_fee=self.key_fee,
+                                   key_fee_address=self.chosen_address)
+        d.addCallback(lambda response: str(response))
+        return d
 
 
 class ClaimNameFactory(ControlHandlerFactory):

@@ -132,3 +132,6 @@ class LBRYLiveStreamDescriptorValidator(object):
         info = []
         info.append(("stream_name", binascii.unhexlify(self.raw_info.get("stream_name"))))
         return info
+
+    def get_length_of_stream(self):
+        return None

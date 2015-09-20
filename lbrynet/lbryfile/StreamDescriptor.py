@@ -132,9 +132,15 @@ class LBRYFileStreamDescriptorValidator(object):
         size_so_far = 0
         for blob_info in self.raw_info.get("blobs", []):
             size_so_far += int(blob_info['length'])
-        info.append(("stream_size", str(size_so_far)))
+        info.append(("stream_size", str(self.get_length_of_stream())))
         suggested_file_name = self.raw_info.get("suggested_file_name", None)
         if suggested_file_name is not None:
             suggested_file_name = binascii.unhexlify(suggested_file_name)
         info.append(("suggested_file_name", suggested_file_name))
         return info
+
+    def get_length_of_stream(self):
+        size_so_far = 0
+        for blob_info in self.raw_info.get("blobs", []):
+            size_so_far += int(blob_info['length'])
+        return size_so_far

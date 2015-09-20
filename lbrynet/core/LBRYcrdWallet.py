@@ -245,9 +245,18 @@ class LBRYcrdWallet(object):
         d.addCallback(get_stream_info_from_value)
         return d
 
-    def claim_name(self, stream_hash, name, amount):
-        value = json.dumps({"stream_hash": stream_hash})
-        d = threads.deferToThread(self._claim_name, name, value, amount)
+    def claim_name(self, name, sd_hash, amount, stream_length=None, description=None, key_fee=None,
+                    key_fee_address=None):
+        value = {"stream_hash": sd_hash}
+        if stream_length is not None:
+            value['stream_length'] = stream_length
+        if description is not None:
+            value['description'] = description
+        if key_fee is not None:
+            value['key_fee'] = key_fee
+        if key_fee_address is not None:
+            value['key_fee_address'] = key_fee_address
+        d = threads.deferToThread(self._claim_name, name, json.dumps(value), amount)
         return d
 
     def get_available_balance(self):
