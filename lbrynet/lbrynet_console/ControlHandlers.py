@@ -1009,7 +1009,7 @@ class ClaimName(ControlHandler):
                     return False, defer.succeed("You must enter an integer or leave blank.\n\n%s" % self.stream_length_prompt)
             else:
                 self.stream_length = None
-                self.stream_length_chosen = True
+            self.stream_length_chosen = True
             return False, defer.succeed(self.short_desc_prompt)
         if self.short_description is None:
             self.short_description = line
@@ -1051,14 +1051,21 @@ class ClaimName(ControlHandler):
 
     def _get_file_type_options(self):
         options = []
+        pattern = "[%d] %s\n"
+        prompt_string = "What would you like to publish?\n"
+        prompt_string += "LBRY Files:\n"
+        i = 0
         for lbry_file in self.lbry_file_manager.lbry_files:
             options.append((lbry_file, lbry_file.file_name))
+            prompt_string += pattern % (i, lbry_file.file_name)
+            i += 1
+        prompt_string += "Other:\n"
         options.append(("hash", "Enter a hash"))
+        prompt_string += pattern % (i, "Enter a hash")
+        i += 1
         options.append((None, "Cancel"))
+        prompt_string += pattern % (i, "Cancel")
         self.file_type_options = options
-        prompt_string = "What would you like to publish?\n"
-        for i, option in enumerate(options):
-            prompt_string += "[%d] %s\n" % (i, option[1])
         return prompt_string
 
     def _try_to_get_length_from_sd_hash(self):
