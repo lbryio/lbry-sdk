@@ -381,13 +381,16 @@ class AddStream(ControlHandler):
         self.options_left = self.metadata.options.get_downloader_options(self.metadata.validator,
                                                                          self.payment_rate_manager)
         prompt = "Stream info:\n"
-        for info_line in self.metadata.validator.info_to_show():
+        for info_line in self._get_info_to_show():
             prompt += info_line[0] + ": " + info_line[1] + "\n"
         prompt += "\nOptions:\n"
         for option in self.options_left:
             prompt += option.long_description + ": " + str(option.default_value_description) + "\n"
         prompt += "\nModify options? (y/n)"
         return str(prompt)
+
+    def _get_info_to_show(self):
+        return self.metadata.validator.info_to_show()
 
     def _get_list_of_option_types(self):
         options_string = ""
@@ -509,7 +512,7 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
     def __init__(self, sd_identifier, session, wallet):
         AddStreamFromHash.__init__(self, sd_identifier, session)
         self.wallet = wallet
-        self.resolved_nome = None
+        self.resolved_name = None
         self.description = None
         self.key_fee = None
         self.key_fee_address = None
@@ -558,6 +561,17 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
                 return defer.fail(InsufficientFundsError())
             return self.wallet.send_points_to_address(reserved_points, self.key_fee)
         return defer.succeed(True)
+
+    def _get_info_to_show(self):
+        i = AddStream._get_info_to_show(self)
+        if self.description is not None:
+            i.append(("description", self.description))
+        if self.key_fee is None or self.key_fee_address is None:
+            i.append(("decryption key fee", "Free"))
+        else:
+            i.append(("decription key fee", str(self.key_fee)))
+            i.append(("address to pay key fee", str(self.key_fee_address)))
+        return i
 
 
 class AddStreamFromLBRYcrdNameFactory(ControlHandlerFactory):
