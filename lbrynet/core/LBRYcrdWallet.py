@@ -25,6 +25,16 @@ class ReservedPoints(object):
         self.amount = amount
 
 
+def _catch_connection_error(f):
+    def w(*args):
+        try:
+            return f(*args)
+        except socket.error:
+            raise ValueError("Unable to connect to an lbrycrd server. Make sure an lbrycrd server " +
+                             "is running and that this application can connect to it.")
+    return w
+
+
 class LBRYcrdWallet(object):
     """This class implements the LBRYWallet interface for the LBRYcrd payment system"""
     implements(ILBRYWallet)
@@ -263,11 +273,9 @@ class LBRYcrdWallet(object):
         d.addCallback(get_stream_info_from_value)
         return d
 
-    def claim_name(self, name, sd_hash, amount, stream_length=None, description=None, key_fee=None,
+    def claim_name(self, name, sd_hash, amount, description=None, key_fee=None,
                     key_fee_address=None):
         value = {"stream_hash": sd_hash}
-        if stream_length is not None:
-            value['stream_length'] = stream_length
         if description is not None:
             value['description'] = description
         if key_fee is not None:
@@ -285,15 +293,6 @@ class LBRYcrdWallet(object):
 
     def _get_rpc_conn(self):
         return AuthServiceProxy(self.rpc_conn_string)
-
-    def _catch_connection_error(f):
-        def w(*args):
-            try:
-                return f(*args)
-            except socket.error:
-                raise ValueError("Unable to connect to an lbrycrd server. Make sure an lbrycrd server " +
-                                 "is running and that this application can connect to it.")
-        return w
 
     def _start_daemon(self):
 

@@ -990,7 +990,6 @@ class ModifyLBRYFileOptionsFactory(LBRYFileChooserFactory):
 class ClaimName(ControlHandler):
     prompt_description = "Publish to an lbry:// address"
     other_hash_prompt = "Enter the hash you would like to publish:"
-    stream_length_prompt = "Enter the total length of the stream, or leave blank if not applicable:"
     short_desc_prompt = "Enter a short description:"
     sd_failure_message = "Unable to find a stream descriptor for that file.\n\nPress enter to continue"
     requested_price_prompt = "Enter the fee others should pay for the decryption key for this stream. Leave blank for no fee:"
@@ -1007,8 +1006,6 @@ class ClaimName(ControlHandler):
         self.file_type_chosen = None
         self.lbry_file_list = []
         self.sd_hash = None
-        self.stream_length = None
-        self.stream_length_chosen = False
         self.key_fee = None
         self.key_fee_chosen = False
         self.need_address = True
@@ -1037,19 +1034,9 @@ class ClaimName(ControlHandler):
             if self.file_type_chosen == "hash":
                 return False, defer.succeed(self.other_hash_prompt)
             else:
-                return False, self._set_length_and_get_desc_prompt()
+                return False, self._set_sd_hash_and_get_desc_prompt()
         if self.sd_hash is None:
             self.sd_hash = line
-            return False, defer.succeed(self.stream_length_prompt)
-        if self.stream_length_chosen is False:
-            if line:
-                try:
-                    self.stream_length = int(line)
-                except ValueError:
-                    return False, defer.succeed("You must enter an integer or leave blank.\n\n%s" % self.stream_length_prompt)
-            else:
-                self.stream_length = None
-            self.stream_length_chosen = True
             return False, defer.succeed(self.short_desc_prompt)
         if self.short_description is None:
             self.short_description = line
@@ -1108,42 +1095,14 @@ class ClaimName(ControlHandler):
         self.file_type_options = options
         return prompt_string
 
-    def _try_to_get_length_from_sd_hash(self):
-        d = self.blob_manager.get_blob(self.sd_hash, upload_allowed=True)
-
-        def log_error(err):
-            self.failed = True
-            log.error("An error occurred getting the length from an sd blob: %s", err.getTraceback())
-            return False
-
-        def get_validator_for_blob(blob):
-            if not blob.verified:
-                return None
-            d = self.sd_identifier.get_metadata_for_sd_blob(blob)
-            d.addCallback(lambda v_o_f: v_o_f[0])
-
-            return d
-
-        d.addCallback(get_validator_for_blob)
-
-        def get_length_from_validator(validator):
-            if validator is not None:
-                self.stream_length = validator.get_length_of_stream()
-            return True
-
-        d.addCallback(get_length_from_validator)
-        d.addErrback(log_error)
-        return d
-
     def _choose_sd(self, sd_blob_hashes):
         if not sd_blob_hashes:
             self.failed = True
             return defer.succeed(False)
         self.sd_hash = sd_blob_hashes[0]
-        self.stream_length_chosen = True
-        return self._try_to_get_length_from_sd_hash()
+        return defer.succeed(True)
 
-    def _set_length_and_get_desc_prompt(self):
+    def _set_sd_hash_and_get_desc_prompt(self):
         d = self.lbry_file_manager.stream_info_manager.get_sd_blob_hashes_for_stream(self.file_type_chosen.stream_hash)
         d.addCallback(self._choose_sd)
         d.addCallback(lambda success: self.short_desc_prompt if success else self.sd_failure_message)
@@ -1163,7 +1122,6 @@ class ClaimName(ControlHandler):
         if self.file_type_chosen != "hash":
             v_string += "File name: %s\n" % str(self.file_type_chosen.file_name)
         v_string += "Hash: %s\n" % str(self.sd_hash)
-        v_string += "Length: %s\n" % str(self.stream_length)
         v_string += "Description: %s\n" % str(self.short_description)
         v_string += "Key fee: %s\n" % str(self.key_fee)
         if self.chosen_address is not None:
@@ -1175,7 +1133,6 @@ class ClaimName(ControlHandler):
 
     def _claim_name(self):
         d = self.wallet.claim_name(self.chosen_name, self.sd_hash, float(self.bid_amount),
-                                   stream_length=self.stream_length,
                                    description=self.short_description, key_fee=self.key_fee,
                                    key_fee_address=self.chosen_address)
         d.addCallback(lambda response: str(response))
