@@ -259,11 +259,9 @@ class AddStream(ControlHandler):
 
     def __init__(self, sd_identifier, base_payment_rate_manager):
         self.sd_identifier = sd_identifier
-        self.loading_info_and_factories_deferred = None
-        self.factories = None
+        self.loading_metadata_deferred = None
+        self.metadata = None
         self.factory = None
-        self.info_validator = None
-        self.options = None
         self.options_left = []
         self.options_chosen = []
         self.current_option = None
@@ -278,27 +276,27 @@ class AddStream(ControlHandler):
             return False, defer.succeed(self.line_prompt)
         if self.loading_failed is True:
             return True, None
-        if self.loading_info_and_factories_deferred is not None:
+        if self.loading_metadata_deferred is not None:
             if line.lower() == "cancel":
-                self.loading_info_and_factories_deferred.cancel()
-                self.loading_info_and_factories_deferred = None
+                self.loading_metadata_deferred.cancel()
+                self.loading_metadata_deferred = None
                 return True, None
             else:
                 return False, defer.succeed(self.cancel_prompt)
-        if self.factories is None:
-            self.loading_info_and_factories_deferred = self._load_info_and_factories(line)
+        if self.metadata is None:
+            self.loading_metadata_deferred = self._load_metadata(line)
             cancel_prompt_d = defer.succeed(self.cancel_prompt)
-            self.loading_info_and_factories_deferred.addCallback(self._choose_factory)
-            self.loading_info_and_factories_deferred.addErrback(self._handle_load_canceled)
-            self.loading_info_and_factories_deferred.addErrback(self._handle_load_failed)
-            return False, cancel_prompt_d, self.loading_info_and_factories_deferred
+            self.loading_metadata_deferred.addCallback(self._choose_factory)
+            self.loading_metadata_deferred.addErrback(self._handle_load_canceled)
+            self.loading_metadata_deferred.addErrback(self._handle_load_failed)
+            return False, cancel_prompt_d, self.loading_metadata_deferred
         if self.factory is None:
             try:
                 choice = int(line)
             except ValueError:
                 return False, defer.succeed(self._show_factory_choices())
-            if choice in xrange(len(self.factories)):
-                self.factory = self.factories[choice]
+            if choice in xrange(len(self.metadata.factories)):
+                self.factory = self.metadata.factories[choice]
                 return False, defer.succeed(self._show_info_and_options())
             else:
                 return False, defer.succeed(self._show_factory_choices())
@@ -350,7 +348,7 @@ class AddStream(ControlHandler):
             return choice_num
         raise InvalidChoiceError()
 
-    def _load_info_and_factories(self, sd_file):
+    def _load_metadata(self, sd_file):
         return defer.fail(NotImplementedError())
 
     def _handle_load_canceled(self, err):
@@ -364,25 +362,25 @@ class AddStream(ControlHandler):
                              "See console.log for further details.\n\n"
                              "Press enter to continue")
 
-    def _choose_factory(self, info_and_factories):
-        self.loading_info_and_factories_deferred = None
-        self.info_validator, self.options, self.factories = info_and_factories
-        if len(self.factories) == 1:
-            self.factory = self.factories[0]
+    def _choose_factory(self, metadata):
+        self.loading_metadata_deferred = None
+        self.metadata = metadata
+        if len(self.metadata.factories) == 1:
+            self.factory = self.metadata.factories[0]
             return self._show_info_and_options()
         return self._show_factory_choices()
 
     def _show_factory_choices(self):
         prompt = "Choose what to do with the file:\n"
-        for i, factory in enumerate(self.factories):
+        for i, factory in enumerate(self.metadata.factories):
             prompt += "[" + str(i) + "] " + factory.get_description() + '\n'
         return str(prompt)
 
     def _show_info_and_options(self):
-        self.options_left = self.options.get_downloader_options(self.info_validator,
-                                                                self.payment_rate_manager)
+        self.options_left = self.metadata.options.get_downloader_options(self.metadata.validator,
+                                                                         self.payment_rate_manager)
         prompt = "Stream info:\n"
-        for info_line in self.info_validator.info_to_show():
+        for info_line in self.metadata.validator.info_to_show():
             prompt += info_line[0] + ": " + info_line[1] + "\n"
         prompt += "\nOptions:\n"
         for option in self.options_left:
@@ -460,7 +458,7 @@ class AddStream(ControlHandler):
             return "An unexpected error has caused the download to stop. See console.log for details."
 
     def _make_downloader(self):
-        return self.factory.make_downloader(self.info_validator, self.options_chosen,
+        return self.factory.make_downloader(self.metadata, self.options_chosen,
                                             self.payment_rate_manager)
 
 
@@ -468,8 +466,8 @@ class AddStreamFromSD(AddStream):
     prompt_description = "Add a stream from a stream descriptor file"
     line_prompt = "Stream descriptor file name:"
 
-    def _load_info_and_factories(self, sd_file):
-        return self.sd_identifier.get_info_and_factories_for_sd_file(sd_file)
+    def _load_metadata(self, sd_file):
+        return self.sd_identifier.get_metadata_for_sd_file(sd_file)
 
 
 class AddStreamFromSDFactory(ControlHandlerFactory):
@@ -484,9 +482,9 @@ class AddStreamFromHash(AddStream):
         AddStream.__init__(self, sd_identifier, session.base_payment_rate_manager)
         self.session = session
 
-    def _load_info_and_factories(self, sd_hash):
+    def _load_metadata(self, sd_hash):
         d = download_sd_blob(self.session, sd_hash, self.payment_rate_manager)
-        d.addCallback(self.sd_identifier.get_info_and_factories_for_sd_blob)
+        d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         return d
 
     def _handle_load_failed(self, err):
@@ -511,9 +509,9 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
         AddStreamFromHash.__init__(self, sd_identifier, session)
         self.name_resolver = name_resolver
 
-    def _load_info_and_factories(self, name):
+    def _load_metadata(self, name):
         d = self._resolve_name(name)
-        d.addCallback(lambda stream_hash: AddStreamFromHash._load_info_and_factories(self, stream_hash))
+        d.addCallback(lambda stream_hash: AddStreamFromHash._load_metadata(self, stream_hash))
         return d
 
     def _resolve_name(self, name):
@@ -991,7 +989,7 @@ class ClaimName(ControlHandler):
                 choice = -1
             if choice < 0 or choice >= len(self.file_type_options):
                 return False, defer.succeed("You must enter a valid number.\n\n%s" % self._get_file_type_options())
-            if self.file_type_options[choice] is None:
+            if self.file_type_options[choice][0] is None:
                 return True, defer.succeed("Publishing canceled.")
             self.file_type_chosen = self.file_type_options[choice][0]
             if self.file_type_chosen == "hash":
@@ -1079,7 +1077,7 @@ class ClaimName(ControlHandler):
         def get_validator_for_blob(blob):
             if not blob.verified:
                 return None
-            d = self.sd_identifier.get_info_and_factories_for_sd_blob(blob)
+            d = self.sd_identifier.get_metadata_for_sd_blob(blob)
             d.addCallback(lambda v_o_f: v_o_f[0])
 
             return d

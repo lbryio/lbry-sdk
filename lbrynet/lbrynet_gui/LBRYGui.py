@@ -365,7 +365,7 @@ class LBRYDownloader(object):
             stream_frame.show_metadata_status("name resolved, fetching metadata...")
             get_sd_d = StreamDescriptor.download_sd_blob(self.session, sd_hash,
                                                          payment_rate_manager)
-            get_sd_d.addCallback(self.sd_identifier.get_info_and_factories_for_sd_blob)
+            get_sd_d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
             get_sd_d.addCallbacks(choose_download_factory, bad_sd_blob)
             return get_sd_d
 
@@ -385,9 +385,9 @@ class LBRYDownloader(object):
                 stream_name = "unknown"
             return stream_name, stream_size
 
-        def choose_download_factory(info_and_factories):
-            info_validator, options, factories = info_and_factories
-            stream_name, stream_size = get_info_from_validator(info_validator)
+        def choose_download_factory(metadata):
+            #info_validator, options, factories = info_and_factories
+            stream_name, stream_size = get_info_from_validator(metadata.validator)
             if isinstance(stream_size, (int, long)):
                 price = payment_rate_manager.get_effective_min_blob_data_payment_rate()
                 estimated_cost = stream_size * 1.0 / 2**20 * price
@@ -396,7 +396,8 @@ class LBRYDownloader(object):
 
             stream_frame.show_stream_metadata(stream_name, stream_size)
 
-            available_options = options.get_downloader_options(info_validator, payment_rate_manager)
+            available_options = metadata.options.get_downloader_options(metadata.validator,
+                                                                        payment_rate_manager)
 
             stream_frame.show_download_options(available_options)
 
@@ -409,11 +410,11 @@ class LBRYDownloader(object):
                         get_downloader_d.callback(downloader)
 
                 stream_frame.disable_download_buttons()
-                d = f.make_downloader(info_validator, chosen_options,
+                d = f.make_downloader(metadata, chosen_options,
                                       payment_rate_manager)
                 d.addCallback(fire_get_downloader_d)
 
-            for factory in factories:
+            for factory in metadata.factories:
 
                 def choose_factory(f=factory):
                     chosen_options = stream_frame.get_chosen_options()

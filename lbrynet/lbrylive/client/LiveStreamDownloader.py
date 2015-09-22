@@ -1,4 +1,5 @@
 import binascii
+from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader
 from zope.interface import implements
 from lbrynet.lbrylive.client.LiveStreamMetadataHandler import LiveStreamMetadataHandler
@@ -85,9 +86,9 @@ class FullLiveStreamDownloader(LiveStreamDownloader):
         d.addCallback(lambda _: set_file_name_if_unset())
         return d
 
-    def stop(self):
+    def stop(self, err=None):
         d = self._close_file()
-        d.addBoth(lambda _: LiveStreamDownloader.stop(self))
+        d.addBoth(lambda _: LiveStreamDownloader.stop(self, err))
         return d
 
     def _start(self):
@@ -141,11 +142,21 @@ class FullLiveStreamDownloaderFactory(object):
     def can_download(self, sd_validator):
         return True
 
-    def make_downloader(self, sd_validator, options, payment_rate_manager):
+    def make_downloader(self, metadata, options, payment_rate_manager):
         # TODO: check options for payment rate manager parameters
         payment_rate_manager = LiveStreamPaymentRateManager(self.default_payment_rate_manager,
                                                             payment_rate_manager)
-        d = save_sd_info(self.stream_info_manager, sd_validator.raw_info)
+
+        def save_source_if_blob(stream_hash):
+            if metadata.metadata_source == StreamMetadata.FROM_BLOB:
+                d = self.stream_info_manager.save_sd_blob_hash_to_stream(stream_hash, metadata.source_blob_hash)
+            else:
+                d = defer.succeed(True)
+            d.addCallback(lambda _: stream_hash)
+            return d
+
+        d = save_sd_info(self.stream_info_manager, metadata.validator.raw_info)
+        d.addCallback(save_source_if_blob)
 
         def create_downloader(stream_hash):
             stream_downloader = FullLiveStreamDownloader(stream_hash, self.peer_finder, self.rate_limiter,

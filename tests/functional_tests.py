@@ -677,15 +677,17 @@ class TestTransfer(TestCase):
 
         self.lbry_file_manager = LBRYFileManager(self.session, self.stream_info_manager, sd_identifier)
 
-        def make_downloader(info_and_factories, prm):
-            info_validator, options, factories = info_and_factories
+        def make_downloader(metadata, prm):
+            info_validator = metadata.validator
+            options = metadata.options
+            factories = metadata.factories
             chosen_options = [o.default_value for o in options.get_downloader_options(info_validator, prm)]
-            return factories[0].make_downloader(info_validator, chosen_options, prm)
+            return factories[0].make_downloader(metadata, chosen_options, prm)
 
         def download_file(sd_hash):
             prm = PaymentRateManager(self.session.base_payment_rate_manager)
             d = download_sd_blob(self.session, sd_hash, prm)
-            d.addCallback(sd_identifier.get_info_and_factories_for_sd_blob)
+            d.addCallback(sd_identifier.get_metadata_for_sd_blob)
             d.addCallback(make_downloader, prm)
             d.addCallback(lambda downloader: downloader.start())
             return d
@@ -758,10 +760,12 @@ class TestTransfer(TestCase):
 
         d = self.wait_for_hash_from_queue(sd_hash_queue)
 
-        def create_downloader(info_and_factories, prm):
-            info_validator, options, factories = info_and_factories
+        def create_downloader(metadata, prm):
+            info_validator = metadata.validator
+            options = metadata.options
+            factories = metadata.factories
             chosen_options = [o.default_value for o in options.get_downloader_options(info_validator, prm)]
-            return factories[0].make_downloader(info_validator, chosen_options, prm)
+            return factories[0].make_downloader(metadata, chosen_options, prm)
 
         def start_lbry_file(lbry_file):
             lbry_file = lbry_file
@@ -772,7 +776,7 @@ class TestTransfer(TestCase):
             logging.debug("Downloaded the sd blob. Reading it now")
             prm = PaymentRateManager(self.session.base_payment_rate_manager)
             d = download_sd_blob(self.session, sd_blob_hash, prm)
-            d.addCallback(sd_identifier.get_info_and_factories_for_sd_blob)
+            d.addCallback(sd_identifier.get_metadata_for_sd_blob)
             d.addCallback(create_downloader, prm)
             d.addCallback(start_lbry_file)
             return d

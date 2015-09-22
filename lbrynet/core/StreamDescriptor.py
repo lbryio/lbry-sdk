@@ -107,6 +107,19 @@ class BlobStreamDescriptorWriter(StreamDescriptorWriter):
         return blob_creator.close()
 
 
+class StreamMetadata(object):
+    FROM_BLOB = 1
+    FROM_PLAIN = 2
+
+    def __init__(self, validator, options, factories):
+        self.validator = validator
+        self.options = options
+        self.factories = factories
+        self.metadata_source = None
+        self.source_blob_hash = None
+        self.source_file = None
+
+
 class StreamDescriptorIdentifier(object):
     """Tries to determine the type of stream described by the stream descriptor using the
        'stream_type' field. Keeps a list of StreamDescriptorValidators and StreamDownloaderFactorys
@@ -155,17 +168,28 @@ class StreamDescriptorIdentifier(object):
         """
         self._stream_downloader_factories[stream_type].append(factory)
 
-    def get_info_and_factories_for_sd_file(self, sd_path):
+    def _return_metadata(self, options_validator_factories, source_type, source):
+        validator, options, factories = options_validator_factories
+        m = StreamMetadata(validator, options, factories)
+        m.metadata_source = source_type
+        if source_type == StreamMetadata.FROM_BLOB:
+            m.source_blob_hash = source
+        if source_type == StreamMetadata.FROM_PLAIN:
+            m.source_file = source
+        return m
 
+    def get_metadata_for_sd_file(self, sd_path):
         sd_reader = PlainStreamDescriptorReader(sd_path)
         d = sd_reader.get_info()
-        d.addCallback(self._return_info_and_factories)
+        d.addCallback(self._return_options_and_validator_and_factories)
+        d.addCallback(self._return_metadata, StreamMetadata.FROM_PLAIN, sd_path)
         return d
 
-    def get_info_and_factories_for_sd_blob(self, sd_blob):
+    def get_metadata_for_sd_blob(self, sd_blob):
         sd_reader = BlobStreamDescriptorReader(sd_blob)
         d = sd_reader.get_info()
-        d.addCallback(self._return_info_and_factories)
+        d.addCallback(self._return_options_and_validator_and_factories)
+        d.addCallback(self._return_metadata, StreamMetadata.FROM_BLOB, sd_blob.blob_hash)
         return d
 
     def _get_factories(self, stream_type):
@@ -183,7 +207,7 @@ class StreamDescriptorIdentifier(object):
             raise UnknownStreamTypeError(stream_type)
         return self._stream_options[stream_type]
 
-    def _return_info_and_factories(self, sd_info):
+    def _return_options_and_validator_and_factories(self, sd_info):
         if not 'stream_type' in sd_info:
             raise InvalidStreamDescriptorError('No stream_type parameter in stream descriptor.')
         stream_type = sd_info['stream_type']

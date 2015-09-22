@@ -124,6 +124,7 @@ class LBRYFileStreamDescriptorValidator(object):
         h.update(blobs_hashsum.digest())
         if h.hexdigest() != stream_hash:
             raise InvalidStreamDescriptorError("Stream hash does not match stream metadata")
+        log.debug("It is validated")
         return defer.succeed(True)
 
     def info_to_show(self):

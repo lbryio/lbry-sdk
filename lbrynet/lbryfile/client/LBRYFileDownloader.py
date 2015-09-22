@@ -6,6 +6,7 @@ from zope.interface import implements
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
 from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
+from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.client.LBRYFileMetadataHandler import LBRYFileMetadataHandler
 import os
@@ -97,19 +98,27 @@ class LBRYFileDownloaderFactory(object):
     def can_download(self, sd_validator):
         return True
 
-    def make_downloader(self, sd_validator, options, payment_rate_manager, **kwargs):
+    def make_downloader(self, metadata, options, payment_rate_manager, **kwargs):
         payment_rate_manager.min_blob_data_payment_rate = options[0]
         upload_allowed = options[1]
 
+        def save_source_if_blob(stream_hash):
+            if metadata.metadata_source == StreamMetadata.FROM_BLOB:
+                d = self.stream_info_manager.save_sd_blob_hash_to_stream(stream_hash, metadata.source_blob_hash)
+            else:
+                d = defer.succeed(True)
+            d.addCallback(lambda _: stream_hash)
+            return d
+
         def create_downloader(stream_hash):
-            downloader = self._make_downloader(stream_hash, payment_rate_manager, sd_validator.raw_info,
-                                               upload_allowed)
+            downloader = self._make_downloader(stream_hash, payment_rate_manager,
+                                               metadata.validator.raw_info, upload_allowed)
             d = downloader.set_stream_info()
             d.addCallback(lambda _: downloader)
             return d
 
-        d = save_sd_info(self.stream_info_manager, sd_validator.raw_info)
-
+        d = save_sd_info(self.stream_info_manager, metadata.validator.raw_info)
+        d.addCallback(save_source_if_blob)
         d.addCallback(create_downloader)
         return d
 
@@ -197,7 +206,8 @@ class LBRYFileSaverFactory(LBRYFileDownloaderFactory):
                              self.stream_info_manager, payment_rate_manager, self.wallet,
                              self.download_directory, upload_allowed)
 
-    def get_description(self):
+    @staticmethod
+    def get_description():
         return "Save"
 
 
@@ -276,5 +286,6 @@ class LBRYFileOpenerFactory(LBRYFileDownloaderFactory):
         return LBRYFileOpener(stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager,
                               self.stream_info_manager, payment_rate_manager, self.wallet, upload_allowed)
 
-    def get_description(self):
+    @staticmethod
+    def get_description():
         return "Stream"
