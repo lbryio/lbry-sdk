@@ -8,6 +8,7 @@ from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from lbrynet.lbrynet_console.interfaces import IControlHandler, IControlHandlerFactory
 from lbrynet.core.StreamDescriptor import download_sd_blob, BlobStreamDescriptorReader
 from lbrynet.core.Error import UnknownNameError, InvalidBlobHashError, InsufficientFundsError
+from lbrynet.core.Error import InvalidStreamInfoError
 from twisted.internet import defer, threads
 import os
 
@@ -505,9 +506,13 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
     prompt_description = "Add a stream from a short name"
     line_prompt = "Short name:"
 
-    def __init__(self, sd_identifier, session, name_resolver):
+    def __init__(self, sd_identifier, session, wallet):
         AddStreamFromHash.__init__(self, sd_identifier, session)
-        self.name_resolver = name_resolver
+        self.wallet = wallet
+        self.resolved_nome = None
+        self.description = None
+        self.key_fee = None
+        self.key_fee_address = None
 
     def _load_metadata(self, name):
         d = self._resolve_name(name)
@@ -516,8 +521,18 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
 
     def _resolve_name(self, name):
         def get_name_from_info(stream_info):
+            if 'stream_hash' not in stream_info:
+                raise InvalidStreamInfoError(name)
+            self.resolved_name = stream_info.get('name', None)
+            self.description = stream_info.get('description', None)
+            try:
+                if 'key_fee' in stream_info:
+                    self.key_fee = float(stream_info['key_fee'])
+            except ValueError:
+                self.key_fee = None
+            self.key_fee_address = stream_info.get('key_fee_address', None)
             return stream_info['stream_hash']
-        d = self.name_resolver.get_stream_info_for_name(name)
+        d = self.wallet.get_stream_info_for_name(name)
         d.addCallback(get_name_from_info)
         return d
 
@@ -530,6 +545,19 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
             return defer.succeed("The metadata for this name is invalid. The stream cannot be downloaded.\n\n" +
                                  "Press enter to continue")
         return AddStreamFromHash._handle_load_failed(self, err)
+
+    def _start_download(self):
+        d = self._pay_key_fee()
+        d.addCallback(lambda _: AddStream._start_download(self))
+        return d
+
+    def _pay_key_fee(self):
+        if self.key_fee is not None and self.key_fee_address is not None:
+            reserved_points = self.wallet.reserve_points(self.key_fee_address, self.key_fee)
+            if reserved_points is None:
+                return defer.fail(InsufficientFundsError())
+            return self.wallet.send_points_to_address(reserved_points, self.key_fee)
+        return defer.succeed(True)
 
 
 class AddStreamFromLBRYcrdNameFactory(ControlHandlerFactory):

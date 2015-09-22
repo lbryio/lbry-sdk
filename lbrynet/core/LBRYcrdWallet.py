@@ -149,11 +149,11 @@ class LBRYcrdWallet(object):
         d = threads.deferToThread(self._get_wallet_balance)
         return d
 
-    def reserve_points(self, peer, amount):
+    def reserve_points(self, identifier, amount):
         """
         Ensure a certain amount of points are available to be sent as payment, before the service is rendered
 
-        @param peer: The peer to which the payment will ultimately be sent
+        @param identifier: The peer to which the payment will ultimately be sent
 
         @param amount: The amount of points to reserve
 
@@ -163,7 +163,7 @@ class LBRYcrdWallet(object):
         #if peer in self.peer_addresses:
         if self.wallet_balance >= self.total_reserved_points + rounded_amount:
             self.total_reserved_points += rounded_amount
-            return ReservedPoints(peer, rounded_amount)
+            return ReservedPoints(identifier, rounded_amount)
         return None
 
     def cancel_point_reservation(self, reserved_points):
@@ -199,6 +199,26 @@ class LBRYcrdWallet(object):
         peer.update_stats('points_sent', amount)
         return defer.succeed(True)
 
+    def send_points_to_address(self, reserved_points, amount):
+        """
+        Schedule a payment to be sent to an address
+
+        @param reserved_points: ReservedPoints object previously returned by reserve_points
+
+        @param amount: amount of points to actually send. must be less than or equal to the
+            amount reselved in reserved_points
+
+        @return: Deferred which fires when the payment has been scheduled
+        """
+        rounded_amount = Decimal(str(round(amount, 8)))
+        address = reserved_points.identifier
+        assert(rounded_amount <= reserved_points.amount)
+        self.queued_payments[address] += rounded_amount
+        self.total_reserved_points -= (reserved_points.amount - rounded_amount)
+        log.info("Ordering that %s points be sent to %s", str(rounded_amount),
+                 str(address))
+        return defer.succeed(True)
+
     def add_expected_payment(self, peer, amount):
         """Increase the number of points expected to be paid by a peer"""
         rounded_amount = Decimal(str(round(amount, 8)))
@@ -232,12 +252,10 @@ class LBRYcrdWallet(object):
                     value_dict = json.loads(value)
                 except ValueError:
                     return Failure(InvalidStreamInfoError(name))
-                if 'stream_hash' in value_dict:
-                    r_dict['stream_hash'] = value_dict['stream_hash']
-                if 'name' in value_dict:
-                    r_dict['name'] = value_dict['name']
-                if 'description' in value_dict:
-                    r_dict['description'] = value_dict['description']
+                known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address']
+                for field in known_fields:
+                    if field in value_dict:
+                        r_dict[field] = value_dict[field]
                 return r_dict
             return Failure(UnknownNameError(name))
 
