@@ -1,7 +1,6 @@
 How to watch It's a Wonderful Life via LBRY
 
-Quickest quick guide
---------------------
+## Quickest quick guide
 
 Create a directory called lbry, and go into that directory
 
@@ -21,8 +20,9 @@ To stop lbrycrdd:
 
 ./lbrycrd/src/lbrycrd-cli stop
 
-Slightly longer install guide
------------------------------
+## Slightly longer install guide
+
+### Installing lbrycrd from source
 
 Acquire the LBRYcrd source code from https://github.com/lbryio/lbrycrd
 
@@ -51,6 +51,8 @@ rpcpassword=rpcpassword
 (use a long random password if your computer is on a network anyone else has access to)
 
 cd ..
+
+### Installing lbrynet from source
 
 Acquire the LBRYnet source code from https://github.com/lbryio/lbry
 
@@ -81,10 +83,11 @@ python setup.py build bdist_egg
 
 sudo python setup.py install
 
-Slightly longer running guide
------------------------------
+## Slightly longer running guide
 
 In order to use lbrynet, lbyrcrdd must be running.
+
+### Running lbrynet
 
 If you ran the easy install script, the lbrycrd folder will be in the directory you ran lbry_setup.sh from. Otherwise it is the root of the cloned lbrycrd repository. Go to that directory.
 
@@ -101,9 +104,9 @@ To shut lbrycrdd down: from the lbrycrd directory, run
 
  ./src/lbrycrd-cli stop
 
-Running lbrynet-console
+### Running lbrynet-console
 
-If you used the virtualenv instructions above, make sure the virtualenv is still active. If not, reactivate it according to the instructions above.
+If you used the virtualenv instructions above, make sure the virtualenv is still active. If not, reactivate it according to the instructions above, under "Installing lbrynet from source"
 
 In your terminal:
 
@@ -123,7 +126,7 @@ You will be prompted to choose if you really want to download this file. Type 'y
 
 To shut it down, type ctrl-c at any time or enter the option to shut down from the main menu.
 
-Running lbrynet-gui
+### Running lbrynet-gui
 In your terminal:
 
 lbrynet-gui
