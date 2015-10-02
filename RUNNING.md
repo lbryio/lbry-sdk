@@ -59,13 +59,18 @@ Slightly longer running guide
 -----------------------------
 
 In order to use lbrynet, lbyrcrdd must be running.
+
 If you ran the easy install script, the lbrycrd folder will be in the directory you ran lbry_setup.sh from. Otherwise it is the root of the cloned lbrycrd repository. Go to that directory.
 
 ./src/lbrycrdd -server -daemon -gen
 
 It will take a few minutes for your client to download the whole block chain.
-Once it has caught up, it will start mining coins. If you don't want to mine, leave off the '-gen' flag.
+Once it has caught up, it will start mining coins.
+
+If you don't want to mine, leave off the '-gen' flag.
+
 lbrycrdd must be running in order for lbrynet to function.
+
 To shut lbrycrdd down: from the lbrycrd directory, run
 
  ./src/lbrycrd-cli stop
@@ -77,13 +82,17 @@ In your terminal:
 lbrynet-console
 
 You should now be presented with a list of options.
+
 Watch It's a Wonderful Life via LBRY
+
 Choose the option labeled Add a stream from a short name by typing the number next to it and pressing the enter key.
-You will be prompted for a name. Type in "wonderfullife" and hit enter.
-After a few seconds, you will prompted to choose what you want to do with the file.
-Select the option labeled Open the file with VLC media player.
+
+You will be prompted for a name. Type in "wonderfullife" and hit enter. After a few seconds, you will prompted to choose what you want to do with the file. Select the option labeled Stream.
+
 You will be shown some options related to the file which you do not care about. Type 'n' and hit enter.
+
 You will be prompted to choose if you really want to download this file. Type 'y' and hit enter.
+
 To shut it down, type ctrl-c at any time or enter the option to shut down from the main menu.
 
 Running lbrynet-gui
