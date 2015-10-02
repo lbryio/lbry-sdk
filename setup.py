@@ -38,6 +38,7 @@ setup(name='lbrynet',
                'lbrynet/lbrynet_gui/drop_down.gif',
                'lbrynet/lbrynet_gui/show_options.gif',
                'lbrynet/lbrynet_gui/hide_options.gif',
+               'lbrynet/lbrynet_gui/lbry.conf',
            ]
            )
       ]

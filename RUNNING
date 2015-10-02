@@ -1,52 +1,97 @@
-To install LBRYnet and lbrynet-console, see INSTALL
+How to watch It's a Wonderful Life via LBRY
 
-lbrynet-console is a console application which makes use of the LBRYnet to share files.
+Quickest quick guide
+--------------------
 
-In particular, lbrynet-console splits files into encrypted chunks of data compatible with
-LBRYnet, groups all metadata into a 'stream descriptor file' which can be sent directly to
-others wishing to obtain the file, or can be itself turned into a chunk compatible with
-LBRYnet and downloaded via LBRYnet by anyone knowing its sha384 hashsum. lbrynet-console
-also acts as a client whichreads a stream descriptor file, downloads the chunks of data
-specified by the hash sums found in the stream descriptor file, decrypts them according to
-metadata found in the stream, and reconstructs the original file. lbrynet-console features
-a server so that clients can connect to it and download the chunks and other data gotten
-from files created locally and files that have been downloaded from LBRYnet.
+Create a directory called lbry, and go into that directory
+Download the file https://raw.githubusercontent.com/lbryio/lbry-setup/master/lbry_setup.sh and run it in that directory
+Once it's done building, type:
+./lbrycrd/src/lbrycrdd -server -daemon -gen
+lbrynet-gui
+A window should show up with an entry box
+Type wonderfullife into the box, hit go, and choose to stream or save
+To stop lbrycrdd:
+./lbrycrd/src/lbrycrd-cli stop
 
-lbrynet-console also has a plugin system. There are two plugins: a live stream proof of
-concept which is currently far behind the development of the rest of the application and
-therefore will not run, and a plugin which attempts to determine which chunks on the
-network should be downloaded in order for the application to turn a profit. It will run,
-but its usefulness is extremely limited.
+Slightly longer install guide
+-----------------------------
 
-Passing '--help' to lbrynet-console will cause it to print out a quick help message
-describing other command line options to the application.
+Acquire the LBRYcrd source code from https://github.com/lbryio/lbrycrd
+cd lbrycrd
+sudo apt-get install build-essential libtool autotools-dev autoconf pkg-config libssl-dev libboost-all-dev libdb-dev libdb++-dev libqt4-dev libprotobuf-dev protobuf-compiler
+./autogen.sh
+./configure --with-incompatible-bdb
+make
 
-Once the application has been started, the user is presented with a numbered list of
-actions which looks something like this:
+When make has completed, create the directory where LBRYcrd data will be stored. ~/.lbrycrd is where LBRYcrd will look by default and so is recommended.
+mkdir ~/.lbrycrd
+vim ~/.lbrycrd/lbrycrd.conf
+Add the following lines to enable the RPC interface, which will be used by lbrynet-console.
 
-...
-[2] Toggle whether an LBRY File is running
-[3] Create an LBRY File from file
-[4] Publish a stream descriptor file to the DHT for an LBRY File
-...
+rpcuser=rpcuser
+rpcpassword=rpcpassword
 
-To perform an action, type the desired number and then hit enter. For example, if you wish
-to create an LBRY file from a file as described in the beginning of this document, type 3 and
-hit enter.
+(use a long random password if your computer is on a network anyone else has access to)
 
-If the application needs more input in order to for the action to be taken, the application
-will continue to print prompts for input until it has received what it needs.
+cd ..
 
-For example, when creating an LBRY file from a file, the application needs to know which file
-it's supposed to use to create the LBRY file, so the user will be prompted for it:
+Acquire the LBRYnet source code from https://github.com/lbryio/lbry
+cd lbry
+sudo apt-get install libgmp3-dev build-essential python-dev python-pip
 
-File name:
+(with virtualenv)
+python-virtualenv
+virtualenv .
+source bin/activate
+python setup.py install
 
-The user should input the desired file name and hit enter, at which point the application
-will go about splitting the file and making it available on the network.
+to deactivate the virtualenv later:
+deactivate
 
-Some actions will produce sub-menus of actions, which work the same way.
+to reactivate it, go to the directory in which you created it and:
+source bin/activate
 
-A more detailed user guide is available at doc.lbry.io
+(without virtualenv)
+python setup.py build bdist_egg
+sudo python setup.py install
 
-Any issues may be reported to jimmy@lbry.io
+Slightly longer running guide
+-----------------------------
+
+In order to use lbrynet, lbyrcrdd must be running.
+If you ran the easy install script, the lbrycrd folder will be in the directory you ran lbry_setup.sh from. Otherwise it is the root of the cloned lbrycrd repository. Go to that directory.
+
+./src/lbrycrdd -server -daemon -gen
+
+It will take a few minutes for your client to download the whole block chain.
+Once it has caught up, it will start mining coins. If you don't want to mine, leave off the '-gen' flag.
+lbrycrdd must be running in order for lbrynet to function.
+To shut lbrycrdd down: from the lbrycrd directory, run
+
+ ./src/lbrycrd-cli stop
+
+Running lbrynet-console
+
+In your terminal:
+
+lbrynet-console
+
+You should now be presented with a list of options.
+Watch It's a Wonderful Life via LBRY
+Choose the option labeled Add a stream from a short name by typing the number next to it and pressing the enter key.
+You will be prompted for a name. Type in "wonderfullife" and hit enter.
+After a few seconds, you will prompted to choose what you want to do with the file.
+Select the option labeled Open the file with VLC media player.
+You will be shown some options related to the file which you do not care about. Type 'n' and hit enter.
+You will be prompted to choose if you really want to download this file. Type 'y' and hit enter.
+To shut it down, type ctrl-c at any time or enter the option to shut down from the main menu.
+
+Running lbrynet-gui
+In your terminal:
+
+lbrynet-gui
+
+A window should pop up with an entry box. Type 'wonderfullife' into the box, hit go, and then choose to save it or stream it.
+Enjoy!
+
+Any questions or problems, email jimmy@lbry.io

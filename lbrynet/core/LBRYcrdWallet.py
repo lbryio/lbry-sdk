@@ -39,8 +39,8 @@ class LBRYcrdWallet(object):
     """This class implements the LBRYWallet interface for the LBRYcrd payment system"""
     implements(ILBRYWallet)
 
-    def __init__(self, rpc_user, rpc_pass, rpc_url, rpc_port, start_lbrycrdd=False,
-                 wallet_dir=None, wallet_conf=None):
+    def __init__(self, rpc_user, rpc_pass, rpc_url, rpc_port, wallet_dir=None, wallet_conf=None,
+                 lbrycrdd_path=None):
         self.rpc_conn_string = "http://%s:%s@%s:%s" % (rpc_user, rpc_pass, rpc_url, str(rpc_port))
         self.next_manage_call = None
         self.wallet_balance = Decimal(0.0)
@@ -53,17 +53,17 @@ class LBRYcrdWallet(object):
                                                  # incremental_amount(float))
         self.max_expected_payment_time = datetime.timedelta(minutes=3)
         self.stopped = True
-        self.start_lbrycrdd = start_lbrycrdd
         self.started_lbrycrdd = False
         self.wallet_dir = wallet_dir
         self.wallet_conf = wallet_conf
         self.lbrycrdd = None
         self.manage_running = False
+        self.lbrycrdd_path = lbrycrdd_path
 
     def start(self):
 
         def make_connection():
-            if self.start_lbrycrdd is True:
+            if self.lbrycrdd_path is not None:
                 self._start_daemon()
             self._get_info()
             log.info("Connected!")
@@ -91,7 +91,7 @@ class LBRYcrdWallet(object):
 
         d = self.manage()
         d.addErrback(log_stop_error)
-        if self.start_lbrycrdd is True:
+        if self.lbrycrdd_path is not None:
             d.addCallback(lambda _: self._stop_daemon())
             d.addErrback(log_stop_error)
         return d
@@ -296,16 +296,21 @@ class LBRYcrdWallet(object):
 
     def _start_daemon(self):
 
-        if os.name == "nt":
-            si = subprocess.STARTUPINFO
-            si.dwFlags = subprocess.STARTF_USESHOWWINDOW
-            si.wShowWindow = subprocess.SW_HIDE
-            self.lbrycrdd = subprocess.Popen(["lbrycrdd.exe", "-datadir=%s" % self.wallet_dir,
-                                              "-conf=%s" % self.wallet_conf], startupinfo=si)
-        else:
-            self.lbrycrdd = subprocess.Popen(["./lbrycrdd", "-datadir=%s" % self.wallet_dir,
-                                              "-conf=%s" % self.wallet_conf])
-        self.started_lbrycrdd = True
+        try:
+            if os.name == "nt":
+                si = subprocess.STARTUPINFO
+                si.dwFlags = subprocess.STARTF_USESHOWWINDOW
+                si.wShowWindow = subprocess.SW_HIDE
+                self.lbrycrdd = subprocess.Popen([self.lbrycrdd_path, "-datadir=%s" % self.wallet_dir,
+                                                  "-conf=%s" % self.wallet_conf], startupinfo=si)
+            else:
+                self.lbrycrdd = subprocess.Popen([self.lbrycrdd_path, "-datadir=%s" % self.wallet_dir,
+                                                  "-conf=%s" % self.wallet_conf])
+            self.started_lbrycrdd = True
+        except OSError:
+            import traceback
+            log.error("Couldn't launch lbrycrdd at path %s: %s", self.lbrycrdd_path, traceback.format_exc())
+            raise ValueError("Couldn't launch lbrycrdd. Tried %s" % self.lbrycrdd_path)
 
         tries = 0
         while tries < 5:

@@ -19,6 +19,7 @@ from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBR
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
 import os
 import requests
+import shutil
 from twisted.internet import threads, defer, task
 
 
@@ -51,7 +52,12 @@ class LBRYDownloader(object):
         self.stream_frames = []
         self.default_blob_data_payment_rate = MIN_BLOB_DATA_PAYMENT_RATE
         self.use_upnp = False
-        self.start_lbrycrdd = True
+        if os.name == "nt":
+            self.start_lbrycrdd = True
+            self.lbrycrdd_path = "lbrycrdd.exe"
+        else:
+            self.start_lbrycrdd = False
+            self.lbrycrdd_path = "./lbrycrdd"
         self.delete_blobs_on_remove = True
         self.blob_request_payment_rate_manager = None
 
@@ -111,15 +117,21 @@ class LBRYDownloader(object):
     def _load_configuration_file(self):
 
         def get_configuration():
-            if not os.path.exists("lbry.conf"):
-                log.debug("Could not read lbry.conf")
-                return ""
+            if os.name == "nt":
+                lbry_conf_path = "lbry.conf"
+                if not os.path.exists(lbry_conf_path):
+                    log.debug("Could not read lbry.conf")
+                    return ""
             else:
-                lbry_conf = open("lbry.conf")
-                log.debug("Loading configuration options from lbry.conf")
-                lines = lbry_conf.readlines()
-                log.debug("lbry.conf file contents:\n%s", str(lines))
-                return lines
+                lbry_conf_path = os.path.join(os.path.expanduser("~"), ".lbrynetgui.conf")
+                if not os.path.exists(lbry_conf_path):
+                    clean_conf_path = os.path.join(os.path.dirname(__file__), "lbry.conf")
+                    shutil.copy(clean_conf_path, lbry_conf_path)
+            lbry_conf = open(lbry_conf_path)
+            log.debug("Loading configuration options from %s", lbry_conf_path)
+            lines = lbry_conf.readlines()
+            log.debug("%s file contents:\n%s", lbry_conf_path, str(lines))
+            return lines
 
         d = threads.deferToThread(get_configuration)
 
@@ -209,6 +221,8 @@ class LBRYDownloader(object):
                             raise ValueError("start_lbrycrdd must be set to True or False. Got %s" % field_value)
                         log.debug("Setting start_lbrycrdd to %s", str(start_lbrycrdd))
                         self.start_lbrycrdd = start_lbrycrdd
+                    elif field_name == "lbrycrdd_path":
+                        self.lbrycrdd_path = field_value
                     elif field_name == "download_directory":
                         log.debug("Setting download_directory to %s", str(field_value))
                         self.download_directory = field_value
@@ -257,9 +271,12 @@ class LBRYDownloader(object):
                     self.wallet_rpc_port = int(l[8:-1])
 
     def _get_session(self):
-        wallet = LBRYcrdWallet(self.wallet_user, self.wallet_password, "127.0.0.1", self.wallet_rpc_port,
-                               start_lbrycrdd=self.start_lbrycrdd, wallet_dir=self.wallet_dir,
-                               wallet_conf=self.wallet_conf)
+        lbrycrdd_path = None
+        if self.start_lbrycrdd is True:
+            lbrycrdd_path = self.lbrycrdd_path
+        wallet = LBRYcrdWallet(self.wallet_user, self.wallet_password, "127.0.0.1",
+                               self.wallet_rpc_port, wallet_dir=self.wallet_dir,
+                               wallet_conf=self.wallet_conf, lbrycrdd_path=lbrycrdd_path)
         peer_port = None
         if self.run_server:
             peer_port = self.peer_port
