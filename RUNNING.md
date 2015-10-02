@@ -85,9 +85,9 @@ sudo python setup.py install
 
 ## Slightly longer running guide
 
-In order to use lbrynet, lbyrcrdd must be running.
+In order to use lbrynet-console or lbrynet-gui, lbyrcrdd must be running.
 
-### Running lbrynet
+### Running lbrycrd
 
 If you ran the easy install script, the lbrycrd folder will be in the directory you ran lbry_setup.sh from. Otherwise it is the root of the cloned lbrycrd repository. Go to that directory.
 
@@ -104,7 +104,7 @@ To shut lbrycrdd down: from the lbrycrd directory, run
 
  ./src/lbrycrd-cli stop
 
-### Running lbrynet-console
+### Option 1) Running lbrynet-console
 
 If you used the virtualenv instructions above, make sure the virtualenv is still active. If not, reactivate it according to the instructions above, under "Installing lbrynet from source"
 
@@ -126,7 +126,10 @@ You will be prompted to choose if you really want to download this file. Type 'y
 
 To shut it down, type ctrl-c at any time or enter the option to shut down from the main menu.
 
-### Running lbrynet-gui
+### Option 2) Running lbrynet-gui
+
+If you used the virtualenv instructions above, make sure the virtualenv is still active. If not, reactivate it according to the instructions above, under "Installing lbrynet from source"
+
 In your terminal:
 
 lbrynet-gui
