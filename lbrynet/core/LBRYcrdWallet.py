@@ -296,6 +296,16 @@ class LBRYcrdWallet(object):
 
     def _start_daemon(self):
 
+        tries = 0
+        try:
+            rpc_conn = self._get_rpc_conn()
+            rpc_conn.getinfo()
+            log.info("lbrycrdd was already running when LBRYcrdWallet was started.")
+            return
+        except (socket.error, JSONRPCException):
+            tries += 1
+            log.info("lbrcyrdd was not running when LBRYcrdWallet was started. Attempting to start it.")
+
         try:
             if os.name == "nt":
                 si = subprocess.STARTUPINFO
@@ -312,8 +322,7 @@ class LBRYcrdWallet(object):
             log.error("Couldn't launch lbrycrdd at path %s: %s", self.lbrycrdd_path, traceback.format_exc())
             raise ValueError("Couldn't launch lbrycrdd. Tried %s" % self.lbrycrdd_path)
 
-        tries = 0
-        while tries < 5:
+        while tries < 6:
             try:
                 rpc_conn = self._get_rpc_conn()
                 rpc_conn.getinfo()

@@ -51,18 +51,17 @@ class LBRYDownloader(object):
         self.download_deferreds = []
         self.stream_frames = []
         self.default_blob_data_payment_rate = MIN_BLOB_DATA_PAYMENT_RATE
-        self.use_upnp = False
+        self.use_upnp = True
+        self.start_lbrycrdd = True
         if os.name == "nt":
-            self.start_lbrycrdd = True
             self.lbrycrdd_path = "lbrycrdd.exe"
         else:
-            self.start_lbrycrdd = False
             self.lbrycrdd_path = "./lbrycrdd"
         self.delete_blobs_on_remove = True
         self.blob_request_payment_rate_manager = None
 
     def start(self):
-        d = self._load_configuration_file()
+        d = self._load_conf_options()
         d.addCallback(lambda _: threads.deferToThread(self._create_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_session())
@@ -114,9 +113,28 @@ class LBRYDownloader(object):
                                              self.current_db_revision)
         return defer.succeed(True)
 
-    def _load_configuration_file(self):
+    def _load_conf_options(self):
 
-        def get_configuration():
+        def get_lbrycrdd_path_conf_file():
+            if os.name == "nt":
+                return ""
+            lbrycrdd_path_conf_path = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
+            if not os.path.exists(lbrycrdd_path_conf_path):
+                return ""
+            lbrycrdd_path_conf = open(lbrycrdd_path_conf_path)
+            lines = lbrycrdd_path_conf.readline()
+            return lines
+
+        d = threads.deferToThread(get_lbrycrdd_path_conf_file)
+
+        def load_lbrycrdd_path(conf):
+            for line in conf:
+                if len(line.strip()) and line.strip()[0] != "#":
+                    self.lbrycrdd_path = line.strip()
+
+        d.addCallback(load_lbrycrdd_path)
+
+        def get_configuration_file():
             if os.name == "nt":
                 lbry_conf_path = "lbry.conf"
                 if not os.path.exists(lbry_conf_path):
@@ -133,9 +151,9 @@ class LBRYDownloader(object):
             log.debug("%s file contents:\n%s", lbry_conf_path, str(lines))
             return lines
 
-        d = threads.deferToThread(get_configuration)
+        d.addCallback(lambda _: threads.deferToThread(get_configuration_file))
 
-        def load_configuration(conf):
+        def load_configuration_file(conf):
             for line in conf:
                 if len(line.strip()) and line.strip()[0] != "#":
                     try:
@@ -236,7 +254,7 @@ class LBRYDownloader(object):
                     else:
                         log.warning("Got unknown configuration field: %s", field_name)
 
-        d.addCallback(load_configuration)
+        d.addCallback(load_configuration_file)
         return d
 
     def _create_directory(self):

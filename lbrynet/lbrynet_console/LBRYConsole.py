@@ -41,8 +41,9 @@ log = logging.getLogger(__name__)
 
 class LBRYConsole():
     """A class which can upload and download file streams to and from the network"""
-    def __init__(self, peer_port, dht_node_port, known_dht_nodes, control_class, wallet_type, lbrycrd_conf,
-                 use_upnp, data_dir, created_data_dir):
+    def __init__(self, peer_port, dht_node_port, known_dht_nodes, control_class, wallet_type,
+                 lbrycrd_conf, lbrycrd_dir, use_upnp, data_dir, created_data_dir,
+                 lbrycrdd_path, start_lbrycrdd):
         """
         @param peer_port: the network port on which to listen for peers
 
@@ -55,6 +56,14 @@ class LBRYConsole():
         self.known_dht_nodes = known_dht_nodes
         self.wallet_type = wallet_type
         self.lbrycrd_conf = lbrycrd_conf
+        self.lbrycrd_dir = lbrycrd_dir
+        if not self.lbrycrd_dir:
+            self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
+        if not self.lbrycrd_conf:
+            self.wallet_conf = os.path.join(self.lbrycrd_dir, "lbrycrd.conf")
+        self.lbrycrdd_path = lbrycrdd_path
+        self.default_lbrycrdd_path = "./lbrycrdd"
+        self.start_lbrycrdd = start_lbrycrdd
         self.use_upnp = use_upnp
         self.lbry_server_port = None
         self.control_class = control_class
@@ -165,6 +174,30 @@ class LBRYConsole():
         d = self.settings.start()
         d.addCallback(lambda _: self.settings.get_lbryid())
         d.addCallback(self.set_lbryid)
+        d.addCallback(lambda _: self.get_lbrycrdd_path())
+        return d
+
+    def get_lbrycrdd_path(self):
+
+        if not self.start_lbrycrdd:
+            return defer.succeed(None)
+
+        def get_lbrycrdd_path_conf_file():
+            lbrycrdd_path_conf_path = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
+            if not os.path.exists(lbrycrdd_path_conf_path):
+                return ""
+            lbrycrdd_path_conf = open(lbrycrdd_path_conf_path)
+            lines = lbrycrdd_path_conf.readline()
+            return lines
+
+        d = threads.deferToThread(get_lbrycrdd_path_conf_file)
+
+        def load_lbrycrdd_path(conf):
+            for line in conf:
+                if len(line.strip()) and line.strip()[0] != "#":
+                    self.lbrycrdd_path = line.strip()
+
+        d.addCallback(load_lbrycrdd_path)
         return d
 
     def set_lbryid(self, lbryid):
@@ -200,8 +233,14 @@ class LBRYConsole():
             return d
 
         def create_lbrycrd_wallet(lbrycrd_options):
+            lbrycrdd_path = None
+            if self.start_lbrycrdd is True:
+                lbrycrdd_path = self.lbrycrdd_path
+                if not lbrycrdd_path:
+                    lbrycrdd_path = self.default_lbrycrdd_path
             return LBRYcrdWallet(lbrycrd_options['username'], lbrycrd_options['password'], "127.0.0.1",
-                                 lbrycrd_options['rpc_port'])
+                                 lbrycrd_options['rpc_port'], wallet_dir=self.lbrycrd_dir,
+                                 wallet_conf=self.lbrycrd_conf, lbrycrdd_path=lbrycrdd_path)
 
         def get_wallet():
             if self.wallet_type == "lbrycrd":
@@ -434,8 +473,11 @@ def launch_lbry_console():
     parser.add_argument("--wallet_type",
                         help="Either 'lbrycrd' or 'ptc'.",
                         type=str, default="lbrycrd")
+    parser.add_argument("--lbrycrd_wallet_dir",
+                        help="The directory in which lbrycrd data will stored. Used if lbrycrdd is "
+                             "launched by this application.")
     parser.add_argument("--lbrycrd_wallet_conf",
-                        help="The configuration file for the LBRYcrd wallet. Default: ~/.lbrycrd",
+                        help="The configuration file for the LBRYcrd wallet. Default: ~/.lbrycrd/lbrycrd.conf",
                         type=str)
     parser.add_argument("--no_dht_bootstrap",
                         help="Don't try to connect to the DHT",
@@ -448,13 +490,20 @@ def launch_lbry_console():
                         help="The port of a known DHT node, to be used to bootstrap into the DHT. Must "
                              "be used with --dht_bootstrap_host",
                         type=int, default=4000)
-    parser.add_argument("--use_upnp",
-                        help="Try to use UPnP to enable incoming connections through the firewall",
+    parser.add_argument("--disable_upnp",
+                        help="Don't try to use UPnP to enable incoming connections through the firewall",
                         action="store_true")
     parser.add_argument("--data_dir",
                         help=("The full path to the directory in which lbrynet data and metadata will be stored. "
                               "Default: ~/.lbrynet"),
                         type=str)
+    parser.add_argument("--lbrycrdd_path",
+                        help="The path to lbrycrdd, which will be launched if it isn't running, unless "
+                             "launching lbrycrdd is disabled by --disable_launch_lbrycrdd. By default, "
+                             "the file ~/.lbrycrddpath.conf will be checked, and if no path is found "
+                             "there, it will be ./lbrycrdd")
+    parser.add_argument("--disable_launch_lbrycrdd",
+                        help="Don't launch lbrycrdd even if it's not running.")
 
     args = parser.parse_args()
 
@@ -482,11 +531,6 @@ def launch_lbry_console():
         os.mkdir(data_dir)
         created_data_dir = True
 
-    if args.lbrycrd_wallet_conf:
-        lbrycrd_conf = args.lbrycrd_wallet_conf
-    else:
-        lbrycrd_conf = os.path.join(os.path.expanduser("~"), ".lbrycrd", "lbrycrd.conf")
-
 
     log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
     formatter = logging.Formatter(log_format)
@@ -498,9 +542,12 @@ def launch_lbry_console():
     file_handler.addFilter(logging.Filter("lbrynet"))
     logger.addHandler(file_handler)
 
-    console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, StdIOControl, wallet_type=args.wallet_type,
-                          lbrycrd_conf=lbrycrd_conf, use_upnp=args.use_upnp,
-                          data_dir=data_dir, created_data_dir=created_data_dir)
+    console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, StdIOControl,
+                          wallet_type=args.wallet_type, lbrycrd_conf=args.lbrycrd_wallet_conf,
+                          lbrycrd_dir=args.lbrycrd_wallet_dir,
+                          use_upnp=not args.disable_upnp, data_dir=data_dir,
+                          created_data_dir=created_data_dir, lbrycrdd_path=args.lbrycrdd_path,
+                          start_lbrycrdd=not args.disable_launch_lbrycrdd)
 
     d = task.deferLater(reactor, 0, console.start)
 
