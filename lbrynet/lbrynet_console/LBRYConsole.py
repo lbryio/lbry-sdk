@@ -4,7 +4,7 @@ import os.path
 import argparse
 from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task
-from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
+from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl, ConsoleControl2
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE  # , MIN_BLOB_INFO_PAYMENT_RATE
@@ -80,6 +80,7 @@ class LBRYConsole():
             os.path.join(os.path.dirname(__file__), "plugins"),
         ])
         self.control_handlers = []
+        self.command_handlers = []
         self.query_handlers = {}
 
         self.settings = LBRYSettings(self.db_dir)
@@ -299,6 +300,8 @@ class LBRYConsole():
         return defer.succeed(True)
 
     def _setup_control_handlers(self):
+        self.command_handlers = [('get', AddStreamFactory(self.sd_identifier, self.session,
+                                                          self.session.wallet))]
         handlers = [
             ('General',
              ApplicationStatusFactory(self.session.rate_limiter, self.session.dht_node)),
@@ -432,7 +435,8 @@ class LBRYConsole():
             return defer.succeed(True)
 
     def _start_controller(self):
-        self.control_class(self.control_handlers)
+        #self.control_class(self.control_handlers)
+        ConsoleControl2(self.command_handlers)
         return defer.succeed(True)
 
     def _shut_down(self):
