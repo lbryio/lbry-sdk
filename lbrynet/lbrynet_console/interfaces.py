@@ -12,3 +12,13 @@ class IControlHandlerFactory(Interface):
 class IControlHandler(Interface):
     def handle_line(self, line):
         pass
+
+
+class ICommandHandlerFactory(Interface):
+    def get_handler(self):
+        pass
+
+
+class ICommandHandler(Interface):
+    def handle_line(self, line):
+        pass

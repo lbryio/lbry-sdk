@@ -1,111 +1,121 @@
-from lbrynet.lbrynet_console.ControlHandlers import ControlHandler, ControlHandlerFactory
-from lbrynet.lbrynet_console.ControlHandlers import RecursiveControlHandler, ModifyPaymentRate
+from lbrynet.lbrynet_console.ControlHandlers import CommandHandler, CommandHandlerFactory
+from lbrynet.lbrynet_console.ControlHandlers import RecursiveCommandHandler, ModifyPaymentRate
 from twisted.internet import defer
 
 
-class StartRepeater(ControlHandler):
+class StartRepeater(CommandHandler):
     prompt_description = "Start the blind repeater"
 
-    def __init__(self, repeater, settings):
+    def __init__(self, console, repeater, settings):
+        CommandHandler.__init__(self, console)
         self.repeater = repeater
         self.settings = settings
 
-    def handle_line(self, line):
-        assert line is None, "Start repeater should not be passed any arguments"
+    def start(self):
+        #assert line is None, "Start repeater should not be passed any arguments"
         d = self.settings.save_repeater_status(running=True)
         d.addCallback(lambda _: self.repeater.start())
-        d.addCallback(lambda _: "Started the repeater")
-        return True, d
+        d.addCallback(lambda _: self.console.sendLine("Started the repeater"))
+        d.chainDeferred(self.finished_deferred)
 
 
-class StartRepeaterFactory(ControlHandlerFactory):
+class StartRepeaterFactory(CommandHandlerFactory):
     control_handler_class = StartRepeater
 
 
-class StopRepeater(ControlHandler):
+class StopRepeater(CommandHandler):
     prompt_description = "Stop the blind repeater"
 
-    def __init__(self, repeater, settings):
+    def __init__(self, console, repeater, settings):
+        CommandHandler.__init__(self, console)
         self.repeater = repeater
         self.settings = settings
 
-    def handle_line(self, line):
-        assert line is None, "Stop repeater should not be passed any arguments"
+    def start(self):
+        #assert line is None, "Stop repeater should not be passed any arguments"
         d = self.settings.save_repeater_status(running=False)
         d.addCallback(lambda _: self.repeater.stop())
-        d.addCallback(lambda _: "Stopped the repeater")
-        return True, d
+        d.addCallback(lambda _: self.console.sendLine("Stopped the repeater"))
+        d.chainDeferred(self.finished_deferred)
 
 
-class StopRepeaterFactory(ControlHandlerFactory):
+class StopRepeaterFactory(CommandHandlerFactory):
     control_handler_class = StopRepeater
 
 
-class UpdateMaxSpace(ControlHandler):
+class UpdateMaxSpace(CommandHandler):
     prompt_description = "Set the maximum space to be used by the blind repeater"
     line_prompt = "Maximum space (in bytes):"
 
-    def __init__(self, repeater, settings):
+    def __init__(self, console, repeater, settings):
+        CommandHandler.__init__(self, console)
         self.repeater = repeater
         self.settings = settings
 
+    def start(self):
+        self.console.sendLine(self.line_prompt)
+
     def handle_line(self, line):
-        if line is None:
-            return False, defer.succeed(self.line_prompt)
-        return True, self._set_max_space(line)
+        d = self._set_max_space(line)
+        d.chainDeferred(self.finished_deferred)
 
     def _set_max_space(self, line):
         max_space = int(line)
         d = self.settings.save_max_space(max_space)
         d.addCallback(lambda _: self.repeater.set_max_space(max_space))
-        d.addCallback(lambda _: "Set the maximum space to " + str(max_space) + " bytes")
+        d.addCallback(lambda _: self.console.sendLine("Set the maximum space to " + str(max_space) + " bytes"))
         return d
 
 
-class UpdateMaxSpaceFactory(ControlHandlerFactory):
+class UpdateMaxSpaceFactory(CommandHandlerFactory):
     control_handler_class = UpdateMaxSpace
 
 
-class AddApprovedPeer(ControlHandler):
+class AddApprovedPeer(CommandHandler):
     prompt_description = "Add a peer to the approved list of peers to check for valuable blob hashes"
     host_prompt = "Peer host in dotted quad (e.g. 127.0.0.1)"
     port_prompt = "Peer port (e.g. 4444)"
 
-    def __init__(self, repeater, peer_manager, settings):
+    def __init__(self, console, repeater, peer_manager, settings):
+        CommandHandler.__init__(self, console)
         self.repeater = repeater
         self.peer_manager = peer_manager
         self.settings = settings
         self.host_to_add = None
 
+    def start(self):
+        self.console.sendLine(self.host_prompt)
+
     def handle_line(self, line):
-        if line is None:
-            return False, defer.succeed(self.host_prompt)
-        elif self.host_to_add is None:
+        #if line is None:
+        #    return False, defer.succeed(self.host_prompt)
+        if self.host_to_add is None:
             self.host_to_add = line
-            return False, defer.succeed(self.port_prompt)
+            self.console.sendLine(self.port_prompt)
         else:
             self.host_to_add, host = None, self.host_to_add
-            return True, self._add_peer(host, line)
+            d = self._add_peer(host, line)
+            d.chainDeferred(self.finished_deferred)
 
     def _add_peer(self, host, port):
         peer = self.peer_manager.get_peer(host, int(port))
         d = self.settings.save_approved_peer(host, int(port))
         d.addCallback(lambda _: self.repeater.add_approved_peer(peer))
-        d.addCallback(lambda _: "Successfully added peer")
+        d.addCallback(lambda _: self.console.sendLine("Successfully added peer"))
         return d
 
 
-class AddApprovedPeerFactory(ControlHandlerFactory):
+class AddApprovedPeerFactory(CommandHandlerFactory):
     control_handler_class = AddApprovedPeer
 
 
-class ApprovedPeerChooser(RecursiveControlHandler):
+class ApprovedPeerChooser(RecursiveCommandHandler):
 
-    def __init__(self, repeater, factory_class, *args, **kwargs):
+    def __init__(self, console, repeater, factory_class, *args, **kwargs):
         self.repeater = repeater
         self.factory_class = factory_class
         self.args = args
-        RecursiveControlHandler.__init__(self, **kwargs)
+        RecursiveCommandHandler.__init__(self, console, **kwargs)
 
     def _get_control_handler_factories(self):
         control_handler_factories = []
@@ -114,7 +124,7 @@ class ApprovedPeerChooser(RecursiveControlHandler):
         return control_handler_factories
 
 
-class ApprovedPeerChooserFactory(ControlHandlerFactory):
+class ApprovedPeerChooserFactory(CommandHandlerFactory):
     def get_prompt_description(self):
         peer = self.args[0]
         return str(peer)
@@ -123,30 +133,32 @@ class ApprovedPeerChooserFactory(ControlHandlerFactory):
 class DeleteApprovedPeerChooser(ApprovedPeerChooser):
     prompt_description = "Remove a peer from the approved list of peers to check for valuable blob hashes"
 
-    def __init__(self, repeater, settings):
-        ApprovedPeerChooser.__init__(self, repeater, DeleteApprovedPeerFactory, repeater, settings,
-                                     exit_after_one_done=True)
+    def __init__(self, console, repeater, settings):
+        ApprovedPeerChooser.__init__(self, console, repeater, DeleteApprovedPeerFactory, repeater,
+                                     settings, exit_after_one_done=True)
 
 
-class DeleteApprovedPeerChooserFactory(ControlHandlerFactory):
+class DeleteApprovedPeerChooserFactory(CommandHandlerFactory):
     control_handler_class = DeleteApprovedPeerChooser
 
 
-class DeleteApprovedPeer(ControlHandler):
+class DeleteApprovedPeer(CommandHandler):
     prompt_description = "Remove a peer from the approved list of peers to check for valuable blob hashes"
 
-    def __init__(self, peer, repeater, settings):
+    def __init__(self, console, peer, repeater, settings):
+        CommandHandler.__init__(self, console)
         self.repeater = repeater
         self.settings = settings
         self.peer_to_remove = peer
 
-    def handle_line(self, line):
-        return True, self._remove_peer()
+    def start(self):
+        d = self._remove_peer()
+        d.chainDeferred(self.finished_deferred)
 
     def _remove_peer(self):
         d = self.settings.remove_approved_peer(self.peer_to_remove.host, int(self.peer_to_remove.port))
         d.addCallback(lambda _: self.repeater.remove_approved_peer(self.peer_to_remove))
-        d.addCallback(lambda _: "Successfully removed peer")
+        d.addCallback(lambda _: self.console.sendLine("Successfully removed peer"))
         return d
 
 
@@ -154,38 +166,43 @@ class DeleteApprovedPeerFactory(ApprovedPeerChooserFactory):
     control_handler_class = DeleteApprovedPeer
 
 
-class ShowApprovedPeers(ControlHandler):
+class ShowApprovedPeers(CommandHandler):
     prompt_description = "Show the list of peers approved to be checked for valuable blob hashes"
 
-    def __init__(self, repeater):
+    def __init__(self, console, repeater):
+        CommandHandler.__init__(self, console)
         self.repeater = repeater
 
-    def handle_line(self, line):
-        assert line is None, "Show approved peers should not be passed any arguments"
-        return True, self._show_peers()
+    def start(self):
+        #assert line is None, "Show approved peers should not be passed any arguments"
+        d = self._show_peers()
+        d.chainDeferred(self.finished_deferred)
 
     def _show_peers(self):
         peer_string = "Approved peers:\n"
         for peer in self.repeater.approved_peers:
             peer_string += str(peer) + "\n"
-        return defer.succeed(peer_string)
+        self.console.sendLine(peer_string)
+        return defer.succeed(None)
 
 
-class ShowApprovedPeersFactory(ControlHandlerFactory):
+class ShowApprovedPeersFactory(CommandHandlerFactory):
     control_handler_class = ShowApprovedPeers
 
 
-class RepeaterStatus(ControlHandler):
+class RepeaterStatus(CommandHandler):
     prompt_description = "Show the repeater's status"
 
-    def __init__(self, repeater):
+    def __init__(self, console, repeater):
+        CommandHandler.__init__(self, console)
         self.repeater = repeater
 
-    def handle_line(self, line):
-        assert line is None, "Show repeater status should not be passed any arguments"
-        return True, defer.maybeDeferred(self._get_status)
+    def start(self):
+        #assert line is None, "Show repeater status should not be passed any arguments"
+        self._show_status()
+        self.finished_deferred.callback(None)
 
-    def _get_status(self):
+    def _show_status(self):
         status_string = "Repeater status: " + self.repeater.status() + "\n"
 
         if self.repeater.stopped is False:
@@ -197,25 +214,25 @@ class RepeaterStatus(ControlHandler):
 
             status_string += "Maximum space: " + str(max_space) + " bytes\n"
             status_string += "Space used: " + str(space_used) + " bytes\n"
-        return defer.succeed(status_string)
+        self.console.sendLine(status_string)
 
 
-class RepeaterStatusFactory(ControlHandlerFactory):
+class RepeaterStatusFactory(CommandHandlerFactory):
     control_handler_class = RepeaterStatus
 
 
 class ModifyDataPaymentRate(ModifyPaymentRate):
     prompt_description = "Modify Blind Repeater data payment rate"
 
-    def __init__(self, repeater, settings):
-        ModifyPaymentRate.__init__(self)
+    def __init__(self, console, repeater, settings):
+        ModifyPaymentRate.__init__(self, console)
         self._prompt_choices['unset'] = (self._unset, "Use the application default data rate")
         self.payment_rate_manager = repeater.payment_rate_manager
         self.settings = settings
 
     def _unset(self):
         self._set_rate(None)
-        return True, defer.succeed("Using the application default data rate")
+        return defer.succeed("Using the application default data rate")
 
     def _set_rate(self, rate):
 
@@ -237,15 +254,15 @@ class ModifyDataPaymentRate(ModifyPaymentRate):
         return status
 
 
-class ModifyDataPaymentRateFactory(ControlHandlerFactory):
+class ModifyDataPaymentRateFactory(CommandHandlerFactory):
     control_handler_class = ModifyDataPaymentRate
 
 
 class ModifyInfoPaymentRate(ModifyPaymentRate):
     prompt_description = "Modify Blind Repeater valuable info payment rate"
 
-    def __init__(self, repeater, settings):
-        ModifyPaymentRate.__init__(self)
+    def __init__(self, console, repeater, settings):
+        ModifyPaymentRate.__init__(self, console)
         self.payment_rate_manager = repeater.payment_rate_manager
         self.settings = settings
 
@@ -264,15 +281,15 @@ class ModifyInfoPaymentRate(ModifyPaymentRate):
         return status
 
 
-class ModifyInfoPaymentRateFactory(ControlHandlerFactory):
+class ModifyInfoPaymentRateFactory(CommandHandlerFactory):
     control_handler_class = ModifyInfoPaymentRate
 
 
 class ModifyHashPaymentRate(ModifyPaymentRate):
     prompt_description = "Modify Blind Repeater valuable hash payment rate"
 
-    def __init__(self, repeater, settings):
-        ModifyPaymentRate.__init__(self)
+    def __init__(self, console, repeater, settings):
+        ModifyPaymentRate.__init__(self, console)
         self.payment_rate_manager = repeater.payment_rate_manager
         self.settings = settings
 
@@ -291,18 +308,18 @@ class ModifyHashPaymentRate(ModifyPaymentRate):
         return status
 
 
-class ModifyHashPaymentRateFactory(ControlHandlerFactory):
+class ModifyHashPaymentRateFactory(CommandHandlerFactory):
     control_handler_class = ModifyHashPaymentRate
 
 
-class ModifyRepeaterOptions(RecursiveControlHandler):
+class ModifyRepeaterOptions(RecursiveCommandHandler):
     prompt_description = "Modify Blind Repeater options"
 
-    def __init__(self, repeater, lbry_session, settings):
+    def __init__(self, console, repeater, lbry_session, settings):
         self.repeater = repeater
         self.lbry_session = lbry_session
         self.settings = settings
-        RecursiveControlHandler.__init__(self)
+        RecursiveCommandHandler.__init__(self, console)
 
     def _get_control_handler_factories(self):
         return [ModifyDataPaymentRateFactory(self.repeater, self.settings),
@@ -314,5 +331,5 @@ class ModifyRepeaterOptions(RecursiveControlHandler):
                 ]
 
 
-class ModifyRepeaterOptionsFactory(ControlHandlerFactory):
+class ModifyRepeaterOptionsFactory(CommandHandlerFactory):
     control_handler_class = ModifyRepeaterOptions

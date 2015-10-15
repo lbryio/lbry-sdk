@@ -4,7 +4,7 @@ import os.path
 import argparse
 from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task
-from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl, ConsoleControl2
+from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE  # , MIN_BLOB_INFO_PAYMENT_RATE
@@ -79,7 +79,6 @@ class LBRYConsole():
             os.path.join(self.db_dir, "plugins"),
             os.path.join(os.path.dirname(__file__), "plugins"),
         ])
-        self.control_handlers = []
         self.command_handlers = []
         self.query_handlers = {}
 
@@ -120,7 +119,7 @@ class LBRYConsole():
 
     def add_control_handlers(self, control_handlers):
         for control_handler in control_handlers:
-            self.control_handlers.append(control_handler)
+            self.command_handlers.append(control_handler)
 
     def add_query_handlers(self, query_handlers):
 
@@ -300,65 +299,42 @@ class LBRYConsole():
         return defer.succeed(True)
 
     def _setup_control_handlers(self):
-        self.command_handlers = [('get', AddStreamFactory(self.sd_identifier, self.session,
-                                                          self.session.wallet))]
         handlers = [
-            ('General',
-             ApplicationStatusFactory(self.session.rate_limiter, self.session.dht_node)),
-            ('General',
-             GetWalletBalancesFactory(self.session.wallet)),
-            ('General',
-             ModifyApplicationDefaultsFactory(self)),
-            ('General',
-             ShutDownFactory(self)),
-            ('General',
-             PeerStatsAndSettingsChooserFactory(self.session.peer_manager)),
-            ('lbryfile',
-             LBRYFileStatusFactory(self.lbry_file_manager)),
-            ('Stream Downloading',
-             AddStreamFromSDFactory(self.sd_identifier, self.session.base_payment_rate_manager)),
-            ('lbryfile',
-             DeleteLBRYFileChooserFactory(self.lbry_file_metadata_manager, self.session.blob_manager,
-                                          self.lbry_file_manager)),
-            ('lbryfile',
-             ToggleLBRYFileRunningChooserFactory(self.lbry_file_manager)),
-            ('lbryfile',
-             CreateLBRYFileFactory(self.session, self.lbry_file_manager)),
-            ('lbryfile',
-             PublishStreamDescriptorChooserFactory(self.lbry_file_metadata_manager,
-                                                   self.session.blob_manager,
-                                                   self.lbry_file_manager)),
-            ('lbryfile',
-             ShowPublishedSDHashesChooserFactory(self.lbry_file_metadata_manager,
-                                                 self.lbry_file_manager)),
-            ('lbryfile',
-             CreatePlainStreamDescriptorChooserFactory(self.lbry_file_manager)),
-            ('lbryfile',
-             ShowLBRYFileStreamHashChooserFactory(self.lbry_file_manager)),
-            ('lbryfile',
-             ModifyLBRYFileOptionsChooserFactory(self.lbry_file_manager)),
-            ('Stream Downloading',
-             AddStreamFromHashFactory(self.sd_identifier, self.session))
+            ApplicationStatusFactory(self.session.rate_limiter, self.session.dht_node),
+            GetWalletBalancesFactory(self.session.wallet),
+            ModifyApplicationDefaultsFactory(self),
+            ShutDownFactory(self),
+            PeerStatsAndSettingsChooserFactory(self.session.peer_manager),
+            LBRYFileStatusFactory(self.lbry_file_manager),
+            AddStreamFromSDFactory(self.sd_identifier, self.session.base_payment_rate_manager),
+            DeleteLBRYFileChooserFactory(self.lbry_file_metadata_manager, self.session.blob_manager,
+                                        self.lbry_file_manager),
+            ToggleLBRYFileRunningChooserFactory(self.lbry_file_manager),
+            CreateLBRYFileFactory(self.session, self.lbry_file_manager),
+            PublishStreamDescriptorChooserFactory(self.lbry_file_metadata_manager,
+                                                  self.session.blob_manager,
+                                                  self.lbry_file_manager),
+            ShowPublishedSDHashesChooserFactory(self.lbry_file_metadata_manager,
+                                                self.lbry_file_manager),
+            CreatePlainStreamDescriptorChooserFactory(self.lbry_file_manager),
+            ShowLBRYFileStreamHashChooserFactory(self.lbry_file_manager),
+            ModifyLBRYFileOptionsChooserFactory(self.lbry_file_manager),
+            AddStreamFromHashFactory(self.sd_identifier, self.session),
         ]
         self.add_control_handlers(handlers)
         if self.wallet_type == 'lbrycrd':
             lbrycrd_handlers = [
-                ('Stream Downloading',
-                 AddStreamFromLBRYcrdNameFactory(self.sd_identifier, self.session,
-                                                 self.session.wallet)),
-                ('General',
-                 ClaimNameFactory(self.session. wallet, self.lbry_file_manager,
-                                  self.session.blob_manager, self.sd_identifier)),
-                ('General',
-                 GetNewWalletAddressFactory(self.session.wallet))
+                AddStreamFromLBRYcrdNameFactory(self.sd_identifier, self.session,
+                                                 self.session.wallet),
+                ClaimNameFactory(self.session. wallet, self.lbry_file_manager,
+                                 self.session.blob_manager, self.sd_identifier),
+                GetNewWalletAddressFactory(self.session.wallet),
             ]
             self.add_control_handlers(lbrycrd_handlers)
         if self.peer_port is not None:
             server_handlers = [
-                ('Server',
-                 ShowServerStatusFactory(self)),
-                ('Server',
-                 ModifyServerSettingsFactory(self)),
+                ShowServerStatusFactory(self),
+                ModifyServerSettingsFactory(self),
             ]
             self.add_control_handlers(server_handlers)
 
@@ -435,8 +411,7 @@ class LBRYConsole():
             return defer.succeed(True)
 
     def _start_controller(self):
-        #self.control_class(self.control_handlers)
-        ConsoleControl2(self.command_handlers)
+        self.control_class(self.command_handlers)
         return defer.succeed(True)
 
     def _shut_down(self):

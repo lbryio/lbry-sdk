@@ -1,5 +1,5 @@
 from lbrynet.lbrylive.StreamDescriptor import LiveStreamType, LBRYLiveStreamDescriptorValidator
-from lbrynet.core.DownloadOption import DownloadOption, DownloadChoice
+from lbrynet.core.DownloadOption import DownloadOption, DownloadOptionChoice
 
 
 def add_live_stream_to_sd_identifier(sd_identifier, base_live_stream_payment_rate_manager):
@@ -23,15 +23,15 @@ class LiveStreamOptions(object):
         options = [
             DownloadOption(
                 [
-                    DownloadChoice(None,
-                                   "No change",
-                                   "No change"),
-                    DownloadChoice(None,
-                                   "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate),
-                                   "Default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate)),
-                    DownloadChoice(float,
-                                   "Rate in LBC/MB",
-                                   "Rate in LBC/MB")
+                    DownloadOptionChoice(None,
+                                         "No change",
+                                         "No change"),
+                    DownloadOptionChoice(None,
+                                         "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate),
+                                         "Default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate)),
+                    DownloadOptionChoice(float,
+                                         "Rate in LBC/MB",
+                                         "Rate in LBC/MB")
                 ],
                 "rate which will be paid for data",
                 "data payment rate",
@@ -40,15 +40,15 @@ class LiveStreamOptions(object):
             ),
             DownloadOption(
                 [
-                    DownloadChoice(None,
-                                   "No change",
-                                   "No change"),
-                    DownloadChoice(None,
-                                   "Application default (%s LBC/MB)" % str(self.base_live_stream_prm.min_live_blob_info_payment_rate),
-                                   "Default (%s LBC/MB)" % str(self.base_live_stream_prm.min_live_blob_info_payment_rate)),
-                    DownloadChoice(float,
-                                   "Rate in LBC/MB",
-                                   "Rate in LBC/MB")
+                    DownloadOptionChoice(None,
+                                         "No change",
+                                         "No change"),
+                    DownloadOptionChoice(None,
+                                         "Application default (%s LBC/MB)" % str(self.base_live_stream_prm.min_live_blob_info_payment_rate),
+                                         "Default (%s LBC/MB)" % str(self.base_live_stream_prm.min_live_blob_info_payment_rate)),
+                    DownloadOptionChoice(float,
+                                         "Rate in LBC/MB",
+                                         "Rate in LBC/MB")
                 ],
                 "rate which will be paid for metadata",
                 "metadata payment rate",
@@ -57,12 +57,12 @@ class LiveStreamOptions(object):
             ),
             DownloadOption(
                 [
-                    DownloadChoice(True,
-                                   "Allow reuploading data downloaded for this file",
-                                   "Allow reuploading"),
-                    DownloadChoice(False,
-                                   "Disallow reuploading data downloaded for this file",
-                                   "Disallow reuploading")
+                    DownloadOptionChoice(True,
+                                         "Allow reuploading data downloaded for this file",
+                                         "Allow reuploading"),
+                    DownloadOptionChoice(False,
+                                         "Disallow reuploading data downloaded for this file",
+                                         "Disallow reuploading")
                 ],
                 "allow reuploading data downloaded for this file",
                 "allow upload",

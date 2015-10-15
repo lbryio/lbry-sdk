@@ -1,5 +1,5 @@
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType, LBRYFileStreamDescriptorValidator
-from lbrynet.core.DownloadOption import DownloadOption, DownloadChoice
+from lbrynet.core.DownloadOption import DownloadOption, DownloadOptionChoice
 
 
 def add_lbry_file_to_sd_identifier(sd_identifier):
@@ -20,16 +20,16 @@ class LBRYFileOptions(object):
                 return "%f LBC/MB" % prm.min_blob_data_payment_rate
 
         rate_choices = []
-        rate_choices.append(DownloadChoice(prm.min_blob_data_payment_rate,
-                                           "No change - %s" % get_default_data_rate_description(),
-                                           "No change - %s" % get_default_data_rate_description()))
+        rate_choices.append(DownloadOptionChoice(prm.min_blob_data_payment_rate,
+                                                 "No change - %s" % get_default_data_rate_description(),
+                                                 "No change - %s" % get_default_data_rate_description()))
         if prm.min_blob_data_payment_rate is not None:
-            rate_choices.append(DownloadChoice(None,
-                                               "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate),
-                                               "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate)))
-        rate_choices.append(DownloadChoice(float,
-                                           "Enter rate in LBC/MB",
-                                           "Enter rate in LBC/MB"))
+            rate_choices.append(DownloadOptionChoice(None,
+                                                     "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate),
+                                                     "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate)))
+        rate_choices.append(DownloadOptionChoice(float,
+                                                 "Enter rate in LBC/MB",
+                                                 "Enter rate in LBC/MB"))
 
         options = [
             DownloadOption(
@@ -41,10 +41,10 @@ class LBRYFileOptions(object):
             ),
             DownloadOption(
                 [
-                    DownloadChoice(bool,
-                                   None,
-                                   None,
-                                   bool_options_description=("Allow", "Disallow")),
+                    DownloadOptionChoice(bool,
+                                         None,
+                                         None,
+                                         bool_options_description=("Allow", "Disallow")),
                 ],
                 "Allow reuploading data downloaded for this file",
                 "allow upload",
