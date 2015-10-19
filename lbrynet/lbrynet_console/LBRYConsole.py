@@ -3,7 +3,7 @@ from lbrynet.core.Session import LBRYSession
 import os.path
 import argparse
 from yapsy.PluginManager import PluginManager
-from twisted.internet import defer, threads, stdio, task
+from twisted.internet import defer, threads, stdio, task, error
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
@@ -194,7 +194,7 @@ class LBRYConsole():
             if not os.path.exists(lbrycrdd_path_conf_path):
                 return ""
             lbrycrdd_path_conf = open(lbrycrdd_path_conf_path)
-            lines = lbrycrdd_path_conf.readline()
+            lines = lbrycrdd_path_conf.readlines()
             return lines
 
         d = threads.deferToThread(get_lbrycrdd_path_conf_file)
@@ -407,7 +407,12 @@ class LBRYConsole():
                                                    self.query_handlers,
                                                    self.session.peer_manager)
             from twisted.internet import reactor
-            self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
+            try:
+                self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
+            except error.CannotListenError as e:
+                import traceback
+                log.error("Couldn't bind to port %d. %s", self.peer_port, traceback.format_exc())
+                raise ValueError("%s lbrynet may already be running on your computer.", str(e))
         return defer.succeed(True)
 
     def stop_server(self):

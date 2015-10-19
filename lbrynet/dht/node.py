@@ -9,7 +9,7 @@
 
 import hashlib, random, struct, time, math, binascii
 import argparse
-from twisted.internet import defer
+from twisted.internet import defer, error
 import constants
 import routingtable
 import datastore
@@ -142,7 +142,13 @@ class Node(object):
         """
         # Prepare the underlying Kademlia protocol
         if self.port is not None:
-            self._listeningPort = twisted.internet.reactor.listenUDP(self.port, self._protocol) #IGNORE:E1101
+            try:
+                self._listeningPort = twisted.internet.reactor.listenUDP(self.port, self._protocol)
+            except error.CannotListenError as e:
+                import traceback
+                log.error("Couldn't bind to port %d. %s", self.port, traceback.format_exc())
+                raise ValueError("%s lbrynet may already be running." % str(e))
+        #IGNORE:E1101
         # Create temporary contact information for the list of addresses of known nodes
         if knownNodeAddresses != None:
             bootstrapContacts = []

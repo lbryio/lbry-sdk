@@ -95,8 +95,8 @@ class LBRYSession(object):
         self.rate_limiter = rate_limiter
 
         self.external_ip = '127.0.0.1'
-        self.upnp_handler = None
-        self.upnp_redirects_set = False
+
+        self.upnp_redirects = []
 
         self.wallet = wallet
 
@@ -148,8 +148,7 @@ class LBRYSession(object):
             ds.append(defer.maybeDeferred(self.wallet.stop))
         if self.blob_manager is not None:
             ds.append(defer.maybeDeferred(self.blob_manager.stop))
-        if self.upnp_redirects_set is True:
-            ds.append(defer.maybeDeferred(self._unset_upnp))
+        ds.append(defer.maybeDeferred(self._unset_upnp))
         return defer.DeferredList(ds)
 
     def _try_upnp(self):
@@ -163,16 +162,24 @@ class LBRYSession(object):
             u = miniupnpc.UPnP()
             num_devices_found = u.discover()
             if num_devices_found > 0:
-                self.upnp_handler = u
                 u.selectigd()
                 external_ip = u.externalipaddress()
                 if external_ip != '0.0.0.0':
                     self.external_ip = external_ip
                 if self.peer_port is not None:
-                    u.addportmapping(self.peer_port, 'TCP', u.lanaddr, self.peer_port, 'LBRY peer port', '')
+                    if u.getspecificportmapping(self.peer_port, 'TCP') is None:
+                        u.addportmapping(self.peer_port, 'TCP', u.lanaddr, self.peer_port, 'LBRY peer port', '')
+                        self.upnp_redirects.append((self.peer_port, 'TCP'))
+                        log.info("Set UPnP redirect for TCP port %d", self.peer_port)
+                    else:
+                        log.warning("UPnP redirect already set for TCP port %d", self.peer_port)
                 if self.dht_node_port is not None:
-                    u.addportmapping(self.dht_node_port, 'UDP', u.lanaddr, self.dht_node_port, 'LBRY DHT port', '')
-                self.upnp_redirects_set = True
+                    if u.getspecificportmapping(self.dht_node_port, 'UDP') is None:
+                        u.addportmapping(self.dht_node_port, 'UDP', u.lanaddr, self.dht_node_port, 'LBRY DHT port', '')
+                        self.upnp_redirects.append((self.dht_node_port, 'UDP'))
+                        log.info("Set UPnP redirect for UPD port %d", self.dht_node_port)
+                    else:
+                        log.warning("UPnP redirect already set for UDP port %d", self.dht_node_port)
                 return True
             return False
 
@@ -247,11 +254,16 @@ class LBRYSession(object):
     def _unset_upnp(self):
 
         def threaded_unset_upnp():
-            u = self.upnp_handler
-            if self.peer_port is not None:
-                u.deleteportmapping(self.peer_port, 'TCP')
-            if self.dht_node_port is not None:
-                u.deleteportmapping(self.dht_node_port, 'UDP')
-            self.upnp_redirects_set = False
+            u = miniupnpc.UPnP()
+            num_devices_found = u.discover()
+            if num_devices_found > 0:
+                u.selectigd()
+                for port, protocol in self.upnp_redirects:
+                    if u.getspecificportmapping(port, protocol) is None:
+                        log.warning("UPnP redirect for %s %d was removed by something else.", protocol, port)
+                    else:
+                        u.deleteportmapping(port, protocol)
+                        log.info("Removed UPnP redirect for %s %d.", protocol, port)
+                self.upnp_redirects = []
 
         return threads.deferToThread(threaded_unset_upnp)

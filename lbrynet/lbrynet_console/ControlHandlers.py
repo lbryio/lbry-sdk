@@ -326,15 +326,15 @@ class ShutDown(CommandHandler):
     #    return True, self._shut_down()
 
     def _shut_down(self):
-        d = self.lbry_service.shut_down()
+        #d = self.lbry_service.shut_down()
 
-        def stop_reactor():
-            from twisted.internet import reactor
-            self.console.sendLine("Shutting down.")
-            reactor.stop()
+        #def stop_reactor():
+        from twisted.internet import reactor
+        self.console.sendLine("Shutting down.")
+        reactor.stop()
 
-        d.addBoth(lambda _: stop_reactor())
-        return d
+        #d.addBoth(lambda _: stop_reactor())
+        return defer.succeed(True)
 
 
 class ShutDownFactory(CommandHandlerFactory):
@@ -538,7 +538,7 @@ class AddStream(CommandHandler):
         self.loading_failed = True
         log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
         self.console.sendLine("An unexpected error occurred attempting to load the stream's metadata.\n"
-                             "See console.log for further details.\n\n")
+                              "See console.log for further details.\n\n")
         self.finished_deferred.callback(None)
 
     def _handle_metadata(self, metadata):
@@ -609,17 +609,17 @@ class AddStream(CommandHandler):
             NotImplementedError()
         return choice_string
 
-    def _get_value_for_choice(self, input):
+    def _get_value_for_choice(self, choice_input):
         choice = self.current_option.option_types[self.current_choice]
         if choice.value == float:
             try:
-                return float(input)
+                return float(choice_input)
             except ValueError:
                 raise InvalidValueError()
         elif choice.value == bool:
-            if input == "0":
+            if choice_input == "0":
                 return True
-            elif input == "1":
+            elif choice_input == "1":
                 return False
             raise InvalidValueError()
         raise NotImplementedError()
@@ -727,7 +727,9 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
 
     def start(self, name):
         self.loading_metadata_deferred = self._resolve_name(name)
-        self.loading_metadata_deferred.addCallback(lambda stream_hash: download_sd_blob(self.session, stream_hash, self.payment_rate_manager))
+        self.loading_metadata_deferred.addCallback(lambda stream_hash: download_sd_blob(self.session,
+                                                                                        stream_hash,
+                                                                                        self.payment_rate_manager))
         self.loading_metadata_deferred.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         AddStream.start(self)
 
