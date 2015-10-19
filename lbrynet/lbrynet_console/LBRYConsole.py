@@ -60,7 +60,7 @@ class LBRYConsole():
         if not self.lbrycrd_dir:
             self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         if not self.lbrycrd_conf:
-            self.wallet_conf = os.path.join(self.lbrycrd_dir, "lbrycrd.conf")
+            self.lbrycrd_conf = os.path.join(self.lbrycrd_dir, "lbrycrd.conf")
         self.lbrycrdd_path = lbrycrdd_path
         self.default_lbrycrdd_path = "./lbrycrdd"
         self.start_lbrycrdd = start_lbrycrdd

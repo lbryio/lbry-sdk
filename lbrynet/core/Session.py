@@ -138,11 +138,16 @@ class LBRYSession(object):
         ds = []
         if self.dht_node is not None:
             ds.append(defer.maybeDeferred(self.dht_node.stop))
-        ds.append(defer.maybeDeferred(self.rate_limiter.stop))
-        ds.append(defer.maybeDeferred(self.peer_finder.stop))
-        ds.append(defer.maybeDeferred(self.hash_announcer.stop))
-        ds.append(defer.maybeDeferred(self.wallet.stop))
-        ds.append(defer.maybeDeferred(self.blob_manager.stop))
+        if self.rate_limiter is not None:
+            ds.append(defer.maybeDeferred(self.rate_limiter.stop))
+        if self.peer_finder is not None:
+            ds.append(defer.maybeDeferred(self.peer_finder.stop))
+        if self.hash_announcer is not None:
+            ds.append(defer.maybeDeferred(self.hash_announcer.stop))
+        if self.wallet is not None:
+            ds.append(defer.maybeDeferred(self.wallet.stop))
+        if self.blob_manager is not None:
+            ds.append(defer.maybeDeferred(self.blob_manager.stop))
         if self.upnp_redirects_set is True:
             ds.append(defer.maybeDeferred(self._unset_upnp))
         return defer.DeferredList(ds)
