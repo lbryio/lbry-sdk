@@ -108,6 +108,12 @@ class LBRYConsole():
 
     def _show_start_error(self, error):
         print error.getErrorMessage()
+        log.error("An error occurred during start up: %s", error.getTraceback())
+        return error
+
+    def _show_shutdown_error(self, error):
+        print error.getErrorMessage()
+        log.error("An error occurred during shutdown: %s", error.getTraceback())
         return error
 
     def shut_down(self):
@@ -115,6 +121,7 @@ class LBRYConsole():
         d = self._shut_down()
         if self.session is not None:
             d.addCallback(lambda _: self.session.shut_down())
+        d.addErrback(self._show_shutdown_error)
         return d
 
     def add_control_handlers(self, control_handlers):
