@@ -48,6 +48,7 @@ class InvalidValueError(Exception):
 
 class CommandHandlerFactory(object):
     implements(ICommandHandlerFactory)
+    is_main_command = False
     short_help = "This should be overridden"
     full_help = "This should really be overridden"
     command = "this-must-be-overridden"
@@ -237,6 +238,7 @@ class ApplicationStatus(CommandHandler):
 
 class ApplicationStatusFactory(CommandHandlerFactory):
     control_handler_class = ApplicationStatus
+    is_main_command = True
     command = "application-status"
     short_help = "Show application status"
     full_help = "Show total bytes uploaded to other peers, total bytes downloaded from peers," \
@@ -275,7 +277,8 @@ class GetWalletBalances(CommandHandler):
 
 class GetWalletBalancesFactory(CommandHandlerFactory):
     control_handler_class = GetWalletBalances
-    command = "wallet-balance"
+    is_main_command = True
+    command = "balance"
     short_help = "Show LBRYcrd balance"
     full_help = "Show the LBRYcrd balance of the wallet to which this application is connected"
 
@@ -305,6 +308,7 @@ class GetNewWalletAddress(CommandHandler):
 
 class GetNewWalletAddressFactory(CommandHandlerFactory):
     control_handler_class = GetNewWalletAddress
+    is_main_command = False
     command = "get-new-address"
     short_help = "Get a new LBRYcrd address"
     full_help = "Get a new LBRYcrd address from the wallet to which this application is connected"
@@ -339,6 +343,7 @@ class ShutDown(CommandHandler):
 
 class ShutDownFactory(CommandHandlerFactory):
     control_handler_class = ShutDown
+    is_main_command = True
     command = "exit"
     short_help = "Shut down"
     full_help = "Shut down"
@@ -374,6 +379,7 @@ class LBRYFileStatus(CommandHandler):
 
 class LBRYFileStatusFactory(CommandHandlerFactory):
     control_handler_class = LBRYFileStatus
+    is_main_command = True
     command = "lbryfile-status"
     short_help = "Print status information for LBRY files"
     full_help = "Print the status information for all streams that are being saved to disk." \
@@ -668,6 +674,7 @@ class AddStreamFromSD(AddStream):
 
 class AddStreamFromSDFactory(CommandHandlerFactory):
     control_handler_class = AddStreamFromSD
+    is_main_command = False
     command = "get-sd"
     short_help = "Download a stream from a plaintext stream descriptor file"
     full_help = "Download a stream from a plaintext stream descriptor file.\n" \
@@ -705,6 +712,7 @@ class AddStreamFromHash(AddStream):
 
 class AddStreamFromHashFactory(CommandHandlerFactory):
     control_handler_class = AddStreamFromHash
+    is_main_command = False
     command = "get-hash"
     short_help = "Download a stream from a hash"
     full_help = "Download a stream from the hash of the stream descriptor. The stream " \
@@ -789,6 +797,7 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
 
 class AddStreamFromLBRYcrdNameFactory(CommandHandlerFactory):
     control_handler_class = AddStreamFromLBRYcrdName
+    is_main_command = True
     command = "get"
     short_help = "Download a stream from a name"
     full_help = "Download a stream associated with a name on the LBRYcrd blockchain. The name will be" \
@@ -841,6 +850,7 @@ class DeleteLBRYFileChooser(LBRYFileChooser):
 
 class DeleteLBRYFileChooserFactory(CommandHandlerFactory):
     control_handler_class = DeleteLBRYFileChooser
+    is_main_command = False
     command = "delete-lbryfile"
     short_help = "Delete an LBRY file"
     full_help = "Delete an LBRY file which has been downloaded or created by this application"
@@ -937,6 +947,7 @@ class ToggleLBRYFileRunningChooser(LBRYFileChooser):
 
 class ToggleLBRYFileRunningChooserFactory(CommandHandlerFactory):
     control_handler_class = ToggleLBRYFileRunningChooser
+    is_main_command = False
     command = "toggle-running"
     short_help = "Toggle whether an LBRY file is running"
     full_help = "Toggle whether an LBRY file, which is being saved by this application," \
@@ -1000,6 +1011,7 @@ class CreateLBRYFile(CommandHandler):
 
 class CreateLBRYFileFactory(CommandHandlerFactory):
     control_handler_class = CreateLBRYFile
+    is_main_command = True
     command = "create-lbryfile"
     short_help = "LBRYize a file"
     full_help = "Split a file up into encrypted chunks compatible with LBRYnet"
@@ -1016,6 +1028,7 @@ class PublishStreamDescriptorChooser(LBRYFileChooser):
 
 class PublishStreamDescriptorChooserFactory(CommandHandlerFactory):
     control_handler_class = PublishStreamDescriptorChooser
+    is_main_command = True
     command = "publish-lbryfile"
     short_help = "Put a stream descriptor onto LBRYnet"
     full_help = "Make a stream descriptor available on LBRYnet at its sha384 hashsum"
@@ -1065,6 +1078,7 @@ class ShowPublishedSDHashesChooser(LBRYFileChooser):
 
 class ShowPublishedSDHashesChooserFactory(CommandHandlerFactory):
     control_handler_class = ShowPublishedSDHashesChooser
+    is_main_command = False
     command = "show-lbryfile-sd-hashes"
     short_help = "Show the published stream descriptor files associated with an LBRY file"
     full_help = "Show the published stream descriptor files associated with an LBRY file"
@@ -1108,6 +1122,7 @@ class CreatePlainStreamDescriptorChooser(LBRYFileChooser):
 
 class CreatePlainStreamDescriptorChooserFactory(CommandHandlerFactory):
     control_handler_class = CreatePlainStreamDescriptorChooser
+    is_main_command = False
     command = "create-stream-descriptor"
     short_help = "Create a plaintext stream descriptor file for an LBRY file"
     full_help = "Create a plaintext stream descriptor file for an LBRY file"
@@ -1175,6 +1190,7 @@ class ShowLBRYFileStreamHashChooser(LBRYFileChooser):
 
 class ShowLBRYFileStreamHashChooserFactory(CommandHandlerFactory):
     control_handler_class = ShowLBRYFileStreamHashChooser
+    is_main_command = False
     command = "lbryfile-streamhash"
     short_help = "Show an LBRY file's stream hash"
     full_help = "Show the stream hash of an LBRY file, which is how the LBRY file is referenced internally" \
@@ -1238,6 +1254,7 @@ class ModifyLBRYFileOptionsChooser(LBRYFileChooser):
 
 class ModifyLBRYFileOptionsChooserFactory(CommandHandlerFactory):
     control_handler_class = ModifyLBRYFileOptionsChooser
+    is_main_command = False
     command = "modify-lbryfile-options"
     short_help = "Modify an LBRY file's options"
     full_help = "Modify an LBRY file's options"
@@ -1443,7 +1460,8 @@ class ClaimName(CommandHandler):
 
 class ClaimNameFactory(CommandHandlerFactory):
     control_handler_class = ClaimName
-    command = "claim-name"
+    is_main_command = True
+    command = "claim"
     short_help = "Associate an LBRY file with a name on LBRYnet"
     full_help = "Associate an LBRY file (or any hash) with a name on LBRYnet"
 
@@ -1507,6 +1525,7 @@ class ModifyApplicationDefaults(RecursiveCommandHandler):
 
 class ModifyApplicationDefaultsFactory(CommandHandlerFactory):
     control_handler_class = ModifyApplicationDefaults
+    is_main_command = True
     command = "modify-application-defaults"
     short_help = "Modify application settings"
     full_help = "Modify application settings"
@@ -1545,6 +1564,7 @@ class ShowServerStatus(CommandHandler):
 
 class ShowServerStatusFactory(CommandHandlerFactory):
     control_handler_class = ShowServerStatus
+    is_main_command = False
     command = "server-status"
     short_help = "Show the server's status"
     full_help = "Show the port on which the server is running, whether the server is running, and the" \
@@ -1771,6 +1791,7 @@ class ModifyServerSettings(RecursiveCommandHandler):
 
 class ModifyServerSettingsFactory(CommandHandlerFactory):
     control_handler_class = ModifyServerSettings
+    is_main_command = True
     command = "modify-server-settings"
     short_help = "Modify server settings"
     full_help = "Modify server settings"
@@ -1856,6 +1877,7 @@ class PeerStatsAndSettingsChooser(PeerChooser):
 
 class PeerStatsAndSettingsChooserFactory(CommandHandlerFactory):
     control_handler_class = PeerStatsAndSettingsChooser
+    is_main_command = False
     command = "peer-stats"
     short_help = "Show some peer statistics"
     full_help = "Show some peer statistics"

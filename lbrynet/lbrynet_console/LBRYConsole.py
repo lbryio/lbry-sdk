@@ -37,11 +37,12 @@ from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
 
 
 log = logging.getLogger(__name__)
+alert = logging.getLogger("lbryalert." + __name__)
 
 
 class LBRYConsole():
     """A class which can upload and download file streams to and from the network"""
-    def __init__(self, peer_port, dht_node_port, known_dht_nodes, control_class, wallet_type,
+    def __init__(self, peer_port, dht_node_port, known_dht_nodes, wallet_type,
                  lbrycrd_conf, lbrycrd_dir, use_upnp, data_dir, created_data_dir,
                  lbrycrdd_path, start_lbrycrdd):
         """
@@ -66,7 +67,6 @@ class LBRYConsole():
         self.start_lbrycrdd = start_lbrycrdd
         self.use_upnp = use_upnp
         self.lbry_server_port = None
-        self.control_class = control_class
         self.session = None
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
@@ -91,7 +91,8 @@ class LBRYConsole():
 
     def start(self):
         """Initialize the session and restore everything to its saved state"""
-        d = threads.deferToThread(self._setup_data_directory)
+        d = self._setup_controller()
+        d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
         d.addCallback(lambda _: self._get_session())
@@ -144,6 +145,7 @@ class LBRYConsole():
         return dl
 
     def _setup_data_directory(self):
+        alert.info("Loading databases...")
         if self.created_data_dir:
             db_revision = open(os.path.join(self.db_dir, "db_revision"), mode='w')
             db_revision.write(str(self.current_db_revision))
@@ -269,6 +271,8 @@ class LBRYConsole():
             return r
 
         def create_session(results):
+
+            alert.info("Databases loaded.")
 
             self.session = LBRYSession(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
@@ -422,9 +426,20 @@ class LBRYConsole():
         else:
             return defer.succeed(True)
 
-    def _start_controller(self):
-        self.control_class(self.command_handlers)
+    def _setup_controller(self):
+        self.controller = ConsoleControl()
+        stdio.StandardIO(self.controller)
+        logger = logging.getLogger()
+        formatter = logging.Formatter("%(message)s")
+        alert_handler = logging.StreamHandler(self.controller)
+        alert_handler.setFormatter(formatter)
+        alert_handler.addFilter(logging.Filter("lbryalert"))
+        alert_handler.setLevel(logging.DEBUG)
+        logger.addHandler(alert_handler)
         return defer.succeed(True)
+
+    def _start_controller(self):
+        return self.controller.start(self.command_handlers)
 
     def _shut_down(self):
         self.plugin_manager = None
@@ -437,11 +452,6 @@ class LBRYConsole():
         ds.append(self._stop_plugins())
         dl = defer.DeferredList(ds)
         return dl
-
-
-class StdIOControl():
-    def __init__(self, control_handlers):
-        stdio.StandardIO(ConsoleControl(control_handlers))
 
 
 def launch_lbry_console():
@@ -533,9 +543,8 @@ def launch_lbry_console():
     file_handler.addFilter(logging.Filter("lbrynet"))
     logger.addHandler(file_handler)
 
-    console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, StdIOControl,
-                          wallet_type=args.wallet_type, lbrycrd_conf=args.lbrycrd_wallet_conf,
-                          lbrycrd_dir=args.lbrycrd_wallet_dir,
+    console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, wallet_type=args.wallet_type,
+                          lbrycrd_conf=args.lbrycrd_wallet_conf, lbrycrd_dir=args.lbrycrd_wallet_dir,
                           use_upnp=not args.disable_upnp, data_dir=data_dir,
                           created_data_dir=created_data_dir, lbrycrdd_path=args.lbrycrdd_path,
                           start_lbrycrdd=not args.disable_launch_lbrycrdd)

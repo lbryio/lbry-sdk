@@ -9,21 +9,57 @@ log = logging.getLogger(__name__)
 class ConsoleControl(basic.LineReceiver):
     from os import linesep as delimiter
 
-    def __init__(self, command_handlers):
+    def __init__(self):
+        self.connected = False
+        self.buffer = []
+
+    def start(self, command_handlers):
         self.command_handlers = {h.command: h for h in command_handlers}
         self.current_handler = None
+        self.send_initial_prompt()
+        return defer.succeed(True)
 
     def connectionMade(self):
+        self.connected = True
+        if self.buffer:
+            self.send(self.buffer)
+            self.buffer = []
+
+    def send_initial_prompt(self):
+        self.sendLine("")
+        self.sendLine("Welcome to lbrynet-console!")
+        self.sendLine("")
         self.sendLine("Enter a command. Try 'get wonderfullife' or 'help' to see more options.")
         self.show_prompt()
 
     def send(self, s):
         self.transport.write(s)
 
+    def write(self, s):
+        if self.connected is False:
+            self.buffer.append(s)
+        else:
+            self.send(s)
+
+    def flush(self):
+        if self.connected is True and self.buffer:
+            self.send(self.buffer)
+            self.buffer = []
+
     def show_prompt(self):
         self.send("> ")
 
-    def show_help_overview(self):
+    def show_quick_help(self):
+        self.sendLine("Available commands:")
+        self.sendLine("")
+        for command, handler in sorted(self.command_handlers.items(), key=lambda x: x[0]):
+            if handler.is_main_command is True:
+                self.sendLine(command + " - " + handler.short_help)
+        self.sendLine("help-debug - Show the full list of available commands")
+        self.sendLine("")
+        self.sendLine("For more information about any command type 'help <command>'")
+
+    def show_full_help(self):
         self.sendLine("Available commands:")
         self.sendLine("")
         for command, handler in sorted(self.command_handlers.items(), key=lambda x: x[0]):
@@ -50,13 +86,24 @@ class ConsoleControl(basic.LineReceiver):
             command, args = words[0], words[1:]
             if command == "help":
                 if len(args) == 0:
-                    self.show_help_overview()
+                    self.show_quick_help()
                     self.show_prompt()
                     return
                 if args[0] in self.command_handlers:
                     self.sendLine(self.command_handlers[args[0]].full_help)
                     self.show_prompt()
                     return
+                if args[0] == "help-debug":
+                    self.sendLine("Show the full list of available commands!")
+                    self.show_prompt()
+                    return
+                self.sendLine("Can't help you with '%s'. Sorry!" % args[0])
+                self.show_prompt()
+                return
+            elif command == "help-debug":
+                self.show_full_help()
+                self.show_prompt()
+                return
             if command in self.command_handlers:
                 command_handler = self.command_handlers[command]
             else:

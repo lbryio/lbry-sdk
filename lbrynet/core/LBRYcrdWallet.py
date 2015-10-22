@@ -17,6 +17,7 @@ import os
 
 
 log = logging.getLogger(__name__)
+alert = logging.getLogger("lbryalert." + __name__)
 
 
 class ReservedPoints(object):
@@ -63,10 +64,12 @@ class LBRYcrdWallet(object):
     def start(self):
 
         def make_connection():
+            alert.info("Connecting to lbrycrdd...")
             if self.lbrycrdd_path is not None:
                 self._start_daemon()
             self._get_info()
             log.info("Connected!")
+            alert.info("Connected to lbrycrdd.")
 
         def start_manage():
             self.stopped = False
