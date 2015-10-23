@@ -50,7 +50,7 @@ class InvalidValueError(Exception):
 
 class CommandHandlerFactory(object):
     implements(ICommandHandlerFactory)
-    is_main_command = False
+    priority = 0
     short_help = "This should be overridden"
     full_help = "This should really be overridden"
     command = "this-must-be-overridden"
@@ -240,7 +240,6 @@ class ApplicationStatus(CommandHandler):
 
 class ApplicationStatusFactory(CommandHandlerFactory):
     control_handler_class = ApplicationStatus
-    is_main_command = False
     command = "application-status"
     short_help = "Show application status"
     full_help = "Show total bytes uploaded to other peers, total bytes downloaded from peers," \
@@ -279,7 +278,7 @@ class GetWalletBalances(CommandHandler):
 
 class GetWalletBalancesFactory(CommandHandlerFactory):
     control_handler_class = GetWalletBalances
-    is_main_command = True
+    priority = 10
     command = "balance"
     short_help = "Show LBRYcrd balance"
     full_help = "Show the LBRYcrd balance of the wallet to which this application is connected"
@@ -310,7 +309,6 @@ class GetNewWalletAddress(CommandHandler):
 
 class GetNewWalletAddressFactory(CommandHandlerFactory):
     control_handler_class = GetNewWalletAddress
-    is_main_command = False
     command = "get-new-address"
     short_help = "Get a new LBRYcrd address"
     full_help = "Get a new LBRYcrd address from the wallet to which this application is connected"
@@ -345,7 +343,7 @@ class ShutDown(CommandHandler):
 
 class ShutDownFactory(CommandHandlerFactory):
     control_handler_class = ShutDown
-    is_main_command = True
+    priority = 5
     command = "exit"
     short_help = "Shut down"
     full_help = "Shut down"
@@ -381,11 +379,10 @@ class LBRYFileStatus(CommandHandler):
 
 class LBRYFileStatusFactory(CommandHandlerFactory):
     control_handler_class = LBRYFileStatus
-    is_main_command = False
     command = "lbryfile-status"
     short_help = "Print status information for LBRY files"
     full_help = "Print the status information for all streams that are being saved to disk." \
-                "This includes whether the stream is currently downloading and teh progress" \
+                "This includes whether the stream is currently downloading and the progress" \
                 "of the download."
 
 
@@ -676,7 +673,6 @@ class AddStreamFromSD(AddStream):
 
 class AddStreamFromSDFactory(CommandHandlerFactory):
     control_handler_class = AddStreamFromSD
-    is_main_command = False
     command = "get-sd"
     short_help = "Download a stream from a plaintext stream descriptor file"
     full_help = "Download a stream from a plaintext stream descriptor file.\n" \
@@ -714,7 +710,6 @@ class AddStreamFromHash(AddStream):
 
 class AddStreamFromHashFactory(CommandHandlerFactory):
     control_handler_class = AddStreamFromHash
-    is_main_command = False
     command = "get-hash"
     short_help = "Download a stream from a hash"
     full_help = "Download a stream from the hash of the stream descriptor. The stream " \
@@ -800,21 +795,23 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
         if self.key_fee is None or self.key_fee_address is None:
             i.append(("decryption key fee", "Free"))
         else:
-            i.append(("decription key fee", str(self.key_fee)))
+            i.append(("decryption key fee", str(self.key_fee)))
             i.append(("address to pay key fee", str(self.key_fee_address)))
         return i
 
 
 class AddStreamFromLBRYcrdNameFactory(CommandHandlerFactory):
     control_handler_class = AddStreamFromLBRYcrdName
-    is_main_command = True
+    priority = 100
     command = "get"
     short_help = "Download a stream from a name"
     full_help = "Download a stream associated with a name on the LBRYcrd blockchain. The name will be" \
                 " looked up on the blockchain, and if it is associated with a stream descriptor hash," \
-                " that stream descriptor will be downloaded and read.\n" \
-                "Takes one argument, the name\n\n" \
-                "get <name>"
+                " that stream descriptor will be downloaded and read. If the given name is itself a valid " \
+                "hash, and the name doesn't exist on the blockchain, then the name will be used as the " \
+                "stream descriptor hash as in get-hash. Use get-hash if you want no ambiguity.\n" \
+                "Takes one argument, the name.\n\n" \
+                "Usage: get <name>"
 
 
 class LBRYFileChooser(RecursiveCommandHandler):
@@ -860,10 +857,13 @@ class DeleteLBRYFileChooser(LBRYFileChooser):
 
 class DeleteLBRYFileChooserFactory(CommandHandlerFactory):
     control_handler_class = DeleteLBRYFileChooser
-    is_main_command = False
     command = "delete-lbryfile"
     short_help = "Delete an LBRY file"
-    full_help = "Delete an LBRY file which has been downloaded or created by this application"
+    full_help = "Delete an LBRY file which has been downloaded or created by this application.\n" \
+                "\nGives the option to also delete the encrypted chunks of data associated with " \
+                "the file. If they are deleted, they will all have to be downloaded again if " \
+                "lbrynet-console is asked to download that file again, and lbrynet-console will " \
+                "not be able to upload those chunks of data to other peers on LBRYnet."
 
 
 class DeleteLBRYFile(CommandHandler):
@@ -967,7 +967,6 @@ class ToggleLBRYFileRunningChooser(LBRYFileChooser):
 
 class ToggleLBRYFileRunningChooserFactory(CommandHandlerFactory):
     control_handler_class = ToggleLBRYFileRunningChooser
-    is_main_command = False
     command = "toggle-running"
     short_help = "Toggle whether an LBRY file is running"
     full_help = "Toggle whether an LBRY file, which is being saved by this application," \
@@ -1031,10 +1030,14 @@ class CreateLBRYFile(CommandHandler):
 
 class CreateLBRYFileFactory(CommandHandlerFactory):
     control_handler_class = CreateLBRYFile
-    is_main_command = False
     command = "create-lbryfile"
     short_help = "LBRYize a file"
-    full_help = "Split a file up into encrypted chunks compatible with LBRYnet"
+    full_help = "Encrypt a file, split it into chunks, and make those chunks available on LBRYnet. Also " \
+                "create a 'stream descriptor file' which contains all of the metadata needed to download " \
+                "the encrypted chunks from LBRYnet and put them back together. This plain stream descriptor " \
+                "can be passed around via other file sharing methods like email. Additionally, this " \
+                "application can publish the stream descriptor to LBRYnet so that the LBRY file can be " \
+                "downloaded via the hash of the stream descriptor."
 
 
 class PublishStreamDescriptorChooser(LBRYFileChooser):
@@ -1048,10 +1051,11 @@ class PublishStreamDescriptorChooser(LBRYFileChooser):
 
 class PublishStreamDescriptorChooserFactory(CommandHandlerFactory):
     control_handler_class = PublishStreamDescriptorChooser
-    is_main_command = False
     command = "release-lbryfile"
     short_help = "Put a stream descriptor onto LBRYnet"
-    full_help = "Make a stream descriptor available on LBRYnet at its sha384 hashsum"
+    full_help = "Make a stream descriptor available on LBRYnet at its sha384 hashsum. If the stream " \
+                "descriptor is made available on LBRYnet, anyone will be able to download it via its " \
+                "hash via LBRYnet, and the LBRY file can then be downloaded if it is available."
 
 
 class PublishStreamDescriptor(CommandHandler):
@@ -1097,10 +1101,12 @@ class ShowPublishedSDHashesChooser(LBRYFileChooser):
 
 class ShowPublishedSDHashesChooserFactory(CommandHandlerFactory):
     control_handler_class = ShowPublishedSDHashesChooser
-    is_main_command = False
     command = "show-lbryfile-sd-hashes"
     short_help = "Show the published stream descriptor files associated with an LBRY file"
-    full_help = "Show the published stream descriptor files associated with an LBRY file"
+    full_help = "Show the published stream descriptor files associated with an LBRY file. " \
+                "These files contain the metadata for LBRY files. These files can be accessed " \
+                "on lbrynet via their hash. From that, lbrynet-console can download the LBRY file " \
+                "if it is available on lbrynet."
 
 
 class ShowPublishedSDHashes(CommandHandler):
@@ -1141,10 +1147,13 @@ class CreatePlainStreamDescriptorChooser(LBRYFileChooser):
 
 class CreatePlainStreamDescriptorChooserFactory(CommandHandlerFactory):
     control_handler_class = CreatePlainStreamDescriptorChooser
-    is_main_command = False
     command = "create-stream-descriptor"
     short_help = "Create a plaintext stream descriptor file for an LBRY file"
-    full_help = "Create a plaintext stream descriptor file for an LBRY file"
+    full_help = "Create a plaintext stream descriptor file for an LBRY file. This file, " \
+                "which traditionally has the file extension .cryptsd, can be shared " \
+                "through a variety of means, including email and file transfer. Anyone " \
+                "possessing this file will be able to download the LBRY file if it is " \
+                "available on lbrynet."
 
 
 class CreatePlainStreamDescriptor(CommandHandler):
@@ -1200,7 +1209,6 @@ class ShowLBRYFileStreamHashChooser(LBRYFileChooser):
 
 class ShowLBRYFileStreamHashChooserFactory(CommandHandlerFactory):
     control_handler_class = ShowLBRYFileStreamHashChooser
-    is_main_command = False
     command = "lbryfile-streamhash"
     short_help = "Show an LBRY file's stream hash"
     full_help = "Show the stream hash of an LBRY file, which is how the LBRY file is referenced internally" \
@@ -1264,10 +1272,11 @@ class ModifyLBRYFileOptionsChooser(LBRYFileChooser):
 
 class ModifyLBRYFileOptionsChooserFactory(CommandHandlerFactory):
     control_handler_class = ModifyLBRYFileOptionsChooser
-    is_main_command = False
     command = "modify-lbryfile-options"
     short_help = "Modify an LBRY file's options"
-    full_help = "Modify an LBRY file's options"
+    full_help = "Modify an LBRY file's options. Options include, and are limited to, " \
+                "changing the rate that the application will pay for data related to " \
+                "this LBRY file."
 
 
 class ModifyLBRYFileOptions(RecursiveCommandHandler):
@@ -1469,10 +1478,20 @@ class ClaimName(CommandHandler):
 
 class ClaimNameFactory(CommandHandlerFactory):
     control_handler_class = ClaimName
-    is_main_command = False
     command = "claim"
-    short_help = "Associate an LBRY file with a name on LBRYnet"
-    full_help = "Associate an LBRY file (or any hash) with a name on LBRYnet"
+    short_help = "Dedicate some LBC toward an lbry:// address"
+    full_help = "Dedicate some LBY toward associate an LBRY file, or any hash, with " \
+                "an lbry:// address. On lbry, whoever dedicates the most credits to an " \
+                "lbry:// address controls that address. This command will let you choose " \
+                "to associate either on LBRY file or any given value with the address.\n" \
+                "This command will ask for a few additional fields, explained here:\n\n" \
+                "The title will be presented to users before they download the file.\n" \
+                "The bid amount is the number of LBC that will be dedicated toward " \
+                "the lbry://address being registered. On lbry, whoever dedicates the most " \
+                "credits to the address controls that address.\n" \
+                "The decryption key fee is the amount of LBC that users will be charged " \
+                "when consuming this file. The fees will be sent to the provided key fee address.\n" \
+                "The description will be presented to users before they download the file.\n"
 
 
 class Publish(CommandHandler):
@@ -1693,10 +1712,23 @@ class Publish(CommandHandler):
 
 class PublishFactory(CommandHandlerFactory):
     control_handler_class = Publish
-    is_main_command = True
+    priority = 90
     command = 'publish'
-    short_help = "Publish a file"
-    full_help = "Publish a file"
+    short_help = "Publish a file to lbrynet"
+    full_help = "Publish a file to lbrynet.\n\n" \
+                "Usage: publish [file_name]\n\n" \
+                "This command takes (or prompts) for a file, prompts for additional " \
+                "information about that file, and then makes that file available on " \
+                "lbrynet via an lbry:// address.\n" \
+                "The file given must exist or publish will fail.\n" \
+                "The title will be presented to users before they download the file.\n" \
+                "The bid amount is the number of LBC that will be dedicated toward " \
+                "the lbry://address being registered. On lbry, whoever dedicates the most " \
+                "credits to the address controls that address.\n" \
+                "The decryption key fee is the amount of LBC that users will be charged " \
+                "when consuming this file. The fees will be sent to the provided key fee address.\n" \
+                "The description will be presented to users before they download the file.\n"
+
 
 
 class ModifyDefaultDataPaymentRate(ModifyPaymentRate):
@@ -1722,7 +1754,7 @@ class ModifyDefaultDataPaymentRateFactory(CommandHandlerFactory):
 
 
 class ForceCheckBlobFileConsistency(CommandHandler):
-    prompt_description = "Verify consistency of stored blobs"
+    prompt_description = "Verify consistency of stored chunks"
 
     def __init__(self, console, blob_manager):
         CommandHandler.__init__(self, console)
@@ -1758,10 +1790,11 @@ class ModifyApplicationDefaults(RecursiveCommandHandler):
 
 class ModifyApplicationDefaultsFactory(CommandHandlerFactory):
     control_handler_class = ModifyApplicationDefaults
-    is_main_command = False
     command = "modify-application-defaults"
     short_help = "Modify application settings"
-    full_help = "Modify application settings"
+    full_help = "Either change the default rate to pay for data downloads or check " \
+                "that the chunks of data on disk match up with the chunks of data " \
+                "the application thinks are on disk."
 
 
 class ShowServerStatus(CommandHandler):
@@ -1797,7 +1830,6 @@ class ShowServerStatus(CommandHandler):
 
 class ShowServerStatusFactory(CommandHandlerFactory):
     control_handler_class = ShowServerStatus
-    is_main_command = False
     command = "server-status"
     short_help = "Show the server's status"
     full_help = "Show the port on which the server is running, whether the server is running, and the" \
@@ -1978,7 +2010,7 @@ class ModifyServerEnabledQueriesFactory(CommandHandlerFactory):
 
 
 class ImmediateAnnounceAllBlobs(CommandHandler):
-    prompt_description = "Immediately announce all blob hashes to the DHT"
+    prompt_description = "Immediately announce all hashes to the DHT"
 
     def __init__(self, console, blob_manager):
         CommandHandler.__init__(self, console)
@@ -2024,10 +2056,16 @@ class ModifyServerSettings(RecursiveCommandHandler):
 
 class ModifyServerSettingsFactory(CommandHandlerFactory):
     control_handler_class = ModifyServerSettings
-    is_main_command = False
     command = "modify-server-settings"
     short_help = "Modify server settings"
-    full_help = "Modify server settings"
+    full_help = "Modify server settings. Settings that can be modified:\n\n" \
+                "1) Queries that the server will answer from other peers. For example, " \
+                "stop the server from responding to requests for metadata, or stop " \
+                "the server from uploading data.\n" \
+                "2) Change whether the server is running at all.\n" \
+                "3) Change the minimum rate the server will accept for data uploads.\n" \
+                "4) Immediately re-broadcast all hashes associated with the server to " \
+                "the distributed hash table."
 
 
 class PeerChooser(RecursiveCommandHandler):
@@ -2110,10 +2148,13 @@ class PeerStatsAndSettingsChooser(PeerChooser):
 
 class PeerStatsAndSettingsChooserFactory(CommandHandlerFactory):
     control_handler_class = PeerStatsAndSettingsChooser
-    is_main_command = False
     command = "peer-stats"
     short_help = "Show some peer statistics"
-    full_help = "Show some peer statistics"
+    full_help = "Show the list of peers that this application has been " \
+                "in contact with. Give the option to show further details " \
+                "for each peer including the number of bytes transferred " \
+                "and the 'score' of the peer which is used in deciding " \
+                "which peers to connect to."
 
 
 class LBRYFileStatusModifier(CommandHandler):
@@ -2230,10 +2271,10 @@ class Status(CommandHandler):
                 self.finished_deferred.callback(None)
 
     def _show_general_status(self):
-        self.console.sendLine("Total bytes uploaded: %s" % str(self.rate_limiter.total_ul_bytes))
-        self.console.sendLine("Total bytes downloaded: %s" % str(self.rate_limiter.total_dl_bytes))
-        self.console.sendLine("Server running: %s" % str(self.lbry_service.lbry_server_port is not None))
-        self.console.sendLine("Server port: %s" % str(self.lbry_service.peer_port))
+        #self.console.sendLine("Total bytes uploaded: %s" % str(self.rate_limiter.total_ul_bytes))
+        #self.console.sendLine("Total bytes downloaded: %s" % str(self.rate_limiter.total_dl_bytes))
+        #self.console.sendLine("Server running: %s" % str(self.lbry_service.lbry_server_port is not None))
+        #self.console.sendLine("Server port: %s" % str(self.lbry_service.peer_port))
         return defer.succeed(True)
 
     def _show_lbry_file_status(self):
@@ -2278,11 +2319,11 @@ class Status(CommandHandler):
 
 class StatusFactory(CommandHandlerFactory):
     control_handler_class = Status
-    is_main_command = True
+    priority = 20
     command = "status"
-    short_help = "Show some basic application status"
-    full_help = "Show some basic application status\n\n" \
-                "Show files currently being downloaded, the total number of bytes " \
-                "downloaded from peers, the total number of bytes uploaded to peers, " \
-                "whether the server is running, and the port on which the server is " \
-                "running."
+    short_help = "Show or alter status of files being downloaded"
+    full_help = "Show or alter status of files being downloaded\n\n" \
+                "Show the list of files that are currently downloading " \
+                "or have been downloaded, and give the option to " \
+                "toggle whether the file is actively downloading or " \
+                "to remove the file."

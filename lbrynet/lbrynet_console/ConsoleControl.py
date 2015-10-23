@@ -52,10 +52,15 @@ class ConsoleControl(basic.LineReceiver):
     def show_quick_help(self):
         self.sendLine("Available commands:")
         self.sendLine("")
-        for command, handler in sorted(self.command_handlers.items(), key=lambda x: x[0]):
-            if handler.is_main_command is True:
+        showed_help_all = False
+        sorted_handlers = sorted(self.command_handlers.items(), key=lambda x: x[0])
+        sorted_handlers = sorted(sorted_handlers, key=lambda x: x[1].priority, reverse=True)
+        for command, handler in sorted_handlers:
+            if handler.priority > 0:
+                if showed_help_all is False and handler.priority < 10:
+                    self.sendLine("help-all - Show the full list of available commands")
+                    showed_help_all = True
                 self.sendLine(command + " - " + handler.short_help)
-        self.sendLine("help-all - Show the full list of available commands")
         self.sendLine("")
         self.sendLine("For more information about any command type 'help <command>'")
 
