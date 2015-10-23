@@ -323,8 +323,7 @@ class LBRYConsole():
             ToggleLBRYFileRunningChooserFactory(self.lbry_file_manager),
             CreateLBRYFileFactory(self.session, self.lbry_file_manager),
             PublishStreamDescriptorChooserFactory(self.lbry_file_metadata_manager,
-                                                  self.session.blob_manager,
-                                                  self.lbry_file_manager),
+                                                  self.session.blob_manager),
             ShowPublishedSDHashesChooserFactory(self.lbry_file_metadata_manager,
                                                 self.lbry_file_manager),
             CreatePlainStreamDescriptorChooserFactory(self.lbry_file_manager),
@@ -338,7 +337,7 @@ class LBRYConsole():
                 AddStreamFromLBRYcrdNameFactory(self.sd_identifier, self.session,
                                                  self.session.wallet),
                 ClaimNameFactory(self.session. wallet, self.lbry_file_manager,
-                                 self.session.blob_manager, self.sd_identifier),
+                                 self.session.blob_manager),
                 GetNewWalletAddressFactory(self.session.wallet),
             ]
             self.add_control_handlers(lbrycrd_handlers)

@@ -126,7 +126,7 @@ class ConsoleControl(basic.LineReceiver):
                     command_handler = self.command_handlers[candidates[0]]
             try:
                 self.current_handler = command_handler.get_handler(self)
-            except Exception:
+            except:
                 self.current_handler = None
                 import traceback
                 self.sendLine(traceback.format_exc())
@@ -139,6 +139,13 @@ class ConsoleControl(basic.LineReceiver):
                 self.current_handler = None
                 self.sendLine("Invalid arguments. Type 'help <command>' for the argument list.")
                 import traceback
+                log.error(traceback.format_exc())
+                self.show_prompt()
+                return
+            except:
+                self.current_handler = None
+                import traceback
+                self.sendLine(traceback.format_exc())
                 log.error(traceback.format_exc())
                 self.show_prompt()
                 return

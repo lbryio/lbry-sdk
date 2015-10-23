@@ -2,8 +2,10 @@ import binascii
 import logging
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
-from twisted.internet import defer
+from twisted.internet import defer, threads
 from lbrynet.core.Error import DuplicateStreamHashError, InvalidStreamDescriptorError
+from lbrynet.core.StreamDescriptor import PlainStreamDescriptorWriter, BlobStreamDescriptorWriter
+import os
 
 
 log = logging.getLogger(__name__)
@@ -75,6 +77,47 @@ def get_sd_info(stream_info_manager, stream_hash, include_blobs):
         return d
 
     d.addCallback(format_info)
+    return d
+
+
+def publish_sd_blob(stream_info_manager, blob_manager, stream_hash):
+    descriptor_writer = BlobStreamDescriptorWriter(blob_manager)
+
+    d = get_sd_info(stream_info_manager, stream_hash, True)
+    d.addCallback(descriptor_writer.create_descriptor)
+
+    def add_sd_blob_to_stream(sd_blob_hash):
+        d = stream_info_manager.save_sd_blob_hash_to_stream(stream_hash, sd_blob_hash)
+        d.addCallback(lambda _: sd_blob_hash)
+        return d
+
+    d.addCallback(add_sd_blob_to_stream)
+    return d
+
+
+def create_plain_sd(stream_info_manager, stream_hash, file_name, overwrite_existing=False):
+
+    def _get_file_name():
+        actual_file_name = file_name
+        if os.path.exists(actual_file_name):
+            ext_num = 1
+            while os.path.exists(actual_file_name + "_" + str(ext_num)):
+                ext_num += 1
+            actual_file_name = actual_file_name + "_" + str(ext_num)
+        return actual_file_name
+
+    if overwrite_existing is False:
+        d = threads.deferToThread(_get_file_name())
+    else:
+        d = defer.succeed(file_name)
+
+    def do_create(file_name):
+        descriptor_writer = PlainStreamDescriptorWriter(file_name)
+        d = get_sd_info(stream_info_manager, stream_hash, True)
+        d.addCallback(descriptor_writer.create_descriptor)
+        return d
+
+    d.addCallback(do_create)
     return d
 
 

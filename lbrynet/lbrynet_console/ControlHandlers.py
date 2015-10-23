@@ -1,16 +1,18 @@
 import logging
 from zope.interface import implements
-from lbrynet.core.StreamDescriptor import PlainStreamDescriptorWriter, BlobStreamDescriptorWriter
+#from lbrynet.core.StreamDescriptor import PlainStreamDescriptorWriter, BlobStreamDescriptorWriter
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
-from lbrynet.lbryfile.StreamDescriptor import get_sd_info
+# from lbrynet.lbryfile.StreamDescriptor import get_sd_info
+from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob, create_plain_sd
 from lbrynet.lbrynet_console.interfaces import ICommandHandler, ICommandHandlerFactory
-from lbrynet.core.StreamDescriptor import download_sd_blob, BlobStreamDescriptorReader
+from lbrynet.core.StreamDescriptor import download_sd_blob#, BlobStreamDescriptorReader
 from lbrynet.core.Error import UnknownNameError, InvalidBlobHashError, InsufficientFundsError
 from lbrynet.core.Error import InvalidStreamInfoError
+from lbrynet.core.utils import is_valid_blobhash
 from twisted.internet import defer, threads
-import os
+#import os
 
 
 log = logging.getLogger(__name__)
@@ -734,6 +736,7 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
         self.key_fee_address = None
 
     def start(self, name):
+        self.name = name
         self.loading_metadata_deferred = self._resolve_name(name)
         self.loading_metadata_deferred.addCallback(lambda stream_hash: download_sd_blob(self.session,
                                                                                         stream_hash,
@@ -761,9 +764,15 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
     def _handle_load_failed(self, err):
         self.loading_failed = True
         if err.check(UnknownNameError):
-            self.console.sendLine("The name %s could not be found.\n\n" % err.getErrorMessage())
-            self.finished_deferred.callback(None)
-            return
+            if is_valid_blobhash(self.name):
+                self.loading_failed = False
+                self.loading_metadata_deferred = None
+                AddStreamFromHash.start(self, self.name)
+                return
+            else:
+                self.console.sendLine("The name %s could not be found.\n\n" % err.getErrorMessage())
+                self.finished_deferred.callback(None)
+                return
         elif err.check(InvalidBlobHashError):
             self.console.sendLine("The metadata for this name is invalid. The stream cannot be downloaded.\n\n")
             self.finished_deferred.callback(None)
@@ -1037,31 +1046,30 @@ class PublishStreamDescriptorChooserFactory(CommandHandlerFactory):
 class PublishStreamDescriptor(CommandHandler):
     #prompt_description = "Publish a stream descriptor file to the DHT for an LBRY File"
 
-    def __init__(self, console, lbry_file, stream_info_manager, blob_manager, lbry_file_manager):
+    def __init__(self, console, lbry_file, stream_info_manager, blob_manager):
         CommandHandler.__init__(self, console)
         self.lbry_file = lbry_file
         self.stream_info_manager = stream_info_manager
         self.blob_manager = blob_manager
-        self.lbry_file_manager = lbry_file_manager
 
     def start(self):
-        d = self._publish_sd_blob()
+        d = publish_sd_blob(self.stream_info_manager, self.blob_manager, self.lbry_file.stream_hash)
         d.addCallback(lambda sd_hash: self.console.sendLine(sd_hash))
         d.chainDeferred(self.finished_deferred)
 
-    def _publish_sd_blob(self):
-        descriptor_writer = BlobStreamDescriptorWriter(self.blob_manager)
+    #def _publish_sd_blob(self):
+    #    descriptor_writer = BlobStreamDescriptorWriter(self.blob_manager)
 
-        d = get_sd_info(self.lbry_file_manager.stream_info_manager, self.lbry_file.stream_hash, True)
-        d.addCallback(descriptor_writer.create_descriptor)
+    #    d = get_sd_info(self.stream_info_manager, self.lbry_file.stream_hash, True)
+    #    d.addCallback(descriptor_writer.create_descriptor)
 
-        def add_sd_blob_to_stream(sd_blob_hash):
-            d = self.stream_info_manager.save_sd_blob_hash_to_stream(self.lbry_file.stream_hash, sd_blob_hash)
-            d.addCallback(lambda _: sd_blob_hash)
-            return d
+    #    def add_sd_blob_to_stream(sd_blob_hash):
+    #        d = self.stream_info_manager.save_sd_blob_hash_to_stream(self.lbry_file.stream_hash, sd_blob_hash)
+    #        d.addCallback(lambda _: sd_blob_hash)
+    #        return d
 
-        d.addCallback(add_sd_blob_to_stream)
-        return d
+    #    d.addCallback(add_sd_blob_to_stream)
+    #    return d
 
 
 class PublishStreamDescriptorFactory(LBRYFileChooserFactory):
@@ -1136,6 +1144,7 @@ class CreatePlainStreamDescriptor(CommandHandler):
         self.lbry_file = lbry_file
         self.lbry_file_manager = lbry_file_manager
         self.sd_file_name = None
+        self.overwrite_old = False
 
     def start(self):
         self.console.sendLine(self._get_file_name_prompt())
@@ -1143,8 +1152,11 @@ class CreatePlainStreamDescriptor(CommandHandler):
     def handle_line(self, line):
         if self.sd_file_name is None:
             self.sd_file_name = line
-            d = threads.deferToThread(self._get_file_name)
-            d.addCallback(self._create_sd)
+            d = self._get_file_name()
+            d.addCallback(lambda file_name: create_plain_sd(self.lbry_file_manager.stream_info_manager,
+                                                            self.lbry_file.stream_hash, file_name,
+                                                            self.overwrite_old))
+            d.addCallback(lambda sd_file_name: self.console.sendLine("Wrote stream metadata to " + sd_file_name))
             d.chainDeferred(self.finished_deferred)
 
     def _get_file_name_prompt(self):
@@ -1157,24 +1169,11 @@ class CreatePlainStreamDescriptor(CommandHandler):
     def _get_file_name(self):
         if self.sd_file_name:
             file_name = self.sd_file_name
+            self.overwrite_old = True
         else:
             file_name = self.lbry_file.file_name
-            if not file_name:
-                file_name = "_"
-            file_name += ".cryptsd"
-            if os.path.exists(file_name):
-                ext_num = 1
-                while os.path.exists(file_name + "_" + str(ext_num)):
-                    ext_num += 1
-                file_name = file_name + "_" + str(ext_num)
-        return file_name
-
-    def _create_sd(self, file_name):
-        descriptor_writer = PlainStreamDescriptorWriter(file_name)
-        d = get_sd_info(self.lbry_file_manager.stream_info_manager, self.lbry_file.stream_hash, True)
-        d.addCallback(descriptor_writer.create_descriptor)
-        d.addCallback(lambda sd_file_name: self.console.sendLine("Wrote stream metadata to " + sd_file_name))
-        return d
+        file_name = file_name + ".cryptsd"
+        return defer.succeed(file_name)
 
 
 class CreatePlainStreamDescriptorFactory(LBRYFileChooserFactory):
@@ -1282,18 +1281,17 @@ class ClaimName(CommandHandler):
     #prompt_description = "Publish to an lbry:// address"
     other_hash_prompt = "Enter the hash you would like to publish:"
     short_desc_prompt = "Enter a short description:"
-    sd_failure_message = "Unable to find a stream descriptor for that file."
+    #sd_failure_message = "Unable to find a stream descriptor for that file."
     requested_price_prompt = "Enter the fee others should pay for the decryption key for this stream. Leave blank for no fee:"
     lbrycrd_address_prompt = "Enter the LBRYcrd address to which the key fee should be sent. If left blank a new address will be used from the wallet:"
     bid_amount_prompt = "Enter the number of credits you wish to use to support your bid for the name:"
     choose_name_prompt = "Enter the name to which you would like to publish:"
 
-    def __init__(self, console, wallet, lbry_file_manager, blob_manager, sd_identifier):
+    def __init__(self, console, wallet, lbry_file_manager, blob_manager):
         CommandHandler.__init__(self, console)
         self.wallet = wallet
         self.lbry_file_manager = lbry_file_manager
         self.blob_manager = blob_manager
-        self.sd_identifier = sd_identifier
         self.file_type_options = []
         self.file_type_chosen = None
         self.lbry_file_list = []
@@ -1405,26 +1403,26 @@ class ClaimName(CommandHandler):
 
     def _choose_sd(self, sd_blob_hashes):
         if not sd_blob_hashes:
-            return defer.succeed(False)
-        self.sd_hash = sd_blob_hashes[0]
-        return defer.succeed(True)
+            return publish_sd_blob(self.lbry_file_manager.stream_info_manager, self.blob_manager,
+                                   self.file_type_chosen.stream_hash)
+
+        else:
+            return defer.succeed(sd_blob_hashes[0])
 
     def _set_sd_hash_and_get_desc_prompt(self):
         d = self.lbry_file_manager.stream_info_manager.get_sd_blob_hashes_for_stream(self.file_type_chosen.stream_hash)
         d.addCallback(self._choose_sd)
 
-        def sd_hash_set(success):
-            if success:
-                self.console.sendLine(self.short_desc_prompt)
-            else:
-                self.console.sendLine(self.sd_failure_message)
-                self.finished_deferred.callback(None)
+        def set_sd_hash(sd_hash):
+            self.sd_hash = sd_hash
+            self.console.sendLine(self.short_desc_prompt)
 
         def sd_hash_failed(err):
             self.console.sendLine("An error occurred getting the stream descriptor hash: %s" % err.getErrorMessage())
             self.finished_deferred.callback(None)
 
-        d.addCallbacks(sd_hash_set, sd_hash_failed)
+        d.addCallback(set_sd_hash)
+        d.addErrback(sd_hash_failed)
         return d
 
     def _get_new_address(self):
@@ -1464,6 +1462,100 @@ class ClaimNameFactory(CommandHandlerFactory):
     command = "claim"
     short_help = "Associate an LBRY file with a name on LBRYnet"
     full_help = "Associate an LBRY file (or any hash) with a name on LBRYnet"
+
+
+class Publish(CommandHandler):
+    def __init__(self, console, session, lbry_file_manager, wallet):
+        CommandHandler.__init__(self, console)
+        self.session = session
+        self.lbry_file_manager = lbry_file_manager
+        self.wallet = wallet
+        self.file_name = None
+        self.title = None
+        self.publish_name = None
+        self.bid_amount = None
+        self.key_fee = None
+        self.key_fee_address = None
+        self.key_fee_address_chosen = False
+        self.description = None
+        self.verified = False
+
+    def start(self, file_name=None, title=None, publish_name=None, bid_amount=None,
+              key_fee=None, key_fee_address=None):
+
+        def set_other_fields():
+            self.title = title
+            self.publish_name = publish_name
+            self.bid_amount = bid_amount
+            if key_fee is not None:
+                try:
+                    self.key_fee = float(key_fee)
+                except ValueError:
+                    self.console.sendLine("Decryption key fee must be a number (e.g. 5 or 10.0)")
+                    self.finished_deferred.callback(None)
+                    return
+            if key_fee_address is not None:
+                self.key_fee_address = key_fee_address
+                self.key_fee_address_chosen = True
+
+        def handle_error(err):
+            log.error(err.getTraceback())
+            self.console.sendLine("You made something bad happen: %s" % err.getErrorMessage())
+            self.finished_deferred.callback(None)
+
+        if file_name is not None:
+            d = self._check_file_name(file_name)
+            d.addCallback(lambda _: set_other_fields())
+            d.addErrback(handle_error)
+        else:
+            d = defer.succeed(None)
+        d.addCallback(lambda _: self.console.send(self._get_next_prompt()))
+
+    def _check_file_name(self, file_name):
+        def check_file_threaded():
+            f = open(file_name)
+            f.close()
+            self.file_name = file_name
+        return threads.deferToThread(check_file_threaded)
+
+    def _get_next_prompt(self):
+        if self.file_name is None:
+            return "File name: "
+        if self.title is None:
+            return "Title: "
+        if self.publish_name is None:
+            return "Publish to: lbry://"
+        if self.bid_amount is None:
+            return "Bid amount for published name: "
+        if self.key_fee is None:
+            return "Decryption key fee: "
+        if self.key_fee_address_chosen is False or self.key_fee > 0:
+            return "Decryption key fee sent to (leave blank for a new address): "
+        if self.description is None:
+            return "Description: "
+        if self.verified is None:
+            return self._get_verification_prompt()
+
+    def _get_verification_prompt(self):
+        v_string = "\nPlease review the following details.\n\n"
+        v_string += "File name: %s\n" % str(self.file_name)
+        v_string += "Title: %s\n" % str(self.title)
+        v_string += "Published to: lbry://%s\n" % str(self.publish_name)
+        v_string += "Bid amount: %s\n" % str(self.bid_amount)
+        v_string += "Fee for decryption key: %s LBC\n" % str(self.key_fee)
+        if self.key_fee > 0:
+            v_string += "Decryption key address: %s\n" % str(self.key_fee_address)
+        v_string += "Is this correct? (y/n): "
+        return v_string
+
+
+
+class PublishFactory(CommandHandlerFactory):
+    control_handler_class = Publish
+    is_main_command = True
+    command = 'publish'
+    help = "Publish a file"
+    full_help = "Publish a file"
 
 
 class ModifyDefaultDataPaymentRate(ModifyPaymentRate):
