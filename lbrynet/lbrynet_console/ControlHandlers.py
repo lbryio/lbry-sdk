@@ -240,7 +240,7 @@ class ApplicationStatus(CommandHandler):
 
 class ApplicationStatusFactory(CommandHandlerFactory):
     control_handler_class = ApplicationStatus
-    is_main_command = True
+    is_main_command = False
     command = "application-status"
     short_help = "Show application status"
     full_help = "Show total bytes uploaded to other peers, total bytes downloaded from peers," \
@@ -381,7 +381,7 @@ class LBRYFileStatus(CommandHandler):
 
 class LBRYFileStatusFactory(CommandHandlerFactory):
     control_handler_class = LBRYFileStatus
-    is_main_command = True
+    is_main_command = False
     command = "lbryfile-status"
     short_help = "Print status information for LBRY files"
     full_help = "Print the status information for all streams that are being saved to disk." \
@@ -734,6 +734,7 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
         self.description = None
         self.key_fee = None
         self.key_fee_address = None
+        self.name = None
 
     def start(self, name):
         self.name = name
@@ -867,7 +868,8 @@ class DeleteLBRYFileChooserFactory(CommandHandlerFactory):
 
 class DeleteLBRYFile(CommandHandler):
     #prompt_description = "Delete LBRY File"
-    line_prompt = "Also delete data? (y/n):"
+    delete_data_prompt = "Also delete data? (y/n): "
+    confirm_prompt = "Are you sure? (y/n): "
 
     def __init__(self, console, lbry_file, stream_info_manager, blob_manager, lbry_file_manager):
         CommandHandler.__init__(self, console)
@@ -875,35 +877,44 @@ class DeleteLBRYFile(CommandHandler):
         self.stream_info_manager = stream_info_manager
         self.blob_manager = blob_manager
         self.lbry_file_manager = lbry_file_manager
-        self.got_input = False
+        self.got_delete_data = False
+        self.delete_data = False
+        self.got_confirmation = False
 
     def start(self):
-        self.console.sendLine(self.line_prompt)
+        self.console.send(self.delete_data_prompt)
 
     def handle_line(self, line):
         #if line is None:
         #    return False, defer.succeed(self.line_prompt)
-        if self.got_input is False:
-            self.got_input = True
-            delete_data = False
-            if line == 'y' or line == 'Y':
-                delete_data = True
-            d = self._delete_lbry_file(delete_data)
+        if self.got_delete_data is False:
+            self.got_delete_data = True
+            if line.lower() in ['y', 'yes']:
+                self.delete_data = True
+            self.console.send(self.confirm_prompt)
+            return
+        if self.got_confirmation is False:
+            self.got_confirmation = True
+            if line.lower() in ['y', 'yes']:
+                d = self._delete_lbry_file()
 
-            def show_done():
-                self.console.sendLine("Successfully deleted " + str(self.lbry_file.stream_name))
+                def show_done():
+                    self.console.sendLine("Successfully deleted " + str(self.lbry_file.stream_name))
 
-            def delete_failed(err):
-                self.console.sendLine("Deletion unsuccessful. Reason: %s" % err.getErrorMessage())
+                def delete_failed(err):
+                    self.console.sendLine("Deletion unsuccessful. Reason: %s" % err.getErrorMessage())
 
-            d.addCallbacks(lambda _: show_done(), delete_failed)
-            d.chainDeferred(self.finished_deferred)
+                d.addCallbacks(lambda _: show_done(), delete_failed)
+                d.chainDeferred(self.finished_deferred)
+            else:
+                self.console.sendLine("Canceled deletion.")
+                self.finished_deferred.callback(None)
 
-    def _delete_lbry_file(self, delete_data):
+    def _delete_lbry_file(self):
         d = self.lbry_file_manager.delete_lbry_file(self.lbry_file.stream_hash)
 
         def finish_deletion():
-            if delete_data is True:
+            if self.delete_data is True:
                 d = self._delete_data()
             else:
                 d = defer.succeed(True)
@@ -1020,7 +1031,7 @@ class CreateLBRYFile(CommandHandler):
 
 class CreateLBRYFileFactory(CommandHandlerFactory):
     control_handler_class = CreateLBRYFile
-    is_main_command = True
+    is_main_command = False
     command = "create-lbryfile"
     short_help = "LBRYize a file"
     full_help = "Split a file up into encrypted chunks compatible with LBRYnet"
@@ -1037,8 +1048,8 @@ class PublishStreamDescriptorChooser(LBRYFileChooser):
 
 class PublishStreamDescriptorChooserFactory(CommandHandlerFactory):
     control_handler_class = PublishStreamDescriptorChooser
-    is_main_command = True
-    command = "publish-lbryfile"
+    is_main_command = False
+    command = "release-lbryfile"
     short_help = "Put a stream descriptor onto LBRYnet"
     full_help = "Make a stream descriptor available on LBRYnet at its sha384 hashsum"
 
@@ -1458,18 +1469,23 @@ class ClaimName(CommandHandler):
 
 class ClaimNameFactory(CommandHandlerFactory):
     control_handler_class = ClaimName
-    is_main_command = True
+    is_main_command = False
     command = "claim"
     short_help = "Associate an LBRY file with a name on LBRYnet"
     full_help = "Associate an LBRY file (or any hash) with a name on LBRYnet"
 
 
 class Publish(CommandHandler):
+    couldnt_read_file_error = "Unable to read %s. The file must exist and you must have permission to read it."
+    bid_amount_not_number = "Bid amount must be a number (e.g. 5 or 10.0)"
+    key_fee_not_number = "Decryption key fee must be a number (e.g. 5 or 10.0)"
+
     def __init__(self, console, session, lbry_file_manager, wallet):
         CommandHandler.__init__(self, console)
         self.session = session
         self.lbry_file_manager = lbry_file_manager
         self.wallet = wallet
+        self.received_file_name = False
         self.file_name = None
         self.title = None
         self.publish_name = None
@@ -1479,82 +1495,207 @@ class Publish(CommandHandler):
         self.key_fee_address_chosen = False
         self.description = None
         self.verified = False
+        self.lbry_file = None
+        self.sd_hash = None
+        self.tx_hash = None
 
-    def start(self, file_name=None, title=None, publish_name=None, bid_amount=None,
-              key_fee=None, key_fee_address=None):
+    def start(self, file_name=None):#, title=None, publish_name=None, bid_amount=None,
+        #      key_fee=None, key_fee_address=None):
 
-        def set_other_fields():
-            self.title = title
-            self.publish_name = publish_name
-            self.bid_amount = bid_amount
-            if key_fee is not None:
-                try:
-                    self.key_fee = float(key_fee)
-                except ValueError:
-                    self.console.sendLine("Decryption key fee must be a number (e.g. 5 or 10.0)")
-                    self.finished_deferred.callback(None)
-                    return
-            if key_fee_address is not None:
-                self.key_fee_address = key_fee_address
-                self.key_fee_address_chosen = True
+        #def set_other_fields():
+        #    self.title = title
+        #    self.publish_name = publish_name
+        #    if bid_amount is not None:
+        #        try:
+        #            self.bid_amount = float(bid_amount)
+        #        except ValueError:
+        #            self.console.sendLine(self.bid_amount_not_number)
+        #            self.finished_deferred.callback(None)
+        #            return
+        #    if key_fee is not None:
+        #        try:
+        #            self.key_fee = float(key_fee)
+        #        except ValueError:
+        #            self.console.sendLine(self.key_fee_not_number)
+        #            self.finished_deferred.callback(None)
+        #            return
+        #    if key_fee_address is not None:
+        #        self.key_fee_address = key_fee_address
+        #        self.key_fee_address_chosen = True
+        #    self._send_next_prompt()
 
         def handle_error(err):
-            log.error(err.getTraceback())
-            self.console.sendLine("You made something bad happen: %s" % err.getErrorMessage())
+            if err.check(IOError):
+                self.console.sendLine(self.couldnt_read_file_error % str(file_name))
+            else:
+                self.console.sendLine("An unexpected error occurred: %s" % str(err.getErrorMessage()))
             self.finished_deferred.callback(None)
 
         if file_name is not None:
+            self.received_file_name = True
             d = self._check_file_name(file_name)
-            d.addCallback(lambda _: set_other_fields())
-            d.addErrback(handle_error)
+            #d.addCallback(lambda _: set_other_fields())
+            d.addCallbacks(lambda _: self._send_next_prompt(), handle_error)
         else:
-            d = defer.succeed(None)
-        d.addCallback(lambda _: self.console.send(self._get_next_prompt()))
+            self._send_next_prompt()
+
+    def handle_line(self, line):
+        d = defer.succeed(True)
+        if self.file_name is None:
+            if self.received_file_name is False:
+                self.received_file_name = True
+                d = self._check_file_name(line)
+
+                def file_name_failed(err):
+                    err.trap(IOError)
+                    self.console.sendLine(self.couldnt_read_file_error % line)
+                    self.finished_deferred.callback(None)
+                    return False
+
+                d.addErrback(file_name_failed)
+        elif self.title is None:
+            self.title = line
+        elif self.publish_name is None:
+            self.publish_name = line
+        elif self.bid_amount is None:
+            try:
+                self.bid_amount = float(line)
+            except ValueError:
+                self.console.sendLine(self.bid_amount_not_number)
+        elif self.key_fee is None:
+            try:
+                self.key_fee = float(line)
+            except ValueError:
+                self.console.sendLine(self.key_fee_not_number)
+        elif self.key_fee_address_chosen is False and self.key_fee > 0:
+            if line:
+                self.key_fee_address = line
+            else:
+                d = self._get_new_address()
+            self.key_fee_address_chosen = True
+        elif self.description is None:
+            self.description = line
+        elif self.verified is False:
+            if line.lower() in ['yes', 'y']:
+                self._do_publish()
+                self.console.sendLine("Publishing in the background.")
+            else:
+                self.console.sendLine("Canceled.")
+            self.finished_deferred.callback(None)
+            return
+        else:
+            return
+        d.addCallbacks(lambda s: self._send_next_prompt() if s is True else None,
+                       self.finished_deferred.errback)
 
     def _check_file_name(self, file_name):
         def check_file_threaded():
             f = open(file_name)
             f.close()
             self.file_name = file_name
+            return True
         return threads.deferToThread(check_file_threaded)
 
-    def _get_next_prompt(self):
+    def _get_new_address(self):
+        d = self.wallet.get_new_address()
+
+        def set_address(address):
+            self.key_fee_address = address
+            return True
+
+        d.addCallback(set_address)
+        return d
+
+    def _send_next_prompt(self):
+        prompt = None
         if self.file_name is None:
-            return "File name: "
-        if self.title is None:
-            return "Title: "
-        if self.publish_name is None:
-            return "Publish to: lbry://"
-        if self.bid_amount is None:
-            return "Bid amount for published name: "
-        if self.key_fee is None:
-            return "Decryption key fee: "
-        if self.key_fee_address_chosen is False or self.key_fee > 0:
-            return "Decryption key fee sent to (leave blank for a new address): "
-        if self.description is None:
-            return "Description: "
-        if self.verified is None:
-            return self._get_verification_prompt()
+            prompt = "File name: "
+        elif self.title is None:
+            prompt = "Title: "
+        elif self.publish_name is None:
+            prompt = "Publish to: lbry://"
+        elif self.bid_amount is None:
+            prompt = "Bid amount for published name in LBC: "
+        elif self.key_fee is None:
+            prompt = "Decryption key fee in LBC: "
+        elif self.key_fee_address_chosen is False and self.key_fee > 0:
+            prompt = "Decryption key fee sent to (leave blank for a new address): "
+        elif self.description is None:
+            prompt = "Description: "
+        elif self.verified is False:
+            prompt = self._get_verification_prompt()
+        if prompt is not None:
+            self.console.send(prompt)
 
     def _get_verification_prompt(self):
         v_string = "\nPlease review the following details.\n\n"
         v_string += "File name: %s\n" % str(self.file_name)
         v_string += "Title: %s\n" % str(self.title)
         v_string += "Published to: lbry://%s\n" % str(self.publish_name)
-        v_string += "Bid amount: %s\n" % str(self.bid_amount)
+        v_string += "Bid amount: %s LBC\n" % str(self.bid_amount)
         v_string += "Fee for decryption key: %s LBC\n" % str(self.key_fee)
         if self.key_fee > 0:
             v_string += "Decryption key address: %s\n" % str(self.key_fee_address)
+        v_string += "Description: %s\n" % str(self.description)
         v_string += "Is this correct? (y/n): "
         return v_string
 
+    def set_status(self, lbry_file_downloader, stream_hash):
+        self.lbry_file = lbry_file_downloader
+        d = self.lbry_file_manager.change_lbry_file_status(stream_hash,
+                                                           ManagedLBRYFileDownloader.STATUS_FINISHED)
+        d.addCallback(lambda _: lbry_file_downloader.restore())
+        return d
+
+    def add_to_lbry_files(self, stream_hash):
+        prm = PaymentRateManager(self.session.base_payment_rate_manager)
+        d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
+        d.addCallback(self.set_status, stream_hash)
+        return d
+
+    def _create_sd_blob(self):
+        d = publish_sd_blob(self.lbry_file_manager.stream_info_manager, self.session.blob_manager,
+                            self.lbry_file.stream_hash)
+
+        def set_sd_hash(sd_hash):
+            self.sd_hash = sd_hash
+
+        d.addCallback(set_sd_hash)
+        return d
+
+    def _claim_name(self):
+        d = self.wallet.claim_name(self.publish_name, self.sd_hash, self.bid_amount,
+                                   description=self.description, key_fee=self.key_fee,
+                                   key_fee_address=self.key_fee_address)
+
+        def set_tx_hash(tx_hash):
+            self.tx_hash = tx_hash
+
+        d.addCallback(set_tx_hash)
+        return d
+
+    def _show_result(self):
+        message = "Finished publishing %s to %s. The txid of the LBRYcrd claim is %s."
+        self.console.sendLine(message % (str(self.file_name), str(self.publish_name), str(self.tx_hash)))
+
+    def _show_publish_error(self, err):
+        message = "An error occurred publishing %s to %s. Error: %s."
+        self.console.sendLine(message % (str(self.file_name), str(self.publish_name), err.getErrorMessage()))
+
+    def _do_publish(self):
+        d = create_lbry_file(self.session, self.lbry_file_manager, self.file_name, open(self.file_name))
+        d.addCallback(self.add_to_lbry_files)
+        d.addCallback(lambda _: self._create_sd_blob())
+        d.addCallback(lambda _: self._claim_name())
+        d.addCallbacks(lambda _: self._show_result(), self._show_publish_error)
+        return d
 
 
 class PublishFactory(CommandHandlerFactory):
     control_handler_class = Publish
     is_main_command = True
     command = 'publish'
-    help = "Publish a file"
+    short_help = "Publish a file"
     full_help = "Publish a file"
 
 
@@ -1617,7 +1758,7 @@ class ModifyApplicationDefaults(RecursiveCommandHandler):
 
 class ModifyApplicationDefaultsFactory(CommandHandlerFactory):
     control_handler_class = ModifyApplicationDefaults
-    is_main_command = True
+    is_main_command = False
     command = "modify-application-defaults"
     short_help = "Modify application settings"
     full_help = "Modify application settings"
@@ -1883,7 +2024,7 @@ class ModifyServerSettings(RecursiveCommandHandler):
 
 class ModifyServerSettingsFactory(CommandHandlerFactory):
     control_handler_class = ModifyServerSettings
-    is_main_command = True
+    is_main_command = False
     command = "modify-server-settings"
     short_help = "Modify server settings"
     full_help = "Modify server settings"
@@ -1973,3 +2114,175 @@ class PeerStatsAndSettingsChooserFactory(CommandHandlerFactory):
     command = "peer-stats"
     short_help = "Show some peer statistics"
     full_help = "Show some peer statistics"
+
+
+class LBRYFileStatusModifier(CommandHandler):
+    def __init__(self, console, lbry_file, stream_info_manager, blob_manager, lbry_file_manager):
+        CommandHandler.__init__(self, console)
+        self.lbry_file = lbry_file
+        self.stream_info_manager = stream_info_manager
+        self.blob_manager = blob_manager
+        self.lbry_file_manager = lbry_file_manager
+        self.current_handler = None
+
+    def start(self):
+        d = self.lbry_file.status()
+        d.addCallback(self._show_prompt)
+
+    def handle_line(self, line):
+        if self.current_handler is None:
+            if line:
+                if line.lower() == 'd':
+                    self.current_handler = DeleteLBRYFile(self.console, self.lbry_file,
+                                                          self.stream_info_manager, self.blob_manager,
+                                                          self.lbry_file_manager)
+                elif line.lower() == 't':
+                    self.current_handler = ToggleLBRYFileRunning(self.console, self.lbry_file,
+                                                                 self.lbry_file_manager)
+                else:
+                    self.console.sendLine("Invalid selection\n")
+                    self.finished_deferred.callback(None)
+                    return
+            else:
+                self.console.sendLine("")
+                self.finished_deferred.callback(None)
+                return
+            try:
+                self.current_handler.start()
+            except Exception as e:
+                self.console.sendLine("Operation failed. Error: %s\n" % str(e))
+                import traceback
+                log.error(traceback.format_exc())
+                self.finished_deferred.callback(None)
+                return
+            self.current_handler.finished_deferred.chainDeferred(self.finished_deferred)
+        else:
+            try:
+                self.current_handler.handle_line(line)
+            except Exception as e:
+                self.console.sendLine("Operation failed. Error: %s\n" % str(e))
+                import traceback
+                log.error(traceback.format_exc())
+                self.finished_deferred.callback(None)
+
+    def _show_prompt(self, status_report):
+        self.console.sendLine("\n%s - %d chunks downloaded out of %d - %s" % (str(status_report.name),
+                                                                              status_report.num_completed,
+                                                                              status_report.num_known,
+                                                                              str(status_report.running_status)))
+        self.console.sendLine("\nTo delete this file, type 'd'. To toggle its running status, type 't'. "
+                              "Then hit enter. To do nothing, just hit enter.")
+        self.console.send("Choice: ")
+
+
+class Status(CommandHandler):
+    lbry_file_status_format = "[%d] %s - %s bytes - %s%% - %s"
+
+    def __init__(self, console, lbry_service, rate_limiter, lbry_file_manager, blob_manager):
+        CommandHandler.__init__(self, console)
+        self.lbry_service = lbry_service
+        self.rate_limiter = rate_limiter
+        self.lbry_file_manager = lbry_file_manager
+        self.blob_manager = blob_manager
+        self.chosen_lbry_file = None
+        self.current_handler = None
+
+    def start(self):
+        d = self._show_general_status()
+        d.addCallback(lambda _: self._show_lbry_file_status())
+        d.addCallback(lambda _: self._show_prompt())
+
+    def handle_line(self, line):
+        if self.current_handler is None:
+            if line:
+                try:
+                    index = int(line)
+                except ValueError:
+                    self.console.sendLine("Choice must be a number.\n")
+                    self.finished_deferred.callback(None)
+                    return
+                if index < 0 or index >= len(self.lbry_files):
+                    self.console.sendLine("Invalid choice.\n")
+                    self.finished_deferred.callback(None)
+                    return
+                self.current_handler = LBRYFileStatusModifier(self.console, self.lbry_files[index],
+                                                              self.lbry_file_manager.stream_info_manager,
+                                                              self.blob_manager, self.lbry_file_manager)
+                try:
+                    self.current_handler.start()
+                except Exception as e:
+                    self.console.sendLine("Selection failed. Error: %s\n" % str(e))
+                    import traceback
+                    log.error(traceback.format_exc())
+                    self.finished_deferred.callback(None)
+                    return
+                self.current_handler.finished_deferred.chainDeferred(self.finished_deferred)
+            else:
+                self.console.sendLine("")
+                self.finished_deferred.callback(None)
+        else:
+            try:
+                self.current_handler.handle_line(line)
+            except Exception as e:
+                self.console.sendLine("Operation failed. Error: %s\n" % str(e))
+                import traceback
+                log.error(traceback.format_exc())
+                self.finished_deferred.callback(None)
+
+    def _show_general_status(self):
+        self.console.sendLine("Total bytes uploaded: %s" % str(self.rate_limiter.total_ul_bytes))
+        self.console.sendLine("Total bytes downloaded: %s" % str(self.rate_limiter.total_dl_bytes))
+        self.console.sendLine("Server running: %s" % str(self.lbry_service.lbry_server_port is not None))
+        self.console.sendLine("Server port: %s" % str(self.lbry_service.peer_port))
+        return defer.succeed(True)
+
+    def _show_lbry_file_status(self):
+        self.lbry_files = self.lbry_file_manager.lbry_files
+        status_ds = map(lambda lbry_file: lbry_file.status(), self.lbry_files)
+        status_dl = defer.DeferredList(status_ds)
+
+        size_ds = map(lambda lbry_file: lbry_file.get_total_bytes(), self.lbry_files)
+        size_dl = defer.DeferredList(size_ds)
+
+        dl = defer.DeferredList([status_dl, size_dl])
+
+        def show_statuses(statuses):
+            status_reports = statuses[0][1]
+            sizes = statuses[1][1]
+            for i, (lbry_file, (succ1, status), (succ2, size)) in enumerate(zip(self.lbry_files, status_reports, sizes)):
+                percent_done = "unknown"
+                name = lbry_file.file_name
+                total_bytes = "unknown"
+                running_status = "unknown"
+                if succ1:
+                    percent_done = "0"
+                    if status.num_known > 0:
+                        percent = 100.0 * status.num_completed / status.num_known
+                        percent_done = "%.2f" % percent
+                    running_status = status.running_status
+                if succ2:
+                    total_bytes = "%d" % size
+                self.console.sendLine(self.lbry_file_status_format % (i, str(name),
+                                                                      total_bytes,
+                                                                      percent_done,
+                                                                      str(running_status)))
+
+        dl.addCallback(show_statuses)
+        return dl
+
+    def _show_prompt(self):
+        self.console.sendLine("\n\nTo alter the status of any file shown above, type the number next to it "
+                              "and then hit 'enter'. Otherwise, just hit 'enter'.")
+        self.console.send("Choice: ")
+
+
+class StatusFactory(CommandHandlerFactory):
+    control_handler_class = Status
+    is_main_command = True
+    command = "status"
+    short_help = "Show some basic application status"
+    full_help = "Show some basic application status\n\n" \
+                "Show files currently being downloaded, the total number of bytes " \
+                "downloaded from peers, the total number of bytes uploaded to peers, " \
+                "whether the server is running, and the port on which the server is " \
+                "running."

@@ -55,7 +55,7 @@ class ConsoleControl(basic.LineReceiver):
         for command, handler in sorted(self.command_handlers.items(), key=lambda x: x[0]):
             if handler.is_main_command is True:
                 self.sendLine(command + " - " + handler.short_help)
-        self.sendLine("help-debug - Show the full list of available commands")
+        self.sendLine("help-all - Show the full list of available commands")
         self.sendLine("")
         self.sendLine("For more information about any command type 'help <command>'")
 
@@ -93,14 +93,14 @@ class ConsoleControl(basic.LineReceiver):
                     self.sendLine(self.command_handlers[args[0]].full_help)
                     self.show_prompt()
                     return
-                if args[0] == "help-debug":
+                if args[0] == "help-all":
                     self.sendLine("Show the full list of available commands!")
                     self.show_prompt()
                     return
                 self.sendLine("Can't help you with '%s'. Sorry!" % args[0])
                 self.show_prompt()
                 return
-            elif command == "help-debug":
+            elif command == "help-all":
                 self.show_full_help()
                 self.show_prompt()
                 return

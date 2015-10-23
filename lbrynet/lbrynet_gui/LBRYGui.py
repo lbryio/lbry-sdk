@@ -462,7 +462,7 @@ class LBRYDownloader(object):
             return get_downloader_d
 
         def show_stream_status(downloader):
-            total_bytes = downloader.get_total_bytes()
+            total_bytes = downloader.get_total_bytes_cached()
             bytes_left_to_download = downloader.get_bytes_left_to_download()
             points_paid = payment_rate_manager.points_paid
             payment_rate = payment_rate_manager.get_effective_min_blob_data_payment_rate()

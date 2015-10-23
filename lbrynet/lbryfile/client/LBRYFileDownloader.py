@@ -61,6 +61,15 @@ class LBRYFileDownloader(CryptStreamDownloader):
         pass
 
     def get_total_bytes(self):
+        d = self.stream_info_manager.get_blobs_for_stream(self.stream_hash)
+
+        def calculate_size(blobs):
+            return sum([b[3] for b in blobs])
+
+        d.addCallback(calculate_size)
+        return d
+
+    def get_total_bytes_cached(self):
         if self._calculated_total_bytes is None or self._calculated_total_bytes == 0:
             if self.download_manager is None:
                 return 0

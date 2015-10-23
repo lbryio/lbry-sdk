@@ -31,8 +31,8 @@ from lbrynet.lbrynet_console.ControlHandlers import ShowLBRYFileStreamHashChoose
 from lbrynet.lbrynet_console.ControlHandlers import AddStreamFromSDFactory, AddStreamFromLBRYcrdNameFactory
 from lbrynet.lbrynet_console.ControlHandlers import ClaimNameFactory, GetNewWalletAddressFactory
 from lbrynet.lbrynet_console.ControlHandlers import ShowServerStatusFactory, ModifyServerSettingsFactory
-from lbrynet.lbrynet_console.ControlHandlers import ModifyLBRYFileOptionsChooserFactory
-from lbrynet.lbrynet_console.ControlHandlers import PeerStatsAndSettingsChooserFactory
+from lbrynet.lbrynet_console.ControlHandlers import ModifyLBRYFileOptionsChooserFactory, StatusFactory
+from lbrynet.lbrynet_console.ControlHandlers import PeerStatsAndSettingsChooserFactory, PublishFactory
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
 
 
@@ -319,7 +319,7 @@ class LBRYConsole():
             LBRYFileStatusFactory(self.lbry_file_manager),
             AddStreamFromSDFactory(self.sd_identifier, self.session.base_payment_rate_manager),
             DeleteLBRYFileChooserFactory(self.lbry_file_metadata_manager, self.session.blob_manager,
-                                        self.lbry_file_manager),
+                                         self.lbry_file_manager),
             ToggleLBRYFileRunningChooserFactory(self.lbry_file_manager),
             CreateLBRYFileFactory(self.session, self.lbry_file_manager),
             PublishStreamDescriptorChooserFactory(self.lbry_file_metadata_manager,
@@ -330,6 +330,8 @@ class LBRYConsole():
             ShowLBRYFileStreamHashChooserFactory(self.lbry_file_manager),
             ModifyLBRYFileOptionsChooserFactory(self.lbry_file_manager),
             AddStreamFromHashFactory(self.sd_identifier, self.session),
+            StatusFactory(self, self.session.rate_limiter, self.lbry_file_manager,
+                          self.session.blob_manager)
         ]
         self.add_control_handlers(handlers)
         if self.wallet_type == 'lbrycrd':
@@ -339,6 +341,7 @@ class LBRYConsole():
                 ClaimNameFactory(self.session. wallet, self.lbry_file_manager,
                                  self.session.blob_manager),
                 GetNewWalletAddressFactory(self.session.wallet),
+                PublishFactory(self.session, self.lbry_file_manager, self.session.wallet)
             ]
             self.add_control_handlers(lbrycrd_handlers)
         if self.peer_port is not None:
