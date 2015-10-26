@@ -82,7 +82,7 @@ class LBRYSettings(object):
 
         def get_rate():
             if rate_type in self.db:
-                return json.loads(self.db['rate_type'])
+                return json.loads(self.db[rate_type])
             else:
                 return None
 
