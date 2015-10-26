@@ -12,7 +12,7 @@ from lbrynet.core.Error import UnknownNameError, InvalidBlobHashError, Insuffici
 from lbrynet.core.Error import InvalidStreamInfoError
 from lbrynet.core.utils import is_valid_blobhash
 from twisted.internet import defer, threads
-#import os
+import os
 
 
 log = logging.getLogger(__name__)
@@ -1505,6 +1505,7 @@ class Publish(CommandHandler):
         self.lbry_file_manager = lbry_file_manager
         self.wallet = wallet
         self.received_file_name = False
+        self.file_path = None
         self.file_name = None
         self.title = None
         self.publish_name = None
@@ -1552,7 +1553,7 @@ class Publish(CommandHandler):
 
         if file_name is not None:
             self.received_file_name = True
-            d = self._check_file_name(file_name)
+            d = self._check_file_path(file_name)
             #d.addCallback(lambda _: set_other_fields())
             d.addCallbacks(lambda _: self._send_next_prompt(), handle_error)
         else:
@@ -1563,7 +1564,7 @@ class Publish(CommandHandler):
         if self.file_name is None:
             if self.received_file_name is False:
                 self.received_file_name = True
-                d = self._check_file_name(line)
+                d = self._check_file_path(line)
 
                 def file_name_failed(err):
                     err.trap(IOError)
@@ -1607,11 +1608,12 @@ class Publish(CommandHandler):
         d.addCallbacks(lambda s: self._send_next_prompt() if s is True else None,
                        self.finished_deferred.errback)
 
-    def _check_file_name(self, file_name):
+    def _check_file_path(self, file_path):
         def check_file_threaded():
-            f = open(file_name)
+            f = open(file_path)
             f.close()
-            self.file_name = file_name
+            self.file_path = file_path
+            self.file_name = os.path.basename(self.file_path)
             return True
         return threads.deferToThread(check_file_threaded)
 
@@ -1628,7 +1630,7 @@ class Publish(CommandHandler):
     def _send_next_prompt(self):
         prompt = None
         if self.file_name is None:
-            prompt = "File name: "
+            prompt = "Path to file: "
         elif self.title is None:
             prompt = "Title: "
         elif self.publish_name is None:
@@ -1648,6 +1650,7 @@ class Publish(CommandHandler):
 
     def _get_verification_prompt(self):
         v_string = "\nPlease review the following details.\n\n"
+        v_string += "Path to file: %s\n" % str(self.file_path)
         v_string += "File name: %s\n" % str(self.file_name)
         v_string += "Title: %s\n" % str(self.title)
         v_string += "Published to: lbry://%s\n" % str(self.publish_name)
@@ -1728,7 +1731,6 @@ class PublishFactory(CommandHandlerFactory):
                 "The decryption key fee is the amount of LBC that users will be charged " \
                 "when consuming this file. The fees will be sent to the provided key fee address.\n" \
                 "The description will be presented to users before they download the file.\n"
-
 
 
 class ModifyDefaultDataPaymentRate(ModifyPaymentRate):
