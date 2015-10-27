@@ -220,11 +220,25 @@ class LBRYConsole():
         d = self.settings.save_lbryid(self.lbryid)
         return d
 
+    def _check_config_newlines(self, config_path):
+        f = open(config_path, 'r')
+        lines = [l for l in f]
+        f.close()
+        if lines[-1][-1] != "\n":
+            f = open(config_path, 'w')
+            for l in lines:
+                if l[-1] == "\n":
+                    f.write(l)
+                else:
+                    f.write(l + "\n")
+            f.close()
+
     def _get_lbrycrd_settings(self):
         settings = {"username": "rpcuser",
                     "password": "rpcpassword",
                     "rpc_port": 8332}
         if os.path.exists(self.lbrycrd_conf):
+            self._check_config_newlines(self.lbrycrd_conf)
             lbrycrd_conf = open(self.lbrycrd_conf)
             for l in lbrycrd_conf:
                 if l.startswith("rpcuser="):
