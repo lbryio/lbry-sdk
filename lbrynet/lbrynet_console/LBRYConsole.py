@@ -247,8 +247,8 @@ class LBRYConsole():
                 lbrycrdd_path = self.lbrycrdd_path
                 if not lbrycrdd_path:
                     lbrycrdd_path = self.default_lbrycrdd_path
-            return LBRYcrdWallet(lbrycrd_options['username'], lbrycrd_options['password'], "127.0.0.1",
-                                 lbrycrd_options['rpc_port'], wallet_dir=self.lbrycrd_dir,
+            return LBRYcrdWallet(self.db_dir, lbrycrd_options['username'], lbrycrd_options['password'],
+                                 "127.0.0.1", lbrycrd_options['rpc_port'], wallet_dir=self.lbrycrd_dir,
                                  wallet_conf=self.lbrycrd_conf, lbrycrdd_path=lbrycrdd_path)
 
         def get_wallet():
@@ -331,13 +331,13 @@ class LBRYConsole():
             ModifyLBRYFileOptionsChooserFactory(self.lbry_file_manager),
             AddStreamFromHashFactory(self.sd_identifier, self.session),
             StatusFactory(self, self.session.rate_limiter, self.lbry_file_manager,
-                          self.session.blob_manager)
+                          self.session.blob_manager, self.session.wallet if self.wallet_type == 'lbrycrd' else None)
         ]
         self.add_control_handlers(handlers)
         if self.wallet_type == 'lbrycrd':
             lbrycrd_handlers = [
                 AddStreamFromLBRYcrdNameFactory(self.sd_identifier, self.session,
-                                                 self.session.wallet),
+                                                self.session.wallet),
                 ClaimNameFactory(self.session. wallet, self.lbry_file_manager,
                                  self.session.blob_manager),
                 GetNewWalletAddressFactory(self.session.wallet),

@@ -1,9 +1,11 @@
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, ILBRYWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
+from lbrynet.core.sqlite_helpers import rerun_if_locked
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
+from twisted.enterprise import adbapi
 from collections import defaultdict, deque
 from zope.interface import implements
 from decimal import Decimal
@@ -14,7 +16,6 @@ import subprocess
 import socket
 import time
 import os
-
 
 log = logging.getLogger(__name__)
 alert = logging.getLogger("lbryalert." + __name__)
@@ -40,8 +41,10 @@ class LBRYcrdWallet(object):
     """This class implements the LBRYWallet interface for the LBRYcrd payment system"""
     implements(ILBRYWallet)
 
-    def __init__(self, rpc_user, rpc_pass, rpc_url, rpc_port, wallet_dir=None, wallet_conf=None,
+    def __init__(self, db_dir, rpc_user, rpc_pass, rpc_url, rpc_port, wallet_dir=None, wallet_conf=None,
                  lbrycrdd_path=None):
+        self.db_dir = db_dir
+        self.db = None
         self.rpc_conn_string = "http://%s:%s@%s:%s" % (rpc_user, rpc_pass, rpc_url, str(rpc_port))
         self.next_manage_call = None
         self.wallet_balance = Decimal(0.0)
@@ -76,7 +79,8 @@ class LBRYcrdWallet(object):
             self.manage()
             return True
 
-        d = threads.deferToThread(make_connection)
+        d = self._open_db()
+        d.addCallback(lambda _: threads.deferToThread(make_connection))
         d.addCallback(lambda _: start_manage())
         return d
 
@@ -269,7 +273,12 @@ class LBRYcrdWallet(object):
                 for field in known_fields:
                     if field in value_dict:
                         r_dict[field] = value_dict[field]
-                return r_dict
+                if 'stream_hash' in r_dict and 'txid' in result:
+                    d = self._save_name_metadata(name, r_dict['stream_hash'], str(result['txid']))
+                else:
+                    d = defer.succeed(True)
+                d.addCallback(lambda _: r_dict)
+                return d
             return Failure(UnknownNameError(name))
 
         d = threads.deferToThread(self._get_value_for_name, name)
@@ -286,6 +295,18 @@ class LBRYcrdWallet(object):
         if key_fee_address is not None:
             value['key_fee_address'] = key_fee_address
         d = threads.deferToThread(self._claim_name, name, json.dumps(value), amount)
+
+        def _save_metadata(txid):
+            d = self._save_name_metadata(name, sd_hash, txid)
+            d.addCallback(lambda _: txid)
+            return d
+
+        d.addCallback(_save_metadata)
+        return d
+
+    def get_name_and_validity_for_sd_hash(self, sd_hash):
+        d = self._get_claim_metadata_for_sd_hash(sd_hash)
+        d.addCallback(lambda name_txid: self._get_status_of_claim(name_txid[1], name_txid[0], sd_hash) if name_txid is not None else None)
         return d
 
     def get_available_balance(self):
@@ -447,6 +468,28 @@ class LBRYcrdWallet(object):
         return str(rpc_conn.claimname(name, value, amount))
 
     @_catch_connection_error
+    def _get_status_of_claim(self, txhash, name, sd_hash):
+        rpc_conn = self._get_rpc_conn()
+        claims = rpc_conn.getclaimsfortx(txhash)
+        for claim in claims:
+            if 'in claim trie' in claim:
+                if 'name' in claim and str(claim['name']) == name and 'value' in claim:
+                    try:
+                        value_dict = json.loads(claim['value'])
+                    except ValueError:
+                        return None
+                    if 'stream_hash' in value_dict and str(value_dict['stream_hash']) == sd_hash:
+                        if 'is controlling' in claim and claim['is controlling']:
+                            return name, "valid"
+                        if claim['in claim trie']:
+                            return name, "invalid"
+                        if 'in queue' in claim and claim['in queue']:
+                            return name, "pending"
+                        return name, "unconfirmed"
+        return None
+
+
+    @_catch_connection_error
     def _rpc_stop(self):
         # check if our lbrycrdd is actually running, or if we connected to one that was already
         # running and ours failed to start
@@ -454,6 +497,24 @@ class LBRYcrdWallet(object):
             rpc_conn = self._get_rpc_conn()
             rpc_conn.stop()
             self.lbrycrdd.wait()
+
+    def _open_db(self):
+        self.db = adbapi.ConnectionPool('sqlite3', os.path.join(self.db_dir, "blockchainname.db"),
+                                        check_same_thread=False)
+        return self.db.runQuery("create table if not exists name_metadata (" +
+                                "    name text, " +
+                                "    txid text, " +
+                                "    sd_hash text)")
+
+    def _save_name_metadata(self, name, sd_hash, txid):
+        d = self.db.runQuery("insert into name_metadata values (?, ?, ?)",
+                             (name, txid, sd_hash))
+        return d
+
+    def _get_claim_metadata_for_sd_hash(self, sd_hash):
+        d = self.db.runQuery("select name, txid from name_metadata where sd_hash=?", (sd_hash,))
+        d.addCallback(lambda r: r[0] if len(r) else None)
+        return d
 
 
 class LBRYcrdAddressRequester(object):

@@ -2219,14 +2219,15 @@ class LBRYFileStatusModifier(CommandHandler):
 
 
 class Status(CommandHandler):
-    lbry_file_status_format = "[%d] %s - %s bytes - %s%% - %s"
+    lbry_file_status_format = "[%d] %s - %s bytes - %s - %s - %s%% - %s"
 
-    def __init__(self, console, lbry_service, rate_limiter, lbry_file_manager, blob_manager):
+    def __init__(self, console, lbry_service, rate_limiter, lbry_file_manager, blob_manager, wallet=None):
         CommandHandler.__init__(self, console)
         self.lbry_service = lbry_service
         self.rate_limiter = rate_limiter
         self.lbry_file_manager = lbry_file_manager
         self.blob_manager = blob_manager
+        self.wallet = wallet
         self.chosen_lbry_file = None
         self.current_handler = None
 
@@ -2279,6 +2280,13 @@ class Status(CommandHandler):
         #self.console.sendLine("Server port: %s" % str(self.lbry_service.peer_port))
         return defer.succeed(True)
 
+    def _get_name_and_validity_for_lbry_file(self, lbry_file):
+        if self.wallet is None:
+            return defer.succeed(None)
+        d = self.lbry_file_manager.stream_info_manager.get_sd_blob_hashes_for_stream(lbry_file.stream_hash)
+        d.addCallback(lambda sd_blob_hashes: self.wallet.get_name_and_validity_for_sd_hash(sd_blob_hashes[0]) if len(sd_blob_hashes) else None)
+        return d
+
     def _show_lbry_file_status(self):
         self.lbry_files = self.lbry_file_manager.lbry_files
         status_ds = map(lambda lbry_file: lbry_file.status(), self.lbry_files)
@@ -2287,14 +2295,27 @@ class Status(CommandHandler):
         size_ds = map(lambda lbry_file: lbry_file.get_total_bytes(), self.lbry_files)
         size_dl = defer.DeferredList(size_ds)
 
-        dl = defer.DeferredList([status_dl, size_dl])
+        name_validity_ds = map(self._get_name_and_validity_for_lbry_file, self.lbry_files)
+        name_validity_dl = defer.DeferredList(name_validity_ds)
+
+        dl = defer.DeferredList([status_dl, size_dl, name_validity_dl])
 
         def show_statuses(statuses):
             status_reports = statuses[0][1]
             sizes = statuses[1][1]
-            for i, (lbry_file, (succ1, status), (succ2, size)) in enumerate(zip(self.lbry_files, status_reports, sizes)):
+            name_validities = statuses[2][1]
+            for i, (lbry_file, (succ1, status), (succ2, size), (succ3, name_validity)) in enumerate(zip(self.lbry_files, status_reports, sizes, name_validities)):
                 percent_done = "unknown"
                 name = lbry_file.file_name
+                claimed_name = ""
+                claimed_name_valid = ""
+                if succ3 and name_validity:
+                    validity = name_validity[1]
+                    if validity == "valid":
+                        claimed_name_valid = ""
+                    else:
+                        claimed_name_valid = "(" + validity + ")"
+                    claimed_name = name_validity[0]
                 total_bytes = "unknown"
                 running_status = "unknown"
                 if succ1:
@@ -2305,10 +2326,10 @@ class Status(CommandHandler):
                     running_status = status.running_status
                 if succ2:
                     total_bytes = "%d" % size
-                self.console.sendLine(self.lbry_file_status_format % (i, str(name),
-                                                                      total_bytes,
-                                                                      percent_done,
-                                                                      str(running_status)))
+                self.console.sendLine(self.lbry_file_status_format % (i, str(name), total_bytes,
+                                                                      str(claimed_name_valid),
+                                                                      str(claimed_name),
+                                                                      percent_done, str(running_status)))
 
         dl.addCallback(show_statuses)
         return dl
