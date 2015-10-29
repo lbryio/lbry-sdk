@@ -220,55 +220,21 @@ class LBRYConsole():
         d = self.settings.save_lbryid(self.lbryid)
         return d
 
-    def _check_config_newlines(self, config_path):
-        f = open(config_path, 'r')
-        lines = [l for l in f]
-        f.close()
-        if lines[-1][-1] != "\n":
-            f = open(config_path, 'w')
-            for l in lines:
-                if l[-1] == "\n":
-                    f.write(l)
-                else:
-                    f.write(l + "\n")
-            f.close()
-
-    def _get_lbrycrd_settings(self):
-        settings = {"username": "rpcuser",
-                    "password": "rpcpassword",
-                    "rpc_port": 8332}
-        if os.path.exists(self.lbrycrd_conf):
-            self._check_config_newlines(self.lbrycrd_conf)
-            lbrycrd_conf = open(self.lbrycrd_conf)
-            for l in lbrycrd_conf:
-                if l.startswith("rpcuser="):
-                    settings["username"] = l[8:-1]
-                if l.startswith("rpcpassword="):
-                    settings["password"] = l[12:-1]
-                if l.startswith("rpcport="):
-                    settings["rpc_port"] = int(l[8:-1])
-        return settings
-
     def _get_session(self):
         def get_default_data_rate():
             d = self.settings.get_default_data_payment_rate()
             d.addCallback(lambda rate: {"default_data_payment_rate": rate if rate is not None else MIN_BLOB_DATA_PAYMENT_RATE})
             return d
 
-        def create_lbrycrd_wallet(lbrycrd_options):
-            lbrycrdd_path = None
-            if self.start_lbrycrdd is True:
-                lbrycrdd_path = self.lbrycrdd_path
-                if not lbrycrdd_path:
-                    lbrycrdd_path = self.default_lbrycrdd_path
-            return LBRYcrdWallet(self.db_dir, lbrycrd_options['username'], lbrycrd_options['password'],
-                                 "127.0.0.1", lbrycrd_options['rpc_port'], wallet_dir=self.lbrycrd_dir,
-                                 wallet_conf=self.lbrycrd_conf, lbrycrdd_path=lbrycrdd_path)
-
         def get_wallet():
             if self.wallet_type == "lbrycrd":
-                d = threads.deferToThread(self._get_lbrycrd_settings)
-                d.addCallback(create_lbrycrd_wallet)
+                lbrycrdd_path = None
+                if self.start_lbrycrdd is True:
+                    lbrycrdd_path = self.lbrycrdd_path
+                    if not lbrycrdd_path:
+                        lbrycrdd_path = self.default_lbrycrdd_path
+                d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.lbrycrd_dir,
+                                                wallet_conf=self.lbrycrd_conf, lbrycrdd_path=lbrycrdd_path))
             else:
                 d = defer.succeed(PTCWallet(self.db_dir))
             d.addCallback(lambda wallet: {"wallet": wallet})

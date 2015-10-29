@@ -282,19 +282,20 @@ class LBRYDownloader(object):
             lbrycrd_conf = open(self.wallet_conf)
             for l in lbrycrd_conf:
                 if l.startswith("rpcuser="):
-                    self.wallet_user = l[8:-1]
+                    self.wallet_user = l[8:].rstrip('\n')
                 if l.startswith("rpcpassword="):
-                    self.wallet_password = l[12:-1]
+                    self.wallet_password = l[12:].rstrip('\n')
                 if l.startswith("rpcport="):
-                    self.wallet_rpc_port = int(l[8:-1])
+                    self.wallet_rpc_port = int(l[8:-1].rstrip('\n'))
 
     def _get_session(self):
         lbrycrdd_path = None
         if self.start_lbrycrdd is True:
             lbrycrdd_path = self.lbrycrdd_path
-        wallet = LBRYcrdWallet(self.db_dir, self.wallet_user, self.wallet_password, "127.0.0.1",
-                               self.wallet_rpc_port, wallet_dir=self.wallet_dir,
-                               wallet_conf=self.wallet_conf, lbrycrdd_path=lbrycrdd_path)
+
+        wallet = LBRYcrdWallet(self.db_dir, wallet_dir=self.wallet_dir, wallet_conf=self.wallet_conf,
+                               lbrycrdd_path=lbrycrdd_path)
+
         peer_port = None
         if self.run_server:
             peer_port = self.peer_port

@@ -41,11 +41,10 @@ class LBRYcrdWallet(object):
     """This class implements the LBRYWallet interface for the LBRYcrd payment system"""
     implements(ILBRYWallet)
 
-    def __init__(self, db_dir, rpc_user, rpc_pass, rpc_url, rpc_port, wallet_dir=None, wallet_conf=None,
-                 lbrycrdd_path=None):
+    def __init__(self, db_dir, wallet_dir=None, wallet_conf=None, lbrycrdd_path=None):
+
         self.db_dir = db_dir
         self.db = None
-        self.rpc_conn_string = "http://%s:%s@%s:%s" % (rpc_user, rpc_pass, rpc_url, str(rpc_port))
         self.next_manage_call = None
         self.wallet_balance = Decimal(0.0)
         self.total_reserved_points = Decimal(0.0)
@@ -63,6 +62,13 @@ class LBRYcrdWallet(object):
         self.lbrycrdd = None
         self.manage_running = False
         self.lbrycrdd_path = lbrycrdd_path
+
+        settings = self.get_rpc_conf()
+        rpc_user = settings["username"]
+        rpc_pass = settings["password"]
+        rpc_port = settings["rpc_port"]
+        rpc_url = "127.0.0.1"
+        self.rpc_conn_string = "http://%s:%s@%s:%s" % (rpc_user, rpc_pass, rpc_url, str(rpc_port))
 
     def start(self):
 
@@ -314,6 +320,21 @@ class LBRYcrdWallet(object):
 
     def get_new_address(self):
         return threads.deferToThread(self._get_new_address)
+
+    def get_rpc_conf(self):
+        settings = {"username": "rpcuser",
+                    "password": "rpcpassword",
+                    "rpc_port": 8332}
+        if os.path.exists(self.wallet_conf):
+            conf = open(self.wallet_conf)
+            for l in conf:
+                if l.startswith("rpcuser="):
+                    settings["username"] = l[8:].rstrip('\n')
+                if l.startswith("rpcpassword="):
+                    settings["password"] = l[12:].rstrip('\n')
+                if l.startswith("rpcport="):
+                    settings["rpc_port"] = int(l[8:].rstrip('\n'))
+        return settings
 
     def _get_rpc_conn(self):
         return AuthServiceProxy(self.rpc_conn_string)
