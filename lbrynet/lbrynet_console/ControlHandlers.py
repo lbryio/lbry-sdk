@@ -1705,7 +1705,7 @@ class Publish(CommandHandler):
         self.console.sendLine(message % (str(self.file_name), str(self.publish_name), err.getErrorMessage()))
 
     def _do_publish(self):
-        d = create_lbry_file(self.session, self.lbry_file_manager, self.file_name, open(self.file_name))
+        d = create_lbry_file(self.session, self.lbry_file_manager, self.file_name, open(self.file_path))
         d.addCallback(self.add_to_lbry_files)
         d.addCallback(lambda _: self._create_sd_blob())
         d.addCallback(lambda _: self._claim_name())
