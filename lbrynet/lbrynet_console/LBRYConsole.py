@@ -21,6 +21,7 @@ from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 #from lbrynet.lbrylive.PaymentRateManager import LiveStreamPaymentRateManager
 from lbrynet.lbrynet_console.ControlHandlers import ApplicationStatusFactory, GetWalletBalancesFactory, ShutDownFactory
+from lbrynet.lbrynet_console.ControlHandlers import AutoFetcherFactory, ImmediateAnnounceAllBlobsFactory
 from lbrynet.lbrynet_console.ControlHandlers import LBRYFileStatusFactory, DeleteLBRYFileChooserFactory
 from lbrynet.lbrynet_console.ControlHandlers import ToggleLBRYFileRunningChooserFactory
 from lbrynet.lbrynet_console.ControlHandlers import ModifyApplicationDefaultsFactory
@@ -311,7 +312,10 @@ class LBRYConsole():
             ModifyLBRYFileOptionsChooserFactory(self.lbry_file_manager),
             AddStreamFromHashFactory(self.sd_identifier, self.session),
             StatusFactory(self, self.session.rate_limiter, self.lbry_file_manager,
-                          self.session.blob_manager, self.session.wallet if self.wallet_type == 'lbrycrd' else None)
+                          self.session.blob_manager, self.session.wallet if self.wallet_type == 'lbrycrd' else None),
+            AutoFetcherFactory(self.session, self.lbry_file_manager, self.lbry_file_metadata_manager,
+                               self.session.wallet, self.sd_identifier),
+            ImmediateAnnounceAllBlobsFactory(self.session.blob_manager)
         ]
         self.add_control_handlers(handlers)
         if self.wallet_type == 'lbrycrd':
@@ -537,3 +541,6 @@ def launch_lbry_console():
 
     reactor.addSystemEventTrigger('before', 'shutdown', console.shut_down)
     reactor.run()
+
+if __name__ == "__main__":
+    launch_lbry_console()
