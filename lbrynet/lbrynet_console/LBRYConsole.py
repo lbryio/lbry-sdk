@@ -2,6 +2,8 @@ import logging
 from lbrynet.core.Session import LBRYSession
 import os.path
 import argparse
+import requests
+import locale
 from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task, error
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
@@ -33,6 +35,7 @@ from lbrynet.lbrynet_console.ControlHandlers import ClaimNameFactory, GetNewWall
 from lbrynet.lbrynet_console.ControlHandlers import ShowServerStatusFactory, ModifyServerSettingsFactory
 from lbrynet.lbrynet_console.ControlHandlers import ModifyLBRYFileOptionsChooserFactory, StatusFactory
 from lbrynet.lbrynet_console.ControlHandlers import PeerStatsAndSettingsChooserFactory, PublishFactory
+from lbrynet.lbrynet_console.ControlHandlers import BlockchainStatusFactory
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
 
 
@@ -234,7 +237,8 @@ class LBRYConsole():
                     if not lbrycrdd_path:
                         lbrycrdd_path = self.default_lbrycrdd_path
                 d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.lbrycrd_dir,
-                                                wallet_conf=self.lbrycrd_conf, lbrycrdd_path=lbrycrdd_path))
+                                                wallet_conf=self.lbrycrd_conf,
+                                                lbrycrdd_path=lbrycrdd_path))
             else:
                 d = defer.succeed(PTCWallet(self.db_dir))
             d.addCallback(lambda wallet: {"wallet": wallet})
@@ -267,7 +271,50 @@ class LBRYConsole():
 
         dl.addCallback(lambda _: self.session.setup())
 
+        dl.addCallback(lambda _: self.check_first_run())
+
+        dl.addCallback(self._show_first_run_result)
+
         return dl
+
+    def check_first_run(self):
+        d = self.session.wallet.check_first_run()
+        d.addCallback(lambda is_first_run: self._do_first_run() if is_first_run else 0.0)
+        return d
+
+    def _do_first_run(self):
+        d = self.session.wallet.get_new_address()
+
+        def send_request(url, data):
+            r = requests.post(url, json=data)
+            if r.status_code == 200:
+                return r.json()['credits_sent']
+            return 0.0
+
+        def log_error(err):
+            log.warning("unable to request free credits. %s", err.getErrorMessage())
+            return 0.0
+
+        def request_credits(address):
+            url = "http://credreq.lbry.io/requestcredits"
+            data = {"address": address}
+            d = threads.deferToThread(send_request, url, data)
+            d.addErrback(log_error)
+            return d
+
+        d.addCallback(request_credits)
+        return d
+
+    @staticmethod
+    def _show_first_run_result(credits_received):
+        if credits_received != 0.0:
+            points_string = locale.format_string("%.2f LBC", (round(credits_received, 2),),
+                                                 grouping=True)
+            alert.info("Thank you for using LBRY! You have been given %s for free because we "
+                       "love you. Please give them a few minutes to show up while you catch up "
+                       "with our blockchain.\nTo check whether you've caught up with the blockchain, "
+                       "use the command 'get-blockchain-status'.\nDownloading some files "
+                       "may not work until you have downloaded the LBC blockchain.", points_string)
 
     def _setup_lbry_file_manager(self):
         self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.db_dir)
@@ -318,10 +365,11 @@ class LBRYConsole():
             lbrycrd_handlers = [
                 AddStreamFromLBRYcrdNameFactory(self.sd_identifier, self.session,
                                                 self.session.wallet),
-                ClaimNameFactory(self.session. wallet, self.lbry_file_manager,
+                ClaimNameFactory(self.session.wallet, self.lbry_file_manager,
                                  self.session.blob_manager),
                 GetNewWalletAddressFactory(self.session.wallet),
-                PublishFactory(self.session, self.lbry_file_manager, self.session.wallet)
+                PublishFactory(self.session, self.lbry_file_manager, self.session.wallet),
+                BlockchainStatusFactory(self.session.wallet)
             ]
             self.add_control_handlers(lbrycrd_handlers)
         if self.peer_port is not None:

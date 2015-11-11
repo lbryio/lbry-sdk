@@ -32,8 +32,6 @@ class LBRYDownloader(object):
         self.known_dht_nodes = [('104.236.42.182', 4000)]
         self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrydownloader")
         self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
-        self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
-        self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.peer_port = 3333
         self.dht_node_port = 4444
         self.run_server = True
@@ -42,8 +40,10 @@ class LBRYDownloader(object):
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
             self.download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
+            self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrycrd")
         else:
             self.download_directory = os.getcwd()
+        self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.wallet_user = None
         self.wallet_password = None
         self.sd_identifier = StreamDescriptorIdentifier()
@@ -267,26 +267,26 @@ class LBRYDownloader(object):
         if not os.path.exists(self.blobfile_dir):
             os.makedirs(self.blobfile_dir)
             log.debug("Created the data directory: %s", str(self.blobfile_dir))
-        if not os.path.exists(self.wallet_dir):
-            os.makedirs(self.wallet_dir)
-        if not os.path.exists(self.wallet_conf):
-            lbrycrd_conf = open(self.wallet_conf, mode='w')
-            self.wallet_user = "rpcuser"
-            lbrycrd_conf.write("rpcuser=%s\n" % self.wallet_user)
-            self.wallet_password = binascii.hexlify(Random.new().read(20))
-            lbrycrd_conf.write("rpcpassword=%s\n" % self.wallet_password)
-            lbrycrd_conf.write("server=1\n")
-            lbrycrd_conf.close()
-            self.first_run = True
-        else:
-            lbrycrd_conf = open(self.wallet_conf)
-            for l in lbrycrd_conf:
-                if l.startswith("rpcuser="):
-                    self.wallet_user = l[8:].rstrip('\n')
-                if l.startswith("rpcpassword="):
-                    self.wallet_password = l[12:].rstrip('\n')
-                if l.startswith("rpcport="):
-                    self.wallet_rpc_port = int(l[8:-1].rstrip('\n'))
+        if os.name == "nt":
+            if not os.path.exists(self.wallet_dir):
+                os.makedirs(self.wallet_dir)
+            if not os.path.exists(self.wallet_conf):
+                lbrycrd_conf = open(self.wallet_conf, mode='w')
+                self.wallet_user = "rpcuser"
+                lbrycrd_conf.write("rpcuser=%s\n" % self.wallet_user)
+                self.wallet_password = binascii.hexlify(Random.new().read(20))
+                lbrycrd_conf.write("rpcpassword=%s\n" % self.wallet_password)
+                lbrycrd_conf.write("server=1\n")
+                lbrycrd_conf.close()
+            else:
+                lbrycrd_conf = open(self.wallet_conf)
+                for l in lbrycrd_conf:
+                    if l.startswith("rpcuser="):
+                        self.wallet_user = l[8:].rstrip('\n')
+                    if l.startswith("rpcpassword="):
+                        self.wallet_password = l[12:].rstrip('\n')
+                    if l.startswith("rpcport="):
+                        self.wallet_rpc_port = int(l[8:-1].rstrip('\n'))
 
     def _get_session(self):
         lbrycrdd_path = None
@@ -349,30 +349,33 @@ class LBRYDownloader(object):
                                                     self.session.wallet)
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, file_opener_factory)
 
-    def do_first_run(self):
-        if self.first_run is True:
-            d = self.session.wallet.get_new_address()
+    def check_first_run(self):
+        d = self.session.wallet.check_first_run()
+        d.addCallback(lambda is_first_run: self._do_first_run() if is_first_run else 0.0)
+        return d
 
-            def send_request(url, data):
-                r = requests.post(url, json=data)
-                if r.status_code == 200:
-                    return r.json()['credits_sent']
-                return 0.0
+    def _do_first_run(self):
+        d = self.session.wallet.get_new_address()
 
-            def log_error(err):
-                log.warning("unable to request free credits. %s", err.getErrorMessage())
-                return 0.0
+        def send_request(url, data):
+            r = requests.post(url, json=data)
+            if r.status_code == 200:
+                return r.json()['credits_sent']
+            return 0.0
 
-            def request_credits(address):
-                url = "http://credreq.lbry.io/requestcredits"
-                data = {"address": address}
-                d = threads.deferToThread(send_request, url, data)
-                d.addErrback(log_error)
-                return d
+        def log_error(err):
+            log.warning("unable to request free credits. %s", err.getErrorMessage())
+            return 0.0
 
-            d.addCallback(request_credits)
+        def request_credits(address):
+            url = "http://credreq.lbry.io/requestcredits"
+            data = {"address": address}
+            d = threads.deferToThread(send_request, url, data)
+            d.addErrback(log_error)
             return d
-        return defer.succeed(0.0)
+
+        d.addCallback(request_credits)
+        return d
 
     def _resolve_name(self, uri):
         return self.session.wallet.get_stream_info_for_name(uri)

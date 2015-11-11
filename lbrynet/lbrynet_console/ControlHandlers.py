@@ -12,6 +12,7 @@ from lbrynet.core.Error import UnknownNameError, InvalidBlobHashError, Insuffici
 from lbrynet.core.Error import InvalidStreamInfoError
 from lbrynet.core.utils import is_valid_blobhash
 from twisted.internet import defer, threads
+import datetime
 import os
 
 
@@ -2350,3 +2351,49 @@ class StatusFactory(CommandHandlerFactory):
                 "or have been downloaded, and give the option to " \
                 "toggle whether the file is actively downloading or " \
                 "to remove the file."
+
+
+class BlockchainStatus(CommandHandler):
+    def __init__(self, console, wallet=None):
+        CommandHandler.__init__(self, console)
+        self.wallet = wallet
+
+    def start(self):
+        d = self.wallet.get_most_recent_blocktime()
+        d.addCallbacks(self._show_time_behind_blockchain, self._show_error)
+        d.chainDeferred(self.finished_deferred)
+        return d
+
+    def _show_time_behind_blockchain(self, best_block_time):
+        best_time = datetime.datetime.utcfromtimestamp(best_block_time)
+        diff = datetime.datetime.utcnow() - best_time
+        unit = None
+        val = None
+        if diff.days > 0:
+            if diff.days >= 7:
+                val = diff.days // 7
+                unit = "week"
+            else:
+                val = diff.days
+                unit = "day"
+        elif diff.seconds >= 60 * 90:
+            if diff.seconds >= 60 * 60:
+                val = diff.seconds // (60 * 60)
+                unit = "hour"
+        if unit is not None:
+            if val != 1:
+                unit += "s"
+            self.console.sendLine("This application is %d %s behind the LBC blockchain." % (val, unit))
+        else:
+            self.console.sendLine("This application is up to date with the LBC blockchain.")
+
+    def _show_error(self, err):
+        logging.error(err.getTraceback())
+        self.console.sendLine("Unable to determine the status of the blockchain.")
+
+
+class BlockchainStatusFactory(CommandHandlerFactory):
+    control_handler_class = BlockchainStatus
+    command = "get-blockchain-status"
+    short_help = "Show whether this application has caught up with the LBC blockchain"
+    full_help = "Show whether this applications has caught up with the LBC blockchain"

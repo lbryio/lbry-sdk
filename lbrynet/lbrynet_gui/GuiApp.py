@@ -226,7 +226,7 @@ class DownloaderApp(object):
     def _start_downloader(self):
         self.downloader = LBRYDownloader()
         d = self.downloader.start()
-        d.addCallback(lambda _: self.downloader.do_first_run())
+        d.addCallback(lambda _: self.downloader.check_first_run())
         d.addCallback(self._show_welcome_message)
         return d
 

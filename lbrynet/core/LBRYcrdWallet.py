@@ -312,7 +312,7 @@ class LBRYcrdWallet(object):
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
-        d.addCallback(lambda name_txid: self._get_status_of_claim(name_txid[1], name_txid[0], sd_hash) if name_txid is not None else None)
+        d.addCallback(lambda name_txid: threads.deferToThread(self._get_status_of_claim, name_txid[1], name_txid[0], sd_hash) if name_txid is not None else None)
         return d
 
     def get_available_balance(self):
@@ -320,6 +320,15 @@ class LBRYcrdWallet(object):
 
     def get_new_address(self):
         return threads.deferToThread(self._get_new_address)
+
+    def check_first_run(self):
+        d = threads.deferToThread(self._get_wallet_balance)
+        d.addCallback(lambda bal: threads.deferToThread(self._get_num_addresses) if bal == 0 else 2)
+        d.addCallback(lambda num_addresses: True if num_addresses <= 1 else False)
+        return d
+
+    def get_most_recent_blocktime(self):
+        return threads.deferToThread(self._get_best_block_time)
 
     def get_rpc_conf(self):
         settings = {"username": "rpcuser",
@@ -508,6 +517,20 @@ class LBRYcrdWallet(object):
                             return name, "pending"
                         return name, "unconfirmed"
         return None
+
+    @_catch_connection_error
+    def _get_num_addresses(self):
+        rpc_conn = self._get_rpc_conn()
+        return len(rpc_conn.getaddressesbyaccount(""))
+
+    @_catch_connection_error
+    def _get_best_block_time(self):
+        rpc_conn = self._get_rpc_conn()
+        best_block_hash = rpc_conn.getbestblockhash()
+        block = rpc_conn.getblock(best_block_hash)
+        if 'time' in block:
+            return block['time']
+        raise ValueError("Could not get a block time")
 
 
     @_catch_connection_error
