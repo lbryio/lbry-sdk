@@ -339,6 +339,9 @@ class LBRYcrdWallet(object):
     def _get_rpc_conn(self):
         return AuthServiceProxy(self.rpc_conn_string)
 
+    def get_rpc_conn_x(self):
+        return AuthServiceProxy(self.rpc_conn_string)
+
     def _start_daemon(self):
 
         tries = 0

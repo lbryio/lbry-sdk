@@ -2369,14 +2369,13 @@ class StatusFactory(CommandHandlerFactory):
                 "to remove the file."
 
 
-class AutoAddStream(object):
-    def __init__(self):
-        self.console = None
+class AutoAddStream(CommandHandler):
+    def __init__(self, console):
+        CommandHandler.__init__(self, console)
         self.session = None
         self.loading_metadata_deferred = None
         self.lbry_file_manager = None
         self.sd_identifier = None
-        self.finished_deferred = None
         self.metadata = None
         self.downloader = None
         self.loading_failed = False
@@ -2388,29 +2387,9 @@ class AutoAddStream(object):
 
     def start(self):
         self.console.sendLine("Started autoaddstream")
-        self.loading_metadata_deferred.addCallback(self._handle_metadata)
-        self.loading_metadata_deferred.addErrback(self._handle_load_canceled)
-        self.loading_metadata_deferred.addErrback(self._handle_load_failed)
-        self.console.sendLine("AutoAddStream starting download")
-        self._start_download()
 
     def _load_metadata(self, sd_file):
         return defer.fail(NotImplementedError())
-
-    def _handle_load_canceled(self, err):
-        err.trap(defer.CancelledError)
-        self.finished_deferred.callback(None)
-
-    def _handle_load_failed(self, err):
-        self.loading_failed = True
-        self.console.sendLine("handle load failed: " + str(err.getTraceback()))
-        log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
-        self.finished_deferred.callback(None)
-
-    def _handle_metadata(self, metadata):
-        self.console.sendLine("Metadata: " + str(metadata))
-        self.metadata = metadata
-        self.factory = self.metadata.factories[0]
 
     def _start_download(self):
         self.console.sendLine("Autoaddstream _start_download, making downloader")
@@ -2429,34 +2408,12 @@ class AutoAddStream(object):
     def _make_downloader(self):
         self.console.sendLine("making downloader, factory: " + str(self.factory))
         self.downloader = self.factory.make_downloader(self.metadata, [0.5, True], self.payment_rate_manager)
-        return defer.succeed(self.downloader)
+        return self.downloader
 
 
-class AutoAddStreamFromHash(AutoAddStream):
-    def __init__(self):
-        AutoAddStream.__init__(self)
-
-    def start(self, sd_hash):
-        self.console.sendLine("Started AutoAddStreamFromHash")
-        self.loading_metadata_deferred = download_sd_blob(self.session, sd_hash,
-                                                          self.payment_rate_manager)
-        self.loading_metadata_deferred.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        AutoAddStream.start(self)
-
-    def _handle_load_failed(self, err):
-        self.loading_failed = True
-        if err.check(InvalidBlobHashError):
-            self.finished_deferred.callback(None)
-            return
-        if err.check(InsufficientFundsError):
-            self.finished_deferred.callback(None)
-            return
-        return AutoAddStream._handle_load_failed(self, err)
-
-
-class AutoAddStreamFromLBRYcrdName(AutoAddStreamFromHash):
+class AutoAddStreamFromLBRYcrdName(AutoAddStream):
     def __init__(self, console, sd_identifier, session, wallet, lbry_file_manager):
-        AutoAddStreamFromHash.__init__(self)
+        AutoAddStream.__init__(self, console)
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
@@ -2465,30 +2422,40 @@ class AutoAddStreamFromLBRYcrdName(AutoAddStreamFromHash):
         self.name = None
         self.session = session
         self.payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager)
-        self.console = console
-        self.loading_metadata_deferred = None
+        self.loading_metadata_deferred = defer.Deferred()
         self.lbry_file_manager = lbry_file_manager
         self.sd_identifier = sd_identifier
-        self.finished_deferred = None
         self.metadata = None
         self.loading_failed = False
+        self.downloading_metadata_deferred = defer.Deferred()
+        self.resolved_name = None
+        self.description = None
+        self.key_fee = None
+        self.key_fee_address = None
+        self.stream_hash = None
 
     def start(self, name):
         self.console.sendLine("Started AutoAddStreamFromLBRYcrdName, file: " + name)
         self.name = name
-        self.loading_metadata_deferred = self._resolve_name(name)
-        self.loading_metadata_deferred.addCallback(lambda stream_hash: download_sd_blob(self.session,
-                                                                                        stream_hash,
-                                                                                        self.payment_rate_manager))
+
+        self.loading_metadata_deferred = defer.Deferred(None)
+        self.loading_metadata_deferred.addCallback(lambda _: self._resolve_name(str(name)))
+
+        #self.downloading_metadata_deferred.addCallback(lambda _: self.loading_metadata_deferred.callback(None))
+        self.loading_metadata_deferred.addCallback(lambda stream_hash: download_sd_blob(self.session, stream_hash, self.payment_rate_manager))
         self.loading_metadata_deferred.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        self.console.sendLine("Starting autoaddstream...")
-        self.loading_metadata_deferred.addCallback(AutoAddStream.start(self))
-        self.loading_metadata_deferred.addCallback(self._start_download())
+        self.loading_metadata_deferred.addCallback(self._handle_metadata)
+        #self.loading_metadata_deferred.addErrback(self._handle_load_canceled)
+        #self.loading_metadata_deferred.addErrback(self._handle_load_failed)
+
+        self.finished_deferred.addCallback(lambda _: self.loading_metadata_deferred.callback(None))
+
+        return self.finished_deferred.callback(None)
 
     def _resolve_name(self, name):
         def get_name_from_info(stream_info):
-            self.console.sendLine("1 Stream info: " + str(stream_info))
             if 'stream_hash' not in stream_info:
+                print 'InvalidStreamInfoError'
                 raise InvalidStreamInfoError(name)
             self.resolved_name = stream_info.get('name', None)
             self.description = stream_info.get('description', None)
@@ -2499,27 +2466,11 @@ class AutoAddStreamFromLBRYcrdName(AutoAddStreamFromHash):
                 self.key_fee = None
             self.key_fee_address = stream_info.get('key_fee_address', None)
             self.stream_hash = stream_info['stream_hash']
+            print "Stream info ", stream_info
             return stream_info['stream_hash']
         d = self.wallet.get_stream_info_for_name(name)
-        self.console.sendLine("2 Stream info: " + str(d))
         d.addCallback(get_name_from_info)
         return d
-
-    def _handle_load_failed(self, err):
-        self.loading_failed = True
-        if err.check(UnknownNameError):
-            if is_valid_blobhash(self.name):
-                self.loading_failed = False
-                self.loading_metadata_deferred = None
-                AutoAddStreamFromHash.start(self, self.name)
-                return
-            else:
-                self.finished_deferred.callback(None)
-                return
-        elif err.check(InvalidBlobHashError):
-            self.finished_deferred.callback(None)
-            return
-        return AutoAddStreamFromHash._handle_load_failed(self, err)
 
     def _start_download(self):
         self.console.sendLine("crd name _start_download")
@@ -2534,7 +2485,28 @@ class AutoAddStreamFromLBRYcrdName(AutoAddStreamFromHash):
                 return defer.fail(InsufficientFundsError())
             return self.wallet.send_points_to_address(reserved_points, self.key_fee)
         self.console.sendLine("Sent key fee" + str(self.key_fee_address) + " | " + str(self.key_fee))
-        return defer.succeed(True)
+        return defer.succeed(None)
+
+    def _handle_load_canceled(self, err):
+        err.trap(defer.CancelledError)
+        self.finished_deferred.callback(None)
+
+    def _handle_load_failed(self, err):
+        self.loading_failed = True
+        self.console.sendLine("handle load failed: " + str(err.getTraceback()))
+        log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
+        self.finished_deferred.callback(None)
+
+    def _handle_metadata(self, metadata):
+        self.console.sendLine("Metadata: " + str(metadata))
+        self.metadata = metadata
+        self.factory = self.metadata.factories[0]
+        self.console.sendLine("Factory: " + str(self.factory))
+
+        self.finished_deferred.addCallback(lambda _: self.console.sendLine("Factoryx " + str(self.factory)))
+        self.finished_deferred.addCallback(lambda _: AutoAddStream.start(self))
+        self.finished_deferred.addCallback(lambda _: self._start_download())
+        self.finished_deferred.addCallback(lambda _: AutoAddStream._start_download(self))
 
 
 class AutoFetcher(CommandHandler):
@@ -2572,7 +2544,6 @@ class AutoFetcher(CommandHandler):
                             #self.console.sendLine(str(claim))
                             self.console.sendLine("lbry://" + str(claim['name']) + " | stream hash: " +
                                                         str(json.loads(claim['value'])['stream_hash']))
-                            self.console.sendLine(str(json.loads(claim['value'])))
                             rtn.append(claim['name'])
                             self.seen.append(claim)
             if not len(rtn):
@@ -2586,14 +2557,13 @@ class AutoFetcher(CommandHandler):
 
     def _download_claims(self, claims):
         for claim in claims:
-            # stream = AutoAddStreamFromHash(self.console, self.sd_identifier,
-            #                                 self.session, self.lbry_file_manager, stream_hash,
-            #                                 description, key_fee, key_fee_address)
+            download = defer.Deferred()
             stream = AutoAddStreamFromLBRYcrdName(self.console, self.sd_identifier, self.session,
                                                   self.wallet, self.lbry_file_manager)
-            d = threads.deferToThread(stream.start(str(claim)))
+            download.addCallback(lambda _: stream.start(str(claim)))
+            download.callback(None)
             self.console.sendLine("Download complete")
-        return defer.succeed(d)
+        return defer.succeed(None)
 
 
 class AutoFetcherFactory(CommandHandlerFactory):
