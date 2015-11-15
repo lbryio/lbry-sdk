@@ -417,7 +417,6 @@ class AddStream(CommandHandler):
         self.payment_rate_manager = PaymentRateManager(base_payment_rate_manager)
 
     def start(self):
-        self.console.sendLine("Starting addstream...")
         self.console.sendLine(self.cancel_prompt)
         self.loading_metadata_deferred.addCallback(self._handle_metadata)
         self.loading_metadata_deferred.addErrback(self._handle_load_canceled)
@@ -652,7 +651,6 @@ class AddStream(CommandHandler):
         return choice_string
 
     def _start_download(self):
-        print 'Starting addstream._start_download'
         d = self._make_downloader()
         d.addCallback(lambda stream_downloader: stream_downloader.start())
         d.addErrback(self._handle_download_error)
@@ -666,7 +664,6 @@ class AddStream(CommandHandler):
             self.console.sendLine("An unexpected error has caused the download to stop. See console.log for details.")
 
     def _make_downloader(self):
-        print 'Making downloader'
         return self.factory.make_downloader(self.metadata, self.options_chosen,
                                             self.payment_rate_manager)
 
@@ -698,7 +695,6 @@ class AddStreamFromHash(AddStream):
         self.session = session
 
     def start(self, sd_hash):
-        print 'Starting addstreamfromhash'
         self.loading_metadata_deferred = download_sd_blob(self.session, sd_hash,
                                                           self.payment_rate_manager)
         self.loading_metadata_deferred.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
@@ -742,14 +738,12 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
         self.name = None
 
     def start(self, name):
-        print 'Starting addstreamfromlbrycrdname'
         self.name = name
         self.loading_metadata_deferred = self._resolve_name(name)
         self.loading_metadata_deferred.addCallback(lambda stream_hash: download_sd_blob(self.session,
                                                                                         stream_hash,
                                                                                         self.payment_rate_manager))
         self.loading_metadata_deferred.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        print 'Sending addstream.start from crdname'
         AddStream.start(self)
 
     def _resolve_name(self, name):
@@ -767,7 +761,6 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
             return stream_info['stream_hash']
         d = self.wallet.get_stream_info_for_name(name)
         d.addCallback(get_name_from_info)
-        print 'Resolved name'
         return d
 
     def _handle_load_failed(self, err):
@@ -789,13 +782,11 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
         return AddStreamFromHash._handle_load_failed(self, err)
 
     def _start_download(self):
-        print 'Startind download in addstreamlbrycrd'
         d = self._pay_key_fee()
         d.addCallback(lambda _: AddStream._start_download(self))
         return d
 
     def _pay_key_fee(self):
-        print 'Paying kee fee'
         if self.key_fee is not None and self.key_fee_address is not None:
             reserved_points = self.wallet.reserve_points(self.key_fee_address, self.key_fee)
             if reserved_points is None:
