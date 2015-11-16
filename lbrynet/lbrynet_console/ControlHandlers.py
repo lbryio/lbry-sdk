@@ -2504,6 +2504,8 @@ class AutoFetcher(CommandHandler):
         self.seen = []
         self.lastbestblock = None
         self.rpc_conn = self.wallet.get_rpc_conn_x()
+        self.search = None
+        self.first_run = True
 
     def start(self):
         #TODO add a stop function
@@ -2511,8 +2513,12 @@ class AutoFetcher(CommandHandler):
         #TODO first search through the nametrie before monitoring live updates
         #TODO load previously downloaded streams
 
-        search = LoopingCall(self._looped_search)
-        search.start(10)
+        self.search = LoopingCall(self._looped_search)
+        self.search.start(1)
+        self.finished_deferred.callback(None)
+
+    def stop(self):
+        self.search.stop()
         self.finished_deferred.callback(None)
 
     def _get_names(self):
@@ -2524,7 +2530,11 @@ class AutoFetcher(CommandHandler):
             transactions = [self.rpc_conn.decoderawtransaction(self.rpc_conn.getrawtransaction(t)) for t in txids]
             for t in transactions:
                 claims = self.rpc_conn.getclaimsfortx(t['txid'])
-                #claims = self.rpc_conn.getclaimsfortx("c3684bd587856ba5cc38c4afdbcd2c6efc60cb2d1ed21188485ea58048b419a8")
+                # uncomment to make it download wonderfullife on startup
+                # if self.first_run:
+                #     claims = self.rpc_conn.getclaimsfortx("c3684bd587856ba5cc38c4afdbcd2c6efc60cb2d1ed21188485ea58048b419a8")
+                #     self.first_run = False
+
                 if claims:
                     for claim in claims:
                         if claim not in self.seen:
@@ -2533,8 +2543,8 @@ class AutoFetcher(CommandHandler):
                             rtn.append(claim['name'])
                             self.seen.append(claim)
                 else:
-                    #self.console.sendLine("No new claims in block #" + str(block['height']))
-                    pass
+                    self.console.sendLine("No new claims in block #" + str(block['height']))
+                    #pass
 
         self.lastbestblock = c
 
