@@ -66,6 +66,7 @@ class LBRYConsole():
             self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         if not self.lbrycrd_conf:
             self.lbrycrd_conf = os.path.join(self.lbrycrd_dir, "lbrycrd.conf")
+        self.autofetcher_conf = os.path.join(self.lbrycrd_dir, "autofetcher.conf")
         self.lbrycrdd_path = lbrycrdd_path
         self.default_lbrycrdd_path = "./lbrycrdd"
         self.start_lbrycrdd = start_lbrycrdd
@@ -104,7 +105,7 @@ class LBRYConsole():
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_lbry_file_manager())
         d.addCallback(lambda _: self._setup_lbry_file_opener())
-        d.addCallback(lambda _: self._get_autofetcher()),
+        d.addCallback(lambda _: self._get_autofetcher())
         d.addCallback(lambda _: self._setup_control_handlers())
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._load_plugins())
@@ -115,7 +116,7 @@ class LBRYConsole():
 
     def _get_autofetcher(self):
         self.autofetcher = AutoFetcher(self.session, self.lbry_file_manager, self.lbry_file_metadata_manager,
-                                       self.session.wallet, self.sd_identifier)
+                                       self.session.wallet, self.sd_identifier, self.autofetcher_conf)
 
     def _show_start_error(self, error):
         print error.getErrorMessage()
