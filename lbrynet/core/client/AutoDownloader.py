@@ -11,7 +11,7 @@ from lbrynet.core.StreamDescriptor import download_sd_blob
 log = logging.getLogger(__name__)
 
 
-class AutoAddStreamFromLBRYcrdName(object):
+class AutoAddStream(object):
     def __init__(self, console, sd_identifier, session, wallet, lbry_file_manager, max_key_fee):
         self.finished_deferred = defer.Deferred(None)
         self.console = console
@@ -193,7 +193,7 @@ class AutoFetcher(object):
         if claims:
             for claim in claims:
                 download = defer.Deferred()
-                stream = AutoAddStreamFromLBRYcrdName(self.console, self.sd_identifier, self.session,
+                stream = AutoAddStream(self.console, self.sd_identifier, self.session,
                                                       self.wallet, self.lbry_file_manager, self.max_key_fee)
                 download.addCallback(lambda _: stream.start(claim))
                 download.callback(None)
