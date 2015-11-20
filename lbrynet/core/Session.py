@@ -148,7 +148,8 @@ class LBRYSession(object):
             ds.append(defer.maybeDeferred(self.wallet.stop))
         if self.blob_manager is not None:
             ds.append(defer.maybeDeferred(self.blob_manager.stop))
-        ds.append(defer.maybeDeferred(self._unset_upnp))
+        if self.use_upnp is True:
+            ds.append(defer.maybeDeferred(self._unset_upnp))
         return defer.DeferredList(ds)
 
     def _try_upnp(self):
