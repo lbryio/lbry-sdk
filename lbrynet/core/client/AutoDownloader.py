@@ -52,9 +52,10 @@ class AutoAddStream(object):
         self.stream_hash = json.loads(self.stream_info['value'])['stream_hash']
 
         if self.key_fee > self.max_key_fee:
-            self.console.sendLine("Key fee (" + str(self.key_fee) + ") above limit of " + str(
-                self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name))
-            return self.finished_deferred.callback(None)
+            pass
+            # self.console.sendLine("Key fee (" + str(self.key_fee) + ") above limit of " + str(
+            #     self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name))
+            # return self.finished_deferred.callback(None)
 
         self.loading_metadata_deferred = defer.Deferred(None)
         self.loading_metadata_deferred.addCallback(
@@ -69,7 +70,8 @@ class AutoAddStream(object):
         return self.finished_deferred.callback(None)
 
     def _start_download(self):
-        d = self._pay_key_fee()
+        #d = self._pay_key_fee()
+        d = defer.Deferred(None)
         d.addCallback(lambda _: self._make_downloader())
         d.addCallback(lambda stream_downloader: stream_downloader.start())
         d.addErrback(self._handle_download_error)
