@@ -384,7 +384,7 @@ class LBRYcrdWallet(object):
             except (socket.error, JSONRPCException):
                 tries += 1
                 log.warning("Failed to connect to lbrycrdd.")
-                if tries < 5:
+                if tries < 6:
                     time.sleep(2 ** tries)
                     log.warning("Trying again in %d seconds", 2 ** tries)
                 else:
