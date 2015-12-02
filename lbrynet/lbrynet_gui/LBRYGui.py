@@ -43,6 +43,7 @@ class LBRYDownloader(object):
             self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrycrd")
         else:
             self.download_directory = os.getcwd()
+            self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.wallet_user = None
         self.wallet_password = None
@@ -56,7 +57,8 @@ class LBRYDownloader(object):
         if os.name == "nt":
             self.lbrycrdd_path = "lbrycrdd.exe"
         else:
-            self.lbrycrdd_path = "./lbrycrdd"
+            self.lbrycrdd_path = None
+            self.default_lbrycrdd_path = "./lbrycrdd"
         self.delete_blobs_on_remove = True
         self.blob_request_payment_rate_manager = None
 
@@ -122,7 +124,7 @@ class LBRYDownloader(object):
             if not os.path.exists(lbrycrdd_path_conf_path):
                 return ""
             lbrycrdd_path_conf = open(lbrycrdd_path_conf_path)
-            lines = lbrycrdd_path_conf.readline()
+            lines = lbrycrdd_path_conf.readlines()
             return lines
 
         d = threads.deferToThread(get_lbrycrdd_path_conf_file)
@@ -292,6 +294,8 @@ class LBRYDownloader(object):
         lbrycrdd_path = None
         if self.start_lbrycrdd is True:
             lbrycrdd_path = self.lbrycrdd_path
+            if not lbrycrdd_path:
+                lbrycrdd_path = self.default_lbrycrdd_path
 
         wallet = LBRYcrdWallet(self.db_dir, wallet_dir=self.wallet_dir, wallet_conf=self.wallet_conf,
                                lbrycrdd_path=lbrycrdd_path)
