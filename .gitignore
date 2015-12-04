@@ -1,1 +1,15 @@
 *.pyc
+
+*.xml
+
+.idea/.name
+
+*.iml
+
+*.log
+
+*.txt
+
+lbrynet.egg-info/PKG-INFO
+
+*.egg
