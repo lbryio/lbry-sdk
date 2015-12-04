@@ -842,7 +842,7 @@ class LBRYFileChooser(RecursiveCommandHandler):
     def _get_control_handler_factories(self):
         control_handler_factories = []
         for lbry_file in self.lbry_file_manager.lbry_files:
-            control_handler_factories.append(self.factory_class(lbry_file, *self.args))
+            control_handler_factories.append(self.factory_class(self.console, lbry_file, *self.args))
         return control_handler_factories
 
 
@@ -2454,4 +2454,3 @@ class BlockchainStatusFactory(CommandHandlerFactory):
     command = "get-blockchain-status"
     short_help = "Show whether this application has caught up with the LBC blockchain"
     full_help = "Show whether this applications has caught up with the LBC blockchain"
-

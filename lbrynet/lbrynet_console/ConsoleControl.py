@@ -12,6 +12,8 @@ class ConsoleControl(basic.LineReceiver):
     def __init__(self):
         self.connected = False
         self.buffer = []
+        self.command_handlers = {}
+        self.current_handler = None
 
     def start(self, command_handlers):
         self.command_handlers = {h.command: h for h in command_handlers}
@@ -83,6 +85,8 @@ class ConsoleControl(basic.LineReceiver):
         self.show_prompt()
 
     def lineReceived(self, line):
+        if not self.command_handlers:
+            return
         if self.current_handler is None:
             words = line.split()
             if len(words) == 0:
