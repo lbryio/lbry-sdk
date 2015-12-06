@@ -47,4 +47,4 @@ Send all support requests to jimmy@lbry.io
 
 ## License
 
-See [LICENSE](LICENSE.md)
+See [LICENSE](LICENSE)
