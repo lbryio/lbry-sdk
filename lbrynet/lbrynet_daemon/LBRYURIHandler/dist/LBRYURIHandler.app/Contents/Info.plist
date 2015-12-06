@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleDisplayName</key>
+	<string>LBRYURIHandler</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeOSTypes</key>
+			<array>
+				<string>****</string>
+				<string>fold</string>
+				<string>disk</string>
+			</array>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+		</dict>
+	</array>
+	<key>CFBundleExecutable</key>
+	<string>LBRYURIHandler</string>
+
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLName</key>
+        <string>LBRYURIHandler</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>lbry</string>
+        </array>
+    </dict>
+</array>
+<key>NSUIElement</key>
+<true/>
+
+	<key>CFBundleIconFile</key>
+	<string>PythonApplet.icns</string>
+	<key>CFBundleIdentifier</key>
+	<string>org.pythonmac.unspecified.LBRYURIHandler</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>LBRYURIHandler</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.0</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>0.0.0</string>
+	<key>LSHasLocalizedDisplayName</key>
+	<false/>
+	<key>NSAppleScriptEnabled</key>
+	<false/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright not specified</string>
+	<key>NSMainNibFile</key>
+	<string>MainMenu</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>PyMainFileNames</key>
+	<array>
+		<string>__boot__</string>
+	</array>
+	<key>PyOptions</key>
+	<dict>
+		<key>alias</key>
+		<false/>
+		<key>argv_emulation</key>
+		<true/>
+		<key>emulate_shell_environment</key>
+		<false/>
+		<key>no_chdir</key>
+		<false/>
+		<key>prefer_ppc</key>
+		<false/>
+		<key>site_packages</key>
+		<false/>
+		<key>use_faulthandler</key>
+		<false/>
+		<key>use_pythonpath</key>
+		<false/>
+		<key>verbose</key>
+		<false/>
+	</dict>
+	<key>PyResourcePackages</key>
+	<array>
+	</array>
+	<key>PyRuntimeLocations</key>
+	<array>
+		<string>@executable_path/../Frameworks/Python.framework/Versions/2.7/Python</string>
+	</array>
+	<key>PythonInfoDict</key>
+	<dict>
+		<key>PythonExecutable</key>
+		<string>/Library/Frameworks/Python.framework/Versions/2.7/Resources/Python.app/Contents/MacOS/Python</string>
+		<key>PythonLongVersion</key>
+		<string>2.7.10 (v2.7.10:15c95b7d81dc, May 23 2015, 09:33:12) 
+[GCC 4.2.1 (Apple Inc. build 5666) (dot 3)]</string>
+		<key>PythonShortVersion</key>
+		<string>2.7</string>
+		<key>py2app</key>
+		<dict>
+			<key>alias</key>
+			<false/>
+			<key>template</key>
+			<string>app</string>
+			<key>version</key>
+			<string>0.9</string>
+		</dict>
+	</dict>
+</dict>
+</plist>
