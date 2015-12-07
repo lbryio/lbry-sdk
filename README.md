@@ -28,11 +28,11 @@ must first obtain the 'stream descriptor' and then may open it with his 'lbrynet
 download all of the chunks by locating peers with the chunks via the DHT, and then combine the
 chunks into the original file, according to the metadata included in the 'stream descriptor'.
 
-To install and use this client, see INSTALL and RUNNING
+To install and use this client, see [INSTALL](INSTALL.md) and [RUNNING](RUNNING.md)
 
 ## Installation
 
-See INSTALL
+See [INSTALL](INSTALL.md)
 
 ## Developers
 
@@ -47,4 +47,4 @@ Send all support requests to jimmy@lbry.io
 
 ## License
 
-See LICENSE
+See [LICENSE](LICENSE)
