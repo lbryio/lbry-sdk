@@ -352,10 +352,10 @@ class AutoFetcher(object):
                 if l.startswith("maxkey="):
                     settings["maxkey"] = float(l[7:].rstrip('\n'))
         else:
-            self.console.sendLine("Autofetcher using default max key price of 0.0")
-            self.console.sendLine("To change this create the file:")
-            self.console.sendLine(str(self.autofetcher_conf))
-            self.console.sendLine("Example contents of conf file:")
-            self.console.sendLine("maxkey=1.0")
+            print "Autofetcher using default max key price of 0.0"
+            print "To change this create the file:"
+            print str(self.autofetcher_conf)
+            print "Example contents of conf file:"
+            print "maxkey=1.0"
 
         self.max_key_fee = settings["maxkey"]
