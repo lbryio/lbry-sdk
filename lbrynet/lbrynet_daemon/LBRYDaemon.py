@@ -242,9 +242,15 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Get downloads
         """
 
-        downloads = [{'stream_hash': stream.stream_hash,
-                        'path': os.path.join(stream.downloader.download_directory, stream.downloader.file_name)}
-                        for stream in self.download_deferreds]
+        downloads = []
+
+        for stream in self.download_deferreds:
+            try:
+                downloads.append({'stream_hash': stream.stream_hash,
+                        'path': os.path.join(stream.downloader.download_directory, stream.downloader.file_name)})
+            except:
+                pass
+
         return downloads
 
     def xmlrpc_download_name(self, name):
