@@ -46,7 +46,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.sd_identifier = StreamDescriptorIdentifier()
             self.stream_info_manager = TempLBRYFileMetadataManager()
             self.wallet_rpc_port = 8332
-            self.download_deferreds = []
+            self.downloads = []
             self.stream_frames = []
             self.default_blob_data_payment_rate = MIN_BLOB_DATA_PAYMENT_RATE
             self.use_upnp = True
@@ -64,6 +64,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
             self.lbrycrd_conf = os.path.join(self.lbrycrd_dir, "lbrycrd.conf")
             self.rpc_conn = None
+            self.files = []
             return defer.succeed(None)
 
         d = defer.Deferred()
@@ -208,7 +209,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
-    def xmlrpc_getbalance(self):
+    def xmlrpc_get_balance(self):
         """
         Get LBC balance
         """
@@ -233,6 +234,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         d = defer.Deferred()
         d.addCallback(lambda _: self.session.wallet.get_stream_info_for_name(name))
+        d.addErrback(lambda _: 'UnknownNameError')
         d.addCallback(_disp)
         d.callback(None)
         return d
@@ -244,7 +246,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         downloads = []
 
-        for stream in self.download_deferreds:
+        for stream in self.downloads:
             try:
                 downloads.append({'stream_hash': stream.stream_hash,
                         'path': os.path.join(stream.downloader.download_directory, stream.downloader.file_name)})
@@ -260,23 +262,34 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         def _disp():
             try:
-                stream = self.download_deferreds[-1]
+                stream = self.downloads[-1]
                 print '[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash)
                 return defer.succeed(None)
             except:
                 pass
 
-        stream = GetStream(None, self.sd_identifier, self.session, self.session.wallet,
-                               self.lbry_file_manager, 25.0, console_on=False, pay_key=True)
-        self.download_deferreds.append(stream)
+        stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager, 25.0)
+        self.downloads.append(stream)
 
-        d = defer.Deferred()
-        d.addCallback(lambda _: self.session.wallet.get_stream_info_for_name(name))
+        d = self.session.wallet.get_stream_info_for_name(name)
         d.addCallback(lambda stream_info: stream.start(stream_info))
         d.addCallback(lambda _: _disp())
-        d.callback(None)
-        msg = {'ts': datetime.now(),'name': name}
-        return defer.succeed(str(msg))
+        # d.addCallback(lambda _: self.files.append({'name': name, 'stream_hash': stream.stream_hash,
+        #                  'path': os.path.join(stream.downloader.download_directory, stream.downloader.file_name)}))
+        d.addCallback(lambda _: {'ts': datetime.now(),'name': name})
+        d.addErrback(lambda _: 'UnknownNameError')
+
+        return d
+
+    def xmlrpc_path_from_name(self, name):
+        d = self.session.wallet.get_stream_info_for_name(name)
+        d.addCallback(lambda stream_info: stream_info['stream_hash'])
+        d.addCallback(lambda stream_hash: [{'stream_hash': stream.stream_hash,
+                                            'path': os.path.join(stream.downloader.download_directory,
+                                                                 stream.downloader.file_name)}
+                                           for stream in self.downloads if stream.stream_hash == stream_hash])
+        return d
+    
 
 def main():
     daemon = LBRYDaemon()

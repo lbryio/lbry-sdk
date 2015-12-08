@@ -114,12 +114,8 @@ class AutoAddStream(object):
 
 
 class GetStream(object):
-    def __init__(self, console, sd_identifier, session, wallet, lbry_file_manager, max_key_fee,
-                 console_on=True, pay_key=True):
+    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee):
         self.finished_deferred = defer.Deferred(None)
-        self.console_on = console_on
-        self.pay_key = pay_key
-        self.console = console
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
@@ -145,42 +141,23 @@ class GetStream(object):
 
     def start(self, stream_info):
         self.stream_info = stream_info
-        try:
-            if 'stream_hash' in json.loads(self.stream_info['value']):
-                self.resolved_name = self.stream_info.get('name', None)
-                self.description = json.loads(self.stream_info['value']).get('description', None)
-                try:
-                    if 'key_fee' in json.loads(self.stream_info['value']):
-                        self.key_fee = float(json.loads(self.stream_info['value'])['key_fee'])
-                except ValueError:
-                    self.key_fee = None
-                self.key_fee_address = json.loads(self.stream_info['value']).get('key_fee_address', None)
-                self.stream_hash = json.loads(self.stream_info['value'])['stream_hash']
+        if 'stream_hash' in self.stream_info.keys():
+            self.description = self.stream_info['description']
+            if 'key_fee' in self.stream_info.keys():
+                self.key_fee = float(self.stream_info['key_fee'])
+                self.key_fee_address = self.stream_info['key_fee_address']
             else:
-                raise InvalidStreamInfoError(self.stream_info)
+                self.key_fee = None
+            self.stream_hash = self.stream_info['stream_hash']
+        else:
+            raise InvalidStreamInfoError(self.stream_info)
 
-        except:
-            if 'stream_hash' in self.stream_info.keys():
-                self.description = self.stream_info['description']
-                if 'key_fee' in self.stream_info.keys():
-                    self.key_fee = float(self.stream_info['key_fee'])
-                    self.key_fee_address = self.stream_info['key_fee_address']
-                else:
-                    self.key_fee = None
-                self.stream_hash = self.stream_info['stream_hash']
-            else:
-                raise InvalidStreamInfoError(self.stream_info)
-
-        # if self.key_fee < self.max_key_fee:
-        #     if self.pay_key:
-        #         if self.console_on:
-        #             self.console.sendLine("Key fee (" + str(self.key_fee) + ") above limit of " + str(
-        #                 self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name))
-        #         return self.finished_deferred.callback(None)
-        #     else:
-        #         pass
-        # else:
-        #     pass
+        if self.key_fee > self.max_key_fee:
+            print "Key fee (" + str(self.key_fee) + ") above limit of " + str(
+                                    self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name)
+            return self.finished_deferred.callback(None)
+        else:
+            pass
 
         def _get_downloader_for_return():
             return defer.succeed(self.downloader)
@@ -192,6 +169,7 @@ class GetStream(object):
         self.loading_metadata_deferred.addCallback(self._handle_metadata)
         self.loading_metadata_deferred.addErrback(self._handle_load_canceled)
         self.loading_metadata_deferred.addErrback(self._handle_load_failed)
+        self.loading_metadata_deferred.addCallback(lambda _: self._pay_key_fee())
         self.loading_metadata_deferred.addCallback(lambda _: self._make_downloader())
         self.loading_metadata_deferred.addCallback(lambda _: self.downloader.start())
         self.loading_metadata_deferred.addErrback(self._handle_download_error)
@@ -205,9 +183,8 @@ class GetStream(object):
             reserved_points = self.wallet.reserve_points(self.key_fee_address, self.key_fee)
             if reserved_points is None:
                 return defer.fail(InsufficientFundsError())
+            print 'Key fee: ' + str(self.key_fee) + ' | ' + str(self.key_fee_address)
             return self.wallet.send_points_to_address(reserved_points, self.key_fee)
-        if self.console_on:
-            self.console.sendLine("Sent key fee" + str(self.key_fee_address) + " | " + str(self.key_fee))
         return defer.succeed(None)
 
     def _handle_load_canceled(self, err):
@@ -216,8 +193,6 @@ class GetStream(object):
 
     def _handle_load_failed(self, err):
         self.loading_failed = True
-        if self.console_on:
-            self.console.sendLine("handle load failed: " + str(err.getTraceback()))
         log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
         print 'Load Failed: ', err.getTraceback()
         self.finished_deferred.callback(None)
@@ -225,15 +200,11 @@ class GetStream(object):
     def _handle_metadata(self, metadata):
         self.metadata = metadata
         self.factory = self.metadata.factories[0]
-        return defer.succeed(None) #self._start_download()
+        return defer.succeed(None)
 
     def _handle_download_error(self, err):
-        if self.console_on:
-            if err.check(InsufficientFundsError):
-                self.console.sendLine("Download stopped due to insufficient funds.")
-            else:
-                self.console.sendLine(
-                    "Autoaddstream: An unexpected error has caused the download to stop: %s" % err.getTraceback())
+        if err.check(InsufficientFundsError):
+            print "Download stopped due to insufficient funds."
         else:
             print "Autoaddstream: An unexpected error has caused the download to stop: ", err.getTraceback()
 
