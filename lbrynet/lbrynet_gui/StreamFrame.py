@@ -56,7 +56,8 @@ class StreamFrame(object):
 
         self.name_frame = ttk.Frame(self.stream_frame_body, style="D.TFrame")
         self.name_frame.grid(sticky=tk.W + tk.E)
-        self.name_frame.grid_columnconfigure(0, weight=1)
+        self.name_frame.grid_columnconfigure(0, weight=16)
+        self.name_frame.grid_columnconfigure(1, weight=1)
 
         self.stream_frame_body.grid_columnconfigure(0, weight=1)
 
@@ -98,14 +99,16 @@ class StreamFrame(object):
         #self.show_options_button = None
 
         self.status_label = None
-        self.name_label = None
+        #self.name_label = None
+        self.name_text = None
         self.estimated_cost_frame = None
         self.bytes_downloaded_label = None
         self.button_frame = None
         self.download_buttons = []
         self.option_frames = []
         self.name_font = None
-        self.description_label = None
+        self.description_text = None
+        #self.description_label = None
         self.file_name_frame = None
         self.cost_frame = None
         self.cost_description = None
@@ -120,22 +123,72 @@ class StreamFrame(object):
         self.stream_frame.destroy()
         self.app.stream_removed()
 
+    def _resize_text(self, text_widget):
+        actual_height = text_widget.tk.call(text_widget._w, "count", "-displaylines", "0.0", "end")
+        text_widget.config(height=int(actual_height))
+
     def show_name(self, name):
         self.name_font = tkFont.Font(size=16)
-        self.name_label = ttk.Label(
-            self.name_frame, text=name, font=self.name_font
+        #self.name_label = ttk.Label(
+        #    self.name_frame, text=name, font=self.name_font
+        #)
+        #self.name_label.grid(row=0, column=0, sticky=tk.W)
+        self.name_text = tk.Text(
+            self.name_frame, font=self.name_font, wrap=tk.WORD, relief=tk.FLAT, borderwidth=0,
+            highlightthickness=0, width=1, height=1
         )
-        self.name_label.grid(row=0, column=0, sticky=tk.W)
+        self.name_text.insert(tk.INSERT, name)
+        self.name_text.config(state=tk.DISABLED)
+        self.name_text.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S)
+        self.name_text.update()
+        self._resize_text(self.name_text)
 
     def show_description(self, description):
-        if os.name == "nt":
-            wraplength = 580
-        else:
-            wraplength = 600
-        self.description_label = ttk.Label(
-            self.name_frame, text=description, wraplength=wraplength
+        #if os.name == "nt":
+        #    wraplength = 580
+        #else:
+        #    wraplength = 600
+        #self.description_label = ttk.Label(
+        #    self.name_frame, text=description, wraplength=wraplength
+        #)
+        #self.description_label.grid(row=1, column=0, sticky=tk.W)
+        self.description_text = tk.Text(
+            self.name_frame, wrap=tk.WORD, relief=tk.FLAT, borderwidth=0,
+            highlightthickness=0, width=1, height=1
         )
-        self.description_label.grid(row=1, column=0, sticky=tk.W)
+        self.description_text.insert(tk.INSERT, description)
+        self.description_text.config(state=tk.DISABLED)
+        self.description_text.grid(row=1, column=0, sticky=tk.W+tk.E+tk.N+tk.S)
+        self.description_text.update()
+        self._resize_text(self.description_text)
+
+    def show_thumbnail(self, url=None):
+        thumbnail = None
+        if url is not None:
+            import urllib2
+            import base64
+            response = urllib2.urlopen(url)
+            thumbnail_data = base64.b64encode(response.read())
+            thumbnail = tk.PhotoImage(data=thumbnail_data)
+            current_width = thumbnail.width()
+            current_height = thumbnail.height()
+            max_width = 130
+            max_height = 90
+            scale_ratio = max(1.0 * current_width / max_width, 1.0 * current_height / max_height)
+            if scale_ratio < 1:
+                scale_ratio = 1
+            else:
+                scale_ratio = int(scale_ratio + 1)
+            thumbnail = thumbnail.subsample(scale_ratio)
+        if thumbnail is not None:
+            label = ttk.Label(self.name_frame, image=thumbnail)
+            label.safekeeping = thumbnail
+            label.grid(row=0, column=1, rowspan=2, sticky=tk.E+tk.N+tk.W+tk.S)
+            label.update()
+            self.description_text.update()
+            self.name_text.update()
+            self._resize_text(self.description_text)
+            self._resize_text(self.name_text)
 
     def show_metadata_status(self, value):
         if self.status_label is None:

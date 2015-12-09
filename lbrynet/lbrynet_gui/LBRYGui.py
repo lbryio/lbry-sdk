@@ -397,6 +397,8 @@ class LBRYDownloader(object):
                 stream_frame.show_name(value['name'])
             if 'description' in value:
                 stream_frame.show_description(value['description'])
+            if 'thumbnail' in value:
+                stream_frame.show_thumbnail(value['thumbnail'])
             return value
 
         def get_sd_hash(value):
