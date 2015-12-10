@@ -275,7 +275,7 @@ class LBRYcrdWallet(object):
                     value_dict = json.loads(value)
                 except ValueError:
                     return Failure(InvalidStreamInfoError(name))
-                known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address']
+                known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address', 'thumbnail']
                 for field in known_fields:
                     if field in value_dict:
                         r_dict[field] = value_dict[field]
