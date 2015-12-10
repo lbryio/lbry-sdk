@@ -11,6 +11,7 @@ def main(args):
 
     if len(args) > 1:
         print 'Too many args', args
+
     else:
         resolved = daemon.resolve_name(str(args[0])[7:])
         daemon.download_name(str(args[0])[7:])

@@ -288,8 +288,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                                             'path': os.path.join(stream.downloader.download_directory,
                                                                  stream.downloader.file_name)}
                                            for stream in self.downloads if stream.stream_hash == stream_hash])
+        d.addErrback(lambda _: 'UnknownNameError')
         return d
-    
+
 
 def main():
     daemon = LBRYDaemon()
