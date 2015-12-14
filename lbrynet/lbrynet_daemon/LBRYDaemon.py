@@ -1,7 +1,7 @@
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.core.client.AutoDownloader import GetStream
+from lbrynet.core.client.AutoDownloader import GetStream, FetcherDaemon
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
@@ -27,6 +27,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
     def setup(self):
         def _set_vars():
+            self.fetcher = None
             self.current_db_revision = 1
             self.run_server = True
             self.session = None
@@ -67,6 +68,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.wallet_type = "lbrycrd"
             self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
             self.lbrycrd_conf = os.path.join(self.lbrycrd_dir, "lbrycrd.conf")
+            self.autofetcher_conf = os.path.join(self.lbrycrd_dir, "autofetcher.conf")
             self.rpc_conn = None
             self.files = []
             self.created_data_dir = False
@@ -86,8 +88,14 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_stream_identifier())
         d.addCallback(lambda _: self._setup_lbry_file_manager())
         d.addCallback(lambda _: self._setup_lbry_file_opener())
+        d.addCallback(lambda _: self._setup_fetcher())
         d.callback(None)
 
+        return defer.succeed(None)
+
+    def _setup_fetcher(self):
+        self.fetcher = FetcherDaemon(self.session, self.lbry_file_manager, self.lbry_file_metadata_manager,
+                                     self.session.wallet, self.sd_identifier, self.autofetcher_conf)
         return defer.succeed(None)
 
     def _setup_data_directory(self):
@@ -194,13 +202,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.rpc_conn = self.session.wallet.get_rpc_conn_x()
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
-
         dl.addCallback(combine_results)
-
         dl.addCallback(create_session)
-
         dl.addCallback(lambda _: self.session.setup())
-
         return dl
 
     def get_lbrycrdd_path(self):
@@ -254,10 +258,36 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
+    def xmlrpc_start_fetcher(self):
+        """
+        Start autofetcher
+        """
+
+        self.fetcher.start()
+
+        return str('Started autofetching')
+
+    def xmlrpc_stop_fetcher(self):
+        """
+        Start autofetcher
+        """
+
+        self.fetcher.stop()
+
+        return str('Started autofetching')
+
+    def xmlrpc_fetcher_status(self):
+        """
+        Start autofetcher
+        """
+
+        return str(self.fetcher.check_if_running())
+
     def xmlrpc_get_balance(self):
         """
         Get LBC balance
         """
+
         return str(self.session.wallet.wallet_balance)
 
     def xmlrpc_stop(self):
@@ -324,7 +354,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         # d.addCallback(lambda _: self.files.append({'name': name, 'stream_hash': stream.stream_hash,
         #                  'path': os.path.join(stream.downloader.download_directory, stream.downloader.file_name)}))
         d.addCallback(lambda _: {'ts': datetime.now(),'name': name})
-        d.addErrback(lambda _: 'UnknownNameError')
+        d.addErrback(lambda err: str(err.getTraceback()))
 
         return d
 
