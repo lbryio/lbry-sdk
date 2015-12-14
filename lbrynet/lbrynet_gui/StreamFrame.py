@@ -56,7 +56,8 @@ class StreamFrame(object):
 
         self.name_frame = ttk.Frame(self.stream_frame_body, style="D.TFrame")
         self.name_frame.grid(sticky=tk.W + tk.E)
-        self.name_frame.grid_columnconfigure(0, weight=1)
+        self.name_frame.grid_columnconfigure(0, weight=16)
+        self.name_frame.grid_columnconfigure(1, weight=1)
 
         self.stream_frame_body.grid_columnconfigure(0, weight=1)
 
@@ -69,42 +70,45 @@ class StreamFrame(object):
         self.outer_button_frame = ttk.Frame(self.stream_frame_body, style="D.TFrame")
         self.outer_button_frame.grid(sticky=tk.W + tk.E, row=4)
 
-        show_options_picture_file_name = "show_options.gif"
-        if os.name == "nt":
-            show_options_picture_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
-                                                     "lbrynet", "lbrynet_downloader_gui",
-                                                     show_options_picture_file_name)
-        else:
-            show_options_picture_file = os.path.join(os.path.dirname(__file__),
-                                                     show_options_picture_file_name)
+        #show_options_picture_file_name = "show_options.gif"
+        #if os.name == "nt":
+        #    show_options_picture_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
+        #                                             "lbrynet", "lbrynet_downloader_gui",
+        #                                             show_options_picture_file_name)
+        #else:
+        #    show_options_picture_file = os.path.join(os.path.dirname(__file__),
+        #                                             show_options_picture_file_name)
 
-        self.show_options_picture = tk.PhotoImage(
-            file=show_options_picture_file
-        )
+        #self.show_options_picture = tk.PhotoImage(
+        #    file=show_options_picture_file
+        #)
 
-        hide_options_picture_file_name = "hide_options.gif"
-        if os.name == "nt":
-            hide_options_picture_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
-                                                     "lbrynet", "lbrynet_downloader_gui",
-                                                     hide_options_picture_file_name)
-        else:
-            hide_options_picture_file = os.path.join(os.path.dirname(__file__),
-                                                     hide_options_picture_file_name)
+        #hide_options_picture_file_name = "hide_options.gif"
+        #if os.name == "nt":
+        #    hide_options_picture_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
+        #                                             "lbrynet", "lbrynet_downloader_gui",
+        #                                             hide_options_picture_file_name)
+        #else:
+        #    hide_options_picture_file = os.path.join(os.path.dirname(__file__),
+        #                                             hide_options_picture_file_name)
 
-        self.hide_options_picture = tk.PhotoImage(
-            file=hide_options_picture_file
-        )
+        #self.hide_options_picture = tk.PhotoImage(
+        #    file=hide_options_picture_file
+        #)
 
-        self.show_options_button = None
+        #self.show_options_button = None
 
         self.status_label = None
-        self.name_label = None
+        #self.name_label = None
+        self.name_text = None
+        self.estimated_cost_frame = None
         self.bytes_downloaded_label = None
         self.button_frame = None
         self.download_buttons = []
         self.option_frames = []
         self.name_font = None
-        self.description_label = None
+        self.description_text = None
+        #self.description_label = None
         self.file_name_frame = None
         self.cost_frame = None
         self.cost_description = None
@@ -119,22 +123,72 @@ class StreamFrame(object):
         self.stream_frame.destroy()
         self.app.stream_removed()
 
+    def _resize_text(self, text_widget):
+        actual_height = text_widget.tk.call(text_widget._w, "count", "-displaylines", "0.0", "end")
+        text_widget.config(height=int(actual_height))
+
     def show_name(self, name):
         self.name_font = tkFont.Font(size=16)
-        self.name_label = ttk.Label(
-            self.name_frame, text=name, font=self.name_font
+        #self.name_label = ttk.Label(
+        #    self.name_frame, text=name, font=self.name_font
+        #)
+        #self.name_label.grid(row=0, column=0, sticky=tk.W)
+        self.name_text = tk.Text(
+            self.name_frame, font=self.name_font, wrap=tk.WORD, relief=tk.FLAT, borderwidth=0,
+            highlightthickness=0, width=1, height=1
         )
-        self.name_label.grid(row=0, column=0, sticky=tk.W)
+        self.name_text.insert(tk.INSERT, name)
+        self.name_text.config(state=tk.DISABLED)
+        self.name_text.grid(row=0, column=0, sticky=tk.W+tk.E+tk.N+tk.S)
+        self.name_text.update()
+        self._resize_text(self.name_text)
 
     def show_description(self, description):
-        if os.name == "nt":
-            wraplength = 580
-        else:
-            wraplength = 600
-        self.description_label = ttk.Label(
-            self.name_frame, text=description, wraplength=wraplength
+        #if os.name == "nt":
+        #    wraplength = 580
+        #else:
+        #    wraplength = 600
+        #self.description_label = ttk.Label(
+        #    self.name_frame, text=description, wraplength=wraplength
+        #)
+        #self.description_label.grid(row=1, column=0, sticky=tk.W)
+        self.description_text = tk.Text(
+            self.name_frame, wrap=tk.WORD, relief=tk.FLAT, borderwidth=0,
+            highlightthickness=0, width=1, height=1
         )
-        self.description_label.grid(row=1, column=0, sticky=tk.W)
+        self.description_text.insert(tk.INSERT, description)
+        self.description_text.config(state=tk.DISABLED)
+        self.description_text.grid(row=1, column=0, sticky=tk.W+tk.E+tk.N+tk.S)
+        self.description_text.update()
+        self._resize_text(self.description_text)
+
+    def show_thumbnail(self, url=None):
+        thumbnail = None
+        if url is not None:
+            import urllib2
+            import base64
+            response = urllib2.urlopen(url)
+            thumbnail_data = base64.b64encode(response.read())
+            thumbnail = tk.PhotoImage(data=thumbnail_data)
+            current_width = thumbnail.width()
+            current_height = thumbnail.height()
+            max_width = 130
+            max_height = 90
+            scale_ratio = max(1.0 * current_width / max_width, 1.0 * current_height / max_height)
+            if scale_ratio < 1:
+                scale_ratio = 1
+            else:
+                scale_ratio = int(scale_ratio + 1)
+            thumbnail = thumbnail.subsample(scale_ratio)
+        if thumbnail is not None:
+            label = ttk.Label(self.name_frame, image=thumbnail)
+            label.safekeeping = thumbnail
+            label.grid(row=0, column=1, rowspan=2, sticky=tk.E+tk.N+tk.W+tk.S)
+            label.update()
+            self.description_text.update()
+            self.name_text.update()
+            self._resize_text(self.description_text)
+            self._resize_text(self.name_text)
 
     def show_metadata_status(self, value):
         if self.status_label is None:
@@ -166,7 +220,7 @@ class StreamFrame(object):
             return "%.1f %s" % (round((stream_size * 1.0 / factor), 1), units)
         return stream_size
 
-    def show_stream_metadata(self, stream_name, stream_size):
+    def show_stream_metadata(self, stream_name, stream_size, stream_cost):
         if self.status_label is not None:
             self.status_label.destroy()
 
@@ -185,6 +239,17 @@ class StreamFrame(object):
             text=" - " + stream_name,
         )
         file_name_label.grid(row=0, column=3)
+
+        self.estimated_cost_frame = ttk.Frame(self.metadata_frame, style="F.TFrame")
+        self.estimated_cost_frame.grid(row=1, column=0, sticky=tk.W)
+
+        estimated_cost_label = ttk.Label(
+            self.estimated_cost_frame,
+            text=locale.format_string("%.2f LBC",
+                                      (round(stream_cost, 2)), grouping=True),
+            foreground="red"
+        )
+        estimated_cost_label.grid(row=1, column=2)
 
         self.button_frame = ttk.Frame(self.outer_button_frame, style="E.TFrame")
         self.button_frame.grid(row=0, column=1)
@@ -309,12 +374,12 @@ class StreamFrame(object):
                 option_widget = self.get_option_widget(option.option_types[0], choice_frame)
                 option_widget.grid(row=0, column=0, sticky=tk.W)
                 f.option_widget = option_widget
-        self.show_options_button = ttk.Button(
-            self.stream_frame_body, command=self._toggle_show_options, style="Stop.TButton",
-            cursor=self.button_cursor
-        )
-        self.show_options_button.config(image=self.show_options_picture)
-        self.show_options_button.grid(sticky=tk.W, row=2, column=0)
+        #self.show_options_button = ttk.Button(
+        #    self.stream_frame_body, command=self._toggle_show_options, style="Stop.TButton",
+        #    cursor=self.button_cursor
+        #)
+        #self.show_options_button.config(image=self.show_options_picture)
+        #self.show_options_button.grid(sticky=tk.W, row=2, column=0)
 
     def _get_chosen_option(self, option_type, option_widget):
         if option_type.value == float:
@@ -337,23 +402,24 @@ class StreamFrame(object):
                 chosen_options.append(self._get_chosen_option(option_type, option_widget))
         return chosen_options
 
-    def _toggle_show_options(self):
-        if self.options_frame.winfo_ismapped():
-            self.show_options_button.config(image=self.show_options_picture)
-            self.options_frame.grid_forget()
-        else:
-            self.show_options_button.config(image=self.hide_options_picture)
-            self.options_frame.grid(sticky=tk.W + tk.E, row=3)
+    #def _toggle_show_options(self):
+    #    if self.options_frame.winfo_ismapped():
+    #        self.show_options_button.config(image=self.show_options_picture)
+    #        self.options_frame.grid_forget()
+    #    else:
+    #        self.show_options_button.config(image=self.hide_options_picture)
+    #        self.options_frame.grid(sticky=tk.W + tk.E, row=3)
 
     def show_progress(self, total_bytes, bytes_left_to_download, points_paid,
                       points_remaining):
         if self.bytes_downloaded_label is None:
             self.remove_download_buttons()
             self.button_frame.destroy()
+            self.estimated_cost_frame.destroy()
             for option, frame in self.option_frames:
                 frame.destroy()
             self.options_frame.destroy()
-            self.show_options_button.destroy()
+            #self.show_options_button.destroy()
 
             self.progress_frame = ttk.Frame(self.outer_button_frame, style="F.TFrame")
             self.progress_frame.grid(row=0, column=0, sticky=tk.W, pady=(0, 8))
@@ -365,7 +431,7 @@ class StreamFrame(object):
             self.bytes_downloaded_label.grid(row=0, column=0)
 
             self.cost_frame = ttk.Frame(self.outer_button_frame, style="F.TFrame")
-            self.cost_frame.grid(row=1, column=0, sticky=tk.W, pady=(0, 7))
+            self.cost_frame.grid(row=1, column=0, sticky=tk.W, pady=(0, 4))
 
             self.cost_label = ttk.Label(
                 self.cost_frame,

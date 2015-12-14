@@ -8,7 +8,9 @@ built into LBRYnet.
 
 on Ubuntu:
 
+```
 sudo apt-get install libgmp3-dev build-essential python-dev python-pip
+```
 
 Getting the source
 ------------------
@@ -20,15 +22,19 @@ Setting up the environment
 
 It's recommended that you use a virtualenv
 
+```
 sudo apt-get install python-virtualenv
 cd <source base directory>
 virtualenv .
 source bin/activate
+```
 
 (to deactivate the virtualenv, enter 'deactivate')
 
+```
 python setup.py install
+```
 
 this will install all of the libraries and a few applications
 
-For running the file sharing application, see RUNNING
+For running the file sharing application, see [RUNNING](RUNNING.md)
