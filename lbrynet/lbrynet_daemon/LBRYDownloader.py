@@ -11,10 +11,9 @@ from lbrynet.core.StreamDescriptor import download_sd_blob
 log = logging.getLogger(__name__)
 
 
-class AutoAddStream(object):
-    def __init__(self, console, sd_identifier, session, wallet, lbry_file_manager, max_key_fee):
+class GetStream(object):
+    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True):
         self.finished_deferred = defer.Deferred(None)
-        self.console = console
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
@@ -35,27 +34,49 @@ class AutoAddStream(object):
         self.stream_hash = None
         self.max_key_fee = max_key_fee
         self.stream_info = None
+        self.stream_info_manager = None
+        self.downloader = None
+        self.pay_key = pay_key
 
     def start(self, stream_info):
         self.stream_info = stream_info
-        if 'stream_hash' not in json.loads(self.stream_info['value']):
+        if 'stream_hash' in self.stream_info.keys():
+            self.description = self.stream_info['description']
+            if 'key_fee' in self.stream_info.keys():
+                self.key_fee = float(self.stream_info['key_fee'])
+                if 'key_fee_address' in self.stream_info.keys():
+                    self.key_fee_address = self.stream_info['key_fee_address']
+                else:
+                    self.key_fee_address = None
+            else:
+                self.key_fee = None
+                self.key_fee_address = None
+            self.stream_hash = self.stream_info['stream_hash']
+        elif 'stream_hash' in json.loads(self.stream_info['value']):
+            self.resolved_name = self.stream_info.get('name', None)
+            self.description = json.loads(self.stream_info['value']).get('description', None)
+
+            try:
+                if 'key_fee' in json.loads(self.stream_info['value']):
+                    self.key_fee = float(json.loads(self.stream_info['value'])['key_fee'])
+            except ValueError:
+                self.key_fee = None
+            self.key_fee_address = json.loads(self.stream_info['value']).get('key_fee_address', None)
+            self.stream_hash = json.loads(self.stream_info['value'])['stream_hash']
+        else:
             print 'InvalidStreamInfoError'
             raise InvalidStreamInfoError(self.stream_info)
-        self.resolved_name = self.stream_info.get('name', None)
-        self.description = json.loads(self.stream_info['value']).get('description', None)
-        try:
-            if 'key_fee' in json.loads(self.stream_info['value']):
-                self.key_fee = float(json.loads(self.stream_info['value'])['key_fee'])
-        except ValueError:
-            self.key_fee = None
-        self.key_fee_address = json.loads(self.stream_info['value']).get('key_fee_address', None)
-        self.stream_hash = json.loads(self.stream_info['value'])['stream_hash']
 
         if self.key_fee > self.max_key_fee:
+            if self.pay_key:
+                print "Key fee (" + str(self.key_fee) + ") above limit of " + str(
+                    self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name)
+                return self.finished_deferred.callback(None)
+        else:
             pass
-            # self.console.sendLine("Key fee (" + str(self.key_fee) + ") above limit of " + str(
-            #     self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name))
-            # return self.finished_deferred.callback(None)
+
+        def _get_downloader_for_return():
+            return defer.succeed(self.downloader)
 
         self.loading_metadata_deferred = defer.Deferred(None)
         self.loading_metadata_deferred.addCallback(
@@ -64,26 +85,23 @@ class AutoAddStream(object):
         self.loading_metadata_deferred.addCallback(self._handle_metadata)
         self.loading_metadata_deferred.addErrback(self._handle_load_canceled)
         self.loading_metadata_deferred.addErrback(self._handle_load_failed)
+        if self.pay_key:
+            self.loading_metadata_deferred.addCallback(lambda _: self._pay_key_fee())
+        self.loading_metadata_deferred.addCallback(lambda _: self._make_downloader())
+        self.loading_metadata_deferred.addCallback(lambda _: self.downloader.start())
+        self.loading_metadata_deferred.addErrback(self._handle_download_error)
+        self.loading_metadata_deferred.addCallback(lambda _: _get_downloader_for_return())
+        self.loading_metadata_deferred.callback(None)
 
-        self.finished_deferred.addCallback(lambda _: self.loading_metadata_deferred.callback(None))
-
-        return self.finished_deferred.callback(None)
-
-    def _start_download(self):
-        #d = self._pay_key_fee()
-        d = defer.Deferred(None)
-        d.addCallback(lambda _: self._make_downloader())
-        d.addCallback(lambda stream_downloader: stream_downloader.start())
-        d.addErrback(self._handle_download_error)
-        return d
+        return defer.succeed(None)
 
     def _pay_key_fee(self):
         if self.key_fee is not None and self.key_fee_address is not None:
             reserved_points = self.wallet.reserve_points(self.key_fee_address, self.key_fee)
             if reserved_points is None:
                 return defer.fail(InsufficientFundsError())
+            print 'Key fee: ' + str(self.key_fee) + ' | ' + str(self.key_fee_address)
             return self.wallet.send_points_to_address(reserved_points, self.key_fee)
-        self.console.sendLine("Sent key fee" + str(self.key_fee_address) + " | " + str(self.key_fee))
         return defer.succeed(None)
 
     def _handle_load_canceled(self, err):
@@ -92,32 +110,38 @@ class AutoAddStream(object):
 
     def _handle_load_failed(self, err):
         self.loading_failed = True
-        self.console.sendLine("handle load failed: " + str(err.getTraceback()))
         log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
+        print 'Load Failed: ', err.getTraceback()
         self.finished_deferred.callback(None)
 
     def _handle_metadata(self, metadata):
         self.metadata = metadata
         self.factory = self.metadata.factories[0]
-        self.finished_deferred.addCallback(lambda _: self._start_download())
+        return defer.succeed(None)
 
     def _handle_download_error(self, err):
         if err.check(InsufficientFundsError):
-            self.console.sendLine("Download stopped due to insufficient funds.")
+            print "Download stopped due to insufficient funds."
         else:
-            self.console.sendLine(
-                "Autoaddstream: An unexpected error has caused the download to stop: %s" % err.getTraceback())
+            print "Autoaddstream: An unexpected error has caused the download to stop: ", err.getTraceback()
 
     def _make_downloader(self):
+
+        def _set_downloader(downloader):
+            self.downloader = downloader
+            print "Downloading", self.stream_hash, " -->", os.path.join(self.downloader.download_directory,
+                                                                        self.downloader.file_name)
+            return self.downloader
+
         self.downloader = self.factory.make_downloader(self.metadata, [0.5, True], self.payment_rate_manager)
-        return self.downloader
+        self.downloader.addCallback(_set_downloader)
+        return defer.succeed(self.downloader)
 
 
-class AutoFetcher(object):
+class FetcherDaemon(object):
     def __init__(self, session, lbry_file_manager, lbry_file_metadata_manager, wallet, sd_identifier, autofetcher_conf):
         self.autofetcher_conf = autofetcher_conf
         self.max_key_fee = 0.0
-        self.console = None
         self.sd_identifier = sd_identifier
         self.wallet = wallet
         self.session = session
@@ -131,36 +155,28 @@ class AutoFetcher(object):
         self.is_running = False
         self._get_autofetcher_conf()
 
-    def start(self, console):
-        # TODO first search through the nametrie before monitoring live updates
-        # TODO load previously downloaded streams
-
-        self.console = console
-
+    def start(self):
         if not self.is_running:
             self.is_running = True
             self.search = LoopingCall(self._looped_search)
             self.search.start(1)
         else:
-            self.console.sendLine("Autofetcher is already running")
+            print "Autofetcher is already running"
 
-    def stop(self, console):
-        self.console = console
-
+    def stop(self):
         if self.is_running:
             self.search.stop()
             self.is_running = False
         else:
-            self.console.sendLine("Autofetcher isn't running, there's nothing to stop")
+            print "Autofetcher isn't running, there's nothing to stop"
 
-    def check_if_running(self, console):
-        self.console = console
-
+    def check_if_running(self):
         if self.is_running:
-            self.console.sendLine("Autofetcher is running")
-            self.console.sendLine("Last block hash: " + str(self.lastbestblock['bestblockhash']))
+            msg = "Autofetcher is running\n"
+            msg += "Last block hash: " + str(self.lastbestblock['bestblockhash'])
         else:
-            self.console.sendLine("Autofetcher is not running")
+            msg = "Autofetcher is not running"
+        return msg
 
     def _get_names(self):
         c = self.rpc_conn.getblockchaininfo()
@@ -172,19 +188,18 @@ class AutoFetcher(object):
             for t in transactions:
                 claims = self.rpc_conn.getclaimsfortx(t['txid'])
                 # if self.first_run:
-                #     #claims = self.rpc_conn.getclaimsfortx("96aca2c60efded5806b7336430c5987b9092ffbea9c6ed444e3bf8e008993e11")
-                #     claims = self.rpc_conn.getclaimsfortx("cc9c7f5225ecb38877e6ca7574d110b23214ac3556b9d65784065ad3a85b4f74")
+                #     # claims = self.rpc_conn.getclaimsfortx("96aca2c60efded5806b7336430c5987b9092ffbea9c6ed444e3bf8e008993e11")
+                #     # claims = self.rpc_conn.getclaimsfortx("cc9c7f5225ecb38877e6ca7574d110b23214ac3556b9d65784065ad3a85b4f74")
                 #     self.first_run = False
                 if claims:
                     for claim in claims:
                         if claim not in self.seen:
-                            self.console.sendLine("lbry://" + str(claim['name']) + " | stream hash: " +
-                                                  str(json.loads(claim['value'])['stream_hash']))
+                            msg = "[" + str(datetime.now()) + "] New claim | lbry://" + str(claim['name']) + \
+                                  " | stream hash: " + str(json.loads(claim['value'])['stream_hash'])
+                            print msg
+                            log.debug(msg)
                             rtn.append(claim)
                             self.seen.append(claim)
-                else:
-                    # self.console.sendLine("No new claims in block #" + str(block['height']))
-                    pass
 
         self.lastbestblock = c
 
@@ -195,8 +210,8 @@ class AutoFetcher(object):
         if claims:
             for claim in claims:
                 download = defer.Deferred()
-                stream = AutoAddStream(self.console, self.sd_identifier, self.session,
-                                                      self.wallet, self.lbry_file_manager, self.max_key_fee)
+                stream = GetStream(self.sd_identifier, self.session, self.wallet, self.lbry_file_manager,
+                                   self.max_key_fee, pay_key=False)
                 download.addCallback(lambda _: stream.start(claim))
                 download.callback(None)
 
