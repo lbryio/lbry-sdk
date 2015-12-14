@@ -31,7 +31,10 @@ class LBRYFileManager(object):
         self.sd_identifier = sd_identifier
         self.lbry_files = []
         self.sql_db = None
-        self.download_directory = os.getcwd()
+        if os.name == 'posix':
+            self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
+        else:
+            self.download_directory = os.getcwd()
 
     def setup(self):
         d = self._open_db()
