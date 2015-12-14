@@ -1,4 +1,3 @@
-import os
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
@@ -15,6 +14,10 @@ from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, 
 from twisted.web import xmlrpc, server
 from twisted.internet import defer, threads, reactor
 from datetime import datetime
+import logging
+import os
+
+log = logging.getLogger(__name__)
 
 
 class LBRYDaemon(xmlrpc.XMLRPC):
@@ -24,6 +27,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
     def setup(self):
         def _set_vars():
+            self.current_db_revision = 1
             self.run_server = True
             self.session = None
             self.known_dht_nodes = [('104.236.42.182', 4000)]
@@ -65,10 +69,16 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.lbrycrd_conf = os.path.join(self.lbrycrd_dir, "lbrycrd.conf")
             self.rpc_conn = None
             self.files = []
+            self.created_data_dir = False
+            if not os.path.exists(self.db_dir):
+                os.mkdir(self.db_dir)
+                self.created_data_dir = True
             return defer.succeed(None)
 
         d = defer.Deferred()
         d.addCallback(lambda _: _set_vars())
+        d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
+        d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
         d.addCallback(lambda _: self.get_lbrycrdd_path())
         d.addCallback(lambda _: self._get_session())
@@ -79,6 +89,41 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.callback(None)
 
         return defer.succeed(None)
+
+    def _setup_data_directory(self):
+        print "Loading databases..."
+        if self.created_data_dir:
+            db_revision = open(os.path.join(self.db_dir, "db_revision"), mode='w')
+            db_revision.write(str(self.current_db_revision))
+            db_revision.close()
+            log.debug("Created the db revision file: %s", str(os.path.join(self.db_dir, "db_revision")))
+        if not os.path.exists(self.blobfile_dir):
+            os.mkdir(self.blobfile_dir)
+            log.debug("Created the blobfile directory: %s", str(self.blobfile_dir))
+
+    def _check_db_migration(self):
+        old_revision = 0
+        db_revision_file = os.path.join(self.db_dir, "db_revision")
+        if os.path.exists(db_revision_file):
+            old_revision = int(open(db_revision_file).read().strip())
+        if old_revision < self.current_db_revision:
+            from lbrynet.db_migrator import dbmigrator
+            print "Upgrading your databases..."
+            d = threads.deferToThread(dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision)
+
+            def print_success(old_dirs):
+                success_string = "Finished upgrading the databases. It is now safe to delete the"
+                success_string += " following directories, if you feel like it. It won't make any"
+                success_string += " difference.\nAnyway here they are: "
+                for i, old_dir in enumerate(old_dirs):
+                    success_string += old_dir
+                    if i + 1 < len(old_dir):
+                        success_string += ", "
+                print success_string
+
+            d.addCallback(print_success)
+            return d
+        return defer.succeed(True)
 
     def _get_settings(self):
         d = self.settings.start()
@@ -229,6 +274,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
 
         def _disp(info):
+            log.debug('[' + str(datetime.now()) + ']' + ' Resolved info: ' + str(info))
             print '[' + str(datetime.now()) + ']' + ' Resolved info: ' + str(info)
             return info
 
@@ -263,6 +309,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         def _disp():
             try:
                 stream = self.downloads[-1]
+                log.debug('[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash))
                 print '[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash)
                 return defer.succeed(None)
             except:
