@@ -6,6 +6,8 @@ import requests
 import locale
 from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task, error
+
+from lbrynet.core.client.AutoDownloader import AutoFetcher
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
@@ -23,6 +25,8 @@ from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 #from lbrynet.lbrylive.PaymentRateManager import LiveStreamPaymentRateManager
 from lbrynet.lbrynet_console.ControlHandlers import ApplicationStatusFactory, GetWalletBalancesFactory, ShutDownFactory
+from lbrynet.lbrynet_console.ControlHandlers import AutoFetcherStartFactory, AutoFetcherStopFactory
+from lbrynet.lbrynet_console.ControlHandlers import ImmediateAnnounceAllBlobsFactory, AutoFetcherStatusFactory
 from lbrynet.lbrynet_console.ControlHandlers import LBRYFileStatusFactory, DeleteLBRYFileChooserFactory
 from lbrynet.lbrynet_console.ControlHandlers import ToggleLBRYFileRunningChooserFactory
 from lbrynet.lbrynet_console.ControlHandlers import ModifyApplicationDefaultsFactory
@@ -65,6 +69,7 @@ class LBRYConsole():
             self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         if not self.lbrycrd_conf:
             self.lbrycrd_conf = os.path.join(self.lbrycrd_dir, "lbrycrd.conf")
+        self.autofetcher_conf = os.path.join(self.lbrycrd_dir, "autofetcher.conf")
         self.lbrycrdd_path = lbrycrdd_path
         self.default_lbrycrdd_path = "./lbrycrdd"
         self.start_lbrycrdd = start_lbrycrdd
@@ -91,6 +96,7 @@ class LBRYConsole():
         self.sd_identifier = StreamDescriptorIdentifier()
         self.plugin_objects = []
         self.db_migration_revisions = None
+        self.autofetcher = None
 
     def start(self):
         """Initialize the session and restore everything to its saved state"""
@@ -102,6 +108,7 @@ class LBRYConsole():
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_lbry_file_manager())
         d.addCallback(lambda _: self._setup_lbry_file_opener())
+        d.addCallback(lambda _: self._get_autofetcher())
         d.addCallback(lambda _: self._setup_control_handlers())
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._load_plugins())
@@ -109,6 +116,10 @@ class LBRYConsole():
         d.addCallback(lambda _: self._start_controller())
         d.addErrback(self._show_start_error)
         return d
+
+    def _get_autofetcher(self):
+        self.autofetcher = AutoFetcher(self.session, self.lbry_file_manager, self.lbry_file_metadata_manager,
+                                       self.session.wallet, self.sd_identifier, self.autofetcher_conf)
 
     def _show_start_error(self, error):
         print error.getErrorMessage()
@@ -358,7 +369,11 @@ class LBRYConsole():
             ModifyLBRYFileOptionsChooserFactory(self.lbry_file_manager),
             AddStreamFromHashFactory(self.sd_identifier, self.session),
             StatusFactory(self, self.session.rate_limiter, self.lbry_file_manager,
-                          self.session.blob_manager, self.session.wallet if self.wallet_type == 'lbrycrd' else None)
+                          self.session.blob_manager, self.session.wallet if self.wallet_type == 'lbrycrd' else None),
+            # AutoFetcherStartFactory(self.autofetcher),
+            # AutoFetcherStopFactory(self.autofetcher),
+            # AutoFetcherStatusFactory(self.autofetcher),
+            ImmediateAnnounceAllBlobsFactory(self.session.blob_manager)
         ]
         self.add_control_handlers(handlers)
         if self.wallet_type == 'lbrycrd':
@@ -585,3 +600,6 @@ def launch_lbry_console():
 
     reactor.addSystemEventTrigger('before', 'shutdown', console.shut_down)
     reactor.run()
+
+if __name__ == "__main__":
+    launch_lbry_console()

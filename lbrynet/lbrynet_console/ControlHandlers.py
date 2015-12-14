@@ -1,4 +1,9 @@
+import json
 import logging
+from time import sleep
+
+from bitcoinrpc.authproxy import AuthServiceProxy
+from twisted.internet.task import LoopingCall
 from zope.interface import implements
 #from lbrynet.core.StreamDescriptor import PlainStreamDescriptorWriter, BlobStreamDescriptorWriter
 from lbrynet.core.PaymentRateManager import PaymentRateManager
@@ -2028,6 +2033,10 @@ class ImmediateAnnounceAllBlobs(CommandHandler):
 
 class ImmediateAnnounceAllBlobsFactory(CommandHandlerFactory):
     control_handler_class = ImmediateAnnounceAllBlobs
+    command = "announce-blobs"
+    short_help = "Announce all blobs to the dht"
+    full_help = "Immediately re-broadcast all hashes associated with the server to " \
+                "the distributed hash table."
 
 
 class ModifyServerSettings(RecursiveCommandHandler):
@@ -2351,6 +2360,54 @@ class StatusFactory(CommandHandlerFactory):
                 "or have been downloaded, and give the option to " \
                 "toggle whether the file is actively downloading or " \
                 "to remove the file."
+
+
+# class AutoFetcherStart(CommandHandler):
+#     def __init__(self, console, autofetcher):
+#         CommandHandler.__init__(self, console)
+#         self.autofetcher = autofetcher
+#
+#     def start(self):
+#         self.autofetcher.start(self.console)
+#         self.finished_deferred.callback(None)
+#
+#
+# class AutoFetcherStop(CommandHandler):
+#     def __init__(self, console, autofetcher):
+#         CommandHandler.__init__(self, console)
+#         self.autofetcher = autofetcher
+#
+#     def start(self):
+#         self.autofetcher.stop(self.console)
+#         self.finished_deferred.callback(None)
+#
+#
+# class AutoFetcherStatus(CommandHandler):
+#     def __init__(self, console, autofetcher):
+#         CommandHandler.__init__(self, console)
+#         self.autofetcher = autofetcher
+#
+#     def start(self):
+#         self.autofetcher.check_if_running(self.console)
+#         self.finished_deferred.callback(None)
+
+
+# class AutoFetcherStartFactory(CommandHandlerFactory):
+#     control_handler_class = AutoFetcherStart
+#     command = "start-autofetcher"
+#     short_help = "Start downloading all lbry files as they are published"
+#
+#
+# class AutoFetcherStopFactory(CommandHandlerFactory):
+#     control_handler_class = AutoFetcherStop
+#     command = "stop-autofetcher"
+#     short_help = "Stop downloading all lbry files as they are published"
+#
+#
+# class AutoFetcherStatusFactory(CommandHandlerFactory):
+#     control_handler_class = AutoFetcherStatus
+#     command = "autofetcher-status"
+#     short_help = "Check autofetcher status"
 
 
 class BlockchainStatus(CommandHandler):
