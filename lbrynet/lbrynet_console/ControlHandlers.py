@@ -2362,52 +2362,52 @@ class StatusFactory(CommandHandlerFactory):
                 "to remove the file."
 
 
-class AutoFetcherStart(CommandHandler):
-    def __init__(self, console, autofetcher):
-        CommandHandler.__init__(self, console)
-        self.autofetcher = autofetcher
-
-    def start(self):
-        self.autofetcher.start(self.console)
-        self.finished_deferred.callback(None)
-
-
-class AutoFetcherStop(CommandHandler):
-    def __init__(self, console, autofetcher):
-        CommandHandler.__init__(self, console)
-        self.autofetcher = autofetcher
-
-    def start(self):
-        self.autofetcher.stop(self.console)
-        self.finished_deferred.callback(None)
-
-
-class AutoFetcherStatus(CommandHandler):
-    def __init__(self, console, autofetcher):
-        CommandHandler.__init__(self, console)
-        self.autofetcher = autofetcher
-
-    def start(self):
-        self.autofetcher.check_if_running(self.console)
-        self.finished_deferred.callback(None)
-
-
-class AutoFetcherStartFactory(CommandHandlerFactory):
-    control_handler_class = AutoFetcherStart
-    command = "start-autofetcher"
-    short_help = "Start downloading all lbry files as they are published"
+# class AutoFetcherStart(CommandHandler):
+#     def __init__(self, console, autofetcher):
+#         CommandHandler.__init__(self, console)
+#         self.autofetcher = autofetcher
+#
+#     def start(self):
+#         self.autofetcher.start(self.console)
+#         self.finished_deferred.callback(None)
+#
+#
+# class AutoFetcherStop(CommandHandler):
+#     def __init__(self, console, autofetcher):
+#         CommandHandler.__init__(self, console)
+#         self.autofetcher = autofetcher
+#
+#     def start(self):
+#         self.autofetcher.stop(self.console)
+#         self.finished_deferred.callback(None)
+#
+#
+# class AutoFetcherStatus(CommandHandler):
+#     def __init__(self, console, autofetcher):
+#         CommandHandler.__init__(self, console)
+#         self.autofetcher = autofetcher
+#
+#     def start(self):
+#         self.autofetcher.check_if_running(self.console)
+#         self.finished_deferred.callback(None)
 
 
-class AutoFetcherStopFactory(CommandHandlerFactory):
-    control_handler_class = AutoFetcherStop
-    command = "stop-autofetcher"
-    short_help = "Stop downloading all lbry files as they are published"
-
-
-class AutoFetcherStatusFactory(CommandHandlerFactory):
-    control_handler_class = AutoFetcherStatus
-    command = "autofetcher-status"
-    short_help = "Check autofetcher status"
+# class AutoFetcherStartFactory(CommandHandlerFactory):
+#     control_handler_class = AutoFetcherStart
+#     command = "start-autofetcher"
+#     short_help = "Start downloading all lbry files as they are published"
+#
+#
+# class AutoFetcherStopFactory(CommandHandlerFactory):
+#     control_handler_class = AutoFetcherStop
+#     command = "stop-autofetcher"
+#     short_help = "Stop downloading all lbry files as they are published"
+#
+#
+# class AutoFetcherStatusFactory(CommandHandlerFactory):
+#     control_handler_class = AutoFetcherStatus
+#     command = "autofetcher-status"
+#     short_help = "Check autofetcher status"
 
 
 class BlockchainStatus(CommandHandler):

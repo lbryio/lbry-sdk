@@ -370,9 +370,9 @@ class LBRYConsole():
             AddStreamFromHashFactory(self.sd_identifier, self.session),
             StatusFactory(self, self.session.rate_limiter, self.lbry_file_manager,
                           self.session.blob_manager, self.session.wallet if self.wallet_type == 'lbrycrd' else None),
-            AutoFetcherStartFactory(self.autofetcher),
-            AutoFetcherStopFactory(self.autofetcher),
-            AutoFetcherStatusFactory(self.autofetcher),
+            # AutoFetcherStartFactory(self.autofetcher),
+            # AutoFetcherStopFactory(self.autofetcher),
+            # AutoFetcherStatusFactory(self.autofetcher),
             ImmediateAnnounceAllBlobsFactory(self.session.blob_manager)
         ]
         self.add_control_handlers(handlers)
