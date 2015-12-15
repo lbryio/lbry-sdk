@@ -320,11 +320,10 @@ class LBRYConsole():
         if credits_received != 0.0:
             points_string = locale.format_string("%.2f LBC", (round(credits_received, 2),),
                                                  grouping=True)
-            alert.info("Thank you for using LBRY! You have been given %s for free because we "
-                       "love you. Please give them a few minutes to show up while you catch up "
-                       "with our blockchain.\nTo check whether you've caught up with the blockchain, "
-                       "use the command 'get-blockchain-status'.\nDownloading some files "
-                       "may not work until you have downloaded the LBC blockchain.", points_string)
+            alert.info("\n\nThank you for testing the alpha version of LBRY!\n\n"
+                       "You have been given %s for free because we love you.\n"
+                       "Please give them a few minutes to show up while you\n"
+                       "catch up with our blockchain.\n", points_string)
 
     def _setup_lbry_file_manager(self):
         self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.db_dir)
