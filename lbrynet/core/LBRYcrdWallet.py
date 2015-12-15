@@ -1,6 +1,7 @@
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, ILBRYWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
+from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 from twisted.internet import threads, reactor, defer, task
@@ -498,12 +499,20 @@ class LBRYcrdWallet(object):
     @_catch_connection_error
     def _claim_name(self, name, value, amount):
         rpc_conn = self._get_rpc_conn()
-        return str(rpc_conn.claimname(name, value, amount))
+        try:
+            return str(rpc_conn.claimname(name, value, amount))
+        except JSONRPCException as e:
+            if 'message' in e.error and e.error['message'] == "Insufficient funds":
+                raise InsufficientFundsError()
+            elif 'message' in e.error:
+                raise ValueError(e.error['message'])
 
     @_catch_connection_error
     def _get_status_of_claim(self, txhash, name, sd_hash):
         rpc_conn = self._get_rpc_conn()
         claims = rpc_conn.getclaimsfortx(txhash)
+        if claims is None:
+            claims = []
         for claim in claims:
             if 'in claim trie' in claim:
                 if 'name' in claim and str(claim['name']) == name and 'value' in claim:
