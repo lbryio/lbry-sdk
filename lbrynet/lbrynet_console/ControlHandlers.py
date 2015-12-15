@@ -269,6 +269,33 @@ class GetWalletBalances(CommandHandler):
     #    assert line is None, "Show wallet balances should not be passed any arguments"
     #    return True, self._get_wallet_balances()
 
+    def _show_time_behind_blockchain(self, best_block_time):
+        best_time = datetime.datetime.utcfromtimestamp(best_block_time)
+        diff = datetime.datetime.utcnow() - best_time
+        unit = None
+        val = None
+        if diff.days > 0:
+            if diff.days >= 7:
+                val = diff.days // 7
+                unit = "week"
+            else:
+                val = diff.days
+                unit = "day"
+        elif diff.seconds >= 60 * 90:
+            if diff.seconds >= 60 * 60:
+                val = diff.seconds // (60 * 60)
+                unit = "hour"
+        if unit is not None:
+            if val != 1:
+                unit += "s"
+            self.console.sendLine("\n\nYour balance may be out of date. This application\n"
+                                  "is %d %s behind the LBC blockchain.\n\n" % (val, unit))
+        else:
+            self.console.sendLine("\n\n")
+
+    def _log_recent_blocktime_error(self, err):
+        log.error("An error occurred looking up the most recent blocktime: %s", err.getTraceback())
+
     def _get_wallet_balances(self):
         d = self.wallet.get_balance()
 
@@ -277,6 +304,10 @@ class GetWalletBalances(CommandHandler):
                 balance = 0
             balance_string = "balance: " + str(balance) + " LBC\n"
             self.console.sendLine(balance_string)
+            d = self.wallet.get_most_recent_blocktime()
+            d.addCallback(self._show_time_behind_blockchain)
+            d.addErrback(self._log_recent_blocktime_error)
+            d.chainDeferred(self.finished_deferred)
 
         d.addCallback(format_balance)
         return d
@@ -763,6 +794,34 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
         d.addCallback(get_name_from_info)
         return d
 
+    def _show_time_behind_blockchain(self, best_block_time):
+        best_time = datetime.datetime.utcfromtimestamp(best_block_time)
+        diff = datetime.datetime.utcnow() - best_time
+        unit = None
+        val = None
+        if diff.days > 0:
+            if diff.days >= 7:
+                val = diff.days // 7
+                unit = "week"
+            else:
+                val = diff.days
+                unit = "day"
+        elif diff.seconds >= 60 * 90:
+            if diff.seconds >= 60 * 60:
+                val = diff.seconds // (60 * 60)
+                unit = "hour"
+        if unit is not None:
+            if val != 1:
+                unit += "s"
+            self.console.sendLine("\nThis application is %d %s behind the LBC blockchain, which may be\n"
+                                  "preventing this name from being resolved. Use 'get-blockchain-status'\n"
+                                  "to check if your application is up to date with the blockchain.\n\n" % (val, unit))
+        else:
+            self.console.sendLine("\n\n")
+
+    def _log_recent_blockchain_time_error(self, err):
+        log.error("An error occurred trying to look up the most recent blocktime: %s", err.getTraceback())
+
     def _handle_load_failed(self, err):
         self.loading_failed = True
         if err.check(UnknownNameError):
@@ -772,8 +831,11 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
                 AddStreamFromHash.start(self, self.name)
                 return
             else:
-                self.console.sendLine("The name %s could not be found.\n\n" % err.getErrorMessage())
-                self.finished_deferred.callback(None)
+                self.console.sendLine("The name %s could not be found." % err.getErrorMessage())
+                d = self.wallet.get_most_recent_blocktime()
+                d.addCallback(self._show_time_behind_blockchain)
+                d.addErrback(self._log_recent_blockchain_time_error)
+                d.chainDeferred(self.finished_deferred)
                 return
         elif err.check(InvalidBlobHashError):
             self.console.sendLine("The metadata for this name is invalid. The stream cannot be downloaded.\n\n")
@@ -1709,6 +1771,7 @@ class Publish(CommandHandler):
     def _show_publish_error(self, err):
         message = "An error occurred publishing %s to %s. Error: %s."
         self.console.sendLine(message % (str(self.file_name), str(self.publish_name), err.getErrorMessage()))
+        log.error(message, str(self.file_name), str(self.publish_name), err.getTraceback())
 
     def _do_publish(self):
         d = create_lbry_file(self.session, self.lbry_file_manager, self.file_name, open(self.file_path))
@@ -1722,7 +1785,7 @@ class Publish(CommandHandler):
 class PublishFactory(CommandHandlerFactory):
     control_handler_class = Publish
     priority = 90
-    command = 'publish'
+    command = "publish"
     short_help = "Publish a file to lbrynet"
     full_help = "Publish a file to lbrynet.\n\n" \
                 "Usage: publish [file_name]\n\n" \
