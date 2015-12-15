@@ -258,6 +258,50 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
+    def _download_name(self, name):
+        def _disp(stream):
+            print '[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash)
+            log.debug('[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash))
+            return defer.succeed(None)
+
+        stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager, 25.0)
+        self.downloads.append(stream)
+
+        d = self.session.wallet.get_stream_info_for_name(name)
+        d.addCallback(lambda stream_info: stream.start(stream_info))
+        d.addCallback(lambda _: _disp(stream))
+        d.addCallback(lambda _: {'ts': datetime.now(),'name': name})
+        d.addErrback(lambda err: str(err.getTraceback()))
+
+        return d
+
+    def _path_from_name(self, name):
+        d = self.session.wallet.get_stream_info_for_name(name)
+        d.addCallback(lambda stream_info: stream_info['stream_hash'])
+        d.addCallback(lambda stream_hash: [{'stream_hash': stream.stream_hash,
+                                            'path': os.path.join(stream.downloader.download_directory,
+                                                                 stream.downloader.file_name)}
+                                           for stream in self.downloads if stream.stream_hash == stream_hash][0])
+        d.addErrback(lambda _: 'UnknownNameError')
+        return d
+
+    def _get_downloads(self):
+        downloads = []
+        for stream in self.downloads:
+            try:
+                downloads.append({'stream_hash': stream.stream_hash,
+                        'path': os.path.join(stream.downloader.download_directory, stream.downloader.file_name)})
+            except:
+                pass
+        return downloads
+
+    def _resolve_name(self, name):
+        d = defer.Deferred()
+        d.addCallback(lambda _: self.session.wallet.get_stream_info_for_name(name))
+        d.addErrback(lambda _: 'UnknownNameError')
+        d.callback(None)
+        return d
+
     def xmlrpc_start_fetcher(self):
         """
         Start autofetcher
@@ -298,9 +342,20 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         reactor.stop()
         return defer.succeed('Stopping')
 
+    def xmlrpc_get_lbry_files(self):
+        """
+        Get LBRY files
+
+        @return: Managed LBRY files
+        """
+
+        return [[str(i), str(dir(i))] for i in self.lbry_file_manager.lbry_files]
+
     def xmlrpc_resolve_name(self, name):
         """
         Resolve stream info from a LBRY uri
+
+        @param: name
         """
 
         def _disp(info):
@@ -317,7 +372,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
     def xmlrpc_get_downloads(self):
         """
-        Get downloads
+        Get files downloaded in this session
+
+        @return: [{stream_hash, path}]
         """
 
         downloads = []
@@ -334,38 +391,55 @@ class LBRYDaemon(xmlrpc.XMLRPC):
     def xmlrpc_download_name(self, name):
         """
         Download stream from a LBRY uri
+
+        @param: name
         """
 
-        def _disp():
-            try:
-                stream = self.downloads[-1]
-                log.debug('[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash))
-                print '[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash)
-                return defer.succeed(None)
-            except:
-                pass
+        def _disp(stream):
+            print '[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash)
+            log.debug('[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash))
+            return defer.succeed(None)
 
         stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager, 25.0)
         self.downloads.append(stream)
 
         d = self.session.wallet.get_stream_info_for_name(name)
         d.addCallback(lambda stream_info: stream.start(stream_info))
-        d.addCallback(lambda _: _disp())
-        # d.addCallback(lambda _: self.files.append({'name': name, 'stream_hash': stream.stream_hash,
-        #                  'path': os.path.join(stream.downloader.download_directory, stream.downloader.file_name)}))
+        d.addCallback(lambda _: _disp(stream))
         d.addCallback(lambda _: {'ts': datetime.now(),'name': name})
         d.addErrback(lambda err: str(err.getTraceback()))
 
         return d
 
     def xmlrpc_path_from_name(self, name):
+        """
+        Get file path for a downloaded name
+
+        @param: name
+        @return: {stream_hash, path}:
+        """
+
         d = self.session.wallet.get_stream_info_for_name(name)
         d.addCallback(lambda stream_info: stream_info['stream_hash'])
         d.addCallback(lambda stream_hash: [{'stream_hash': stream.stream_hash,
                                             'path': os.path.join(stream.downloader.download_directory,
                                                                  stream.downloader.file_name)}
-                                           for stream in self.downloads if stream.stream_hash == stream_hash])
+                                           for stream in self.downloads if stream.stream_hash == stream_hash][0])
         d.addErrback(lambda _: 'UnknownNameError')
+        return d
+
+    def xmlrpc_get(self, name):
+        """
+        Download a name and return the path of the resulting file
+
+        @param: name:
+        @return: {stream_hash, path}:
+        """
+
+        d = defer.Deferred(None)
+        d.addCallback(lambda _: self._download_name(name))
+        d.addCallback(lambda _: self._path_from_name(name))
+        d.callback(None)
         return d
 
 
