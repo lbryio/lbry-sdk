@@ -54,6 +54,49 @@ class InvalidValueError(Exception):
 #    prompt_description = None
 
 
+class RoundedTime(object):
+    SECOND = 0
+    MINUTE = 1
+    HOUR = 2
+    DAY = 3
+    WEEK = 4
+    units = ['second', 'minute', 'hour', 'day', 'week']
+
+    def __init__(self, unit, val):
+        assert unit < len(self.units)
+        self.unit = unit
+        self.val = val
+
+    def __str__(self):
+        assert self.unit < len(self.units)
+        unit_str = self.units[self.unit]
+        if self.val != 1:
+            unit_str += "s"
+        return "%d %s" % (self.val, unit_str)
+
+
+def get_time_behind_blockchain(best_block_time):
+    best_time = datetime.datetime.utcfromtimestamp(best_block_time)
+    diff = datetime.datetime.utcnow() - best_time
+    if diff.days > 0:
+        if diff.days >= 7:
+            val = diff.days // 7
+            unit = RoundedTime.WEEK
+        else:
+            val = diff.days
+            unit = RoundedTime.DAY
+    elif diff.seconds >= 60 * 60:
+        val = diff.seconds // (60 * 60)
+        unit = RoundedTime.HOUR
+    elif diff.seconds >= 60:
+        val = diff.seconds // 60
+        unit = RoundedTime.MINUTE
+    else:
+        val = diff.seconds
+        unit = RoundedTime.SECOND
+    return RoundedTime(unit, val)
+
+
 class CommandHandlerFactory(object):
     implements(ICommandHandlerFactory)
     priority = 0
@@ -269,14 +312,30 @@ class GetWalletBalances(CommandHandler):
     #    assert line is None, "Show wallet balances should not be passed any arguments"
     #    return True, self._get_wallet_balances()
 
+    def _show_time_behind_blockchain(self, rounded_time):
+        if rounded_time.unit >= RoundedTime.HOUR:
+            self.console.sendLine("\n\nYour balance may be out of date. This application\n"
+                                  "is %s behind the LBC blockchain.\n\n" % str(rounded_time))
+        else:
+            self.console.sendLine("")
+
+    def _log_recent_blocktime_error(self, err):
+        log.error("An error occurred looking up the most recent blocktime: %s", err.getTraceback())
+        self.console.sendLine("")
+
     def _get_wallet_balances(self):
         d = self.wallet.get_balance()
 
         def format_balance(balance):
             if balance == 0:
                 balance = 0
-            balance_string = "balance: " + str(balance) + " LBC\n"
+            balance_string = "balance: " + str(balance) + " LBC"
             self.console.sendLine(balance_string)
+            d = self.wallet.get_most_recent_blocktime()
+            d.addCallback(get_time_behind_blockchain)
+            d.addCallback(self._show_time_behind_blockchain)
+            d.addErrback(self._log_recent_blocktime_error)
+            return d
 
         d.addCallback(format_balance)
         return d
@@ -398,9 +457,10 @@ class AddStream(CommandHandler):
     cancel_prompt = "Trying to locate the stream's metadata. Type \"cancel\" to cancel..."
     canceled_message = "Canceled downloading."
 
-    def __init__(self, console, sd_identifier, base_payment_rate_manager):
+    def __init__(self, console, sd_identifier, base_payment_rate_manager, wallet):
         CommandHandler.__init__(self, console)
         self.sd_identifier = sd_identifier
+        self.wallet = wallet
         self.loading_metadata_deferred = None
         self.metadata = None
         self.factory = None
@@ -659,6 +719,10 @@ class AddStream(CommandHandler):
     def _handle_download_error(self, err):
         if err.check(InsufficientFundsError):
             self.console.sendLine("Download stopped due to insufficient funds.")
+            d = self.wallet.get_most_recent_blocktime()
+            d.addCallback(get_time_behind_blockchain)
+            d.addCallback(self._show_time_behind_blockchain_download)
+            d.addErrback(self._log_recent_blockchain_time_error_download)
         else:
             log.error("An unexpected error has caused the download to stop: %s" % err.getTraceback())
             self.console.sendLine("An unexpected error has caused the download to stop. See console.log for details.")
@@ -666,6 +730,15 @@ class AddStream(CommandHandler):
     def _make_downloader(self):
         return self.factory.make_downloader(self.metadata, self.options_chosen,
                                             self.payment_rate_manager)
+
+    def _show_time_behind_blockchain_download(self, rounded_time):
+        if rounded_time.unit >= RoundedTime.HOUR:
+            self.console.sendLine("\nThis application is %s behind the LBC blockchain, so some of your\n"
+                                  "funds may not be available. Use 'get-blockchain-status' to check if\n"
+                                  "your application is up to date with the blockchain." % str(rounded_time))
+
+    def _log_recent_blockchain_time_error_download(self, err):
+        log.error("An error occurred trying to look up the most recent blocktime: %s", err.getTraceback())
 
 
 class AddStreamFromSD(AddStream):
@@ -690,8 +763,8 @@ class AddStreamFromHash(AddStream):
     #prompt_description = "Add a stream from a hash"
     #line_prompt = "Stream descriptor hash:"
 
-    def __init__(self, console, sd_identifier, session):
-        AddStream.__init__(self, console, sd_identifier, session.base_payment_rate_manager)
+    def __init__(self, console, sd_identifier, session, wallet):
+        AddStream.__init__(self, console, sd_identifier, session.base_payment_rate_manager, wallet)
         self.session = session
 
     def start(self, sd_hash):
@@ -708,8 +781,13 @@ class AddStreamFromHash(AddStream):
             self.finished_deferred.callback(None)
             return
         if err.check(InsufficientFundsError):
-            self.console.sendLine("Insufficient funds to download the metadata blob.\n\n")
-            self.finished_deferred.callback(None)
+            self.console.sendLine("Insufficient funds to download the metadata blob.")
+            d = self.wallet.get_most_recent_blocktime()
+            d.addCallback(get_time_behind_blockchain)
+            d.addCallback(self._show_time_behind_blockchain_download)
+            d.addErrback(self._log_recent_blockchain_time_error_download)
+            d.addCallback(lambda _: self.console.sendLine("\n"))
+            d.chainDeferred(self.finished_deferred)
             return
         return AddStream._handle_load_failed(self, err)
 
@@ -729,7 +807,7 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
     #line_prompt = "Short name:"
 
     def __init__(self, console, sd_identifier, session, wallet):
-        AddStreamFromHash.__init__(self, console, sd_identifier, session)
+        AddStreamFromHash.__init__(self, console, sd_identifier, session, wallet)
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
@@ -759,9 +837,24 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
                 self.key_fee = None
             self.key_fee_address = stream_info.get('key_fee_address', None)
             return stream_info['stream_hash']
-        d = self.wallet.get_stream_info_for_name(name)
+        d = self.wallet.get_most_recent_blocktime()
+        d.addCallback(get_time_behind_blockchain)
+        d.addCallback(self._show_time_behind_blockchain_resolve)
+        d.addErrback(self._log_recent_blockchain_time_error_resolve)
+        d.addCallback(lambda _: self.wallet.get_stream_info_for_name(name))
         d.addCallback(get_name_from_info)
         return d
+
+    def _show_time_behind_blockchain_resolve(self, rounded_time):
+        if rounded_time.unit >= RoundedTime.HOUR:
+            self.console.sendLine("\nThis application is %s behind the LBC blockchain, which may be\n"
+                                  "preventing this name from being resolved correctly. Use 'get-blockchain-status'\n"
+                                  "to check if your application is up to date with the blockchain.\n\n" % str(rounded_time))
+        else:
+            self.console.sendLine("\n")
+
+    def _log_recent_blockchain_time_error_resolve(self, err):
+        log.error("An error occurred trying to look up the most recent blocktime: %s", err.getTraceback())
 
     def _handle_load_failed(self, err):
         self.loading_failed = True
@@ -772,8 +865,8 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
                 AddStreamFromHash.start(self, self.name)
                 return
             else:
-                self.console.sendLine("The name %s could not be found.\n\n" % err.getErrorMessage())
-                self.finished_deferred.callback(None)
+                self.console.sendLine("The name %s could not be found." % err.getErrorMessage())
+                self.finished_deferred.callback(True)
                 return
         elif err.check(InvalidBlobHashError):
             self.console.sendLine("The metadata for this name is invalid. The stream cannot be downloaded.\n\n")
@@ -1706,9 +1799,29 @@ class Publish(CommandHandler):
         message = "Finished publishing %s to %s. The txid of the LBRYcrd claim is %s."
         self.console.sendLine(message % (str(self.file_name), str(self.publish_name), str(self.tx_hash)))
 
+    def _show_time_behind_blockchain(self, rounded_time):
+        if rounded_time.unit >= RoundedTime.HOUR:
+            self.console.sendLine("This application is %s behind the LBC blockchain\n"
+                                  "and therefore may not have all of the funds you expect\n"
+                                  "available at this time." % str(rounded_time))
+
+    def _log_best_blocktime_error(self, err):
+        log.error("An error occurred checking the best time of the blockchain: %s", err.getTraceback())
+
     def _show_publish_error(self, err):
         message = "An error occurred publishing %s to %s. Error: %s."
-        self.console.sendLine(message % (str(self.file_name), str(self.publish_name), err.getErrorMessage()))
+        if err.check(InsufficientFundsError):
+            d = self.wallet.get_most_recent_blocktime()
+            d.addCallback(get_time_behind_blockchain)
+            d.addCallback(self._show_time_behind_blockchain)
+            d.addErrback(self._log_best_blocktime_error)
+            error_message = "Insufficient funds"
+        else:
+            d = defer.succeed(True)
+            error_message = err.getErrorMessage()
+        self.console.sendLine(message % (str(self.file_name), str(self.publish_name), error_message))
+        log.error(message, str(self.file_name), str(self.publish_name), err.getTraceback())
+        return d
 
     def _do_publish(self):
         d = create_lbry_file(self.session, self.lbry_file_manager, self.file_name, open(self.file_path))
@@ -1722,7 +1835,7 @@ class Publish(CommandHandler):
 class PublishFactory(CommandHandlerFactory):
     control_handler_class = Publish
     priority = 90
-    command = 'publish'
+    command = "publish"
     short_help = "Publish a file to lbrynet"
     full_help = "Publish a file to lbrynet.\n\n" \
                 "Usage: publish [file_name]\n\n" \
@@ -2417,35 +2530,19 @@ class BlockchainStatus(CommandHandler):
 
     def start(self):
         d = self.wallet.get_most_recent_blocktime()
+        d.addCallback(get_time_behind_blockchain)
         d.addCallbacks(self._show_time_behind_blockchain, self._show_error)
         d.chainDeferred(self.finished_deferred)
         return d
 
-    def _show_time_behind_blockchain(self, best_block_time):
-        best_time = datetime.datetime.utcfromtimestamp(best_block_time)
-        diff = datetime.datetime.utcnow() - best_time
-        unit = None
-        val = None
-        if diff.days > 0:
-            if diff.days >= 7:
-                val = diff.days // 7
-                unit = "week"
-            else:
-                val = diff.days
-                unit = "day"
-        elif diff.seconds >= 60 * 90:
-            if diff.seconds >= 60 * 60:
-                val = diff.seconds // (60 * 60)
-                unit = "hour"
-        if unit is not None:
-            if val != 1:
-                unit += "s"
-            self.console.sendLine("This application is %d %s behind the LBC blockchain." % (val, unit))
+    def _show_time_behind_blockchain(self, rounded_time):
+        if rounded_time.unit >= RoundedTime.HOUR:
+            self.console.sendLine("This application is %s behind the LBC blockchain." % str(rounded_time))
         else:
             self.console.sendLine("This application is up to date with the LBC blockchain.")
 
     def _show_error(self, err):
-        logging.error(err.getTraceback())
+        log.error(err.getTraceback())
         self.console.sendLine("Unable to determine the status of the blockchain.")
 
 
