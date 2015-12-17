@@ -42,7 +42,7 @@ class LBRYDownloader(object):
             self.download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
             self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrycrd")
         else:
-            self.download_directory = os.getcwd()
+            self.download_directory = os.path.join(os.path.expanduser("~"), "Downloads")
             self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.wallet_user = None
