@@ -129,7 +129,7 @@ class GetStream(object):
 
         def _set_downloader(downloader):
             self.downloader = downloader
-            print "Downloading", self.stream_hash, " -->", os.path.join(self.downloader.download_directory,
+            print "Downloading", self.stream_hash, "-->", os.path.join(self.downloader.download_directory,
                                                                         self.downloader.file_name)
             return self.downloader
 
