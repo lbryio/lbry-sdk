@@ -315,7 +315,9 @@ class GetWalletBalances(CommandHandler):
     def _show_time_behind_blockchain(self, rounded_time):
         if rounded_time.unit >= RoundedTime.HOUR:
             self.console.sendLine("\n\nYour balance may be out of date. This application\n"
-                                  "is %s behind the LBC blockchain.\n\n" % str(rounded_time))
+                                  "is %s behind the LBC blockchain. It should take a few minutes to\n"
+                                  "catch up the first time you run this early version of LBRY.\n"
+                                  "Please be patient =).\n\n" % str(rounded_time))
         else:
             self.console.sendLine("")
 
@@ -608,8 +610,11 @@ class AddStream(CommandHandler):
     def _handle_load_failed(self, err):
         self.loading_failed = True
         log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
+        log_file = "console.log"
+        if len(log.handlers):
+            log_file = log.handlers[0].baseFilename
         self.console.sendLine("An unexpected error occurred attempting to load the stream's metadata.\n"
-                              "See console.log for further details.\n\n")
+                              "See %s for further details.\n\n" % log_file)
         self.finished_deferred.callback(None)
 
     def _handle_metadata(self, metadata):
@@ -725,7 +730,10 @@ class AddStream(CommandHandler):
             d.addErrback(self._log_recent_blockchain_time_error_download)
         else:
             log.error("An unexpected error has caused the download to stop: %s" % err.getTraceback())
-            self.console.sendLine("An unexpected error has caused the download to stop. See console.log for details.")
+            log_file = "console.log"
+            if len(log.handlers):
+                log_file = log.handlers[0].baseFilename
+            self.console.sendLine("An unexpected error has caused the download to stop. See %s for details." % log_file)
 
     def _make_downloader(self):
         return self.factory.make_downloader(self.metadata, self.options_chosen,
@@ -735,7 +743,9 @@ class AddStream(CommandHandler):
         if rounded_time.unit >= RoundedTime.HOUR:
             self.console.sendLine("\nThis application is %s behind the LBC blockchain, so some of your\n"
                                   "funds may not be available. Use 'get-blockchain-status' to check if\n"
-                                  "your application is up to date with the blockchain." % str(rounded_time))
+                                  "your application is up to date with the blockchain.\n\n"
+                                  "It should take a few minutes to catch up the first time you run this\n"
+                                  "early version of LBRY. Please be patient =).\n\n" % str(rounded_time))
 
     def _log_recent_blockchain_time_error_download(self, err):
         log.error("An error occurred trying to look up the most recent blocktime: %s", err.getTraceback())
@@ -849,7 +859,9 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
         if rounded_time.unit >= RoundedTime.HOUR:
             self.console.sendLine("\nThis application is %s behind the LBC blockchain, which may be\n"
                                   "preventing this name from being resolved correctly. Use 'get-blockchain-status'\n"
-                                  "to check if your application is up to date with the blockchain.\n\n" % str(rounded_time))
+                                  "to check if your application is up to date with the blockchain.\n\n"
+                                  "It should take a few minutes to catch up the first time you run\n"
+                                  "this early version of LBRY. Please be patient =).\n\n" % str(rounded_time))
         else:
             self.console.sendLine("\n")
 
@@ -1091,7 +1103,10 @@ class ToggleLBRYFileRunning(CommandHandler):
             return "Download stopped due to insufficient funds."
         else:
             log.error("An unexpected error occurred due to toggling an LBRY file running. %s", err.getTraceback())
-            return "An unexpected error occurred. See console.log for details."
+            log_file = "console.log"
+            if len(log.handlers):
+                log_file = log.handlers[0].baseFilename
+            return "An unexpected error occurred. See %s for details." % log_file
 
 
 class ToggleLBRYFileRunningFactory(LBRYFileChooserFactory):
@@ -1803,7 +1818,9 @@ class Publish(CommandHandler):
         if rounded_time.unit >= RoundedTime.HOUR:
             self.console.sendLine("This application is %s behind the LBC blockchain\n"
                                   "and therefore may not have all of the funds you expect\n"
-                                  "available at this time." % str(rounded_time))
+                                  "available at this time. It should take a few minutes to\n"
+                                  "catch up the first time you run this early version of LBRY.\n"
+                                  "Please be patient =).\n" % str(rounded_time))
 
     def _log_best_blocktime_error(self, err):
         log.error("An error occurred checking the best time of the blockchain: %s", err.getTraceback())
@@ -2537,7 +2554,8 @@ class BlockchainStatus(CommandHandler):
 
     def _show_time_behind_blockchain(self, rounded_time):
         if rounded_time.unit >= RoundedTime.HOUR:
-            self.console.sendLine("This application is %s behind the LBC blockchain." % str(rounded_time))
+            self.console.sendLine("This application is %s behind the LBC blockchain. It\n"
+                                  "should only take a few minutes to catch up." % str(rounded_time))
         else:
             self.console.sendLine("This application is up to date with the LBC blockchain.")
 

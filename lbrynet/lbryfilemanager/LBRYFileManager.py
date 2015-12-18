@@ -7,6 +7,7 @@ import logging
 from twisted.enterprise import adbapi
 
 import os
+import sys
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
@@ -31,7 +32,7 @@ class LBRYFileManager(object):
         self.sd_identifier = sd_identifier
         self.lbry_files = []
         self.sql_db = None
-        if os.name == 'posix':
+        if sys.platform.startswith("darwin"):
             self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
         else:
             self.download_directory = os.getcwd()
