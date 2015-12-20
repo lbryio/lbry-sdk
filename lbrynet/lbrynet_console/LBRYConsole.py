@@ -4,6 +4,7 @@ import os.path
 import argparse
 import requests
 import locale
+import sys
 from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task, error
 # from lbrynet.core.client.AutoDownloader import AutoFetcher
@@ -65,7 +66,10 @@ class LBRYConsole():
         self.lbrycrd_conf = lbrycrd_conf
         self.lbrycrd_dir = lbrycrd_dir
         if not self.lbrycrd_dir:
-            self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
+            if sys.platform == "darwin":
+                self.lbrycrd_dir =  os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrycrd")
+            else:
+                self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         if not self.lbrycrd_conf:
             self.lbrycrd_conf = os.path.join(self.lbrycrd_dir, "lbrycrd.conf")
         # self.autofetcher_conf = os.path.join(self.lbrycrd_dir, "autofetcher.conf")
