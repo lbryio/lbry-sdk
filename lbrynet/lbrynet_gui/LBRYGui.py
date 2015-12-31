@@ -20,6 +20,7 @@ from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifi
 import os
 import requests
 import shutil
+import sys
 from twisted.internet import threads, defer, task
 
 
@@ -42,8 +43,12 @@ class LBRYDownloader(object):
             self.download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
             self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrycrd")
         else:
-            self.download_directory = os.path.join(os.path.expanduser("~"), "Downloads")
-            self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
+            if sys.platform == 'darwin':
+                self.download_directory = os.path.join(os.path.expanduser("~"), "Downloads")
+                self.wallet_dir =  os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrycrd")
+            else:
+                self.download_directory = os.getcwd()
+                self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.wallet_user = None
         self.wallet_password = None
@@ -296,6 +301,9 @@ class LBRYDownloader(object):
             lbrycrdd_path = self.lbrycrdd_path
             if not lbrycrdd_path:
                 lbrycrdd_path = self.default_lbrycrdd_path
+
+        if sys.platform == 'darwin':
+            os.chdir("/Applications/LBRY.app/Contents/Resources")
 
         wallet = LBRYcrdWallet(self.db_dir, wallet_dir=self.wallet_dir, wallet_conf=self.wallet_conf,
                                lbrycrdd_path=lbrycrdd_path)

@@ -1,3 +1,4 @@
+import sys
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, ILBRYWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
@@ -372,6 +373,8 @@ class LBRYcrdWallet(object):
                 self.lbrycrdd = subprocess.Popen([self.lbrycrdd_path, "-datadir=%s" % self.wallet_dir,
                                                   "-conf=%s" % self.wallet_conf], startupinfo=si)
             else:
+                if sys.platform == 'darwin':
+                    os.chdir("/Applications/LBRY.app/Contents/Resources")
                 self.lbrycrdd = subprocess.Popen([self.lbrycrdd_path, "-datadir=%s" % self.wallet_dir,
                                                   "-conf=%s" % self.wallet_conf])
             self.started_lbrycrdd = True
