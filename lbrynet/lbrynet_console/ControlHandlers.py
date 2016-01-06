@@ -54,6 +54,14 @@ class InvalidValueError(Exception):
 #    prompt_description = None
 
 
+def get_log_file():
+    log_file = "console.log"
+    logging_handlers = logging.getLogger().handlers
+    if len(logging_handlers):
+        log_file = logging_handlers[0].baseFilename
+    return log_file
+
+
 class RoundedTime(object):
     SECOND = 0
     MINUTE = 1
@@ -611,9 +619,7 @@ class AddStream(CommandHandler):
     def _handle_load_failed(self, err):
         self.loading_failed = True
         log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
-        log_file = "console.log"
-        if len(log.handlers):
-            log_file = log.handlers[0].baseFilename
+        log_file = get_log_file()
         self.console.sendLine("An unexpected error occurred attempting to load the stream's metadata.\n"
                               "See %s for further details.\n\n" % log_file)
         self.finished_deferred.callback(None)
@@ -771,10 +777,8 @@ class AddStream(CommandHandler):
             d.addErrback(self._log_recent_blockchain_time_error_download)
         else:
             log.error("An unexpected error has caused the download to stop: %s" % err.getTraceback())
-            log_file = "console.log"
-            if len(log.handlers):
-                log_file = log.handlers[0].baseFilename
-            self.console.sendLine("An unexpected error has caused the download to stop. See %s for details." % log_file)
+            log_file = get_log_file()
+            self.console.sendLine("An unexpected error has caused the download to stop:\n%s\n\nSee %s for further details." % (err.getErrorMessage(), log_file))
 
     def _make_downloader(self):
         return self.factory.make_downloader(self.metadata, self.options_chosen,
