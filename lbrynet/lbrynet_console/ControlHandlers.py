@@ -554,7 +554,8 @@ class AddStream(CommandHandler):
                 if command in self.factory_choices:
                     self.factory = self.factory_choices[command]
                     self._start_download()
-                    self.console.sendLine("Downloading in the background")
+                    self.console.sendLine("Downloading in the background. Use the command 'status'\n"
+                                          "to check the status of the download.")
                     self.finished_deferred.callback(None)
                 else:
                     self._show_factory_choices()
@@ -639,8 +640,26 @@ class AddStream(CommandHandler):
         self._show_info_and_options()
         return self._show_factory_choices()
 
+    def _get_estimated_cost_string(self):
+        estimated_cost_string = "unknown LBC"
+        for option, option_value in zip(self.download_options, self.options_chosen):
+            if option.short_description == "data payment rate":
+                if option_value == None:
+                    rate = self.payment_rate_manager.get_effective_min_blob_data_payment_rate()
+                else:
+                    rate = option_value
+                stream_size = None
+                for field, val in self.metadata.validator.info_to_show():
+                    if field == "stream_size":
+                        stream_size = int(val)
+                if stream_size is not None and rate is not None:
+                    estimated_cost_string = str(stream_size * 1.0 / 2**20 * rate) + " LBC"
+        return estimated_cost_string
+
     def _show_factory_choices(self):
         prompt = "\n"
+        prompt += "Estimated cost: " + self._get_estimated_cost_string()
+        prompt += "\n\n"
         for factory_choice_string in self.factory_choice_strings:
             prompt += factory_choice_string[1] + '\n'
         self.console.sendLine(str(prompt))
@@ -649,12 +668,34 @@ class AddStream(CommandHandler):
         #self.download_options = self.metadata.options.get_downloader_options(self.metadata.validator,
         #                                                                     self.payment_rate_manager)
         prompt = "Stream info:\n"
-        for info_line in self._get_info_to_show():
-            prompt += info_line[0] + ": " + info_line[1] + "\n"
+        for field_name, value in self._get_info_to_show():
+            if field_name == "stream_size":
+                value = str(self._get_formatted_stream_size(int(value)))
+            prompt += field_name + ": " + value + "\n"
         prompt += "\nOptions:\n"
         for option in self.download_options:
             prompt += option.long_description + ": " + str(option.default_value_description) + "\n"
         self.console.sendLine(str(prompt))
+
+    @staticmethod
+    def _get_formatted_stream_size(stream_size):
+        if isinstance(stream_size, (int, long)):
+            if stream_size >= 2**40:
+                units = "TB"
+                factor = 2**40
+            elif stream_size >= 2**30:
+                units = "GB"
+                factor = 2**30
+            elif stream_size >= 2**20:
+                units = "MB"
+                factor = 2**20
+            elif stream_size >= 2**10:
+                units = "KB"
+                factor = 2**10
+            else:
+                return str(stream_size) + " B"
+            return "%.1f %s" % (round((stream_size * 1.0 / factor), 1), units)
+        return stream_size
 
     def _get_info_to_show(self):
         return self.metadata.validator.info_to_show()

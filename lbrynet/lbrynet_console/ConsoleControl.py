@@ -37,7 +37,8 @@ class ConsoleControl(basic.LineReceiver):
                       "your balance is showing 0 when you know it shouldn't be, it\n"
                       "is likely that the culprit is the blockchain.\n\n"
                       "You should have received 1000 LBC the first time you ran\n"
-                      "this program. If you did not, let us know!\n\n"
+                      "this program. If you did not, let us know! But first give\n"
+                      "them a couple of minutes to show up.\n\n"
                       "Welcome to lbrynet-console!")
         self.sendLine("")
         self.sendLine("Enter a command. Try 'get wonderfullife' or 'help' to see more options.")

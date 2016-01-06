@@ -36,6 +36,7 @@ class LBRYFileManager(object):
             self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
         else:
             self.download_directory = os.getcwd()
+        log.debug("Download directory for LBRYFileManager: %s", str(self.download_directory))
 
     def setup(self):
         d = self._open_db()
