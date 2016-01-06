@@ -402,7 +402,9 @@ class LBRYcrdWallet(object):
 
     def _stop_daemon(self):
         if self.lbrycrdd is not None and self.started_lbrycrdd is True:
+            alert.info("Stopping lbrycrdd...")
             d = threads.deferToThread(self._rpc_stop)
+            d.addCallback(lambda _: alert.info("Stopped lbrycrdd."))
             return d
         return defer.succeed(True)
 
