@@ -16,6 +16,7 @@ from twisted.internet import defer, threads, reactor
 from datetime import datetime
 import logging
 import os
+import sys
 
 log = logging.getLogger(__name__)
 
@@ -42,9 +43,13 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
                 self.download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
                 self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrycrd")
-            else:
+            elif sys.platform == "darwin":
                 self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
+                self.wallet_dir = os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrycrd")
+            else:
                 self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
+                self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
+
             self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
             self.wallet_user = None
             self.wallet_password = None
@@ -66,15 +71,17 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.lbry_file_manager = None
             self.settings = LBRYSettings(self.db_dir)
             self.wallet_type = "lbrycrd"
-            self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
-            self.lbrycrd_conf = os.path.join(self.lbrycrd_dir, "lbrycrd.conf")
-            self.autofetcher_conf = os.path.join(self.lbrycrd_dir, "autofetcher.conf")
+            self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
+            self.autofetcher_conf = os.path.join(self.wallet_dir, "autofetcher.conf")
             self.rpc_conn = None
             self.files = []
             self.created_data_dir = False
             if not os.path.exists(self.db_dir):
                 os.mkdir(self.db_dir)
                 self.created_data_dir = True
+            self.session_settings = None
+            self.data_rate = 0.5
+            self.max_key_fee = 100.0
             return defer.succeed(None)
 
         d = defer.Deferred()
@@ -92,6 +99,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.callback(None)
 
         return defer.succeed(None)
+
+    def _update_settings(self):
+        self.data_rate = self.session_settings['data_rate']
+        self.max_key_fee = self.session_settings['max_key_fee']
 
     def _setup_fetcher(self):
         self.fetcher = FetcherDaemon(self.session, self.lbry_file_manager, self.lbry_file_metadata_manager,
@@ -177,7 +188,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                     lbrycrdd_path = self.lbrycrdd_path
                     if not lbrycrdd_path:
                         lbrycrdd_path = self.default_lbrycrdd_path
-                d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.lbrycrd_dir, wallet_conf=self.lbrycrd_conf,
+                d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.wallet_dir, wallet_conf=self.lbrycrd_conf,
                                                 lbrycrdd_path=lbrycrdd_path))
             else:
                 d = defer.succeed(PTCWallet(self.db_dir))
@@ -264,7 +275,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             log.debug('[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash))
             return defer.succeed(None)
 
-        stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager, 25.0)
+        stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
+                                                    max_key_fee=self.max_key_fee, data_rate=self.data_rate)
         self.downloads.append(stream)
 
         d = self.session.wallet.get_stream_info_for_name(name)
@@ -301,6 +313,21 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addErrback(lambda _: 'UnknownNameError')
         d.callback(None)
         return d
+
+    def xmlrpc_get_settings(self):
+        """
+        Get LBRY payment settings
+        """
+        if not self.session_settings:
+            self.session_settings = {'data_rate': self.data_rate, 'max_key_fee': self.max_key_fee}
+
+        return self.session_settings
+
+    def xmlrpc_set_settings(self, settings):
+        self.session_settings = settings
+        self._update_settings()
+
+        return 'Set'
 
     def xmlrpc_start_fetcher(self):
         """
@@ -400,7 +427,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             log.debug('[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash))
             return defer.succeed(None)
 
-        stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager, 25.0)
+        stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
+                                                    max_key_fee=self.max_key_fee, data_rate=self.data_rate)
+
         self.downloads.append(stream)
 
         d = self.session.wallet.get_stream_info_for_name(name)

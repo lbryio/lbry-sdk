@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 class GetStream(object):
-    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True):
+    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5):
         self.finished_deferred = defer.Deferred(None)
         self.wallet = wallet
         self.resolved_name = None
@@ -36,6 +36,7 @@ class GetStream(object):
         self.stream_info = None
         self.stream_info_manager = None
         self.downloader = None
+        self.data_rate = data_rate
         self.pay_key = pay_key
 
     def start(self, stream_info):
@@ -133,7 +134,7 @@ class GetStream(object):
                                                                         self.downloader.file_name)
             return self.downloader
 
-        self.downloader = self.factory.make_downloader(self.metadata, [0.5, True], self.payment_rate_manager)
+        self.downloader = self.factory.make_downloader(self.metadata, [self.data_rate, True], self.payment_rate_manager)
         self.downloader.addCallback(_set_downloader)
         return defer.succeed(self.downloader)
 
