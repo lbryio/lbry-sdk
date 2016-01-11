@@ -1,3 +1,4 @@
+import sqlite3
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
@@ -19,6 +20,20 @@ import os
 import sys
 
 log = logging.getLogger(__name__)
+
+class DummyDownloader(object):
+    def __init__(self, directory, file_name):
+        self.download_directory = directory
+        self.file_name = file_name
+
+class DummyStream(object):
+    def __init__(self, row):
+        download_directory = os.path.join(*row[2].split('/')[:-1])
+        file_name = row[2].split('/')[len(row[2].split('/')) - 1]
+
+        self.stream_hash = row[0]
+        self.downloader = DummyDownloader(download_directory, file_name)
+        self.is_dummy = True
 
 
 class LBRYDaemon(xmlrpc.XMLRPC):
@@ -282,23 +297,28 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
-    def _download_name(self, name):
+    def _download_name(self, history, name):
         def _disp(stream):
             print '[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash)
             log.debug('[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash))
             return defer.succeed(None)
 
-        stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
-                                                    max_key_fee=self.max_key_fee, data_rate=self.data_rate)
-        self.downloads.append(stream)
+        if not history:
+            stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
+                                                        max_key_fee=self.max_key_fee, data_rate=self.data_rate)
 
-        d = self.session.wallet.get_stream_info_for_name(name)
-        d.addCallback(lambda stream_info: stream.start(stream_info))
-        d.addCallback(lambda _: _disp(stream))
-        d.addCallback(lambda _: {'ts': datetime.now(),'name': name})
-        d.addErrback(lambda err: str(err.getTraceback()))
+            self.downloads.append(stream)
 
-        return d
+            d = self.session.wallet.get_stream_info_for_name(name)
+            d.addCallback(lambda stream_info: stream.start(stream_info))
+            d.addCallback(lambda _: _disp(stream))
+            d.addCallback(lambda _: {'ts': datetime.now(),'name': name})
+            d.addErrback(lambda err: str(err.getTraceback()))
+            return d
+
+        else:
+            self.downloads.append(DummyStream(history[0]))
+            return defer.succeed(None)
 
     def _path_from_name(self, name):
         d = self.session.wallet.get_stream_info_for_name(name)
@@ -326,6 +346,57 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addErrback(lambda _: 'UnknownNameError')
         d.callback(None)
         return d
+
+    def _check_history(self, name, metadata):
+        con = sqlite3.connect(os.path.join(self.db_dir, 'daemon.sqlite'))
+        cur = con.cursor()
+
+        query = "create table if not exists history            \
+                    (stream_hash char(96) primary key not null,\
+                    uri text not null,                        \
+                    path text not null);"
+
+        cur.execute(query)
+        con.commit()
+        r = cur.execute("select * from history where stream_hash='" + metadata['stream_hash'] + "'")
+        files = r.fetchall()
+
+        if files:
+            if not os.path.isfile(files[0][2]):
+                print "Couldn't find", files[0][2], ", trying to redownload it"
+                cur.execute("delete from history where stream_hash='" + files[0][0] + "'")
+                con.commit()
+                con.close()
+                return []
+            else:
+                con.close()
+                return files
+        else:
+            con.close()
+            return files
+
+    def _add_to_history(self, name, path):
+        con = sqlite3.connect(os.path.join(self.db_dir, 'daemon.sqlite'))
+        cur = con.cursor()
+
+        query = "create table if not exists history            \
+                    (stream_hash char(96) primary key not null,\
+                    uri text not null,                        \
+                    path text not null);"
+
+        cur.execute(query)
+        con.commit()
+
+        r = cur.execute("select * from history where stream_hash='" + path['stream_hash'] + "'")
+        files = r.fetchall()
+        if not files:
+            vals = path['stream_hash'], name, path['path']
+            r = cur.execute("insert into history values (?, ?, ?)", vals)
+            con.commit()
+        else:
+            print 'Already downloaded', path['stream_hash'], '->', path['path']
+        con.close()
+        return path['path']
 
     def xmlrpc_get_settings(self):
         """
@@ -447,7 +518,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             return defer.succeed(None)
 
         stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
-                                                    max_key_fee=self.max_key_fee, data_rate=self.data_rate)
+                                                        max_key_fee=self.max_key_fee, data_rate=self.data_rate)
 
         self.downloads.append(stream)
 
@@ -456,7 +527,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: _disp(stream))
         d.addCallback(lambda _: {'ts': datetime.now(),'name': name})
         d.addErrback(lambda err: str(err.getTraceback()))
-
         return d
 
     def xmlrpc_path_from_name(self, name):
@@ -484,10 +554,12 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         @return: {stream_hash, path}:
         """
 
-        d = defer.Deferred(None)
-        d.addCallback(lambda _: self._download_name(name))
+        d = self._resolve_name(name)
+        d.addCallback(lambda metadata: self._check_history(name, metadata))
+        d.addCallback(lambda hist: self._download_name(hist, name))
         d.addCallback(lambda _: self._path_from_name(name))
-        d.callback(None)
+        d.addCallback(lambda path: self._add_to_history(name, path))
+        d.addCallback(lambda _: self._path_from_name(name))
         return d
 
 
