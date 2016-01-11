@@ -84,6 +84,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.max_key_fee = 100.0
             return defer.succeed(None)
 
+        def _disp_startup():
+            print "Started LBRYnet daemon"
+            return defer.succeed(None)
+
         d = defer.Deferred()
         d.addCallback(lambda _: _set_vars())
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
@@ -96,9 +100,18 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_lbry_file_manager())
         d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_fetcher())
+        d.addCallback(lambda _: _disp_startup())
         d.callback(None)
 
         return defer.succeed(None)
+
+    def _shutdown(self):
+        print 'Closing lbrynet session'
+        if self.session is not None:
+            d = self.session.shut_down()
+        else:
+            d = defer.Deferred()
+        return d
 
     def _update_settings(self):
         self.data_rate = self.session_settings['data_rate']
@@ -366,8 +379,14 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Stop the reactor
         """
 
-        reactor.stop()
-        return defer.succeed('Stopping')
+        def _disp_shutdown():
+            print 'Shutting down lbrynet daemon'
+
+        d = self._shutdown()
+        d.addCallback(lambda _: _disp_shutdown())
+        d.addCallback(lambda _: reactor.stop())
+
+        return d
 
     def xmlrpc_get_lbry_files(self):
         """

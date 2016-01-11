@@ -231,6 +231,7 @@ class FetcherDaemon(object):
             for l in conf:
                 if l.startswith("maxkey="):
                     settings["maxkey"] = float(l[7:].rstrip('\n'))
+                    print "Autofetcher using max key price of", settings["maxkey"], ", to start call start_fetcher()"
         else:
             print "Autofetcher using default max key price of 0.0"
             print "To change this create the file:"
