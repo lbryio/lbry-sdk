@@ -1,4 +1,4 @@
-import sqlite3
+from lbrynet.core.Error import UnknownNameError
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
@@ -18,13 +18,16 @@ from datetime import datetime
 import logging
 import os
 import sys
+import sqlite3
 
 log = logging.getLogger(__name__)
+
 
 class DummyDownloader(object):
     def __init__(self, directory, file_name):
         self.download_directory = directory
         self.file_name = file_name
+
 
 class DummyStream(object):
     def __init__(self, row):
@@ -97,6 +100,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.session_settings = None
             self.data_rate = 0.5
             self.max_key_fee = 100.0
+            self.db = None
+            self.cur = None
             return defer.succeed(None)
 
         def _disp_startup():
@@ -115,6 +120,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_lbry_file_manager())
         d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_fetcher())
+        d.addCallback(lambda _: self._setup_daemon_db())
         d.addCallback(lambda _: _disp_startup())
         d.callback(None)
 
@@ -171,6 +177,33 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             d.addCallback(print_success)
             return d
         return defer.succeed(True)
+
+    def _setup_daemon_db(self):
+        self.db = sqlite3.connect(os.path.join(self.db_dir, 'daemon.sqlite'))
+        self.cur = self.db.cursor()
+
+        query = "create table if not exists history            \
+                    (stream_hash char(96) primary key not null,\
+                    uri text not null,                         \
+                    path text not null);"
+
+        self.cur.execute(query)
+        self.db.commit()
+
+        r = self.cur.execute("select * from history")
+        files = r.fetchall()
+
+        print "Checking files in download history still exist, pruning records of those that don't"
+
+        for file in files:
+            if not os.path.isfile(file[2]):
+                print "Couldn't find", file[2], ", removing record"
+                self.cur.execute("delete from history where stream_hash='" + file[0] + "'")
+                self.db.commit()
+
+        print "Done checking records"
+
+        return defer.succeed(None)
 
     def _get_settings(self):
         d = self.settings.start()
@@ -303,6 +336,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             log.debug('[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash))
             return defer.succeed(None)
 
+        if history == 'UnknownNameError':
+            return 'UnknownNameError'
+
         if not history:
             stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
                                                         max_key_fee=self.max_key_fee, data_rate=self.data_rate)
@@ -348,60 +384,43 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return d
 
     def _check_history(self, name, metadata):
-        con = sqlite3.connect(os.path.join(self.db_dir, 'daemon.sqlite'))
-        cur = con.cursor()
+        if metadata == 'UnknownNameError':
+            return 'UnknownNameError'
 
-        query = "create table if not exists history            \
-                    (stream_hash char(96) primary key not null,\
-                    uri text not null,                        \
-                    path text not null);"
-
-        cur.execute(query)
-        con.commit()
-        r = cur.execute("select * from history where stream_hash='" + metadata['stream_hash'] + "'")
+        r = self.cur.execute("select * from history where stream_hash='" + metadata['stream_hash'] + "'")
         files = r.fetchall()
 
         if files:
             if not os.path.isfile(files[0][2]):
                 print "Couldn't find", files[0][2], ", trying to redownload it"
-                cur.execute("delete from history where stream_hash='" + files[0][0] + "'")
-                con.commit()
-                con.close()
+                self.cur.execute("delete from history where stream_hash='" + files[0][0] + "'")
+                self.db.commit()
                 return []
             else:
-                con.close()
                 return files
         else:
-            con.close()
             return files
 
     def _add_to_history(self, name, path):
-        con = sqlite3.connect(os.path.join(self.db_dir, 'daemon.sqlite'))
-        cur = con.cursor()
+        if path == 'UnknownNameError':
+            return 'UnknownNameError'
 
-        query = "create table if not exists history            \
-                    (stream_hash char(96) primary key not null,\
-                    uri text not null,                        \
-                    path text not null);"
-
-        cur.execute(query)
-        con.commit()
-
-        r = cur.execute("select * from history where stream_hash='" + path['stream_hash'] + "'")
+        r = self.cur.execute("select * from history where stream_hash='" + path['stream_hash'] + "'")
         files = r.fetchall()
         if not files:
             vals = path['stream_hash'], name, path['path']
-            r = cur.execute("insert into history values (?, ?, ?)", vals)
-            con.commit()
+            self.cur.execute("insert into history values (?, ?, ?)", vals)
+            self.db.commit()
         else:
             print 'Already downloaded', path['stream_hash'], '->', path['path']
-        con.close()
-        return path['path']
+
+        return path
 
     def xmlrpc_get_settings(self):
         """
         Get LBRY payment settings
         """
+
         if not self.session_settings:
             self.session_settings = {'data_rate': self.data_rate, 'max_key_fee': self.max_key_fee}
 
@@ -454,6 +473,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             print 'Shutting down lbrynet daemon'
 
         d = self._shutdown()
+        d.addCallback(lambda _: self.db.close())
         d.addCallback(lambda _: _disp_shutdown())
         d.addCallback(lambda _: reactor.stop())
 
@@ -482,8 +502,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         d = defer.Deferred()
         d.addCallback(lambda _: self.session.wallet.get_stream_info_for_name(name))
-        d.addErrback(lambda _: 'UnknownNameError')
-        d.addCallback(_disp)
+        d.addCallbacks(_disp, lambda _: str('UnknownNameError'))
         d.callback(None)
         return d
 
@@ -559,7 +578,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda hist: self._download_name(hist, name))
         d.addCallback(lambda _: self._path_from_name(name))
         d.addCallback(lambda path: self._add_to_history(name, path))
-        d.addCallback(lambda _: self._path_from_name(name))
         return d
 
 
