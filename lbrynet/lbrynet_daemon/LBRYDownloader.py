@@ -117,7 +117,7 @@ class GetStream(object):
 
     def _handle_metadata(self, metadata):
         self.metadata = metadata
-        self.factory = self.metadata.factories[0]
+        self.factory = self.metadata.factories[1]
         return defer.succeed(None)
 
     def _handle_download_error(self, err):
@@ -134,9 +134,9 @@ class GetStream(object):
                                                                         self.downloader.file_name)
             return self.downloader
 
-        self.downloader = self.factory.make_downloader(self.metadata, [self.data_rate, True], self.payment_rate_manager)
-        self.downloader.addCallback(_set_downloader)
-        return defer.succeed(self.downloader)
+        downloader = self.factory.make_downloader(self.metadata, [self.data_rate, True], self.payment_rate_manager)
+        downloader.addCallback(_set_downloader)
+        return downloader
 
 
 class FetcherDaemon(object):

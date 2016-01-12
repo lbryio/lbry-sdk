@@ -412,7 +412,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.cur.execute("insert into history values (?, ?, ?)", vals)
             self.db.commit()
         else:
-            print 'Already downloaded', path['stream_hash'], '->', path['path']
+            print 'Already downloaded', path['stream_hash'], '-->', path['path']
 
         return path
 
