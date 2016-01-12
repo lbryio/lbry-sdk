@@ -267,4 +267,6 @@ class LBRYSession(object):
                         log.info("Removed UPnP redirect for %s %d.", protocol, port)
                 self.upnp_redirects = []
 
-        return threads.deferToThread(threaded_unset_upnp)
+        d = threads.deferToThread(threaded_unset_upnp)
+        d.addErrback(lambda err: str(err))
+        return d
