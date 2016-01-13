@@ -1,3 +1,4 @@
+import binascii
 from lbrynet.core.Error import UnknownNameError
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
@@ -19,6 +20,7 @@ import logging
 import os
 import sys
 import sqlite3
+import json
 
 log = logging.getLogger(__name__)
 
@@ -392,7 +394,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         if files:
             if not os.path.isfile(files[0][2]):
-                print "Couldn't find", files[0][2], ", trying to redownload it"
+                print "[" + str(datetime.now()) + "] Couldn't find", files[0][2], ", trying to redownload it"
                 self.cur.execute("delete from history where stream_hash='" + files[0][0] + "'")
                 self.db.commit()
                 return []
@@ -412,7 +414,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.cur.execute("insert into history values (?, ?, ?)", vals)
             self.db.commit()
         else:
-            print 'Already downloaded', path['stream_hash'], '-->', path['path']
+            print '[' + str(datetime.now()) + '] Already downloaded', path['stream_hash'], '-->', path['path']
 
         return path
 
@@ -424,12 +426,14 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         if not self.session_settings:
             self.session_settings = {'data_rate': self.data_rate, 'max_key_fee': self.max_key_fee}
 
+        print '[' + str(datetime.now()) + '] Get daemon settings'
         return self.session_settings
 
     def xmlrpc_set_settings(self, settings):
         self.session_settings = settings
         self._update_settings()
 
+        print '[' + str(datetime.now()) + '] Set daemon settings'
         return 'Set'
 
     def xmlrpc_start_fetcher(self):
@@ -438,7 +442,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
 
         self.fetcher.start()
-
+        print '[' + str(datetime.now()) + '] Start autofetcher'
         return str('Started autofetching')
 
     def xmlrpc_stop_fetcher(self):
@@ -447,7 +451,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
 
         self.fetcher.stop()
-
+        print '[' + str(datetime.now()) + '] Stop autofetcher'
         return str('Started autofetching')
 
     def xmlrpc_fetcher_status(self):
@@ -455,6 +459,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Start autofetcher
         """
 
+        print '[' + str(datetime.now()) + '] Get fetcher status'
         return str(self.fetcher.check_if_running())
 
     def xmlrpc_get_balance(self):
@@ -462,6 +467,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Get LBC balance
         """
 
+        print '[' + str(datetime.now()) + '] Get balance'
         return str(self.session.wallet.wallet_balance)
 
     def xmlrpc_stop(self):
@@ -486,7 +492,24 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         @return: Managed LBRY files
         """
 
-        return [[str(i), str(dir(i))] for i in self.lbry_file_manager.lbry_files]
+        r = []
+        for f in self.lbry_file_manager.lbry_files:
+            if f.key:
+                t = {'completed': f.completed, 'file_handle': f.file_handle, 'file_name': f.file_name,
+                    'key': binascii.b2a_hex(f.key), 'points_paid': f.points_paid, 'stopped': f.stopped,
+                    'stream_hash': f.stream_hash, 'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
+                    'upload_allowed': f.upload_allowed}
+
+            else:
+                t = {'completed': f.completed, 'file_handle': f.file_handle, 'file_name': f.file_name,
+                    'key': None, 'points_paid': f.points_paid, 'stopped': f.stopped,
+                    'stream_hash': f.stream_hash, 'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
+                    'upload_allowed': f.upload_allowed}
+
+            r.append(json.dumps(t))
+
+        print '[' + str(datetime.now()) + '] Get LBRY files'
+        return r
 
     def xmlrpc_resolve_name(self, name):
         """
@@ -522,6 +545,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             except:
                 pass
 
+        print '[' + str(datetime.now()) + '] Get downloads'
         return downloads
 
     def xmlrpc_download_name(self, name):
@@ -578,6 +602,11 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda hist: self._download_name(hist, name))
         d.addCallback(lambda _: self._path_from_name(name))
         d.addCallback(lambda path: self._add_to_history(name, path))
+        return d
+
+    def xmlrpc_toggle_lbry_file_status(self, stream_hash):
+        d = self.lbry_file_manager.toggle_lbry_file_running(stream_hash)
+        d.addErrback(lambda err: str(err))
         return d
 
 
