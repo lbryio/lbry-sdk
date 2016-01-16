@@ -36,7 +36,7 @@ class LBRYFileStreamCreator(CryptStreamCreator):
         log.debug("length: %s", str(blob_info.length))
         self.blob_infos.append(blob_info)
 
-    def _save_lbry_file_info(self):
+    def _save_stream_info(self):
         stream_info_manager = self.lbry_file_manager.stream_info_manager
         d = stream_info_manager.save_stream(self.stream_hash, binascii.hexlify(self.name),
                                             binascii.hexlify(self.key),
@@ -46,8 +46,6 @@ class LBRYFileStreamCreator(CryptStreamCreator):
 
     def setup(self):
         d = CryptStreamCreator.setup(self)
-        d.addCallback(lambda _: self.stream_hash)
-
         return d
 
     def _get_blobs_hashsum(self):
@@ -79,10 +77,7 @@ class LBRYFileStreamCreator(CryptStreamCreator):
 
     def _finished(self):
         self._make_stream_hash()
-        d = self._save_lbry_file_info()
-        d.addCallback(lambda _: self.lbry_file_manager.change_lbry_file_status(
-            self.stream_hash, ManagedLBRYFileDownloader.STATUS_FINISHED
-        ))
+        d = self._save_stream_info()
         return d
 
 

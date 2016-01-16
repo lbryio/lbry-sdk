@@ -1,3 +1,4 @@
+import logging
 from zope.interface import implements
 from lbrynet.interfaces import IStreamDownloader
 from lbrynet.core.client.BlobRequester import BlobRequester
@@ -7,6 +8,9 @@ from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.cryptstream.client.CryptBlobHandler import CryptBlobHandler
 from twisted.internet import defer
 from twisted.python.failure import Failure
+
+
+log = logging.getLogger(__name__)
 
 
 class StartFailedError(Exception):
@@ -79,10 +83,6 @@ class CryptStreamDownloader(object):
 
     def start(self):
 
-        def set_finished_deferred():
-            self.finished_deferred = defer.Deferred()
-            return self.finished_deferred
-
         if self.starting is True:
             raise CurrentlyStartingError()
         if self.stopping is True:
@@ -92,8 +92,9 @@ class CryptStreamDownloader(object):
         assert self.download_manager is None
         self.starting = True
         self.completed = False
+        self.finished_deferred = defer.Deferred()
         d = self._start()
-        d.addCallback(lambda _: set_finished_deferred())
+        d.addCallback(lambda _: self.finished_deferred)
         return d
 
     def stop(self, err=None):
@@ -112,8 +113,8 @@ class CryptStreamDownloader(object):
         assert self.download_manager is not None
         self.stopping = True
         d = self.download_manager.stop_downloading()
-        self._fire_completed_deferred(err)
         d.addCallback(check_if_stop_succeeded)
+        d.addCallback(lambda _: self._fire_completed_deferred(err))
         return d
 
     def _start_failed(self):
@@ -203,6 +204,8 @@ class CryptStreamDownloader(object):
                 d.errback(err)
             else:
                 d.callback(self._get_finished_deferred_callback_value())
+        else:
+            log.debug("Not firing the completed deferred because d is None")
 
     def _get_finished_deferred_callback_value(self):
         return None

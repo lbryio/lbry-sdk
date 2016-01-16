@@ -46,6 +46,31 @@ class LBRYFileDownloader(CryptStreamDownloader):
         else:
             return defer.succeed(True)
 
+    def delete_data(self):
+        d1 = self.stream_info_manager.get_blobs_for_stream(self.stream_hash)
+
+        def get_blob_hashes(blob_infos):
+            return [b[0] for b in blob_infos if b[0] is not None]
+
+        d1.addCallback(get_blob_hashes)
+        d2 = self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
+
+        def combine_blob_hashes(results):
+            blob_hashes = []
+            for success, result in results:
+                if success is True:
+                    blob_hashes.extend(result)
+            return blob_hashes
+
+        def delete_blobs(blob_hashes):
+            self.blob_manager.delete_blobs(blob_hashes)
+            return True
+
+        dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
+        dl.addCallback(combine_blob_hashes)
+        dl.addCallback(delete_blobs)
+        return dl
+
     def stop(self, err=None):
         d = self._close_output()
         d.addCallback(lambda _: CryptStreamDownloader.stop(self, err=err))

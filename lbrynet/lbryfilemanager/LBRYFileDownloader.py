@@ -18,17 +18,18 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
 
-    def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
+    def __init__(self, rowid, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  lbry_file_manager, payment_rate_manager, wallet, download_directory, upload_allowed,
                  file_name=None):
         LBRYFileSaver.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
                                stream_info_manager, payment_rate_manager, wallet, download_directory,
                                upload_allowed, file_name)
+        self.rowid = rowid
         self.lbry_file_manager = lbry_file_manager
         self.saving_status = False
 
     def restore(self):
-        d = self.lbry_file_manager.get_lbry_file_status(self.stream_hash)
+        d = self.lbry_file_manager.get_lbry_file_status(self)
 
         def restore_status(status):
             if status == ManagedLBRYFileDownloader.STATUS_RUNNING:
@@ -103,7 +104,7 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
             s = ManagedLBRYFileDownloader.STATUS_STOPPED
         else:
             s = ManagedLBRYFileDownloader.STATUS_RUNNING
-        return self.lbry_file_manager.change_lbry_file_status(self.stream_hash, s)
+        return self.lbry_file_manager.change_lbry_file_status(self, s)
 
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading, self.blob_manager, download_manager)

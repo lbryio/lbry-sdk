@@ -1067,11 +1067,11 @@ class DeleteLBRYFile(CommandHandler):
                 self.finished_deferred.callback(None)
 
     def _delete_lbry_file(self):
-        d = self.lbry_file_manager.delete_lbry_file(self.lbry_file.stream_hash)
+        d = self.lbry_file_manager.delete_lbry_file(self.lbry_file)
 
         def finish_deletion():
             if self.delete_data is True:
-                d = self._delete_data()
+                d = self.lbry_file.delete_data()
             else:
                 d = defer.succeed(True)
             d.addCallback(lambda _: self._delete_stream_data())
@@ -1080,33 +1080,12 @@ class DeleteLBRYFile(CommandHandler):
         d.addCallback(lambda _: finish_deletion())
         return d
 
-    def _delete_data(self):
-        d1 = self.stream_info_manager.get_blobs_for_stream(self.lbry_file.stream_hash)
-
-        def get_blob_hashes(blob_infos):
-            return [b[0] for b in blob_infos if b[0] is not None]
-
-        d1.addCallback(get_blob_hashes)
-        d2 = self.stream_info_manager.get_sd_blob_hashes_for_stream(self.lbry_file.stream_hash)
-
-        def combine_blob_hashes(results):
-            blob_hashes = []
-            for success, result in results:
-                if success is True:
-                    blob_hashes.extend(result)
-            return blob_hashes
-
-        def delete_blobs(blob_hashes):
-            self.blob_manager.delete_blobs(blob_hashes)
-            return True
-
-        dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
-        dl.addCallback(combine_blob_hashes)
-        dl.addCallback(delete_blobs)
-        return dl
-
     def _delete_stream_data(self):
-        return self.stream_info_manager.delete_stream(self.lbry_file.stream_hash)
+        s_h = self.lbry_file.stream_hash
+        d = self.lbry_file_manager.get_count_for_stream_hash(s_h)
+        # TODO: could possibly be a timing issue here
+        d.addCallback(lambda c: self.stream_info_manager.delete_stream(s_h) if c == 0 else True)
+        return d
 
 
 class DeleteLBRYFileFactory(LBRYFileChooserFactory):
@@ -1138,7 +1117,7 @@ class ToggleLBRYFileRunning(CommandHandler):
         self.lbry_file_manager = lbry_file_manager
 
     def start(self):
-        d = self.lbry_file_manager.toggle_lbry_file_running(self.lbry_file.stream_hash)
+        d = self.lbry_file_manager.toggle_lbry_file_running(self.lbry_file)
         d.addErrback(self._handle_download_error)
         self.finished_deferred.callback(None)
 
@@ -1177,11 +1156,11 @@ class CreateLBRYFile(CommandHandler):
     def add_to_lbry_files(self, stream_hash):
         prm = PaymentRateManager(self.session.base_payment_rate_manager)
         d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
-        d.addCallback(self.set_status, stream_hash)
+        d.addCallback(self.set_status)
         return d
 
-    def set_status(self, lbry_file_downloader, stream_hash):
-        d = self.lbry_file_manager.change_lbry_file_status(stream_hash,
+    def set_status(self, lbry_file_downloader):
+        d = self.lbry_file_manager.change_lbry_file_status(lbry_file_downloader,
                                                            ManagedLBRYFileDownloader.STATUS_FINISHED)
         d.addCallback(lambda _: lbry_file_downloader.restore())
         return d
@@ -1407,7 +1386,7 @@ class ModifyLBRYFileDataPaymentRate(ModifyPaymentRate):
 
     def _set_rate(self, rate):
         self.payment_rate_manager.min_blob_data_payment_rate = rate
-        return self.lbry_file_manager.set_lbry_file_data_payment_rate(self.lbry_file.stream_hash, rate)
+        return self.lbry_file_manager.set_lbry_file_data_payment_rate(self.lbry_file, rate)
 
     def _get_current_status(self):
         status = "The LBRY file's current data payment rate is "
@@ -1821,9 +1800,9 @@ class Publish(CommandHandler):
         v_string += "Is this correct? (y/n): "
         return v_string
 
-    def set_status(self, lbry_file_downloader, stream_hash):
+    def set_status(self, lbry_file_downloader):
         self.lbry_file = lbry_file_downloader
-        d = self.lbry_file_manager.change_lbry_file_status(stream_hash,
+        d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file,
                                                            ManagedLBRYFileDownloader.STATUS_FINISHED)
         d.addCallback(lambda _: lbry_file_downloader.restore())
         return d
@@ -1831,7 +1810,7 @@ class Publish(CommandHandler):
     def add_to_lbry_files(self, stream_hash):
         prm = PaymentRateManager(self.session.base_payment_rate_manager)
         d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
-        d.addCallback(self.set_status, stream_hash)
+        d.addCallback(self.set_status)
         return d
 
     def _create_sd_blob(self):
