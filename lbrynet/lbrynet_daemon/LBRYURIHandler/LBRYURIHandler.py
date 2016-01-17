@@ -3,9 +3,11 @@ import json
 import webbrowser
 import xmlrpclib, sys
 
+
 def render_video(path):
-    r = r'<center><video src="' + path + r'" controls width="960" height="720"></center>'
+    r = r'<center><video src="' + path + r'" controls autoplay width="960" height="720"></center>'
     return r
+
 
 def main(args):
     if len(args) == 0:
@@ -17,7 +19,16 @@ def main(args):
         print 'Too many args', args
 
     else:
-        if args[0][7:] != 'settings':
+
+        if args[0][7:] == 'lbry':
+            daemon.render_gui()
+
+        elif args[0][7:] == 'settings':
+            r = daemon.get_settings()
+            html = "<body>" + json.dumps(r) + "</body>"
+            r = daemon.render_html(html)
+
+        else:
             r = daemon.get(args[0][7:])
             print r
             path = r['path']
@@ -29,20 +40,12 @@ def main(args):
             extension = path.split('.')[len(path.split('.')) - 1]
 
             if extension in ['mp4', 'flv', 'mov']:
-                h = str(render_video(path))
-                f = open('lbry.html', 'w')
-                f.write(h)
-                f.close()
-                webbrowser.open('file://' + os.path.join(os.getcwd(), 'lbry.html'))
+                html = render_video(path)
+                daemon.render_html(html)
 
             else:
-                webbrowser.open('file://' + path)
-        else:
-            r = daemon.get_settings()
-            f = open('lbry.html', 'w')
-            f.write("<body>" + json.dumps(r) + "</body>")
-            f.close()
-            webbrowser.open('file://' + os.path.join(os.getcwd(), 'lbry.html'))
+                webbrowser.open('file://' + str(path))
+
 
 if __name__ == "__main__":
    main(sys.argv[1:])

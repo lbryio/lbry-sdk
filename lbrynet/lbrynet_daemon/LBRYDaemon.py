@@ -1,4 +1,5 @@
 import binascii
+import webbrowser
 from lbrynet.core.Error import UnknownNameError
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
@@ -23,6 +24,9 @@ import sqlite3
 import json
 
 log = logging.getLogger(__name__)
+
+
+#TODO add login credentials in a conf file
 
 
 class DummyDownloader(object):
@@ -482,6 +486,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self.db.close())
         d.addCallback(lambda _: _disp_shutdown())
         d.addCallback(lambda _: reactor.stop())
+        d.callback(None)
 
         return d
 
@@ -607,6 +612,92 @@ class LBRYDaemon(xmlrpc.XMLRPC):
     def xmlrpc_toggle_lbry_file_status(self, stream_hash):
         d = self.lbry_file_manager.toggle_lbry_file_running(stream_hash)
         d.addErrback(lambda err: str(err))
+        return d
+
+    def xmlrpc_render_html(self, html):
+        def _make_file(html, path):
+            f = open(path, 'w')
+            f.write(html)
+            f.close()
+            return defer.succeed(None)
+
+        def _disp_err(err):
+            print str(err.getTraceback())
+            return err
+
+        path = os.path.join(self.download_directory, 'lbry.html')
+
+        d = defer.Deferred()
+        d.addCallback(lambda _: _make_file(html, path))
+        d.addCallback(lambda _: webbrowser.open('file://' + path))
+        d.addErrback(_disp_err)
+        d.callback(None)
+
+        return d
+
+    def xmlrpc_render_gui(self):
+        def _disp_err(err):
+            print str(err.getTraceback())
+            return err
+        d = defer.Deferred()
+        d.addCallback(lambda _: webbrowser.open("https://rawgit.com/jackrobison/lbry.io/local/view/page/demo.html"))
+        d.addErrback(_disp_err)
+        d.callback(None)
+
+        return d
+
+    def xmlrpc_search_nametrie(self, search):
+        def _return_d(x):
+            d = defer.Deferred()
+            d.addCallback(lambda _: x)
+            d.callback(None)
+
+            return d
+
+        def _clean(n):
+            t = []
+            for i in n:
+                if i[0]:
+                    if i[1][0][0] and i[1][1][0]:
+                        i[1][0][1]['value'] = str(i[1][0][1]['value'])
+                        t.append([i[1][0][1], i[1][1][1]])
+            return t
+
+        def _parse(results):
+            f = []
+            for chain, meta in results:
+                t = {}
+                if 'name' in chain.keys():
+                    t['name'] = chain['name']
+                if 'thumbnail' in meta.keys():
+                    t['img'] = meta['thumbnail']
+                if 'name' in meta.keys():
+                    t['title'] = meta['name']
+                if 'description' in meta.keys():
+                    t['description'] = meta['description']
+                if 'key_fee' in meta.keys():
+                    t['cost_est'] = meta['key_fee']
+                else:
+                    t['cost_est'] = 0.0
+                f.append(t)
+
+            return f
+
+        def _disp(results):
+            print '[' + str(datetime.now()) + '] Found ' + str(len(results)) + ' results'
+            return results
+
+        print '[' + str(datetime.now()) + '] Search nametrie: ' + search
+
+        filtered_results = [n for n in self.rpc_conn.getnametrie() if n['name'].startswith(search)]
+        filtered_results = [n for n in filtered_results if 'txid' in n.keys()]
+        resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name(n['name'])]) for n in filtered_results]
+
+        d = defer.DeferredList(resolved_results)
+        d.addCallback(_clean)
+        d.addCallback(_parse)
+        d.addCallback(_disp)
+
         return d
 
 
