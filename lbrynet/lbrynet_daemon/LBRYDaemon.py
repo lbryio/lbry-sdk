@@ -500,16 +500,15 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         r = []
         for f in self.lbry_file_manager.lbry_files:
             if f.key:
-                t = {'completed': f.completed, 'file_handle': f.file_handle, 'file_name': f.file_name,
-                    'key': binascii.b2a_hex(f.key), 'points_paid': f.points_paid, 'stopped': f.stopped,
-                    'stream_hash': f.stream_hash, 'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
-                    'upload_allowed': f.upload_allowed}
+                t = {'completed': f.completed, 'file_name': f.file_name, 'key': binascii.b2a_hex(f.key),
+                     'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
+                     'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
+                     'upload_allowed': f.upload_allowed}
 
             else:
-                t = {'completed': f.completed, 'file_handle': f.file_handle, 'file_name': f.file_name,
-                    'key': None, 'points_paid': f.points_paid, 'stopped': f.stopped,
-                    'stream_hash': f.stream_hash, 'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
-                    'upload_allowed': f.upload_allowed}
+                t = {'completed': f.completed, 'file_name': f.file_name, 'key': None, 'points_paid': f.points_paid,
+                     'stopped': f.stopped, 'stream_hash': f.stream_hash, 'stream_name': f.stream_name,
+                     'suggested_file_name': f.suggested_file_name, 'upload_allowed': f.upload_allowed}
 
             r.append(json.dumps(t))
 
