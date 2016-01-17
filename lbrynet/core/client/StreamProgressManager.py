@@ -118,6 +118,8 @@ class FullStreamProgressManager(StreamProgressManager):
 
         def finished_outputting_blob():
             self.last_blob_outputted += 1
+
+        def check_if_finished():
             final_blob_num = self.download_manager.final_blob_num()
             if final_blob_num is not None and final_blob_num == self.last_blob_outputted:
                 self._finished_outputting()
@@ -134,9 +136,13 @@ class FullStreamProgressManager(StreamProgressManager):
             d = self.download_manager.handle_blob(self.last_blob_outputted + 1)
             d.addCallback(lambda _: finished_outputting_blob())
             d.addCallback(lambda _: self._finished_with_blob(current_blob_num))
+            d.addCallback(lambda _: check_if_finished())
 
             def log_error(err):
                 log.warning("Error occurred in the output loop. Error: %s", err.getErrorMessage())
+                if self.outputting_d is not None and not self.outputting_d.called:
+                    self.outputting_d.callback(True)
+                    self.outputting_d = None
 
             d.addErrback(log_error)
         else:

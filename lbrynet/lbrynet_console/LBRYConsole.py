@@ -125,7 +125,7 @@ class LBRYConsole():
     #                                    self.session.wallet, self.sd_identifier, self.autofetcher_conf)
 
     def _show_start_error(self, error):
-        print error.getErrorMessage()
+        print error.getTraceback()
         log.error("An error occurred during start up: %s", error.getTraceback())
         return error
 

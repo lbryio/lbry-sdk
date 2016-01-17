@@ -54,6 +54,14 @@ class InvalidValueError(Exception):
 #    prompt_description = None
 
 
+def get_log_file():
+    log_file = "console.log"
+    logging_handlers = logging.getLogger().handlers
+    if len(logging_handlers):
+        log_file = logging_handlers[0].baseFilename
+    return log_file
+
+
 class RoundedTime(object):
     SECOND = 0
     MINUTE = 1
@@ -554,7 +562,8 @@ class AddStream(CommandHandler):
                 if command in self.factory_choices:
                     self.factory = self.factory_choices[command]
                     self._start_download()
-                    self.console.sendLine("Downloading in the background")
+                    self.console.sendLine("Downloading in the background. Use the command 'status'\n"
+                                          "to check the status of the download.")
                     self.finished_deferred.callback(None)
                 else:
                     self._show_factory_choices()
@@ -610,9 +619,7 @@ class AddStream(CommandHandler):
     def _handle_load_failed(self, err):
         self.loading_failed = True
         log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
-        log_file = "console.log"
-        if len(log.handlers):
-            log_file = log.handlers[0].baseFilename
+        log_file = get_log_file()
         self.console.sendLine("An unexpected error occurred attempting to load the stream's metadata.\n"
                               "See %s for further details.\n\n" % log_file)
         self.finished_deferred.callback(None)
@@ -639,8 +646,26 @@ class AddStream(CommandHandler):
         self._show_info_and_options()
         return self._show_factory_choices()
 
+    def _get_estimated_cost_string(self):
+        estimated_cost_string = "unknown LBC"
+        for option, option_value in zip(self.download_options, self.options_chosen):
+            if option.short_description == "data payment rate":
+                if option_value == None:
+                    rate = self.payment_rate_manager.get_effective_min_blob_data_payment_rate()
+                else:
+                    rate = option_value
+                stream_size = None
+                for field, val in self.metadata.validator.info_to_show():
+                    if field == "stream_size":
+                        stream_size = int(val)
+                if stream_size is not None and rate is not None:
+                    estimated_cost_string = str(stream_size * 1.0 / 2**20 * rate) + " LBC"
+        return estimated_cost_string
+
     def _show_factory_choices(self):
         prompt = "\n"
+        prompt += "Estimated cost: " + self._get_estimated_cost_string()
+        prompt += "\n\n"
         for factory_choice_string in self.factory_choice_strings:
             prompt += factory_choice_string[1] + '\n'
         self.console.sendLine(str(prompt))
@@ -649,12 +674,34 @@ class AddStream(CommandHandler):
         #self.download_options = self.metadata.options.get_downloader_options(self.metadata.validator,
         #                                                                     self.payment_rate_manager)
         prompt = "Stream info:\n"
-        for info_line in self._get_info_to_show():
-            prompt += info_line[0] + ": " + info_line[1] + "\n"
+        for field_name, value in self._get_info_to_show():
+            if field_name == "stream_size":
+                value = str(self._get_formatted_stream_size(int(value)))
+            prompt += field_name + ": " + value + "\n"
         prompt += "\nOptions:\n"
         for option in self.download_options:
             prompt += option.long_description + ": " + str(option.default_value_description) + "\n"
         self.console.sendLine(str(prompt))
+
+    @staticmethod
+    def _get_formatted_stream_size(stream_size):
+        if isinstance(stream_size, (int, long)):
+            if stream_size >= 2**40:
+                units = "TB"
+                factor = 2**40
+            elif stream_size >= 2**30:
+                units = "GB"
+                factor = 2**30
+            elif stream_size >= 2**20:
+                units = "MB"
+                factor = 2**20
+            elif stream_size >= 2**10:
+                units = "KB"
+                factor = 2**10
+            else:
+                return str(stream_size) + " B"
+            return "%.1f %s" % (round((stream_size * 1.0 / factor), 1), units)
+        return stream_size
 
     def _get_info_to_show(self):
         return self.metadata.validator.info_to_show()
@@ -730,10 +777,8 @@ class AddStream(CommandHandler):
             d.addErrback(self._log_recent_blockchain_time_error_download)
         else:
             log.error("An unexpected error has caused the download to stop: %s" % err.getTraceback())
-            log_file = "console.log"
-            if len(log.handlers):
-                log_file = log.handlers[0].baseFilename
-            self.console.sendLine("An unexpected error has caused the download to stop. See %s for details." % log_file)
+            log_file = get_log_file()
+            self.console.sendLine("An unexpected error has caused the download to stop:\n%s\n\nSee %s for further details." % (err.getErrorMessage(), log_file))
 
     def _make_downloader(self):
         return self.factory.make_downloader(self.metadata, self.options_chosen,
@@ -1022,11 +1067,11 @@ class DeleteLBRYFile(CommandHandler):
                 self.finished_deferred.callback(None)
 
     def _delete_lbry_file(self):
-        d = self.lbry_file_manager.delete_lbry_file(self.lbry_file.stream_hash)
+        d = self.lbry_file_manager.delete_lbry_file(self.lbry_file)
 
         def finish_deletion():
             if self.delete_data is True:
-                d = self._delete_data()
+                d = self.lbry_file.delete_data()
             else:
                 d = defer.succeed(True)
             d.addCallback(lambda _: self._delete_stream_data())
@@ -1035,33 +1080,12 @@ class DeleteLBRYFile(CommandHandler):
         d.addCallback(lambda _: finish_deletion())
         return d
 
-    def _delete_data(self):
-        d1 = self.stream_info_manager.get_blobs_for_stream(self.lbry_file.stream_hash)
-
-        def get_blob_hashes(blob_infos):
-            return [b[0] for b in blob_infos if b[0] is not None]
-
-        d1.addCallback(get_blob_hashes)
-        d2 = self.stream_info_manager.get_sd_blob_hashes_for_stream(self.lbry_file.stream_hash)
-
-        def combine_blob_hashes(results):
-            blob_hashes = []
-            for success, result in results:
-                if success is True:
-                    blob_hashes.extend(result)
-            return blob_hashes
-
-        def delete_blobs(blob_hashes):
-            self.blob_manager.delete_blobs(blob_hashes)
-            return True
-
-        dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
-        dl.addCallback(combine_blob_hashes)
-        dl.addCallback(delete_blobs)
-        return dl
-
     def _delete_stream_data(self):
-        return self.stream_info_manager.delete_stream(self.lbry_file.stream_hash)
+        s_h = self.lbry_file.stream_hash
+        d = self.lbry_file_manager.get_count_for_stream_hash(s_h)
+        # TODO: could possibly be a timing issue here
+        d.addCallback(lambda c: self.stream_info_manager.delete_stream(s_h) if c == 0 else True)
+        return d
 
 
 class DeleteLBRYFileFactory(LBRYFileChooserFactory):
@@ -1093,7 +1117,7 @@ class ToggleLBRYFileRunning(CommandHandler):
         self.lbry_file_manager = lbry_file_manager
 
     def start(self):
-        d = self.lbry_file_manager.toggle_lbry_file_running(self.lbry_file.stream_hash)
+        d = self.lbry_file_manager.toggle_lbry_file_running(self.lbry_file)
         d.addErrback(self._handle_download_error)
         self.finished_deferred.callback(None)
 
@@ -1132,11 +1156,11 @@ class CreateLBRYFile(CommandHandler):
     def add_to_lbry_files(self, stream_hash):
         prm = PaymentRateManager(self.session.base_payment_rate_manager)
         d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
-        d.addCallback(self.set_status, stream_hash)
+        d.addCallback(self.set_status)
         return d
 
-    def set_status(self, lbry_file_downloader, stream_hash):
-        d = self.lbry_file_manager.change_lbry_file_status(stream_hash,
+    def set_status(self, lbry_file_downloader):
+        d = self.lbry_file_manager.change_lbry_file_status(lbry_file_downloader,
                                                            ManagedLBRYFileDownloader.STATUS_FINISHED)
         d.addCallback(lambda _: lbry_file_downloader.restore())
         return d
@@ -1362,7 +1386,7 @@ class ModifyLBRYFileDataPaymentRate(ModifyPaymentRate):
 
     def _set_rate(self, rate):
         self.payment_rate_manager.min_blob_data_payment_rate = rate
-        return self.lbry_file_manager.set_lbry_file_data_payment_rate(self.lbry_file.stream_hash, rate)
+        return self.lbry_file_manager.set_lbry_file_data_payment_rate(self.lbry_file, rate)
 
     def _get_current_status(self):
         status = "The LBRY file's current data payment rate is "
@@ -1776,9 +1800,9 @@ class Publish(CommandHandler):
         v_string += "Is this correct? (y/n): "
         return v_string
 
-    def set_status(self, lbry_file_downloader, stream_hash):
+    def set_status(self, lbry_file_downloader):
         self.lbry_file = lbry_file_downloader
-        d = self.lbry_file_manager.change_lbry_file_status(stream_hash,
+        d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file,
                                                            ManagedLBRYFileDownloader.STATUS_FINISHED)
         d.addCallback(lambda _: lbry_file_downloader.restore())
         return d
@@ -1786,7 +1810,7 @@ class Publish(CommandHandler):
     def add_to_lbry_files(self, stream_hash):
         prm = PaymentRateManager(self.session.base_payment_rate_manager)
         d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
-        d.addCallback(self.set_status, stream_hash)
+        d.addCallback(self.set_status)
         return d
 
     def _create_sd_blob(self):

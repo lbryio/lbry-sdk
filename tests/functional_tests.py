@@ -911,6 +911,121 @@ class TestTransfer(TestCase):
 
         return d
 
+    def test_double_download(self):
+
+        sd_hash_queue = Queue()
+        kill_event = Event()
+        dead_event = Event()
+        uploader = Process(target=start_lbry_uploader, args=(sd_hash_queue, kill_event, dead_event))
+        uploader.start()
+        self.server_processes.append(uploader)
+
+        logging.debug("Testing double download")
+
+        wallet = FakeWallet()
+        peer_manager = PeerManager()
+        peer_finder = FakePeerFinder(5553, peer_manager)
+        hash_announcer = FakeAnnouncer()
+        rate_limiter = DummyRateLimiter()
+        sd_identifier = StreamDescriptorIdentifier()
+
+        downloaders = []
+
+        db_dir = "client"
+        blob_dir = os.path.join(db_dir, "blobfiles")
+        os.mkdir(db_dir)
+        os.mkdir(blob_dir)
+
+        self.session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+                                   peer_finder=peer_finder, hash_announcer=hash_announcer,
+                                   blob_dir=blob_dir, peer_port=5553, use_upnp=False,
+                                   rate_limiter=rate_limiter, wallet=wallet)
+
+        self.stream_info_manager = DBLBRYFileMetadataManager(self.session.db_dir)
+
+        self.lbry_file_manager = LBRYFileManager(self.session, self.stream_info_manager, sd_identifier)
+
+        def make_downloader(metadata, prm):
+            info_validator = metadata.validator
+            options = metadata.options
+            factories = metadata.factories
+            chosen_options = [o.default_value for o in options.get_downloader_options(info_validator, prm)]
+            return factories[0].make_downloader(metadata, chosen_options, prm)
+
+        def append_downloader(downloader):
+            downloaders.append(downloader)
+            return downloader
+
+        def download_file(sd_hash):
+            prm = PaymentRateManager(self.session.base_payment_rate_manager)
+            d = download_sd_blob(self.session, sd_hash, prm)
+            d.addCallback(sd_identifier.get_metadata_for_sd_blob)
+            d.addCallback(make_downloader, prm)
+            d.addCallback(append_downloader)
+            d.addCallback(lambda downloader: downloader.start())
+            return d
+
+        def check_md5_sum():
+            f = open('test_file')
+            hashsum = MD5.new()
+            hashsum.update(f.read())
+            self.assertEqual(hashsum.hexdigest(), "4ca2aafb4101c1e42235aad24fbb83be")
+
+        def delete_lbry_file():
+            logging.debug("deleting the file...")
+            d = self.lbry_file_manager.delete_lbry_file(downloaders[0])
+            d.addCallback(lambda _: self.lbry_file_manager.get_count_for_stream_hash(downloaders[0].stream_hash))
+            d.addCallback(lambda c: self.stream_info_manager.delete_stream(downloaders[1].stream_hash) if c == 0 else True)
+            return d
+
+        def check_lbry_file():
+            d = downloaders[1].status()
+            d.addCallback(lambda _: downloaders[1].status())
+
+            def check_status_report(status_report):
+                self.assertEqual(status_report.num_known, status_report.num_completed)
+                self.assertEqual(status_report.num_known, 3)
+
+            d.addCallback(check_status_report)
+            return d
+
+        def start_transfer(sd_hash):
+
+            logging.debug("Starting the transfer")
+
+            d = self.session.setup()
+            d.addCallback(lambda _: self.stream_info_manager.setup())
+            d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
+            d.addCallback(lambda _: self.lbry_file_manager.setup())
+            d.addCallback(lambda _: download_file(sd_hash))
+            d.addCallback(lambda _: check_md5_sum())
+            d.addCallback(lambda _: download_file(sd_hash))
+            d.addCallback(lambda _: delete_lbry_file())
+            d.addCallback(lambda _: check_lbry_file())
+
+            return d
+
+        def stop(arg):
+            if isinstance(arg, Failure):
+                logging.debug("Client is stopping due to an error. Error: %s", arg.getTraceback())
+            else:
+                logging.debug("Client is stopping normally.")
+            kill_event.set()
+            logging.debug("Set the kill event")
+            d = self.wait_for_dead_event(dead_event)
+
+            def print_shutting_down():
+                logging.info("Client is shutting down")
+
+            d.addCallback(lambda _: print_shutting_down())
+            d.addCallback(lambda _: arg)
+            return d
+
+        d = self.wait_for_hash_from_queue(sd_hash_queue)
+        d.addCallback(start_transfer)
+        d.addBoth(stop)
+        return d
+
 
 class TestStreamify(TestCase):
 
@@ -932,6 +1047,8 @@ class TestStreamify(TestCase):
 
         def delete_test_env():
             shutil.rmtree('client')
+            if os.path.exists("test_file"):
+                os.remove("test_file")
 
         d.addCallback(lambda _: threads.deferToThread(delete_test_env))
         return d

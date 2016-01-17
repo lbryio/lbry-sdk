@@ -36,6 +36,7 @@ class LBRYFileManager(object):
             self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
         else:
             self.download_directory = os.getcwd()
+        log.debug("Download directory for LBRYFileManager: %s", str(self.download_directory))
 
     def setup(self):
         d = self._open_db()
@@ -43,44 +44,15 @@ class LBRYFileManager(object):
         d.addCallback(lambda _: self._start_lbry_files())
         return d
 
-    def get_all_lbry_file_stream_hashes_and_options(self):
-        d = self._get_all_lbry_file_stream_hashes()
+    def get_lbry_file_status(self, lbry_file):
+        return self._get_lbry_file_status(lbry_file.rowid)
 
-        def get_options(stream_hashes):
-            ds = []
+    def set_lbry_file_data_payment_rate(self, lbry_file, new_rate):
+        return self._set_lbry_file_payment_rate(lbry_file.rowid, new_rate)
 
-            def get_options_for_stream_hash(stream_hash):
-                d = self.get_lbry_file_options(stream_hash)
-                d.addCallback(lambda options: (stream_hash, options))
-                return d
-
-            for stream_hash in stream_hashes:
-                ds.append(get_options_for_stream_hash(stream_hash))
-            dl = defer.DeferredList(ds)
-            dl.addCallback(lambda results: [r[1] for r in results if r[0]])
-            return dl
-
-        d.addCallback(get_options)
-        return d
-
-    def save_lbry_file(self, stream_hash, data_payment_rate):
-        return self._save_lbry_file(stream_hash, data_payment_rate)
-
-    def get_lbry_file_status(self, stream_hash):
-        return self._get_lbry_file_status(stream_hash)
-
-    def get_lbry_file_options(self, stream_hash):
-        return self._get_lbry_file_options(stream_hash)
-
-    def delete_lbry_file_options(self, stream_hash):
-        return self._delete_lbry_file_options(stream_hash)
-
-    def set_lbry_file_data_payment_rate(self, stream_hash, new_rate):
-        return self._set_lbry_file_payment_rate(stream_hash, new_rate)
-
-    def change_lbry_file_status(self, stream_hash, status):
-        log.debug("Changing status of %s to %s", stream_hash, status)
-        return self._change_file_status(stream_hash, status)
+    def change_lbry_file_status(self, lbry_file, status):
+        log.debug("Changing status of %s to %s", lbry_file.stream_hash, status)
+        return self._change_file_status(lbry_file.rowid, status)
 
     def get_lbry_file_status_reports(self):
         ds = []
@@ -102,29 +74,32 @@ class LBRYFileManager(object):
 
     def _start_lbry_files(self):
 
-        def set_options_and_restore(stream_hash, options):
+        def set_options_and_restore(rowid, stream_hash, options):
             payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager)
-            d = self.start_lbry_file(stream_hash, payment_rate_manager, blob_data_rate=options[0])
+            d = self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
+                                     blob_data_rate=options)
             d.addCallback(lambda downloader: downloader.restore())
             return d
 
         def log_error(err):
             log.error("An error occurred while starting a lbry file: %s", err.getErrorMessage())
 
-        def start_lbry_files(stream_hashes_and_options):
-            for stream_hash, options in stream_hashes_and_options:
-                d = set_options_and_restore(stream_hash, options)
+        def start_lbry_files(lbry_files_and_options):
+            for rowid, stream_hash, options in lbry_files_and_options:
+                d = set_options_and_restore(rowid, stream_hash, options)
                 d.addErrback(log_error)
             return True
 
-        d = self.get_all_lbry_file_stream_hashes_and_options()
+        d = self._get_all_lbry_files()
         d.addCallback(start_lbry_files)
         return d
 
-    def start_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True):
+    def start_lbry_file(self, rowid, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True):
         payment_rate_manager.min_blob_data_payment_rate = blob_data_rate
-        lbry_file_downloader = ManagedLBRYFileDownloader(stream_hash, self.session.peer_finder,
-                                                         self.session.rate_limiter, self.session.blob_manager,
+        lbry_file_downloader = ManagedLBRYFileDownloader(rowid, stream_hash,
+                                                         self.session.peer_finder,
+                                                         self.session.rate_limiter,
+                                                         self.session.blob_manager,
                                                          self.stream_info_manager, self,
                                                          payment_rate_manager, self.session.wallet,
                                                          self.download_directory,
@@ -136,17 +111,17 @@ class LBRYFileManager(object):
 
     def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True):
         d = self._save_lbry_file(stream_hash, blob_data_rate)
-        d.addCallback(lambda _: self.start_lbry_file(stream_hash, payment_rate_manager, blob_data_rate, upload_allowed))
+        d.addCallback(lambda rowid: self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
+                                                         blob_data_rate, upload_allowed))
         return d
 
-    def delete_lbry_file(self, stream_hash):
+    def delete_lbry_file(self, lbry_file):
         for l in self.lbry_files:
-            if l.stream_hash == stream_hash:
+            if l == lbry_file:
                 lbry_file = l
                 break
         else:
-            return defer.fail(Failure(ValueError("Could not find an LBRY file with the given stream hash, " +
-                                                 stream_hash)))
+            return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
         def wait_for_finished(count=2):
             if count <= 0 or lbry_file.saving_status is False:
@@ -165,23 +140,16 @@ class LBRYFileManager(object):
             self.lbry_files.remove(lbry_file)
 
         d.addCallback(lambda _: remove_from_list())
-        d.addCallback(lambda _: self.delete_lbry_file_options(stream_hash))
+        d.addCallback(lambda _: self._delete_lbry_file_options(lbry_file.rowid))
         return d
 
-    def toggle_lbry_file_running(self, stream_hash):
+    def toggle_lbry_file_running(self, lbry_file):
         """Toggle whether a stream reader is currently running"""
         for l in self.lbry_files:
-            if l.stream_hash == stream_hash:
+            if l == lbry_file:
                 return l.toggle_running()
         else:
-            return defer.fail(Failure(ValueError("Could not find an LBRY file with the given stream hash, " +
-                                                 stream_hash)))
-
-    def get_stream_hash_from_name(self, lbry_file_name):
-        for l in self.lbry_files:
-            if l.file_name == lbry_file_name:
-                return l.stream_hash
-        return None
+            return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
     def stop(self):
         ds = []
@@ -208,6 +176,9 @@ class LBRYFileManager(object):
         dl.addCallback(lambda _: close_db())
         return dl
 
+    def get_count_for_stream_hash(self, stream_hash):
+        return self._get_count_for_stream_hash(stream_hash)
+
     ######### database calls #########
 
     def _open_db(self):
@@ -226,41 +197,41 @@ class LBRYFileManager(object):
 
     @rerun_if_locked
     def _save_lbry_file(self, stream_hash, data_payment_rate):
-        return self.sql_db.runQuery("insert into lbry_file_options values (?, ?, ?)",
-                                    (data_payment_rate, ManagedLBRYFileDownloader.STATUS_STOPPED,
-                                     stream_hash))
+        def do_save(db_transaction):
+            db_transaction.execute("insert into lbry_file_options values (?, ?, ?)",
+                                  (data_payment_rate, ManagedLBRYFileDownloader.STATUS_STOPPED,
+                                   stream_hash))
+            return db_transaction.lastrowid
+        return self.sql_db.runInteraction(do_save)
 
     @rerun_if_locked
-    def _get_lbry_file_options(self, stream_hash):
-        d = self.sql_db.runQuery("select blob_data_rate from lbry_file_options where stream_hash = ?",
-                                 (stream_hash,))
-        d.addCallback(lambda result: result[0] if len(result) else (None, ))
+    def _delete_lbry_file_options(self, rowid):
+        return self.sql_db.runQuery("delete from lbry_file_options where rowid = ?",
+                                    (rowid,))
+
+    @rerun_if_locked
+    def _set_lbry_file_payment_rate(self, rowid, new_rate):
+        return self.sql_db.runQuery("update lbry_file_options set blob_data_rate = ? where rowid = ?",
+                                    (new_rate, rowid))
+
+    @rerun_if_locked
+    def _get_all_lbry_files(self):
+        d = self.sql_db.runQuery("select rowid, stream_hash, blob_data_rate from lbry_file_options")
         return d
 
     @rerun_if_locked
-    def _delete_lbry_file_options(self, stream_hash):
-        return self.sql_db.runQuery("delete from lbry_file_options where stream_hash = ?",
-                                    (stream_hash,))
+    def _change_file_status(self, rowid, new_status):
+        return self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
+                                    (new_status, rowid))
 
     @rerun_if_locked
-    def _set_lbry_file_payment_rate(self, stream_hash, new_rate):
-        return self.sql_db.runQuery("update lbry_file_options set blob_data_rate = ? where stream_hash = ?",
-                                    (new_rate, stream_hash))
-
-    @rerun_if_locked
-    def _get_all_lbry_file_stream_hashes(self):
-        d = self.sql_db.runQuery("select stream_hash from lbry_file_options")
-        d.addCallback(lambda results: [r[0] for r in results])
-        return d
-
-    @rerun_if_locked
-    def _change_file_status(self, stream_hash, new_status):
-        return self.sql_db.runQuery("update lbry_file_options set status = ? where stream_hash = ?",
-                                    (new_status, stream_hash))
-
-    @rerun_if_locked
-    def _get_lbry_file_status(self, stream_hash):
-        d = self.sql_db.runQuery("select status from lbry_file_options where stream_hash = ?",
-                                 (stream_hash,))
+    def _get_lbry_file_status(self, rowid):
+        d = self.sql_db.runQuery("select status from lbry_file_options where rowid = ?",
+                                 (rowid,))
         d.addCallback(lambda r: r[0][0] if len(r) else ManagedLBRYFileDownloader.STATUS_STOPPED)
         return d
+
+    @rerun_if_locked
+    def _get_count_for_stream_hash(self, stream_hash):
+        return self.sql_db.runQuery("select count(*) from lbry_file_options where stream_hash = ?",
+                                     (stream_hash,))
