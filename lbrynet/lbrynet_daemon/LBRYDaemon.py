@@ -1,3 +1,4 @@
+from lbrynet.core.Error import UnknownNameError
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
@@ -17,8 +18,24 @@ from datetime import datetime
 import logging
 import os
 import sys
+import json
+import binascii
+import webbrowser
 
 log = logging.getLogger(__name__)
+
+
+#TODO add login credentials in a conf file
+
+#issues with delete:
+#TODO when stream is complete the generated file doesn't delete, but blobs do
+#TODO when stream is stopped the generated file is deleted
+
+#functions to add:
+#TODO publish
+#TODO send credits to address
+#TODO get new address
+#TODO alert if your copy of a lbry file is out of date with the name record
 
 
 class LBRYDaemon(xmlrpc.XMLRPC):
@@ -38,7 +55,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.peer_port = 3333
             self.dht_node_port = 4444
             self.first_run = False
-            self.current_db_revision = 1
             if os.name == "nt":
                 from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
                 self.download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
@@ -84,21 +100,34 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.max_key_fee = 100.0
             return defer.succeed(None)
 
+        def _disp_startup():
+            print "Started LBRYnet daemon"
+            return defer.succeed(None)
+
         d = defer.Deferred()
         d.addCallback(lambda _: _set_vars())
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
-        d.addCallback(lambda _: self.get_lbrycrdd_path())
+        d.addCallback(lambda _: self._get_lbrycrdd_path())
         d.addCallback(lambda _: self._get_session())
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_stream_identifier())
         d.addCallback(lambda _: self._setup_lbry_file_manager())
         d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_fetcher())
+        d.addCallback(lambda _: _disp_startup())
         d.callback(None)
 
         return defer.succeed(None)
+
+    def _shutdown(self):
+        print 'Closing lbrynet session'
+        if self.session is not None:
+            d = self.session.shut_down()
+        else:
+            d = defer.Deferred()
+        return d
 
     def _update_settings(self):
         self.data_rate = self.session_settings['data_rate']
@@ -148,7 +177,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d = self.settings.start()
         d.addCallback(lambda _: self.settings.get_lbryid())
         d.addCallback(self.set_lbryid)
-        d.addCallback(lambda _: self.get_lbrycrdd_path())
+        d.addCallback(lambda _: self._get_lbrycrdd_path())
         return d
 
     def set_lbryid(self, lbryid):
@@ -218,7 +247,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         dl.addCallback(lambda _: self.session.setup())
         return dl
 
-    def get_lbrycrdd_path(self):
+    def _get_lbrycrdd_path(self):
         def get_lbrycrdd_path_conf_file():
             lbrycrdd_path_conf_path = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
             if not os.path.exists(lbrycrdd_path_conf_path):
@@ -270,63 +299,123 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return defer.succeed(True)
 
     def _download_name(self, name):
-        def _disp(stream):
-            print '[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash)
-            log.debug('[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash))
-            return defer.succeed(None)
+        def _disp_file(file):
+            print '[' + str(datetime.now()) + ']' + ' Already downloaded: ' + str(file.stream_hash)
+            d = self._path_from_lbry_file(file)
+            return d
 
-        stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
-                                                    max_key_fee=self.max_key_fee, data_rate=self.data_rate)
-        self.downloads.append(stream)
+        def _get_stream(name):
+            def _disp(stream):
+                print '[' + str(datetime.now()) + ']' + ' Start stream: ' + stream['stream_hash']
+                return stream
 
-        d = self.session.wallet.get_stream_info_for_name(name)
-        d.addCallback(lambda stream_info: stream.start(stream_info))
-        d.addCallback(lambda _: _disp(stream))
-        d.addCallback(lambda _: {'ts': datetime.now(),'name': name})
-        d.addErrback(lambda err: str(err.getTraceback()))
+            d = self.session.wallet.get_stream_info_for_name(name)
+            stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
+                                                        max_key_fee=self.max_key_fee, data_rate=self.data_rate)
+            d.addCallback(_disp)
+            d.addCallback(lambda stream_info: stream.start(stream_info))
+            d.addCallback(lambda _: self._path_from_name(name))
+
+            return d
+
+        d = self._check_history(name)
+        d.addCallback(lambda lbry_file: _get_stream(name) if not lbry_file else _disp_file(lbry_file))
+        d.addCallback(lambda _: self._check_history(name))
+        d.addCallback(lambda lbry_file: self._path_from_lbry_file(lbry_file) if lbry_file else 'Not found')
+        d.addErrback(lambda err: str(err))
 
         return d
-
-    def _path_from_name(self, name):
-        d = self.session.wallet.get_stream_info_for_name(name)
-        d.addCallback(lambda stream_info: stream_info['stream_hash'])
-        d.addCallback(lambda stream_hash: [{'stream_hash': stream.stream_hash,
-                                            'path': os.path.join(stream.downloader.download_directory,
-                                                                 stream.downloader.file_name)}
-                                           for stream in self.downloads if stream.stream_hash == stream_hash][0])
-        d.addErrback(lambda _: 'UnknownNameError')
-        return d
-
-    def _get_downloads(self):
-        downloads = []
-        for stream in self.downloads:
-            try:
-                downloads.append({'stream_hash': stream.stream_hash,
-                        'path': os.path.join(stream.downloader.download_directory, stream.downloader.file_name)})
-            except:
-                pass
-        return downloads
 
     def _resolve_name(self, name):
         d = defer.Deferred()
         d.addCallback(lambda _: self.session.wallet.get_stream_info_for_name(name))
-        d.addErrback(lambda _: 'UnknownNameError')
-        d.callback(None)
+        d.addErrback(lambda _: defer.fail(UnknownNameError))
+
         return d
+
+
+    def _resolve_name_wc(self, name):
+        d = defer.Deferred()
+        d.addCallback(lambda _: self.session.wallet.get_stream_info_for_name(name))
+        d.addErrback(lambda _: defer.fail(UnknownNameError))
+        d.callback(None)
+
+        return d
+
+    def _check_history(self, name):
+        def _get_lbry_file(path):
+            f = open(path, 'r')
+            l = json.loads(f.read())
+            f.close()
+            file_name = l['stream_name'].decode('hex')
+            lbry_file = [file for file in self.lbry_file_manager.lbry_files if file.stream_name == file_name][0]
+            return lbry_file
+
+        def _check(info):
+            stream_hash = info['stream_hash']
+            path = os.path.join(self.blobfile_dir, stream_hash)
+            if os.path.isfile(path):
+                print "[" + str(datetime.now()) + "] Search for lbry_file, returning: " + stream_hash
+                return defer.succeed(_get_lbry_file(path))
+            else:
+                print  "[" + str(datetime.now()) + "] Search for lbry_file didn't return anything"
+                return defer.succeed(False)
+
+        d = self._resolve_name(name)
+        d.addCallbacks(_check, lambda _: False)
+        d.callback(None)
+
+        return d
+
+    def _delete_lbry_file(self, lbry_file):
+        d = self.lbry_file_manager.delete_lbry_file(lbry_file)
+
+        def finish_deletion(lbry_file):
+            d = lbry_file.delete_data()
+            d.addCallback(lambda _: _delete_stream_data(lbry_file))
+            return d
+
+        def _delete_stream_data(lbry_file):
+            s_h = lbry_file.stream_hash
+            d = self.lbry_file_manager.get_count_for_stream_hash(s_h)
+            # TODO: could possibly be a timing issue here
+            d.addCallback(lambda c: self.stream_info_manager.delete_stream(s_h) if c == 0 else True)
+            return d
+
+        d.addCallback(lambda _: finish_deletion(lbry_file))
+        return d
+
+    def _path_from_name(self, name):
+        d = self._check_history(name)
+        d.addCallback(lambda lbry_file: {'stream_hash': lbry_file.stream_hash,
+                                         'path': os.path.join(self.download_directory, lbry_file.file_name)}
+                                        if lbry_file else defer.fail(UnknownNameError))
+        return d
+
+    def _path_from_lbry_file(self, lbry_file):
+        if lbry_file:
+            r = {'stream_hash': lbry_file.stream_hash,
+                 'path': os.path.join(self.download_directory, lbry_file.file_name)}
+            return defer.succeed(r)
+        else:
+            return defer.fail(UnknownNameError)
 
     def xmlrpc_get_settings(self):
         """
         Get LBRY payment settings
         """
+
         if not self.session_settings:
             self.session_settings = {'data_rate': self.data_rate, 'max_key_fee': self.max_key_fee}
 
+        print '[' + str(datetime.now()) + '] Get daemon settings'
         return self.session_settings
 
     def xmlrpc_set_settings(self, settings):
         self.session_settings = settings
         self._update_settings()
 
+        print '[' + str(datetime.now()) + '] Set daemon settings'
         return 'Set'
 
     def xmlrpc_start_fetcher(self):
@@ -335,7 +424,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
 
         self.fetcher.start()
-
+        print '[' + str(datetime.now()) + '] Start autofetcher'
         return str('Started autofetching')
 
     def xmlrpc_stop_fetcher(self):
@@ -344,7 +433,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
 
         self.fetcher.stop()
-
+        print '[' + str(datetime.now()) + '] Stop autofetcher'
         return str('Started autofetching')
 
     def xmlrpc_fetcher_status(self):
@@ -352,6 +441,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Start autofetcher
         """
 
+        print '[' + str(datetime.now()) + '] Get fetcher status'
         return str(self.fetcher.check_if_running())
 
     def xmlrpc_get_balance(self):
@@ -359,6 +449,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Get LBC balance
         """
 
+        print '[' + str(datetime.now()) + '] Get balance'
         return str(self.session.wallet.wallet_balance)
 
     def xmlrpc_stop(self):
@@ -366,8 +457,15 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Stop the reactor
         """
 
-        reactor.stop()
-        return defer.succeed('Stopping')
+        def _disp_shutdown():
+            print 'Shutting down lbrynet daemon'
+
+        d = self._shutdown()
+        d.addCallback(lambda _: _disp_shutdown())
+        d.addCallback(lambda _: reactor.stop())
+        d.callback(None)
+
+        return d
 
     def xmlrpc_get_lbry_files(self):
         """
@@ -376,7 +474,23 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         @return: Managed LBRY files
         """
 
-        return [[str(i), str(dir(i))] for i in self.lbry_file_manager.lbry_files]
+        r = []
+        for f in self.lbry_file_manager.lbry_files:
+            if f.key:
+                t = {'completed': f.completed, 'file_name': f.file_name, 'key': binascii.b2a_hex(f.key),
+                     'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
+                     'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
+                     'upload_allowed': f.upload_allowed}
+
+            else:
+                t = {'completed': f.completed, 'file_name': f.file_name, 'key': None, 'points_paid': f.points_paid,
+                     'stopped': f.stopped, 'stream_hash': f.stream_hash, 'stream_name': f.stream_name,
+                     'suggested_file_name': f.suggested_file_name, 'upload_allowed': f.upload_allowed}
+
+            r.append(json.dumps(t))
+
+        print '[' + str(datetime.now()) + '] Get LBRY files'
+        return r
 
     def xmlrpc_resolve_name(self, name):
         """
@@ -386,89 +500,155 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
 
         def _disp(info):
-            log.debug('[' + str(datetime.now()) + ']' + ' Resolved info: ' + str(info))
-            print '[' + str(datetime.now()) + ']' + ' Resolved info: ' + str(info)
+            log.debug('[' + str(datetime.now()) + ']' + ' Resolved info: ' + str(info['stream_hash']))
+            print '[' + str(datetime.now()) + ']' + ' Resolved info: ' + str(info['stream_hash'])
             return info
 
-        d = defer.Deferred()
-        d.addCallback(lambda _: self.session.wallet.get_stream_info_for_name(name))
-        d.addErrback(lambda _: 'UnknownNameError')
-        d.addCallback(_disp)
+        d = self._resolve_name(name)
+        d.addCallbacks(_disp, lambda _: str('UnknownNameError'))
         d.callback(None)
         return d
 
-    def xmlrpc_get_downloads(self):
-        """
-        Get files downloaded in this session
-
-        @return: [{stream_hash, path}]
-        """
-
-        downloads = []
-
-        for stream in self.downloads:
-            try:
-                downloads.append({'stream_hash': stream.stream_hash,
-                        'path': os.path.join(stream.downloader.download_directory, stream.downloader.file_name)})
-            except:
-                pass
-
-        return downloads
-
-    def xmlrpc_download_name(self, name):
+    def xmlrpc_get(self, name):
         """
         Download stream from a LBRY uri
 
         @param: name
         """
 
-        def _disp(stream):
-            print '[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash)
-            log.debug('[' + str(datetime.now()) + ']' + ' Downloading: ' + str(stream.stream_hash))
+        d = self._download_name(name)
+
+        return d
+
+    def xmlrpc_stop_lbry_file(self, stream_hash):
+        try:
+            lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
+        except IndexError:
+            return defer.fail(UnknownNameError)
+
+        if not lbry_file.stopped:
+            d = self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
+            d.addCallback(lambda _: 'Stream has been stopped')
+            d.addErrback(lambda err: str(err))
+            return d
+        else:
+            return defer.succeed('Stream was already stopped')
+
+    def xmlrpc_start_lbry_file(self, stream_hash):
+        try:
+            lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
+        except IndexError:
+            return defer.fail(UnknownNameError)
+
+        if lbry_file.stopped:
+            d = self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
+            d.callback(None)
+            return defer.succeed('Stream started')
+        else:
+            return defer.succeed('Stream was already running')
+
+
+    def xmlrpc_render_html(self, html):
+        def _make_file(html, path):
+            f = open(path, 'w')
+            f.write(html)
+            f.close()
             return defer.succeed(None)
 
-        stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
-                                                    max_key_fee=self.max_key_fee, data_rate=self.data_rate)
+        def _disp_err(err):
+            print str(err.getTraceback())
+            return err
 
-        self.downloads.append(stream)
+        path = os.path.join(self.download_directory, 'lbry.html')
 
-        d = self.session.wallet.get_stream_info_for_name(name)
-        d.addCallback(lambda stream_info: stream.start(stream_info))
-        d.addCallback(lambda _: _disp(stream))
-        d.addCallback(lambda _: {'ts': datetime.now(),'name': name})
-        d.addErrback(lambda err: str(err.getTraceback()))
-
-        return d
-
-    def xmlrpc_path_from_name(self, name):
-        """
-        Get file path for a downloaded name
-
-        @param: name
-        @return: {stream_hash, path}:
-        """
-
-        d = self.session.wallet.get_stream_info_for_name(name)
-        d.addCallback(lambda stream_info: stream_info['stream_hash'])
-        d.addCallback(lambda stream_hash: [{'stream_hash': stream.stream_hash,
-                                            'path': os.path.join(stream.downloader.download_directory,
-                                                                 stream.downloader.file_name)}
-                                           for stream in self.downloads if stream.stream_hash == stream_hash][0])
-        d.addErrback(lambda _: 'UnknownNameError')
-        return d
-
-    def xmlrpc_get(self, name):
-        """
-        Download a name and return the path of the resulting file
-
-        @param: name:
-        @return: {stream_hash, path}:
-        """
-
-        d = defer.Deferred(None)
-        d.addCallback(lambda _: self._download_name(name))
-        d.addCallback(lambda _: self._path_from_name(name))
+        d = defer.Deferred()
+        d.addCallback(lambda _: _make_file(html, path))
+        d.addCallback(lambda _: webbrowser.open('file://' + path))
+        d.addErrback(_disp_err)
         d.callback(None)
+
+        return d
+
+    def xmlrpc_render_gui(self):
+        def _disp_err(err):
+            print str(err.getTraceback())
+            return err
+        d = defer.Deferred()
+        d.addCallback(lambda _: webbrowser.open("https://rawgit.com/jackrobison/lbry.io/local/view/page/demo.html"))
+        d.addErrback(_disp_err)
+        d.callback(None)
+
+        return d
+
+    def xmlrpc_search_nametrie(self, search):
+        def _return_d(x):
+            d = defer.Deferred()
+            d.addCallback(lambda _: x)
+            d.callback(None)
+
+            return d
+
+        def _clean(n):
+            t = []
+            for i in n:
+                if i[0]:
+                    if i[1][0][0] and i[1][1][0]:
+                        i[1][0][1]['value'] = str(i[1][0][1]['value'])
+                        t.append([i[1][0][1], i[1][1][1]])
+            return t
+
+        def _parse(results):
+            f = []
+            for chain, meta in results:
+                t = {}
+                if 'name' in chain.keys():
+                    t['name'] = chain['name']
+                if 'thumbnail' in meta.keys():
+                    t['img'] = meta['thumbnail']
+                if 'name' in meta.keys():
+                    t['title'] = meta['name']
+                if 'description' in meta.keys():
+                    t['description'] = meta['description']
+                if 'key_fee' in meta.keys():
+                    t['cost_est'] = meta['key_fee']
+                else:
+                    t['cost_est'] = 0.0
+                f.append(t)
+
+            return f
+
+        def _disp(results):
+            print '[' + str(datetime.now()) + '] Found ' + str(len(results)) + ' results'
+            return results
+
+        print '[' + str(datetime.now()) + '] Search nametrie: ' + search
+
+        filtered_results = [n for n in self.rpc_conn.getnametrie() if n['name'].startswith(search)]
+        filtered_results = [n for n in filtered_results if 'txid' in n.keys()]
+        resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name_wc(n['name'])]) for n in filtered_results]
+
+        d = defer.DeferredList(resolved_results)
+        d.addCallback(_clean)
+        d.addCallback(_parse)
+        d.addCallback(_disp)
+
+        return d
+
+    def xmlrpc_delete_lbry_file(self, file_name):
+        def _disp(file_name):
+            print '[' + str(datetime.now()) + '] Deleted: ' + file_name
+            return defer.succeed(str('Deleted: ' + file_name))
+
+        lbry_files = [self._delete_lbry_file(f) for f in self.lbry_file_manager.lbry_files if file_name == f.file_name]
+        d = defer.DeferredList(lbry_files)
+        d.addCallback(lambda _: _disp(file_name))
+        return d
+
+    def xmlrpc_check(self, name):
+        d = self._check_history(name)
+        d.addCallback(lambda lbry_file: self._path_from_lbry_file(lbry_file) if lbry_file else 'Not found')
+        d.addErrback(lambda err: str(err))
+
         return d
 
 
