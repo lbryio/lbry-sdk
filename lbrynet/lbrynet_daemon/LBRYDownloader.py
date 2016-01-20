@@ -13,31 +13,23 @@ log = logging.getLogger(__name__)
 
 class GetStream(object):
     def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5):
-        self.finished_deferred = defer.Deferred(None)
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
         self.key_fee = None
         self.key_fee_address = None
+        self.data_rate = data_rate
+        self.pay_key = pay_key
         self.name = None
         self.session = session
         self.payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager)
-        self.loading_metadata_deferred = defer.Deferred()
         self.lbry_file_manager = lbry_file_manager
         self.sd_identifier = sd_identifier
-        self.metadata = None
-        self.loading_failed = False
-        self.resolved_name = None
-        self.description = None
-        self.key_fee = None
-        self.key_fee_address = None
         self.stream_hash = None
         self.max_key_fee = max_key_fee
         self.stream_info = None
         self.stream_info_manager = None
-        self.downloader = None
-        self.data_rate = data_rate
-        self.pay_key = pay_key
+
 
     def start(self, stream_info):
         self.stream_info = stream_info
@@ -52,18 +44,9 @@ class GetStream(object):
             else:
                 self.key_fee = None
                 self.key_fee_address = None
-            self.stream_hash = self.stream_info['stream_hash']
-        elif 'stream_hash' in json.loads(self.stream_info['value']):
-            self.resolved_name = self.stream_info.get('name', None)
-            self.description = json.loads(self.stream_info['value']).get('description', None)
 
-            try:
-                if 'key_fee' in json.loads(self.stream_info['value']):
-                    self.key_fee = float(json.loads(self.stream_info['value'])['key_fee'])
-            except ValueError:
-                self.key_fee = None
-            self.key_fee_address = json.loads(self.stream_info['value']).get('key_fee_address', None)
-            self.stream_hash = json.loads(self.stream_info['value'])['stream_hash']
+            self.stream_hash = self.stream_info['stream_hash']
+
         else:
             print 'InvalidStreamInfoError'
             raise InvalidStreamInfoError(self.stream_info)
@@ -72,71 +55,42 @@ class GetStream(object):
             if self.pay_key:
                 print "Key fee (" + str(self.key_fee) + ") above limit of " + str(
                     self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name)
-                return self.finished_deferred.callback(None)
+                return defer.fail(None)
         else:
             pass
 
-        def _get_downloader_for_return():
-            return defer.succeed(self.downloader)
+        d = defer.Deferred(None)
+        d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
+        d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
+        d.addCallback(lambda metadata:
+                      metadata.factories[1].make_downloader(metadata, [self.data_rate, True], self.payment_rate_manager))
+        d.addErrback(lambda err: err.trap(defer.CancelledError))
+        d.addErrback(lambda err: log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback()))
+        d.addCallback(self._start_download)
+        d.callback(None)
 
-        self.loading_metadata_deferred = defer.Deferred(None)
-        self.loading_metadata_deferred.addCallback(
-            lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
-        self.loading_metadata_deferred.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        self.loading_metadata_deferred.addCallback(self._handle_metadata)
-        self.loading_metadata_deferred.addErrback(self._handle_load_canceled)
-        self.loading_metadata_deferred.addErrback(self._handle_load_failed)
+        return d
+
+    def _start_download(self, downloader):
+        def _pay_key_fee():
+            if self.key_fee is not None and self.key_fee_address is not None:
+                reserved_points = self.wallet.reserve_points(self.key_fee_address, self.key_fee)
+                if reserved_points is None:
+                    return defer.fail(InsufficientFundsError())
+                print 'Key fee: ' + str(self.key_fee) + ' | ' + str(self.key_fee_address)
+                return self.wallet.send_points_to_address(reserved_points, self.key_fee)
+            return defer.succeed(None)
+
         if self.pay_key:
-            self.loading_metadata_deferred.addCallback(lambda _: self._pay_key_fee())
-        self.loading_metadata_deferred.addCallback(lambda _: self._make_downloader())
-        self.loading_metadata_deferred.addCallback(lambda _: self.downloader.start())
-        self.loading_metadata_deferred.addErrback(self._handle_download_error)
-        self.loading_metadata_deferred.addCallback(lambda _: _get_downloader_for_return())
-        self.loading_metadata_deferred.callback(None)
-
-        return defer.succeed(None)
-
-    def _pay_key_fee(self):
-        if self.key_fee is not None and self.key_fee_address is not None:
-            reserved_points = self.wallet.reserve_points(self.key_fee_address, self.key_fee)
-            if reserved_points is None:
-                return defer.fail(InsufficientFundsError())
-            print 'Key fee: ' + str(self.key_fee) + ' | ' + str(self.key_fee_address)
-            return self.wallet.send_points_to_address(reserved_points, self.key_fee)
-        return defer.succeed(None)
-
-    def _handle_load_canceled(self, err):
-        err.trap(defer.CancelledError)
-        self.finished_deferred.callback(None)
-
-    def _handle_load_failed(self, err):
-        self.loading_failed = True
-        log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback())
-        print 'Load Failed: ', err.getTraceback()
-        self.finished_deferred.callback(None)
-
-    def _handle_metadata(self, metadata):
-        self.metadata = metadata
-        self.factory = self.metadata.factories[1]
-        return defer.succeed(None)
-
-    def _handle_download_error(self, err):
-        if err.check(InsufficientFundsError):
-            print "Download stopped due to insufficient funds."
+            d = _pay_key_fee()
         else:
-            print "Autoaddstream: An unexpected error has caused the download to stop: ", err.getTraceback()
+            d = defer.Deferred()
 
-    def _make_downloader(self):
+        downloader.start()
 
-        def _set_downloader(downloader):
-            self.downloader = downloader
-            print "Downloading", self.stream_hash, "-->", os.path.join(self.downloader.download_directory,
-                                                                        self.downloader.file_name)
-            return self.downloader
+        print "Downloading", self.stream_hash, "-->", os.path.join(downloader.download_directory, downloader.file_name)
 
-        downloader = self.factory.make_downloader(self.metadata, [self.data_rate, True], self.payment_rate_manager)
-        downloader.addCallback(_set_downloader)
-        return downloader
+        return d
 
 
 class FetcherDaemon(object):
