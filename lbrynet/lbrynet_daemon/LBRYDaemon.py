@@ -126,7 +126,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         if self.session is not None:
             d = self.session.shut_down()
         else:
-            d = defer.Deferred()
+            d = defer.succeed(True)
         return d
 
     def _update_settings(self):
