@@ -3,6 +3,7 @@ from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream, FetcherDaemon
+from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
@@ -28,13 +29,10 @@ log = logging.getLogger(__name__)
 #TODO add login credentials in a conf file
 
 #issues with delete:
-#TODO when stream is complete the generated file doesn't delete, but blobs do
 #TODO when stream is stopped the generated file is deleted
 
 #functions to add:
-#TODO publish
 #TODO send credits to address
-#TODO get new address
 #TODO alert if your copy of a lbry file is out of date with the name record
 
 
@@ -574,7 +572,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             print str(err.getTraceback())
             return err
         d = defer.Deferred()
-        d.addCallback(lambda _: webbrowser.open("https://rawgit.com/jackrobison/lbry.io/local/view/page/demo.html"))
+        d.addCallback(lambda _: webbrowser.open("https://cdn.rawgit.com/jackrobison/lbry.io/local/view/page/demo.html"))
         d.addErrback(_disp_err)
         d.callback(None)
 
@@ -651,6 +649,56 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         return d
 
+    def xmlrpc_publish(self, metadata):
+        metadata = json.loads(metadata)
+
+        required = ['name', 'file_path', 'bid']
+
+        for r in required:
+            if not r in metadata.keys():
+                return defer.fail()
+
+        # if not os.path.isfile(metadata['file_path']):
+        #     return defer.fail()
+
+        if not type(metadata['bid']) is float and metadata['bid'] > 0.0:
+            return defer.fail()
+
+        name = metadata['name']
+        file_path = metadata['file_path']
+        bid = metadata['bid']
+
+        if 'title' in metadata.keys():
+            title = metadata['title']
+        else:
+            title = None
+
+        if 'description' in metadata.keys():
+            description = metadata['description']
+        else:
+            description = None
+
+        if 'thumbnail' in metadata.keys():
+            thumbnail = metadata['thumbnail']
+        else:
+            thumbnail = None
+
+        if 'key_fee' in metadata.keys():
+            if not 'key_fee_address' in metadata.keys():
+                return defer.fail()
+            key_fee = metadata['key_fee']
+        else:
+            key_fee = None
+
+        if 'key_fee_address' in metadata.keys():
+            key_fee_address = metadata['key_fee_address']
+        else:
+            key_fee_address = None
+
+        p = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
+        d = p.start(name, file_path, bid, title, description, thumbnail, key_fee, key_fee_address)
+
+        return d
 
 def main():
     daemon = LBRYDaemon()
