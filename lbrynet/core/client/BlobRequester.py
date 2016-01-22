@@ -307,16 +307,13 @@ class BlobRequester(object):
             return
         if reason.check(NoResponseError):
             self._incompatible_peers.append(peer)
-            return
         log.warning("Blob requester: a request of type '%s' failed. Reason: %s, Error type: %s",
                     str(request_type), reason.getErrorMessage(), reason.type)
         self._update_local_score(peer, -10.0)
-        if isinstance(reason, InvalidResponseError):
+        if isinstance(reason, InvalidResponseError) or isinstance(reason, NoResponseError):
             peer.update_score(-10.0)
         else:
             peer.update_score(-2.0)
         if reason.check(ConnectionClosedBeforeResponseError):
             return
-        # Only unexpected errors should be returned, as they are indicative of real problems
-        # and may be shown to the user.
         return reason

@@ -154,6 +154,6 @@ class BlobRequestHandler(object):
                 self.currently_uploading = None
             self.file_sender = None
             if reason is not None and isinstance(reason, Failure):
-                log.warning("Upload has failed. Reason: %s", reason.getErrorMessage())
+                log.info("Upload has failed. Reason: %s", reason.getErrorMessage())
 
         return _send_file()

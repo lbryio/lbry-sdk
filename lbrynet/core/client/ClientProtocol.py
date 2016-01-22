@@ -1,6 +1,6 @@
 import json
 import logging
-from twisted.internet import error, defer, reactor
+from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.python import failure
 from lbrynet.conf import MAX_RESPONSE_INFO_SIZE as MAX_RESPONSE_SIZE
@@ -111,6 +111,8 @@ class ClientProtocol(Protocol):
 
     def _ask_for_request(self):
 
+        log.debug("In _ask_for_request")
+
         if self.connection_closed is True or self.connection_closing is True:
             return
 
@@ -158,8 +160,9 @@ class ClientProtocol(Protocol):
                          RequestCanceledError):
             log.error("The connection to %s is closing due to an unexpected error: %s", str(self.peer),
                       err.getErrorMessage())
-        if not err.check(RequestCanceledError):
-            self.transport.loseConnection()
+        if not err.check(RequestCanceledError):  # The connection manager is closing the connection, so
+                                                 # there's no need to do it here.
+            return err
 
     def _handle_response(self, response):
         ds = []
@@ -181,9 +184,24 @@ class ClientProtocol(Protocol):
             d.addErrback(self._handle_response_error)
             ds.append(d)
 
-        dl = defer.DeferredList(ds)
+        dl = defer.DeferredList(ds, consumeErrors=True)
 
-        dl.addCallback(lambda _: self._ask_for_request())
+        def get_next_request(results):
+            failed = False
+            for success, result in results:
+                if success is False:
+                    failed = True
+                    log.info("The connection is closing due to an error: %s", str(result.getTraceback()))
+            if failed is False:
+                log.debug("Asking for another request.")
+                from twisted.internet import reactor
+                reactor.callLater(0, self._ask_for_request)
+                #self._ask_for_request()
+            else:
+                log.debug("Not asking for another request.")
+                self.transport.loseConnection()
+
+        dl.addCallback(get_next_request)
 
     def _downloading_finished(self, arg):
         log.debug("The blob has finished downloading")

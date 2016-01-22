@@ -612,7 +612,7 @@ class LBRYcrdAddressRequester(object):
         if not err.check(RequestCanceledError):
             log.warning("A peer failed to send a valid public key response. Error: %s, peer: %s",
                         err.getErrorMessage(), str(peer))
-            #return err
+            return err
 
 
 class LBRYcrdAddressQueryHandlerFactory(object):

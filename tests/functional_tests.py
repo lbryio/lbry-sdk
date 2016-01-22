@@ -92,30 +92,17 @@ class FakeWallet(object):
 
 
 class FakePeerFinder(object):
-    def __init__(self, port, peer_manager):
+    def __init__(self, start_port, peer_manager, num_peers):
+        self.start_port = start_port
         self.peer_manager = peer_manager
-
-    def find_peers_for_blob(self, *args):
-        return defer.succeed([self.peer_manager.get_peer("127.0.0.1", 5553)])
-
-    def run_manage_loop(self):
-        pass
-
-    def stop(self):
-        pass
-
-
-class FakeTwoPeerFinder(object):
-    def __init__(self, port, peer_manager):
-        self.peer_manager = peer_manager
+        self.num_peers = num_peers
         self.count = 0
 
     def find_peers_for_blob(self, *args):
-        if self.count % 2 == 0:
-            peer_port = 5553
-        else:
-            peer_port = 5554
+        peer_port = self.start_port + self.count
         self.count += 1
+        if self.count >= self.num_peers:
+            self.count = 0
         return defer.succeed([self.peer_manager.get_peer("127.0.0.1", peer_port)])
 
     def run_manage_loop(self):
@@ -208,7 +195,7 @@ test_create_stream_sd_file = {
     'stream_hash': '6d27fbe10c86d81aacfb897c7a426d0a2214f5a299455a6d315c0f998c4b3545c2dc60906122d94653c23b1898229e3f'}
 
 
-def start_lbry_uploader(sd_hash_queue, kill_event, dead_event):
+def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rate_limit=None):
 
     sys.modules = sys.modules.copy()
 
@@ -231,9 +218,9 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event):
 
     wallet = FakeWallet()
     peer_manager = PeerManager()
-    peer_finder = FakePeerFinder(5553, peer_manager)
+    peer_finder = FakePeerFinder(5553, peer_manager, 1)
     hash_announcer = FakeAnnouncer()
-    rate_limiter = DummyRateLimiter()
+    rate_limiter = RateLimiter()
     sd_identifier = StreamDescriptorIdentifier()
 
     db_dir = "server"
@@ -246,6 +233,9 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event):
     stream_info_manager = TempLBRYFileMetadataManager()
 
     lbry_file_manager = LBRYFileManager(session, stream_info_manager, sd_identifier)
+
+    if ul_rate_limit is not None:
+        session.rate_limiter.set_ul_limit(ul_rate_limit)
 
     def start_all():
 
@@ -302,7 +292,7 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event):
         return True
 
     def create_stream():
-        test_file = GenFile(5209343, b''.join([chr(i) for i in xrange(0, 64, 6)]))
+        test_file = GenFile(file_size, b''.join([chr(i) for i in xrange(0, 64, 6)]))
         d = create_lbry_file(session, lbry_file_manager, "test_file", test_file)
         return d
 
@@ -316,6 +306,123 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event):
         sd_hash_queue.put(sd_hash)
 
     reactor.callLater(1, start_all)
+    reactor.run()
+
+
+def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_rate_limit=None):
+
+    sys.modules = sys.modules.copy()
+
+    del sys.modules['twisted.internet.reactor']
+
+    import twisted.internet
+
+    twisted.internet.reactor = twisted.internet.epollreactor.EPollReactor()
+
+    sys.modules['twisted.internet.reactor'] = twisted.internet.reactor
+
+    from twisted.internet import reactor
+
+    logging.debug("Starting the uploader")
+
+    Random.atfork()
+
+    r = random.Random()
+    r.seed("start_lbry_uploader")
+
+    wallet = FakeWallet()
+    peer_port = 5553 + n
+    peer_manager = PeerManager()
+    peer_finder = FakePeerFinder(5553, peer_manager, 1)
+    hash_announcer = FakeAnnouncer()
+    rate_limiter = RateLimiter()
+    sd_identifier = StreamDescriptorIdentifier()
+
+    db_dir = "server_" + str(n)
+    blob_dir = os.path.join(db_dir, "blobfiles")
+    os.mkdir(db_dir)
+    os.mkdir(blob_dir)
+
+    session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd" + str(n),
+                          peer_finder=peer_finder, hash_announcer=hash_announcer,
+                          blob_dir=None, peer_port=peer_port,
+                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
+
+    stream_info_manager = TempLBRYFileMetadataManager()
+
+    lbry_file_manager = LBRYFileManager(session, stream_info_manager, sd_identifier)
+
+    if ul_rate_limit is not None:
+        session.rate_limiter.set_ul_limit(ul_rate_limit)
+
+    def make_downloader(metadata, prm):
+        info_validator = metadata.validator
+        options = metadata.options
+        factories = metadata.factories
+        chosen_options = [o.default_value for o in options.get_downloader_options(info_validator, prm)]
+        return factories[0].make_downloader(metadata, chosen_options, prm)
+
+    def download_file():
+        prm = PaymentRateManager(session.base_payment_rate_manager)
+        d = download_sd_blob(session, sd_hash, prm)
+        d.addCallback(sd_identifier.get_metadata_for_sd_blob)
+        d.addCallback(make_downloader, prm)
+        d.addCallback(lambda downloader: downloader.start())
+        return d
+
+    def start_transfer():
+
+        logging.debug("Starting the transfer")
+
+        d = session.setup()
+        d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
+        d.addCallback(lambda _: lbry_file_manager.setup())
+        d.addCallback(lambda _: download_file())
+
+        return d
+
+    def start_server():
+
+        server_port = None
+
+        query_handler_factories = {
+            BlobAvailabilityHandlerFactory(session.blob_manager): True,
+            BlobRequestHandlerFactory(session.blob_manager, session.wallet,
+                                      PaymentRateManager(session.base_payment_rate_manager)): True,
+            session.wallet.get_wallet_info_query_handler_factory(): True,
+        }
+
+        server_factory = ServerProtocolFactory(session.rate_limiter,
+                                               query_handler_factories,
+                                               session.peer_manager)
+
+        server_port = reactor.listenTCP(peer_port, server_factory)
+        logging.debug("Started listening")
+
+        def kill_server():
+            ds = []
+            ds.append(session.shut_down())
+            ds.append(lbry_file_manager.stop())
+            if server_port:
+                ds.append(server_port.stopListening())
+            kill_check.stop()
+            dead_event.set()
+            dl = defer.DeferredList(ds)
+            dl.addCallback(lambda _: reactor.stop())
+            return dl
+
+        def check_for_kill():
+            if kill_event.is_set():
+                kill_server()
+
+        kill_check = task.LoopingCall(check_for_kill)
+        kill_check.start(1.0)
+        ready_event.set()
+        logging.debug("set the ready event")
+
+    d = task.deferLater(reactor, 1.0, start_transfer)
+    d.addCallback(lambda _: start_server())
+
     reactor.run()
 
 
@@ -342,7 +449,7 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
 
     wallet = FakeWallet()
     peer_manager = PeerManager()
-    peer_finder = FakePeerFinder(5553, peer_manager)
+    peer_finder = FakePeerFinder(5553, peer_manager, 1)
     hash_announcer = FakeAnnouncer()
     rate_limiter = DummyRateLimiter()
     sd_identifier = StreamDescriptorIdentifier()
@@ -481,7 +588,7 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow):
 
     wallet = FakeWallet()
     peer_manager = PeerManager()
-    peer_finder = FakePeerFinder(5554, peer_manager)
+    peer_finder = FakePeerFinder(5553, peer_manager, 1)
     hash_announcer = FakeAnnouncer()
     rate_limiter = RateLimiter()
 
@@ -601,29 +708,29 @@ class TestTransfer(TestCase):
         return d
 
     @staticmethod
-    def wait_for_dead_event(dead_event):
+    def wait_for_event(event, timeout):
 
         from twisted.internet import reactor
         d = defer.Deferred()
 
         def stop():
-            dead_check.stop()
+            set_check.stop()
             if stop_call.active():
                 stop_call.cancel()
                 d.callback(True)
 
-        def check_if_dead_event_set():
-            if dead_event.is_set():
+        def check_if_event_set():
+            if event.is_set():
                 logging.debug("Dead event has been found set")
                 stop()
 
         def done_waiting():
-            logging.warning("Dead event has not been found set and timeout has expired")
+            logging.warning("Event has not been found set and timeout has expired")
             stop()
 
-        dead_check = task.LoopingCall(check_if_dead_event_set)
-        dead_check.start(.1)
-        stop_call = reactor.callLater(15, done_waiting)
+        set_check = task.LoopingCall(check_if_event_set)
+        set_check.start(.1)
+        stop_call = reactor.callLater(timeout, done_waiting)
         return d
 
     @staticmethod
@@ -650,7 +757,7 @@ class TestTransfer(TestCase):
         sd_hash_queue = Queue()
         kill_event = Event()
         dead_event = Event()
-        uploader = Process(target=start_lbry_uploader, args=(sd_hash_queue, kill_event, dead_event))
+        uploader = Process(target=start_lbry_uploader, args=(sd_hash_queue, kill_event, dead_event, 5209343))
         uploader.start()
         self.server_processes.append(uploader)
 
@@ -658,7 +765,7 @@ class TestTransfer(TestCase):
 
         wallet = FakeWallet()
         peer_manager = PeerManager()
-        peer_finder = FakePeerFinder(5553, peer_manager)
+        peer_finder = FakePeerFinder(5553, peer_manager, 1)
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
@@ -717,7 +824,7 @@ class TestTransfer(TestCase):
                 logging.debug("Client is stopping normally.")
             kill_event.set()
             logging.debug("Set the kill event")
-            d = self.wait_for_dead_event(dead_event)
+            d = self.wait_for_event(dead_event, 15)
 
             def print_shutting_down():
                 logging.info("Client is shutting down")
@@ -744,7 +851,7 @@ class TestTransfer(TestCase):
 
         wallet = FakeWallet()
         peer_manager = PeerManager()
-        peer_finder = FakePeerFinder(5553, peer_manager)
+        peer_finder = FakePeerFinder(5553, peer_manager, 1)
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
@@ -815,7 +922,7 @@ class TestTransfer(TestCase):
                 logging.debug("Client is stopping normally.")
             kill_event.set()
             logging.debug("Set the kill event")
-            d = self.wait_for_dead_event(dead_event)
+            d = self.wait_for_event(dead_event, 15)
 
             def print_shutting_down():
                 logging.info("Client is shutting down")
@@ -847,7 +954,7 @@ class TestTransfer(TestCase):
 
         wallet = FakeWallet()
         peer_manager = PeerManager()
-        peer_finder = FakeTwoPeerFinder(5553, peer_manager)
+        peer_finder = FakePeerFinder(5553, peer_manager, 2)
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
 
@@ -896,8 +1003,8 @@ class TestTransfer(TestCase):
                 logging.debug("Client is stopping normally.")
             kill_event.set()
             logging.debug("Set the kill event")
-            d1 = self.wait_for_dead_event(dead_event_1)
-            d2 = self.wait_for_dead_event(dead_event_2)
+            d1 = self.wait_for_event(dead_event_1, 15)
+            d2 = self.wait_for_event(dead_event_2, 15)
             dl = defer.DeferredList([d1, d2])
 
             def print_shutting_down():
@@ -916,7 +1023,7 @@ class TestTransfer(TestCase):
         sd_hash_queue = Queue()
         kill_event = Event()
         dead_event = Event()
-        uploader = Process(target=start_lbry_uploader, args=(sd_hash_queue, kill_event, dead_event))
+        uploader = Process(target=start_lbry_uploader, args=(sd_hash_queue, kill_event, dead_event, 5209343))
         uploader.start()
         self.server_processes.append(uploader)
 
@@ -924,7 +1031,7 @@ class TestTransfer(TestCase):
 
         wallet = FakeWallet()
         peer_manager = PeerManager()
-        peer_finder = FakePeerFinder(5553, peer_manager)
+        peer_finder = FakePeerFinder(5553, peer_manager, 1)
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
@@ -1012,7 +1119,7 @@ class TestTransfer(TestCase):
                 logging.debug("Client is stopping normally.")
             kill_event.set()
             logging.debug("Set the kill event")
-            d = self.wait_for_dead_event(dead_event)
+            d = self.wait_for_event(dead_event, 15)
 
             def print_shutting_down():
                 logging.info("Client is shutting down")
@@ -1024,6 +1131,109 @@ class TestTransfer(TestCase):
         d = self.wait_for_hash_from_queue(sd_hash_queue)
         d.addCallback(start_transfer)
         d.addBoth(stop)
+        return d
+
+    def test_multiple_uploaders(self):
+
+        sd_hash_queue = Queue()
+        num_uploaders = 3
+        kill_event = Event()
+        dead_events = [Event() for _ in range(num_uploaders)]
+        ready_events = [Event() for _ in range(1, num_uploaders)]
+        uploader = Process(target=start_lbry_uploader, args=(sd_hash_queue, kill_event, dead_events[0],
+                                                             9373419, 2**22))
+        uploader.start()
+        self.server_processes.append(uploader)
+
+        logging.debug("Testing multiple uploaders")
+
+        wallet = FakeWallet()
+        peer_manager = PeerManager()
+        peer_finder = FakePeerFinder(5553, peer_manager, num_uploaders)
+        hash_announcer = FakeAnnouncer()
+        rate_limiter = DummyRateLimiter()
+        sd_identifier = StreamDescriptorIdentifier()
+
+        db_dir = "client"
+        blob_dir = os.path.join(db_dir, "blobfiles")
+        os.mkdir(db_dir)
+        os.mkdir(blob_dir)
+
+        self.session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+                                   peer_finder=peer_finder, hash_announcer=hash_announcer,
+                                   blob_dir=None, peer_port=5553,
+                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
+
+        self.stream_info_manager = TempLBRYFileMetadataManager()
+
+        self.lbry_file_manager = LBRYFileManager(self.session, self.stream_info_manager, sd_identifier)
+
+        def start_additional_uploaders(sd_hash):
+            for i in range(1, num_uploaders):
+                uploader = Process(target=start_lbry_reuploader,
+                                   args=(sd_hash, kill_event, dead_events[i], ready_events[i-1], i, 2**10))
+                uploader.start()
+                self.server_processes.append(uploader)
+            return defer.succeed(True)
+
+        def wait_for_ready_events():
+            return defer.DeferredList([self.wait_for_event(ready_event, 60) for ready_event in ready_events])
+
+        def make_downloader(metadata, prm):
+            info_validator = metadata.validator
+            options = metadata.options
+            factories = metadata.factories
+            chosen_options = [o.default_value for o in options.get_downloader_options(info_validator, prm)]
+            return factories[0].make_downloader(metadata, chosen_options, prm)
+
+        def download_file(sd_hash):
+            prm = PaymentRateManager(self.session.base_payment_rate_manager)
+            d = download_sd_blob(self.session, sd_hash, prm)
+            d.addCallback(sd_identifier.get_metadata_for_sd_blob)
+            d.addCallback(make_downloader, prm)
+            d.addCallback(lambda downloader: downloader.start())
+            return d
+
+        def check_md5_sum():
+            f = open('test_file')
+            hashsum = MD5.new()
+            hashsum.update(f.read())
+            self.assertEqual(hashsum.hexdigest(), "e5941d615f53312fd66638239c1f90d5")
+
+        def start_transfer(sd_hash):
+
+            logging.debug("Starting the transfer")
+
+            d = start_additional_uploaders(sd_hash)
+            d.addCallback(lambda _: wait_for_ready_events())
+            d.addCallback(lambda _: self.session.setup())
+            d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
+            d.addCallback(lambda _: self.lbry_file_manager.setup())
+            d.addCallback(lambda _: download_file(sd_hash))
+            d.addCallback(lambda _: check_md5_sum())
+
+            return d
+
+        def stop(arg):
+            if isinstance(arg, Failure):
+                logging.debug("Client is stopping due to an error. Error: %s", arg.getTraceback())
+            else:
+                logging.debug("Client is stopping normally.")
+            kill_event.set()
+            logging.debug("Set the kill event")
+            d = defer.DeferredList([self.wait_for_event(dead_event, 15) for dead_event in dead_events])
+
+            def print_shutting_down():
+                logging.info("Client is shutting down")
+
+            d.addCallback(lambda _: print_shutting_down())
+            d.addCallback(lambda _: arg)
+            return d
+
+        d = self.wait_for_hash_from_queue(sd_hash_queue)
+        d.addCallback(start_transfer)
+        d.addBoth(stop)
+
         return d
 
 
@@ -1057,7 +1267,7 @@ class TestStreamify(TestCase):
 
         wallet = FakeWallet()
         peer_manager = PeerManager()
-        peer_finder = FakeTwoPeerFinder(5553, peer_manager)
+        peer_finder = FakePeerFinder(5553, peer_manager, 2)
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
@@ -1109,7 +1319,7 @@ class TestStreamify(TestCase):
 
         wallet = FakeWallet()
         peer_manager = PeerManager()
-        peer_finder = FakeTwoPeerFinder(5553, peer_manager)
+        peer_finder = FakePeerFinder(5553, peer_manager, 2)
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()

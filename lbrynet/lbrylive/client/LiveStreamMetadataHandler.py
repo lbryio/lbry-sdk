@@ -338,12 +338,9 @@ class LiveStreamMetadataHandler(object):
             return
         if reason.check(NoResponseError):
             self._incompatible_peers.append(peer)
-            return
         log.warning("Crypt stream info finder: a request failed. Reason: %s", reason.getErrorMessage())
         self._update_local_score(peer, -5.0)
         peer.update_score(-10.0)
         if reason.check(ConnectionClosedBeforeResponseError):
             return
-        # Only unexpected errors should be returned, as they are indicative of real problems
-        # and may be shown to the user.
         return reason

@@ -59,6 +59,9 @@ class HashBlobWriter(object):
                                                             " %s to %s" % (str(self.len_so_far),
                                                                            str(self.length_getter())))))
         else:
+            if self.write_handle is None:
+                log.debug("Tried to write to a write_handle that was None.")
+                return
             self.write_handle.write(data)
             if self.len_so_far == self.length_getter():
                 self.finished_cb(self)

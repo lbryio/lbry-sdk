@@ -1,5 +1,6 @@
 from zope.interface import implements
 from lbrynet.interfaces import IRateLimiter
+from twisted.internet import task
 
 
 class DummyRateLimiter(object):
@@ -10,34 +11,26 @@ class DummyRateLimiter(object):
         self.total_ul_bytes = 0
         self.target_dl = 0
         self.target_ul = 0
-        self.ul_delay = 0.00
-        self.dl_delay = 0.00
-        self.next_tick = None
+        self.tick_call = None
+
+    def start(self):
+        self.tick_call = task.LoopingCall(self.tick)
+        self.tick_call.start(1)
 
     def tick(self):
-
-        from twisted.internet import reactor
-
         self.dl_bytes_this_second = 0
         self.ul_bytes_this_second = 0
-        self.next_tick = reactor.callLater(1.0, self.tick)
 
     def stop(self):
-        if self.next_tick is not None:
-            self.next_tick.cancel()
-            self.next_tick = None
+        if self.tick_call is not None:
+            self.tick_call.stop()
+            self.tick_call = None
 
     def set_dl_limit(self, limit):
         pass
 
     def set_ul_limit(self, limit):
         pass
-
-    def ul_wait_time(self):
-        return self.ul_delay
-
-    def dl_wait_time(self):
-        return self.dl_delay
 
     def report_dl_bytes(self, num_bytes):
         self.dl_bytes_this_second += num_bytes
@@ -58,66 +51,32 @@ class RateLimiter(object):
     def __init__(self, max_dl_bytes=None, max_ul_bytes=None):
         self.max_dl_bytes = max_dl_bytes
         self.max_ul_bytes = max_ul_bytes
-        self.dl_bytes_this_second = 0
-        self.ul_bytes_this_second = 0
+        self.dl_bytes_this_interval = 0
+        self.ul_bytes_this_interval = 0
         self.total_dl_bytes = 0
         self.total_ul_bytes = 0
-        self.next_tick = None
-        self.next_unthrottle_dl = None
-        self.next_unthrottle_ul = None
-
-        self.next_dl_check = None
-        self.next_ul_check = None
-
-        self.dl_check_interval = 1.0
-        self.ul_check_interval = 1.0
+        self.tick_call = None
+        self.tick_interval = 0.1
 
         self.dl_throttled = False
         self.ul_throttled = False
 
         self.protocols = []
 
+    def start(self):
+        self.tick_call = task.LoopingCall(self.tick)
+        self.tick_call.start(self.tick_interval)
+
     def tick(self):
-
-        from twisted.internet import reactor
-
-        # happens once per second
-        if self.next_dl_check is not None:
-            self.next_dl_check.cancel()
-            self.next_dl_check = None
-        if self.next_ul_check is not None:
-            self.next_ul_check.cancel()
-            self.next_ul_check = None
-        if self.max_dl_bytes is not None:
-            if self.dl_bytes_this_second == 0:
-                self.dl_check_interval = 1.0
-            else:
-                self.dl_check_interval = min(1.0, self.dl_check_interval *
-                                             self.max_dl_bytes / self.dl_bytes_this_second)
-            self.next_dl_check = reactor.callLater(self.dl_check_interval, self.check_dl)
-        if self.max_ul_bytes is not None:
-            if self.ul_bytes_this_second == 0:
-                self.ul_check_interval = 1.0
-            else:
-                self.ul_check_interval = min(1.0, self.ul_check_interval *
-                                             self.max_ul_bytes / self.ul_bytes_this_second)
-            self.next_ul_check = reactor.callLater(self.ul_check_interval, self.check_ul)
-        self.dl_bytes_this_second = 0
-        self.ul_bytes_this_second = 0
+        self.dl_bytes_this_interval = 0
+        self.ul_bytes_this_interval = 0
         self.unthrottle_dl()
         self.unthrottle_ul()
-        self.next_tick = reactor.callLater(1.0, self.tick)
 
     def stop(self):
-        if self.next_tick is not None:
-            self.next_tick.cancel()
-            self.next_tick = None
-        if self.next_dl_check is not None:
-            self.next_dl_check.cancel()
-            self.next_dl_check = None
-        if self.next_ul_check is not None:
-            self.next_ul_check.cancel()
-            self.next_ul_check = None
+        if self.tick_call is not None:
+            self.tick_call.stop()
+            self.tick_call = None
 
     def set_dl_limit(self, limit):
         self.max_dl_bytes = limit
@@ -129,27 +88,15 @@ class RateLimiter(object):
 
     def check_dl(self):
 
-        from twisted.internet import reactor
-
-        self.next_dl_check = None
-
-        if self.dl_bytes_this_second > self.max_dl_bytes:
-            self.throttle_dl()
-        else:
-            self.next_dl_check = reactor.callLater(self.dl_check_interval, self.check_dl)
-            self.dl_check_interval = min(self.dl_check_interval * 2, 1.0)
+        if self.max_dl_bytes is not None and self.dl_bytes_this_interval > self.max_dl_bytes * self.tick_interval:
+            from twisted.internet import reactor
+            reactor.callLater(0, self.throttle_dl)
 
     def check_ul(self):
 
-        from twisted.internet import reactor
-
-        self.next_ul_check = None
-
-        if self.ul_bytes_this_second > self.max_ul_bytes:
-            self.throttle_ul()
-        else:
-            self.next_ul_check = reactor.callLater(self.ul_check_interval, self.check_ul)
-            self.ul_check_interval = min(self.ul_check_interval * 2, 1.0)
+        if self.max_ul_bytes is not None and self.ul_bytes_this_interval > self.max_ul_bytes * self.tick_interval:
+            from twisted.internet import reactor
+            reactor.callLater(0, self.throttle_ul)
 
     def throttle_dl(self):
         if self.dl_throttled is False:
@@ -175,23 +122,17 @@ class RateLimiter(object):
                 protocol.unthrottle_upload()
             self.ul_throttled = False
 
-    #deprecated
-
-    def ul_wait_time(self):
-        return 0
-
-    def dl_wait_time(self):
-        return 0
-
     #called by protocols
 
     def report_dl_bytes(self, num_bytes):
-        self.dl_bytes_this_second += num_bytes
+        self.dl_bytes_this_interval += num_bytes
         self.total_dl_bytes += num_bytes
+        self.check_dl()
 
     def report_ul_bytes(self, num_bytes):
-        self.ul_bytes_this_second += num_bytes
+        self.ul_bytes_this_interval += num_bytes
         self.total_ul_bytes += num_bytes
+        self.check_ul()
 
     def register_protocol(self, protocol):
         if protocol not in self.protocols:

@@ -243,7 +243,7 @@ class LBRYSession(object):
             else:
                 self.blob_manager = DiskBlobManager(self.hash_announcer, self.blob_dir, self.db_dir)
 
-        self.rate_limiter.tick()
+        self.rate_limiter.start()
         d1 = self.blob_manager.setup()
         d2 = self.wallet.start()
 

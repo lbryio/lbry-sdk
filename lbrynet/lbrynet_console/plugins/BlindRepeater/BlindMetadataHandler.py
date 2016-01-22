@@ -290,15 +290,12 @@ class BlindMetadataHandler(object):
             return
         if reason.check(NoResponseError):
             self._incompatible_peers.append(peer)
-            return
         log.warning("Valuable blob info requester: a request of type %s has failed. Reason: %s",
                     str(request_type), str(reason.getErrorMessage()))
         self._update_local_score(peer, -10.0)
         peer.update_score(-5.0)
         if reason.check(ConnectionClosedBeforeResponseError):
             return
-        # Only unexpected errors should be returned, as they are indicative of real problems
-        # and may be shown to the user.
         return reason
 
     def _search_for_peers(self):
