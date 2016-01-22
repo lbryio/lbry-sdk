@@ -100,6 +100,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         def _disp_startup():
             print "Started LBRYnet daemon"
+            print "The daemon can be shut down by running 'stop-lbrynet-daemon' in a terminal"
             return defer.succeed(None)
 
         d = defer.Deferred()
@@ -572,7 +573,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             print str(err.getTraceback())
             return err
         d = defer.Deferred()
-        d.addCallback(lambda _: webbrowser.open("https://cdn.rawgit.com/jackrobison/lbry.io/local/view/page/demo.html"))
+        d.addCallback(lambda _: webbrowser.open("file://" + str(os.path.join(self.download_directory, "lbryio/view/page/gui.html"))))
         d.addErrback(_disp_err)
         d.callback(None)
 
