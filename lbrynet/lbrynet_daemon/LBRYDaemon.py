@@ -573,7 +573,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             print str(err.getTraceback())
             return err
         d = defer.Deferred()
-        d.addCallback(lambda _: webbrowser.open(os.path.join(self.download_directory, "lbryio/view/page/gui.html")))
+        d.addCallback(lambda _: webbrowser.open("file://" + str(os.path.join(self.download_directory, "lbryio/view/page/gui.html"))))
         d.addErrback(_disp_err)
         d.callback(None)
 
