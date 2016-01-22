@@ -15,11 +15,17 @@ def main(args):
 
     daemon = xmlrpclib.ServerProxy('http://localhost:7080/')
 
+    try:
+        b = daemon.get_balance()
+        is_running = True
+    except:
+        webbrowser.open('http://lbry.io/get')
+        is_running = False
+
     if len(args) > 1:
         print 'Too many args', args
 
-    else:
-
+    elif is_running:
         if args[0][7:] == 'lbry':
             daemon.render_gui()
 

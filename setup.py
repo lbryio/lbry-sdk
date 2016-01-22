@@ -22,6 +22,7 @@ setup(name='lbrynet',
               'lbrynet-lookup-hosts-for-hash = lbrynet.dht_scripts:get_hosts_for_hash_in_dht',
               'lbrynet-announce_hash_to_dht = lbrynet.dht_scripts:announce_hash_to_dht',
               'lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemon:main',
+              'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonStopper:main',
           ]
       },
       data_files=[
