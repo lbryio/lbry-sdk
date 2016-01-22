@@ -75,6 +75,9 @@ class CryptStreamDownloader(object):
 
         self.points_paid = 0.0
 
+    def __str__(self):
+        return str(self.stream_name)
+
     def toggle_running(self):
         if self.stopped is True:
             return self.start()

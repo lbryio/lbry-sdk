@@ -172,7 +172,14 @@ class LBRYFileSaver(LBRYFileDownloader):
                                     stream_info_manager, payment_rate_manager, wallet, upload_allowed)
         self.download_directory = download_directory
         self.file_name = file_name
+        self.file_written_to = None
         self.file_handle = None
+
+    def __str__(self):
+        if self.file_written_to is not None:
+            return str(self.file_written_to)
+        else:
+            return str(self.file_name)
 
     def set_stream_info(self):
         d = LBRYFileDownloader.set_stream_info(self)
@@ -210,6 +217,7 @@ class LBRYFileSaver(LBRYFileDownloader):
                     file_name = file_name + "_" + str(ext_num)
                 try:
                     self.file_handle = open(os.path.join(self.download_directory, file_name), 'wb')
+                    self.file_written_to = os.path.join(self.download_directory, file_name)
                 except IOError:
                     log.error(traceback.format_exc())
                     raise ValueError("Failed to open %s. Make sure you have permission to save files to that"

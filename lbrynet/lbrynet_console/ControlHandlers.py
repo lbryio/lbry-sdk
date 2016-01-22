@@ -481,7 +481,6 @@ class AddStream(CommandHandler):
         self.options_chosen = []
         self.current_option = None
         self.current_choice = None
-        self.downloader = None
         self.got_options_response = False
         self.loading_failed = False
         self.payment_rate_manager = PaymentRateManager(base_payment_rate_manager)
@@ -764,9 +763,18 @@ class AddStream(CommandHandler):
 
     def _start_download(self):
         d = self._make_downloader()
-        d.addCallback(lambda stream_downloader: stream_downloader.start())
+
+        def do_download(stream_downloader):
+            d = stream_downloader.start()
+            d.addCallback(lambda _: self._download_succeeded(stream_downloader))
+            return d
+
+        d.addCallback(do_download)
         d.addErrback(self._handle_download_error)
         return d
+
+    def _download_succeeded(self, stream_downloader):
+        self.console.sendLine("%s has successfully downloaded." % str(stream_downloader))
 
     def _handle_download_error(self, err):
         if err.check(InsufficientFundsError):
