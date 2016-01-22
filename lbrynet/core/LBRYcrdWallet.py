@@ -294,7 +294,7 @@ class LBRYcrdWallet(object):
         return d
 
     def claim_name(self, name, sd_hash, amount, description=None, key_fee=None,
-                    key_fee_address=None):
+                    key_fee_address=None, thumbnail=None):
         value = {"stream_hash": sd_hash}
         if description is not None:
             value['description'] = description
@@ -302,6 +302,8 @@ class LBRYcrdWallet(object):
             value['key_fee'] = key_fee
         if key_fee_address is not None:
             value['key_fee_address'] = key_fee_address
+        if thumbnail is not None:
+            value['thumbnail'] = thumbnail
         d = threads.deferToThread(self._claim_name, name, json.dumps(value), amount)
 
         def _save_metadata(txid):
