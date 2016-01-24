@@ -7,7 +7,7 @@ from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
+from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
@@ -24,7 +24,6 @@ import binascii
 import webbrowser
 
 log = logging.getLogger(__name__)
-
 
 #TODO add login credentials in a conf file
 
@@ -332,7 +331,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         return d
 
-
     def _resolve_name_wc(self, name):
         d = defer.Deferred()
         d.addCallback(lambda _: self.session.wallet.get_stream_info_for_name(name))
@@ -399,9 +397,44 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         else:
             return defer.fail(UnknownNameError)
 
+    def _get_est_cost(self, name):
+        def _check_est(d, name):
+            if type(d.result) is float:
+                print '[' + str(datetime.now()) + '] Cost est for lbry://' + name + ': ' + str(d.result) + 'LBC'
+            else:
+                print '[' + str(datetime.now()) + '] Timeout estimating cost for lbry://' + name + ', using key fee'
+                d.cancel()
+            return defer.succeed(None)
+
+        def _to_dict(r):
+            t = {}
+            for i in r:
+                t[i[0]] = i[1]
+            return t
+
+        def _add_key_fee(data_cost):
+            d = self.session.wallet.get_stream_info_for_name(name)
+            d.addCallback(lambda info: info['key_fee'] if 'key_fee' in info.keys() else 0.0)
+            d.addCallback(lambda key_fee: key_fee + data_cost)
+            return d
+
+        d = self.session.wallet.get_stream_info_for_name(name)
+        d.addCallback(lambda info: download_sd_blob(self.session, info['stream_hash'], self.session.base_payment_rate_manager))
+        d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
+        d.addCallback(lambda metadata: metadata.validator.info_to_show())
+        d.addCallback(_to_dict)
+        d.addCallback(lambda info: int(info['stream_size'])/1000000*self.data_rate)
+        d.addCallback(_add_key_fee)
+        d.addErrback(lambda _: _add_key_fee(0.0))
+        reactor.callLater(5.0, _check_est, d, name)
+
+        return d
+
     def xmlrpc_get_settings(self):
         """
         Get LBRY payment settings
+
+        @return {'data_rate': float, 'max_key_fee': float}
         """
 
         if not self.session_settings:
@@ -411,6 +444,12 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return self.session_settings
 
     def xmlrpc_set_settings(self, settings):
+        """
+        Set LBRY payment settings
+
+        @param settings dict: {'data_rate': float, 'max_key_fee': float}
+        """
+
         self.session_settings = settings
         self._update_settings()
 
@@ -428,7 +467,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
     def xmlrpc_stop_fetcher(self):
         """
-        Start autofetcher
+        Stop autofetcher
         """
 
         self.fetcher.stop()
@@ -453,7 +492,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
     def xmlrpc_stop(self):
         """
-        Stop the reactor
+        Stop lbrynet-daemon
         """
 
         def _disp_shutdown():
@@ -470,7 +509,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
         Get LBRY files
 
-        @return: Managed LBRY files
+        @return: List of managed LBRY files
         """
 
         r = []
@@ -496,6 +535,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Resolve stream info from a LBRY uri
 
         @param: name
+        @return: info for name claim
         """
 
         def _disp(info):
@@ -513,6 +553,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Download stream from a LBRY uri
 
         @param: name
+        @return: {'stream_hash': hex string, 'path': path of download}
         """
 
         d = self._download_name(name)
@@ -546,8 +587,13 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         else:
             return defer.succeed('Stream was already running')
 
-
     def xmlrpc_render_html(self, html):
+        """
+        Writes html to lbry.html in the downloads directory, then opens it with the browser
+
+        @param html:
+        """
+
         def _make_file(html, path):
             f = open(path, 'w')
             f.write(html)
@@ -569,6 +615,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return d
 
     def xmlrpc_render_gui(self):
+        """
+        Opens the lbry web ui in a browser
+        """
+
         def _disp_err(err):
             print str(err.getTraceback())
             return err
@@ -580,6 +630,13 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return d
 
     def xmlrpc_search_nametrie(self, search):
+        """
+        Search the nametrie for claims beginning with search
+
+        @param search:
+        @return:
+        """
+
         def _return_d(x):
             d = defer.Deferred()
             d.addCallback(lambda _: x)
@@ -591,27 +648,26 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             t = []
             for i in n:
                 if i[0]:
-                    if i[1][0][0] and i[1][1][0]:
+                    if i[1][0][0] and i[1][1][0] and i[1][2][0]:
                         i[1][0][1]['value'] = str(i[1][0][1]['value'])
-                        t.append([i[1][0][1], i[1][1][1]])
+                        t.append([i[1][0][1], i[1][1][1], i[1][2][1]])
             return t
 
         def _parse(results):
             f = []
-            for chain, meta in results:
+            for chain, meta, cost_est in results:
                 t = {}
                 if 'name' in chain.keys():
                     t['name'] = chain['name']
                 if 'thumbnail' in meta.keys():
                     t['img'] = meta['thumbnail']
+                else:
+                    t['img'] = 'File://' + str(os.path.join(self.download_directory, "lbryio/web/img/Free-speech-flag.svg"))
                 if 'name' in meta.keys():
                     t['title'] = meta['name']
                 if 'description' in meta.keys():
                     t['description'] = meta['description']
-                if 'key_fee' in meta.keys():
-                    t['cost_est'] = meta['key_fee']
-                else:
-                    t['cost_est'] = 0.0
+                t['cost_est'] = cost_est
                 f.append(t)
 
             return f
@@ -623,8 +679,12 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         print '[' + str(datetime.now()) + '] Search nametrie: ' + search
 
         filtered_results = [n for n in self.rpc_conn.getnametrie() if n['name'].startswith(search)]
+        if len(filtered_results) > 25:
+            filtered_results = filtered_results[:25]
         filtered_results = [n for n in filtered_results if 'txid' in n.keys()]
-        resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name_wc(n['name'])]) for n in filtered_results]
+        resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name_wc(n['name']),
+                                                self._get_est_cost(n['name'])])
+                                                for n in filtered_results]
 
         d = defer.DeferredList(resolved_results)
         d.addCallback(_clean)
@@ -685,21 +745,28 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             thumbnail = None
 
         if 'key_fee' in metadata.keys():
-            if not 'key_fee_address' in metadata.keys():
-                return defer.fail()
+            if not float(metadata['key_fee']) == 0.0:
+                if not 'key_fee_address' in metadata.keys():
+                    return defer.fail()
             key_fee = metadata['key_fee']
         else:
-            key_fee = None
+            key_fee = 0.0
 
         if 'key_fee_address' in metadata.keys():
             key_fee_address = metadata['key_fee_address']
         else:
             key_fee_address = None
 
+        if 'content_license' in metadata.keys():
+            content_license = metadata['content_license']
+        else:
+            content_license = None
+
         p = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
-        d = p.start(name, file_path, bid, title, description, thumbnail, key_fee, key_fee_address)
+        d = p.start(name, file_path, bid, title, description, thumbnail, key_fee, key_fee_address, content_license)
 
         return d
+
 
 def main():
     daemon = LBRYDaemon()
