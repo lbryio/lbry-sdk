@@ -556,8 +556,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         @return: {'stream_hash': hex string, 'path': path of download}
         """
 
-        d = self._download_name(name)
-
+        if name:
+            d = self._download_name(name)
+        else:
+            d = defer.succeed('No name provided')
         return d
 
     def xmlrpc_stop_lbry_file(self, stream_hash):
