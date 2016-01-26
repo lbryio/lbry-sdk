@@ -498,14 +498,15 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             return d
 
         d = self.session.wallet.get_stream_info_for_name(name)
-        d.addCallback(lambda info: download_sd_blob(self.session, info['stream_hash'], self.session.base_payment_rate_manager))
+        d.addCallback(lambda info: download_sd_blob(self.session, info['stream_hash'],
+                                                    self.blob_request_payment_rate_manager))
         d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         d.addCallback(lambda metadata: metadata.validator.info_to_show())
         d.addCallback(_to_dict)
         d.addCallback(lambda info: int(info['stream_size'])/1000000*self.data_rate)
         d.addCallback(_add_key_fee)
         d.addErrback(lambda _: _add_key_fee(0.0))
-        reactor.callLater(7.5, _check_est, d, name)
+        reactor.callLater(3.0, _check_est, d, name)
 
         return d
 
