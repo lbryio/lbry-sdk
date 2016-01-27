@@ -33,8 +33,7 @@ class StreamFrame(object):
 
         close_file_name = "close2.gif"
         if os.name == "nt":
-            close_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "lbrynet",
-                                      "lbrynet_downloader_gui", close_file_name)
+            close_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), close_file_name)
         else:
             close_file = os.path.join(os.path.dirname(__file__), close_file_name)
 
