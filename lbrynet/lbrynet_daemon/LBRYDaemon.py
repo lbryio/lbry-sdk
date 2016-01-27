@@ -803,7 +803,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         # if not os.path.isfile(metadata['file_path']):
         #     return defer.fail()
 
-        if not type(metadata['bid']) is float and metadata['bid'] > 0.0:
+        if not isinstance(metadata['bid'], float) and metadata['bid'] > 0.0:
             return defer.fail()
 
         name = metadata['name']
@@ -879,6 +879,14 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(get_time_behind_blockchain)
 
         return d
+
+    def xmlrpc_toggle_fetcher_verbose(self):
+        if self.fetcher.verbose:
+            self.fetcher.verbose = False
+        else:
+            self.fetcher.verbose = True
+
+        return self.fetcher.verbose
 
 
 def main():
