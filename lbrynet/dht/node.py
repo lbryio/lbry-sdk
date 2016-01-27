@@ -516,7 +516,7 @@ class Node(object):
             else:
                 raise TypeError, 'No NodeID given. Therefore we can\'t store this node'
 
-        if self_store is True and self.externalIP is not None:
+        if self_store is True and self.externalIP:
             contact = Contact(self.id, self.externalIP, self.port, None, None)
             compact_ip = contact.compact_ip()
         elif '_rpcNodeContact' in kwargs:

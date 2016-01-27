@@ -1,3 +1,8 @@
+from lbrynet.core.PaymentRateManager import PaymentRateManager
+from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
+from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
+from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
+from lbrynet.lbrynet_console.ControlHandlers import get_time_behind_blockchain
 from lbrynet.core.Error import UnknownNameError
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
@@ -7,14 +12,14 @@ from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
+from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 from twisted.web import xmlrpc, server
-from twisted.internet import defer, threads, reactor
+from twisted.internet import defer, threads, reactor, error
 from datetime import datetime
 import logging
 import os
@@ -22,9 +27,9 @@ import sys
 import json
 import binascii
 import webbrowser
+from decimal import Decimal
 
 log = logging.getLogger(__name__)
-
 
 #TODO add login credentials in a conf file
 
@@ -87,7 +92,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.wallet_type = "lbrycrd"
             self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
             self.autofetcher_conf = os.path.join(self.wallet_dir, "autofetcher.conf")
-            self.rpc_conn = None
             self.files = []
             self.created_data_dir = False
             if not os.path.exists(self.db_dir):
@@ -96,6 +100,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.session_settings = None
             self.data_rate = 0.5
             self.max_key_fee = 100.0
+            self.query_handlers = {}
+
             return defer.succeed(None)
 
         def _disp_startup():
@@ -114,18 +120,91 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_stream_identifier())
         d.addCallback(lambda _: self._setup_lbry_file_manager())
         d.addCallback(lambda _: self._setup_lbry_file_opener())
+        d.addCallback(lambda _: self._setup_query_handlers())
+        d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: self._setup_fetcher())
         d.addCallback(lambda _: _disp_startup())
         d.callback(None)
 
         return defer.succeed(None)
 
+    def _start_server(self):
+
+        if self.peer_port is not None:
+
+            server_factory = ServerProtocolFactory(self.session.rate_limiter,
+                                                   self.query_handlers,
+                                                   self.session.peer_manager)
+            try:
+                self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
+            except error.CannotListenError as e:
+                import traceback
+                log.error("Couldn't bind to port %d. %s", self.peer_port, traceback.format_exc())
+                raise ValueError("%s lbrynet may already be running on your computer.", str(e))
+        return defer.succeed(True)
+
+    def _stop_server(self):
+        if self.lbry_server_port is not None:
+            self.lbry_server_port, p = None, self.lbry_server_port
+            return defer.maybeDeferred(p.stopListening)
+        else:
+            return defer.succeed(True)
+
+    def _setup_server(self):
+
+        def restore_running_status(running):
+            if running is True:
+                return self._start_server()
+            return defer.succeed(True)
+
+        dl = self.settings.get_server_running_status()
+        dl.addCallback(restore_running_status)
+        return dl
+
+    def _setup_query_handlers(self):
+        handlers = [
+            #CryptBlobInfoQueryHandlerFactory(self.lbry_file_metadata_manager, self.session.wallet,
+            #                                 self._server_payment_rate_manager),
+            BlobAvailabilityHandlerFactory(self.session.blob_manager),
+            #BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
+            #                          self._server_payment_rate_manager),
+            self.session.wallet.get_wallet_info_query_handler_factory(),
+        ]
+
+        def get_blob_request_handler_factory(rate):
+            self.blob_request_payment_rate_manager = PaymentRateManager(
+                self.session.base_payment_rate_manager, rate
+            )
+            handlers.append(BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
+                                                      self.blob_request_payment_rate_manager))
+
+        d1 = self.settings.get_server_data_payment_rate()
+        d1.addCallback(get_blob_request_handler_factory)
+
+        dl = defer.DeferredList([d1])
+        dl.addCallback(lambda _: self._add_query_handlers(handlers))
+        return dl
+
+    def _add_query_handlers(self, query_handlers):
+
+        def _set_query_handlers(statuses):
+            from future_builtins import zip
+            for handler, (success, status) in zip(query_handlers, statuses):
+                if success is True:
+                    self.query_handlers[handler] = status
+
+        ds = []
+        for handler in query_handlers:
+            ds.append(self.settings.get_query_handler_status(handler.get_primary_query_identifier()))
+        dl = defer.DeferredList(ds)
+        dl.addCallback(_set_query_handlers)
+        return dl
+
     def _shutdown(self):
         print 'Closing lbrynet session'
+        d = self._stop_server()
         if self.session is not None:
-            d = self.session.shut_down()
-        else:
-            d = defer.succeed(True)
+            d.addCallback(lambda _: self.session.shut_down())
         return d
 
     def _update_settings(self):
@@ -175,11 +254,11 @@ class LBRYDaemon(xmlrpc.XMLRPC):
     def _get_settings(self):
         d = self.settings.start()
         d.addCallback(lambda _: self.settings.get_lbryid())
-        d.addCallback(self.set_lbryid)
+        d.addCallback(self._set_lbryid)
         d.addCallback(lambda _: self._get_lbrycrdd_path())
         return d
 
-    def set_lbryid(self, lbryid):
+    def _set_lbryid(self, lbryid):
         if lbryid is None:
             return self._make_lbryid()
         else:
@@ -238,7 +317,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
                                        use_upnp=self.use_upnp, wallet=results['wallet'])
-            self.rpc_conn = self.session.wallet.get_rpc_conn_x()
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
         dl.addCallback(combine_results)
@@ -332,7 +410,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         return d
 
-
     def _resolve_name_wc(self, name):
         d = defer.Deferred()
         d.addCallback(lambda _: self.session.wallet.get_stream_info_for_name(name))
@@ -399,9 +476,45 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         else:
             return defer.fail(UnknownNameError)
 
+    def _get_est_cost(self, name):
+        def _check_est(d, name):
+            if type(d.result) is float:
+                print '[' + str(datetime.now()) + '] Cost est for lbry://' + name + ': ' + str(d.result) + 'LBC'
+            else:
+                print '[' + str(datetime.now()) + '] Timeout estimating cost for lbry://' + name + ', using key fee'
+                d.cancel()
+            return defer.succeed(None)
+
+        def _to_dict(r):
+            t = {}
+            for i in r:
+                t[i[0]] = i[1]
+            return t
+
+        def _add_key_fee(data_cost):
+            d = self.session.wallet.get_stream_info_for_name(name)
+            d.addCallback(lambda info: info['key_fee'] if 'key_fee' in info.keys() else 0.0)
+            d.addCallback(lambda key_fee: key_fee + data_cost)
+            return d
+
+        d = self.session.wallet.get_stream_info_for_name(name)
+        d.addCallback(lambda info: download_sd_blob(self.session, info['stream_hash'],
+                                                    self.blob_request_payment_rate_manager))
+        d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
+        d.addCallback(lambda metadata: metadata.validator.info_to_show())
+        d.addCallback(_to_dict)
+        d.addCallback(lambda info: int(info['stream_size'])/1000000*self.data_rate)
+        d.addCallback(_add_key_fee)
+        d.addErrback(lambda _: _add_key_fee(0.0))
+        reactor.callLater(3.0, _check_est, d, name)
+
+        return d
+
     def xmlrpc_get_settings(self):
         """
         Get LBRY payment settings
+
+        @return {'data_rate': float, 'max_key_fee': float}
         """
 
         if not self.session_settings:
@@ -411,6 +524,12 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return self.session_settings
 
     def xmlrpc_set_settings(self, settings):
+        """
+        Set LBRY payment settings
+
+        @param settings dict: {'data_rate': float, 'max_key_fee': float}
+        """
+
         self.session_settings = settings
         self._update_settings()
 
@@ -428,7 +547,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
     def xmlrpc_stop_fetcher(self):
         """
-        Start autofetcher
+        Stop autofetcher
         """
 
         self.fetcher.stop()
@@ -453,7 +572,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
     def xmlrpc_stop(self):
         """
-        Stop the reactor
+        Stop lbrynet-daemon
         """
 
         def _disp_shutdown():
@@ -461,16 +580,15 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         d = self._shutdown()
         d.addCallback(lambda _: _disp_shutdown())
-        d.addCallback(lambda _: reactor.stop())
-        d.callback(None)
+        d.addCallback(lambda _: reactor.callLater(1.0, reactor.stop))
 
-        return d
+        return defer.succeed('Shutting down')
 
     def xmlrpc_get_lbry_files(self):
         """
         Get LBRY files
 
-        @return: Managed LBRY files
+        @return: List of managed LBRY files
         """
 
         r = []
@@ -496,6 +614,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Resolve stream info from a LBRY uri
 
         @param: name
+        @return: info for name claim
         """
 
         def _disp(info):
@@ -513,10 +632,13 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         Download stream from a LBRY uri
 
         @param: name
+        @return: {'stream_hash': hex string, 'path': path of download}
         """
 
-        d = self._download_name(name)
-
+        if name:
+            d = self._download_name(name)
+        else:
+            d = defer.succeed('No name provided')
         return d
 
     def xmlrpc_stop_lbry_file(self, stream_hash):
@@ -546,8 +668,13 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         else:
             return defer.succeed('Stream was already running')
 
-
     def xmlrpc_render_html(self, html):
+        """
+        Writes html to lbry.html in the downloads directory, then opens it with the browser
+
+        @param html:
+        """
+
         def _make_file(html, path):
             f = open(path, 'w')
             f.write(html)
@@ -569,6 +696,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return d
 
     def xmlrpc_render_gui(self):
+        """
+        Opens the lbry web ui in a browser
+        """
+
         def _disp_err(err):
             print str(err.getTraceback())
             return err
@@ -580,6 +711,13 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return d
 
     def xmlrpc_search_nametrie(self, search):
+        """
+        Search the nametrie for claims beginning with search
+
+        @param search:
+        @return:
+        """
+
         def _return_d(x):
             d = defer.Deferred()
             d.addCallback(lambda _: x)
@@ -591,27 +729,26 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             t = []
             for i in n:
                 if i[0]:
-                    if i[1][0][0] and i[1][1][0]:
+                    if i[1][0][0] and i[1][1][0] and i[1][2][0]:
                         i[1][0][1]['value'] = str(i[1][0][1]['value'])
-                        t.append([i[1][0][1], i[1][1][1]])
+                        t.append([i[1][0][1], i[1][1][1], i[1][2][1]])
             return t
 
         def _parse(results):
             f = []
-            for chain, meta in results:
+            for chain, meta, cost_est in results:
                 t = {}
                 if 'name' in chain.keys():
                     t['name'] = chain['name']
                 if 'thumbnail' in meta.keys():
                     t['img'] = meta['thumbnail']
+                else:
+                    t['img'] = 'File://' + str(os.path.join(self.download_directory, "lbryio/web/img/Free-speech-flag.svg"))
                 if 'name' in meta.keys():
                     t['title'] = meta['name']
                 if 'description' in meta.keys():
                     t['description'] = meta['description']
-                if 'key_fee' in meta.keys():
-                    t['cost_est'] = meta['key_fee']
-                else:
-                    t['cost_est'] = 0.0
+                t['cost_est'] = cost_est
                 f.append(t)
 
             return f
@@ -622,9 +759,13 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         print '[' + str(datetime.now()) + '] Search nametrie: ' + search
 
-        filtered_results = [n for n in self.rpc_conn.getnametrie() if n['name'].startswith(search)]
+        filtered_results = [n for n in self.session.wallet.get_nametrie() if n['name'].startswith(search)]
+        if len(filtered_results) > 25:
+            filtered_results = filtered_results[:25]
         filtered_results = [n for n in filtered_results if 'txid' in n.keys()]
-        resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name_wc(n['name'])]) for n in filtered_results]
+        resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name_wc(n['name']),
+                                                self._get_est_cost(n['name'])])
+                                                for n in filtered_results]
 
         d = defer.DeferredList(resolved_results)
         d.addCallback(_clean)
@@ -685,21 +826,60 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             thumbnail = None
 
         if 'key_fee' in metadata.keys():
-            if not 'key_fee_address' in metadata.keys():
-                return defer.fail()
+            if not float(metadata['key_fee']) == 0.0:
+                if not 'key_fee_address' in metadata.keys():
+                    return defer.fail()
             key_fee = metadata['key_fee']
         else:
-            key_fee = None
+            key_fee = 0.0
 
         if 'key_fee_address' in metadata.keys():
             key_fee_address = metadata['key_fee_address']
         else:
             key_fee_address = None
 
+        if 'content_license' in metadata.keys():
+            content_license = metadata['content_license']
+        else:
+            content_license = None
+
         p = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
-        d = p.start(name, file_path, bid, title, description, thumbnail, key_fee, key_fee_address)
+        d = p.start(name, file_path, bid, title, description, thumbnail, key_fee, key_fee_address, content_license)
 
         return d
+
+    def xmlrpc_abandon_name(self, txid):
+        def _disp(txid, tx):
+            print '[' + str(datetime.now()) + '] Spent coins from claim tx ' + txid + ' --> ' + tx
+            return tx
+
+        d = defer.Deferred()
+        d.addCallback(lambda _: self.session.wallet.abandon_name(txid))
+        d.addCallback(lambda tx: _disp(txid, tx))
+        d.addErrback(lambda err: str(err.getTraceback()))
+        d.callback(None)
+
+        return d
+
+    def xmlrpc_get_name_claims(self):
+        def _clean(claims):
+            for c in claims:
+                for k in c.keys():
+                    if type(c[k]) == Decimal:
+                        c[k] = float(c[k])
+            return claims
+
+        d = self.session.wallet.get_name_claims()
+        d.addCallback(_clean)
+
+        return d
+
+    def xmlrpc_get_time_behind_blockchain(self):
+        d = self.session.wallet.get_most_recent_blocktime()
+        d.addCallback(get_time_behind_blockchain)
+
+        return d
+
 
 def main():
     daemon = LBRYDaemon()

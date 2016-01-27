@@ -294,7 +294,7 @@ class LBRYcrdWallet(object):
         return d
 
     def claim_name(self, name, sd_hash, amount, description=None, key_fee=None,
-                    key_fee_address=None, thumbnail=None):
+                    key_fee_address=None, thumbnail=None, content_license=None):
         value = {"stream_hash": sd_hash}
         if description is not None:
             value['description'] = description
@@ -304,6 +304,9 @@ class LBRYcrdWallet(object):
             value['key_fee_address'] = key_fee_address
         if thumbnail is not None:
             value['thumbnail'] = thumbnail
+        if content_license is not None:
+            value['content_license'] = content_license
+
         d = threads.deferToThread(self._claim_name, name, json.dumps(value), amount)
 
         def _save_metadata(txid):
@@ -313,6 +316,47 @@ class LBRYcrdWallet(object):
 
         d.addCallback(_save_metadata)
         return d
+
+    def abandon_name(self, txid):
+        address = self._get_new_address()
+        raw = self._get_raw_tx(txid)
+        transaction = self._get_decoded_tx(raw)
+        amount = float(transaction['vout'][1]['value'])
+        return self._abandon_name(txid, address, amount)
+
+    def get_tx(self, txid):
+        raw = self._get_raw_tx(txid)
+        return self._get_decoded_tx(raw)
+
+    def get_name_claims(self):
+        return threads.deferToThread(self._get_name_claims)
+
+    def start_miner(self):
+        if not self._get_gen_status():
+            return self._set_gen_status(True)
+        else:
+            return "Miner was already running"
+
+    def stop_miner(self):
+        if self._get_gen_status():
+            return self._set_gen_status(False)
+        else:
+            return "Miner wasn't running"
+
+    def get_miner_status(self):
+        return self._get_gen_status()
+
+    def get_block(self, blockhash):
+        return self._get_block(blockhash)
+
+    def get_blockchain_info(self):
+        return self._get_blockchain_info()
+
+    def get_claims_for_tx(self, txid):
+        return self._get_claims_for_tx(txid)
+
+    def get_nametrie(self):
+        return self._get_nametrie()
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
@@ -350,9 +394,6 @@ class LBRYcrdWallet(object):
         return settings
 
     def _get_rpc_conn(self):
-        return AuthServiceProxy(self.rpc_conn_string)
-
-    def get_rpc_conn_x(self):
         return AuthServiceProxy(self.rpc_conn_string)
 
     def _start_daemon(self):
@@ -487,6 +528,60 @@ class LBRYcrdWallet(object):
     def _get_info(self):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.getinfo()
+
+    @_catch_connection_error
+    def _get_name_claims(self):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.listnameclaims()
+
+    @_catch_connection_error
+    def _get_gen_status(self):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.getgenerate()
+
+    @_catch_connection_error
+    def _set_gen_status(self, b):
+        if b:
+            log.info("Starting miner")
+        else:
+            log.info("Stopping miner")
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.setgenerate(b)
+
+    @_catch_connection_error
+    def _get_raw_tx(self, txid):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.getrawtransaction(txid)
+
+    @_catch_connection_error
+    def _get_decoded_tx(self, raw):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.decoderawtransaction(raw)
+
+    @_catch_connection_error
+    def _abandon_name(self, txid, address, amount):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.abandonname(txid, address, amount)
+
+    @_catch_connection_error
+    def _get_blockchain_info(self):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.getblockchaininfo()
+
+    @_catch_connection_error
+    def _get_block(self, blockhash):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.getblock(blockhash)
+
+    @_catch_connection_error
+    def _get_claims_for_tx(self, txid):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.getclaimsfortx(txid)
+
+    @_catch_connection_error
+    def _get_nametrie(self):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.getnametrie()
 
     @_catch_connection_error
     def _get_wallet_balance(self):

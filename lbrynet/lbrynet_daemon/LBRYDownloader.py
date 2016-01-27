@@ -104,7 +104,6 @@ class FetcherDaemon(object):
         self.lbry_metadata_manager = lbry_file_metadata_manager
         self.seen = []
         self.lastbestblock = None
-        self.rpc_conn = self.wallet.get_rpc_conn_x()
         self.search = None
         self.first_run = True
         self.is_running = False
@@ -134,14 +133,14 @@ class FetcherDaemon(object):
         return msg
 
     def _get_names(self):
-        c = self.rpc_conn.getblockchaininfo()
+        c = self.wallet.get_blockchain_info()
         rtn = []
         if self.lastbestblock != c:
-            block = self.rpc_conn.getblock(c['bestblockhash'])
+            block = self.wallet.get_block(c['bestblockhash'])
             txids = block['tx']
-            transactions = [self.rpc_conn.decoderawtransaction(self.rpc_conn.getrawtransaction(t)) for t in txids]
+            transactions = [self.wallet.get_tx(t) for t in txids]
             for t in transactions:
-                claims = self.rpc_conn.getclaimsfortx(t['txid'])
+                claims = self.wallet.get_claims_for_tx(t['txid'])
                 # if self.first_run:
                 #     # claims = self.rpc_conn.getclaimsfortx("96aca2c60efded5806b7336430c5987b9092ffbea9c6ed444e3bf8e008993e11")
                 #     # claims = self.rpc_conn.getclaimsfortx("cc9c7f5225ecb38877e6ca7574d110b23214ac3556b9d65784065ad3a85b4f74")

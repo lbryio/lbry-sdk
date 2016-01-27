@@ -69,7 +69,7 @@ class DownloaderApp(object):
 
         if os.name == "nt":
             root.iconbitmap(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
-                                         "lbrynet", "lbrynet_downloader_gui", "lbry-dark-icon.ico"))
+                                         "lbry-dark-icon.ico"))
         else:
             root.wm_iconbitmap("@" + os.path.join(os.path.dirname(__file__), "lbry-dark-icon.xbm"))
 
@@ -111,8 +111,7 @@ class DownloaderApp(object):
 
         logo_file_name = "lbry-dark-242x80.gif"
         if os.name == "nt":
-            logo_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "lbrynet",
-                                     "lbrynet_downloader_gui", logo_file_name)
+            logo_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), logo_file_name)
         else:
             logo_file = os.path.join(os.path.dirname(__file__), logo_file_name)
 
@@ -142,8 +141,8 @@ class DownloaderApp(object):
 
         dropdown_file_name = "drop_down.gif"
         if os.name == "nt":
-            dropdown_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "lbrynet",
-                                         "lbrynet_downloader_gui", dropdown_file_name)
+            dropdown_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
+                                         dropdown_file_name)
         else:
             dropdown_file = os.path.join(os.path.dirname(__file__), dropdown_file_name)
 

@@ -13,3 +13,7 @@
 lbrynet.egg-info/PKG-INFO
 
 *.egg
+
+/build
+
+/dist
