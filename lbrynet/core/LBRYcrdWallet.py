@@ -267,7 +267,7 @@ class LBRYcrdWallet(object):
         d.addCallback(set_address_for_peer)
         return d
 
-    def get_stream_info_for_name(self, name):
+    def get_stream_info_for_name(self, name, txid=None):
 
         def get_stream_info_from_value(result):
             r_dict = {}
@@ -277,7 +277,8 @@ class LBRYcrdWallet(object):
                     value_dict = json.loads(value)
                 except ValueError:
                     return Failure(InvalidStreamInfoError(name))
-                known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address', 'thumbnail']
+                known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address', 'thumbnail',
+                                'content_license']
                 for field in known_fields:
                     if field in value_dict:
                         r_dict[field] = value_dict[field]
@@ -289,7 +290,7 @@ class LBRYcrdWallet(object):
                 return d
             return Failure(UnknownNameError(name))
 
-        d = threads.deferToThread(self._get_value_for_name, name)
+        d = threads.deferToThread(self._get_value_for_name, name, txid)
         d.addCallback(get_stream_info_from_value)
         return d
 
@@ -594,9 +595,17 @@ class LBRYcrdWallet(object):
         return rpc_conn.getnewaddress()
 
     @_catch_connection_error
-    def _get_value_for_name(self, name):
+    def _get_value_for_name(self, name, txid=None):
         rpc_conn = self._get_rpc_conn()
-        return rpc_conn.getvalueforname(name)
+        if not txid:
+            return rpc_conn.getvalueforname(name)
+        else:
+            claim = rpc_conn.getclaimsfortx(txid)[0]
+            if claim['name'] == name:
+                claim['txid'] = txid
+                return claim
+            else:
+                raise ValueError
 
     @_catch_connection_error
     def _claim_name(self, name, value, amount):

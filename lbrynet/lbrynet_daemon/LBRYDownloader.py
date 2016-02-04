@@ -94,7 +94,8 @@ class GetStream(object):
 
 
 class FetcherDaemon(object):
-    def __init__(self, session, lbry_file_manager, lbry_file_metadata_manager, wallet, sd_identifier, autofetcher_conf):
+    def __init__(self, session, lbry_file_manager, lbry_file_metadata_manager, wallet, sd_identifier, autofetcher_conf,
+                 verbose=False):
         self.autofetcher_conf = autofetcher_conf
         self.max_key_fee = 0.0
         self.sd_identifier = sd_identifier
@@ -107,6 +108,7 @@ class FetcherDaemon(object):
         self.search = None
         self.first_run = True
         self.is_running = False
+        self.verbose = verbose
         self._get_autofetcher_conf()
 
     def start(self):
@@ -152,13 +154,16 @@ class FetcherDaemon(object):
                                   " | stream hash: " + str(json.loads(claim['value'])['stream_hash'])
                             print msg
                             log.debug(msg)
-                            rtn.append(claim)
+                            rtn.append([claim['name'], t['txid']])
                             self.seen.append(claim)
+                else:
+                    if self.verbose:
+                        print "[" + str(datetime.now()) + "] No claims in block", c['bestblockhash']
 
         self.lastbestblock = c
 
         if len(rtn):
-            return defer.succeed(rtn)
+            return defer.DeferredList([self.wallet.get_stream_info_for_name(name, txid=t) for name, t in rtn])
 
     def _download_claims(self, claims):
         if claims:
@@ -166,13 +171,13 @@ class FetcherDaemon(object):
                 download = defer.Deferred()
                 stream = GetStream(self.sd_identifier, self.session, self.wallet, self.lbry_file_manager,
                                    self.max_key_fee, pay_key=False)
-                download.addCallback(lambda _: stream.start(claim))
+                download.addCallback(lambda _: stream.start(claim[1]))
                 download.callback(None)
 
         return defer.succeed(None)
 
     def _looped_search(self):
-        d = defer.Deferred(None)
+        d = defer.Deferred()
         d.addCallback(lambda _: self._get_names())
         d.addCallback(self._download_claims)
         d.callback(None)
