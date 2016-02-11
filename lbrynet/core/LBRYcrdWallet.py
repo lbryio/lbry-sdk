@@ -359,6 +359,9 @@ class LBRYcrdWallet(object):
     def get_nametrie(self):
         return self._get_nametrie()
 
+    # def update_name(self, name_value):
+    #     return self._update_name(name_value)
+
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
         d.addCallback(lambda name_txid: threads.deferToThread(self._get_status_of_claim, name_txid[1], name_txid[0], sd_hash) if name_txid is not None else None)
@@ -606,6 +609,10 @@ class LBRYcrdWallet(object):
                 return claim
             else:
                 raise ValueError
+
+    # def _update_name(self, name_value):
+    #     rpc_conn = self._get_rpc_conn()
+    #     return rpc_conn.updatename(name_value)
 
     @_catch_connection_error
     def _claim_name(self, name, value, amount):

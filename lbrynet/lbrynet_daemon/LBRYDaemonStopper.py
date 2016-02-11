@@ -10,10 +10,8 @@ def main():
         is_running = False
 
     if is_running:
-        try:
-            daemon.stop()
-        except:
-            print "LBRYnet daemon stopped"
+        daemon.stop()
+        print "LBRYnet daemon stopped"
     else:
         print "LBRYnet daemon wasn't running"
 

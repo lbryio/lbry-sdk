@@ -38,7 +38,7 @@ class Publisher(object):
               key_fee=None, key_fee_address=None, content_license=None):
 
         def _show_result():
-            message = "[" + str(datetime.now()) + " ] Published " + self.file_name + " --> lbry://" + \
+            message = "[" + str(datetime.now()) + "] Published " + self.file_name + " --> lbry://" + \
                         str(self.publish_name) + " with txid: " + str(self.tx_hash)
             print message
             return defer.succeed(message)

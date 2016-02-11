@@ -27,6 +27,7 @@ import sys
 import json
 import binascii
 import webbrowser
+import xmlrpclib
 from decimal import Decimal
 
 log = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 os.mkdir(self.db_dir)
                 self.created_data_dir = True
             self.session_settings = None
-            self.data_rate = 0.5
+            self.data_rate = MIN_BLOB_DATA_PAYMENT_RATE
             self.max_key_fee = 100.0
             self.query_handlers = {}
 
@@ -424,8 +425,11 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             l = json.loads(f.read())
             f.close()
             file_name = l['stream_name'].decode('hex')
-            lbry_file = [file for file in self.lbry_file_manager.lbry_files if file.stream_name == file_name][0]
-            return lbry_file
+            lbry_file = [file for file in self.lbry_file_manager.lbry_files if file.stream_name == file_name]
+            if lbry_file:
+                return lbry_file[0]
+            else:
+                return None
 
         def _check(info):
             stream_hash = info['stream_hash']
@@ -543,7 +547,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         self.fetcher.start()
         print '[' + str(datetime.now()) + '] Start autofetcher'
-        return str('Started autofetching')
+        return 'Started autofetching'
 
     def xmlrpc_stop_fetcher(self):
         """
@@ -552,7 +556,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         self.fetcher.stop()
         print '[' + str(datetime.now()) + '] Stop autofetcher'
-        return str('Started autofetching')
+        return 'Stopped autofetching'
 
     def xmlrpc_fetcher_status(self):
         """
@@ -777,7 +781,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
     def xmlrpc_delete_lbry_file(self, file_name):
         def _disp(file_name):
             print '[' + str(datetime.now()) + '] Deleted: ' + file_name
-            return defer.succeed(str('Deleted: ' + file_name))
+            return defer.succeed('Deleted: ' + file_name)
 
         lbry_files = [self._delete_lbry_file(f) for f in self.lbry_file_manager.lbry_files if file_name == f.file_name]
         d = defer.DeferredList(lbry_files)
@@ -865,7 +869,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         def _clean(claims):
             for c in claims:
                 for k in c.keys():
-                    if type(c[k]) == Decimal:
+                    if isinstance(c[k], Decimal):
                         c[k] = float(c[k])
             return claims
 
@@ -880,6 +884,26 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         return d
 
+    # def xmlrpc_update_name(self, metadata):
+    #     def _disp(x):
+    #         print x
+    #         return x
+    #
+    #     metadata = json.loads(metadata)
+    #
+    #     required = ['name', 'file_path', 'bid']
+    #
+    #     for r in required:
+    #         if not r in metadata.keys():
+    #             return defer.fail()
+    #
+    #     d = defer.Deferred()
+    #     d.addCallback(lambda _: self.session.wallet.update_name(metadata))
+    #     d.addCallback(_disp)
+    #     d.callback(None)
+    #
+    #     return d
+
     def xmlrpc_toggle_fetcher_verbose(self):
         if self.fetcher.verbose:
             self.fetcher.verbose = False
@@ -890,6 +914,12 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
 
 def main():
+    try:
+        d = xmlrpclib.ServerProxy('http://localhost:7080')
+        d.stop()
+    except:
+        pass
+
     daemon = LBRYDaemon()
     daemon.setup()
     reactor.listenTCP(7080, server.Site(daemon))
