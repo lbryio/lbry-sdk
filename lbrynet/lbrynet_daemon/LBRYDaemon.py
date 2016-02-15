@@ -11,7 +11,7 @@ from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream, FetcherDaemon
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
+from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
@@ -53,7 +53,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.current_db_revision = 1
             self.run_server = True
             self.session = None
-            self.known_dht_nodes = [('104.236.42.182', 4000)]
+            self.known_dht_nodes = KNOWN_DHT_NODES
             self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
             self.peer_port = 3333
@@ -100,7 +100,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 self.created_data_dir = True
             self.session_settings = None
             self.data_rate = MIN_BLOB_DATA_PAYMENT_RATE
-            self.max_key_fee = 100.0
+            self.max_key_fee = DEFAULT_MAX_KEY_FEE
+            self.max_search_results = DEFAULT_MAX_SEARCH_RESULTS
+            self.search_timeout = 3.0
             self.query_handlers = {}
 
             return defer.succeed(None)
@@ -497,8 +499,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         def _add_key_fee(data_cost):
             d = self.session.wallet.get_stream_info_for_name(name)
-            d.addCallback(lambda info: info['key_fee'] if 'key_fee' in info.keys() else 0.0)
-            d.addCallback(lambda key_fee: key_fee + data_cost)
+            d.addCallback(lambda info: data_cost + info['key_fee'] if 'key_fee' in info.keys() else data_cost)
             return d
 
         d = self.session.wallet.get_stream_info_for_name(name)
@@ -510,7 +511,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda info: int(info['stream_size'])/1000000*self.data_rate)
         d.addCallback(_add_key_fee)
         d.addErrback(lambda _: _add_key_fee(0.0))
-        reactor.callLater(3.0, _check_est, d, name)
+        reactor.callLater(self.search_timeout, _check_est, d, name)
 
         return d
 
@@ -764,11 +765,11 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         print '[' + str(datetime.now()) + '] Search nametrie: ' + search
 
         filtered_results = [n for n in self.session.wallet.get_nametrie() if n['name'].startswith(search)]
-        if len(filtered_results) > 25:
-            filtered_results = filtered_results[:25]
+        if len(filtered_results) > self.max_search_results:
+            filtered_results = filtered_results[:self.max_search_results]
         filtered_results = [n for n in filtered_results if 'txid' in n.keys()]
         resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name_wc(n['name']),
-                                                self._get_est_cost(n['name'])])
+                                                self._get_est_cost(n['name'])], consumeErrors=True)
                                                 for n in filtered_results]
 
         d = defer.DeferredList(resolved_results)
