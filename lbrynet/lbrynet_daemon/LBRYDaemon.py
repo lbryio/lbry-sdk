@@ -990,6 +990,36 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         return self.fetcher.verbose
 
+    def xmlrpc_check_for_new_version(self):
+        message = ""
+
+        git_version = subprocess.check_output("git ls-remote https://github.com/lbryio/lbry.git | grep HEAD | cut -f 1", shell=True)
+        if os.path.isfile(os.path.join(self.db_dir, "lbrynet_version.txt")):
+            f = open(os.path.join(self.db_dir, "lbrynet_version.txt"), 'r')
+            current_version = f.read()
+            f.close()
+
+            if git_version == current_version:
+                message += "LBRYnet is up to date\n"
+            else:
+                message += "LBRYnet version is out of date, restart the daemon to update\n"
+        else:
+            message += "Unknown version of LBRYnet, try running installer again\n"
+
+        git_version = subprocess.check_output("git ls-remote  https://github.com/jackrobison/lbrynet-app.git | grep HEAD | cut -f 1", shell=True)
+        if os.path.isfile(os.path.join(self.wallet_dir, "lbry_app_version.txt")):
+            f = open(os.path.join(self.wallet_dir, "lbry_app_version.txt"), 'r')
+            current_version = f.read()
+            f.close()
+
+            if git_version == current_version:
+                message += "LBRY is up to date"
+            else:
+                message += "LBRY version is out of date, restart the daemon to update"
+        else:
+            message += "Unknown version of LBRYnet, try running installer again\n"
+
+        return message
 
 def main():
     # shut down existing instance of lbrynet-daemon if there is one
