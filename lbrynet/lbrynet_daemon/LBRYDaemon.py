@@ -169,9 +169,12 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 if git_version == current_version:
                     print "LBRYnet installation version " + current_version[:-1] + " is up to date"
                     return defer.succeed(None)
+                print "Update LBRYnet version " + current_version[:-1] + " --> " + git_version[:-1]
+                self.restart_message = "Updates available"
+            else:
+                print "Update LBRYnet to version " + git_version[:-1]
+                self.restart_message = "Updates available"
 
-            print "Update LBRYnet version " + current_version[:-1] + " --> " + git_version[:-1]
-            self.restart_message = "Updates available"
             return defer.succeed(None)
 
         def _update_lbrycrdd():
@@ -185,9 +188,12 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 if git_version == current_version:
                     print "LBRY installation version " + current_version[:-1] + " is up to date"
                     return defer.succeed(None)
+                print "Update LBRY version " + current_version[:-1] + " --> " + git_version[:-1]
+                self.restart_message = "Updates available"
+            else:
+                print "Update LBRY to version " + git_version[:-1]
+                self.restart_message = "Updates available"
 
-            print "Update LBRY version " + current_version[:-1] + " --> " + git_version[:-1]
-            self.restart_message = "Updates available"
             return defer.succeed(None)
 
         d = _check_for_updater()
