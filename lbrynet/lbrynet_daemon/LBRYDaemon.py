@@ -29,17 +29,22 @@ import binascii
 import webbrowser
 import xmlrpclib
 from decimal import Decimal
+import subprocess
+from StringIO import StringIO
+from zipfile import ZipFile
+from urllib import urlopen
 
 log = logging.getLogger(__name__)
 
-#TODO add login credentials in a conf file
 
-#issues with delete:
-#TODO when stream is stopped the generated file is deleted
+# TODO add login credentials in a conf file
 
-#functions to add:
-#TODO send credits to address
-#TODO alert if your copy of a lbry file is out of date with the name record
+# issues with delete:
+# TODO when stream is stopped the generated file is deleted
+
+# functions to add:
+# TODO send credits to address
+# TODO alert if your copy of a lbry file is out of date with the name record
 
 
 class LBRYDaemon(xmlrpc.XMLRPC):
@@ -54,7 +59,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.run_server = True
             self.session = None
             self.known_dht_nodes = KNOWN_DHT_NODES
-            self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+            if sys.platform != "darwin":
+                self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+            else:
+                self.db_dir = os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
             self.peer_port = 3333
             self.dht_node_port = 4444
@@ -102,14 +110,19 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.data_rate = MIN_BLOB_DATA_PAYMENT_RATE
             self.max_key_fee = DEFAULT_MAX_KEY_FEE
             self.max_search_results = DEFAULT_MAX_SEARCH_RESULTS
+            self.restart_message = ""
             self.search_timeout = 3.0
             self.query_handlers = {}
 
             return defer.succeed(None)
 
         def _disp_startup():
-            print "Started LBRYnet daemon"
-            print "The daemon can be shut down by running 'stop-lbrynet-daemon' in a terminal"
+            if self.restart_message:
+                print self.restart_message
+            else:
+                print "Started LBRYnet daemon"
+                print "The daemon can be shut down by running 'stop-lbrynet-daemon' in a terminal"
+
             return defer.succeed(None)
 
         d = defer.Deferred()
@@ -125,11 +138,78 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._setup_server())
+        if sys.platform == "darwin":
+            d.addCallback(lambda _: self._update())
         d.addCallback(lambda _: self._setup_fetcher())
         d.addCallback(lambda _: _disp_startup())
         d.callback(None)
 
         return defer.succeed(None)
+
+    def _update(self):
+        def _check_for_updater():
+            if os.path.isdir("/Applications/LBRY Updater.app"):
+                print "Found LBRY updater"
+                return defer.succeed(None)
+
+            print "LBRY updater not found, downloading and installing..."
+            url = urlopen("https://rawgit.com/jackrobison/lbrynet-app/master/LBRY%20Updater.app.zip")
+            zipped_app = ZipFile(StringIO(url.read()))
+            zipped_app.extractall("/Applications")
+            return defer.succeed(None)
+
+        def _update_lbrynet():
+            git_version = subprocess.check_output(
+                "git ls-remote https://github.com/lbryio/lbry.git | grep HEAD | cut -f 1",
+                shell=True)
+            if os.path.isfile(os.path.join(self.db_dir, "lbrynet_version.txt")):
+                f = open(os.path.join(self.db_dir, "lbrynet_version.txt"), 'r')
+                current_version = f.read()
+                f.close()
+                if git_version == current_version:
+                    print "LBRYnet installation version " + current_version[:-1] + " is up to date"
+                    return defer.succeed(None)
+
+            print "Update LBRYnet version " + current_version[:-1] + " --> " + git_version[:-1]
+            self.restart_message = "Updates available"
+            return defer.succeed(None)
+
+        def _update_lbrycrdd():
+            git_version = subprocess.check_output(
+                "git ls-remote https://github.com/jackrobison/lbrynet-app.git | grep HEAD | cut -f 1",
+                shell=True)
+            if os.path.isfile(os.path.join(self.wallet_dir, "lbry_app_version.txt")):
+                f = open(os.path.join(self.wallet_dir, "lbry_app_version.txt"), 'r')
+                current_version = f.read()
+                f.close()
+                if git_version == current_version:
+                    print "LBRY installation version " + current_version[:-1] + " is up to date"
+                    return defer.succeed(None)
+
+            print "Update LBRY version " + current_version[:-1] + " --> " + git_version[:-1]
+            self.restart_message = "Updates available"
+            return defer.succeed(None)
+
+        d = _check_for_updater()
+        d.addCallback(lambda _: _update_lbrynet())
+        d.addCallback(lambda _: _update_lbrycrdd())
+        d.addCallback(lambda _: os.system("open /Applications/LBRY\ Updater.app &>/dev/null") if self.restart_message
+                                else defer.succeed(None))
+        d.addCallbacks(lambda _: self._restart() if self.restart_message else defer.succeed(None))
+
+        return defer.succeed(None)
+
+    def _restart(self):
+        def _disp_shutdown():
+            print 'Restarting lbrynet daemon'
+            return defer.succeed(None)
+
+        # LBRY Updater.app will restart the daemon
+        d = self._shutdown()
+        d.addCallback(lambda _: _disp_shutdown())
+        d.addCallback(lambda _: reactor.callLater(1.0, reactor.stop))
+
+        return d
 
     def _start_server(self):
 
@@ -166,10 +246,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
     def _setup_query_handlers(self):
         handlers = [
-            #CryptBlobInfoQueryHandlerFactory(self.lbry_file_metadata_manager, self.session.wallet,
+            # CryptBlobInfoQueryHandlerFactory(self.lbry_file_metadata_manager, self.session.wallet,
             #                                 self._server_payment_rate_manager),
             BlobAvailabilityHandlerFactory(self.session.blob_manager),
-            #BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
+            # BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
             #                          self._server_payment_rate_manager),
             self.session.wallet.get_wallet_info_query_handler_factory(),
         ]
@@ -287,8 +367,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
     def _get_session(self):
         def get_default_data_rate():
             d = self.settings.get_default_data_payment_rate()
-            d.addCallback(lambda rate: {"default_data_payment_rate":
-                                            rate if rate is not None else MIN_BLOB_DATA_PAYMENT_RATE})
+            d.addCallback(lambda rate: {"default_data_payment_rate": rate if rate is not None else
+            MIN_BLOB_DATA_PAYMENT_RATE})
             return d
 
         def get_wallet():
@@ -358,18 +438,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, file_opener_factory)
         return defer.succeed(None)
 
-    def _setup_lbry_file_manager(self):
-        self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.db_dir)
-        d = self.lbry_file_metadata_manager.setup()
-
-        def set_lbry_file_manager():
-            self.lbry_file_manager = LBRYFileManager(self.session, self.lbry_file_metadata_manager, self.sd_identifier)
-            return self.lbry_file_manager.setup()
-
-        d.addCallback(lambda _: set_lbry_file_manager())
-
-        return d
-
     def _setup_lbry_file_opener(self):
 
         downloader_factory = LBRYFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
@@ -391,7 +459,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
             d = self.session.wallet.get_stream_info_for_name(name)
             stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
-                                                        max_key_fee=self.max_key_fee, data_rate=self.data_rate)
+                               max_key_fee=self.max_key_fee, data_rate=self.data_rate)
             d.addCallback(_disp)
             d.addCallback(lambda stream_info: stream.start(stream_info))
             d.addCallback(lambda _: self._path_from_name(name))
@@ -440,7 +508,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 print "[" + str(datetime.now()) + "] Search for lbry_file, returning: " + stream_hash
                 return defer.succeed(_get_lbry_file(path))
             else:
-                print  "[" + str(datetime.now()) + "] Search for lbry_file didn't return anything"
+                print "[" + str(datetime.now()) + "] Search for lbry_file didn't return anything"
                 return defer.succeed(False)
 
         d = self._resolve_name(name)
@@ -471,7 +539,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d = self._check_history(name)
         d.addCallback(lambda lbry_file: {'stream_hash': lbry_file.stream_hash,
                                          'path': os.path.join(self.download_directory, lbry_file.file_name)}
-                                        if lbry_file else defer.fail(UnknownNameError))
+        if lbry_file else defer.fail(UnknownNameError))
         return d
 
     def _path_from_lbry_file(self, lbry_file):
@@ -508,7 +576,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         d.addCallback(lambda metadata: metadata.validator.info_to_show())
         d.addCallback(_to_dict)
-        d.addCallback(lambda info: int(info['stream_size'])/1000000*self.data_rate)
+        d.addCallback(lambda info: int(info['stream_size']) / 1000000 * self.data_rate)
         d.addCallback(_add_key_fee)
         d.addErrback(lambda _: _add_key_fee(0.0))
         reactor.callLater(self.search_timeout, _check_est, d, name)
@@ -708,8 +776,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         def _disp_err(err):
             print str(err.getTraceback())
             return err
+
         d = defer.Deferred()
-        d.addCallback(lambda _: webbrowser.open("file://" + str(os.path.join(self.download_directory, "lbryio/view/page/gui.html"))))
+        d.addCallback(lambda _: webbrowser.open(
+            "file://" + str(os.path.join(self.download_directory, "lbryio/view/page/gui.html"))))
         d.addErrback(_disp_err)
         d.callback(None)
 
@@ -748,7 +818,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 if 'thumbnail' in meta.keys():
                     t['img'] = meta['thumbnail']
                 else:
-                    t['img'] = 'File://' + str(os.path.join(self.download_directory, "lbryio/web/img/Free-speech-flag.svg"))
+                    t['img'] = 'File://' + str(
+                        os.path.join(self.download_directory, "lbryio/web/img/Free-speech-flag.svg"))
                 if 'name' in meta.keys():
                     t['title'] = meta['name']
                 if 'description' in meta.keys():
@@ -770,7 +841,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         filtered_results = [n for n in filtered_results if 'txid' in n.keys()]
         resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name_wc(n['name']),
                                                 self._get_est_cost(n['name'])], consumeErrors=True)
-                                                for n in filtered_results]
+                            for n in filtered_results]
 
         d = defer.DeferredList(resolved_results)
         d.addCallback(_clean)
@@ -915,6 +986,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
 
 def main():
+    # shut down existing instance of lbrynet-daemon if there is one
     try:
         d = xmlrpclib.ServerProxy('http://localhost:7080')
         d.stop()
@@ -925,6 +997,7 @@ def main():
     daemon.setup()
     reactor.listenTCP(7080, server.Site(daemon))
     reactor.run()
+
 
 if __name__ == '__main__':
     main()

@@ -544,7 +544,7 @@ def launch_lbry_console():
                         action="store_true")
     parser.add_argument("--data_dir",
                         help=("The full path to the directory in which lbrynet data and metadata will be stored. "
-                              "Default: ~/.lbrynet"),
+                              "Default: ~/.lbrynet on linux, ~/Library/Application Support/lbrynet on OS X"),
                         type=str)
     parser.add_argument("--lbrycrdd_path",
                         help="The path to lbrycrdd, which will be launched if it isn't running, unless "
@@ -573,7 +573,10 @@ def launch_lbry_console():
 
     created_data_dir = False
     if not args.data_dir:
-        data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+        if sys.platform == "darwin":
+            data_dir =  os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
+        else:
+            data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
     else:
         data_dir = args.data_dir
     if not os.path.exists(data_dir):
