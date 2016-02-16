@@ -21,12 +21,10 @@ echo "Downloading update"
 git clone https://github.com/lbryio/lbry.git &>/dev/null
 cd lbry
 
-version=$(git rev-parse HEAD)
-
 echo "Updating lbrynet"
 sudo python setup.py install &>/dev/null
 mkdir -p "$lbrynet_directory"
-echo $version > "${lbrynet_directory}/lbrynet_version.txt"
+echo $current_version > "${lbrynet_directory}/lbrynet_version.txt"
 
 echo "Cleaning up"
 

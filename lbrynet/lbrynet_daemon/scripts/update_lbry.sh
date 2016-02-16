@@ -26,6 +26,10 @@ unzip LBRYURIHandler.app.zip &>/dev/null
 unzip LBRY\ Updater.app.zip &>/dev/null
 
 echo "Installing update"
+
+mkdir -p "$lbrycrd_directory"
+echo $current_version > "${lbrycrd_directory}/lbry_app_version.txt"
+
 rm -rf /Applications/LBRY.app &>/dev/null
 rm -rf /Applications/LBRYURIHandler.app &>/dev/null
 rm -rf /Applications/LBRY\ Updater.app &>/dev/null
