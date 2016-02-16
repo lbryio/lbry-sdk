@@ -13,13 +13,11 @@ if [ -d "$lbrycrd_directory" ]; then
 	fi
 fi
 
-echo "Updating LBRY"
-
 tmp=$(mktemp -d)
 cd $tmp
 
-echo "Downloading update"
-git clone https://github.com/jackrobison/lbrynet-app.git &>/dev/null
+echo "Downloading LBRY update"
+git clone --depth 1 https://github.com/jackrobison/lbrynet-app.git &>/dev/null
 cd lbrynet-app
 unzip LBRY.app.zip &>/dev/null
 unzip LBRYURIHandler.app.zip &>/dev/null

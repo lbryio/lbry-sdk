@@ -16,12 +16,12 @@ fi
 tmp=$(mktemp -d)
 cd $tmp
 
-echo "Downloading update"
+echo "Downloading LBRYnet update"
 
-git clone https://github.com/lbryio/lbry.git &>/dev/null
+git clone --depth 1 https://github.com/lbryio/lbry.git &>/dev/null
 cd lbry
 
-echo "Updating lbrynet"
+echo "Updating LBRYnet"
 sudo python setup.py install &>/dev/null
 mkdir -p "$lbrynet_directory"
 echo $current_version > "${lbrynet_directory}/lbrynet_version.txt"
