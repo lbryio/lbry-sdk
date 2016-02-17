@@ -799,12 +799,12 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         @return:
         """
 
-        def _return_d(x):
-            d = defer.Deferred()
-            d.addCallback(lambda _: x)
-            d.callback(None)
+        #def _return_d(x):
+        #    d = defer.Deferred()
+        #    d.addCallback(lambda _: x)
+        #    d.callback(None)
 
-            return d
+        #    return d
 
         def _clean(n):
             t = []
@@ -835,21 +835,36 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
             return f
 
+        def resolve_claims(claims):
+            ds = []
+            for claim in claims:
+                d1 = defer.succeed(claim)
+                d2 = self._resolve_name_wc(claim['name'])
+                d3 = self._get_est_cost(claim['name'])
+                dl = defer.DeferredList([d1, d2, d3], consumeErrors=True)
+                ds.append(dl)
+            return defer.DeferredList(ds)
+
         def _disp(results):
             print '[' + str(datetime.now()) + '] Found ' + str(len(results)) + ' results'
             return results
 
         print '[' + str(datetime.now()) + '] Search nametrie: ' + search
 
-        filtered_results = [n for n in self.session.wallet.get_nametrie() if n['name'].startswith(search)]
-        if len(filtered_results) > self.max_search_results:
-            filtered_results = filtered_results[:self.max_search_results]
-        filtered_results = [n for n in filtered_results if 'txid' in n.keys()]
-        resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name_wc(n['name']),
-                                                self._get_est_cost(n['name'])], consumeErrors=True)
-                            for n in filtered_results]
+        d = self.session.wallet.get_nametrie()
+        d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
+        d.addCallback(lambda claims: claims[:self.max_search_results])
+        d.addCallback(resolve_claims)
 
-        d = defer.DeferredList(resolved_results)
+        #filtered_results = [n for n in self.session.wallet.get_nametrie() if n['name'].startswith(search)]
+        #if len(filtered_results) > self.max_search_results:
+        #    filtered_results = filtered_results[:self.max_search_results]
+        #filtered_results = [n for n in filtered_results if 'txid' in n.keys()]
+        #resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name_wc(n['name']),
+        #                                        self._get_est_cost(n['name'])], consumeErrors=True)
+        #                                        for n in filtered_results]
+
+        #d = defer.DeferredList(resolved_results)
         d.addCallback(_clean)
         d.addCallback(_parse)
         d.addCallback(_disp)

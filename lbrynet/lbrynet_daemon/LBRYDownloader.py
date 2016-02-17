@@ -135,52 +135,66 @@ class FetcherDaemon(object):
         return msg
 
     def _get_names(self):
-        c = self.wallet.get_blockchain_info()
-        rtn = []
-        if self.lastbestblock != c:
-            block = self.wallet.get_block(c['bestblockhash'])
-            txids = block['tx']
-            transactions = [self.wallet.get_tx(t) for t in txids]
-            for t in transactions:
-                claims = self.wallet.get_claims_for_tx(t['txid'])
+        d = self.wallet.get_blockchain_info()
+        d.addCallback(lambda c: get_new_streams if c != self.lastbestblock else [])
+
+        def get_new_streams(c):
+            self.lastbestblock = c
+            d = self.wallet.get_block(c['bestblockhash'])
+            d.addCallback(lambda block: get_new_streams_in_txes(block['tx'], c))
+            return d
+
+        def get_new_streams_in_txes(txids, c):
+            ds = []
+            for t in txids:
+                d = self.wallet.get_claims_from_tx(t)
+                d.addCallback(get_new_streams_in_tx, t, c)
+                ds.append(d)
+            d = defer.DeferredList(ds, consumeErrors=True)
+            d.addCallback(lambda result: [r[1] for r in result if r[0]])
+            d.addCallback(lambda stream_lists: [stream for streams in stream_lists for stream in streams])
+            return d
+
+        def get_new_streams_in_tx(claims, t, c):
+                #claims = self.wallet.get_claims_for_tx(t['txid'])
                 # if self.first_run:
                 #     # claims = self.rpc_conn.getclaimsfortx("96aca2c60efded5806b7336430c5987b9092ffbea9c6ed444e3bf8e008993e11")
                 #     # claims = self.rpc_conn.getclaimsfortx("cc9c7f5225ecb38877e6ca7574d110b23214ac3556b9d65784065ad3a85b4f74")
                 #     self.first_run = False
-                if claims:
-                    for claim in claims:
-                        if claim not in self.seen:
-                            msg = "[" + str(datetime.now()) + "] New claim | lbry://" + str(claim['name']) + \
-                                  " | stream hash: " + str(json.loads(claim['value'])['stream_hash'])
-                            print msg
-                            log.debug(msg)
-                            rtn.append([claim['name'], t['txid']])
-                            self.seen.append(claim)
-                else:
-                    if self.verbose:
-                        print "[" + str(datetime.now()) + "] No claims in block", c['bestblockhash']
+            rtn = []
+            if claims:
+                for claim in claims:
+                    if claim not in self.seen:
+                        msg = "[" + str(datetime.now()) + "] New claim | lbry://" + str(claim['name']) + \
+                              " | stream hash: " + str(json.loads(claim['value'])['stream_hash'])
+                        print msg
+                        log.debug(msg)
+                        rtn.append((claim['name'], t))
+                        self.seen.append(claim)
+            else:
+                if self.verbose:
+                    print "[" + str(datetime.now()) + "] No claims in block", c['bestblockhash']
+            return rtn
 
-        self.lastbestblock = c
-
-        if len(rtn):
-            return defer.DeferredList([self.wallet.get_stream_info_for_name(name, txid=t) for name, t in rtn])
+        d.addCallback(lambda streams: defer.DeferredList(
+            [self.wallet.get_stream_info_from_txid(name, t) for name, t in streams]))
+        #    if len(rtn):
+        #        return defer.DeferredList([self.wallet.get_stream_info_for_name(name, txid=t) for name, t in rtn])
+        return d
 
     def _download_claims(self, claims):
         if claims:
             for claim in claims:
-                download = defer.Deferred()
                 stream = GetStream(self.sd_identifier, self.session, self.wallet, self.lbry_file_manager,
                                    self.max_key_fee, pay_key=False)
-                download.addCallback(lambda _: stream.start(claim[1]))
-                download.callback(None)
+                stream.start(claim[1])
 
         return defer.succeed(None)
 
     def _looped_search(self):
-        d = defer.Deferred()
-        d.addCallback(lambda _: self._get_names())
+        d = self._get_names()
         d.addCallback(self._download_claims)
-        d.callback(None)
+        return d
 
     def _get_autofetcher_conf(self):
         settings = {"maxkey": "0.0"}

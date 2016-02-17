@@ -766,15 +766,15 @@ class AddStream(CommandHandler):
 
         def do_download(stream_downloader):
             d = stream_downloader.start()
-            d.addCallback(lambda _: self._download_succeeded(stream_downloader))
+            d.addCallback(lambda result: self._download_succeeded(stream_downloader, result))
             return d
 
         d.addCallback(do_download)
         d.addErrback(self._handle_download_error)
         return d
 
-    def _download_succeeded(self, stream_downloader):
-        self.console.sendLine("%s has successfully downloaded." % str(stream_downloader))
+    def _download_succeeded(self, stream_downloader, result):
+        self.console.sendLine("%s: %s." % (str(stream_downloader), str(result)))
 
     def _handle_download_error(self, err):
         if err.check(InsufficientFundsError):
