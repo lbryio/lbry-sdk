@@ -600,6 +600,9 @@ class LBRYcrdWallet(LBRYWallet):
     def get_nametrie(self):
         return threads.deferToThread(self._get_nametrie_rpc)
 
+    def get_claims_from_tx(self, txid):
+        return self._get_claims_from_tx(txid)
+
     def start_miner(self):
         d = threads.deferToThread(self._get_gen_status_rpc)
         d.addCallback(lambda status: threads.deferToThread(self._set_gen_status_rpc, True) if not status

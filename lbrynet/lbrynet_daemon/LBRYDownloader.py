@@ -136,7 +136,7 @@ class FetcherDaemon(object):
 
     def _get_names(self):
         d = self.wallet.get_blockchain_info()
-        d.addCallback(lambda c: get_new_streams if c != self.lastbestblock else [])
+        d.addCallback(lambda c: get_new_streams(c) if c != self.lastbestblock else [])
 
         def get_new_streams(c):
             self.lastbestblock = c
