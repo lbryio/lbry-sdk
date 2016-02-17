@@ -151,6 +151,12 @@ class LBRYWallet(object):
         d.addBoth(set_manage_not_running)
         return d
 
+    def get_info_exchanger(self):
+        return LBRYcrdAddressRequester(self)
+
+    def get_wallet_info_query_handler_factory(self):
+        return LBRYcrdAddressQueryHandlerFactory(self)
+
     def reserve_points(self, identifier, amount):
         """
         Ensure a certain amount of points are available to be sent as payment, before the service is rendered
@@ -266,7 +272,7 @@ class LBRYWallet(object):
         return d
 
     def get_stream_info_from_txid(self, name, txid):
-        d = self._get_claims_from_tx(txid)
+        d = self.get_claims_from_tx(txid)
 
         def get_claim_for_name(claims):
             for claim in claims:
@@ -326,7 +332,7 @@ class LBRYWallet(object):
 
     def abandon_name(self, txid):
         d1 = self.get_new_address()
-        d2 = self._get_claims_from_tx(txid)
+        d2 = self.get_claims_from_tx(txid)
 
         def get_txout_of_claim(claims):
             for claim in claims:
@@ -374,7 +380,7 @@ class LBRYWallet(object):
         return float(self.wallet_balance - self.total_reserved_points)
 
     def _get_status_of_claim(self, txid, name, sd_hash):
-        d = self._get_claims_from_tx(txid)
+        d = self.get_claims_from_tx(txid)
 
         def get_status(claims):
             if claims is None:
@@ -465,12 +471,6 @@ class LBRYWallet(object):
 
     ######### Must be overridden #########
 
-    def get_info_exchanger(self):
-        return defer.fail(NotImplementedError())
-
-    def get_wallet_info_query_handler_factory(self):
-        return defer.fail(NotImplementedError())
-
     def get_balance(self):
         return defer.fail(NotImplementedError())
 
@@ -510,7 +510,7 @@ class LBRYWallet(object):
     def _get_value_for_name(self, name):
         return defer.fail(NotImplementedError())
 
-    def _get_claims_from_tx(self, txid):
+    def get_claims_from_tx(self, txid):
         return defer.fail(NotImplementedError())
 
     def _get_balance_for_address(self, address):
@@ -563,12 +563,6 @@ class LBRYcrdWallet(LBRYWallet):
                     settings["rpc_port"] = int(l[8:].rstrip('\n'))
         return settings
 
-    def get_info_exchanger(self):
-        return LBRYcrdAddressRequester(self)
-
-    def get_wallet_info_query_handler_factory(self):
-        return LBRYcrdAddressQueryHandlerFactory(self)
-
     def check_first_run(self):
         d = self.get_balance()
         d.addCallback(lambda bal: threads.deferToThread(self._get_num_addresses_rpc) if bal == 0 else 2)
@@ -599,9 +593,6 @@ class LBRYcrdWallet(LBRYWallet):
 
     def get_nametrie(self):
         return threads.deferToThread(self._get_nametrie_rpc)
-
-    def get_claims_from_tx(self, txid):
-        return self._get_claims_from_tx(txid)
 
     def start_miner(self):
         d = threads.deferToThread(self._get_gen_status_rpc)
@@ -636,7 +627,7 @@ class LBRYcrdWallet(LBRYWallet):
     def _send_abandon(self, txid, address, amount):
         return threads.deferToThread(self._send_abandon_rpc, txid, address, amount)
 
-    def _get_claims_from_tx(self, txid):
+    def get_claims_from_tx(self, txid):
         return threads.deferToThread(self._get_claims_from_tx_rpc, txid)
 
     def _get_value_for_name(self, name):
