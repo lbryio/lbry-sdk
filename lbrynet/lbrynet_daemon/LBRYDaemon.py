@@ -1,6 +1,3 @@
-from threading import Thread
-from time import sleep
-
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -11,6 +8,7 @@ from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream, FetcherDaemon
+# from lbrynet.lbrynet_daemon.LBRYOSXStatusBar import DaemonStatusBarApp
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
@@ -28,7 +26,7 @@ from decimal import Decimal
 from StringIO import StringIO
 from zipfile import ZipFile
 from urllib import urlopen
-import os, sys, json, binascii, webbrowser, xmlrpclib, subprocess, logging, rumps
+import os, sys, json, binascii, webbrowser, xmlrpclib, subprocess, logging
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +57,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
             else:
                 self.db_dir = os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
+                # self.status_app = DaemonStatusBarApp()
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
             self.peer_port = 3333
             self.dht_node_port = 4444
@@ -136,6 +135,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_server())
         if sys.platform == "darwin":
             d.addCallback(lambda _: self._update())
+            # d.addCallback(lambda _: self.status_app.run())
         d.addCallback(lambda _: self._setup_fetcher())
         d.addCallback(lambda _: _disp_startup())
         d.callback(None)
@@ -290,6 +290,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d = self._stop_server()
         if self.session is not None:
             d.addCallback(lambda _: self.session.shut_down())
+        # if self.status_app:
+            # d.addCallback(lambda _: self.status_app.stop())
         return d
 
     def _update_settings(self):
@@ -1019,63 +1021,17 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return message
 
 
-class DaemonStatusBarApp(rumps.App):
-    def __init__(self):
-        super(DaemonStatusBarApp, self).__init__("LBRYnet", quit_button=None)
-        self.menu = ["Quit"]
-        # shut down existing instance of lbrynet-daemon if there is one
-        try:
-            d = xmlrpclib.ServerProxy('http://localhost:7080')
-            d.stop()
-        except:
-            pass
-
-        daemon = LBRYDaemon()
-        daemon.setup()
-        reactor.listenTCP(7080, server.Site(daemon))
-        Thread(target=reactor.run, args=(False,)).start()
-
-    @rumps.clicked('Quit')
-    def clean_quit(self):
+def main():
+    try:
         d = xmlrpclib.ServerProxy('http://localhost:7080')
         d.stop()
-        while True:
-            try:
-                d.is_running()
-            except:
-                break
+    except:
+        pass
 
-            sleep(1)
-
-        rumps.quit_application()
-
-def main():
-    if sys.platform == "darwin":
-        try:
-            DaemonStatusBarApp().run()
-        except:
-            print "Couldn't start status bar app"
-            try:
-                d = xmlrpclib.ServerProxy('http://localhost:7080')
-                d.stop()
-            except:
-                pass
-
-            daemon = LBRYDaemon()
-            daemon.setup()
-            reactor.listenTCP(7080, server.Site(daemon))
-            reactor.run()
-    else:
-        try:
-            d = xmlrpclib.ServerProxy('http://localhost:7080')
-            d.stop()
-        except:
-            pass
-
-        daemon = LBRYDaemon()
-        daemon.setup()
-        reactor.listenTCP(7080, server.Site(daemon))
-        reactor.run()
+    daemon = LBRYDaemon()
+    daemon.setup()
+    reactor.listenTCP(7080, server.Site(daemon))
+    reactor.run()
 
 if __name__ == '__main__':
     main()
