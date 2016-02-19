@@ -1021,7 +1021,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
 class DaemonStatusBarApp(rumps.App):
     def __init__(self):
-        super(DaemonStatusBarApp, self).__init__("LBRYnet", icon=os.path.join(os.path.expanduser("~"), "Downloads/lbryio/lbry.io/web/img/fav/apple-touch-icon.png"), quit_button=None)
+        super(DaemonStatusBarApp, self).__init__("LBRYnet", icon=os.path.join(os.path.expanduser("~"), "Downloads/lbryio/web/img/fav/apple-touch-icon.png"), quit_button=None)
         self.menu = ["Quit"]
         # shut down existing instance of lbrynet-daemon if there is one
         try:
@@ -1063,7 +1063,7 @@ def main():
         daemon.setup()
         reactor.listenTCP(7080, server.Site(daemon))
         reactor.run()
-        
+
 if __name__ == '__main__':
     main()
 
