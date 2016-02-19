@@ -8,6 +8,7 @@ from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream, FetcherDaemon
+# from lbrynet.lbrynet_daemon.LBRYOSXStatusBar import DaemonStatusBarApp
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
@@ -21,18 +22,11 @@ from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, 
 from twisted.web import xmlrpc, server
 from twisted.internet import defer, threads, reactor, error
 from datetime import datetime
-import logging
-import os
-import sys
-import json
-import binascii
-import webbrowser
-import xmlrpclib
 from decimal import Decimal
-import subprocess
 from StringIO import StringIO
 from zipfile import ZipFile
 from urllib import urlopen
+import os, sys, json, binascii, webbrowser, xmlrpclib, subprocess, logging
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +57,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
             else:
                 self.db_dir = os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
+                # self.status_app = DaemonStatusBarApp()
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
             self.peer_port = 3333
             self.dht_node_port = 4444
@@ -140,6 +135,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_server())
         if sys.platform == "darwin":
             d.addCallback(lambda _: self._update())
+            # d.addCallback(lambda _: self.status_app.run())
         d.addCallback(lambda _: self._setup_fetcher())
         d.addCallback(lambda _: _disp_startup())
         d.callback(None)
@@ -294,6 +290,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d = self._stop_server()
         if self.session is not None:
             d.addCallback(lambda _: self.session.shut_down())
+        # if self.status_app:
+            # d.addCallback(lambda _: self.status_app.stop())
         return d
 
     def _update_settings(self):
@@ -565,12 +563,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 d.cancel()
             return defer.succeed(None)
 
-        def _to_dict(r):
-            t = {}
-            for i in r:
-                t[i[0]] = i[1]
-            return t
-
         def _add_key_fee(data_cost):
             d = self.session.wallet.get_stream_info_for_name(name)
             d.addCallback(lambda info: data_cost + info['key_fee'] if 'key_fee' in info.keys() else data_cost)
@@ -581,13 +573,15 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                                                     self.blob_request_payment_rate_manager))
         d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         d.addCallback(lambda metadata: metadata.validator.info_to_show())
-        d.addCallback(_to_dict)
-        d.addCallback(lambda info: int(info['stream_size']) / 1000000 * self.data_rate)
+        d.addCallback(lambda info: int(dict(info)['stream_size']) / 1000000 * self.data_rate)
         d.addCallback(_add_key_fee)
         d.addErrback(lambda _: _add_key_fee(0.0))
         reactor.callLater(self.search_timeout, _check_est, d, name)
 
         return d
+
+    def xmlrpc_is_running(self):
+        return True
 
     def xmlrpc_get_settings(self):
         """
@@ -855,16 +849,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
         d.addCallback(lambda claims: claims[:self.max_search_results])
         d.addCallback(resolve_claims)
-
-        #filtered_results = [n for n in self.session.wallet.get_nametrie() if n['name'].startswith(search)]
-        #if len(filtered_results) > self.max_search_results:
-        #    filtered_results = filtered_results[:self.max_search_results]
-        #filtered_results = [n for n in filtered_results if 'txid' in n.keys()]
-        #resolved_results = [defer.DeferredList([_return_d(n), self._resolve_name_wc(n['name']),
-        #                                        self._get_est_cost(n['name'])], consumeErrors=True)
-        #                                        for n in filtered_results]
-
-        #d = defer.DeferredList(resolved_results)
         d.addCallback(_clean)
         d.addCallback(_parse)
         d.addCallback(_disp)
@@ -1036,8 +1020,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         return message
 
+
 def main():
-    # shut down existing instance of lbrynet-daemon if there is one
     try:
         d = xmlrpclib.ServerProxy('http://localhost:7080')
         d.stop()
@@ -1049,6 +1033,6 @@ def main():
     reactor.listenTCP(7080, server.Site(daemon))
     reactor.run()
 
-
 if __name__ == '__main__':
     main()
+
