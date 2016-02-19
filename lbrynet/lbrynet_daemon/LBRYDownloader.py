@@ -129,33 +129,33 @@ class FetcherDaemon(object):
     def check_if_running(self):
         if self.is_running:
             msg = "Autofetcher is running\n"
-            msg += "Last block hash: " + str(self.lastbestblock['bestblockhash'])
+            msg += "Last block hash: " + str(self.lastbestblock)
         else:
             msg = "Autofetcher is not running"
         return msg
 
     def _get_names(self):
-        d = self.wallet.get_blockchain_info()
-        d.addCallback(lambda c: get_new_streams(c) if c != self.lastbestblock else [])
+        d = self.wallet.get_best_blockhash()
+        d.addCallback(lambda blockhash: get_new_streams(blockhash) if blockhash != self.lastbestblock else [])
 
-        def get_new_streams(c):
-            self.lastbestblock = c
-            d = self.wallet.get_block(c['bestblockhash'])
-            d.addCallback(lambda block: get_new_streams_in_txes(block['tx'], c))
+        def get_new_streams(blockhash):
+            self.lastbestblock = blockhash
+            d = self.wallet.get_block(blockhash)
+            d.addCallback(lambda block: get_new_streams_in_txes(block['tx'], blockhash))
             return d
 
-        def get_new_streams_in_txes(txids, c):
+        def get_new_streams_in_txes(txids, blockhash):
             ds = []
             for t in txids:
                 d = self.wallet.get_claims_from_tx(t)
-                d.addCallback(get_new_streams_in_tx, t, c)
+                d.addCallback(get_new_streams_in_tx, t, blockhash)
                 ds.append(d)
             d = defer.DeferredList(ds, consumeErrors=True)
             d.addCallback(lambda result: [r[1] for r in result if r[0]])
             d.addCallback(lambda stream_lists: [stream for streams in stream_lists for stream in streams])
             return d
 
-        def get_new_streams_in_tx(claims, t, c):
+        def get_new_streams_in_tx(claims, t, blockhash):
                 #claims = self.wallet.get_claims_for_tx(t['txid'])
                 # if self.first_run:
                 #     # claims = self.rpc_conn.getclaimsfortx("96aca2c60efded5806b7336430c5987b9092ffbea9c6ed444e3bf8e008993e11")
@@ -173,7 +173,7 @@ class FetcherDaemon(object):
                         self.seen.append(claim)
             else:
                 if self.verbose:
-                    print "[" + str(datetime.now()) + "] No claims in block", c['bestblockhash']
+                    print "[" + str(datetime.now()) + "] No claims in block", blockhash
             return rtn
 
         d.addCallback(lambda streams: defer.DeferredList(

@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 setup(name='lbrynet',
       version='0.0.4',
       packages=find_packages(),
-      install_requires=['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure', 'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0', 'leveldb'],
+      install_requires=['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure', 'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0', 'leveldb', 'lbryum'],
       entry_points={
           'console_scripts': [
               'lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch_lbry_console',
@@ -43,5 +43,6 @@ setup(name='lbrynet',
                'lbrynet/lbrynet_gui/lbry.conf',
            ]
            )
-      ]
+      ],
+      dependency_links=['https://github.com/lbryio/lbryum/tarball/master/#egg=lbryum'],
       )

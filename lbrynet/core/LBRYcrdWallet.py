@@ -4,6 +4,13 @@ from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
+
+from lbryum import SimpleConfig, Network
+from lbryum.bitcoin import COIN, TYPE_ADDRESS
+from lbryum.wallet import WalletStorage, Wallet
+from lbryum.commands import known_commands, Commands
+from lbryum.transaction import Transaction
+
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
@@ -73,9 +80,6 @@ class LBRYWallet(object):
         d.addCallback(lambda _: start_manage())
         return d
 
-    def _start(self):
-        pass
-
     @staticmethod
     def log_stop_error(err):
         log.error("An error occurred stopping the wallet: %s", err.getTraceback())
@@ -94,9 +98,6 @@ class LBRYWallet(object):
         d.addCallback(lambda _: self._stop())
         d.addErrback(self.log_stop_error)
         return d
-
-    def _stop(self):
-        pass
 
     def manage(self):
         log.info("Doing manage")
@@ -256,13 +257,15 @@ class LBRYWallet(object):
         payments_to_send = {}
         for address, points in self.queued_payments.items():
             log.info("Should be sending %s points to %s", str(points), str(address))
-            payments_to_send[address] = float(points)
+            payments_to_send[address] = points
             self.total_reserved_points -= points
             self.wallet_balance -= points
             del self.queued_payments[address]
         if payments_to_send:
             log.info("Creating a transaction with outputs %s", str(payments_to_send))
-            return self._do_send_many(payments_to_send)
+            d = self._do_send_many(payments_to_send)
+            d.addCallback(lambda txid: log.debug("Sent transaction %s", txid))
+            return d
         log.info("There were no payments to send")
         return defer.succeed(True)
 
@@ -304,6 +307,8 @@ class LBRYWallet(object):
                 d = defer.succeed(True)
             d.addCallback(lambda _: r_dict)
             return d
+        elif 'error' in result:
+            log.warning("Got an error looking up a name: %s", result['error'])
         return Failure(UnknownNameError(name))
 
     def claim_name(self, name, sd_hash, amount, description=None, key_fee=None,
@@ -483,7 +488,7 @@ class LBRYWallet(object):
     def get_most_recent_blocktime(self):
         return defer.fail(NotImplementedError())
 
-    def get_blockchain_info(self):
+    def get_best_blockhash(self):
         return defer.fail(NotImplementedError())
 
     def get_name_claims(self):
@@ -515,6 +520,12 @@ class LBRYWallet(object):
 
     def _get_balance_for_address(self, address):
         return defer.fail(NotImplementedError())
+
+    def _start(self):
+        pass
+
+    def _stop(self):
+        pass
 
 
 class LBRYcrdWallet(LBRYWallet):
@@ -588,8 +599,10 @@ class LBRYcrdWallet(LBRYWallet):
     def get_block(self, blockhash):
         return threads.deferToThread(self._get_block_rpc, blockhash)
 
-    def get_blockchain_info(self):
-        return threads.deferToThread(self._get_blockchain_info_rpc)
+    def get_best_blockhash(self):
+        d = threads.deferToThread(self._get_blockchain_info_rpc)
+        d.addCallback(lambda blockchain_info: blockchain_info['bestblockhash'])
+        return d
 
     def get_nametrie(self):
         return threads.deferToThread(self._get_nametrie_rpc)
@@ -613,7 +626,8 @@ class LBRYcrdWallet(LBRYWallet):
         return threads.deferToThread(self._get_balance_for_address_rpc, address)
 
     def _do_send_many(self, payments_to_send):
-        return threads.deferToThread(self._do_send_many_rpc, payments_to_send)
+        outputs = {address: float(points) for address, points in payments_to_send.iteritems()}
+        return threads.deferToThread(self._do_send_many_rpc, outputs)
 
     def _send_name_claim(self, name, value, amount):
         return threads.deferToThread(self._send_name_claim_rpc, name, value, amount)
@@ -701,8 +715,7 @@ class LBRYcrdWallet(LBRYWallet):
     @_catch_connection_error
     def _do_send_many_rpc(self, payments):
         rpc_conn = self._get_rpc_conn()
-        rpc_conn.sendmany("", payments)
-        return True
+        return rpc_conn.sendmany("", payments)
 
     @_catch_connection_error
     def _get_info_rpc(self):
@@ -811,6 +824,156 @@ class LBRYcrdWallet(LBRYWallet):
             rpc_conn = self._get_rpc_conn()
             rpc_conn.stop()
             self.lbrycrdd.wait()
+
+
+class LBRYumWallet(LBRYWallet):
+
+    def __init__(self, db_dir):
+        LBRYWallet.__init__(self, db_dir)
+        self.config = None
+        self.network = None
+        self.wallet = None
+        self.cmd_runner = None
+        self.first_run = False
+
+    def _start(self):
+
+        network_start_d = defer.Deferred()
+
+        def setup_network():
+            self.config = SimpleConfig()
+            self.network = Network(self.config)
+            return defer.succeed(self.network.start())
+
+        d = setup_network()
+
+        def check_started():
+            if self.network.is_connecting():
+                return False
+            start_check.stop()
+            if self.network.is_connected():
+                network_start_d.callback(True)
+            else:
+                network_start_d.errback(ValueError("Failed to connect to network."))
+
+        start_check = task.LoopingCall(check_started)
+
+        d.addCallback(lambda _: start_check.start(.1))
+        d.addCallback(lambda _: network_start_d)
+        d.addCallback(lambda _: self._load_wallet())
+        d.addCallback(lambda _: self._get_cmd_runner())
+        return d
+
+    def _stop(self):
+        d = defer.Deferred()
+
+        def check_stopped():
+            if self.network.is_connected():
+                return False
+            stop_check.stop()
+            self.network = None
+            d.callback(True)
+
+        self.network.stop()
+
+        stop_check = task.LoopingCall(check_stopped)
+        stop_check.start(.1)
+        return d
+
+    def _load_wallet(self):
+
+        def get_wallet():
+            path = self.config.get_wallet_path()
+            storage = WalletStorage(path)
+            wallet = Wallet(storage)
+            if not storage.file_exists:
+                self.first_run = True
+                seed = wallet.make_seed()
+                wallet.add_seed(seed, None)
+                wallet.create_master_keys(None)
+                wallet.create_main_account()
+                wallet.synchronize()
+            self.wallet = wallet
+
+        d = threads.deferToThread(get_wallet)
+        d.addCallback(self._save_wallet)
+        d.addCallback(lambda _: self.wallet.start_threads(self.network))
+        return d
+
+    def _get_cmd_runner(self):
+        self.cmd_runner = Commands(self.config, self.wallet, self.network)
+
+    def get_balance(self):
+        cmd = known_commands['getbalance']
+        func = getattr(self.cmd_runner, cmd.name)
+        d = threads.deferToThread(func)
+        d.addCallback(lambda result: result['unmatured'] if 'unmatured' in result else result['confirmed'])
+        d.addCallback(Decimal)
+        return d
+
+    def get_new_address(self):
+        d = threads.deferToThread(self.wallet.create_new_address)
+        d.addCallback(self._save_wallet)
+        return d
+
+    def get_block(self, blockhash):
+        return defer.fail(NotImplementedError())
+
+    def get_most_recent_blocktime(self):
+        header = self.network.get_header(self.network.get_local_height())
+        return defer.succeed(header['timestamp'])
+
+    def get_best_blockhash(self):
+        height = self.network.get_local_height()
+        d = threads.deferToThread(self.network.blockchain.read_header, height)
+        d.addCallback(lambda header: self.network.blockchain.hash_header(header))
+        return d
+
+    def get_name_claims(self):
+        return defer.fail(NotImplementedError())
+
+    def check_first_run(self):
+        return defer.succeed(self.first_run)
+
+    def _get_raw_tx(self, txid):
+        cmd = known_commands['gettransaction']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, txid)
+
+    def _send_name_claim(self, name, val, amount):
+        return defer.fail(NotImplementedError())
+
+    def _get_decoded_tx(self, raw_tx):
+        return defer.fail(NotImplementedError())
+
+    def _send_abandon(self, txid, address, amount):
+        return defer.fail(NotImplementedError())
+
+    def _do_send_many(self, payments_to_send):
+        log.warning("Doing send many. payments to send: %s", str(payments_to_send))
+        outputs = [(TYPE_ADDRESS, address, int(amount*COIN)) for address, amount in payments_to_send.iteritems()]
+        d = threads.deferToThread(self.wallet.mktx, outputs, None, self.config)
+        d.addCallback(lambda tx: threads.deferToThread(self.wallet.sendtx, tx))
+        d.addCallback(self._save_wallet)
+        return d
+
+    def _get_value_for_name(self, name):
+        cmd = known_commands['getvalueforname']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, name)
+
+    def get_claims_from_tx(self, txid):
+        cmd = known_commands['getclaimsfromtx']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, txid)
+
+    def _get_balance_for_address(self, address):
+        return defer.succeed(Decimal(self.wallet.get_addr_received(address))/COIN)
+
+    def _save_wallet(self, val):
+        d = threads.deferToThread(self.wallet.storage.write)
+        d.addCallback(lambda _: val)
+        return d
 
 
 class LBRYcrdAddressRequester(object):
