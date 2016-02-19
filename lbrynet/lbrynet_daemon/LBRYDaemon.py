@@ -1051,7 +1051,20 @@ class DaemonStatusBarApp(rumps.App):
 
 def main():
     if sys.platform == "darwin":
-        DaemonStatusBarApp().run()
+        try:
+            DaemonStatusBarApp().run()
+        except:
+            print "Couldn't start status bar app"
+            try:
+                d = xmlrpclib.ServerProxy('http://localhost:7080')
+                d.stop()
+            except:
+                pass
+
+            daemon = LBRYDaemon()
+            daemon.setup()
+            reactor.listenTCP(7080, server.Site(daemon))
+            reactor.run()
     else:
         try:
             d = xmlrpclib.ServerProxy('http://localhost:7080')
