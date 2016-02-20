@@ -192,9 +192,29 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
             return defer.succeed(None)
 
+        def _update_lbryum():
+            git_version = subprocess.check_output(
+                "git ls-remote https://github.com/lbryio/lbryum.git | grep HEAD | cut -f 1",
+                shell=True)
+            if os.path.isfile(os.path.join(self.db_dir, "lbryum_version.txt")):
+                f = open(os.path.join(self.db_dir, "lbryum_version.txt"), 'r')
+                current_version = f.read()
+                f.close()
+                if git_version == current_version:
+                    print "LBRYum installation version " + current_version[:-1] + " is up to date"
+                    return defer.succeed(None)
+                print "Update LBRYum version " + current_version[:-1] + " --> " + git_version[:-1]
+                self.restart_message = "Updates available"
+            else:
+                print "Update LBRYum to version " + git_version[:-1]
+                self.restart_message = "Updates available"
+
+            return defer.succeed(None)
+
         d = _check_for_updater()
         d.addCallback(lambda _: _update_lbrynet())
         d.addCallback(lambda _: _update_lbrycrdd())
+        d.addCallback(lambda _: _update_lbryum())
         d.addCallback(lambda _: os.system("open /Applications/LBRY\ Updater.app &>/dev/null") if self.restart_message
                                 else defer.succeed(None))
         d.addCallbacks(lambda _: self._restart() if self.restart_message else defer.succeed(None))
