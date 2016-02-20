@@ -7,6 +7,7 @@ import locale
 import sys
 from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task, error
+from twisted.python.failure import Failure
 # from lbrynet.core.client.AutoDownloader import AutoFetcher
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
@@ -40,7 +41,7 @@ from lbrynet.lbrynet_console.ControlHandlers import ShowServerStatusFactory, Mod
 from lbrynet.lbrynet_console.ControlHandlers import ModifyLBRYFileOptionsChooserFactory, StatusFactory
 from lbrynet.lbrynet_console.ControlHandlers import PeerStatsAndSettingsChooserFactory, PublishFactory
 from lbrynet.lbrynet_console.ControlHandlers import BlockchainStatusFactory
-from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
+from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
 
 
 log = logging.getLogger(__name__)
@@ -253,8 +254,12 @@ class LBRYConsole():
                 d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.lbrycrd_dir,
                                                 wallet_conf=self.lbrycrd_conf,
                                                 lbrycrdd_path=lbrycrdd_path))
-            else:
+            elif self.wallet_type == 'ptc':
                 d = defer.succeed(PTCWallet(self.db_dir))
+            elif self.wallet_type == 'lbryum':
+                d = defer.succeed(LBRYumWallet(self.db_dir))
+            else:
+                d = defer.fail(Failure(ValueError("Invalid wallet type")))
             d.addCallback(lambda wallet: {"wallet": wallet})
             return d
 
@@ -372,14 +377,14 @@ class LBRYConsole():
             ModifyLBRYFileOptionsChooserFactory(self.lbry_file_manager),
             AddStreamFromHashFactory(self.sd_identifier, self.session, self.session.wallet),
             StatusFactory(self, self.session.rate_limiter, self.lbry_file_manager,
-                          self.session.blob_manager, self.session.wallet if self.wallet_type == 'lbrycrd' else None),
+                          self.session.blob_manager, self.session.wallet if self.wallet_type in ['lbrycrd', 'lbryum'] else None),
             # AutoFetcherStartFactory(self.autofetcher),
             # AutoFetcherStopFactory(self.autofetcher),
             # AutoFetcherStatusFactory(self.autofetcher),
             ImmediateAnnounceAllBlobsFactory(self.session.blob_manager)
         ]
         self.add_control_handlers(handlers)
-        if self.wallet_type == 'lbrycrd':
+        if self.wallet_type in ['lbrycrd', 'lbryum']:
             lbrycrd_handlers = [
                 AddStreamFromLBRYcrdNameFactory(self.sd_identifier, self.session,
                                                 self.session.wallet),
@@ -520,7 +525,7 @@ def launch_lbry_console():
                         help="The port on which the console will listen for DHT connections.",
                         type=int, default=4444)
     parser.add_argument("--wallet_type",
-                        help="Either 'lbrycrd' or 'ptc'.",
+                        help="Either 'lbrycrd' or 'ptc' or 'lbryum'.",
                         type=str, default="lbrycrd")
     parser.add_argument("--lbrycrd_wallet_dir",
                         help="The directory in which lbrycrd data will stored. Used if lbrycrdd is "
