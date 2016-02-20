@@ -58,6 +58,17 @@ else
 	echo "rumps already installed..."
 fi
 
+if ! python -c "import six; exit(0) if six.__version__ == '1.9.0' else exit(1)" &>/dev/null; then
+    echo "Installing six 1.9.0 for python"
+    curl -O https://pypi.python.org/packages/source/s/six/six-1.9.0.tar.gz &>/dev/null
+    tar xf six-1.9.0.tar.gz &>/dev/null
+    cd six-1.9.0
+    sudo python setup.py install &>/dev/null
+    cd ..
+    rm -rf six-1.9.0
+    rm six-1.9.0.tar.gz
+fi
+
 lbrynet_directory="/Users/${SUDO_USER}/Library/Application Support/lbrynet"
 
 lbrynet_current_version=$(git ls-remote https://github.com/lbryio/lbry.git | grep HEAD | cut -f 1)
