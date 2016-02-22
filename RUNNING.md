@@ -25,7 +25,7 @@ To stop lbrycrdd: `./lbrycrd/src/lbrycrd-cli stop`
 ### Installing lbrycrd from source
 
 ```
-git clone --depth=1 https://github.com/lbryio/lbrycrd.git
+git clone --depth=1 -b alpha https://github.com/lbryio/lbrycrd.git
 cd lbrycrd
 sudo apt-get install build-essential libtool autotools-dev autoconf pkg-config libssl-dev libboost-all-dev libdb-dev libdb++-dev libqt4-dev libprotobuf-dev protobuf-compiler
 ./autogen.sh
