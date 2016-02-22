@@ -917,7 +917,9 @@ class LBRYumWallet(LBRYWallet):
         return d
 
     def get_block(self, blockhash):
-        return defer.fail(NotImplementedError())
+        cmd = known_commands['getblock']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, blockhash)
 
     def get_most_recent_blocktime(self):
         header = self.network.get_header(self.network.get_local_height())
