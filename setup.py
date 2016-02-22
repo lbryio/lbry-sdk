@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 setup(name='lbrynet',
       version='0.0.4',
       packages=find_packages(),
-      install_requires=['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure', 'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0', 'leveldb', 'lbryum'],
+      install_requires=['six>=1.9.0', 'pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure', 'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0', 'leveldb', 'lbryum'],
       entry_points={
           'console_scripts': [
               'lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch_lbry_console',
