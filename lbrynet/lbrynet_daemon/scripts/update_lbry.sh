@@ -13,6 +13,14 @@ if [ -d "$lbrycrd_directory" ]; then
 	fi
 fi
 
+if ! brew list berkeley-db4 &>/dev/null; then
+    echo "Installing berkeley-db4"
+    sudo -u ${SUDO_USER} brew install https://rawgit.com/jackrobison/homebrew/master/Library/Formula/berkeley-db4.rb &>/dev/null
+    sudo -u ${SUDO_USER} brew link --force berkeley-db4 &>/dev/null
+else
+    echo "berkeley-db4 already installed"
+fi
+
 tmp=$(mktemp -d)
 cd $tmp
 
