@@ -972,6 +972,11 @@ class LBRYumWallet(LBRYWallet):
     def _get_balance_for_address(self, address):
         return defer.succeed(Decimal(self.wallet.get_addr_received(address))/COIN)
 
+    def get_nametrie(self):
+        cmd = known_commands['getnametrie']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func)
+
     def _save_wallet(self, val):
         d = threads.deferToThread(self.wallet.storage.write)
         d.addCallback(lambda _: val)
