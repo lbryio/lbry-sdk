@@ -835,6 +835,7 @@ class LBRYumWallet(LBRYWallet):
         self.wallet = None
         self.cmd_runner = None
         self.first_run = False
+        self.printed_retrieving_headers = False
 
     def _start(self):
 
@@ -843,15 +844,20 @@ class LBRYumWallet(LBRYWallet):
         def setup_network():
             self.config = SimpleConfig()
             self.network = Network(self.config)
+            alert.info("Starting the wallet...")
             return defer.succeed(self.network.start())
 
         d = setup_network()
 
         def check_started():
             if self.network.is_connecting():
+                if not self.printed_retrieving_headers and self.network.blockchain.retrieving_headers:
+                    alert.info("Running the wallet for the first time...this may take a moment.")
+                    self.printed_retrieving_headers = True
                 return False
             start_check.stop()
             if self.network.is_connected():
+                alert.info("Wallet started.")
                 network_start_d.callback(True)
             else:
                 network_start_d.errback(ValueError("Failed to connect to network."))
@@ -917,7 +923,9 @@ class LBRYumWallet(LBRYWallet):
         return d
 
     def get_block(self, blockhash):
-        return defer.fail(NotImplementedError())
+        cmd = known_commands['getblock']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, blockhash)
 
     def get_most_recent_blocktime(self):
         header = self.network.get_header(self.network.get_local_height())
@@ -969,6 +977,11 @@ class LBRYumWallet(LBRYWallet):
 
     def _get_balance_for_address(self, address):
         return defer.succeed(Decimal(self.wallet.get_addr_received(address))/COIN)
+
+    def get_nametrie(self):
+        cmd = known_commands['getnametrie']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func)
 
     def _save_wallet(self, val):
         d = threads.deferToThread(self.wallet.storage.write)
