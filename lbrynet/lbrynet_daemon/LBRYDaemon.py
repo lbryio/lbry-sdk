@@ -16,7 +16,7 @@ from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS,
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
+from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 from twisted.web import xmlrpc, server
@@ -26,7 +26,8 @@ from decimal import Decimal
 from StringIO import StringIO
 from zipfile import ZipFile
 from urllib import urlopen
-import os, sys, json, binascii, webbrowser, xmlrpclib, subprocess, logging
+
+import os, sys, json, binascii, webbrowser, xmlrpclib, subprocess, logging, argparse, getopt
 
 log = logging.getLogger(__name__)
 
@@ -46,8 +47,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
     LBRYnet daemon
     """
 
-    def setup(self):
-        def _set_vars():
+    def setup(self, wallet_type):
+        def _set_vars(wallet_type):
             self.fetcher = None
             self.current_db_revision = 1
             self.run_server = True
@@ -93,7 +94,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.lbry_file_metadata_manager = None
             self.lbry_file_manager = None
             self.settings = LBRYSettings(self.db_dir)
-            self.wallet_type = "lbrycrd"
+            self.wallet_type = wallet_type
             self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
             self.autofetcher_conf = os.path.join(self.wallet_dir, "autofetcher.conf")
             self.files = []
@@ -121,7 +122,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             return defer.succeed(None)
 
         d = defer.Deferred()
-        d.addCallback(lambda _: _set_vars())
+        d.addCallback(lambda _: _set_vars(wallet_type))
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
@@ -397,6 +398,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         def get_wallet():
             if self.wallet_type == "lbrycrd":
+                print "Using lbrycrd wallet"
                 lbrycrdd_path = None
                 if self.start_lbrycrdd is True:
                     lbrycrdd_path = self.lbrycrdd_path
@@ -404,8 +406,15 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                         lbrycrdd_path = self.default_lbrycrdd_path
                 d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.wallet_dir, wallet_conf=self.lbrycrd_conf,
                                                 lbrycrdd_path=lbrycrdd_path))
-            else:
+            elif self.wallet_type == "lbryum":
+                print "Using lbryum wallet"
+                d = defer.succeed(LBRYumWallet(self.db_dir))
+            elif self.wallet_type == "ptc":
+                print "Using PTC wallet"
                 d = defer.succeed(PTCWallet(self.db_dir))
+            else:
+                d = defer.fail()
+
             d.addCallback(lambda wallet: {"wallet": wallet})
             return d
 
@@ -1042,17 +1051,23 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
+    parser.add_argument("--wallet",
+                        help="Either lbrycrd or lbryum",
+                        type=str,
+                        default="lbryum")
+    args = parser.parse_args()
+
     try:
-        d = xmlrpclib.ServerProxy('http://localhost:7080')
-        d.stop()
+        daemon = xmlrpclib.ServerProxy("http://localhost:7080")
+        daemon.stop()
     except:
         pass
 
     daemon = LBRYDaemon()
-    daemon.setup()
+    daemon.setup(args.wallet)
     reactor.listenTCP(7080, server.Site(daemon))
     reactor.run()
 
 if __name__ == '__main__':
     main()
-
