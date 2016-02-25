@@ -8,7 +8,6 @@ from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream, FetcherDaemon
-# from lbrynet.lbrynet_daemon.LBRYOSXStatusBar import DaemonStatusBarApp
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
@@ -27,9 +26,10 @@ from StringIO import StringIO
 from zipfile import ZipFile
 from urllib import urlopen
 
-import os, sys, json, binascii, webbrowser, xmlrpclib, subprocess, logging, argparse, getopt
+import os, sys, json, binascii, webbrowser, xmlrpclib, subprocess, logging, argparse
 
 log = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.DEBUG)
 
 
 # TODO add login credentials in a conf file
@@ -47,8 +47,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
     LBRYnet daemon
     """
 
-    def setup(self, wallet_type):
-        def _set_vars(wallet_type):
+    def setup(self, wallet_type, check_for_updates):
+        def _set_vars(wallet_type, check_for_updates):
             self.fetcher = None
             self.current_db_revision = 1
             self.run_server = True
@@ -58,7 +58,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
             else:
                 self.db_dir = os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
-                # self.status_app = DaemonStatusBarApp()
+                from lbrynet.lbrynet_daemon.LBRYOSXStatusBar import DaemonStatusBarApp
+                self.status_app = DaemonStatusBarApp()
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
             self.peer_port = 3333
             self.dht_node_port = 4444
@@ -95,9 +96,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.lbry_file_manager = None
             self.settings = LBRYSettings(self.db_dir)
             self.wallet_type = wallet_type
+            self.check_for_updates = check_for_updates
             self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
             self.autofetcher_conf = os.path.join(self.wallet_dir, "autofetcher.conf")
-            self.files = []
             self.created_data_dir = False
             if not os.path.exists(self.db_dir):
                 os.mkdir(self.db_dir)
@@ -118,11 +119,14 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             else:
                 print "Started LBRYnet daemon"
                 print "The daemon can be shut down by running 'stop-lbrynet-daemon' in a terminal"
+                log.info('[' + str(datetime.now()) + '] Started lbrynet-daemon')
 
             return defer.succeed(None)
 
+        log.info('[' + str(datetime.now()) + '] Starting lbrynet-daemon')
+
         d = defer.Deferred()
-        d.addCallback(lambda _: _set_vars(wallet_type))
+        d.addCallback(lambda _: _set_vars(wallet_type, check_for_updates))
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
@@ -135,8 +139,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._setup_server())
         if sys.platform == "darwin":
-            d.addCallback(lambda _: self._update())
-            # d.addCallback(lambda _: self.status_app.run())
+            d.addCallback(lambda _: self._update() if self.check_for_updates == "True" else defer.succeed(None))
+            # d.addCallback(lambda _: defer.succeed(self.status_app.run()))
         d.addCallback(lambda _: self._setup_fetcher())
         d.addCallback(lambda _: _disp_startup())
         d.callback(None)
@@ -399,6 +403,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         def get_wallet():
             if self.wallet_type == "lbrycrd":
                 print "Using lbrycrd wallet"
+                log.info("Using lbrycrd wallet")
                 lbrycrdd_path = None
                 if self.start_lbrycrdd is True:
                     lbrycrdd_path = self.lbrycrdd_path
@@ -408,9 +413,11 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                                                 lbrycrdd_path=lbrycrdd_path))
             elif self.wallet_type == "lbryum":
                 print "Using lbryum wallet"
+                log.info("Using lbryum wallet")
                 d = defer.succeed(LBRYumWallet(self.db_dir))
             elif self.wallet_type == "ptc":
                 print "Using PTC wallet"
+                log.info("Using PTC wallet")
                 d = defer.succeed(PTCWallet(self.db_dir))
             else:
                 d = defer.fail()
@@ -539,9 +546,11 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             path = os.path.join(self.blobfile_dir, stream_hash)
             if os.path.isfile(path):
                 print "[" + str(datetime.now()) + "] Search for lbry_file, returning: " + stream_hash
+                log.info("[" + str(datetime.now()) + "] Search for lbry_file, returning: " + stream_hash)
                 return defer.succeed(_get_lbry_file(path))
             else:
                 print "[" + str(datetime.now()) + "] Search for lbry_file didn't return anything"
+                log.info("[" + str(datetime.now()) + "] Search for lbry_file didn't return anything")
                 return defer.succeed(False)
 
         d = self._resolve_name(name)
@@ -587,8 +596,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         def _check_est(d, name):
             if type(d.result) is float:
                 print '[' + str(datetime.now()) + '] Cost est for lbry://' + name + ': ' + str(d.result) + 'LBC'
+                log.info('[' + str(datetime.now()) + '] Cost est for lbry://' + name + ': ' + str(d.result) + 'LBC')
             else:
                 print '[' + str(datetime.now()) + '] Timeout estimating cost for lbry://' + name + ', using key fee'
+                log.info('[' + str(datetime.now()) + '] Timeout estimating cost for lbry://' + name + ', using key fee')
                 d.cancel()
             return defer.succeed(None)
 
@@ -645,6 +656,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         self.fetcher.start()
         print '[' + str(datetime.now()) + '] Start autofetcher'
+        log.info('[' + str(datetime.now()) + '] Start autofetcher')
         return 'Started autofetching'
 
     def xmlrpc_stop_fetcher(self):
@@ -654,6 +666,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         self.fetcher.stop()
         print '[' + str(datetime.now()) + '] Stop autofetcher'
+        log.info('[' + str(datetime.now()) + '] Stop autofetcher')
         return 'Stopped autofetching'
 
     def xmlrpc_fetcher_status(self):
@@ -678,6 +691,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
 
         def _disp_shutdown():
+            log.info('Shutting down lbrynet daemon')
             print 'Shutting down lbrynet daemon'
 
         d = self._shutdown()
@@ -720,7 +734,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
 
         def _disp(info):
-            log.debug('[' + str(datetime.now()) + ']' + ' Resolved info: ' + str(info['stream_hash']))
             print '[' + str(datetime.now()) + ']' + ' Resolved info: ' + str(info['stream_hash'])
             return info
 
@@ -822,13 +835,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         @return:
         """
 
-        #def _return_d(x):
-        #    d = defer.Deferred()
-        #    d.addCallback(lambda _: x)
-        #    d.callback(None)
-
-        #    return d
-
         def _clean(n):
             t = []
             for i in n:
@@ -870,9 +876,13 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         def _disp(results):
             print '[' + str(datetime.now()) + '] Found ' + str(len(results)) + ' results'
+            log.info('[' + str(datetime.now()) + '] Search results: ')
+            for r in results:
+                log.info(str(r))
             return results
 
         print '[' + str(datetime.now()) + '] Search nametrie: ' + search
+        log.info('[' + str(datetime.now()) + '] Search nametrie: ' + search)
 
         d = self.session.wallet.get_nametrie()
         d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
@@ -953,6 +963,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         else:
             content_license = None
 
+        log.info('[' + str(datetime.now()) + '] Publish: ', name, file_path, bid, title, description, thumbnail,
+                                                            key_fee, key_fee_address, content_license)
+
         p = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
         d = p.start(name, file_path, bid, title, description, thumbnail, key_fee, key_fee_address, content_license)
 
@@ -988,6 +1001,15 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d = self.session.wallet.get_most_recent_blocktime()
         d.addCallback(get_time_behind_blockchain)
 
+        return d
+
+    def xmlrpc_get_new_address(self):
+        def _disp(address):
+            print "[" + str(datetime.now()) + "] Got new wallet address: " + address
+            return address
+
+        d = self.session.wallet.get_new_address()
+        d.addCallback(_disp)
         return d
 
     # def xmlrpc_update_name(self, metadata):
@@ -1053,9 +1075,14 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 def main():
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
     parser.add_argument("--wallet",
-                        help="Either lbrycrd or lbryum",
+                        help="lbrycrd or lbryum, default lbryum",
                         type=str,
                         default="lbryum")
+    parser.add_argument("--update",
+                        help="True or false, default true",
+                        type=str,
+                        default="True")
+
     args = parser.parse_args()
 
     try:
@@ -1065,7 +1092,7 @@ def main():
         pass
 
     daemon = LBRYDaemon()
-    daemon.setup(args.wallet)
+    daemon.setup(args.wallet, args.update)
     reactor.listenTCP(7080, server.Site(daemon))
     reactor.run()
 
