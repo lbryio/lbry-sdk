@@ -938,7 +938,9 @@ class LBRYumWallet(LBRYWallet):
         return d
 
     def get_name_claims(self):
-        return defer.fail(NotImplementedError())
+        cmd = known_commands['getnameclaims']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func)
 
     def check_first_run(self):
         return defer.succeed(self.first_run)
@@ -949,13 +951,38 @@ class LBRYumWallet(LBRYWallet):
         return threads.deferToThread(func, txid)
 
     def _send_name_claim(self, name, val, amount):
-        return defer.fail(NotImplementedError())
+        def send_claim(address):
+            cmd = known_commands['claimname']
+            func = getattr(self.cmd_runner, cmd.name)
+            return threads.deferToThread(func, address, amount, name, val)
+        d = self.get_new_address()
+        d.addCallback(send_claim)
+        d.addCallback(self._broadcast_transaction)
+        return d
 
     def _get_decoded_tx(self, raw_tx):
-        return defer.fail(NotImplementedError())
+        tx = Transaction(raw_tx)
+        decoded_tx = {}
+        decoded_tx['vout'] = []
+        for output in tx.outputs():
+            out = {}
+            out['value'] = output[2]
+            decoded_tx['vout'].append(out)
+        return decoded_tx
 
     def _send_abandon(self, txid, address, amount):
-        return defer.fail(NotImplementedError())
+        cmd = known_commands['abandonclaim']
+        func = getattr(self.cmd_runner, cmd.name)
+        d = threads.deferToThread(func, txid, address, amount)
+        d.addCallback(self._broadcast_transaction)
+        return d
+
+    def _broadcast_transaction(self, raw_tx):
+        cmd = known_commands['broadcast']
+        func = getattr(self.cmd_runner, cmd.name)
+        d = threads.deferToThread(func, raw_tx)
+        d.addCallback(self._save_wallet)
+        return d
 
     def _do_send_many(self, payments_to_send):
         log.warning("Doing send many. payments to send: %s", str(payments_to_send))
