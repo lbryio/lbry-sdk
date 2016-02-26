@@ -1006,7 +1006,7 @@ class LBRYumWallet(LBRYWallet):
         return defer.succeed(Decimal(self.wallet.get_addr_received(address))/COIN)
 
     def get_nametrie(self):
-        cmd = known_commands['getnametrie']
+        cmd = known_commands['getclaimtrie']
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func)
 
