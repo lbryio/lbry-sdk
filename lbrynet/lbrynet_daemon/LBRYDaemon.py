@@ -1093,7 +1093,7 @@ def main():
 
     daemon = LBRYDaemon()
     daemon.setup(args.wallet, args.update)
-    reactor.listenTCP(7080, server.Site(daemon))
+    reactor.listenTCP(7080, server.Site(daemon), interface='localhost')
     reactor.run()
 
 if __name__ == '__main__':
