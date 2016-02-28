@@ -4,12 +4,11 @@ import xmlrpclib
 def main():
     daemon = xmlrpclib.ServerProxy("http://localhost:7080/")
     try:
-        b = daemon.get_balance()
-        is_running = True
+        status = daemon.is_running()
     except:
-        is_running = False
+        status = False
 
-    if is_running:
+    if status:
         daemon.stop()
         print "LBRYnet daemon stopped"
     else:

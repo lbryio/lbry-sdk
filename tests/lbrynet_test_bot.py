@@ -7,9 +7,8 @@ from slackclient import SlackClient
 def get_conf():
     f = open('testbot.conf', 'r')
     token = f.readline().replace('\n', '')
-    channel = f.readline().replace('\n', '')
     f.close()
-    return token, channel
+    return token
 
 def test_lbrynet(lbry, slack, channel):
     logfile = open('lbrynet_test_log.txt', 'a')
@@ -48,10 +47,11 @@ def test_lbrynet(lbry, slack, channel):
     lbry.delete_lbry_file('test.jpg')
     logfile.close()
 
-token, channel = get_conf()
+token = get_conf()
 
 sc = SlackClient(token)
 sc.rtm_connect()
+channel = [c['id'] for c in json.loads(sc.api_call('channels.list'))['channels'] if c['name'] == 'tech'][0]
 print 'Connected to slack'
 daemon = xmlrpclib.ServerProxy("http://localhost:7080")
 
