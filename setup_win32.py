@@ -7,7 +7,7 @@ import os
 import sys
 
 from cx_Freeze import setup, Executable
-
+import requests.certs
 
 def find_data_file(filename):
     if getattr(sys, 'frozen', False):
@@ -48,9 +48,9 @@ bdist_msi_options = {
 build_exe_options = {
     'include_msvcr': True,
     'includes': [],
-    'packages': ['os', 'twisted', 'miniupnpc', 'unqlite', 'seccure',
+    'packages': ['six', 'os', 'twisted', 'miniupnpc', 'unqlite', 'seccure',
                  'requests', 'bitcoinrpc', 'txjsonrpc', 'win32api', 'Crypto',
-                 'gmpy', 'yapsy'],
+                 'gmpy', 'yapsy', 'lbryum', 'google.protobuf'],
     'excludes': ['zope.interface._zope_interface_coptimizations'],
     'include_files': [os.path.join('lbrynet', 'lbrynet_gui', 'close.gif'),
                       os.path.join('lbrynet', 'lbrynet_gui', 'close1.png'),
@@ -63,6 +63,7 @@ build_exe_options = {
                       os.path.join('lbrynet', 'lbrynet_gui', 'show_options.gif'),
                       os.path.join('lbrycrdd.exe'),  # Not included in repo
                       os.path.join('lbrycrd-cli.exe'),  # Not included in repo
+                      (requests.certs.where(), 'cacert.pem'),
                       ],
     'namespace_packages': ['zope']}
 
