@@ -2,6 +2,7 @@ import rumps
 import xmlrpclib
 import os
 import webbrowser
+import subprocess
 
 
 class DaemonStatusBarApp(rumps.App):
@@ -63,6 +64,7 @@ class DaemonStatusBarApp(rumps.App):
 
 
 def main():
+    subprocess.Popen("screen -dmS lbry bash -c 'lbrynet-daemon --update=False'", shell=True)
     status_app = DaemonStatusBarApp()
     status_app.run()
 
