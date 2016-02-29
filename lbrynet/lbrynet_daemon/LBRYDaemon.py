@@ -1,3 +1,22 @@
+import os
+import sys
+import json
+import binascii
+import webbrowser
+import xmlrpclib
+import subprocess
+import logging
+import argparse
+
+from twisted.web import xmlrpc, server
+from twisted.internet import defer, threads, reactor, error
+
+from datetime import datetime
+from decimal import Decimal
+from StringIO import StringIO
+from zipfile import ZipFile
+from urllib import urlopen
+
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -18,15 +37,7 @@ from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
-from twisted.web import xmlrpc, server
-from twisted.internet import defer, threads, reactor, error
-from datetime import datetime
-from decimal import Decimal
-from StringIO import StringIO
-from zipfile import ZipFile
-from urllib import urlopen
 
-import os, sys, json, binascii, webbrowser, xmlrpclib, subprocess, logging, argparse
 
 log = logging.getLogger(__name__)
 # logging.basicConfig(level=logging.DEBUG)
@@ -138,9 +149,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._setup_server())
-        if sys.platform == "darwin":
-            d.addCallback(lambda _: self._update() if self.check_for_updates == "True" else defer.succeed(None))
-            # d.addCallback(lambda _: defer.succeed(self.status_app.run()))
+        d.addCallback(lambda _: self._update() if self.check_for_updates == "True" and sys.platform == "darwin"
+                                else defer.succeed(None))
         d.addCallback(lambda _: self._setup_fetcher())
         d.addCallback(lambda _: _disp_startup())
         d.callback(None)
@@ -218,8 +228,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         d = _check_for_updater()
         d.addCallback(lambda _: _update_lbrynet())
-        d.addCallback(lambda _: _update_lbrycrdd())
-        d.addCallback(lambda _: _update_lbryum())
+        d.addCallback(lambda _: _update_lbrycrdd() if self.wallet_type == 'lbrycrd' else _update_lbryum())
         d.addCallback(lambda _: os.system("open /Applications/LBRY\ Updater.app &>/dev/null") if self.restart_message
                                 else defer.succeed(None))
         d.addCallbacks(lambda _: self._restart() if self.restart_message else defer.succeed(None))
@@ -1071,6 +1080,27 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         return message
 
+    def xmlrpc_start_status_bar_app(self):
+        if sys.platform == 'darwin':
+            subprocess.Popen("screen -dmS lbry-status bash -c 'lbrynet-daemon-status --startdaemon=False'", shell=True)
+            return "Started"
+        else:
+            return "Status bar not implemented on non OS X"
+
+
+def stop():
+    daemon = xmlrpclib.ServerProxy("http://localhost:7080/")
+    try:
+        status = daemon.is_running()
+    except:
+        status = False
+
+    if status:
+        daemon.stop()
+        print "LBRYnet daemon stopped"
+    else:
+        print "LBRYnet daemon wasn't running"
+
 
 def main():
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
@@ -1095,6 +1125,7 @@ def main():
     daemon.setup(args.wallet, args.update)
     reactor.listenTCP(7080, server.Site(daemon), interface='localhost')
     reactor.run()
+
 
 if __name__ == '__main__':
     main()

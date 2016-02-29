@@ -16,7 +16,7 @@ console_scripts = ['lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch
                   'lbrynet-lookup-hosts-for-hash = lbrynet.dht_scripts:get_hosts_for_hash_in_dht',
                   'lbrynet-announce_hash_to_dht = lbrynet.dht_scripts:announce_hash_to_dht',
                   'lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemon:main',
-                  'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonStopper:main']
+                  'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemon:stop']
 
 if sys.platform == 'darwin':
     console_scripts.append('lbrynet-daemon-status = lbrynet.lbrynet_daemon.LBRYOSXStatusBar:main')

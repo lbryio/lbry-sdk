@@ -3,11 +3,19 @@ import xmlrpclib
 import os
 import webbrowser
 import subprocess
+import argparse
 
 
 class DaemonStatusBarApp(rumps.App):
     def __init__(self):
-        icon_path = os.path.join(os.path.expanduser("~"), "Downloads/lbryio/web/img/fav/apple-touch-icon.png")
+        #detect if being run as root, if so find the correct icon path
+        if os.path.expanduser("~") != '/var/root':
+            icon_path = os.path.join(os.path.expanduser("~"), "Downloads/lbryio/web/img/fav/apple-touch-icon.png")
+        else:
+            icon_path = os.path.join("/Users",
+                                     subprocess.check_output('echo $SUDO_USER', shell=True)[:-1],
+                                     "Downloads/lbryio/web/img/fav/apple-touch-icon.png")
+
         if os.path.isfile(icon_path):
             rumps.App.__init__(self, name="LBRY", icon=icon_path, quit_button=None,
                                 menu=["Open", "Preferences", "View balance", "Quit"])
@@ -64,7 +72,16 @@ class DaemonStatusBarApp(rumps.App):
 
 
 def main():
-    subprocess.Popen("screen -dmS lbry bash -c 'lbrynet-daemon --update=False'", shell=True)
+    parser = argparse.ArgumentParser(description="Launch lbrynet status bar application")
+    parser.add_argument("--startdaemon",
+                        help="true or false, default true",
+                        type=str,
+                        default="true")
+    args = parser.parse_args()
+
+    if args.startdaemon.lower() == "true":
+        subprocess.Popen("screen -dmS lbrynet bash -c 'lbrynet-daemon'", shell=True)
+
     status_app = DaemonStatusBarApp()
     status_app.run()
 
