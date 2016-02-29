@@ -79,7 +79,7 @@ def main():
                         default="true")
     args = parser.parse_args()
 
-    if args.startdaemon.lower() == "true":
+    if str(args.startdaemon).lower() == "true":
         subprocess.Popen("screen -dmS lbrynet bash -c 'lbrynet-daemon'", shell=True)
 
     status_app = DaemonStatusBarApp()
