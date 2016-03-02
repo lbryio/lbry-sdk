@@ -7,6 +7,7 @@ import xmlrpclib
 import subprocess
 import logging
 import argparse
+import pwd
 
 from twisted.web import xmlrpc, server
 from twisted.internet import defer, threads, reactor, error
@@ -69,8 +70,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
             else:
                 self.db_dir = os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
-                # from lbrynet.lbrynet_daemon.LBRYOSXStatusBar import DaemonStatusBarApp
-                # self.status_app = DaemonStatusBarApp()
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
             self.peer_port = 3333
             self.dht_node_port = 4444
@@ -813,6 +812,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         d = defer.Deferred()
         d.addCallback(lambda _: _make_file(html, path))
+        d.addCallback(lambda _: os.chown(path, pwd.getpwuid(os.getuid()).pw_uid, pwd.getpwuid(os.getuid()).pw_gid))
         d.addCallback(lambda _: webbrowser.open('file://' + path))
         d.addErrback(_disp_err)
         d.callback(None)

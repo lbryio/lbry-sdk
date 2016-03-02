@@ -8,13 +8,7 @@ import argparse
 
 class DaemonStatusBarApp(rumps.App):
     def __init__(self):
-        #detect if being run as root, if so find the correct icon path
-        if os.path.expanduser("~") != '/var/root':
-            icon_path = os.path.join(os.path.expanduser("~"), "Downloads/lbryio/web/img/fav/apple-touch-icon.png")
-        else:
-            icon_path = os.path.join("/Users",
-                                     subprocess.check_output('echo $SUDO_USER', shell=True)[:-1],
-                                     "Downloads/lbryio/web/img/fav/apple-touch-icon.png")
+        icon_path = 'app.icns'
 
         if os.path.isfile(icon_path):
             rumps.App.__init__(self, name="LBRY", icon=icon_path, quit_button=None,
@@ -80,7 +74,10 @@ def main():
     args = parser.parse_args()
 
     if str(args.startdaemon).lower() == "true":
-        subprocess.Popen("screen -dmS lbrynet bash -c 'lbrynet-daemon'", shell=True)
+        subprocess.Popen("screen -dmS lbrynet bash -c "
+                         "'PYTHONPATH=$PYTHONPATH:`cat /Users/${USER}/Library/Application\ Support/lbrynet/.python_path`; "
+                         "PATH=$PATH:`cat /Users/${USER}/Library/Application\ Support/lbrynet/.lbry_bin_path`; "
+                         "lbrynet-daemon --update=False'", shell=True)
 
     status_app = DaemonStatusBarApp()
     status_app.run()
