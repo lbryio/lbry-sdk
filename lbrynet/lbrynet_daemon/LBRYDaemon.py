@@ -1,3 +1,4 @@
+import locale
 import os
 import sys
 import json
@@ -8,10 +9,10 @@ import subprocess
 import logging
 import argparse
 import pwd
+import requests
 
 from twisted.web import xmlrpc, server
 from twisted.internet import defer, threads, reactor, error
-
 from datetime import datetime
 from decimal import Decimal
 from StringIO import StringIO
@@ -39,8 +40,9 @@ from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 
-
 log = logging.getLogger(__name__)
+
+
 # logging.basicConfig(level=logging.DEBUG)
 
 
@@ -118,6 +120,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.max_key_fee = DEFAULT_MAX_KEY_FEE
             self.max_search_results = DEFAULT_MAX_SEARCH_RESULTS
             self.restart_message = ""
+            self.startup_message = ""
+            self.announced_startup = False
             self.search_timeout = 3.0
             self.query_handlers = {}
 
@@ -229,7 +233,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: _update_lbrynet())
         d.addCallback(lambda _: _update_lbrycrdd() if self.wallet_type == 'lbrycrd' else _update_lbryum())
         d.addCallback(lambda _: os.system("open /Applications/LBRY\ Updater.app &>/dev/null") if self.restart_message
-                                else defer.succeed(None))
+        else defer.succeed(None))
         d.addCallbacks(lambda _: self._restart() if self.restart_message else defer.succeed(None))
 
         return defer.succeed(None)
@@ -323,8 +327,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d = self._stop_server()
         if self.session is not None:
             d.addCallback(lambda _: self.session.shut_down())
-        # if self.status_app:
-            # d.addCallback(lambda _: self.status_app.stop())
         return d
 
     def _update_settings(self):
@@ -453,7 +455,44 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         dl.addCallback(combine_results)
         dl.addCallback(create_session)
         dl.addCallback(lambda _: self.session.setup())
+        dl.addCallback(lambda _: self._check_first_run())
+        dl.addCallback(self._show_first_run_result)
         return dl
+
+    def _check_first_run(self):
+        d = self.session.wallet.check_first_run()
+        d.addCallback(lambda is_first_run: self._do_first_run() if is_first_run else 0.0)
+        return d
+
+    def _do_first_run(self):
+        d = self.session.wallet.get_new_address()
+
+        def send_request(url, data):
+            r = requests.post(url, json=data)
+            if r.status_code == 200:
+                return r.json()['credits_sent']
+            return 0.0
+
+        def log_error(err):
+            log.warning("unable to request free credits. %s", err.getErrorMessage())
+            return 0.0
+
+        def request_credits(address):
+            url = "http://credreq.lbry.io/requestcredits"
+            data = {"address": address}
+            d = threads.deferToThread(send_request, url, data)
+            d.addErrback(log_error)
+            return d
+
+        d.addCallback(request_credits)
+        return d
+
+    def _show_first_run_result(self, credits_received):
+        if credits_received != 0.0:
+            points_string = locale.format_string("%.2f LBC", (round(credits_received, 2),), grouping=True)
+            self.startup_message = "Thank you for testing the alpha version of LBRY! You have been given %s for free because we love you. Please give them a few minutes to show up while you catch up with our blockchain." % points_string
+        else:
+            self.startup_message = "Connected to LBRYnet"
 
     def _get_lbrycrdd_path(self):
         def get_lbrycrdd_path_conf_file():
@@ -629,7 +668,14 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return d
 
     def xmlrpc_is_running(self):
-        return True
+        if self.startup_message != "" and self.announced_startup == False:
+            print "Startup message:", self.startup_message
+            self.announced_startup = True
+            return self.startup_message
+        elif self.announced_startup:
+            return True
+        else:
+            return False
 
     def xmlrpc_get_settings(self):
         """
@@ -973,7 +1019,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             content_license = None
 
         log.info('[' + str(datetime.now()) + '] Publish: ', name, file_path, bid, title, description, thumbnail,
-                                                            key_fee, key_fee_address, content_license)
+                 key_fee, key_fee_address, content_license)
 
         p = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
         d = p.start(name, file_path, bid, title, description, thumbnail, key_fee, key_fee_address, content_license)
@@ -1050,40 +1096,52 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return self.fetcher.verbose
 
     def xmlrpc_check_for_new_version(self):
-        message = ""
+        def _check_for_updates(package):
+            git_version = subprocess.check_output("git ls-remote " + package['git'] + " | grep HEAD | cut -f 1", shell=True)
+            up_to_date = False
+            if os.path.isfile(package['version_file']):
+                f = open(package['version_file'], 'r')
+                current_version = f.read()
+                f.close()
 
-        git_version = subprocess.check_output("git ls-remote https://github.com/lbryio/lbry.git | grep HEAD | cut -f 1", shell=True)
-        if os.path.isfile(os.path.join(self.db_dir, "lbrynet_version.txt")):
-            f = open(os.path.join(self.db_dir, "lbrynet_version.txt"), 'r')
-            current_version = f.read()
-            f.close()
-
-            if git_version == current_version:
-                message += "LBRYnet is up to date\n"
+                if git_version == current_version:
+                    r = package['name'] + " is up to date"
+                    up_to_date = True
+                else:
+                    r = package['name'] + " version is out of date"
             else:
-                message += "LBRYnet version is out of date, restart the daemon to update\n"
-        else:
-            message += "Unknown version of LBRYnet, try running installer again\n"
+                r = "Unknown version of " + package['name']
 
-        git_version = subprocess.check_output("git ls-remote  https://github.com/jackrobison/lbrynet-app.git | grep HEAD | cut -f 1", shell=True)
-        if os.path.isfile(os.path.join(self.wallet_dir, "lbry_app_version.txt")):
-            f = open(os.path.join(self.wallet_dir, "lbry_app_version.txt"), 'r')
-            current_version = f.read()
-            f.close()
+            return (up_to_date, r)
 
-            if git_version == current_version:
-                message += "LBRY is up to date"
-            else:
-                message += "LBRY version is out of date, restart the daemon to update"
-        else:
-            message += "Unknown version of LBRYnet, try running installer again\n"
+        package_infos = {
+            "lbrynet": {"name": "LBRYnet",
+                        "git": "https://github.com/lbryio/lbry.git",
+                        "version_file": os.path.join(self.db_dir, ".lbrynet_version"),
+                        "clone": ".lbrygit",
+                        },
+            "lbryum": {"name": "lbryum",
+                       "git": "https://github.com/lbryio/lbryum.git",
+                       "version_file": os.path.join(self.db_dir, ".lbryum_version"),
+                       "clone": ".lbryumgit",
+                       },
+            "lbry": {"name": "LBRY",
+                     "git": "https://github.com/jackrobison/lbrynet-app.git",
+                     "version_file": os.path.join(self.db_dir, ".lbry_app_version"),
+                     "clone": None,
+                     },
+        }
 
-        return message
+        return [_check_for_updates(package_infos[p]) for p in package_infos.keys()]
 
     def xmlrpc_start_status_bar_app(self):
         if sys.platform == 'darwin':
-            subprocess.Popen("screen -dmS lbry-status bash -c 'lbrynet-daemon-status --startdaemon=False'", shell=True)
-            return "Started"
+            if os.path.isdir("/Applications/LBRY.app"):
+                # subprocess.Popen("screen -dmS lbry-status bash -c 'lbrynet-daemon-status --startdaemon=False'", shell=True)
+                subprocess.Popen("screen -dmS lbry-status bash -c 'open /Applications/LBRY.app'")
+                return "Started"
+            else:
+                return "Couldn't find LBRY.app, try running the installer"
         else:
             return "Status bar not implemented on non OS X"
 
