@@ -82,7 +82,7 @@ if [ -d "$lbrynet_directory" ]; then
 
             echo "Downloading LBRYum update..."
 
-            git clone -b development --depth 1 https://github.com/lbryio/lbryum.git &>/dev/null
+            git clone --depth 1 https://github.com/lbryio/lbryum.git &>/dev/null
             cd lbryum
 
             echo "Installing update..."
@@ -101,7 +101,7 @@ if [ -d "$lbrynet_directory" ]; then
 
         echo "Downloading LBRYum..."
 
-        git clone -b development --depth 1 https://github.com/lbryio/lbryum.git &>/dev/null
+        git clone --depth 1 https://github.com/lbryio/lbryum.git &>/dev/null
         cd lbryum
 
         echo "Installing..."
@@ -128,7 +128,7 @@ if [ -d "$lbrynet_directory" ]; then
 
             echo "Downloading LBRYnet update"
 
-            git clone -b development --depth 1 https://github.com/lbryio/lbry.git &>/dev/null
+            git clone --depth 1 https://github.com/lbryio/lbry.git &>/dev/null
             cd lbry
 
             echo "Installing update..."
@@ -147,7 +147,7 @@ if [ -d "$lbrynet_directory" ]; then
 
         echo "Downloading LBRYnet..."
 
-        git clone -b development --depth 1 https://github.com/lbryio/lbry.git &>/dev/null
+        git clone --depth 1 https://github.com/lbryio/lbry.git &>/dev/null
         cd lbry
 
         echo "Installing..."
