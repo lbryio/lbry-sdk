@@ -1,7 +1,7 @@
 import os
 from setuptools import setup
 
-APP = [os.path.join('lbrynet', 'lbrynet_daemon', 'LBRYOSXStatusBar.py')]
+APP = [os.path.join('lbrynet', 'lbrynet_daemon', 'Apps', 'LBRYOSXStatusBar.py')]
 DATA_FILES = []
 OPTIONS = {
     'argv_emulation': True,
