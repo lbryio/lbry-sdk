@@ -59,7 +59,7 @@ else
 fi
 
 if ! python -c "import six; exit(0) if six.__version__ == '1.9.0' else exit(1)" &>/dev/null; then
-    echo "Installing six 1.9.0 for python"
+    echo "Installing six 1.9.0 for python..."
     curl -O https://pypi.python.org/packages/source/s/six/six-1.9.0.tar.gz &>/dev/null
     tar xf six-1.9.0.tar.gz &>/dev/null
     cd six-1.9.0
@@ -70,6 +70,51 @@ if ! python -c "import six; exit(0) if six.__version__ == '1.9.0' else exit(1)" 
 fi
 
 lbrynet_directory="/Users/${SUDO_USER}/Library/Application Support/lbrynet"
+lbryum_current_version=$(git ls-remote https://github.com/lbryio/lbryum.git | grep HEAD | cut -f 1)
+
+if [ -d "$lbrynet_directory" ]; then
+	if [ -f "${lbrynet_directory}/lbryum_version.txt" ]; then
+		if grep -Fxq "$lbryum_current_version" "${lbrynet_directory}/lbryum_version.txt"; then
+			echo "LBRYum version $lbryum_current_version is up to date"
+		else
+            tmp=$(mktemp -d)
+            cd $tmp
+
+            echo "Downloading LBRYum update..."
+
+            git clone -b development --depth 1 https://github.com/lbryio/lbryum.git &>/dev/null
+            cd lbryum
+
+            echo "Installing update..."
+            sudo python setup.py install &>/dev/null
+            mkdir -p "$lbrynet_directory"
+            echo $lbryum_current_version > "${lbrynet_directory}/lbryum_version.txt"
+
+            echo "Cleaning up..."
+
+            cd ../../
+            rm -rf $tmp
+		fi
+	else
+        tmp=$(mktemp -d)
+        cd $tmp
+
+        echo "Downloading LBRYum..."
+
+        git clone -b development --depth 1 https://github.com/lbryio/lbryum.git &>/dev/null
+        cd lbryum
+
+        echo "Installing..."
+        sudo python setup.py install &>/dev/null
+        mkdir -p "$lbrynet_directory"
+        echo $lbryum_current_version > "${lbrynet_directory}/lbryum_version.txt"
+
+        echo "Cleaning up..."
+
+        cd ../../
+        rm -rf $tmp
+	fi
+fi
 
 lbrynet_current_version=$(git ls-remote https://github.com/lbryio/lbry.git | grep HEAD | cut -f 1)
 
@@ -83,15 +128,15 @@ if [ -d "$lbrynet_directory" ]; then
 
             echo "Downloading LBRYnet update"
 
-            git clone --depth 1 https://github.com/lbryio/lbry.git &>/dev/null
+            git clone -b development --depth 1 https://github.com/lbryio/lbry.git &>/dev/null
             cd lbry
 
-            echo "Installing update"
+            echo "Installing update..."
             sudo python setup.py install &>/dev/null
             mkdir -p "$lbrynet_directory"
             echo $lbrynet_current_version > "${lbrynet_directory}/lbrynet_version.txt"
 
-            echo "Cleaning up"
+            echo "Cleaning up..."
 
             cd ../../
             rm -rf $tmp
@@ -100,63 +145,17 @@ if [ -d "$lbrynet_directory" ]; then
         tmp=$(mktemp -d)
         cd $tmp
 
-        echo "Downloading LBRYnet update"
+        echo "Downloading LBRYnet..."
 
-        git clone --depth 1 https://github.com/lbryio/lbry.git &>/dev/null
+        git clone -b development --depth 1 https://github.com/lbryio/lbry.git &>/dev/null
         cd lbry
 
-        echo "Installing update"
+        echo "Installing..."
         sudo python setup.py install &>/dev/null
         mkdir -p "$lbrynet_directory"
         echo $lbrynet_current_version > "${lbrynet_directory}/lbrynet_version.txt"
 
-        echo "Cleaning up"
-
-        cd ../../
-        rm -rf $tmp
-	fi
-fi
-
-lbryum_current_version=$(git ls-remote https://github.com/lbryio/lbryum.git | grep HEAD | cut -f 1)
-
-if [ -d "$lbrynet_directory" ]; then
-	if [ -f "${lbrynet_directory}/lbryum_version.txt" ]; then
-		if grep -Fxq "$lbryum_current_version" "${lbrynet_directory}/lbryum_version.txt"; then
-			echo "LBRYum version $lbryum_current_version is up to date"
-		else
-            tmp=$(mktemp -d)
-            cd $tmp
-
-            echo "Downloading LBRYum update"
-
-            git clone --depth 1 https://github.com/lbryio/lbryum.git &>/dev/null
-            cd lbryum
-
-            echo "Installing update"
-            sudo python setup.py install &>/dev/null
-            mkdir -p "$lbrynet_directory"
-            echo $lbryum_current_version > "${lbrynet_directory}/lbryum_version.txt"
-
-            echo "Cleaning up"
-
-            cd ../../
-            rm -rf $tmp
-		fi
-	else
-        tmp=$(mktemp -d)
-        cd $tmp
-
-        echo "Downloading LBRYum update"
-
-        git clone --depth 1 https://github.com/lbryio/lbryum.git &>/dev/null
-        cd lbryum
-
-        echo "Installing update"
-        sudo python setup.py install &>/dev/null
-        mkdir -p "$lbrynet_directory"
-        echo $lbryum_current_version > "${lbrynet_directory}/lbryum_version.txt"
-
-        echo "Cleaning up"
+        echo "Cleaning up..."
 
         cd ../../
         rm -rf $tmp

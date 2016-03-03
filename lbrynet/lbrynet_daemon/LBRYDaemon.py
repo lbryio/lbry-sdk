@@ -1,3 +1,24 @@
+import locale
+import os
+import sys
+import json
+import binascii
+import webbrowser
+import xmlrpclib
+import subprocess
+import logging
+import argparse
+import pwd
+import requests
+
+from twisted.web import xmlrpc, server
+from twisted.internet import defer, threads, reactor, error
+from datetime import datetime
+from decimal import Decimal
+from StringIO import StringIO
+from zipfile import ZipFile
+from urllib import urlopen
+
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -8,7 +29,6 @@ from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream, FetcherDaemon
-# from lbrynet.lbrynet_daemon.LBRYOSXStatusBar import DaemonStatusBarApp
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
@@ -16,19 +36,14 @@ from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS,
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet
+from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
-from twisted.web import xmlrpc, server
-from twisted.internet import defer, threads, reactor, error
-from datetime import datetime
-from decimal import Decimal
-from StringIO import StringIO
-from zipfile import ZipFile
-from urllib import urlopen
-import os, sys, json, binascii, webbrowser, xmlrpclib, subprocess, logging
 
 log = logging.getLogger(__name__)
+
+
+# logging.basicConfig(level=logging.DEBUG)
 
 
 # TODO add login credentials in a conf file
@@ -46,8 +61,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
     LBRYnet daemon
     """
 
-    def setup(self):
-        def _set_vars():
+    def setup(self, wallet_type, check_for_updates):
+        def _set_vars(wallet_type, check_for_updates):
             self.fetcher = None
             self.current_db_revision = 1
             self.run_server = True
@@ -57,7 +72,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
             else:
                 self.db_dir = os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
-                # self.status_app = DaemonStatusBarApp()
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
             self.peer_port = 3333
             self.dht_node_port = 4444
@@ -93,10 +107,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.lbry_file_metadata_manager = None
             self.lbry_file_manager = None
             self.settings = LBRYSettings(self.db_dir)
-            self.wallet_type = "lbrycrd"
+            self.wallet_type = wallet_type
+            self.check_for_updates = check_for_updates
             self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
             self.autofetcher_conf = os.path.join(self.wallet_dir, "autofetcher.conf")
-            self.files = []
             self.created_data_dir = False
             if not os.path.exists(self.db_dir):
                 os.mkdir(self.db_dir)
@@ -106,6 +120,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             self.max_key_fee = DEFAULT_MAX_KEY_FEE
             self.max_search_results = DEFAULT_MAX_SEARCH_RESULTS
             self.restart_message = ""
+            self.startup_message = ""
+            self.announced_startup = False
             self.search_timeout = 3.0
             self.query_handlers = {}
 
@@ -117,11 +133,14 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             else:
                 print "Started LBRYnet daemon"
                 print "The daemon can be shut down by running 'stop-lbrynet-daemon' in a terminal"
+                log.info('[' + str(datetime.now()) + '] Started lbrynet-daemon')
 
             return defer.succeed(None)
 
+        log.info('[' + str(datetime.now()) + '] Starting lbrynet-daemon')
+
         d = defer.Deferred()
-        d.addCallback(lambda _: _set_vars())
+        d.addCallback(lambda _: _set_vars(wallet_type, check_for_updates))
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
@@ -133,9 +152,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._setup_server())
-        if sys.platform == "darwin":
-            d.addCallback(lambda _: self._update())
-            # d.addCallback(lambda _: self.status_app.run())
+        # d.addCallback(lambda _: self._update() if self.check_for_updates == "True" and sys.platform == "darwin"
+        #                         else defer.succeed(None))
         d.addCallback(lambda _: self._setup_fetcher())
         d.addCallback(lambda _: _disp_startup())
         d.callback(None)
@@ -213,10 +231,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         d = _check_for_updater()
         d.addCallback(lambda _: _update_lbrynet())
-        d.addCallback(lambda _: _update_lbrycrdd())
-        d.addCallback(lambda _: _update_lbryum())
+        d.addCallback(lambda _: _update_lbrycrdd() if self.wallet_type == 'lbrycrd' else _update_lbryum())
         d.addCallback(lambda _: os.system("open /Applications/LBRY\ Updater.app &>/dev/null") if self.restart_message
-                                else defer.succeed(None))
+        else defer.succeed(None))
         d.addCallbacks(lambda _: self._restart() if self.restart_message else defer.succeed(None))
 
         return defer.succeed(None)
@@ -310,8 +327,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d = self._stop_server()
         if self.session is not None:
             d.addCallback(lambda _: self.session.shut_down())
-        # if self.status_app:
-            # d.addCallback(lambda _: self.status_app.stop())
         return d
 
     def _update_settings(self):
@@ -397,6 +412,8 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         def get_wallet():
             if self.wallet_type == "lbrycrd":
+                print "Using lbrycrd wallet"
+                log.info("Using lbrycrd wallet")
                 lbrycrdd_path = None
                 if self.start_lbrycrdd is True:
                     lbrycrdd_path = self.lbrycrdd_path
@@ -404,8 +421,17 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                         lbrycrdd_path = self.default_lbrycrdd_path
                 d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.wallet_dir, wallet_conf=self.lbrycrd_conf,
                                                 lbrycrdd_path=lbrycrdd_path))
-            else:
+            elif self.wallet_type == "lbryum":
+                print "Using lbryum wallet"
+                log.info("Using lbryum wallet")
+                d = defer.succeed(LBRYumWallet(self.db_dir))
+            elif self.wallet_type == "ptc":
+                print "Using PTC wallet"
+                log.info("Using PTC wallet")
                 d = defer.succeed(PTCWallet(self.db_dir))
+            else:
+                d = defer.fail()
+
             d.addCallback(lambda wallet: {"wallet": wallet})
             return d
 
@@ -429,7 +455,44 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         dl.addCallback(combine_results)
         dl.addCallback(create_session)
         dl.addCallback(lambda _: self.session.setup())
+        dl.addCallback(lambda _: self._check_first_run())
+        dl.addCallback(self._show_first_run_result)
         return dl
+
+    def _check_first_run(self):
+        d = self.session.wallet.check_first_run()
+        d.addCallback(lambda is_first_run: self._do_first_run() if is_first_run else 0.0)
+        return d
+
+    def _do_first_run(self):
+        d = self.session.wallet.get_new_address()
+
+        def send_request(url, data):
+            r = requests.post(url, json=data)
+            if r.status_code == 200:
+                return r.json()['credits_sent']
+            return 0.0
+
+        def log_error(err):
+            log.warning("unable to request free credits. %s", err.getErrorMessage())
+            return 0.0
+
+        def request_credits(address):
+            url = "http://credreq.lbry.io/requestcredits"
+            data = {"address": address}
+            d = threads.deferToThread(send_request, url, data)
+            d.addErrback(log_error)
+            return d
+
+        d.addCallback(request_credits)
+        return d
+
+    def _show_first_run_result(self, credits_received):
+        if credits_received != 0.0:
+            points_string = locale.format_string("%.2f LBC", (round(credits_received, 2),), grouping=True)
+            self.startup_message = "Thank you for testing the alpha version of LBRY! You have been given %s for free because we love you. Please give them a few minutes to show up while you catch up with our blockchain." % points_string
+        else:
+            self.startup_message = "Connected to LBRYnet"
 
     def _get_lbrycrdd_path(self):
         def get_lbrycrdd_path_conf_file():
@@ -530,9 +593,11 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             path = os.path.join(self.blobfile_dir, stream_hash)
             if os.path.isfile(path):
                 print "[" + str(datetime.now()) + "] Search for lbry_file, returning: " + stream_hash
+                log.info("[" + str(datetime.now()) + "] Search for lbry_file, returning: " + stream_hash)
                 return defer.succeed(_get_lbry_file(path))
             else:
                 print "[" + str(datetime.now()) + "] Search for lbry_file didn't return anything"
+                log.info("[" + str(datetime.now()) + "] Search for lbry_file didn't return anything")
                 return defer.succeed(False)
 
         d = self._resolve_name(name)
@@ -578,8 +643,10 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         def _check_est(d, name):
             if type(d.result) is float:
                 print '[' + str(datetime.now()) + '] Cost est for lbry://' + name + ': ' + str(d.result) + 'LBC'
+                log.info('[' + str(datetime.now()) + '] Cost est for lbry://' + name + ': ' + str(d.result) + 'LBC')
             else:
                 print '[' + str(datetime.now()) + '] Timeout estimating cost for lbry://' + name + ', using key fee'
+                log.info('[' + str(datetime.now()) + '] Timeout estimating cost for lbry://' + name + ', using key fee')
                 d.cancel()
             return defer.succeed(None)
 
@@ -601,7 +668,14 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return d
 
     def xmlrpc_is_running(self):
-        return True
+        if self.startup_message != "" and self.announced_startup == False:
+            print "Startup message:", self.startup_message
+            self.announced_startup = True
+            return self.startup_message
+        elif self.announced_startup:
+            return True
+        else:
+            return False
 
     def xmlrpc_get_settings(self):
         """
@@ -636,6 +710,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         self.fetcher.start()
         print '[' + str(datetime.now()) + '] Start autofetcher'
+        log.info('[' + str(datetime.now()) + '] Start autofetcher')
         return 'Started autofetching'
 
     def xmlrpc_stop_fetcher(self):
@@ -645,6 +720,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         self.fetcher.stop()
         print '[' + str(datetime.now()) + '] Stop autofetcher'
+        log.info('[' + str(datetime.now()) + '] Stop autofetcher')
         return 'Stopped autofetching'
 
     def xmlrpc_fetcher_status(self):
@@ -669,6 +745,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
 
         def _disp_shutdown():
+            log.info('Shutting down lbrynet daemon')
             print 'Shutting down lbrynet daemon'
 
         d = self._shutdown()
@@ -711,7 +788,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         """
 
         def _disp(info):
-            log.debug('[' + str(datetime.now()) + ']' + ' Resolved info: ' + str(info['stream_hash']))
             print '[' + str(datetime.now()) + ']' + ' Resolved info: ' + str(info['stream_hash'])
             return info
 
@@ -782,6 +858,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         d = defer.Deferred()
         d.addCallback(lambda _: _make_file(html, path))
+        d.addCallback(lambda _: os.chown(path, pwd.getpwuid(os.getuid()).pw_uid, pwd.getpwuid(os.getuid()).pw_gid))
         d.addCallback(lambda _: webbrowser.open('file://' + path))
         d.addErrback(_disp_err)
         d.callback(None)
@@ -812,13 +889,6 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         @param search:
         @return:
         """
-
-        #def _return_d(x):
-        #    d = defer.Deferred()
-        #    d.addCallback(lambda _: x)
-        #    d.callback(None)
-
-        #    return d
 
         def _clean(n):
             t = []
@@ -861,9 +931,13 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         def _disp(results):
             print '[' + str(datetime.now()) + '] Found ' + str(len(results)) + ' results'
+            log.info('[' + str(datetime.now()) + '] Search results: ')
+            for r in results:
+                log.info(str(r))
             return results
 
         print '[' + str(datetime.now()) + '] Search nametrie: ' + search
+        log.info('[' + str(datetime.now()) + '] Search nametrie: ' + search)
 
         d = self.session.wallet.get_nametrie()
         d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
@@ -944,6 +1018,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         else:
             content_license = None
 
+        log.info('[' + str(datetime.now()) + '] Publish: ', name, file_path, bid, title, description, thumbnail,
+                 key_fee, key_fee_address, content_license)
+
         p = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
         d = p.start(name, file_path, bid, title, description, thumbnail, key_fee, key_fee_address, content_license)
 
@@ -981,6 +1058,15 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         return d
 
+    def xmlrpc_get_new_address(self):
+        def _disp(address):
+            print "[" + str(datetime.now()) + "] Got new wallet address: " + address
+            return address
+
+        d = self.session.wallet.get_new_address()
+        d.addCallback(_disp)
+        return d
+
     # def xmlrpc_update_name(self, metadata):
     #     def _disp(x):
     #         print x
@@ -1010,49 +1096,94 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return self.fetcher.verbose
 
     def xmlrpc_check_for_new_version(self):
-        message = ""
+        def _check_for_updates(package):
+            git_version = subprocess.check_output("git ls-remote " + package['git'] + " | grep HEAD | cut -f 1", shell=True)
+            up_to_date = False
+            if os.path.isfile(package['version_file']):
+                f = open(package['version_file'], 'r')
+                current_version = f.read()
+                f.close()
 
-        git_version = subprocess.check_output("git ls-remote https://github.com/lbryio/lbry.git | grep HEAD | cut -f 1", shell=True)
-        if os.path.isfile(os.path.join(self.db_dir, "lbrynet_version.txt")):
-            f = open(os.path.join(self.db_dir, "lbrynet_version.txt"), 'r')
-            current_version = f.read()
-            f.close()
-
-            if git_version == current_version:
-                message += "LBRYnet is up to date\n"
+                if git_version == current_version:
+                    r = package['name'] + " is up to date"
+                    up_to_date = True
+                else:
+                    r = package['name'] + " version is out of date"
             else:
-                message += "LBRYnet version is out of date, restart the daemon to update\n"
-        else:
-            message += "Unknown version of LBRYnet, try running installer again\n"
+                r = "Unknown version of " + package['name']
 
-        git_version = subprocess.check_output("git ls-remote  https://github.com/jackrobison/lbrynet-app.git | grep HEAD | cut -f 1", shell=True)
-        if os.path.isfile(os.path.join(self.wallet_dir, "lbry_app_version.txt")):
-            f = open(os.path.join(self.wallet_dir, "lbry_app_version.txt"), 'r')
-            current_version = f.read()
-            f.close()
+            return (up_to_date, r)
 
-            if git_version == current_version:
-                message += "LBRY is up to date"
+        package_infos = {
+            "lbrynet": {"name": "LBRYnet",
+                        "git": "https://github.com/lbryio/lbry.git",
+                        "version_file": os.path.join(self.db_dir, ".lbrynet_version"),
+                        "clone": ".lbrygit",
+                        },
+            "lbryum": {"name": "lbryum",
+                       "git": "https://github.com/lbryio/lbryum.git",
+                       "version_file": os.path.join(self.db_dir, ".lbryum_version"),
+                       "clone": ".lbryumgit",
+                       },
+            "lbry": {"name": "LBRY",
+                     "git": "https://github.com/jackrobison/lbrynet-app.git",
+                     "version_file": os.path.join(self.db_dir, ".lbry_app_version"),
+                     "clone": None,
+                     },
+        }
+
+        return [_check_for_updates(package_infos[p]) for p in package_infos.keys()]
+
+    def xmlrpc_start_status_bar_app(self):
+        if sys.platform == 'darwin':
+            if os.path.isdir("/Applications/LBRY.app"):
+                # subprocess.Popen("screen -dmS lbry-status bash -c 'lbrynet-daemon-status --startdaemon=False'", shell=True)
+                subprocess.Popen("screen -dmS lbry-status bash -c 'open /Applications/LBRY.app'")
+                return "Started"
             else:
-                message += "LBRY version is out of date, restart the daemon to update"
+                return "Couldn't find LBRY.app, try running the installer"
         else:
-            message += "Unknown version of LBRYnet, try running installer again\n"
+            return "Status bar not implemented on non OS X"
 
-        return message
+
+def stop():
+    daemon = xmlrpclib.ServerProxy("http://localhost:7080/")
+    try:
+        status = daemon.is_running()
+    except:
+        status = False
+
+    if status:
+        daemon.stop()
+        print "LBRYnet daemon stopped"
+    else:
+        print "LBRYnet daemon wasn't running"
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
+    parser.add_argument("--wallet",
+                        help="lbrycrd or lbryum, default lbryum",
+                        type=str,
+                        default="lbryum")
+    parser.add_argument("--update",
+                        help="True or false, default true",
+                        type=str,
+                        default="True")
+
+    args = parser.parse_args()
+
     try:
-        d = xmlrpclib.ServerProxy('http://localhost:7080')
-        d.stop()
+        daemon = xmlrpclib.ServerProxy("http://localhost:7080")
+        daemon.stop()
     except:
         pass
 
     daemon = LBRYDaemon()
-    daemon.setup()
-    reactor.listenTCP(7080, server.Site(daemon))
+    daemon.setup(args.wallet, args.update)
+    reactor.listenTCP(7080, server.Site(daemon), interface='localhost')
     reactor.run()
+
 
 if __name__ == '__main__':
     main()
-
