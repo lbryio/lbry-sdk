@@ -30,22 +30,25 @@ def main(args):
 
         else:
             r = daemon.get(args[0][7:])
-            path = r['path']
-            if path[0] != '/':
-                path = '/' + path
+            if r[0] == 200:
+                path = r[1]['path']
+                if path[0] != '/':
+                    path = '/' + path
 
-            filename = os.path.basename(path)
-            extension = os.path.splitext(filename)[1]
+                filename = os.path.basename(path)
+                extension = os.path.splitext(filename)[1]
 
-            if extension in ['mp4', 'flv', 'mov']:
-                html = render_video(path)
-                daemon.render_html(html)
+                if extension in ['mp4', 'flv', 'mov']:
+                    html = render_video(path)
+                    daemon.render_html(html)
+                else:
+                    webbrowser.get('safari').open('file://' + str(path))
 
             else:
-                webbrowser.open('file://' + str(path))
+                webbrowser.get('safari').open('http://lbry.io/get')
 
     except:
-        webbrowser.open('http://lbry.io/get')
+        webbrowser.get('safari').open('http://lbry.io/get')
 
 
 if __name__ == "__main__":

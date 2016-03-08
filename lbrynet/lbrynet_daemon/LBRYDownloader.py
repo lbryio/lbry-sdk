@@ -7,6 +7,7 @@ from twisted.internet.task import LoopingCall
 from lbrynet.core.Error import InvalidStreamInfoError, InsufficientFundsError
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
+from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 
 log = logging.getLogger(__name__)
 
@@ -62,8 +63,8 @@ class GetStream(object):
         d = defer.Deferred(None)
         d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
         d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        d.addCallback(lambda metadata:
-                      metadata.factories[1].make_downloader(metadata, [self.data_rate, True], self.payment_rate_manager))
+        d.addCallback(lambda metadata: (next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)), metadata))
+        d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata, [self.data_rate, True], self.payment_rate_manager))
         d.addErrback(lambda err: err.trap(defer.CancelledError))
         d.addErrback(lambda err: log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback()))
         d.addCallback(self._start_download)

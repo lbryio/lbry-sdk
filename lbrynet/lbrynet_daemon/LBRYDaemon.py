@@ -41,19 +41,19 @@ from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 
 log = logging.getLogger(__name__)
-
-
 # logging.basicConfig(level=logging.DEBUG)
 
 
 # TODO add login credentials in a conf file
-
-# issues with delete:
-# TODO when stream is stopped the generated file is deleted
-
 # functions to add:
 # TODO send credits to address
 # TODO alert if your copy of a lbry file is out of date with the name record
+
+
+BAD_REQUEST = (400, "Bad request")
+NOT_FOUND = (404, "Not found")
+
+OK_CODE = 200
 
 
 class LBRYDaemon(xmlrpc.XMLRPC):
@@ -556,8 +556,11 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d = self._check_history(name)
         d.addCallback(lambda lbry_file: _get_stream(name) if not lbry_file else _disp_file(lbry_file))
         d.addCallback(lambda _: self._check_history(name))
-        d.addCallback(lambda lbry_file: self._path_from_lbry_file(lbry_file) if lbry_file else 'Not found')
-        d.addErrback(lambda err: str(err))
+        d.addCallback(lambda lbry_file: (OK_CODE, {'stream_hash': lbry_file.stream_hash,
+                                                'path': os.path.join(self.download_directory,
+                                                                     lbry_file.file_name)})
+                                        if lbry_file else NOT_FOUND)
+        d.addErrback(lambda _: NOT_FOUND)
 
         return d
 
@@ -612,6 +615,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         def finish_deletion(lbry_file):
             d = lbry_file.delete_data()
             d.addCallback(lambda _: _delete_stream_data(lbry_file))
+            d.addCallback(lambda _: _delete_file(lbry_file))
             return d
 
         def _delete_stream_data(lbry_file):
@@ -620,6 +624,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             # TODO: could possibly be a timing issue here
             d.addCallback(lambda c: self.stream_info_manager.delete_stream(s_h) if c == 0 else True)
             return d
+
+        def _delete_file(lbry_file):
+            os.remove(os.path.join(self.download_directory, lbry_file.file_name))
 
         d.addCallback(lambda _: finish_deletion(lbry_file))
         return d
@@ -807,7 +814,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         if name:
             d = self._download_name(name)
         else:
-            d = defer.succeed('No name provided')
+            d = defer.succeed(BAD_REQUEST)
         return d
 
     def xmlrpc_stop_lbry_file(self, stream_hash):
@@ -875,8 +882,12 @@ class LBRYDaemon(xmlrpc.XMLRPC):
             return err
 
         d = defer.Deferred()
-        d.addCallback(lambda _: webbrowser.open(
-            "file://" + str(os.path.join(self.download_directory, "lbryio/view/page/gui.html"))))
+        if sys.platform == 'darwin':
+            d.addCallback(lambda _: webbrowser.get('safari').open(
+                                "file://" + str(os.path.join(self.download_directory, "lbryio/view/page/gui.html"))))
+        else:
+            d.addCallback(lambda _: webbrowser.open(
+                                "file://" + str(os.path.join(self.download_directory, "lbryio/view/page/gui.html"))))
         d.addErrback(_disp_err)
         d.callback(None)
 
@@ -967,13 +978,16 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         return d
 
     def xmlrpc_publish(self, metadata):
-        metadata = json.loads(metadata)
+        try:
+            metadata = json.loads(metadata)
+        except:
+            return defer.succeed(BAD_REQUEST)
 
         required = ['name', 'file_path', 'bid']
 
         for r in required:
             if not r in metadata.keys():
-                return defer.fail()
+                return defer.succeed(BAD_REQUEST)
 
         # if not os.path.isfile(metadata['file_path']):
         #     return defer.fail()
@@ -1023,6 +1037,7 @@ class LBRYDaemon(xmlrpc.XMLRPC):
 
         p = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
         d = p.start(name, file_path, bid, title, description, thumbnail, key_fee, key_fee_address, content_license)
+        d.addCallback(lambda msg: (OK_CODE, msg))
 
         return d
 
@@ -1144,6 +1159,12 @@ class LBRYDaemon(xmlrpc.XMLRPC):
                 return "Couldn't find LBRY.app, try running the installer"
         else:
             return "Status bar not implemented on non OS X"
+
+    def xmlrpc___dir__(self):
+        return ['is_running', 'get_settings', 'set_settings', 'start_fetcher', 'stop_fetcher', 'fetcher_status',
+                'get_balance', 'stop', 'get_lbry_files', 'resolve_name', 'get', 'search_nametrie',
+                'delete_lbry_file', 'check', 'publish', 'abandon_name', 'get_name_claims',
+                'get_time_behind_blockchain', 'get_new_address', 'toggle_fetcher_verbose', 'check_for_new_version']
 
 
 def stop():

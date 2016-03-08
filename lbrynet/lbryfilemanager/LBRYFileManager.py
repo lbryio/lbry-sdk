@@ -3,17 +3,19 @@ Keep track of which LBRY Files are downloading and store their LBRY File specifi
 """
 
 import logging
-
-from twisted.enterprise import adbapi
-
+import datetime
 import os
 import sys
+
+from twisted.internet.task import LoopingCall
+from twisted.enterprise import adbapi
+from twisted.internet import defer, task, reactor
+from twisted.python.failure import Failure
+
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.core.PaymentRateManager import PaymentRateManager
-from twisted.internet import defer, task, reactor
-from twisted.python.failure import Failure
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError, CurrentlyStoppingError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
@@ -32,6 +34,7 @@ class LBRYFileManager(object):
         self.sd_identifier = sd_identifier
         self.lbry_files = []
         self.sql_db = None
+        self.check_exists_loop = LoopingCall(self.check_files_exist)
         if sys.platform.startswith("darwin"):
             self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
         else:
@@ -39,10 +42,24 @@ class LBRYFileManager(object):
         log.debug("Download directory for LBRYFileManager: %s", str(self.download_directory))
 
     def setup(self):
+        self.check_exists_loop.start(1)
+
         d = self._open_db()
         d.addCallback(lambda _: self._add_to_sd_identifier())
         d.addCallback(lambda _: self._start_lbry_files())
         return d
+
+    def check_files_exist(self):
+        def _disp(deleted_files):
+            if deleted_files[0][0]:
+                for file in bad_files:
+                    print "[" + str(datetime.datetime.now()) + "] Detected " + file.file_name + " was deleted, removing from file manager"
+
+        bad_files = [lbry_file for lbry_file in self.lbry_files
+                                          if lbry_file.completed == True and
+                                          os.path.isfile(os.path.join(self.download_directory, lbry_file.file_name)) == False]
+        d = defer.DeferredList([self.delete_lbry_file(lbry_file) for lbry_file in bad_files], consumeErrors=True)
+        d.addCallback(lambda files: _disp(files) if len(files) else defer.succeed(None))
 
     def get_lbry_file_status(self, lbry_file):
         return self._get_lbry_file_status(lbry_file.rowid)
@@ -152,6 +169,8 @@ class LBRYFileManager(object):
             return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
     def stop(self):
+        self.check_exists_loop.stop()
+
         ds = []
 
         def wait_for_finished(lbry_file, count=2):
