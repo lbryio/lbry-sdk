@@ -37,7 +37,7 @@ See [INSTALL](INSTALL.md)
 ## Developers
 
 Documentation: doc.lbry.io
-Source code: trac.lbry.io/browser
+Source code: https://github.com/lbryio/lbry
 
 To contribute to the development of LBRYnet or lbrynet-console, contact jimmy@lbry.io
 
