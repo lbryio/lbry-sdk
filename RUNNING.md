@@ -9,20 +9,38 @@ Download the file https://raw.githubusercontent.com/lbryio/lbry-setup/master/lbr
 Once it's done building, type:
 
 ```
-./lbrycrd/src/lbrycrdd -server -daemon
-lbrynet-gui
+lbrynet-console
 ```
 
-A window should show up with an entry box
+A console application will load, and after a moment you will be presented with a ">" signifying
+that the console is ready for commands.
 
-Type wonderfullife into the box, hit go, and choose to stream or save
+If it's your first time running lbrynet-console, you should be given some credits to test the
+network. If they don't show up within a minute or two, let us know, and we'll send you some.
 
-To stop lbrycrdd: `./lbrycrd/src/lbrycrd-cli stop`
+After your credits have shown up, type
+
+```
+get wonderfullife
+```
+
+into the prompt and hit enter.
+
+You will be asked if you want to cancel, change options, save, and perhaps stream the file.
+
+Enter 's' for save and then hit enter.
+
+The file should start downloading. Enter the command 'status' to check on the status of files
+that are in the process of being downloaded.
+
+To stop lbrynet-console, enter the command 'exit'.
 
 
 ## Slightly longer install guide
 
-### Installing lbrycrd from source
+### Installing lbrycrd, the full blockchain client
+
+Note: this process takes upwards of an hour and is not necessary to use lbrynet.
 
 ```
 git clone --depth=1 -b alpha https://github.com/lbryio/lbrycrd.git
@@ -89,11 +107,21 @@ sudo python setup.py install
 
 ## Slightly longer running guide
 
-###In order to use lbrynet-console or lbrynet-gui, lbyrcrd must be running.
+### lbrynet-console can be set to use lbrycrdd instead of the built in lightweight client.
 
-### Running lbrycrd
+To run lbrynet-console with lbrycrdd:
 
-If you ran the easy install script, the lbrycrd folder will be in the directory you ran lbry_setup.sh from. Otherwise it is the root of the cloned lbrycrd repository. Go to that directory.
+```
+lbrynet-console </path/to/lbrycrdd>
+```
+
+If lbrycrdd is not already running, lbrynet will launch it at that path, and will shut it down
+when lbrynet exits. If lbrycrdd is already running, lbrynet will not launch it and will not
+shut it down, but it will connect to it and use it.
+
+### Running lbrycrdd manually
+
+From the lbrycrd directory, run:
 
 ```
 ./src/lbrycrdd -server -daemon
@@ -105,37 +133,14 @@ If you want to mine LBC, also use the flag '-gen', so:
 ./src/lbrycrdd -server -daemon -gen
 ```
 
+Warning: This will put a heavy load on your CPU
+
 It will take a few minutes for your client to download the whole block chain.
 
-lbrycrdd must be running in order for lbrynet to function.
-
-To shut lbrycrdd down: from the lbrycrd directory, run
+To shut lbrycrdd down: from the lbrycrd directory, run:
 
 ```
 ./src/lbrycrd-cli stop
 ```
-
-### Option 1) Running lbrynet-console
-
-If you used the virtualenv instructions above, make sure the virtualenv is still active. If not, reactivate it according to the instructions above, under "Installing lbrynet from source"
-
-In your terminal: `lbrynet-console`
-
-You should be presented with a prompt.
-
-Watch It's a Wonderful Life via LBRY
-
-Type into the prompt: `get wonderfullife`
-
-To shut it down, press ctrl-c at any time or enter `exit` into the prompt.
-
-### Option 2) Running lbrynet-gui
-
-If you used the virtualenv instructions above, make sure the virtualenv is still active. If not, reactivate it according to the instructions above, under "Installing lbrynet from source"
-
-In your terminal: `lbrynet-gui`
-
-A window should pop up with an entry box. Type `wonderfullife` into the box, hit go, and then choose to save it or stream it.
-Enjoy!
 
 Any questions or problems, email jimmy@lbry.io
