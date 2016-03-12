@@ -294,7 +294,7 @@ class LBRYWallet(object):
             value = result['value']
             try:
                 value_dict = json.loads(value)
-            except ValueError:
+            except (ValueError, TypeError):
                 return Failure(InvalidStreamInfoError(name))
             known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address', 'thumbnail',
                             'content_license']
@@ -395,7 +395,7 @@ class LBRYWallet(object):
                     if 'name' in claim and str(claim['name']) == name and 'value' in claim:
                         try:
                             value_dict = json.loads(claim['value'])
-                        except ValueError:
+                        except (ValueError, TypeError):
                             return None
                         if 'stream_hash' in value_dict and str(value_dict['stream_hash']) == sd_hash:
                             if 'is controlling' in claim and claim['is controlling']:
