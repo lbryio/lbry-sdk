@@ -297,8 +297,9 @@ class LBRYWallet(object):
             except (ValueError, TypeError):
                 return Failure(InvalidStreamInfoError(name))
             known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address', 'thumbnail',
-                            'content_license', 'sources']
+                            'content_license', 'sources', 'fee']
             known_sources = ['lbry_sd_hash']
+            known_fee_types = {'LBC': ['amount', 'address']}
             for field in known_fields:
                 if field in value_dict:
                     if field == 'sources':
@@ -308,6 +309,18 @@ class LBRYWallet(object):
                                     r_dict['stream_hash'] = value_dict[field][source]
                                 else:
                                     r_dict[source] = value_dict[field][source]
+                    elif field == 'fee':
+                        fee = value_dict['fee']
+                        if 'type' in fee:
+                            if fee['type'] in known_fee_types:
+                                fee_fields = known_fee_types[fee['type']]
+                                if all([f in fee for f in fee_fields]):
+                                    r_dict['key_fee'] = fee['amount']
+                                    r_dict['key_fee_address'] = fee['address']
+                                else:
+                                    for f in ['key_fee', 'key_fee_address']:
+                                        if f in r_dict:
+                                            del r_dict[f]
                     else:
                         r_dict[field] = value_dict[field]
             if 'stream_hash' in r_dict and 'txid' in result:
@@ -325,10 +338,8 @@ class LBRYWallet(object):
         value = {"sources": {'lbry_sd_hash': sd_hash}}
         if description is not None:
             value['description'] = description
-        if key_fee is not None:
-            value['key_fee'] = key_fee
-        if key_fee_address is not None:
-            value['key_fee_address'] = key_fee_address
+        if key_fee is not None and key_fee_address is not None:
+            value['fee'] = {'type': 'LBC', 'amount': key_fee, 'address': key_fee_address}
         if thumbnail is not None:
             value['thumbnail'] = thumbnail
         if content_license is not None:
