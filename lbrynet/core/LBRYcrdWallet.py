@@ -869,7 +869,7 @@ class LBRYumWallet(LBRYWallet):
         def setup_network():
             self.config = SimpleConfig()
             self.network = Network(self.config)
-            alert.info("Starting the wallet...")
+            alert.info("Loading the wallet...")
             return defer.succeed(self.network.start())
 
         d = setup_network()
@@ -882,7 +882,6 @@ class LBRYumWallet(LBRYWallet):
                 return False
             start_check.stop()
             if self.network.is_connected():
-                alert.info("Wallet started.")
                 network_start_d.callback(True)
             else:
                 network_start_d.errback(ValueError("Failed to connect to network."))
@@ -926,9 +925,24 @@ class LBRYumWallet(LBRYWallet):
                 wallet.synchronize()
             self.wallet = wallet
 
+        blockchain_caught_d = defer.Deferred()
+
+        def check_caught_up():
+            local_height = self.network.get_local_height()
+            remote_height = self.network.get_server_height()
+
+            if remote_height != 0 and remote_height - local_height <= 5:
+                alert.info('Wallet loaded.')
+                catch_up_check.stop()
+                blockchain_caught_d.callback(True)
+
+        catch_up_check = task.LoopingCall(check_caught_up)
+
         d = threads.deferToThread(get_wallet)
         d.addCallback(self._save_wallet)
         d.addCallback(lambda _: self.wallet.start_threads(self.network))
+        d.addCallback(lambda _: catch_up_check.start(.1))
+        d.addCallback(lambda _: blockchain_caught_d)
         return d
 
     def _get_cmd_runner(self):
