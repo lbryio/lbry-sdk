@@ -297,10 +297,32 @@ class LBRYWallet(object):
             except (ValueError, TypeError):
                 return Failure(InvalidStreamInfoError(name))
             known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address', 'thumbnail',
-                            'content_license']
+                            'content_license', 'sources', 'fee']
+            known_sources = ['lbry_sd_hash']
+            known_fee_types = {'LBC': ['amount', 'address']}
             for field in known_fields:
                 if field in value_dict:
-                    r_dict[field] = value_dict[field]
+                    if field == 'sources':
+                        for source in known_sources:
+                            if source in value_dict[field]:
+                                if source == 'lbry_sd_hash':
+                                    r_dict['stream_hash'] = value_dict[field][source]
+                                else:
+                                    r_dict[source] = value_dict[field][source]
+                    elif field == 'fee':
+                        fee = value_dict['fee']
+                        if 'type' in fee:
+                            if fee['type'] in known_fee_types:
+                                fee_fields = known_fee_types[fee['type']]
+                                if all([f in fee for f in fee_fields]):
+                                    r_dict['key_fee'] = fee['amount']
+                                    r_dict['key_fee_address'] = fee['address']
+                                else:
+                                    for f in ['key_fee', 'key_fee_address']:
+                                        if f in r_dict:
+                                            del r_dict[f]
+                    else:
+                        r_dict[field] = value_dict[field]
             if 'stream_hash' in r_dict and 'txid' in result:
                 d = self._save_name_metadata(name, r_dict['stream_hash'], str(result['txid']))
             else:
@@ -312,14 +334,12 @@ class LBRYWallet(object):
         return Failure(UnknownNameError(name))
 
     def claim_name(self, name, sd_hash, amount, description=None, key_fee=None,
-                    key_fee_address=None, thumbnail=None, content_license=None):
-        value = {"stream_hash": sd_hash}
+                   key_fee_address=None, thumbnail=None, content_license=None):
+        value = {"sources": {'lbry_sd_hash': sd_hash}}
         if description is not None:
             value['description'] = description
-        if key_fee is not None:
-            value['key_fee'] = key_fee
-        if key_fee_address is not None:
-            value['key_fee_address'] = key_fee_address
+        if key_fee is not None and key_fee_address is not None:
+            value['fee'] = {'type': 'LBC', 'amount': key_fee, 'address': key_fee_address}
         if thumbnail is not None:
             value['thumbnail'] = thumbnail
         if content_license is not None:
@@ -397,7 +417,12 @@ class LBRYWallet(object):
                             value_dict = json.loads(claim['value'])
                         except (ValueError, TypeError):
                             return None
-                        if 'stream_hash' in value_dict and str(value_dict['stream_hash']) == sd_hash:
+                        claim_sd_hash = None
+                        if 'stream_hash' in value_dict:
+                            claim_sd_hash = str(value_dict['stream_hash'])
+                        if 'sources' in value_dict and 'lbrynet_sd_hash' in value_dict['sources']:
+                            claim_sd_hash = str(value_dict['sources']['lbry_sd_hash'])
+                        if claim_sd_hash is not None and claim_sd_hash == sd_hash:
                             if 'is controlling' in claim and claim['is controlling']:
                                 return name, "valid"
                             if claim['in claim trie']:
