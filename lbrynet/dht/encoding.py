@@ -99,7 +99,10 @@ class Bencode(Encoding):
         """
         if len(data) == 0:
             raise DecodeError, 'Cannot decode empty string'
-        return self._decodeRecursive(data)[0]
+        try:
+            return self._decodeRecursive(data)[0]
+        except ValueError as e:
+            raise DecodeError, e.message
     
     @staticmethod
     def _decodeRecursive(data, startIndex=0):
