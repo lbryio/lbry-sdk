@@ -27,3 +27,13 @@ POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2
 #POINTTRADER_SERVER = 'http://127.0.0.1:2424'
 
 CRYPTSD_FILE_EXTENSION = ".cryptsd"
+
+API_INTERFACE = "localhost"
+API_ADDRESS = "lbryapi"
+API_PORT = 5279
+ICON_PATH = "app.icns"
+APP_NAME = "LBRY"
+DEFAULT_WALLET = "lbryum"
+
+API_CONNECTION_STRING = "http://%s:%i/%s" % (API_INTERFACE, API_PORT, API_ADDRESS)
+PROTOCOL_PREFIX = "lbry"

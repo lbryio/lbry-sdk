@@ -40,7 +40,7 @@ class Publisher(object):
         def _show_result():
             message = "[" + str(datetime.now()) + "] Published " + self.file_name + " --> lbry://" + \
                         str(self.publish_name) + " with txid: " + str(self.tx_hash)
-            print message
+            log.info(message)
             return defer.succeed(message)
 
         self.publish_name = name
@@ -122,6 +122,6 @@ class Publisher(object):
         else:
             d = defer.succeed(True)
             error_message = err.getErrorMessage()
-        print message % (str(self.file_name), str(self.publish_name), error_message)
+        log.error(error_message)
         log.error(message, str(self.file_name), str(self.publish_name), err.getTraceback())
         return d

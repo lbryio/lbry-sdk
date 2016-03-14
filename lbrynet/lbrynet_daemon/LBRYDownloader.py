@@ -49,13 +49,13 @@ class GetStream(object):
             self.stream_hash = self.stream_info['stream_hash']
 
         else:
-            print 'InvalidStreamInfoError'
+            log.error("InvalidStreamInfoError in autofetcher: ", stream_info)
             raise InvalidStreamInfoError(self.stream_info)
 
         if self.key_fee > self.max_key_fee:
             if self.pay_key:
-                print "Key fee (" + str(self.key_fee) + ") above limit of " + str(
-                    self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name)
+                log.info("Key fee (" + str(self.key_fee) + ") above limit of " + str(
+                    self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name))
                 return defer.fail(None)
         else:
             pass
@@ -78,7 +78,7 @@ class GetStream(object):
                 reserved_points = self.wallet.reserve_points(self.key_fee_address, self.key_fee)
                 if reserved_points is None:
                     return defer.fail(InsufficientFundsError())
-                print 'Key fee: ' + str(self.key_fee) + ' | ' + str(self.key_fee_address)
+                log.info("Key fee: " + str(self.key_fee) + " | " + str(self.key_fee_address))
                 return self.wallet.send_points_to_address(reserved_points, self.key_fee)
             return defer.succeed(None)
 
@@ -89,7 +89,7 @@ class GetStream(object):
 
         downloader.start()
 
-        print "Downloading", self.stream_hash, "-->", os.path.join(downloader.download_directory, downloader.file_name)
+        log.info("Downloading", self.stream_hash, "-->", os.path.join(downloader.download_directory, downloader.file_name))
 
         return d
 
@@ -117,15 +117,16 @@ class FetcherDaemon(object):
             self.is_running = True
             self.search = LoopingCall(self._looped_search)
             self.search.start(1)
+            log.info("Starting autofetcher")
         else:
-            print "Autofetcher is already running"
+            log.info("Autofetcher is already running")
 
     def stop(self):
         if self.is_running:
             self.search.stop()
             self.is_running = False
         else:
-            print "Autofetcher isn't running, there's nothing to stop"
+            log.info("Autofetcher isn't running, there's nothing to stop")
 
     def check_if_running(self):
         if self.is_running:
@@ -157,19 +158,15 @@ class FetcherDaemon(object):
             return d
 
         def get_new_streams_in_tx(claims, t, blockhash):
-                #claims = self.wallet.get_claims_for_tx(t['txid'])
-                # if self.first_run:
-                #     # claims = self.rpc_conn.getclaimsfortx("96aca2c60efded5806b7336430c5987b9092ffbea9c6ed444e3bf8e008993e11")
-                #     # claims = self.rpc_conn.getclaimsfortx("cc9c7f5225ecb38877e6ca7574d110b23214ac3556b9d65784065ad3a85b4f74")
-                #     self.first_run = False
             rtn = []
             if claims:
                 for claim in claims:
                     if claim not in self.seen:
                         msg = "[" + str(datetime.now()) + "] New claim | lbry://" + str(claim['name']) + \
                               " | stream hash: " + str(json.loads(claim['value'])['stream_hash'])
-                        print msg
-                        log.debug(msg)
+                        log.info(msg)
+                        if self.verbose:
+                            print msg
                         rtn.append((claim['name'], t))
                         self.seen.append(claim)
             else:
@@ -179,8 +176,6 @@ class FetcherDaemon(object):
 
         d.addCallback(lambda streams: defer.DeferredList(
             [self.wallet.get_stream_info_from_txid(name, t) for name, t in streams]))
-        #    if len(rtn):
-        #        return defer.DeferredList([self.wallet.get_stream_info_for_name(name, txid=t) for name, t in rtn])
         return d
 
     def _download_claims(self, claims):
@@ -204,12 +199,12 @@ class FetcherDaemon(object):
             for l in conf:
                 if l.startswith("maxkey="):
                     settings["maxkey"] = float(l[7:].rstrip('\n'))
-                    print "Autofetcher using max key price of", settings["maxkey"], ", to start call start_fetcher()"
+            conf.close()
         else:
-            print "Autofetcher using default max key price of 0.0"
-            print "To change this create the file:"
-            print str(self.autofetcher_conf)
-            print "Example contents of conf file:"
-            print "maxkey=1.0"
+            conf = open(self.autofetcher_conf, "w")
+            conf.write("maxkey=10.0")
+            conf.close()
+            settings["maxkey"] = 10.0
+            log.info("No autofetcher conf file found, making one with max key fee of 10.0")
 
         self.max_key_fee = settings["maxkey"]

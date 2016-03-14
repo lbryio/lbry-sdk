@@ -874,13 +874,15 @@ class LBRYumWallet(LBRYWallet):
         d = defer.Deferred()
 
         def check_stopped():
-            if self.network.is_connected():
-                return False
+            if self.network:
+                if self.network.is_connected():
+                    return False
             stop_check.stop()
             self.network = None
             d.callback(True)
 
-        self.network.stop()
+        if self.network:
+            self.network.stop()
 
         stop_check = task.LoopingCall(check_stopped)
         stop_check.start(.1)
