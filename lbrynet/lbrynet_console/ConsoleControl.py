@@ -29,16 +29,10 @@ class ConsoleControl(basic.LineReceiver):
 
     def send_initial_prompt(self):
         self.sendLine("")
-        self.sendLine("In this early release of LBRY, some functions will not work\n"
-                      "until you have downloaded a full copy of our blockchain. To\n"
-                      "check whether you've caught up with the blockchain, use the\n"
-                      "command 'get-blockchain-status'.\n\n"
-                      "If, for example, you are unable to download some files or\n"
-                      "your balance is showing 0 when you know it shouldn't be, it\n"
-                      "is likely that the culprit is the blockchain.\n\n"
-                      "You should have received 1000 LBC the first time you ran\n"
+        self.sendLine("You should have received 1000 LBC the first time you ran\n"
                       "this program. If you did not, let us know! But first give\n"
-                      "them a couple of minutes to show up.\n\n"
+                      "them a moment to show up. The block time is currently 30\n"
+                      "seconds so they should show up within a couple of minutes.\n\n"
                       "Welcome to lbrynet-console!")
         self.sendLine("")
         self.sendLine("Enter a command. Try 'get wonderfullife' or 'help' to see more options.")

@@ -323,7 +323,7 @@ class GetWalletBalances(CommandHandler):
     def _show_time_behind_blockchain(self, rounded_time):
         if rounded_time.unit >= RoundedTime.HOUR:
             self.console.sendLine("\n\nYour balance may be out of date. This application\n"
-                                  "is %s behind the LBC blockchain. It should take a few minutes to\n"
+                                  "is %s behind the LBC blockchain. It may take a few minutes to\n"
                                   "catch up the first time you run this early version of LBRY.\n"
                                   "Please be patient =).\n\n" % str(rounded_time))
         else:
@@ -797,7 +797,7 @@ class AddStream(CommandHandler):
             self.console.sendLine("\nThis application is %s behind the LBC blockchain, so some of your\n"
                                   "funds may not be available. Use 'get-blockchain-status' to check if\n"
                                   "your application is up to date with the blockchain.\n\n"
-                                  "It should take a few minutes to catch up the first time you run this\n"
+                                  "It may take a few minutes to catch up the first time you run this\n"
                                   "early version of LBRY. Please be patient =).\n\n" % str(rounded_time))
 
     def _log_recent_blockchain_time_error_download(self, err):
@@ -913,7 +913,7 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
             self.console.sendLine("\nThis application is %s behind the LBC blockchain, which may be\n"
                                   "preventing this name from being resolved correctly. Use 'get-blockchain-status'\n"
                                   "to check if your application is up to date with the blockchain.\n\n"
-                                  "It should take a few minutes to catch up the first time you run\n"
+                                  "It may take a few minutes to catch up the first time you run\n"
                                   "this early version of LBRY. Please be patient =).\n\n" % str(rounded_time))
         else:
             self.console.sendLine("\n")
@@ -1850,7 +1850,7 @@ class Publish(CommandHandler):
         if rounded_time.unit >= RoundedTime.HOUR:
             self.console.sendLine("This application is %s behind the LBC blockchain\n"
                                   "and therefore may not have all of the funds you expect\n"
-                                  "available at this time. It should take a few minutes to\n"
+                                  "available at this time. It may take a few minutes to\n"
                                   "catch up the first time you run this early version of LBRY.\n"
                                   "Please be patient =).\n" % str(rounded_time))
 
