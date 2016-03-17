@@ -1,20 +1,23 @@
 import json
 import logging
 import os
+
 from datetime import datetime
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
+
 from lbrynet.core.Error import InvalidStreamInfoError, InsufficientFundsError
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
+from lbrynet.conf import DEFAULT_TIMEOUT
 
 log = logging.getLogger(__name__)
 
 
 class GetStream(object):
     def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5,
-                                                                                                        timeout=30):
+                                                                                            timeout=DEFAULT_TIMEOUT):
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
@@ -106,8 +109,9 @@ class GetStream(object):
         else:
             d = defer.Deferred()
 
+        downloader.start()
+
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
-        d.addCallback(lambda _: downloader.start())
         d.addCallback(lambda _: log.info("Downloading " + str(self.stream_hash) + " --> " + str(self.download_path)))
 
         return d

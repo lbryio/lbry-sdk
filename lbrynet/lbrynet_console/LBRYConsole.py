@@ -1,16 +1,21 @@
 import logging
-from lbrynet.core.Session import LBRYSession
 import os.path
 import argparse
 import requests
 import locale
 import sys
+
+if sys.platform == "darwin":
+    from appdirs import user_data_dir
 from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task, error
+from jsonrpc.proxy import JSONRPCProxy
+
+from lbrynet.core.Session import LBRYSession
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE  # , MIN_BLOB_INFO_PAYMENT_RATE
+from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, API_CONNECTION_STRING  # , MIN_BLOB_INFO_PAYMENT_RATE
 from lbrynet.core.utils import generate_id
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.PaymentRateManager import PaymentRateManager
@@ -461,7 +466,6 @@ class LBRYConsole():
 
 
 def launch_lbry_console():
-
     from twisted.internet import reactor
 
     parser = argparse.ArgumentParser(description="Launch a lbrynet console")
@@ -529,7 +533,7 @@ def launch_lbry_console():
     created_data_dir = False
     if not args.data_dir:
         if sys.platform == "darwin":
-            data_dir =  os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
+            data_dir = user_data_dir("LBRY")
         else:
             data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
     else:
@@ -538,28 +542,35 @@ def launch_lbry_console():
         os.mkdir(data_dir)
         created_data_dir = True
 
+    daemon = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+    try:
+        daemon.is_running()
+        log.info("Attempt to start lbrynet-console while lbrynet-daemon is running")
+        print "lbrynet-daemon is running, you must turn it off before using lbrynet-console"
+        print "If you're running the app, quit before starting lbrynet-console"
+        print "If you're running lbrynet-daemon in a terminal, run 'stop-lbrynet-daemon' to turn it off"
 
-    log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
-    formatter = logging.Formatter(log_format)
+    except:
+        log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
+        formatter = logging.Formatter(log_format)
 
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    file_handler = logging.FileHandler(os.path.join(data_dir, "console.log"))
-    file_handler.setFormatter(formatter)
-    file_handler.addFilter(logging.Filter("lbrynet"))
-    logger.addHandler(file_handler)
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
+        file_handler = logging.FileHandler(os.path.join(data_dir, "console.log"))
+        file_handler.setFormatter(formatter)
+        file_handler.addFilter(logging.Filter("lbrynet"))
+        logger.addHandler(file_handler)
 
-    console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, fake_wallet=args.fake_wallet,
-                          lbrycrd_conf=args.lbrycrd_wallet_conf, lbrycrd_dir=args.lbrycrd_wallet_dir,
-                          use_upnp=not args.disable_upnp, data_dir=data_dir,
-                          created_data_dir=created_data_dir, lbrycrdd_path=args.lbrycrdd_path)
 
-    d = task.deferLater(reactor, 0, console.start)
+        console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, fake_wallet=args.fake_wallet,
+                                lbrycrd_conf=args.lbrycrd_wallet_conf, lbrycrd_dir=args.lbrycrd_wallet_dir,
+                                use_upnp=not args.disable_upnp, data_dir=data_dir,
+                                created_data_dir=created_data_dir, lbrycrdd_path=args.lbrycrdd_path)
 
-    d.addErrback(lambda _: reactor.stop())
-
-    reactor.addSystemEventTrigger('before', 'shutdown', console.shut_down)
-    reactor.run()
+        d = task.deferLater(reactor, 0, console.start)
+        d.addErrback(lambda _: reactor.stop())
+        reactor.addSystemEventTrigger('before', 'shutdown', console.shut_down)
+        reactor.run()
 
 if __name__ == "__main__":
     launch_lbry_console()

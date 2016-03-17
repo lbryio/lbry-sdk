@@ -35,7 +35,7 @@ from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE
-from lbrynet.conf import API_CONNECTION_STRING, API_PORT, API_ADDRESS
+from lbrynet.conf import API_CONNECTION_STRING, API_PORT, API_ADDRESS, DEFAULT_TIMEOUT
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
@@ -540,7 +540,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
-    def _download_name(self, name):
+    def _download_name(self, name, timeout=DEFAULT_TIMEOUT):
         def _disp_file(f):
             file_path = os.path.join(self.download_directory, f.file_name)
             log.info("[" + str(datetime.now()) + "] Already downloaded: " + str(f.stream_hash) + " --> " + file_path)
@@ -553,7 +553,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
             d = self.session.wallet.get_stream_info_for_name(name)
             stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
-                               max_key_fee=self.max_key_fee, data_rate=self.data_rate)
+                               max_key_fee=self.max_key_fee, data_rate=self.data_rate, timeout=timeout)
             d.addCallback(_disp)
             d.addCallback(lambda stream_info: stream.start(stream_info))
             d.addCallback(lambda _: self._path_from_name(name))
@@ -837,8 +837,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         params = Bunch(p)
 
+        if 'timeout' not in p.keys():
+            params.timeout = DEFAULT_TIMEOUT
+
         if params.name:
-            d = self._download_name(params.name)
+            d = self._download_name(params.name, timeout=params.timeout)
             d.addCallbacks(lambda message: self._render_response(message, OK_CODE),
                            lambda err: self._render_response('error', NOT_FOUND))
         else:
