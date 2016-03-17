@@ -6,10 +6,14 @@ import binascii
 import subprocess
 import logging
 import requests
+# import rumps
+# import httplib2
 
 from twisted.web import server, resource, static
 from twisted.internet import defer, threads, error, reactor
 from txjsonrpc.web import jsonrpc
+from jsonrpc.proxy import JSONRPCProxy
+
 from datetime import datetime
 from decimal import Decimal
 from StringIO import StringIO
@@ -537,10 +541,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(True)
 
     def _download_name(self, name):
-        def _disp_file(file):
-            log.info("[" + str(datetime.now()) + "] Already downloaded: " + str(file.stream_hash))
-            d = self._path_from_lbry_file(file)
-            return d
+        def _disp_file(f):
+            file_path = os.path.join(self.download_directory, f.file_name)
+            log.info("[" + str(datetime.now()) + "] Already downloaded: " + str(f.stream_hash) + " --> " + file_path)
+            return defer.succeed(f)
 
         def _get_stream(name):
             def _disp(stream):
@@ -558,12 +562,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self._check_history(name)
         d.addCallback(lambda lbry_file: _get_stream(name) if not lbry_file else _disp_file(lbry_file))
-        d.addCallback(lambda _: self._check_history(name))
-        d.addCallback(lambda lbry_file: ({'stream_hash': lbry_file.stream_hash,
-                                            'path': os.path.join(self.download_directory,
-                                                                            lbry_file.file_name)})
-                                        if lbry_file else defer.fail(NOT_FOUND))
+        d.addCallback(lambda _: self._path_from_name(name))
         d.addErrback(lambda err: defer.fail(NOT_FOUND))
+
         return d
 
     def _resolve_name(self, name):
@@ -586,12 +587,19 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             f = open(path, 'r')
             l = json.loads(f.read())
             f.close()
+
             file_name = l['stream_name'].decode('hex')
-            lbry_file = [file for file in self.lbry_file_manager.lbry_files if file.stream_name == file_name]
-            if lbry_file:
-                return lbry_file[0]
+            for lbry_file in self.lbry_file_manager.lbry_files:
+                if lbry_file.stream_name == file_name:
+                    if sys.platform == "darwin":
+                        if os.path.isfile(os.path.join(self.download_directory, lbry_file.stream_name)):
+                            return lbry_file
+                        else:
+                            return False
+                    else:
+                        return lbry_file
             else:
-                return None
+                return False
 
         def _check(info):
             stream_hash = info['stream_hash']
@@ -604,7 +612,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 return defer.succeed(False)
 
         d = self._resolve_name(name)
-        d.addCallbacks(_check, lambda _: False)
+        d.addCallback(_check)
         d.callback(None)
 
         return d
@@ -633,7 +641,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = self._check_history(name)
         d.addCallback(lambda lbry_file: {'stream_hash': lbry_file.stream_hash,
                                          'path': os.path.join(self.download_directory, lbry_file.file_name)}
-        if lbry_file else defer.fail(UnknownNameError))
+                                        if lbry_file else defer.fail(UnknownNameError))
         return d
 
     def _path_from_lbry_file(self, lbry_file):
@@ -672,6 +680,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _render_response(self, result, code):
         return json.dumps({'result': result, 'code': code})
+
+    # def _log_to_slack(self, msg):
+    #     URL = "https://hooks.slack.com/services/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"
+    #     h = httplib2.Http()
+    #     h.request(URL, 'POST', json.dumps({"text": msg}), headers={'Content-Type': 'application/json'})
 
     def jsonrpc_is_running(self):
         """
@@ -722,6 +735,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         self.fetcher.start()
         log.info('[' + str(datetime.now()) + '] Start autofetcher')
+        # self._log_to_slack('[' + str(datetime.now()) + '] Start autofetcher')
         return self._render_response("Started autofetching claims", OK_CODE)
 
     def jsonrpc_stop_fetcher(self):
@@ -829,6 +843,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                            lambda err: self._render_response('error', NOT_FOUND))
         else:
             d = self._render_response('error', BAD_REQUEST)
+
         return d
 
     def jsonrpc_stop_lbry_file(self, p):
@@ -933,27 +948,40 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         @param:
         @return:
         """
+
         params = Bunch(p)
 
-        metadata_fields = {"name": str, "file_path": str, "bid": float, "author": str, "title": str,
-                           "description": str, "thumbnail": str, "key_fee": float, "key_fee_address": str,
-                           "content_license": str}
-        log.info(params)
-        log.info(params.__dict__)
+        metadata_fields = {"name": unicode, "file_path": unicode, "bid": float, "author": unicode, "title": unicode,
+                           "description": unicode, "thumbnail": unicode, "key_fee": float, "key_fee_address": unicode,
+                           "content_license": unicode, "sources": dict}
 
         for k in metadata_fields.keys():
             if k in params.__dict__.keys():
-                assert isinstance(params.__dict__[k], metadata_fields[k])
-                metadata_fields[k] = params.__dict__[k]
+                if isinstance(params.__dict__[k], metadata_fields[k]):
+                    if type(params.__dict__[k]) == unicode:
+                        metadata_fields[k] = str(params.__dict__[k])
+                    else:
+                        metadata_fields[k] = params.__dict__[k]
+                else:
+                    metadata_fields[k] = None
             else:
                 metadata_fields[k] = None
 
         log.info("[" + str(datetime.now()) + "] Publish: ", metadata_fields)
 
         p = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
-        d = p.start(metadata_fields['name'], metadata_fields['file_path'], metadata_fields['bid'],
-                    metadata_fields['title'], metadata_fields['description'], metadata_fields['thumbnail'],
-                    metadata_fields['key_fee'], metadata_fields['key_fee_address'], metadata_fields['content_license'])
+        d = p.start(name=metadata_fields['name'],
+                    file_path=metadata_fields['file_path'],
+                    bid=metadata_fields['bid'],
+                    title=metadata_fields['title'],
+                    description=metadata_fields['description'],
+                    thumbnail=metadata_fields['thumbnail'],
+                    key_fee=metadata_fields['key_fee'],
+                    key_fee_address=metadata_fields['key_fee_address'],
+                    content_license=metadata_fields['content_license'],
+                    author=metadata_fields['author'],
+                    sources=metadata_fields['sources'])
+
         d.addCallbacks(lambda msg: self._render_response(msg, OK_CODE),
                        lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
 

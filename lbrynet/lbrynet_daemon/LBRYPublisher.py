@@ -33,9 +33,11 @@ class Publisher(object):
         self.sd_hash = None
         self.tx_hash = None
         self.content_license = None
+        self.author = None
+        self.sources = None
 
     def start(self, name, file_path, bid, title=None, description=None, thumbnail=None,
-              key_fee=None, key_fee_address=None, content_license=None):
+              key_fee=None, key_fee_address=None, content_license=None, author=None, sources=None):
 
         def _show_result():
             message = "[" + str(datetime.now()) + "] Published " + self.file_name + " --> lbry://" + \
@@ -52,6 +54,8 @@ class Publisher(object):
         self.key_fee = key_fee
         self.key_fee_address = key_fee_address
         self.content_license = content_license
+        self.author = author
+        self.sources = sources
 
         d = self._check_file_path(self.file_path)
         d.addCallback(lambda _: create_lbry_file(self.session, self.lbry_file_manager,
@@ -104,10 +108,11 @@ class Publisher(object):
         return d
 
     def _claim_name(self):
-        d = self.wallet.claim_name(self.publish_name, self.sd_hash, self.bid_amount,
+        d = self.wallet.claim_name(self.publish_name, {'sd_hash': self.sd_hash}, self.bid_amount,
                                    description=self.description, key_fee=self.key_fee,
                                    key_fee_address=self.key_fee_address, thumbnail=self.thumbnail,
-                                   content_license=self.content_license)
+                                   content_license=self.content_license, author=self.author,
+                                   sources=self.sources)
 
         def set_tx_hash(tx_hash):
             self.tx_hash = tx_hash

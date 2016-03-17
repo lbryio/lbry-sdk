@@ -13,7 +13,8 @@ log = logging.getLogger(__name__)
 
 
 class GetStream(object):
-    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5):
+    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5,
+                                                                                                        timeout=30):
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
@@ -30,7 +31,24 @@ class GetStream(object):
         self.max_key_fee = max_key_fee
         self.stream_info = None
         self.stream_info_manager = None
+        self.d = defer.Deferred(None)
+        self.timeout = timeout
+        self.timeout_counter = 0
+        self.download_path = None
+        self.checker = LoopingCall(self.check_status)
 
+
+    def check_status(self):
+        self.timeout_counter += 1
+
+        if self.download_path and os.path.isfile(self.download_path):
+            self.checker.stop()
+            return defer.succeed(True)
+
+        elif self.timeout_counter >= self.timeout:
+            log.info("Timeout downloading " + str(self.stream_info))
+            self.checker.stop()
+            self.d.cancel()
 
     def start(self, stream_info):
         self.stream_info = stream_info
@@ -60,17 +78,18 @@ class GetStream(object):
         else:
             pass
 
-        d = defer.Deferred(None)
-        d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
-        d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        d.addCallback(lambda metadata: (next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)), metadata))
-        d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata, [self.data_rate, True], self.payment_rate_manager))
-        d.addErrback(lambda err: err.trap(defer.CancelledError))
-        d.addErrback(lambda err: log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback()))
-        d.addCallback(self._start_download)
-        d.callback(None)
+        self.checker.start(1)
 
-        return d
+        self.d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
+        self.d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
+        self.d.addCallback(lambda metadata: (next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)), metadata))
+        self.d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata, [self.data_rate, True], self.payment_rate_manager))
+        self.d.addErrback(lambda err: err.trap(defer.CancelledError))
+        self.d.addErrback(lambda err: log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback()))
+        self.d.addCallback(self._start_download)
+        self.d.callback(None)
+
+        return self.d
 
     def _start_download(self, downloader):
         def _pay_key_fee():
@@ -87,9 +106,9 @@ class GetStream(object):
         else:
             d = defer.Deferred()
 
-        downloader.start()
-
-        log.info("Downloading", self.stream_hash, "-->", os.path.join(downloader.download_directory, downloader.file_name))
+        self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
+        d.addCallback(lambda _: downloader.start())
+        d.addCallback(lambda _: log.info("Downloading " + str(self.stream_hash) + " --> " + str(self.download_path)))
 
         return d
 
