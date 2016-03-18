@@ -5,9 +5,13 @@ import argparse
 import requests
 import locale
 import sys
+import webbrowser
+
+from xmlrpclib import ServerProxy
 from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task, error
 from twisted.python.failure import Failure
+
 # from lbrynet.core.client.AutoDownloader import AutoFetcher
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
@@ -508,109 +512,120 @@ class LBRYConsole():
 
 
 def launch_lbry_console():
+    try:
+        daemon = ServerProxy("http://localhost:7080")
+        daemon.is_running()
 
-    from twisted.internet import reactor
+        print "lbrynet-daemon is already running"
+        print "To use lbrynet-console first close the LBRY status bar app, " \
+              "or run stop-lbrynet-daemon if you started it via command line"
+        print ""
+        print "Launching browser interface"
 
-    parser = argparse.ArgumentParser(description="Launch a lbrynet console")
-    parser.add_argument("--no_listen_peer",
-                        help="Don't listen for incoming data connections.",
-                        action="store_true")
-    parser.add_argument("--peer_port",
-                        help="The port on which the console will listen for incoming data connections.",
-                        type=int, default=3333)
-    parser.add_argument("--no_listen_dht",
-                        help="Don't listen for incoming DHT connections.",
-                        action="store_true")
-    parser.add_argument("--dht_node_port",
-                        help="The port on which the console will listen for DHT connections.",
-                        type=int, default=4444)
-    parser.add_argument("--wallet_type",
-                        help="Either 'lbrycrd' or 'ptc' or 'lbryum'.",
-                        type=str, default="lbrycrd")
-    parser.add_argument("--lbrycrd_wallet_dir",
-                        help="The directory in which lbrycrd data will stored. Used if lbrycrdd is "
-                             "launched by this application.")
-    parser.add_argument("--lbrycrd_wallet_conf",
-                        help="The configuration file for the LBRYcrd wallet. Default: ~/.lbrycrd/lbrycrd.conf",
-                        type=str)
-    parser.add_argument("--no_dht_bootstrap",
-                        help="Don't try to connect to the DHT",
-                        action="store_true")
-    parser.add_argument("--dht_bootstrap_host",
-                        help="The hostname of a known DHT node, to be used to bootstrap into the DHT. "
-                             "Must be used with --dht_bootstrap_port",
-                        type=str, default='104.236.42.182')
-    parser.add_argument("--dht_bootstrap_port",
-                        help="The port of a known DHT node, to be used to bootstrap into the DHT. Must "
-                             "be used with --dht_bootstrap_host",
-                        type=int, default=4000)
-    parser.add_argument("--disable_upnp",
-                        help="Don't try to use UPnP to enable incoming connections through the firewall",
-                        action="store_true")
-    parser.add_argument("--data_dir",
-                        help=("The full path to the directory in which lbrynet data and metadata will be stored. "
-                              "Default: ~/.lbrynet on linux, ~/Library/Application Support/lbrynet on OS X"),
-                        type=str)
-    parser.add_argument("--lbrycrdd_path",
-                        help="The path to lbrycrdd, which will be launched if it isn't running, unless "
-                             "launching lbrycrdd is disabled by --disable_launch_lbrycrdd. By default, "
-                             "the file ~/.lbrycrddpath.conf will be checked, and if no path is found "
-                             "there, it will be ./lbrycrdd")
-    parser.add_argument("--disable_launch_lbrycrdd",
-                        help="Don't launch lbrycrdd even if it's not running.")
+        webbrowser.open("lbry://lbry")
 
-    args = parser.parse_args()
+    except:
+        from twisted.internet import reactor
 
-    if args.no_dht_bootstrap:
-        bootstrap_nodes = []
-    else:
-        bootstrap_nodes = [(args.dht_bootstrap_host, args.dht_bootstrap_port)]
+        parser = argparse.ArgumentParser(description="Launch a lbrynet console")
+        parser.add_argument("--no_listen_peer",
+                            help="Don't listen for incoming data connections.",
+                            action="store_true")
+        parser.add_argument("--peer_port",
+                            help="The port on which the console will listen for incoming data connections.",
+                            type=int, default=3333)
+        parser.add_argument("--no_listen_dht",
+                            help="Don't listen for incoming DHT connections.",
+                            action="store_true")
+        parser.add_argument("--dht_node_port",
+                            help="The port on which the console will listen for DHT connections.",
+                            type=int, default=4444)
+        parser.add_argument("--wallet_type",
+                            help="Either 'lbrycrd' or 'ptc' or 'lbryum'.",
+                            type=str, default="lbrycrd")
+        parser.add_argument("--lbrycrd_wallet_dir",
+                            help="The directory in which lbrycrd data will stored. Used if lbrycrdd is "
+                                 "launched by this application.")
+        parser.add_argument("--lbrycrd_wallet_conf",
+                            help="The configuration file for the LBRYcrd wallet. Default: ~/.lbrycrd/lbrycrd.conf",
+                            type=str)
+        parser.add_argument("--no_dht_bootstrap",
+                            help="Don't try to connect to the DHT",
+                            action="store_true")
+        parser.add_argument("--dht_bootstrap_host",
+                            help="The hostname of a known DHT node, to be used to bootstrap into the DHT. "
+                                 "Must be used with --dht_bootstrap_port",
+                            type=str, default='104.236.42.182')
+        parser.add_argument("--dht_bootstrap_port",
+                            help="The port of a known DHT node, to be used to bootstrap into the DHT. Must "
+                                 "be used with --dht_bootstrap_host",
+                            type=int, default=4000)
+        parser.add_argument("--disable_upnp",
+                            help="Don't try to use UPnP to enable incoming connections through the firewall",
+                            action="store_true")
+        parser.add_argument("--data_dir",
+                            help=("The full path to the directory in which lbrynet data and metadata will be stored. "
+                                  "Default: ~/.lbrynet on linux, ~/Library/Application Support/lbrynet on OS X"),
+                            type=str)
+        parser.add_argument("--lbrycrdd_path",
+                            help="The path to lbrycrdd, which will be launched if it isn't running, unless "
+                                 "launching lbrycrdd is disabled by --disable_launch_lbrycrdd. By default, "
+                                 "the file ~/.lbrycrddpath.conf will be checked, and if no path is found "
+                                 "there, it will be ./lbrycrdd")
+        parser.add_argument("--disable_launch_lbrycrdd",
+                            help="Don't launch lbrycrdd even if it's not running.")
 
-    if args.no_listen_peer:
-        peer_port = None
-    else:
-        peer_port = args.peer_port
+        args = parser.parse_args()
 
-    if args.no_listen_dht:
-        dht_node_port = None
-    else:
-        dht_node_port = args.dht_node_port
-
-    created_data_dir = False
-    if not args.data_dir:
-        if sys.platform == "darwin":
-            data_dir =  os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
+        if args.no_dht_bootstrap:
+            bootstrap_nodes = []
         else:
-            data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-    else:
-        data_dir = args.data_dir
-    if not os.path.exists(data_dir):
-        os.mkdir(data_dir)
-        created_data_dir = True
+            bootstrap_nodes = [(args.dht_bootstrap_host, args.dht_bootstrap_port)]
 
+        if args.no_listen_peer:
+            peer_port = None
+        else:
+            peer_port = args.peer_port
 
-    log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
-    formatter = logging.Formatter(log_format)
+        if args.no_listen_dht:
+            dht_node_port = None
+        else:
+            dht_node_port = args.dht_node_port
 
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    file_handler = logging.FileHandler(os.path.join(data_dir, "console.log"))
-    file_handler.setFormatter(formatter)
-    file_handler.addFilter(logging.Filter("lbrynet"))
-    logger.addHandler(file_handler)
+        created_data_dir = False
+        if not args.data_dir:
+            if sys.platform == "darwin":
+                data_dir =  os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
+            else:
+                data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+        else:
+            data_dir = args.data_dir
+        if not os.path.exists(data_dir):
+            os.mkdir(data_dir)
+            created_data_dir = True
 
-    console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, wallet_type=args.wallet_type,
-                          lbrycrd_conf=args.lbrycrd_wallet_conf, lbrycrd_dir=args.lbrycrd_wallet_dir,
-                          use_upnp=not args.disable_upnp, data_dir=data_dir,
-                          created_data_dir=created_data_dir, lbrycrdd_path=args.lbrycrdd_path,
-                          start_lbrycrdd=not args.disable_launch_lbrycrdd)
+        log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
+        formatter = logging.Formatter(log_format)
 
-    d = task.deferLater(reactor, 0, console.start)
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
+        file_handler = logging.FileHandler(os.path.join(data_dir, "console.log"))
+        file_handler.setFormatter(formatter)
+        file_handler.addFilter(logging.Filter("lbrynet"))
+        logger.addHandler(file_handler)
 
-    d.addErrback(lambda _: reactor.stop())
+        console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, wallet_type=args.wallet_type,
+                              lbrycrd_conf=args.lbrycrd_wallet_conf, lbrycrd_dir=args.lbrycrd_wallet_dir,
+                              use_upnp=not args.disable_upnp, data_dir=data_dir,
+                              created_data_dir=created_data_dir, lbrycrdd_path=args.lbrycrdd_path,
+                              start_lbrycrdd=not args.disable_launch_lbrycrdd)
 
-    reactor.addSystemEventTrigger('before', 'shutdown', console.shut_down)
-    reactor.run()
+        d = task.deferLater(reactor, 0, console.start)
+
+        d.addErrback(lambda _: reactor.stop())
+
+        reactor.addSystemEventTrigger('before', 'shutdown', console.shut_down)
+        reactor.run()
 
 if __name__ == "__main__":
     launch_lbry_console()
