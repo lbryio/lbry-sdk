@@ -69,7 +69,7 @@ class LBRYWallet(object):
         self.manage_running = False
         self._manage_count = 0
         self._balance_refresh_time = 3
-        self._batch_count = 60
+        self._batch_count = 20
 
     def start(self):
 
