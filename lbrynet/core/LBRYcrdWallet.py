@@ -67,6 +67,9 @@ class LBRYWallet(object):
         self.stopped = True
 
         self.manage_running = False
+        self._manage_count = 0
+        self._balance_refresh_time = 3
+        self._batch_count = 60
 
     def start(self):
 
@@ -93,16 +96,20 @@ class LBRYWallet(object):
             self.next_manage_call.cancel()
             self.next_manage_call = None
 
-        d = self.manage()
+        d = self.manage(do_full=True)
         d.addErrback(self.log_stop_error)
         d.addCallback(lambda _: self._stop())
         d.addErrback(self.log_stop_error)
         return d
 
-    def manage(self):
+    def manage(self, do_full=False):
         log.info("Doing manage")
         self.next_manage_call = None
         have_set_manage_running = [False]
+        self._manage_count += 1
+        if self._manage_count % self._batch_count == 0:
+            self._manage_count = 0
+            do_full = True
 
         def check_if_manage_running():
 
@@ -113,6 +120,8 @@ class LBRYWallet(object):
                     self.manage_running = True
                     have_set_manage_running[0] = True
                     d.callback(True)
+                elif do_full is False:
+                    d.callback(False)
                 else:
                     task.deferLater(reactor, 1, fire_if_not_running)
 
@@ -121,20 +130,26 @@ class LBRYWallet(object):
 
         d = check_if_manage_running()
 
-        d.addCallback(lambda _: self._check_expected_balances())
+        def do_manage():
+            if do_full:
+                d = self._check_expected_balances()
+                d.addCallback(lambda _: self._send_payments())
+            else:
+                d = defer.succeed(True)
 
-        d.addCallback(lambda _: self._send_payments())
+            d.addCallback(lambda _: self.get_balance())
 
-        d.addCallback(lambda _: self.get_balance())
+            def set_wallet_balance(balance):
+                self.wallet_balance = balance
 
-        def set_wallet_balance(balance):
-            self.wallet_balance = balance
+            d.addCallback(set_wallet_balance)
+            return d
 
-        d.addCallback(set_wallet_balance)
+        d.addCallback(lambda should_run: do_manage() if should_run else None)
 
         def set_next_manage_call():
             if not self.stopped:
-                self.next_manage_call = reactor.callLater(60, self.manage)
+                self.next_manage_call = reactor.callLater(self._balance_refresh_time, self.manage)
 
         d.addCallback(lambda _: set_next_manage_call())
 
