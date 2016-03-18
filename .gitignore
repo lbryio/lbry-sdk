@@ -17,3 +17,9 @@ lbrynet.egg-info/PKG-INFO
 /build
 
 /dist
+
+*.so
+
+*.pem
+
+*.decTest

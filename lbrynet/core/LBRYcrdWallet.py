@@ -294,7 +294,7 @@ class LBRYWallet(object):
             value = result['value']
             try:
                 value_dict = json.loads(value)
-            except ValueError:
+            except (ValueError, TypeError):
                 return Failure(InvalidStreamInfoError(name))
             known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address', 'thumbnail',
                             'content_license']
@@ -395,7 +395,7 @@ class LBRYWallet(object):
                     if 'name' in claim and str(claim['name']) == name and 'value' in claim:
                         try:
                             value_dict = json.loads(claim['value'])
-                        except ValueError:
+                        except (ValueError, TypeError):
                             return None
                         if 'stream_hash' in value_dict and str(value_dict['stream_hash']) == sd_hash:
                             if 'is controlling' in claim and claim['is controlling']:
@@ -835,6 +835,7 @@ class LBRYumWallet(LBRYWallet):
         self.wallet = None
         self.cmd_runner = None
         self.first_run = False
+        self.printed_retrieving_headers = False
 
     def _start(self):
 
@@ -843,15 +844,20 @@ class LBRYumWallet(LBRYWallet):
         def setup_network():
             self.config = SimpleConfig()
             self.network = Network(self.config)
+            alert.info("Starting the wallet...")
             return defer.succeed(self.network.start())
 
         d = setup_network()
 
         def check_started():
             if self.network.is_connecting():
+                if not self.printed_retrieving_headers and self.network.blockchain.retrieving_headers:
+                    alert.info("Running the wallet for the first time...this may take a moment.")
+                    self.printed_retrieving_headers = True
                 return False
             start_check.stop()
             if self.network.is_connected():
+                alert.info("Wallet started.")
                 network_start_d.callback(True)
             else:
                 network_start_d.errback(ValueError("Failed to connect to network."))
@@ -917,7 +923,9 @@ class LBRYumWallet(LBRYWallet):
         return d
 
     def get_block(self, blockhash):
-        return defer.fail(NotImplementedError())
+        cmd = known_commands['getblock']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, blockhash)
 
     def get_most_recent_blocktime(self):
         header = self.network.get_header(self.network.get_local_height())
@@ -930,7 +938,9 @@ class LBRYumWallet(LBRYWallet):
         return d
 
     def get_name_claims(self):
-        return defer.fail(NotImplementedError())
+        cmd = known_commands['getnameclaims']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func)
 
     def check_first_run(self):
         return defer.succeed(self.first_run)
@@ -941,13 +951,38 @@ class LBRYumWallet(LBRYWallet):
         return threads.deferToThread(func, txid)
 
     def _send_name_claim(self, name, val, amount):
-        return defer.fail(NotImplementedError())
+        def send_claim(address):
+            cmd = known_commands['claimname']
+            func = getattr(self.cmd_runner, cmd.name)
+            return threads.deferToThread(func, address, amount, name, val)
+        d = self.get_new_address()
+        d.addCallback(send_claim)
+        d.addCallback(self._broadcast_transaction)
+        return d
 
     def _get_decoded_tx(self, raw_tx):
-        return defer.fail(NotImplementedError())
+        tx = Transaction(raw_tx)
+        decoded_tx = {}
+        decoded_tx['vout'] = []
+        for output in tx.outputs():
+            out = {}
+            out['value'] = output[2]
+            decoded_tx['vout'].append(out)
+        return decoded_tx
 
     def _send_abandon(self, txid, address, amount):
-        return defer.fail(NotImplementedError())
+        cmd = known_commands['abandonclaim']
+        func = getattr(self.cmd_runner, cmd.name)
+        d = threads.deferToThread(func, txid, address, amount)
+        d.addCallback(self._broadcast_transaction)
+        return d
+
+    def _broadcast_transaction(self, raw_tx):
+        cmd = known_commands['broadcast']
+        func = getattr(self.cmd_runner, cmd.name)
+        d = threads.deferToThread(func, raw_tx)
+        d.addCallback(self._save_wallet)
+        return d
 
     def _do_send_many(self, payments_to_send):
         log.warning("Doing send many. payments to send: %s", str(payments_to_send))
@@ -969,6 +1004,11 @@ class LBRYumWallet(LBRYWallet):
 
     def _get_balance_for_address(self, address):
         return defer.succeed(Decimal(self.wallet.get_addr_received(address))/COIN)
+
+    def get_nametrie(self):
+        cmd = known_commands['getclaimtrie']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func)
 
     def _save_wallet(self, val):
         d = threads.deferToThread(self.wallet.storage.write)
