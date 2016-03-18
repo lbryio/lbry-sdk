@@ -46,13 +46,13 @@ setup(name='lbrynet',
       install_requires=requires,
       entry_points={'console_scripts': console_scripts},
       data_files=[
-          ('lbrynet/lbrynet_console/plugins',
+          ('share/lbrynet/lbrynet_console/plugins',
            [
                os.path.join(base_dir, 'lbrynet', 'lbrynet_console', 'plugins',
                             'blindrepeater.yapsy-plugin')
            ]
            ),
-          ('lbrynet/lbrynet_gui', gui_data_paths)
+          ('share/lbrynet/lbrynet_gui', gui_data_paths)
       ],
       dependency_links=['https://github.com/lbryio/lbryum/tarball/master/#egg=lbryum'],
       )
