@@ -152,6 +152,9 @@ class LBRYDaemon(xmlrpc.XMLRPC):
         d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._setup_server())
+        # if sys.platform == "darwin":
+        #     d.addCallback(lambda _: self._update())
+        #     d.addCallback(lambda _: self.status_app.run())
         # d.addCallback(lambda _: self._update() if self.check_for_updates == "True" and sys.platform == "darwin"
         #                         else defer.succeed(None))
         d.addCallback(lambda _: self._setup_fetcher())
