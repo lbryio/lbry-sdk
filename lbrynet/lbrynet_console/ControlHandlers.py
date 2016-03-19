@@ -955,7 +955,7 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
     def _get_info_to_show(self):
         i = AddStream._get_info_to_show(self)
         if self.description is not None:
-            i.append(("description", self.description))
+            i.append(("description", str(self.description)))
         if self.key_fee is None or self.key_fee_address is None:
             i.append(("decryption key fee", "Free"))
         else:
