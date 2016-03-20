@@ -783,6 +783,9 @@ class AddStream(CommandHandler):
             d.addCallback(get_time_behind_blockchain)
             d.addCallback(self._show_time_behind_blockchain_download)
             d.addErrback(self._log_recent_blockchain_time_error_download)
+            d.addCallback(lambda _: self.wallet.is_first_run())
+            d.addCallback(self._show_first_run_insufficient_funds)
+            d.addErrback(self._log_first_run_check_error)
         else:
             log.error("An unexpected error has caused the download to stop: %s" % err.getTraceback())
             log_file = get_log_file()
@@ -802,6 +805,16 @@ class AddStream(CommandHandler):
 
     def _log_recent_blockchain_time_error_download(self, err):
         log.error("An error occurred trying to look up the most recent blocktime: %s", err.getTraceback())
+
+    def _show_first_run_insufficient_funds(self, is_first_run):
+        if is_first_run:
+            self.console.sendLine("\nThis appears to be the first time you have run LBRY. It can take\n"
+                                  "a few minutes for your testing LBC to show up. If you haven't\n"
+                                  "received them after a few minutes, please let us know.\n\n"
+                                  "Thank you for your patience.\n\n")
+
+    def _log_first_run_check_error(self, err):
+        log.error("An error occurred checking if this was the first run: %s", err.getTraceback())
 
 
 class AddStreamFromSD(AddStream):
