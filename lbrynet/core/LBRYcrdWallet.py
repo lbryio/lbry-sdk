@@ -108,7 +108,6 @@ class LBRYWallet(object):
         return d
 
     def manage(self, do_full=False):
-        log.info("Doing manage")
         self.next_manage_call = None
         have_set_manage_running = [False]
         self._manage_count += 1
@@ -145,6 +144,8 @@ class LBRYWallet(object):
             d.addCallback(lambda _: self.get_balance())
 
             def set_wallet_balance(balance):
+                if self.wallet_balance != balance:
+                    log.info("Got a new balance: %s", str(balance))
                 self.wallet_balance = balance
 
             d.addCallback(set_wallet_balance)
@@ -272,8 +273,6 @@ class LBRYWallet(object):
         return d
 
     def _send_payments(self):
-        log.info("Trying to send payments, if there are any to be sent")
-
         payments_to_send = {}
         for address, points in self.queued_payments.items():
             log.info("Should be sending %s points to %s", str(points), str(address))
