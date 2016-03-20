@@ -862,6 +862,9 @@ class AddStreamFromHash(AddStream):
             d.addCallback(get_time_behind_blockchain)
             d.addCallback(self._show_time_behind_blockchain_download)
             d.addErrback(self._log_recent_blockchain_time_error_download)
+            d.addCallback(lambda _: self.wallet.is_first_run())
+            d.addCallback(self._show_first_run_insufficient_funds)
+            d.addErrback(self._log_first_run_check_error)
             d.addCallback(lambda _: self.console.sendLine("\n"))
             d.chainDeferred(self.finished_deferred)
             return
@@ -1870,6 +1873,16 @@ class Publish(CommandHandler):
     def _log_best_blocktime_error(self, err):
         log.error("An error occurred checking the best time of the blockchain: %s", err.getTraceback())
 
+    def _show_first_run_insufficient_funds(self, is_first_run):
+        if is_first_run:
+            self.console.sendLine("\nThis appears to be the first time you have run LBRY. It can take\n"
+                                  "a few minutes for your testing LBC to show up. If you haven't\n"
+                                  "received them after a few minutes, please let us know.\n\n"
+                                  "Thank you for your patience.\n\n")
+
+    def _log_first_run_check_error(self, err):
+        log.error("An error occurred checking if this was the first run: %s", err.getTraceback())
+
     def _show_publish_error(self, err):
         message = "An error occurred publishing %s to %s. Error: %s."
         if err.check(InsufficientFundsError):
@@ -1877,6 +1890,9 @@ class Publish(CommandHandler):
             d.addCallback(get_time_behind_blockchain)
             d.addCallback(self._show_time_behind_blockchain)
             d.addErrback(self._log_best_blocktime_error)
+            d.addCallback(lambda _: self.wallet.is_first_run())
+            d.addCallback(self._show_first_run_insufficient_funds)
+            d.addErrback(self._log_first_run_check_error)
             error_message = "Insufficient funds"
         else:
             d = defer.succeed(True)
