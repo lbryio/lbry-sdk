@@ -253,7 +253,7 @@ class LBRYConsole():
         return dl
 
     def check_first_run(self):
-        d = self.session.wallet.check_first_run()
+        d = self.session.wallet.is_first_run()
         d.addCallback(lambda is_first_run: self._do_first_run() if is_first_run else 0.0)
         return d
 
