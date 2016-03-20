@@ -50,6 +50,10 @@ class LBRYWallet(object):
     """This class implements the LBRYWallet interface for the LBRYcrd payment system"""
     implements(ILBRYWallet)
 
+    _FIRST_RUN_UNKNOWN = 0
+    _FIRST_RUN_YES = 1
+    _FIRST_RUN_NO = 2
+
     def __init__(self, db_dir):
 
         self.db_dir = db_dir
@@ -70,6 +74,7 @@ class LBRYWallet(object):
         self._manage_count = 0
         self._balance_refresh_time = 3
         self._batch_count = 20
+        self._first_run = self._FIRST_RUN_UNKNOWN
 
     def start(self):
 
@@ -419,6 +424,19 @@ class LBRYWallet(object):
     def get_available_balance(self):
         return float(self.wallet_balance - self.total_reserved_points)
 
+    def is_first_run(self):
+        if self._first_run == self._FIRST_RUN_UNKNOWN:
+            d = self._check_first_run()
+
+            def set_first_run(is_first):
+                self._first_run = self._FIRST_RUN_YES if is_first else self._FIRST_RUN_NO
+
+            d.addCallback(set_first_run)
+        else:
+            d = defer.succeed(None)
+        d.addCallback(lambda _: self._first_run == self._FIRST_RUN_YES)
+        return d
+
     def _get_status_of_claim(self, txid, name, sd_hash):
         d = self.get_claims_from_tx(txid)
 
@@ -534,7 +552,7 @@ class LBRYWallet(object):
     def get_name_claims(self):
         return defer.fail(NotImplementedError())
 
-    def check_first_run(self):
+    def _check_first_run(self):
         return defer.fail(NotImplementedError())
 
     def _get_raw_tx(self, txid):
@@ -614,7 +632,7 @@ class LBRYcrdWallet(LBRYWallet):
                     settings["rpc_port"] = int(l[8:].rstrip('\n'))
         return settings
 
-    def check_first_run(self):
+    def _check_first_run(self):
         d = self.get_balance()
         d.addCallback(lambda bal: threads.deferToThread(self._get_num_addresses_rpc) if bal == 0 else 2)
         d.addCallback(lambda num_addresses: True if num_addresses <= 1 else False)
@@ -996,7 +1014,7 @@ class LBRYumWallet(LBRYWallet):
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func)
 
-    def check_first_run(self):
+    def _check_first_run(self):
         return defer.succeed(self.first_run)
 
     def _get_raw_tx(self, txid):
