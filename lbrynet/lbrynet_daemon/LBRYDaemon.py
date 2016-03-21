@@ -943,10 +943,19 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return defer.DeferredList(ds)
 
         def _disp(results):
-            log.info('[' + str(datetime.now()) + '] Search results: ')
+            log.info('[' + str(datetime.now()) + '] Found ' + str(len(results)) + ' search results')
+            consolidated_results = []
             for r in results:
-                log.info(str(r))
-            return self._render_response(results, OK_CODE)
+                t = {}
+                t.update(r[0])
+                if 'name' in r[1].keys():
+                    r[1]['stream_name'] = r[1]['name']
+                    del r[1]['name']
+                t.update(r[1])
+                t['cost_est'] = r[2]
+                consolidated_results.append(t)
+                # log.info(str(t))
+            return self._render_response(consolidated_results, OK_CODE)
 
         log.info('[' + str(datetime.now()) + '] Search nametrie: ' + params.search)
 
