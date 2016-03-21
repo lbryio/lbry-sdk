@@ -11,6 +11,7 @@ import requests
 
 from twisted.web import server, resource, static
 from twisted.internet import defer, threads, error, reactor
+from txjsonrpc import jsonrpclib
 from txjsonrpc.web import jsonrpc
 from jsonrpc.proxy import JSONRPCProxy
 
@@ -63,6 +64,35 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
     isLeaf = True
+
+    def render(self, request):
+        request.content.seek(0, 0)
+        # Unmarshal the JSON-RPC data.
+        content = request.content.read()
+        parsed = jsonrpclib.loads(content)
+        functionPath = parsed.get("method")
+        args = parsed.get('params')
+        id = parsed.get('id')
+        version = parsed.get('jsonrpc')
+        if version:
+            version = int(float(version))
+        elif id and not version:
+            version = jsonrpclib.VERSION_1
+        else:
+            version = jsonrpclib.VERSION_PRE1
+        # XXX this all needs to be re-worked to support logic for multiple
+        # versions...
+        try:
+            function = self._getFunction(functionPath)
+        except jsonrpclib.Fault, f:
+            self._cbRender(f, request, id, version)
+        else:
+            request.setHeader('Access-Control-Allow-Origin', ('http://localhost' + ':' + str(API_PORT)))
+            request.setHeader("content-type", "text/json")
+            d = defer.maybeDeferred(function, *args)
+            d.addErrback(self._ebRender, id)
+            d.addCallback(self._cbRender, request, id, version)
+        return server.NOT_DONE_YET
 
     def setup(self, wallet_type, check_for_updates):
         def _set_vars(wallet_type, check_for_updates):
