@@ -89,7 +89,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             request.setHeader('Access-Control-Allow-Origin', ('http://localhost' + ':' + str(API_PORT)))
             request.setHeader("content-type", "text/json")
-            d = defer.maybeDeferred(function, *args)
+            if args == [{}]:
+                d = defer.maybeDeferred(function)
+            else:
+                d = defer.maybeDeferred(function, *args)
             d.addErrback(self._ebRender, id)
             d.addCallback(self._cbRender, request, id, version)
         return server.NOT_DONE_YET
@@ -917,6 +920,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         @param {'search': search string}
         @return: List of search results
         """
+
         params = Bunch(p)
 
         def _clean(n):
