@@ -1,11 +1,11 @@
 import argparse
 import logging
 
-from twisted.web import server
+from twisted.web import server, static
 from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
 
-from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon, LBRYindex, LBRYDaemonWeb, LBRYFilePage
+from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon, LBRYindex, LBRYDaemonWeb, LBRYFileRender
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, DEFAULT_WALLET
 
 log = logging.getLogger(__name__)
@@ -43,9 +43,13 @@ def start():
     daemon.setup(args.wallet, args.update)
 
     root = LBRYindex()
-    root.putChild("", root)
-    root.putChild("webapi", LBRYDaemonWeb())
+    root.putChild("css", static.File("./css"))
+    root.putChild("font", static.File("./font"))
+    root.putChild("img", static.File("./img"))
+    root.putChild("js", static.File("./js"))
     root.putChild(API_ADDRESS, daemon)
-    root.putChild("myfiles", LBRYFilePage())
+    root.putChild("webapi", LBRYDaemonWeb())
+    root.putChild("view", LBRYFileRender())
     reactor.listenTCP(API_PORT, server.Site(root), interface=API_INTERFACE)
+
     reactor.run()

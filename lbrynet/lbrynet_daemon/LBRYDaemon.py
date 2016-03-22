@@ -126,7 +126,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
                 self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
-
+            self.daemon_conf = os.path.join(self.wallet_dir, 'daemon_settings.conf')
             self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
             self.wallet_user = None
             self.wallet_password = None
@@ -164,6 +164,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.announced_startup = False
             self.search_timeout = 3.0
             self.query_handlers = {}
+            self.default_settings = {
+                                        'run_on_startup': False,
+                                         'data_rate': MIN_BLOB_DATA_PAYMENT_RATE,
+                                         'max_key_fee': 10.0,
+                                         'default_download_directory': self.download_directory,
+                                         'max_upload': 0.0,
+                                         'max_download': 0.0
+                                     }
 
             return defer.succeed(None)
 
@@ -178,7 +186,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.info("[" + str(datetime.now()) + "] Starting lbrynet-daemon")
 
         d = defer.Deferred()
-        d.addCallback(lambda _: _set_vars(wallet_type, check_for_updates))
+        d.addCallback(lambda _:_set_vars(wallet_type, check_for_updates))
+        d.addCallback(lambda _: self._setup_daemon_settings())
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
@@ -200,6 +209,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _initial_setup(self):
         return NotImplemented
+
+    def _setup_daemon_settings(self):
+        self.session_settings = self.default_settings
+        return defer.succeed(None)
 
     def _update(self):
         def _check_for_updater():
@@ -370,9 +383,28 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addCallback(lambda _: self.session.shut_down())
         return d
 
-    def _update_settings(self):
-        self.data_rate = self.session_settings['data_rate']
-        self.max_key_fee = self.session_settings['max_key_fee']
+    def _update_settings(self, settings):
+        if not isinstance(settings['run_on_startup'], bool):
+            return defer.fail()
+        elif not isinstance(settings['data_rate'], float):
+            return defer.fail()
+        elif not isinstance(settings['max_key_fee'], float):
+            return defer.fail()
+        elif not isinstance(settings['default_download_directory'], unicode):
+            return defer.fail()
+        elif not isinstance(settings['max_upload'], float):
+            return defer.fail()
+        elif not isinstance(settings['max_download'], float):
+            return defer.fail()
+
+        self.session_settings['run_on_startup'] = settings['run_on_startup']
+        self.session_settings['data_rate'] = settings['data_rate']
+        self.session_settings['max_key_fee'] = settings['max_key_fee']
+        self.session_settings['default_download_directory'] = settings['default_download_directory']
+        self.session_settings['max_upload'] = settings['max_upload']
+        self.session_settings['max_download'] = settings['max_download']
+
+        return defer.succeed(True)
 
     def _setup_fetcher(self):
         self.fetcher = FetcherDaemon(self.session, self.lbry_file_manager, self.lbry_file_metadata_manager,
@@ -739,9 +771,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         @return {'data_rate': float, 'max_key_fee': float}
         """
 
-        if not self.session_settings:
-            self.session_settings = {'data_rate': self.data_rate, 'max_key_fee': self.max_key_fee}
-
         log.info("[" + str(datetime.now()) + "] Get daemon settings")
         return self._render_response(self.session_settings, OK_CODE)
 
@@ -751,10 +780,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         @param settings: {'settings': {'data_rate': float, 'max_key_fee': float}}
         """
-        params = Bunch(p)
 
-        self.session_settings = params.settings
-        self._update_settings()
+        d = self._update_settings(p)
 
         log.info("[" + str(datetime.now()) + "] Set daemon settings")
         return self._render_response(True, OK_CODE)
@@ -1194,39 +1221,60 @@ class LBRYindex(resource.Resource):
         request.write(str(results))
         request.finish()
 
+    def getChild(self, name, request):
+        if name == '':
+            return self
+        return resource.Resource.getChild(self, name, request)
 
     def render_GET(self, request):
         def _disp(r):
             log.info(r)
             return "<html><table style='width:100%'>" + ''.join(r) + "</html>"
 
-
-        d = LBRYDaemonCommandHandler('__dir__').run()
-        d.addCallback(lambda functions: ["<tr><td><a href=/webapi?function=%s>%s</a></td></tr>" % (function, function) for function in functions])
-        d.addCallback(_disp)
-        d.addCallbacks(lambda results: self._delayed_render(request, results),
-                       lambda err: self._delayed_render(request, err.getTraceback()))
-
-        return server.NOT_DONE_YET
+        return static.File("./dist/index.html").render_GET(request)
 
 
-class LBRYFilePage(resource.Resource):
+class LBRYFileRender(resource.Resource):
     isLeaf = False
+
+    def _render_path(self, path):
+        return r'<html><center><video src="' + path + r'" controls autoplay width="960" height="720"></center></html>'
 
     def _delayed_render(self, request, results):
         request.write(str(results))
         request.finish()
 
-        h = "<tr><td><a href=/webapi?function=delete_lbry_file&file_name=%s>%s</a></td></tr>"
+    def render_GET(self, request):
+        if 'name' in request.args.keys():
+            api = jsonrpc.Proxy(API_CONNECTION_STRING)
+            d = api.callRemote("get", {'name': request.args['name'][0]})
+            d.addCallback(lambda response: self._delayed_render(request, self._render_path(json.loads(response)['result']['path']))
+                                            if json.loads(response)['code'] == 200
+                                            else self._delayed_render(request, "Error"))
 
-        d = LBRYDaemonCommandHandler('get_lbry_files').run()
-        d.addCallback(lambda r: json.loads(r)['result'])
-        d.addCallback(lambda lbry_files: [h % (json.loads(lbry_file)['file_name'], json.loads(lbry_file)['file_name']) for lbry_file in lbry_files])
-        d.addCallback(lambda r: "<html><table style='width:100%'>" + ''.join(r) + "</html>")
-        d.addCallbacks(lambda results: self._delayed_render(request, results),
-                       lambda err: self._delayed_render(request, err.getTraceback()))
+            return server.NOT_DONE_YET
+        else:
+            self._delayed_render(request, "Error")
+            return server.NOT_DONE_YET
 
-        return server.NOT_DONE_YET
+
+# class LBRYFilePage(resource.Resource):
+#     isLeaf = False
+#
+#     def _delayed_render(self, request, results):
+#         request.write(str(results))
+#         request.finish()
+#
+#         h = "<tr><td><a href=/webapi?function=delete_lbry_file&file_name=%s>%s</a></td></tr>"
+#
+#         d = LBRYDaemonCommandHandler('get_lbry_files').run()
+#         d.addCallback(lambda r: json.loads(r)['result'])
+#         d.addCallback(lambda lbry_files: [h % (json.loads(lbry_file)['file_name'], json.loads(lbry_file)['file_name']) for lbry_file in lbry_files])
+#         d.addCallback(lambda r: "<html><table style='width:100%'>" + ''.join(r) + "</html>")
+#         d.addCallbacks(lambda results: self._delayed_render(request, results),
+#                        lambda err: self._delayed_render(request, err.getTraceback()))
+#
+#         return server.NOT_DONE_YET
 
 
 class LBRYDaemonWeb(resource.Resource):

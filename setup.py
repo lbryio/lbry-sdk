@@ -29,7 +29,7 @@ setup(name='lbrynet',
       packages=find_packages(),
       install_requires=['six>=1.9.0', 'pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
                         'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0',
-                        'leveldb', 'lbryum'],
+                        'leveldb', 'lbryum', 'jsonrpc', 'simplejson', 'appdirs'],
       entry_points={'console_scripts': console_scripts},
       data_files=[
           ('lbrynet/lbrynet_console/plugins',
