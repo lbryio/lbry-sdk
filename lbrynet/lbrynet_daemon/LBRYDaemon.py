@@ -1120,6 +1120,10 @@ class LBRYDaemonCommandHandler(object):
 
 
 class LBRYindex(resource.Resource):
+    def __init__(self, ui_dir):
+        resource.Resource.__init__(self)
+        self.ui_dir = ui_dir
+
     isLeaf = False
 
     def _delayed_render(self, request, results):
@@ -1136,7 +1140,7 @@ class LBRYindex(resource.Resource):
             log.info(r)
             return "<html><table style='width:100%'>" + ''.join(r) + "</html>"
 
-        return static.File("./dist/index.html").render_GET(request)
+        return static.File(os.path.join(self.ui_dir, "index.html")).render_GET(request)
 
 
 class LBRYFileRender(resource.Resource):

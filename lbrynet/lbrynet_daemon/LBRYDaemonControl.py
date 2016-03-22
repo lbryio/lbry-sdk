@@ -1,5 +1,12 @@
 import argparse
 import logging
+import tempfile
+import os
+import shutil
+
+from StringIO import StringIO
+from zipfile import ZipFile
+from urllib import urlopen
 
 from twisted.web import server, static
 from twisted.internet import reactor, defer
@@ -38,18 +45,26 @@ def start():
 
     log.info("Starting lbrynet-daemon from command line")
 
+    tmpdir = tempfile.mkdtemp()
+    url = urlopen("https://rawgit.com/lbryio/lbry-web-ui/master/dist.zip")
+    z = ZipFile(StringIO(url.read()))
+    z.extractall(tmpdir)
+
+
     args = parser.parse_args()
     daemon = LBRYDaemon()
     daemon.setup(args.wallet, args.update)
 
-    root = LBRYindex()
-    root.putChild("css", static.File("./css"))
-    root.putChild("font", static.File("./font"))
-    root.putChild("img", static.File("./img"))
-    root.putChild("js", static.File("./js"))
+    root = LBRYindex(tmpdir)
+    root.putChild("css", static.File(os.path.join(tmpdir, "css")))
+    root.putChild("font", static.File(os.path.join(tmpdir, "font")))
+    root.putChild("img", static.File(os.path.join(tmpdir, "img")))
+    root.putChild("js", static.File(os.path.join(tmpdir, "js")))
     root.putChild(API_ADDRESS, daemon)
     root.putChild("webapi", LBRYDaemonWeb())
     root.putChild("view", LBRYFileRender())
     reactor.listenTCP(API_PORT, server.Site(root), interface=API_INTERFACE)
 
     reactor.run()
+    
+    shutil.rmtree(tmpdir)
