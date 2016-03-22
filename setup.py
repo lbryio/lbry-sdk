@@ -4,6 +4,13 @@ import ez_setup
 ez_setup.use_setuptools()
 from setuptools import setup, find_packages
 import sys
+import os
+
+base_dir = os.path.abspath(os.path.dirname(__file__))
+
+
+from lbrynet import __version__
+
 
 console_scripts = ['lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch_lbry_console',
                   'lbrynet-stdin-uploader = lbrynet.lbrynet_console.LBRYStdinUploader:launch_stdin_uploader',
@@ -18,33 +25,28 @@ console_scripts = ['lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch
                   'lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemon:main',
                   'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemon:stop']
 
+
 if sys.platform == 'darwin':
     console_scripts.append('lbrynet-daemon-status = lbrynet.lbrynet_daemon.LBRYOSXStatusBar:main')
 
 
+gui_data_files = ['close2.gif', 'lbry-dark-242x80.gif', 'lbry-dark-icon.xbm', 'lbry-dark-icon.ico',
+                  'drop_down.gif', 'show_options.gif', 'hide_options.gif', 'lbry.conf']
+gui_data_paths = [os.path.join(base_dir, 'lbrynet', 'lbrynet_gui', f) for f in gui_data_files]
+
 setup(name='lbrynet',
-      version='0.0.4',
-      packages=find_packages(),
+      version='.'.join([str(x) for x in __version__]),
+      packages=find_packages(base_dir),
       install_requires=['six>=1.9.0', 'pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure', 'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0', 'leveldb', 'lbryum'],
       entry_points={'console_scripts': console_scripts},
       data_files=[
           ('lbrynet/lbrynet_console/plugins',
            [
-               'lbrynet/lbrynet_console/plugins/blindrepeater.yapsy-plugin',
+               os.path.join(base_dir, 'lbrynet', 'lbrynet_console', 'plugins',
+                            'blindrepeater.yapsy-plugin')
            ]
            ),
-          ('lbrynet/lbrynet_gui',
-           [
-               'lbrynet/lbrynet_gui/close2.gif',
-               'lbrynet/lbrynet_gui/lbry-dark-242x80.gif',
-               'lbrynet/lbrynet_gui/lbry-dark-icon.xbm',
-               'lbrynet/lbrynet_gui/lbry-dark-icon.ico',
-               'lbrynet/lbrynet_gui/drop_down.gif',
-               'lbrynet/lbrynet_gui/show_options.gif',
-               'lbrynet/lbrynet_gui/hide_options.gif',
-               'lbrynet/lbrynet_gui/lbry.conf',
-           ]
-           )
+          ('lbrynet/lbrynet_gui', gui_data_paths)
       ],
       dependency_links=['https://github.com/lbryio/lbryum/tarball/master/#egg=lbryum'],
       )
