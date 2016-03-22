@@ -1147,7 +1147,9 @@ class LBRYFileRender(resource.Resource):
     isLeaf = False
 
     def _render_path(self, path):
-        return r'<html><center><video src="' + path + r'" controls autoplay width="960" height="720"></center></html>'
+        extension = os.path.splitext(path)[1]
+        if extension in ['mp4', 'flv', 'mov', 'ogv']:
+            return r'<html><center><video src="' + path + r'" controls autoplay width="960" height="720"></center></html>'
 
     def _delayed_render(self, request, results):
         request.write(str(results))
