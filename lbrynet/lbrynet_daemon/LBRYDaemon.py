@@ -159,7 +159,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.data_rate = MIN_BLOB_DATA_PAYMENT_RATE
             self.max_key_fee = DEFAULT_MAX_KEY_FEE
             self.max_search_results = DEFAULT_MAX_SEARCH_RESULTS
-            self.restart_message = ""
             self.startup_message = ""
             self.announced_startup = False
             self.search_timeout = 3.0
@@ -176,10 +175,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return defer.succeed(None)
 
         def _disp_startup():
-            if self.restart_message:
-                log.info(self.restart_message)
-            else:
-                log.info("[" + str(datetime.now()) + "] Started lbrynet-daemon")
+            log.info("[" + str(datetime.now()) + "] Started lbrynet-daemon")
 
             return defer.succeed(None)
 
@@ -199,8 +195,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._setup_server())
-        # d.addCallback(lambda _: self._update() if self.check_for_updates == "True" and sys.platform == "darwin"
-        #                         else defer.succeed(None))
         d.addCallback(lambda _: self._setup_fetcher())
         d.addCallback(lambda _: _disp_startup())
         d.callback(None)
@@ -208,101 +202,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(None)
 
     def _initial_setup(self):
-        return NotImplemented
+        return defer.fail(NotImplementedError())
 
     def _setup_daemon_settings(self):
         self.session_settings = self.default_settings
         return defer.succeed(None)
-
-    def _update(self):
-        def _check_for_updater():
-            if os.path.isdir("/Applications/LBRY Updater.app"):
-                print "Found LBRY updater"
-                return defer.succeed(None)
-
-            print "LBRY updater not found, downloading and installing..."
-            url = urlopen("https://rawgit.com/jackrobison/lbrynet-app/master/LBRY%20Updater.app.zip")
-            zipped_app = ZipFile(StringIO(url.read()))
-            zipped_app.extractall("/Applications")
-            return defer.succeed(None)
-
-        def _update_lbrynet():
-            git_version = subprocess.check_output(
-                "git ls-remote https://github.com/lbryio/lbry.git | grep HEAD | cut -f 1",
-                shell=True)
-            if os.path.isfile(os.path.join(self.db_dir, "lbrynet_version.txt")):
-                f = open(os.path.join(self.db_dir, "lbrynet_version.txt"), 'r')
-                current_version = f.read()
-                f.close()
-                if git_version == current_version:
-                    print "LBRYnet installation version " + current_version[:-1] + " is up to date"
-                    return defer.succeed(None)
-                print "Update LBRYnet version " + current_version[:-1] + " --> " + git_version[:-1]
-                self.restart_message = "Updates available"
-            else:
-                print "Update LBRYnet to version " + git_version[:-1]
-                self.restart_message = "Updates available"
-
-            return defer.succeed(None)
-
-        def _update_lbrycrdd():
-            git_version = subprocess.check_output(
-                "git ls-remote https://github.com/jackrobison/lbrynet-app.git | grep HEAD | cut -f 1",
-                shell=True)
-            if os.path.isfile(os.path.join(self.wallet_dir, "lbry_app_version.txt")):
-                f = open(os.path.join(self.wallet_dir, "lbry_app_version.txt"), 'r')
-                current_version = f.read()
-                f.close()
-                if git_version == current_version:
-                    print "LBRY installation version " + current_version[:-1] + " is up to date"
-                    return defer.succeed(None)
-                print "Update LBRY version " + current_version[:-1] + " --> " + git_version[:-1]
-                self.restart_message = "Updates available"
-            else:
-                print "Update LBRY to version " + git_version[:-1]
-                self.restart_message = "Updates available"
-
-            return defer.succeed(None)
-
-        def _update_lbryum():
-            git_version = subprocess.check_output(
-                "git ls-remote https://github.com/lbryio/lbryum.git | grep HEAD | cut -f 1",
-                shell=True)
-            if os.path.isfile(os.path.join(self.db_dir, "lbryum_version.txt")):
-                f = open(os.path.join(self.db_dir, "lbryum_version.txt"), 'r')
-                current_version = f.read()
-                f.close()
-                if git_version == current_version:
-                    print "LBRYum installation version " + current_version[:-1] + " is up to date"
-                    return defer.succeed(None)
-                print "Update LBRYum version " + current_version[:-1] + " --> " + git_version[:-1]
-                self.restart_message = "Updates available"
-            else:
-                print "Update LBRYum to version " + git_version[:-1]
-                self.restart_message = "Updates available"
-
-            return defer.succeed(None)
-
-        d = _check_for_updater()
-        d.addCallback(lambda _: _update_lbrynet())
-        d.addCallback(lambda _: _update_lbrycrdd() if self.wallet_type == 'lbrycrd' else _update_lbryum())
-        d.addCallback(lambda _: os.system("open /Applications/LBRY\ Updater.app &>/dev/null") if self.restart_message
-        else defer.succeed(None))
-        d.addCallbacks(lambda _: self._restart() if self.restart_message else defer.succeed(None))
-
-        return defer.succeed(None)
-
-    def _restart(self):
-        def _disp_shutdown():
-            print 'Restarting lbrynet daemon'
-            return defer.succeed(None)
-
-        # LBRY Updater.app will restart the daemon
-        d = self._shutdown()
-        d.addCallback(lambda _: _disp_shutdown())
-        d.addCallback(lambda _: reactor.callLater(1.0, reactor.stop))
-
-        return d
 
     def _start_server(self):
 
@@ -1106,6 +1010,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         @return: time behind blockchain
         """
         d = self.session.wallet.get_most_recent_blocktime()
+        d.addCallback(get_time_behind_blockchain)
         d.addCallbacks(lambda result: self._render_response(result, OK_CODE),
                        lambda result: self._render_response(result, BAD_REQUEST))
 
