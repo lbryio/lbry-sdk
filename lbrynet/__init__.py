@@ -1,5 +1,7 @@
 import logging
-from version import __version__
 
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
+
+
+__version__ = (0, 2, 0)
