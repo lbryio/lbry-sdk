@@ -3,9 +3,12 @@ import json
 import webbrowser
 import sys
 from time import sleep
+import subprocess
 
 from jsonrpc.proxy import JSONRPCProxy
-from lbrynet.conf import API_CONNECTION_STRING, UI_ADDRESS
+
+API_CONNECTION_STRING = "http://localhost:5279/lbryapi"
+UI_ADDRESS = "http://localhost:5279"
 
 
 class LBRYURIHandler(object):
@@ -15,27 +18,42 @@ class LBRYURIHandler(object):
         self.daemon = JSONRPCProxy.from_url(API_CONNECTION_STRING)
 
     def check_status(self):
+        status = None
         try:
-            self.daemon.is_running()
-
-        except:
-            if self.started_daemon:
-                if self.start_timeout < 30:
-                    sleep(1)
-                    self.start_timeout += 1
-                    self.check_status()
-                else:
-                    exit(1)
-            else:
-                os.system("open /Applications/LBRY.app")
-                self.started_daemon = True
+            status = json.loads(self.daemon.is_running())['result']
+            if self.start_timeout < 30 and not status:
+                sleep(1)
                 self.start_timeout += 1
                 self.check_status()
+            elif status:
+                return True
+            else:
+                exit(1)
+        except:
+            if self.start_timeout < 30:
+                sleep(1)
+                self.start_timeout += 1
+                self.check_status()
+            else:
+                exit(1)
 
     def handle(self, lbry_name):
-        self.check_status()
+        lbry_process = [d for d in subprocess.Popen(['ps','aux'], stdout=subprocess.PIPE).stdout.readlines()
+                            if 'LBRY.app' in d]
+        try:
+            status = json.loads(self.daemon.is_running())['result']
+        except:
+            pass
 
-        if lbry_name == "lbry":
+        if lbry_process:
+            self.check_status()
+            started = False
+        else:
+            os.system("open /Applications/LBRY.app")
+            self.check_status()
+            started = True
+
+        if lbry_name == "lbry" or lbry_name == "" and not started:
             webbrowser.get('safari').open(UI_ADDRESS)
         else:
             r = json.loads(self.daemon.get({'name': lbry_name}))

@@ -1136,10 +1136,6 @@ class LBRYindex(resource.Resource):
         return resource.Resource.getChild(self, name, request)
 
     def render_GET(self, request):
-        def _disp(r):
-            log.info(r)
-            return "<html><table style='width:100%'>" + ''.join(r) + "</html>"
-
         return static.File(os.path.join(self.ui_dir, "index.html")).render_GET(request)
 
 
