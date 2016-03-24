@@ -1,19 +1,23 @@
 import json
 import logging
 import os
+
 from datetime import datetime
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
+
 from lbrynet.core.Error import InvalidStreamInfoError, InsufficientFundsError
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
+from lbrynet.conf import DEFAULT_TIMEOUT
 
 log = logging.getLogger(__name__)
 
 
 class GetStream(object):
-    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5):
+    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5,
+                                                                                            timeout=DEFAULT_TIMEOUT):
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
@@ -30,7 +34,24 @@ class GetStream(object):
         self.max_key_fee = max_key_fee
         self.stream_info = None
         self.stream_info_manager = None
+        self.d = defer.Deferred(None)
+        self.timeout = timeout
+        self.timeout_counter = 0
+        self.download_path = None
+        self.checker = LoopingCall(self.check_status)
 
+
+    def check_status(self):
+        self.timeout_counter += 1
+
+        if self.download_path and os.path.isfile(self.download_path):
+            self.checker.stop()
+            return defer.succeed(True)
+
+        elif self.timeout_counter >= self.timeout:
+            log.info("Timeout downloading " + str(self.stream_info))
+            self.checker.stop()
+            self.d.cancel()
 
     def start(self, stream_info):
         self.stream_info = stream_info
@@ -49,28 +70,29 @@ class GetStream(object):
             self.stream_hash = self.stream_info['stream_hash']
 
         else:
-            print 'InvalidStreamInfoError'
+            log.error("InvalidStreamInfoError in autofetcher: ", stream_info)
             raise InvalidStreamInfoError(self.stream_info)
 
         if self.key_fee > self.max_key_fee:
             if self.pay_key:
-                print "Key fee (" + str(self.key_fee) + ") above limit of " + str(
-                    self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name)
+                log.info("Key fee (" + str(self.key_fee) + ") above limit of " + str(
+                    self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name))
                 return defer.fail(None)
         else:
             pass
 
-        d = defer.Deferred(None)
-        d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
-        d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        d.addCallback(lambda metadata: (next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)), metadata))
-        d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata, [self.data_rate, True], self.payment_rate_manager))
-        d.addErrback(lambda err: err.trap(defer.CancelledError))
-        d.addErrback(lambda err: log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback()))
-        d.addCallback(self._start_download)
-        d.callback(None)
+        self.checker.start(1)
 
-        return d
+        self.d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
+        self.d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
+        self.d.addCallback(lambda metadata: (next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)), metadata))
+        self.d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata, [self.data_rate, True], self.payment_rate_manager))
+        self.d.addErrback(lambda err: err.trap(defer.CancelledError))
+        self.d.addErrback(lambda err: log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback()))
+        self.d.addCallback(self._start_download)
+        self.d.callback(None)
+
+        return self.d
 
     def _start_download(self, downloader):
         def _pay_key_fee():
@@ -78,7 +100,7 @@ class GetStream(object):
                 reserved_points = self.wallet.reserve_points(self.key_fee_address, self.key_fee)
                 if reserved_points is None:
                     return defer.fail(InsufficientFundsError())
-                print 'Key fee: ' + str(self.key_fee) + ' | ' + str(self.key_fee_address)
+                log.info("Key fee: " + str(self.key_fee) + " | " + str(self.key_fee_address))
                 return self.wallet.send_points_to_address(reserved_points, self.key_fee)
             return defer.succeed(None)
 
@@ -89,7 +111,8 @@ class GetStream(object):
 
         downloader.start()
 
-        print "Downloading", self.stream_hash, "-->", os.path.join(downloader.download_directory, downloader.file_name)
+        self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
+        d.addCallback(lambda _: log.info("Downloading " + str(self.stream_hash) + " --> " + str(self.download_path)))
 
         return d
 
@@ -117,15 +140,16 @@ class FetcherDaemon(object):
             self.is_running = True
             self.search = LoopingCall(self._looped_search)
             self.search.start(1)
+            log.info("Starting autofetcher")
         else:
-            print "Autofetcher is already running"
+            log.info("Autofetcher is already running")
 
     def stop(self):
         if self.is_running:
             self.search.stop()
             self.is_running = False
         else:
-            print "Autofetcher isn't running, there's nothing to stop"
+            log.info("Autofetcher isn't running, there's nothing to stop")
 
     def check_if_running(self):
         if self.is_running:
@@ -157,19 +181,15 @@ class FetcherDaemon(object):
             return d
 
         def get_new_streams_in_tx(claims, t, blockhash):
-                #claims = self.wallet.get_claims_for_tx(t['txid'])
-                # if self.first_run:
-                #     # claims = self.rpc_conn.getclaimsfortx("96aca2c60efded5806b7336430c5987b9092ffbea9c6ed444e3bf8e008993e11")
-                #     # claims = self.rpc_conn.getclaimsfortx("cc9c7f5225ecb38877e6ca7574d110b23214ac3556b9d65784065ad3a85b4f74")
-                #     self.first_run = False
             rtn = []
             if claims:
                 for claim in claims:
                     if claim not in self.seen:
                         msg = "[" + str(datetime.now()) + "] New claim | lbry://" + str(claim['name']) + \
                               " | stream hash: " + str(json.loads(claim['value'])['stream_hash'])
-                        print msg
-                        log.debug(msg)
+                        log.info(msg)
+                        if self.verbose:
+                            print msg
                         rtn.append((claim['name'], t))
                         self.seen.append(claim)
             else:
@@ -179,8 +199,6 @@ class FetcherDaemon(object):
 
         d.addCallback(lambda streams: defer.DeferredList(
             [self.wallet.get_stream_info_from_txid(name, t) for name, t in streams]))
-        #    if len(rtn):
-        #        return defer.DeferredList([self.wallet.get_stream_info_for_name(name, txid=t) for name, t in rtn])
         return d
 
     def _download_claims(self, claims):
@@ -204,12 +222,12 @@ class FetcherDaemon(object):
             for l in conf:
                 if l.startswith("maxkey="):
                     settings["maxkey"] = float(l[7:].rstrip('\n'))
-                    print "Autofetcher using max key price of", settings["maxkey"], ", to start call start_fetcher()"
+            conf.close()
         else:
-            print "Autofetcher using default max key price of 0.0"
-            print "To change this create the file:"
-            print str(self.autofetcher_conf)
-            print "Example contents of conf file:"
-            print "maxkey=1.0"
+            conf = open(self.autofetcher_conf, "w")
+            conf.write("maxkey=10.0")
+            conf.close()
+            settings["maxkey"] = 10.0
+            log.info("No autofetcher conf file found, making one with max key fee of 10.0")
 
         self.max_key_fee = settings["maxkey"]

@@ -4,7 +4,9 @@ import os
 APP = [os.path.join('lbrynet', 'lbrynet_daemon', 'Apps', 'LBRYURIHandler.py')]
 DATA_FILES = []
 OPTIONS = {'argv_emulation': True,
+           'packages': ['jsonrpc'],
            'plist': {
+               'LSUIElement': True,
                'CFBundleURLTypes': [
                     {
                     'CFBundleURLTypes': 'LBRYURIHandler',

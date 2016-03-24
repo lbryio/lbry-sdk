@@ -1,54 +1,79 @@
 import os
 import json
 import webbrowser
-import xmlrpclib, sys
+import sys
+from time import sleep
+import subprocess
 
-def render_video(path):
-    r = r'<center><video src="' + path + r'" controls autoplay width="960" height="720"></center>'
-    return r
+from jsonrpc.proxy import JSONRPCProxy
+
+API_CONNECTION_STRING = "http://localhost:5279/lbryapi"
+UI_ADDRESS = "http://localhost:5279"
 
 
-def main(args):
-    if len(args) == 0:
-        args.append('lbry://wonderfullife')
+class LBRYURIHandler(object):
+    def __init__(self):
+        self.started_daemon = False
+        self.start_timeout = 0
+        self.daemon = JSONRPCProxy.from_url(API_CONNECTION_STRING)
 
-    daemon = xmlrpclib.ServerProxy('http://localhost:7080/')
+    def check_status(self):
+        status = None
+        try:
+            status = json.loads(self.daemon.is_running())['result']
+            if self.start_timeout < 30 and not status:
+                sleep(1)
+                self.start_timeout += 1
+                self.check_status()
+            elif status:
+                return True
+            else:
+                exit(1)
+        except:
+            if self.start_timeout < 30:
+                sleep(1)
+                self.start_timeout += 1
+                self.check_status()
+            else:
+                exit(1)
 
-    try:
-        daemon.is_running()
+    def handle(self, lbry_name):
+        lbry_process = [d for d in subprocess.Popen(['ps','aux'], stdout=subprocess.PIPE).stdout.readlines()
+                            if 'LBRY.app' in d]
+        try:
+            status = json.loads(self.daemon.is_running())['result']
+        except:
+            pass
 
-        if len(args) > 1:
-            exit(1)
-
-        if args[0][7:] == 'lbry':
-            daemon.render_gui()
-
-        elif args[0][7:] == 'settings':
-            r = daemon.get_settings()
-            html = "<body>" + json.dumps(r) + "</body>"
-            daemon.render_html(html)
-
+        if lbry_process:
+            self.check_status()
+            started = False
         else:
-            r = daemon.get(args[0][7:])
-            if r[0] == 200:
-                path = r[1]['path']
-                if path[0] != '/':
-                    path = '/' + path
+            os.system("open /Applications/LBRY.app")
+            self.check_status()
+            started = True
 
-                filename = os.path.basename(path)
-                extension = os.path.splitext(filename)[1]
-
-                if extension in ['mp4', 'flv', 'mov']:
-                    html = render_video(path)
-                    daemon.render_html(html)
+        if lbry_name == "lbry" or lbry_name == "" and not started:
+            webbrowser.get('safari').open(UI_ADDRESS)
+        else:
+            r = json.loads(self.daemon.get({'name': lbry_name}))
+            if r['code'] == 200:
+                path = r['result']['path'].encode('utf-8')
+                extension = os.path.splitext(path)[1]
+                if extension in ['mp4', 'flv', 'mov', 'ogv']:
+                    webbrowser.get('safari').open(UI_ADDRESS + "/view?name=" + lbry_name)
                 else:
-                    webbrowser.get('safari').open('file://' + str(path))
-
+                    webbrowser.get('safari').open('file://' + path)
             else:
                 webbrowser.get('safari').open('http://lbry.io/get')
 
-    except:
-        webbrowser.get('safari').open('http://lbry.io/get')
+
+def main(args):
+    if len(args) != 1:
+        args = ['lbry://lbry']
+
+    name = args[0][7:]
+    LBRYURIHandler().handle(lbry_name=name)
 
 
 if __name__ == "__main__":
