@@ -4,4 +4,5 @@ import logging
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 
-__version__ = (0, 2, 0)
+version = (0, 2, 0)
+__version__ = ".".join([str(x) for x in version])

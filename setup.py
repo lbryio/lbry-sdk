@@ -33,7 +33,7 @@ gui_data_files = ['close2.gif', 'lbry-dark-242x80.gif', 'lbry-dark-icon.xbm', 'l
 gui_data_paths = [os.path.join(base_dir, 'lbrynet', 'lbrynet_gui', f) for f in gui_data_files]
 
 setup(name='lbrynet',
-      version='.'.join([str(x) for x in __version__]),
+      version=__version__,
       packages=find_packages(base_dir),
       install_requires=['six>=1.9.0', 'pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure', 'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0', 'leveldb', 'lbryum'],
       entry_points={'console_scripts': console_scripts},
