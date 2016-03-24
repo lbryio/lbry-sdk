@@ -316,8 +316,8 @@ class LBRYWallet(object):
             except (ValueError, TypeError):
                 return Failure(InvalidStreamInfoError(name))
             known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address', 'thumbnail',
-                            'content_license', 'sources', 'fee']
-            known_sources = ['lbry_sd_hash']
+                            'content_license', 'sources', 'fee', 'author']
+            known_sources = ['lbry_sd_hash', 'btih', 'url']
             known_fee_types = {'LBC': ['amount', 'address']}
             for field in known_fields:
                 if field in value_dict:
@@ -353,7 +353,7 @@ class LBRYWallet(object):
         return Failure(UnknownNameError(name))
 
     def claim_name(self, name, sd_hash, amount, description=None, key_fee=None,
-                   key_fee_address=None, thumbnail=None, content_license=None):
+                   key_fee_address=None, thumbnail=None, content_license=None, author=None, sources=None):
         value = {"sources": {'lbry_sd_hash': sd_hash}}
         if description is not None:
             value['description'] = description
@@ -363,6 +363,10 @@ class LBRYWallet(object):
             value['thumbnail'] = thumbnail
         if content_license is not None:
             value['content_license'] = content_license
+        if author is not None:
+            value['author'] = author
+        if sources is not None:
+            value['sources'] = sources
 
         d = self._send_name_claim(name, json.dumps(value), amount)
 
@@ -930,13 +934,15 @@ class LBRYumWallet(LBRYWallet):
         d = defer.Deferred()
 
         def check_stopped():
-            if self.network.is_connected():
-                return False
+            if self.network:
+                if self.network.is_connected():
+                    return False
             stop_check.stop()
             self.network = None
             d.callback(True)
 
-        self.network.stop()
+        if self.network:
+            self.network.stop()
 
         stop_check = task.LoopingCall(check_stopped)
         stop_check.start(.1)
