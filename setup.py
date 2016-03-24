@@ -7,11 +7,8 @@ import sys
 import os
 from setuptools import setup, find_packages
 
-<<<<<<< HEAD
-=======
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
->>>>>>> development
 ez_setup.use_setuptools()
 
 console_scripts = ['lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch_lbry_console',
@@ -26,20 +23,7 @@ console_scripts = ['lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch
                   'lbrynet-announce_hash_to_dht = lbrynet.dht_scripts:announce_hash_to_dht',
                   'lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonControl:start',
                   'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonControl:stop']
-<<<<<<< HEAD
-=======
 
-requires = ['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
-            'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0',
-            'leveldb', 'lbryum', 'jsonrpc', 'simplejson', 'appdirs']
->>>>>>> development
-
-if sys.platform == 'darwin':
-    requires.append('six==1.9.0')
-else:
-    requires.append('six>=1.9.0')
-
-<<<<<<< HEAD
 requires = ['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
             'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0',
             'leveldb', 'lbryum', 'jsonrpc', 'simplejson', 'appdirs']
@@ -49,17 +33,12 @@ if sys.platform == 'darwin':
 else:
     requires.append('six>=1.9.0')
 
-setup(name='lbrynet',
-      version='0.0.4',
-      packages=find_packages(),
-=======
 gui_data_files = ['close2.gif', 'lbry-dark-242x80.gif', 'lbry-dark-icon.xbm', 'lbry-dark-icon.ico',
                   'drop_down.gif', 'show_options.gif', 'hide_options.gif', 'lbry.conf']
 gui_data_paths = [os.path.join(base_dir, 'lbrynet', 'lbrynet_gui', f) for f in gui_data_files]
 
 setup(name='lbrynet', version='.'.join([str(x) for x in __version__]),
       packages=find_packages(base_dir),
->>>>>>> development
       install_requires=requires,
       entry_points={'console_scripts': console_scripts},
       data_files=[
