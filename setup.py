@@ -23,13 +23,19 @@ console_scripts = ['lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch
 if sys.platform == 'darwin':
     console_scripts.append('lbrynet-daemon-status = lbrynet.lbrynet_daemon.LBRYOSXStatusBar:main')
 
+requires = ['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
+            'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0',
+            'leveldb', 'lbryum', 'jsonrpc', 'simplejson', 'appdirs']
+
+if sys.platform == 'darwin':
+    requires.append('six==1.9.0')
+else:
+    requires.append('six>=1.9.0')
 
 setup(name='lbrynet',
       version='0.0.4',
       packages=find_packages(),
-      install_requires=['six>=1.9.0', 'pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
-                        'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0',
-                        'leveldb', 'lbryum', 'jsonrpc', 'simplejson', 'appdirs'],
+      install_requires=requires,
       entry_points={'console_scripts': console_scripts},
       data_files=[
           ('lbrynet/lbrynet_console/plugins',
