@@ -897,6 +897,9 @@ class LBRYumWallet(LBRYWallet):
         self.cmd_runner = None
         self.first_run = False
         self.printed_retrieving_headers = False
+        self._start_check = None
+        self._catch_up_check = None
+        self._caught_up_counter = 0
 
     def _start(self):
 
@@ -916,21 +919,30 @@ class LBRYumWallet(LBRYWallet):
                     alert.info("Running the wallet for the first time...this may take a moment.")
                     self.printed_retrieving_headers = True
                 return False
-            start_check.stop()
+            self._start_check.stop()
+            self._start_check = None
             if self.network.is_connected():
                 network_start_d.callback(True)
             else:
                 network_start_d.errback(ValueError("Failed to connect to network."))
 
-        start_check = task.LoopingCall(check_started)
+        self._start_check = task.LoopingCall(check_started)
 
-        d.addCallback(lambda _: start_check.start(.1))
+        d.addCallback(lambda _: self._start_check.start(.1))
         d.addCallback(lambda _: network_start_d)
         d.addCallback(lambda _: self._load_wallet())
         d.addCallback(lambda _: self._get_cmd_runner())
         return d
 
     def _stop(self):
+        if self._start_check is not None:
+            self._start_check.stop()
+            self._start_check = None
+
+        if self._catch_up_check is not None:
+            self._catch_up_check.stop()
+            self._catch_up_check = None
+
         d = defer.Deferred()
 
         def check_stopped():
@@ -970,16 +982,28 @@ class LBRYumWallet(LBRYWallet):
             remote_height = self.network.get_server_height()
 
             if remote_height != 0 and remote_height - local_height <= 5:
-                alert.info('Wallet loaded.')
-                catch_up_check.stop()
+                msg = ""
+                if self._caught_up_counter != 0:
+                    msg += "All caught up. "
+                msg += "Wallet loaded."
+                alert.info(msg)
+                self._catch_up_check.stop()
+                self._catch_up_check = None
                 blockchain_caught_d.callback(True)
+            elif remote_height != 0:
+                if self._caught_up_counter == 0:
+                    alert.info('Catching up to the blockchain...showing blocks left...')
+                if self._caught_up_counter % 30 == 0:
+                    alert.info('%d...', (remote_height - local_height))
+                self._caught_up_counter += 1
 
-        catch_up_check = task.LoopingCall(check_caught_up)
+
+        self._catch_up_check = task.LoopingCall(check_caught_up)
 
         d = threads.deferToThread(get_wallet)
         d.addCallback(self._save_wallet)
         d.addCallback(lambda _: self.wallet.start_threads(self.network))
-        d.addCallback(lambda _: catch_up_check.start(.1))
+        d.addCallback(lambda _: self._catch_up_check.start(.1))
         d.addCallback(lambda _: blockchain_caught_d)
         return d
 
