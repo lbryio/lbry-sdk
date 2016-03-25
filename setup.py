@@ -3,13 +3,13 @@
 from lbrynet import __version__
 
 import ez_setup
+ez_setup.use_setuptools()
 import sys
 import os
 from setuptools import setup, find_packages
 
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
-ez_setup.use_setuptools()
 
 console_scripts = ['lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch_lbry_console',
                   'lbrynet-stdin-uploader = lbrynet.lbrynet_console.LBRYStdinUploader:launch_stdin_uploader',
