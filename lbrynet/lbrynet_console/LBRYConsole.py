@@ -4,6 +4,7 @@ import argparse
 import requests
 import locale
 import sys
+import webbrowser
 
 if sys.platform == "darwin":
     from appdirs import user_data_dir
@@ -549,6 +550,8 @@ def launch_lbry_console():
         print "lbrynet-daemon is running, you must turn it off before using lbrynet-console"
         print "If you're running the app, quit before starting lbrynet-console"
         print "If you're running lbrynet-daemon in a terminal, run 'stop-lbrynet-daemon' to turn it off"
+
+        webbrowser.open("http://localhost:5279")
 
     except:
         log_format = "(%(asctime)s)[%(filename)s:%(lineno)s] %(funcName)s(): %(message)s"
