@@ -39,7 +39,7 @@ class DaemonStatusBarApp(rumps.App):
         daemon = xmlrpclib.ServerProxy("http://localhost:7080/")
         try:
             daemon.is_running()
-            webbrowser.open("lbry://lbry")
+            webbrowser.get('safari').open("lbry://lbry")
         except:
             try:
                 rumps.notification(title='LBRY', subtitle='', message="Couldn't connect to lbrynet daemon", sound=True)
@@ -51,7 +51,7 @@ class DaemonStatusBarApp(rumps.App):
         daemon = xmlrpclib.ServerProxy("http://localhost:7080/")
         try:
             daemon.is_running()
-            webbrowser.open("lbry://settings")
+            webbrowser.get('safari').open("lbry://settings")
         except:
             rumps.notification(title='LBRY', subtitle='', message="Couldn't connect to lbrynet daemon", sound=True)
 

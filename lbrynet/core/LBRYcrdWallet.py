@@ -50,6 +50,10 @@ class LBRYWallet(object):
     """This class implements the LBRYWallet interface for the LBRYcrd payment system"""
     implements(ILBRYWallet)
 
+    _FIRST_RUN_UNKNOWN = 0
+    _FIRST_RUN_YES = 1
+    _FIRST_RUN_NO = 2
+
     def __init__(self, db_dir):
 
         self.db_dir = db_dir
@@ -67,6 +71,10 @@ class LBRYWallet(object):
         self.stopped = True
 
         self.manage_running = False
+        self._manage_count = 0
+        self._balance_refresh_time = 3
+        self._batch_count = 20
+        self._first_run = self._FIRST_RUN_UNKNOWN
 
     def start(self):
 
@@ -93,16 +101,19 @@ class LBRYWallet(object):
             self.next_manage_call.cancel()
             self.next_manage_call = None
 
-        d = self.manage()
+        d = self.manage(do_full=True)
         d.addErrback(self.log_stop_error)
         d.addCallback(lambda _: self._stop())
         d.addErrback(self.log_stop_error)
         return d
 
-    def manage(self):
-        log.info("Doing manage")
+    def manage(self, do_full=False):
         self.next_manage_call = None
         have_set_manage_running = [False]
+        self._manage_count += 1
+        if self._manage_count % self._batch_count == 0:
+            self._manage_count = 0
+            do_full = True
 
         def check_if_manage_running():
 
@@ -113,6 +124,8 @@ class LBRYWallet(object):
                     self.manage_running = True
                     have_set_manage_running[0] = True
                     d.callback(True)
+                elif do_full is False:
+                    d.callback(False)
                 else:
                     task.deferLater(reactor, 1, fire_if_not_running)
 
@@ -121,20 +134,28 @@ class LBRYWallet(object):
 
         d = check_if_manage_running()
 
-        d.addCallback(lambda _: self._check_expected_balances())
+        def do_manage():
+            if do_full:
+                d = self._check_expected_balances()
+                d.addCallback(lambda _: self._send_payments())
+            else:
+                d = defer.succeed(True)
 
-        d.addCallback(lambda _: self._send_payments())
+            d.addCallback(lambda _: self.get_balance())
 
-        d.addCallback(lambda _: self.get_balance())
+            def set_wallet_balance(balance):
+                if self.wallet_balance != balance:
+                    log.info("Got a new balance: %s", str(balance))
+                self.wallet_balance = balance
 
-        def set_wallet_balance(balance):
-            self.wallet_balance = balance
+            d.addCallback(set_wallet_balance)
+            return d
 
-        d.addCallback(set_wallet_balance)
+        d.addCallback(lambda should_run: do_manage() if should_run else None)
 
         def set_next_manage_call():
             if not self.stopped:
-                self.next_manage_call = reactor.callLater(60, self.manage)
+                self.next_manage_call = reactor.callLater(self._balance_refresh_time, self.manage)
 
         d.addCallback(lambda _: set_next_manage_call())
 
@@ -252,8 +273,6 @@ class LBRYWallet(object):
         return d
 
     def _send_payments(self):
-        log.info("Trying to send payments, if there are any to be sent")
-
         payments_to_send = {}
         for address, points in self.queued_payments.items():
             log.info("Should be sending %s points to %s", str(points), str(address))
@@ -297,10 +316,32 @@ class LBRYWallet(object):
             except (ValueError, TypeError):
                 return Failure(InvalidStreamInfoError(name))
             known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address', 'thumbnail',
-                            'content_license']
+                            'content_license', 'sources', 'fee', 'author']
+            known_sources = ['lbry_sd_hash', 'btih', 'url']
+            known_fee_types = {'LBC': ['amount', 'address']}
             for field in known_fields:
                 if field in value_dict:
-                    r_dict[field] = value_dict[field]
+                    if field == 'sources':
+                        for source in known_sources:
+                            if source in value_dict[field]:
+                                if source == 'lbry_sd_hash':
+                                    r_dict['stream_hash'] = value_dict[field][source]
+                                else:
+                                    r_dict[source] = value_dict[field][source]
+                    elif field == 'fee':
+                        fee = value_dict['fee']
+                        if 'type' in fee:
+                            if fee['type'] in known_fee_types:
+                                fee_fields = known_fee_types[fee['type']]
+                                if all([f in fee for f in fee_fields]):
+                                    r_dict['key_fee'] = fee['amount']
+                                    r_dict['key_fee_address'] = fee['address']
+                                else:
+                                    for f in ['key_fee', 'key_fee_address']:
+                                        if f in r_dict:
+                                            del r_dict[f]
+                    else:
+                        r_dict[field] = value_dict[field]
             if 'stream_hash' in r_dict and 'txid' in result:
                 d = self._save_name_metadata(name, r_dict['stream_hash'], str(result['txid']))
             else:
@@ -312,18 +353,20 @@ class LBRYWallet(object):
         return Failure(UnknownNameError(name))
 
     def claim_name(self, name, sd_hash, amount, description=None, key_fee=None,
-                    key_fee_address=None, thumbnail=None, content_license=None):
-        value = {"stream_hash": sd_hash}
+                   key_fee_address=None, thumbnail=None, content_license=None, author=None, sources=None):
+        value = {"sources": {'lbry_sd_hash': sd_hash}}
         if description is not None:
             value['description'] = description
-        if key_fee is not None:
-            value['key_fee'] = key_fee
-        if key_fee_address is not None:
-            value['key_fee_address'] = key_fee_address
+        if key_fee is not None and key_fee_address is not None:
+            value['fee'] = {'type': 'LBC', 'amount': key_fee, 'address': key_fee_address}
         if thumbnail is not None:
             value['thumbnail'] = thumbnail
         if content_license is not None:
             value['content_license'] = content_license
+        if author is not None:
+            value['author'] = author
+        if sources is not None:
+            value['sources'] = sources
 
         d = self._send_name_claim(name, json.dumps(value), amount)
 
@@ -384,6 +427,19 @@ class LBRYWallet(object):
     def get_available_balance(self):
         return float(self.wallet_balance - self.total_reserved_points)
 
+    def is_first_run(self):
+        if self._first_run == self._FIRST_RUN_UNKNOWN:
+            d = self._check_first_run()
+
+            def set_first_run(is_first):
+                self._first_run = self._FIRST_RUN_YES if is_first else self._FIRST_RUN_NO
+
+            d.addCallback(set_first_run)
+        else:
+            d = defer.succeed(None)
+        d.addCallback(lambda _: self._first_run == self._FIRST_RUN_YES)
+        return d
+
     def _get_status_of_claim(self, txid, name, sd_hash):
         d = self.get_claims_from_tx(txid)
 
@@ -397,7 +453,12 @@ class LBRYWallet(object):
                             value_dict = json.loads(claim['value'])
                         except (ValueError, TypeError):
                             return None
-                        if 'stream_hash' in value_dict and str(value_dict['stream_hash']) == sd_hash:
+                        claim_sd_hash = None
+                        if 'stream_hash' in value_dict:
+                            claim_sd_hash = str(value_dict['stream_hash'])
+                        if 'sources' in value_dict and 'lbrynet_sd_hash' in value_dict['sources']:
+                            claim_sd_hash = str(value_dict['sources']['lbry_sd_hash'])
+                        if claim_sd_hash is not None and claim_sd_hash == sd_hash:
                             if 'is controlling' in claim and claim['is controlling']:
                                 return name, "valid"
                             if claim['in claim trie']:
@@ -494,7 +555,7 @@ class LBRYWallet(object):
     def get_name_claims(self):
         return defer.fail(NotImplementedError())
 
-    def check_first_run(self):
+    def _check_first_run(self):
         return defer.fail(NotImplementedError())
 
     def _get_raw_tx(self, txid):
@@ -574,7 +635,7 @@ class LBRYcrdWallet(LBRYWallet):
                     settings["rpc_port"] = int(l[8:].rstrip('\n'))
         return settings
 
-    def check_first_run(self):
+    def _check_first_run(self):
         d = self.get_balance()
         d.addCallback(lambda bal: threads.deferToThread(self._get_num_addresses_rpc) if bal == 0 else 2)
         d.addCallback(lambda num_addresses: True if num_addresses <= 1 else False)
@@ -836,6 +897,9 @@ class LBRYumWallet(LBRYWallet):
         self.cmd_runner = None
         self.first_run = False
         self.printed_retrieving_headers = False
+        self._start_check = None
+        self._catch_up_check = None
+        self._caught_up_counter = 0
 
     def _start(self):
 
@@ -844,7 +908,7 @@ class LBRYumWallet(LBRYWallet):
         def setup_network():
             self.config = SimpleConfig()
             self.network = Network(self.config)
-            alert.info("Starting the wallet...")
+            alert.info("Loading the wallet...")
             return defer.succeed(self.network.start())
 
         d = setup_network()
@@ -855,32 +919,42 @@ class LBRYumWallet(LBRYWallet):
                     alert.info("Running the wallet for the first time...this may take a moment.")
                     self.printed_retrieving_headers = True
                 return False
-            start_check.stop()
+            self._start_check.stop()
+            self._start_check = None
             if self.network.is_connected():
-                alert.info("Wallet started.")
                 network_start_d.callback(True)
             else:
                 network_start_d.errback(ValueError("Failed to connect to network."))
 
-        start_check = task.LoopingCall(check_started)
+        self._start_check = task.LoopingCall(check_started)
 
-        d.addCallback(lambda _: start_check.start(.1))
+        d.addCallback(lambda _: self._start_check.start(.1))
         d.addCallback(lambda _: network_start_d)
         d.addCallback(lambda _: self._load_wallet())
         d.addCallback(lambda _: self._get_cmd_runner())
         return d
 
     def _stop(self):
+        if self._start_check is not None:
+            self._start_check.stop()
+            self._start_check = None
+
+        if self._catch_up_check is not None:
+            self._catch_up_check.stop()
+            self._catch_up_check = None
+
         d = defer.Deferred()
 
         def check_stopped():
-            if self.network.is_connected():
-                return False
+            if self.network:
+                if self.network.is_connected():
+                    return False
             stop_check.stop()
             self.network = None
             d.callback(True)
 
-        self.network.stop()
+        if self.network:
+            self.network.stop()
 
         stop_check = task.LoopingCall(check_stopped)
         stop_check.start(.1)
@@ -901,9 +975,36 @@ class LBRYumWallet(LBRYWallet):
                 wallet.synchronize()
             self.wallet = wallet
 
+        blockchain_caught_d = defer.Deferred()
+
+        def check_caught_up():
+            local_height = self.network.get_local_height()
+            remote_height = self.network.get_server_height()
+
+            if remote_height != 0 and remote_height - local_height <= 5:
+                msg = ""
+                if self._caught_up_counter != 0:
+                    msg += "All caught up. "
+                msg += "Wallet loaded."
+                alert.info(msg)
+                self._catch_up_check.stop()
+                self._catch_up_check = None
+                blockchain_caught_d.callback(True)
+            elif remote_height != 0:
+                if self._caught_up_counter == 0:
+                    alert.info('Catching up to the blockchain...showing blocks left...')
+                if self._caught_up_counter % 30 == 0:
+                    alert.info('%d...', (remote_height - local_height))
+                self._caught_up_counter += 1
+
+
+        self._catch_up_check = task.LoopingCall(check_caught_up)
+
         d = threads.deferToThread(get_wallet)
         d.addCallback(self._save_wallet)
         d.addCallback(lambda _: self.wallet.start_threads(self.network))
+        d.addCallback(lambda _: self._catch_up_check.start(.1))
+        d.addCallback(lambda _: blockchain_caught_d)
         return d
 
     def _get_cmd_runner(self):
@@ -942,7 +1043,7 @@ class LBRYumWallet(LBRYWallet):
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func)
 
-    def check_first_run(self):
+    def _check_first_run(self):
         return defer.succeed(self.first_run)
 
     def _get_raw_tx(self, txid):
