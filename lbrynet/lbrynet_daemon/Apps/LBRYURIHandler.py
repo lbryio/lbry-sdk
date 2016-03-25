@@ -1,14 +1,22 @@
 import os
 import json
 import webbrowser
-import sys
-from time import sleep
 import subprocess
+import sys
 
+from time import sleep
 from jsonrpc.proxy import JSONRPCProxy
 
 API_CONNECTION_STRING = "http://localhost:5279/lbryapi"
 UI_ADDRESS = "http://localhost:5279"
+
+
+class Timeout(Exception):
+    def __init__(self, value):
+        self.parameter = value
+
+    def __str__(self):
+        return repr(self.parameter)
 
 
 class LBRYURIHandler(object):
@@ -28,18 +36,18 @@ class LBRYURIHandler(object):
             elif status:
                 return True
             else:
-                exit(1)
+                raise Timeout("LBRY daemon is running, but connection timed out")
         except:
             if self.start_timeout < 30:
                 sleep(1)
                 self.start_timeout += 1
                 self.check_status()
             else:
-                exit(1)
+                raise Timeout("Timed out trying to start LBRY daemon")
 
     def handle(self, lbry_name):
         lbry_process = [d for d in subprocess.Popen(['ps','aux'], stdout=subprocess.PIPE).stdout.readlines()
-                            if 'LBRY.app' in d]
+                            if 'LBRY.app' in d and 'LBRYURIHandler' not in d]
         try:
             status = json.loads(self.daemon.is_running())['result']
         except:

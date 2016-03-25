@@ -7,6 +7,7 @@ OPTIONS = {'argv_emulation': True,
            'packages': ['jsonrpc'],
            'plist': {
                'LSUIElement': True,
+               'CFBundleIdentifier': 'io.lbry.LBRYURIHandler',
                'CFBundleURLTypes': [
                     {
                     'CFBundleURLTypes': 'LBRYURIHandler',
