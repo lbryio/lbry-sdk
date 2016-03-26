@@ -36,7 +36,7 @@ from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE
-from lbrynet.conf import API_CONNECTION_STRING, API_PORT, API_ADDRESS, DEFAULT_TIMEOUT
+from lbrynet.conf import API_CONNECTION_STRING, API_PORT, API_ADDRESS, DEFAULT_TIMEOUT, UI_ADDRESS
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
@@ -87,7 +87,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         except jsonrpclib.Fault, f:
             self._cbRender(f, request, id, version)
         else:
-            request.setHeader('Access-Control-Allow-Origin', ('http://localhost' + ':' + str(API_PORT)))
+            request.setHeader('Access-Control-Allow-Origin', UI_ADDRESS)
             request.setHeader("content-type", "text/json")
             if args == [{}]:
                 d = defer.maybeDeferred(function)
@@ -1011,7 +1011,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         d = self.session.wallet.get_most_recent_blocktime()
         d.addCallback(get_time_behind_blockchain)
-        d.addCallbacks(lambda result: self._render_response(result, OK_CODE),
+        d.addCallbacks(lambda result: self._render_response(str(result), OK_CODE),
                        lambda result: self._render_response(result, BAD_REQUEST))
 
         return d
