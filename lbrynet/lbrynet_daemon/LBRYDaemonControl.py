@@ -42,29 +42,39 @@ def start():
                         help="True or false, default true",
                         type=str,
                         default="True")
+    parser.add_argument("--ui",
+                        help="temp or path, default temp, path is the path of the dist folder",
+                        default="temp")
 
     log.info("Starting lbrynet-daemon from command line")
 
-    tmpdir = tempfile.mkdtemp()
-    url = urlopen("https://rawgit.com/lbryio/lbry-web-ui/master/dist.zip")
-    z = ZipFile(StringIO(url.read()))
-    z.extractall(tmpdir)
-
-
     args = parser.parse_args()
+    download_ui = True
+
+    if args.ui != "temp" and os.path.isdir(args.ui):
+        download_ui = False
+        ui_dir = args.ui
+
+    if args.ui == "temp" or download_ui:
+        ui_dir = tempfile.mkdtemp()
+        url = urlopen("https://rawgit.com/lbryio/lbry-web-ui/master/dist.zip")
+        z = ZipFile(StringIO(url.read()))
+        z.extractall(ui_dir)
+
     daemon = LBRYDaemon()
     daemon.setup(args.wallet, args.update)
 
-    root = LBRYindex(tmpdir)
-    root.putChild("css", static.File(os.path.join(tmpdir, "css")))
-    root.putChild("font", static.File(os.path.join(tmpdir, "font")))
-    root.putChild("img", static.File(os.path.join(tmpdir, "img")))
-    root.putChild("js", static.File(os.path.join(tmpdir, "js")))
+    root = LBRYindex(ui_dir)
+    root.putChild("css", static.File(os.path.join(ui_dir, "css")))
+    root.putChild("font", static.File(os.path.join(ui_dir, "font")))
+    root.putChild("img", static.File(os.path.join(ui_dir, "img")))
+    root.putChild("js", static.File(os.path.join(ui_dir, "js")))
     root.putChild(API_ADDRESS, daemon)
     root.putChild("webapi", LBRYDaemonWeb())
     root.putChild("view", LBRYFileRender())
-    reactor.listenTCP(API_PORT, server.Site(root), interface=API_INTERFACE)
 
+    reactor.listenTCP(API_PORT, server.Site(root), interface=API_INTERFACE)
     reactor.run()
-    
-    shutil.rmtree(tmpdir)
+
+    if download_ui:
+        shutil.rmtree(ui_dir)
