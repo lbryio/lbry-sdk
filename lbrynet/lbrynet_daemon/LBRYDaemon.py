@@ -87,7 +87,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         except jsonrpclib.Fault, f:
             self._cbRender(f, request, id, version)
         else:
-            request.setHeader('Access-Control-Allow-Origin', UI_ADDRESS)
+            request.setHeader("Access-Control-Allow-Origin", "*")
             request.setHeader("content-type", "text/json")
             if args == [{}]:
                 d = defer.maybeDeferred(function)
