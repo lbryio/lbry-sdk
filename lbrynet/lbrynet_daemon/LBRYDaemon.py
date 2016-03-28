@@ -121,11 +121,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrycrd")
             elif sys.platform == "darwin":
                 self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
-                # self.wallet_dir = os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrycrd")
-                self.wallet_dir = user_data_dir("LBRY")
+                if wallet_type == "lbrycrd":
+                    self.wallet_dir = user_data_dir("lbrycrd")
+                else:
+                    self.wallet_dir = user_data_dir("LBRY")
             else:
-                self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
-                self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
+                if wallet_type == "lbrycrd":
+                    self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
+                else:
+                    self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
+                self.download_directory = os.getcwd()
             self.daemon_conf = os.path.join(self.wallet_dir, 'daemon_settings.conf')
             self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
             self.wallet_user = None
