@@ -51,9 +51,9 @@ class LBRYURIHandler(object):
         try:
             status = json.loads(self.daemon.is_running())['result']
         except:
-            pass
+            status = None
 
-        if lbry_process:
+        if lbry_process or status:
             self.check_status()
             started = False
         else:
