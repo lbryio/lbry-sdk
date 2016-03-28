@@ -54,8 +54,10 @@ def start():
     if args.ui != "temp" and os.path.isdir(args.ui):
         download_ui = False
         ui_dir = args.ui
+        log.info("Using user specified UI directory: " + str(ui_dir))
 
     if args.ui == "temp" or download_ui:
+        log.info("Downloading current web ui to temp directory")
         ui_dir = tempfile.mkdtemp()
         url = urlopen("https://rawgit.com/lbryio/lbry-web-ui/master/dist.zip")
         z = ZipFile(StringIO(url.read()))
