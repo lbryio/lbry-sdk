@@ -28,7 +28,7 @@ class LBRYURIHandler(object):
     def check_status(self):
         status = None
         try:
-            status = json.loads(self.daemon.is_running())['result']
+            status = self.daemon.is_running()
             if self.start_timeout < 30 and not status:
                 sleep(1)
                 self.start_timeout += 1
@@ -49,7 +49,7 @@ class LBRYURIHandler(object):
         lbry_process = [d for d in subprocess.Popen(['ps','aux'], stdout=subprocess.PIPE).stdout.readlines()
                             if 'LBRY.app' in d and 'LBRYURIHandler' not in d]
         try:
-            status = json.loads(self.daemon.is_running())['result']
+            status = self.daemon.is_running()
         except:
             status = None
 
@@ -64,17 +64,7 @@ class LBRYURIHandler(object):
         if lbry_name == "lbry" or lbry_name == "" and not started:
             webbrowser.get('safari').open(UI_ADDRESS)
         else:
-            r = json.loads(self.daemon.get({'name': lbry_name}))
-            if r['code'] == 200:
-                path = r['result']['path'].encode('utf-8')
-                extension = os.path.splitext(path)[1]
-                if extension in ['mp4', 'flv', 'mov', 'ogv']:
-                    webbrowser.get('safari').open(UI_ADDRESS + "/view?name=" + lbry_name)
-                else:
-                    webbrowser.get('safari').open('file://' + path)
-            else:
-                webbrowser.get('safari').open('http://lbry.io/get')
-
+            webbrowser.get('safari').open(UI_ADDRESS + "/view?name=" + lbry_name)
 
 def main(args):
     if len(args) != 1:
