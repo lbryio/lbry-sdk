@@ -37,7 +37,11 @@ gui_data_files = ['close2.gif', 'lbry-dark-242x80.gif', 'lbry-dark-icon.xbm', 'l
                   'drop_down.gif', 'show_options.gif', 'hide_options.gif', 'lbry.conf']
 gui_data_paths = [os.path.join(base_dir, 'lbrynet', 'lbrynet_gui', f) for f in gui_data_files]
 
-setup(name='lbrynet', version='.'.join([str(x) for x in __version__]),
+setup(name='lbrynet',
+      description='A fully decentralized network for distributing data',
+      version=__version__,
+      maintainer='Jimmy Kiselak',
+      maintainer_email='jimmy@lbry.io',
       packages=find_packages(base_dir),
       install_requires=requires,
       entry_points={'console_scripts': console_scripts},
