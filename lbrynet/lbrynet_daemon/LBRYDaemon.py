@@ -6,14 +6,12 @@ import binascii
 import subprocess
 import logging
 import requests
-# import rumps
-# import httplib2
 
 from twisted.web import server, resource, static
 from twisted.internet import defer, threads, error, reactor
 from txjsonrpc import jsonrpclib
 from txjsonrpc.web import jsonrpc
-from jsonrpc.proxy import JSONRPCProxy
+from txjsonrpc.web.jsonrpc import Handler
 
 from datetime import datetime
 from decimal import Decimal
@@ -82,6 +80,17 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             version = jsonrpclib.VERSION_PRE1
         # XXX this all needs to be re-worked to support logic for multiple
         # versions...
+
+        if not self.announced_startup:
+            if functionPath != 'is_running':
+                request.setHeader("Access-Control-Allow-Origin", "*")
+                request.setHeader("content-type", "text/json")
+                s = jsonrpclib.dumps("Starting up", version=version)
+                request.setHeader("content-length", str(len(s)))
+                request.write(s)
+                request.finish()
+                return server.NOT_DONE_YET
+
         try:
             function = self._getFunction(functionPath)
         except jsonrpclib.Fault, f:
@@ -96,6 +105,32 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addErrback(self._ebRender, id)
             d.addCallback(self._cbRender, request, id, version)
         return server.NOT_DONE_YET
+
+    def _cbRender(self, result, request, id, version):
+        if isinstance(result, Handler):
+            result = result.result
+
+        if isinstance(result, dict):
+            result = result['result']
+
+        if version == jsonrpclib.VERSION_PRE1:
+            if not isinstance(result, jsonrpclib.Fault):
+                result = (result,)
+            # Convert the result (python) to JSON-RPC
+        try:
+            s = jsonrpclib.dumps(result, version=version)
+        except:
+            f = jsonrpclib.Fault(self.FAILURE, "can't serialize output")
+            s = jsonrpclib.dumps(f, version=version)
+        request.setHeader("content-length", str(len(s)))
+        request.write(s)
+        request.finish()
+
+    def _ebRender(self, failure, id):
+        if isinstance(failure.value, jsonrpclib.Fault):
+            return failure.value
+        log.error(failure)
+        return jsonrpclib.Fault(self.FAILURE, "error")
 
     def setup(self, wallet_type, check_for_updates):
         def _set_vars(wallet_type, check_for_updates):
@@ -179,9 +214,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
             return defer.succeed(None)
 
+        def _announce_startup():
+            self.announced_startup = True
+            return defer.succeed(None)
+
         def _disp_startup():
             log.info("[" + str(datetime.now()) + "] Started lbrynet-daemon")
-
             return defer.succeed(None)
 
         log.info("[" + str(datetime.now()) + "] Starting lbrynet-daemon")
@@ -201,6 +239,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: self._setup_fetcher())
+        d.addCallback(lambda _: _announce_startup())
         d.addCallback(lambda _: _disp_startup())
         d.callback(None)
 
@@ -653,7 +692,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return d
 
     def _render_response(self, result, code):
-        return json.dumps({'result': result, 'code': code})
+        return defer.succeed({'result': result, 'code': code})
 
     # def _log_to_slack(self, msg):
     #     URL = "https://hooks.slack.com/services/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"
@@ -662,13 +701,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_is_running(self):
         """
-        Returns a startup message when the daemon starts, after which it will return True
+        Returns true if daemon completed startup, otherwise returns false
         """
 
-        if self.startup_message != "" and self.announced_startup == False:
-            self.announced_startup = True
-            return self._render_response(self.startup_message, OK_CODE)
-        elif self.announced_startup:
+        if self.announced_startup:
             return self._render_response(True, OK_CODE)
         else:
             return self._render_response(False, OK_CODE)
@@ -677,7 +713,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Get LBRY payment settings
 
-        @return {'data_rate': float, 'max_key_fee': float}
+        @return {'data_rate': float, 'max_key_fee': float, 'max_upload': float (0.0 for unlimited),
+                 'default_download_directory': string, 'run_on_startup': bool,
+                 'max_download': float (0.0 for unlimited)}
         """
 
         log.info("[" + str(datetime.now()) + "] Get daemon settings")
@@ -687,7 +725,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Set LBRY payment settings
 
-        @param settings: {'settings': {'data_rate': float, 'max_key_fee': float}}
+        @param settings: {'data_rate': float, 'max_key_fee': float, 'max_upload': float (0.0 for unlimited),
+                          'default_download_directory': string, 'run_on_startup': bool,
+                          'max_download': float (0.0 for unlimited)}
         """
 
         d = self._update_settings(p)
@@ -736,7 +776,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         log.info("[" + str(datetime.now()) + "] Get balance")
-        return self._render_response(self.session.wallet.wallet_balance, OK_CODE)
+        return self._render_response(float(self.session.wallet.wallet_balance), OK_CODE)
 
     def jsonrpc_stop(self):
         """
@@ -818,36 +858,36 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
-    def jsonrpc_stop_lbry_file(self, p):
-        params = Bunch(p)
-
-        try:
-            lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == params.stream_hash][0]
-        except IndexError:
-            return defer.fail(UnknownNameError)
-
-        if not lbry_file.stopped:
-            d = self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
-            d.addCallback(lambda _: self._render_response("Stream has been stopped", OK_CODE))
-            d.addErrback(lambda err: self._render_response(err.getTraceback(), ))
-            return d
-        else:
-            return json.dumps({'result': 'Stream was already stopped'})
-
-    def jsonrpc_start_lbry_file(self, p):
-        params = Bunch(p)
-
-        try:
-            lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == params.stream_hash][0]
-        except IndexError:
-            return defer.fail(UnknownNameError)
-
-        if lbry_file.stopped:
-            d = self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
-            d.callback(None)
-            return json.dumps({'result': 'Stream started'})
-        else:
-            return json.dumps({'result': 'Stream was already running'})
+    # def jsonrpc_stop_lbry_file(self, p):
+    #     params = Bunch(p)
+    #
+    #     try:
+    #         lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == params.stream_hash][0]
+    #     except IndexError:
+    #         return defer.fail(UnknownNameError)
+    #
+    #     if not lbry_file.stopped:
+    #         d = self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
+    #         d.addCallback(lambda _: self._render_response("Stream has been stopped", OK_CODE))
+    #         d.addErrback(lambda err: self._render_response(err.getTraceback(), ))
+    #         return d
+    #     else:
+    #         return json.dumps({'result': 'Stream was already stopped'})
+    #
+    # def jsonrpc_start_lbry_file(self, p):
+    #     params = Bunch(p)
+    #
+    #     try:
+    #         lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == params.stream_hash][0]
+    #     except IndexError:
+    #         return defer.fail(UnknownNameError)
+    #
+    #     if lbry_file.stopped:
+    #         d = self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
+    #         d.callback(None)
+    #         return json.dumps({'result': 'Stream started'})
+    #     else:
+    #         return json.dumps({'result': 'Stream was already running'})
 
     def jsonrpc_search_nametrie(self, p):
         """
@@ -891,7 +931,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 t['cost_est'] = r[2]
                 consolidated_results.append(t)
                 # log.info(str(t))
-            return self._render_response(consolidated_results, OK_CODE)
+            return consolidated_results
 
         log.info('[' + str(datetime.now()) + '] Search nametrie: ' + params.search)
 
@@ -901,6 +941,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(resolve_claims)
         d.addCallback(_clean)
         d.addCallback(_disp)
+        d.addCallback(lambda results: self._render_response(results, OK_CODE))
 
         return d
 
@@ -918,9 +959,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             log.info("[" + str(datetime.now()) + "] Deleted: " + file_name)
             return self._render_response("Deleted: " + file_name, OK_CODE)
 
-        lbry_files = [self._delete_lbry_file(f) for f in self.lbry_file_manager.lbry_files if params.file_name == f.file_name]
+        lbry_files = [self._delete_lbry_file(f) for f in self.lbry_file_manager.lbry_files
+                                                if params.file_name == f.file_name]
         d = defer.DeferredList(lbry_files)
         d.addCallback(lambda _: _disp(params.file_name))
+
         return d
 
     def jsonrpc_publish(self, p):
@@ -1001,10 +1044,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 for k in c.keys():
                     if isinstance(c[k], Decimal):
                         c[k] = float(c[k])
-            return self._render_response(claims, OK_CODE)
+            return defer.succeed(claims)
 
         d = self.session.wallet.get_name_claims()
         d.addCallback(_clean)
+        d.addCallback(lambda claims: self._render_response(claims, OK_CODE))
 
         return d
 
@@ -1029,10 +1073,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         def _disp(address):
             log.info("[" + str(datetime.now()) + "] Got new wallet address: " + address)
-            return json.dumps(self._render_response(address, OK_CODE))
+            return defer.succeed(address)
 
         d = self.session.wallet.get_new_address()
         d.addCallback(_disp)
+        d.addCallback(lambda address: self._render_response(address, OK_CODE))
         return d
 
     # def jsonrpc_update_name(self, metadata):
@@ -1147,66 +1192,12 @@ class LBRYindex(resource.Resource):
 class LBRYFileRender(resource.Resource):
     isLeaf = False
 
-    def _render_path(self, path):
-        extension = os.path.splitext(path)[1]
-        if extension in ['mp4', 'flv', 'mov', 'ogv']:
-            return r'<html><center><video src="' + path + r'" controls autoplay width="960" height="720"></center></html>'
-
-    def _delayed_render(self, request, results):
-        request.write(str(results))
-        request.finish()
-
     def render_GET(self, request):
         if 'name' in request.args.keys():
             api = jsonrpc.Proxy(API_CONNECTION_STRING)
             d = api.callRemote("get", {'name': request.args['name'][0]})
-            d.addCallback(lambda response: self._delayed_render(request, self._render_path(json.loads(response)['result']['path']))
-                                            if json.loads(response)['code'] == 200
-                                            else self._delayed_render(request, "Error"))
+            d.addCallback(lambda results: static.File(results['path']).render_GET(request))
 
             return server.NOT_DONE_YET
         else:
-            self._delayed_render(request, "Error")
-            return server.NOT_DONE_YET
-
-
-# class LBRYFilePage(resource.Resource):
-#     isLeaf = False
-#
-#     def _delayed_render(self, request, results):
-#         request.write(str(results))
-#         request.finish()
-#
-#         h = "<tr><td><a href=/webapi?function=delete_lbry_file&file_name=%s>%s</a></td></tr>"
-#
-#         d = LBRYDaemonCommandHandler('get_lbry_files').run()
-#         d.addCallback(lambda r: json.loads(r)['result'])
-#         d.addCallback(lambda lbry_files: [h % (json.loads(lbry_file)['file_name'], json.loads(lbry_file)['file_name']) for lbry_file in lbry_files])
-#         d.addCallback(lambda r: "<html><table style='width:100%'>" + ''.join(r) + "</html>")
-#         d.addCallbacks(lambda results: self._delayed_render(request, results),
-#                        lambda err: self._delayed_render(request, err.getTraceback()))
-#
-#         return server.NOT_DONE_YET
-
-
-class LBRYDaemonWeb(resource.Resource):
-    isLeaf = False
-
-    def _delayed_render(self, request, results):
-        request.write(str(results))
-        request.setResponseCode(json.loads(results)['code'])
-        request.finish()
-
-    def render_GET(self, request):
-        func = request.args['function'][0]
-        del request.args['function']
-
-        p = {}
-        for k in request.args.keys():
-            p[k] = request.args[k][0]
-
-        d = LBRYDaemonCommandHandler(func).run(p)
-        d.addCallbacks(lambda results: self._delayed_render(request, results),
-                       lambda err: self._delayed_render(request, json.dumps({'message': err.getTraceback(), 'code': BAD_REQUEST})))
-
-        return server.NOT_DONE_YET
+            return server.failure

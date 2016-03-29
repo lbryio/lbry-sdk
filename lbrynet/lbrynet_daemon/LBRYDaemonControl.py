@@ -12,7 +12,7 @@ from twisted.web import server, static
 from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
 
-from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon, LBRYindex, LBRYDaemonWeb, LBRYFileRender
+from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon, LBRYindex, LBRYFileRender
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, DEFAULT_WALLET
 
 log = logging.getLogger(__name__)
@@ -46,6 +46,13 @@ def start():
                         help="temp or path, default temp, path is the path of the dist folder",
                         default="temp")
 
+    try:
+        JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()
+        log.info("lbrynet-daemon is already running")
+        return
+    except:
+        pass
+
     log.info("Starting lbrynet-daemon from command line")
 
     args = parser.parse_args()
@@ -72,7 +79,6 @@ def start():
     root.putChild("img", static.File(os.path.join(ui_dir, "img")))
     root.putChild("js", static.File(os.path.join(ui_dir, "js")))
     root.putChild(API_ADDRESS, daemon)
-    root.putChild("webapi", LBRYDaemonWeb())
     root.putChild("view", LBRYFileRender())
 
     reactor.listenTCP(API_PORT, server.Site(root), interface=API_INTERFACE)
