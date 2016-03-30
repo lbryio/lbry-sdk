@@ -85,7 +85,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             if functionPath != 'is_running':
                 request.setHeader("Access-Control-Allow-Origin", "*")
                 request.setHeader("content-type", "text/json")
-                s = jsonrpclib.dumps("Starting up", version=version)
+                s = jsonrpclib.Fault(self.FAILURE, "error")
                 request.setHeader("content-length", str(len(s)))
                 request.write(s)
                 request.finish()
