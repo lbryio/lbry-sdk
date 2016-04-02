@@ -47,7 +47,6 @@ log = logging.getLogger(__name__)
 BAD_REQUEST = 400
 NOT_FOUND = 404
 OK_CODE = 200
-
 # TODO add login credentials in a conf file
 # TODO alert if your copy of a lbry file is out of date with the name record
 
@@ -83,13 +82,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         if not self.announced_startup:
             if functionPath != 'is_running':
-                request.setHeader("Access-Control-Allow-Origin", "*")
-                request.setHeader("content-type", "text/json")
-                s = jsonrpclib.Fault(self.FAILURE, "error")
-                request.setHeader("content-length", str(len(s)))
-                request.write(s)
-                request.finish()
-                return server.NOT_DONE_YET
+                return server.failure
 
         try:
             function = self._getFunction(functionPath)
@@ -561,7 +554,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _get_stream(name):
             def _disp(stream):
-                log.info("[" + str(datetime.now()) + "] Start stream: " + stream['stream_hash'])
+                stream_hash = stream['stream_hash']
+                if isinstance(stream_hash, dict):
+                    stream_hash = stream_hash['sd_hash']
+
+                log.info("[" + str(datetime.now()) + "] Start stream: " + stream_hash)
                 return stream
 
             d = self.session.wallet.get_stream_info_for_name(name)
@@ -602,6 +599,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             f.close()
 
             file_name = l['stream_name'].decode('hex')
+
             for lbry_file in self.lbry_file_manager.lbry_files:
                 if lbry_file.stream_name == file_name:
                     if sys.platform == "darwin":
@@ -616,6 +614,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _check(info):
             stream_hash = info['stream_hash']
+            if isinstance(stream_hash, dict):
+                stream_hash = stream_hash['sd_hash']
+
             path = os.path.join(self.blobfile_dir, stream_hash)
             if os.path.isfile(path):
                 log.info("[" + str(datetime.now()) + "] Search for lbry_file, returning: " + stream_hash)
@@ -680,7 +681,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return d
 
         d = self.session.wallet.get_stream_info_for_name(name)
-        d.addCallback(lambda info: download_sd_blob(self.session, info['stream_hash'],
+        d.addCallback(lambda info: info['stream_hash'] if isinstance(info['stream_hash'], str)
+                                    else info['stream_hash']['sd_hash'])
+        d.addCallback(lambda sd_hash: download_sd_blob(self.session, sd_hash,
                                                     self.blob_request_payment_rate_manager))
         d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         d.addCallback(lambda metadata: metadata.validator.info_to_show())
@@ -829,11 +832,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         params = Bunch(p)
 
         def _disp(info):
-            log.info("[" + str(datetime.now()) + "] Resolved info: " + info['stream_hash'])
+            stream_hash = info['stream_hash']
+            if isinstance(stream_hash, dict):
+                stream_hash = stream_hash['sd_hash']
+
+            log.info("[" + str(datetime.now()) + "] Resolved info: " + stream_hash)
+
             return self._render_response(info, OK_CODE)
 
         d = self._resolve_name(params.name)
-        d.addCallbacks(_disp, lambda _: self._render_response('error', NOT_FOUND))
+        d.addCallbacks(_disp, lambda _: server.failure)
         d.callback(None)
         return d
 
@@ -960,7 +968,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return self._render_response("Deleted: " + file_name, OK_CODE)
 
         lbry_files = [self._delete_lbry_file(f) for f in self.lbry_file_manager.lbry_files
-                                                if params.file_name == f.file_name]
+                                                if str(params.file_name) == str(f.file_name)]
         d = defer.DeferredList(lbry_files)
         d.addCallback(lambda _: _disp(params.file_name))
 
@@ -974,38 +982,27 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         @return:
         """
 
-        params = Bunch(p)
+        metadata_fields = ["name", "file_path", "bid", "author", "title",
+                           "description", "thumbnail", "key_fee", "key_fee_address",
+                           "content_license", "sources"]
 
-        metadata_fields = {"name": unicode, "file_path": unicode, "bid": float, "author": unicode, "title": unicode,
-                           "description": unicode, "thumbnail": unicode, "key_fee": float, "key_fee_address": unicode,
-                           "content_license": unicode, "sources": dict}
+        for k in metadata_fields:
+            if k not in p.keys():
+                p[k] = None
 
-        for k in metadata_fields.keys():
-            if k in params.__dict__.keys():
-                if isinstance(params.__dict__[k], metadata_fields[k]):
-                    if type(params.__dict__[k]) == unicode:
-                        metadata_fields[k] = str(params.__dict__[k])
-                    else:
-                        metadata_fields[k] = params.__dict__[k]
-                else:
-                    metadata_fields[k] = None
-            else:
-                metadata_fields[k] = None
+        pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
 
-        log.info("[" + str(datetime.now()) + "] Publish: ", metadata_fields)
-
-        p = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
-        d = p.start(name=metadata_fields['name'],
-                    file_path=metadata_fields['file_path'],
-                    bid=metadata_fields['bid'],
-                    title=metadata_fields['title'],
-                    description=metadata_fields['description'],
-                    thumbnail=metadata_fields['thumbnail'],
-                    key_fee=metadata_fields['key_fee'],
-                    key_fee_address=metadata_fields['key_fee_address'],
-                    content_license=metadata_fields['content_license'],
-                    author=metadata_fields['author'],
-                    sources=metadata_fields['sources'])
+        d = pub.start(p['name'],
+                      p['file_path'],
+                      p['bid'],
+                      title=p['title'],
+                      description=p['description'],
+                      thumbnail=p['thumbnail'],
+                      key_fee=p['key_fee'],
+                      key_fee_address=p['key_fee_address'],
+                      content_license=p['content_license'],
+                      author=p['author'],
+                      sources=p['sources'])
 
         d.addCallbacks(lambda msg: self._render_response(msg, OK_CODE),
                        lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))

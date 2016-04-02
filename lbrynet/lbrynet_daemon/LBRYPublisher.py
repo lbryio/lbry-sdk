@@ -43,7 +43,7 @@ class Publisher(object):
             message = "[" + str(datetime.now()) + "] Published " + self.file_name + " --> lbry://" + \
                         str(self.publish_name) + " with txid: " + str(self.tx_hash)
             log.info(message)
-            return defer.succeed(message)
+            return defer.succeed(self.tx_hash)
 
         self.publish_name = name
         self.file_path = file_path
@@ -103,12 +103,16 @@ class Publisher(object):
 
         def set_sd_hash(sd_hash):
             self.sd_hash = sd_hash
+            if isinstance(self.sources, dict):
+                self.sources['lbry_sd_hash'] = sd_hash
+            else:
+                self.sources = {'lbry_sd_hash': sd_hash}
 
         d.addCallback(set_sd_hash)
         return d
 
     def _claim_name(self):
-        d = self.wallet.claim_name(self.publish_name, {'sd_hash': self.sd_hash}, self.bid_amount,
+        d = self.wallet.claim_name(self.publish_name, self.sd_hash, self.bid_amount,
                                    description=self.description, key_fee=self.key_fee,
                                    key_fee_address=self.key_fee_address, thumbnail=self.thumbnail,
                                    content_license=self.content_license, author=self.author,
@@ -121,6 +125,7 @@ class Publisher(object):
         return d
 
     def _show_publish_error(self, err):
+        log.info(err.getTraceback())
         message = "An error occurred publishing %s to %s. Error: %s."
         if err.check(InsufficientFundsError):
             error_message = "Insufficient funds"

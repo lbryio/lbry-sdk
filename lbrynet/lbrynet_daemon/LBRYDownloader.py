@@ -68,6 +68,8 @@ class GetStream(object):
                 self.key_fee_address = None
 
             self.stream_hash = self.stream_info['stream_hash']
+            if isinstance(self.stream_hash, dict):
+                self.stream_hash = self.stream_hash['sd_hash']
 
         else:
             log.error("InvalidStreamInfoError in autofetcher: ", stream_info)
