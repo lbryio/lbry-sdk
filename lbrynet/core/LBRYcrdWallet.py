@@ -1067,7 +1067,7 @@ class LBRYumWallet(LBRYWallet):
         decoded_tx['vout'] = []
         for output in tx.outputs():
             out = {}
-            out['value'] = output[2]
+            out['value'] = Decimal(output[2]) / Decimal(COIN)
             decoded_tx['vout'].append(out)
         return decoded_tx
 
