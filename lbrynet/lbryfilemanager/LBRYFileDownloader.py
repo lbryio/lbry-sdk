@@ -119,7 +119,7 @@ class ManagedLBRYFileDownloaderFactory(object):
     def can_download(self, sd_validator):
         return True
 
-    def make_downloader(self, metadata, options, payment_rate_manager):
+    def make_downloader(self, metadata, options, payment_rate_manager, download_directory=None):
         data_rate = options[0]
         upload_allowed = options[1]
 
@@ -137,7 +137,8 @@ class ManagedLBRYFileDownloaderFactory(object):
         d.addCallback(lambda stream_hash: self.lbry_file_manager.add_lbry_file(stream_hash,
                                                                                payment_rate_manager,
                                                                                data_rate,
-                                                                               upload_allowed))
+                                                                               upload_allowed,
+                                                                               download_directory=download_directory))
         return d
 
     @staticmethod

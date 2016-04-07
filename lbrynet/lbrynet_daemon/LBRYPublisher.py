@@ -103,10 +103,6 @@ class Publisher(object):
 
         def set_sd_hash(sd_hash):
             self.sd_hash = sd_hash
-            if isinstance(self.sources, dict):
-                self.sources['lbry_sd_hash'] = sd_hash
-            else:
-                self.sources = {'lbry_sd_hash': sd_hash}
 
         d.addCallback(set_sd_hash)
         return d

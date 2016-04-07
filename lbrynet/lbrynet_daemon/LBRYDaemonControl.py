@@ -1,5 +1,6 @@
 import argparse
 import logging
+import logging.handlers
 import subprocess
 import os
 import shutil
@@ -17,6 +18,13 @@ from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon, LBRYindex, LBRYFileRender
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, DEFAULT_WALLET, UI_ADDRESS
+
+if sys.platform != "darwin":
+    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+else:
+    log_dir = user_data_dir("LBRY")
+
+LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
