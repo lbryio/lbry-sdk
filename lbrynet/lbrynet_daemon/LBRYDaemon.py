@@ -100,7 +100,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         # versions...
 
         if not self.announced_startup:
-            if functionPath not in ['is_running', 'check_first_run', 'get_time_behind_blockchain', 'stop']:
+            if functionPath not in ['is_running', 'check_first_run',
+                                    'get_time_behind_blockchain', 'stop',
+                                    'daemon_status']:
                 return server.failure
 
         try:
@@ -212,6 +214,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.data_rate = MIN_BLOB_DATA_PAYMENT_RATE
             self.max_key_fee = DEFAULT_MAX_KEY_FEE
             self.max_search_results = DEFAULT_MAX_SEARCH_RESULTS
+            self.startup_status = "Initializing"
             self.startup_message = ""
             self.announced_startup = False
             self.search_timeout = 3.0
@@ -254,6 +257,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _announce_startup():
             self.announced_startup = True
+            self.startus_status = None
             log.info("[" + str(datetime.now()) + "] Started lbrynet-daemon")
             return defer.succeed(None)
 
@@ -307,6 +311,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 f.close()
                 return self.default_settings
 
+        self.startus_status = "Loading configuration"
+
         d = _log_platform()
         d.addCallback(lambda _: _load_daemon_conf())
 
@@ -344,6 +350,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             if running is True:
                 return self._start_server()
             return defer.succeed(True)
+
+        self.startus_status = "Starting lbrynet"
 
         dl = self.settings.get_server_running_status()
         dl.addCallback(restore_running_status)
@@ -471,6 +479,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(None)
 
     def _setup_data_directory(self):
+        self.startus_status = "Loading databases"
         log.info("Loading databases...")
         if self.created_data_dir:
             db_revision = open(os.path.join(self.db_dir, "db_revision"), mode='w')
@@ -526,6 +535,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return d
 
     def _setup_lbry_file_manager(self):
+        self.startus_status = "Loading file manager"
         self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.db_dir)
         d = self.lbry_file_metadata_manager.setup()
 
@@ -548,6 +558,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return d
 
         def get_wallet():
+            self.startup_status = "Loading wallet"
             if self.wallet_type == "lbrycrd":
                 log.info("Using lbrycrd wallet")
                 lbrycrdd_path = None
@@ -580,6 +591,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return r
 
         def create_session(results):
+            self.startus_status = "Loading lbrynet session"
             self.session = LBRYSession(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
@@ -842,6 +854,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return self._render_response(True, OK_CODE)
         else:
             return self._render_response(False, OK_CODE)
+
+    def jsonrpc_daemon_status(self):
+        """
+        Returns {'status': startup status message, 'is_running': true/false}
+        """
+        
+        r = {'status': self.startus_status, 'is_running': self.announced_startup}
+        log.info("[" + str(datetime.now()) + "] daemon status: " + str(r))
+        return self._render_response(r, OK_CODE)
 
     def jsonrpc_check_first_run(self):
         try:
