@@ -420,11 +420,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             elif k == 'data_rate':
                 if type(settings['data_rate']) is float:
                     self.session_settings['data_rate'] = settings['data_rate']
+                elif type(settings['data_rate']) is int:
+                    self.session_settings['data_rate'] = float(settings['data_rate'])
                 else:
                     return defer.fail()
             elif k == 'max_key_fee':
                 if type(settings['max_key_fee']) is float:
                     self.session_settings['max_key_fee'] = settings['max_key_fee']
+                elif type(settings['max_key_fee']) is int:
+                    self.session_settings['max_key_fee'] = float(settings['max_key_fee'])
                 else:
                     return defer.fail()
             elif k == 'default_download_directory':
@@ -438,11 +442,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             elif k == 'max_upload':
                 if type(settings['max_upload']) is float:
                     self.session_settings['max_upload'] = settings['max_upload']
+                elif type(settings['max_upload']) is int:
+                    self.session_settings['max_upload'] = float(settings['max_upload'])
                 else:
                     return defer.fail()
             elif k == 'max_download':
                 if type(settings['max_download']) is float:
                     self.session_settings['max_download'] = settings['max_download']
+                if type(settings['max_download']) is int:
+                    self.session_settings['max_download'] = float(settings['max_download'])
                 else:
                     return defer.fail()
             elif k == 'upload_log':
@@ -827,6 +835,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Returns true if daemon completed startup, otherwise returns false
         """
+
+        log.info("[" + str(datetime.now()) + "] is_running: " + str(self.announced_startup))
 
         if self.announced_startup:
             return self._render_response(True, OK_CODE)
