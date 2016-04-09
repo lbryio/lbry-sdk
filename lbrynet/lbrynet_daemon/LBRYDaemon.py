@@ -58,9 +58,7 @@ if not os.path.isdir(log_dir):
 LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
 
 log = logging.getLogger(__name__)
-
 handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=262144, backupCount=5)
-
 log.addHandler(handler)
 
 STARTUP_STAGES = [
@@ -226,7 +224,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.max_key_fee = DEFAULT_MAX_KEY_FEE
             self.max_search_results = DEFAULT_MAX_SEARCH_RESULTS
             self.startup_status = STARTUP_STAGES[0]
-            self.startup_message = ""
+            self.startup_message = None
             self.announced_startup = False
             self.search_timeout = 3.0
             self.query_handlers = {}
@@ -874,20 +872,27 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return self._render_response(r, OK_CODE)
 
     def jsonrpc_is_first_run(self):
+        """
+        Get True/False if can be determined, if wallet still is being set up returns None
+        """
+
+        log.info("[" + str(datetime.now()) + "] Check if is first run")
         try:
             d = self.session.wallet.is_first_run()
         except:
             d = defer.fail(None)
 
-        d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: server.failure)
+        d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: self._render_response(None, OK_CODE))
 
         return d
 
     def jsonrpc_get_start_notice(self):
-        if self.startup_message:
-            return self._render_response(self.startup_message, OK_CODE)
-        else:
-            return defer.fail(None)
+        """
+        Get any special message to be displayed at startup, such as a first run notice
+        """
+
+        log.info("[" + str(datetime.now()) + "] Get startup notice")
+        return self._render_response(self.startup_message, OK_CODE)
 
     def jsonrpc_get_settings(self):
         """
