@@ -63,6 +63,17 @@ handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=262144, ba
 
 log.addHandler(handler)
 
+STARTUP_STAGES = [
+                    ('initializing', 'Initializing...'),
+                    ('loading_db', 'Loading databases...'),
+                    ('loading_wallet', 'Catching up with blockchain... %s'),
+                    ('loading_session', 'Starting session'),
+                    ('loading_file_manager', 'Setting up file manager'),
+                    ('loading_server', 'Starting lbrynet'),
+                    ('started', 'Started lbrynet')
+                  ]
+
+
 BAD_REQUEST = 400
 NOT_FOUND = 404
 OK_CODE = 200
@@ -214,7 +225,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.data_rate = MIN_BLOB_DATA_PAYMENT_RATE
             self.max_key_fee = DEFAULT_MAX_KEY_FEE
             self.max_search_results = DEFAULT_MAX_SEARCH_RESULTS
-            self.startup_status = "Initializing"
+            self.startup_status = STARTUP_STAGES[0]
             self.startup_message = ""
             self.announced_startup = False
             self.search_timeout = 3.0
@@ -257,7 +268,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _announce_startup():
             self.announced_startup = True
-            self.startus_status = None
+            self.startup_status = STARTUP_STAGES[6]
             log.info("[" + str(datetime.now()) + "] Started lbrynet-daemon")
             return defer.succeed(None)
 
@@ -311,8 +322,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 f.close()
                 return self.default_settings
 
-        self.startus_status = "Loading configuration"
-
         d = _log_platform()
         d.addCallback(lambda _: _load_daemon_conf())
 
@@ -351,7 +360,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 return self._start_server()
             return defer.succeed(True)
 
-        self.startus_status = "Starting lbrynet"
+        self.startup_status = STARTUP_STAGES[5]
 
         dl = self.settings.get_server_running_status()
         dl.addCallback(restore_running_status)
@@ -479,7 +488,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(None)
 
     def _setup_data_directory(self):
-        self.startus_status = "Loading databases"
+        self.startup_status = STARTUP_STAGES[1]
         log.info("Loading databases...")
         if self.created_data_dir:
             db_revision = open(os.path.join(self.db_dir, "db_revision"), mode='w')
@@ -535,7 +544,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return d
 
     def _setup_lbry_file_manager(self):
-        self.startus_status = "Loading file manager"
+        self.startup_status = STARTUP_STAGES[4]
         self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.db_dir)
         d = self.lbry_file_metadata_manager.setup()
 
@@ -558,7 +567,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return d
 
         def get_wallet():
-            self.startup_status = "Loading wallet"
             if self.wallet_type == "lbrycrd":
                 log.info("Using lbrycrd wallet")
                 lbrycrdd_path = None
@@ -591,11 +599,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return r
 
         def create_session(results):
-            self.startus_status = "Loading lbrynet session"
+            self.startup_status = STARTUP_STAGES[2]
             self.session = LBRYSession(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
                                        use_upnp=self.use_upnp, wallet=results['wallet'])
+            self.startup_status = STARTUP_STAGES[3]
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
         dl.addCallback(combine_results)
@@ -857,10 +866,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_daemon_status(self):
         """
-        Returns {'status': startup status message, 'is_running': true/false}
+        Returns {'status_message': startup status message, 'status_code': status_code}
         """
-        
-        r = {'status': self.startus_status, 'is_running': self.announced_startup}
+
+        r = {'status_code': self.startup_status[0], 'status_message': self.startup_status[1]}
         log.info("[" + str(datetime.now()) + "] daemon status: " + str(r))
         return self._render_response(r, OK_CODE)
 
