@@ -173,7 +173,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
             self.peer_port = 3333
             self.dht_node_port = 4444
-            self.first_run = "Loading"
+            self.first_run = None
             if os.name == "nt":
                 from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
                 self.download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
@@ -891,8 +891,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Get any special message to be displayed at startup, such as a first run notice
         """
 
+
         log.info("[" + str(datetime.now()) + "] Get startup notice")
-        return self._render_response(self.startup_message, OK_CODE)
+
+        if self.first_run and not self.wallet.balance:
+            return self._render_response(self.startup_message, OK_CODE)
+        elif self.first_run:
+            return self._render_response(None, OK_CODE)
+        else:
+            self._render_response(self.startup_message, OK_CODE)
 
     def jsonrpc_get_settings(self):
         """
