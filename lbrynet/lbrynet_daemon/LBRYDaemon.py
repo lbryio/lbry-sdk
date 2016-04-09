@@ -587,6 +587,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _check_first_run(self):
         def _set_first_run_false():
+            log.info("Not first run")
             self.first_run = False
             return 0.0
 
@@ -600,6 +601,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = self.session.wallet.get_new_address()
 
         def send_request(url, data):
+            log.info("Requesting first run credits")
             r = requests.post(url, json=data)
             if r.status_code == 200:
                 return r.json()['credits_sent']
@@ -664,7 +666,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
-    def _download_name(self, name, timeout=DEFAULT_TIMEOUT):
+    def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None):
+        if not download_directory:
+            download_directory = self.session_settings['default_download_directory']
+        elif not os.path.isdir(download_directory):
+            download_directory = self.session_settings['default_download_directory']
+
         def _disp_file(f):
             file_path = os.path.join(self.session_settings['default_download_directory'], f.file_name)
             log.info("[" + str(datetime.now()) + "] Already downloaded: " + str(f.stream_hash) + " --> " + file_path)
@@ -682,7 +689,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d = self.session.wallet.get_stream_info_for_name(name)
             stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
                                max_key_fee=self.max_key_fee, data_rate=self.data_rate, timeout=timeout,
-                               download_directory=self.session_settings['default_download_directory'])
+                               download_directory=download_directory)
             d.addCallback(_disp)
             d.addCallback(lambda stream_info: stream.start(stream_info))
             d.addCallback(lambda _: self._path_from_name(name))
@@ -977,16 +984,23 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Download stream from a LBRY uri
 
-        @param: name
+        @param: name, optional: download_directory
         @return: {'stream_hash': hex string, 'path': path of download}
         """
-        params = Bunch(p)
 
         if 'timeout' not in p.keys():
-            params.timeout = DEFAULT_TIMEOUT
+            timeout = DEFAULT_TIMEOUT
+        else:
+            timeout = p['timeout']
 
-        if params.name:
-            d = self._download_name(params.name, timeout=params.timeout)
+        if 'download_directory' not in p.keys():
+            download_directory = self.session_settings['default_download_directory']
+        else:
+            download_directory = p['download_directory']
+
+        if 'name' in p.keys():
+            name = p['name']
+            d = self._download_name(name=name, timeout=timeout, download_directory=download_directory)
             d.addCallbacks(lambda message: self._render_response(message, OK_CODE),
                            lambda err: self._render_response('error', NOT_FOUND))
         else:
