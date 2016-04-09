@@ -894,7 +894,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         log.info("[" + str(datetime.now()) + "] Get startup notice")
 
-        if self.first_run and not self.wallet.balance:
+        if self.first_run and not self.session.wallet.wallet_balance:
             return self._render_response(self.startup_message, OK_CODE)
         elif self.first_run:
             return self._render_response(None, OK_CODE)
