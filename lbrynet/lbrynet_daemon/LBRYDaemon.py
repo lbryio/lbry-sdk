@@ -111,7 +111,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         # versions...
 
         if not self.announced_startup:
-            if functionPath not in ['is_running', 'check_first_run',
+            if functionPath not in ['is_running', 'is_first_run',
                                     'get_time_behind_blockchain', 'stop',
                                     'daemon_status']:
                 return server.failure
@@ -873,7 +873,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.info("[" + str(datetime.now()) + "] daemon status: " + str(r))
         return self._render_response(r, OK_CODE)
 
-    def jsonrpc_check_first_run(self):
+    def jsonrpc_is_first_run(self):
         try:
             d = self.session.wallet.is_first_run()
         except:
