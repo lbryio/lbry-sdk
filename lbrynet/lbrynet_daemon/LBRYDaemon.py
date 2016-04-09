@@ -113,7 +113,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if not self.announced_startup:
             if functionPath not in ['is_running', 'is_first_run',
                                     'get_time_behind_blockchain', 'stop',
-                                    'daemon_status']:
+                                    'daemon_status', 'get_start_notice']:
                 return server.failure
 
         try:
@@ -882,6 +882,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: server.failure)
 
         return d
+
+    def jsonrpc_get_start_notice(self):
+        if self.startup_message:
+            return self._render_response(self.startup_message, OK_CODE)
+        else:
+            return defer.fail(None)
 
     def jsonrpc_get_settings(self):
         """
