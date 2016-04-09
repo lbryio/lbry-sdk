@@ -849,7 +849,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         except:
             d = defer.fail(None)
 
-        d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: self._render_response("Loading", OK_CODE))
+        d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: server.failure)
 
         return d
 
