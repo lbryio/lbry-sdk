@@ -655,7 +655,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             points_string = locale.format_string("%.2f LBC", (round(credits_received, 2),), grouping=True)
             self.startup_message = "Thank you for testing the alpha version of LBRY! You have been given %s for free because we love you. Please give them a few minutes to show up while you catch up with our blockchain." % points_string
         else:
-            self.startup_message = "Connected to LBRYnet"
+            self.startup_message = None
 
     def _get_lbrycrdd_path(self):
         def get_lbrycrdd_path_conf_file():
