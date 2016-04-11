@@ -61,6 +61,9 @@ def start():
     parser.add_argument("--ui",
                         help="path to custom UI folder",
                         default="")
+    parser.add_argument("--branch",
+                        help="Branch of lbry-web-ui repo to use, defaults on HEAD",
+                        default="HEAD")
 
     try:
         JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()
@@ -73,6 +76,14 @@ def start():
 
     args = parser.parse_args()
 
+    if args.branch == "HEAD":
+        GIT_CMD_STRING = "git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep %s | cut -f 1" % args.branch
+        DIST_URL = "https://rawgit.com/lbryio/lbry-web-ui/master/dist.zip"
+    else:
+        log.info("Using UI branch: " + args.branch)
+        GIT_CMD_STRING = "git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep refs/heads/%s | cut -f 1" % args.branch
+        DIST_URL = "https://rawgit.com/lbryio/lbry-web-ui/%s/dist.zip" % args.branch
+
     def getui(ui_dir=None):
         if ui_dir:
             if os.path.isdir(ui_dir):
@@ -82,16 +93,16 @@ def start():
                 log.info("User specified UI directory doesn't exist: " + str(ui_dir))
 
         def download_ui(dest_dir):
-            url = urlopen("https://rawgit.com/lbryio/lbry-web-ui/master/dist.zip")
+            url = urlopen(DIST_URL)
             z = ZipFile(StringIO(url.read()))
-            z.extractall(dest_dir)
+            names = [i for i in z.namelist() if '.DS_Store' not in i and '__MACOSX' not in i]
+            z.extractall(dest_dir, members=names)
             return defer.succeed(dest_dir)
 
         data_dir = user_data_dir("LBRY")
         version_dir = os.path.join(data_dir, "ui_version_history")
 
-        git_version = subprocess.check_output(
-            "git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep HEAD | cut -f 1", shell=True)
+        git_version = subprocess.check_output(GIT_CMD_STRING, shell=True)
 
         if not os.path.isdir(data_dir):
             os.mkdir(data_dir)
