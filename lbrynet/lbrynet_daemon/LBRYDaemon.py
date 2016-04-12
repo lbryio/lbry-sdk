@@ -198,7 +198,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if not self.announced_startup:
             if functionPath not in ['is_running', 'is_first_run',
                                     'get_time_behind_blockchain', 'stop',
-                                    'daemon_status', 'get_start_notice']:
+                                    'daemon_status', 'get_start_notice',
+                                    'version']:
                 return server.failure
 
         try:
@@ -919,6 +920,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             "lbryum version: ": lbryum_version,
             "ui_version": self.ui_version,
         }
+        
+        log.info("[" + str(datetime.now()) + "] Get version info: " + json.dumps(msg))
         return self._render_response(msg, OK_CODE)
 
     def jsonrpc_get_settings(self):
