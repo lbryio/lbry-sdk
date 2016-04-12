@@ -144,7 +144,7 @@ def start():
         return defer.succeed([root, ui_version])
 
     def setupapi(root, wallet, ui_version):
-        daemon = LBRYDaemon(wallet, "False", ui_version)
+        daemon = LBRYDaemon(ui_version, wallet_type=wallet)
         root.putChild(API_ADDRESS, daemon)
         reactor.listenTCP(API_PORT, server.Site(root), interface=API_INTERFACE)
         return daemon.setup()

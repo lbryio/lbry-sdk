@@ -903,6 +903,8 @@ class LBRYumWallet(LBRYWallet):
         self._catch_up_check = None
         self._caught_up_counter = 0
         self.blocks_behind_alert = 0
+        self.catchup_progress = 0
+        self.max_behind = 0
 
     def _start(self):
 
@@ -998,7 +1000,12 @@ class LBRYumWallet(LBRYWallet):
                     alert.info('Catching up to the blockchain...showing blocks left...')
                 if self._caught_up_counter % 30 == 0:
                     self.blocks_behind_alert = remote_height - local_height
+                    if self.blocks_behind_alert > self.max_behind:
+                        self.max_behind = self.blocks_behind_alert
+                    self.catchup_progress = int(100 * (self.blocks_behind_alert / (5 + self.max_behind)))
                     alert.info('%d...', (remote_height - local_height))
+                    alert.info("Catching up: " + str(int(100 * (self.blocks_behind_alert / (5 + self.max_behind)))) + "%")
+
                 self._caught_up_counter += 1
 
 
