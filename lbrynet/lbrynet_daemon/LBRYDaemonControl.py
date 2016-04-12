@@ -88,21 +88,23 @@ def start():
         if ui_dir:
             if os.path.isdir(ui_dir):
                 log.info("Using user specified UI directory: " + str(ui_dir))
-                return defer.succeed(ui_dir)
+                ui_version_info = "user-specified"
+                return defer.succeed([ui_dir, ui_version_info])
             else:
                 log.info("User specified UI directory doesn't exist: " + str(ui_dir))
 
-        def download_ui(dest_dir):
+        def download_ui(dest_dir, ui_version):
             url = urlopen(DIST_URL)
             z = ZipFile(StringIO(url.read()))
             names = [i for i in z.namelist() if '.DS_Store' not in i and '__MACOSX' not in i]
             z.extractall(dest_dir, members=names)
-            return defer.succeed(dest_dir)
+            return defer.succeed([dest_dir, ui_version])
 
         data_dir = user_data_dir("LBRY")
         version_dir = os.path.join(data_dir, "ui_version_history")
 
         git_version = subprocess.check_output(GIT_CMD_STRING, shell=True)
+        ui_version_info = git_version
 
         if not os.path.isdir(data_dir):
             os.mkdir(data_dir)
@@ -128,28 +130,28 @@ def start():
             log.info(version_message)
 
         if os.path.isdir(os.path.join(data_dir, "lbry-web-ui")):
-            return defer.succeed(os.path.join(data_dir, "lbry-web-ui"))
+            return defer.succeed([os.path.join(data_dir, "lbry-web-ui"), ui_version_info])
         else:
-            return download_ui((os.path.join(data_dir, "lbry-web-ui")))
+            return download_ui(os.path.join(data_dir, "lbry-web-ui"), ui_version_info)
 
-    def setupserver(ui_dir):
+    def setupserver(ui_dir, ui_version):
         root = LBRYindex(ui_dir)
         root.putChild("css", static.File(os.path.join(ui_dir, "css")))
         root.putChild("font", static.File(os.path.join(ui_dir, "font")))
         root.putChild("img", static.File(os.path.join(ui_dir, "img")))
         root.putChild("js", static.File(os.path.join(ui_dir, "js")))
         root.putChild("view", LBRYFileRender())
-        return defer.succeed(root)
+        return defer.succeed([root, ui_version])
 
-    def setupapi(root, wallet):
-        daemon = LBRYDaemon()
+    def setupapi(root, wallet, ui_version):
+        daemon = LBRYDaemon(wallet, "False", ui_version)
         root.putChild(API_ADDRESS, daemon)
         reactor.listenTCP(API_PORT, server.Site(root), interface=API_INTERFACE)
-        return daemon.setup(wallet, "False")
+        return daemon.setup()
 
     d = getui(args.ui)
-    d.addCallback(setupserver)
-    d.addCallback(lambda r: setupapi(r, args.wallet))
+    d.addCallback(lambda r: setupserver(r[0], r[1]))
+    d.addCallback(lambda r: setupapi(r[0], args.wallet, r[1]))
     d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
 
     reactor.run()

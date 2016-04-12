@@ -23,7 +23,8 @@ from decimal import Decimal
 from appdirs import user_data_dir
 from urllib2 import urlopen
 
-from lbrynet import __version__
+from lbrynet import __version__ as lbrynet_version
+from lbryum.version import ELECTRUM_VERSION as lbryum_version
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -65,7 +66,6 @@ STARTUP_STAGES = [
                     ('initializing', 'Initializing...'),
                     ('loading_db', 'Loading databases...'),
                     ('loading_wallet', 'Catching up with blockchain... %s'),
-                    ('loading_session', 'Starting session'),
                     ('loading_file_manager', 'Setting up file manager'),
                     ('loading_server', 'Starting lbrynet'),
                     ('started', 'Started lbrynet')
@@ -88,7 +88,91 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
+
     isLeaf = True
+
+    def __init__(self, wallet_type, check_for_updates, ui_version_info):
+        jsonrpc.JSONRPC.__init__(self)
+        reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
+
+        self.log_file = LOG_FILENAME
+        self.fetcher = None
+        self.current_db_revision = 1
+        self.run_server = True
+        self.session = None
+        self.known_dht_nodes = KNOWN_DHT_NODES
+        if sys.platform != "darwin":
+            self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+        else:
+            self.db_dir = user_data_dir("LBRY")
+        self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
+        self.peer_port = 3333
+        self.dht_node_port = 4444
+        self.first_run = None
+        if os.name == "nt":
+            from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
+            self.download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
+            self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrycrd")
+        elif sys.platform == "darwin":
+            self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
+            if wallet_type == "lbrycrd":
+                self.wallet_dir = user_data_dir("lbrycrd")
+            else:
+                self.wallet_dir = user_data_dir("LBRY")
+        else:
+            self.download_directory = os.getcwd()
+            if wallet_type == "lbrycrd":
+                self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
+            else:
+                self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
+        self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.json')
+        self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
+        self.wallet_user = None
+        self.wallet_password = None
+        self.sd_identifier = StreamDescriptorIdentifier()
+        self.stream_info_manager = TempLBRYFileMetadataManager()
+        self.wallet_rpc_port = 8332
+        self.downloads = []
+        self.stream_frames = []
+        self.default_blob_data_payment_rate = MIN_BLOB_DATA_PAYMENT_RATE
+        self.use_upnp = True
+        self.start_lbrycrdd = True
+        if os.name == "nt":
+            self.lbrycrdd_path = "lbrycrdd.exe"
+        else:
+            self.lbrycrdd_path = "./lbrycrdd"
+        self.delete_blobs_on_remove = True
+        self.blob_request_payment_rate_manager = None
+        self.lbry_file_metadata_manager = None
+        self.lbry_file_manager = None
+        self.settings = LBRYSettings(self.db_dir)
+        self.wallet_type = wallet_type
+        self.check_for_updates = check_for_updates
+        self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
+        self.autofetcher_conf = os.path.join(self.wallet_dir, "autofetcher.conf")
+        self.created_data_dir = False
+        if not os.path.exists(self.db_dir):
+            os.mkdir(self.db_dir)
+            self.created_data_dir = True
+        self.session_settings = None
+        self.data_rate = MIN_BLOB_DATA_PAYMENT_RATE
+        self.max_key_fee = DEFAULT_MAX_KEY_FEE
+        self.max_search_results = DEFAULT_MAX_SEARCH_RESULTS
+        self.startup_status = STARTUP_STAGES[0]
+        self.startup_message = None
+        self.announced_startup = False
+        self.search_timeout = 3.0
+        self.query_handlers = {}
+        self.default_settings = {
+            'run_on_startup': False,
+            'data_rate': MIN_BLOB_DATA_PAYMENT_RATE,
+            'max_key_fee': 10.0,
+            'default_download_directory': self.download_directory,
+            'max_upload': 0.0,
+            'max_download': 0.0,
+            'upload_log': True
+        }
+        self.ui_version = ui_version_info.replace('\n', '')
 
     def render(self, request):
         request.content.seek(0, 0)
@@ -97,6 +181,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         parsed = jsonrpclib.loads(content)
         functionPath = parsed.get("method")
         args = parsed.get('params')
+
+        #TODO convert args to correct types if possible
+
         id = parsed.get('id')
         version = parsed.get('jsonrpc')
         if version:
@@ -155,91 +242,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.error(failure)
         return jsonrpclib.Fault(self.FAILURE, "error")
 
-    def setup(self, wallet_type, check_for_updates):
-        def _set_vars(wallet_type, check_for_updates):
-            reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
-
-            self.log_file = LOG_FILENAME
-            self.fetcher = None
-            self.current_db_revision = 1
-            self.run_server = True
-            self.session = None
-            self.known_dht_nodes = KNOWN_DHT_NODES
-            if sys.platform != "darwin":
-                self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-            else:
-                self.db_dir = user_data_dir("LBRY")
-                # self.db_dir = os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrynet")
-            self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
-            self.peer_port = 3333
-            self.dht_node_port = 4444
-            self.first_run = None
-            if os.name == "nt":
-                from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
-                self.download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
-                self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrycrd")
-            elif sys.platform == "darwin":
-                self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
-                if wallet_type == "lbrycrd":
-                    self.wallet_dir = user_data_dir("lbrycrd")
-                else:
-                    self.wallet_dir = user_data_dir("LBRY")
-            else:
-                self.download_directory = os.getcwd()
-                if wallet_type == "lbrycrd":
-                    self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
-                else:
-                    self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
-            self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.json')
-            self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
-            self.wallet_user = None
-            self.wallet_password = None
-            self.sd_identifier = StreamDescriptorIdentifier()
-            self.stream_info_manager = TempLBRYFileMetadataManager()
-            self.wallet_rpc_port = 8332
-            self.downloads = []
-            self.stream_frames = []
-            self.default_blob_data_payment_rate = MIN_BLOB_DATA_PAYMENT_RATE
-            self.use_upnp = True
-            self.start_lbrycrdd = True
-            if os.name == "nt":
-                self.lbrycrdd_path = "lbrycrdd.exe"
-            else:
-                self.lbrycrdd_path = "./lbrycrdd"
-            self.delete_blobs_on_remove = True
-            self.blob_request_payment_rate_manager = None
-            self.lbry_file_metadata_manager = None
-            self.lbry_file_manager = None
-            self.settings = LBRYSettings(self.db_dir)
-            self.wallet_type = wallet_type
-            self.check_for_updates = check_for_updates
-            self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
-            self.autofetcher_conf = os.path.join(self.wallet_dir, "autofetcher.conf")
-            self.created_data_dir = False
-            if not os.path.exists(self.db_dir):
-                os.mkdir(self.db_dir)
-                self.created_data_dir = True
-            self.session_settings = None
-            self.data_rate = MIN_BLOB_DATA_PAYMENT_RATE
-            self.max_key_fee = DEFAULT_MAX_KEY_FEE
-            self.max_search_results = DEFAULT_MAX_SEARCH_RESULTS
-            self.startup_status = STARTUP_STAGES[0]
-            self.startup_message = None
-            self.announced_startup = False
-            self.search_timeout = 3.0
-            self.query_handlers = {}
-            self.default_settings = {
-                                         'run_on_startup': False,
-                                         'data_rate': MIN_BLOB_DATA_PAYMENT_RATE,
-                                         'max_key_fee': 10.0,
-                                         'default_download_directory': self.download_directory,
-                                         'max_upload': 0.0,
-                                         'max_download': 0.0,
-                                         'upload_log': True
-                                     }
-
-            return defer.succeed(None)
-
+    def setup(self):
         def _log_starting_vals():
             def _get_lbry_files_json():
                 r = []
@@ -266,14 +269,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _announce_startup():
             self.announced_startup = True
-            self.startup_status = STARTUP_STAGES[6]
+            self.startup_status = STARTUP_STAGES[5]
             log.info("[" + str(datetime.now()) + "] Started lbrynet-daemon")
             return defer.succeed(None)
 
         log.info("[" + str(datetime.now()) + "] Starting lbrynet-daemon")
 
         d = defer.Deferred()
-        d.addCallback(lambda _:_set_vars(wallet_type, check_for_updates))
         d.addCallback(lambda _: self._initial_setup())
         d.addCallback(self._set_daemon_settings)
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
@@ -299,7 +301,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             msg = {
                 "processor": platform.processor(),
                 "python version: ": platform.python_version(),
-                "lbrynet version: ": __version__,
+                "lbrynet version: ": lbrynet_version,
+                "lbryum version: ": lbryum_version,
+                "ui_version": self.ui_version,
                 # 'ip': json.load(urlopen('http://jsonip.com'))['ip'],
             }
             if sys.platform == "darwin":
@@ -358,7 +362,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 return self._start_server()
             return defer.succeed(True)
 
-        self.startup_status = STARTUP_STAGES[5]
+        self.startup_status = STARTUP_STAGES[4]
 
         dl = self.settings.get_server_running_status()
         dl.addCallback(restore_running_status)
@@ -542,7 +546,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return d
 
     def _setup_lbry_file_manager(self):
-        self.startup_status = STARTUP_STAGES[4]
+        self.startup_status = STARTUP_STAGES[3]
         self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.db_dir)
         d = self.lbry_file_metadata_manager.setup()
 
@@ -597,12 +601,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return r
 
         def create_session(results):
-            self.startup_status = STARTUP_STAGES[2]
             self.session = LBRYSession(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
                                        use_upnp=self.use_upnp, wallet=results['wallet'])
-            self.startup_status = STARTUP_STAGES[3]
+            self.startup_status = STARTUP_STAGES[2]
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
         dl.addCallback(combine_results)
@@ -868,6 +871,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         r = {'status_code': self.startup_status[0], 'status_message': self.startup_status[1]}
+        try:
+            if self.startup_status[0] == 'loading_wallet':
+                r['status_message'] = r['status_message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
+        except:
+            pass
         log.info("[" + str(datetime.now()) + "] daemon status: " + str(r))
         return self._render_response(r, OK_CODE)
 
@@ -900,6 +908,18 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return self._render_response(None, OK_CODE)
         else:
             self._render_response(self.startup_message, OK_CODE)
+
+    def jsonrpc_version(self):
+        """
+        Get lbry version information
+        """
+
+        msg = {
+            "lbrynet version: ": lbrynet_version,
+            "lbryum version: ": lbryum_version,
+            "ui_version": self.ui_version,
+        }
+        return self._render_response(msg, OK_CODE)
 
     def jsonrpc_get_settings(self):
         """
