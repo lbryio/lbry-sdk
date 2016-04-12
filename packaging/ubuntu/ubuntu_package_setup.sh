@@ -9,6 +9,10 @@ set -euo pipefail
 
 BRANCH=${1:-master}
 
+BUILD_DIR="lbry-build-$(date +%Y%m%d-%H%M%S)"
+mkdir "$BUILD_DIR"
+cd "$BUILD_DIR"
+
 # get the required OS packages
 sudo add-apt-repository -y ppa:spotify-jyrki/dh-virtualenv
 sudo apt-get update
@@ -49,13 +53,15 @@ function addfile() {
   echo "$(md5sum "data/$TARGET" | cut -d' ' -f1)  $TARGET" >> control/md5sums
 }
 PACKAGING_DIR='lbry/packaging/ubuntu'
-addfile "$PACKAGING_DIR/lbry-uri-handler" usr/share/python/lbrynet/bin/lbry-uri-handler
+addfile "$PACKAGING_DIR/lbry" usr/share/python/lbrynet/bin/lbry
 addfile "$PACKAGING_DIR/lbry.desktop" usr/share/applications/lbry.desktop
 #addfile lbry/packaging/ubuntu/lbry-init.conf etc/init/lbry.conf
 
 # repackage .deb
+sudo chown -R root:root control data
 tar -cvzf control.tar.gz -C control .
 tar -cvJf data.tar.xz -C data .
+sudo chown root:root debian-binary control.tar.gz data.tar.xz
 ar r "$PACKAGE" debian-binary control.tar.gz data.tar.xz
 
 # TODO: we can append to data.tar instead of extracting it all and recompressing
