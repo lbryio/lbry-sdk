@@ -17,7 +17,7 @@ urlencode() {
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 if [ -z "$(pgrep lbrynet-daemon)" ]; then
   echo "running lbrynet-daemon..."
-  $DIR/lbrynet-daemon 2>&1 >> "$HOME/.lbrynet/daemon.log" &
+  $DIR/lbrynet-daemon --branch=settings-page &
   sleep 3 # let the daemon load before connecting
 fi
 
