@@ -199,7 +199,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             if functionPath not in ['is_running', 'is_first_run',
                                     'get_time_behind_blockchain', 'stop',
                                     'daemon_status', 'get_start_notice',
-                                    'version']:
+                                    'version', 'check_for_new_version']:
                 return server.failure
 
         try:
@@ -920,7 +920,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             "lbryum version: ": lbryum_version,
             "ui_version": self.ui_version,
         }
-        
+
         log.info("[" + str(datetime.now()) + "] Get version info: " + json.dumps(msg))
         return self._render_response(msg, OK_CODE)
 
@@ -1333,45 +1333,23 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return self._render_response(self.fetcher.verbose, OK_CODE)
 
     def jsonrpc_check_for_new_version(self):
-        def _check_for_updates(package):
-            git_version = subprocess.check_output("git ls-remote " + package['git'] + " | grep HEAD | cut -f 1", shell=True)
-            up_to_date = False
-            if os.path.isfile(package['version_file']):
-                f = open(package['version_file'], 'r')
-                current_version = f.read()
-                f.close()
+        def _get_lbryum_version():
+            r = urlopen("https://rawgit.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
+            version = next(line.split("=")[1].split("#")[0].replace(" ", "")
+                           for line in r if "ELECTRUM_VERSION" in line)
+            version = version.replace("'", "")
+            return version
 
-                if git_version == current_version:
-                    r = package['name'] + " is up to date"
-                    up_to_date = True
-                else:
-                    r = package['name'] + " version is out of date"
-            else:
-                r = "Unknown version of " + package['name']
+        def _get_lbrynet_version():
+            r = urlopen("https://rawgit.com/lbryio/lbry/master/lbrynet/__init__.py").read().split('\n')
+            vs = next(i for i in r if 'version =' in i).split("=")[1].replace(" ", "")
+            vt = tuple(int(x) for x in vs[1:-1].split(','))
+            return ".".join([str(x) for x in vt])
 
-            return (up_to_date, r)
-
-        package_infos = {
-            "lbrynet": {"name": "LBRYnet",
-                        "git": "https://github.com/lbryio/lbry.git",
-                        "version_file": os.path.join(self.db_dir, ".lbrynet_version"),
-                        "clone": ".lbrygit",
-                        },
-            "lbryum": {"name": "lbryum",
-                       "git": "https://github.com/lbryio/lbryum.git",
-                       "version_file": os.path.join(self.db_dir, ".lbryum_version"),
-                       "clone": ".lbryumgit",
-                       },
-            "lbry": {"name": "LBRY",
-                     "git": "https://github.com/jackrobison/lbrynet-app.git",
-                     "version_file": os.path.join(self.db_dir, ".lbry_app_version"),
-                     "clone": None,
-                     },
-        }
-
-        r = [_check_for_updates(package_infos[p]) for p in package_infos.keys()]
-        log.info("[" + str(datetime.now()) + "] Check for new version: " + json.dumps(r))
-        return self._render_response(r, OK_CODE)
+        if (lbrynet_version >= _get_lbrynet_version()) and (lbryum_version >= _get_lbryum_version()):
+            return self._render_response(False, OK_CODE)
+        else:
+            return self._render_response(True, OK_CODE)
 
     def jsonrpc___dir__(self):
         return ['is_running', 'get_settings', 'set_settings', 'start_fetcher', 'stop_fetcher', 'fetcher_status',
