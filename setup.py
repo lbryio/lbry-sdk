@@ -29,7 +29,7 @@ requires = ['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
             'leveldb', 'lbryum', 'jsonrpc', 'simplejson', 'appdirs', 'six==1.9.0', 'base58']
 
 gui_data_files = ['close2.gif', 'lbry-dark-242x80.gif', 'lbry-dark-icon.xbm', 'lbry-dark-icon.ico',
-                  'drop_down.gif', 'show_options.gif', 'hide_options.gif', 'lbry.conf']
+                  'drop_down.gif', 'show_options.gif', 'hide_options.gif', 'lbry.conf', 'lbry.png']
 gui_data_paths = [os.path.join(base_dir, 'lbrynet', 'lbrynet_gui', f) for f in gui_data_files]
 
 setup(name='lbrynet',
