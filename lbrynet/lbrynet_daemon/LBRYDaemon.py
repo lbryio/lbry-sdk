@@ -71,17 +71,16 @@ STARTUP_STAGES = [
                     ('started', 'Started lbrynet')
                   ]
 
+ALLOWED_DURING_STARTUP = ['is_running', 'is_first_run',
+                          'get_time_behind_blockchain', 'stop',
+                          'daemon_status', 'get_start_notice',
+                          'version', 'check_for_new_version']
 
 BAD_REQUEST = 400
 NOT_FOUND = 404
 OK_CODE = 200
 # TODO add login credentials in a conf file
 # TODO alert if your copy of a lbry file is out of date with the name record
-
-
-class Bunch:
-    def __init__(self, params):
-        self.__dict__.update(params)
 
 
 class LBRYDaemon(jsonrpc.JSONRPC):
@@ -218,10 +217,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         # versions...
 
         if not self.announced_startup:
-            if functionPath not in ['is_running', 'is_first_run',
-                                    'get_time_behind_blockchain', 'stop',
-                                    'daemon_status', 'get_start_notice',
-                                    'version', 'check_for_new_version']:
+            if functionPath not in ALLOWED_DURING_STARTUP:
                 return server.failure
 
         try:
@@ -878,7 +874,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_is_running(self):
         """
-        Returns true if daemon completed startup, otherwise returns false
+        Check if lbrynet daemon is running
+
+        Args:
+            None
+        Returns: true if daemon completed startup, otherwise false
         """
 
         log.info("[" + str(datetime.now()) + "] is_running: " + str(self.announced_startup))
@@ -890,7 +890,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_daemon_status(self):
         """
-        Returns {'status_message': startup status message, 'status_code': status_code}
+        Get lbrynet daemon status information
+
+        Args:
+            None
+        Returns:
+            'status_message': startup status message
+            'status_code': status_code
+            if status_code is 'loading_wallet', also contains key 'progress': blockchain catchup progress
         """
 
         r = {'status_code': self.startup_status[0], 'status_message': self.startup_status[1]}
@@ -905,7 +912,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_is_first_run(self):
         """
-        Get True/False if can be determined, if wallet still is being set up returns None
+        Check if this is the first time lbrynet daemon has been run
+
+        Args:
+            None
+        Returns:
+            True if first run, otherwise False
         """
 
         log.info("[" + str(datetime.now()) + "] Check if is first run")
@@ -920,9 +932,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_get_start_notice(self):
         """
-        Get any special message to be displayed at startup, such as a first run notice
-        """
+        Get special message to be displayed at startup
 
+        Args:
+            None
+        Returns:
+            Startup message, such as first run notification
+        """
 
         log.info("[" + str(datetime.now()) + "] Get startup notice")
 
@@ -936,11 +952,18 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def jsonrpc_version(self):
         """
         Get lbry version information
+
+        Args:
+            None
+        Returns:
+            'lbrynet version': lbrynet version
+            'lbryum version': lbryum version
+            'ui_version': commit hash of ui
         """
 
         msg = {
-            "lbrynet version: ": lbrynet_version,
-            "lbryum version: ": lbryum_version,
+            "lbrynet_version: ": lbrynet_version,
+            "lbryum_version: ": lbryum_version,
             "ui_version": self.ui_version,
         }
 
@@ -949,11 +972,26 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_get_settings(self):
         """
-        Get LBRY payment settings
+        Get lbrynet daemon settings
 
-        @return {'data_rate': float, 'max_key_fee': float, 'max_upload': float (0.0 for unlimited),
-                 'default_download_directory': string, 'run_on_startup': bool,
-                 'max_download': float (0.0 for unlimited)}
+        Args:
+            None
+        Returns:
+            'run_on_startup': bool,
+            'data_rate': float,
+            'max_key_fee': float,
+            'default_download_directory': string,
+            'max_upload': float, 0.0 for unlimited
+            'max_download': float, 0.0 for unlimited
+            'upload_log': bool,
+            'search_timeout': float,
+            'max_search_results': int,
+            'wallet_type': string,
+            'delete_blobs_on_remove': bool,
+            'peer_port': int,
+            'dht_node_port': int,
+            'use_upnp': bool,
+            'start_lbrycrdd': bool,
         """
 
         log.info("[" + str(datetime.now()) + "] Get daemon settings")
@@ -961,11 +999,26 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_set_settings(self, p):
         """
-        Set LBRY payment settings
+        Set lbrynet daemon settings
 
-        @param settings: {'data_rate': float, 'max_key_fee': float, 'max_upload': float (0.0 for unlimited),
-                          'default_download_directory': string, 'run_on_startup': bool,
-                          'max_download': float (0.0 for unlimited)}
+        Args:
+            'run_on_startup': bool,
+            'data_rate': float,
+            'max_key_fee': float,
+            'default_download_directory': string,
+            'max_upload': float, 0.0 for unlimited
+            'max_download': float, 0.0 for unlimited
+            'upload_log': bool,
+            'search_timeout': float,
+            'max_search_results': int,
+            'wallet_type': string,
+            'delete_blobs_on_remove': bool,
+            'peer_port': int,
+            'dht_node_port': int,
+            'use_upnp': bool,
+            'start_lbrycrdd': bool,
+        Returns:
+            settings dict
         """
 
         def _log_settings_change(params):
@@ -977,11 +1030,43 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    def jsonrpc_help(self, p=None):
+        """
+        Function to retrieve docstring for API function
+
+        Args:
+            optional 'function': function to retrieve documentation for
+            optional 'callable_during_startup':
+        Returns:
+            if given a function, returns given documentation
+            if given callable_during_startup flag, returns list of functions callable during the startup sequence
+            if no params are given, returns the list of callable functions
+        """
+
+        if not p:
+            return self._render_response(['is_running', 'get_settings', 'set_settings', 'start_fetcher', 'stop_fetcher',
+                                          'fetcher_status', 'get_balance', 'stop', 'get_lbry_files', 'resolve_name',
+                                          'get', 'search_nametrie', 'delete_lbry_file', 'check', 'publish',
+                                          'abandon_name', 'get_name_claims', 'get_time_behind_blockchain',
+                                          'get_new_address', 'toggle_fetcher_verbose', 'check_for_new_version'],
+                                         OK_CODE)
+        elif 'callable_during_start' in p.keys():
+            return self._render_response(ALLOWED_DURING_STARTUP, OK_CODE)
+        elif 'function' in p.keys():
+            func_path = p['function']
+            function = self._getFunction(func_path)
+            return self._render_response(function.__doc__, OK_CODE)
+        else:
+            return self._render_response(self.jsonrpc_help.__doc__, OK_CODE)
+
     def jsonrpc_start_fetcher(self):
         """
-        Start automatically downloading new name claims as they happen
+        Start automatically downloading new name claims as they occur (off by default)
 
-        @return: confirmation message
+        Args:
+            None
+        Returns:
+            confirmation message
         """
 
         self.fetcher.start()
@@ -991,9 +1076,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_stop_fetcher(self):
         """
-        Stop automatically downloading new name claims as they happen
+        Stop automatically downloading new name claims as they occur
 
-        @return: confirmation message
+        Args:
+            None
+        Returns:
+            confirmation message
         """
 
         self.fetcher.stop()
@@ -1004,7 +1092,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Get fetcher status
 
-        @return: True/False
+        Args:
+            None
+        Returns:
+            True/False
         """
 
         log.info("[" + str(datetime.now()) + "] Get fetcher status")
@@ -1012,9 +1103,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_get_balance(self):
         """
-        Get LBC balance
+        Get balance
 
-        @return: balance
+        Args:
+            None
+        Returns:
+            balance, float
         """
 
         log.info("[" + str(datetime.now()) + "] Get balance")
@@ -1024,7 +1118,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Stop lbrynet-daemon
 
-        @return: shutdown message
+        Args:
+            None
+        Returns:
+            shutdown message
         """
 
         def _disp_shutdown():
@@ -1040,7 +1137,19 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Get LBRY files
 
-        @return: List of managed LBRY files
+        Args:
+            None
+        Returns:
+            List of lbry files:
+            'completed': bool
+            'file_name': string
+            'key': hex string
+            'points_paid': float
+            'stopped': bool
+            'stream_hash': base 58 string
+            'stream_name': string
+            'suggested_file_name': string
+            'upload_allowed': bool
         """
 
         r = []
@@ -1065,10 +1174,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Resolve stream info from a LBRY uri
 
-        @param: {'name': name to look up}
-        @return: info for name claim
+        Args:
+            'name': name to look up, string, do not include lbry:// prefix
+        Returns:
+            metadata from name claim
         """
-        params = Bunch(p)
+
+        if 'name' in p.keys():
+            name = p['name']
+        else:
+            return self._render_response(None, BAD_REQUEST)
 
         def _disp(info):
             stream_hash = info['stream_hash']
@@ -1079,7 +1194,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
             return self._render_response(info, OK_CODE)
 
-        d = self._resolve_name(params.name)
+        d = self._resolve_name(name)
         d.addCallbacks(_disp, lambda _: server.failure)
         d.callback(None)
         return d
@@ -1088,8 +1203,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Download stream from a LBRY uri
 
-        @param: name, optional: download_directory
-        @return: {'stream_hash': hex string, 'path': path of download}
+        Args:
+            'name': name to download, string
+            optional 'download_directory': path to directory where file will be saved, string
+        Returns:
+            'stream_hash': hex string
+            'path': path of download
         """
 
         if 'timeout' not in p.keys():
@@ -1145,13 +1264,18 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_search_nametrie(self, p):
         """
-        Search the nametrie for claims beginning with search
+        Search the nametrie for claims beginning with search (yes, this is a dumb search, it'll be made better)
 
-        @param {'search': search string}
-        @return: List of search results
+        Args:
+            'search': search query, string
+        Returns:
+            List of search results
         """
 
-        params = Bunch(p)
+        if 'search' in p.keys():
+            search = p['search']
+        else:
+            return self._render_response(None, BAD_REQUEST)
 
         def _clean(n):
             t = []
@@ -1187,10 +1311,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 # log.info(str(t))
             return consolidated_results
 
-        log.info('[' + str(datetime.now()) + '] Search nametrie: ' + params.search)
+        log.info('[' + str(datetime.now()) + '] Search nametrie: ' + search)
 
         d = self.session.wallet.get_nametrie()
-        d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(params.search) and 'txid' in claim])
+        d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
         d.addCallback(lambda claims: claims[:self.max_search_results])
         d.addCallback(resolve_claims)
         d.addCallback(_clean)
@@ -1203,8 +1327,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Delete a lbry file
 
-        @param {'file_name': string}
-        @return: confirmation message
+        Args:
+            'file_name': downloaded file name, string
+        Returns:
+            confirmation message
         """
 
         def _disp(file_name):
@@ -1222,8 +1348,20 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Make a new name claim
 
-        @param:
-        @return:
+        Args:
+            'name': name to be claimed, string
+            'file_path': path to file to be associated with name, string
+            'bid': amount of credits to commit in this claim, float
+            optional 'author': author, string
+            optional 'title': title, description
+            optional 'description': content description, string
+            optional 'thumbnail': thumbnail image url
+            optional 'key_fee': key fee to be paid to publisher, float (default 0.0)
+            optional 'key_fee_address': address for key fee to be sent to, string (defaults on new address)
+            optional 'content_license': content license string
+            optional 'sources': alternative sources dict, keys 'lbry_sd_hash', 'btih', 'url'
+        Returns:
+            Confirmation message
         """
 
         metadata_fields = ["name", "file_path", "bid", "author", "title",
@@ -1255,19 +1393,25 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_abandon_name(self, p):
         """
-        Abandon and reclaim credits from a name claim
+        Abandon a name and reclaim credits from the claim
 
-        @param: {'txid': string}
-        @return: txid
+        Args:
+            'txid': txid of claim, string
+        Return:
+            Confirmation message
         """
-        params = Bunch(p)
+
+        if 'txid' in p.keys():
+            txid = p['txid']
+        else:
+            return server.failure
 
         def _disp(x):
             log.info("[" + str(datetime.now()) + "] Abandoned name claim tx " + str(x))
             return self._render_response(x, OK_CODE)
 
         d = defer.Deferred()
-        d.addCallback(lambda _: self.session.wallet.abandon_name(params.txid))
+        d.addCallback(lambda _: self.session.wallet.abandon_name(txid))
         d.addCallback(_disp)
         d.callback(None)
 
@@ -1275,10 +1419,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_get_name_claims(self):
         """
-        Get name claims
+        Get my name claims
 
-        @return: list of name claims
+        Args:
+            None
+        Returns
+            list of name claims
         """
+
         def _clean(claims):
             for c in claims:
                 for k in c.keys():
@@ -1294,9 +1442,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_get_time_behind_blockchain(self):
         """
-        Get time behind blockchain
+        Get number of blocks behind the blockchain
 
-        @return: time behind blockchain
+        Args:
+            None
+        Returns:
+            number of blocks behind blockchain, int
         """
 
         def _get_time_behind():
@@ -1316,8 +1467,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
         Generate a new wallet address
 
-        @return: new wallet address
+        Args:
+            None
+        Returns:
+            new wallet address, base 58 string
         """
+
         def _disp(address):
             log.info("[" + str(datetime.now()) + "] Got new wallet address: " + address)
             return defer.succeed(address)
@@ -1348,6 +1503,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     #     return d
 
     def jsonrpc_toggle_fetcher_verbose(self):
+        """
+        Toggle fetcher verbose mode
+
+        Args:
+            None
+        Returns:
+            Fetcher verbose status, bool
+        """
+
         if self.fetcher.verbose:
             self.fetcher.verbose = False
         else:
@@ -1358,7 +1522,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def jsonrpc_check_for_new_version(self):
         """
         Checks local version against versions in __init__.py and version.py in the lbrynet and lbryum repos
-        Returns true/false, true meaning that there is a new version available
+
+        Args:
+            None
+        Returns:
+            true/false, true meaning that there is a new version available
         """
 
         def _get_lbryum_version():
@@ -1388,12 +1556,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 return self._render_response(True, OK_CODE)
 
         return _check_version()
-
-    def jsonrpc___dir__(self):
-        return ['is_running', 'get_settings', 'set_settings', 'start_fetcher', 'stop_fetcher', 'fetcher_status',
-                'get_balance', 'stop', 'get_lbry_files', 'resolve_name', 'get', 'search_nametrie',
-                'delete_lbry_file', 'check', 'publish', 'abandon_name', 'get_name_claims',
-                'get_time_behind_blockchain', 'get_new_address', 'toggle_fetcher_verbose', 'check_for_new_version']
 
 
 class LBRYDaemonCommandHandler(object):
