@@ -78,11 +78,11 @@ def start():
 
     if args.branch == "HEAD":
         GIT_CMD_STRING = "git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep %s | cut -f 1" % args.branch
-        DIST_URL = "https://rawgit.com/lbryio/lbry-web-ui/master/dist.zip"
+        DIST_URL = "http://rawgit.com/lbryio/lbry-web-ui/master/dist.zip"
     else:
         log.info("Using UI branch: " + args.branch)
         GIT_CMD_STRING = "git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep refs/heads/%s | cut -f 1" % args.branch
-        DIST_URL = "https://rawgit.com/lbryio/lbry-web-ui/%s/dist.zip" % args.branch
+        DIST_URL = "http://rawgit.com/lbryio/lbry-web-ui/%s/dist.zip" % args.branch
 
     def getui(ui_dir=None):
         if ui_dir:
