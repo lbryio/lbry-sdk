@@ -231,7 +231,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             request.setHeader("Access-Control-Allow-Origin", "*")
             request.setHeader("content-type", "text/json")
-            if args == [{}]:
+            if args == [{}] or args == [None]:
                 d = defer.maybeDeferred(function)
             else:
                 d = defer.maybeDeferred(function, *args)
@@ -1356,23 +1356,38 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return self._render_response(self.fetcher.verbose, OK_CODE)
 
     def jsonrpc_check_for_new_version(self):
+        """
+        Checks local version against versions in __init__.py and version.py in the lbrynet and lbryum repos
+        Returns true/false, true meaning that there is a new version available
+        """
+
         def _get_lbryum_version():
-            r = urlopen("https://rawgit.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
+            r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
             version = next(line.split("=")[1].split("#")[0].replace(" ", "")
                            for line in r if "ELECTRUM_VERSION" in line)
             version = version.replace("'", "")
+            log.info("remote lbryum " + str(version) + " > local lbryum " + str(lbryum_version) + " = " + str(version > lbryum_version))
             return version
 
         def _get_lbrynet_version():
-            r = urlopen("https://rawgit.com/lbryio/lbry/master/lbrynet/__init__.py").read().split('\n')
+            r = urlopen("https://raw.githubusercontent.com/lbryio/lbry/master/lbrynet/__init__.py").read().split('\n')
             vs = next(i for i in r if 'version =' in i).split("=")[1].replace(" ", "")
             vt = tuple(int(x) for x in vs[1:-1].split(','))
-            return ".".join([str(x) for x in vt])
+            vr = ".".join([str(x) for x in vt])
+            log.info("remote lbrynet " + str(vr) + " > local lbrynet " + str(lbrynet_version) + " = " + str(vr > lbrynet_version))
+            return vr
 
-        if (lbrynet_version >= _get_lbrynet_version()) and (lbryum_version >= _get_lbryum_version()):
-            return self._render_response(False, OK_CODE)
-        else:
-            return self._render_response(True, OK_CODE)
+        def _check_version():
+            git_lbrynet = _get_lbrynet_version()
+            git_lbryum = _get_lbryum_version()
+            if (lbrynet_version >= git_lbrynet) and (lbryum_version >= git_lbryum):
+                log.info("[" + str(datetime.now()) + "] Up to date")
+                return self._render_response(False, OK_CODE)
+            else:
+                log.info("[" + str(datetime.now()) + "] Updates available")
+                return self._render_response(True, OK_CODE)
+
+        return _check_version()
 
     def jsonrpc___dir__(self):
         return ['is_running', 'get_settings', 'set_settings', 'start_fetcher', 'stop_fetcher', 'fetcher_status',
