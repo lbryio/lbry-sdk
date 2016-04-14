@@ -683,7 +683,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _show_first_run_result(self, credits_received):
         if credits_received != 0.0:
             points_string = locale.format_string("%.2f LBC", (round(credits_received, 2),), grouping=True)
-            self.startup_message = "Thank you for testing the alpha version of LBRY! You have been given %s for free because we love you. Please give them a few minutes to show up while you catch up with our blockchain." % points_string
+            self.startup_message = "Thank you for testing the alpha version of LBRY! You have been given %s for free because we love you. Please hang on for a few minutes for the next block to be mined. When you refresh this page and see your credits you're ready to go!." % points_string
         else:
             self.startup_message = None
 
