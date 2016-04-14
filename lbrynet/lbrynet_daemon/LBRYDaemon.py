@@ -229,7 +229,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             request.setHeader("Access-Control-Allow-Origin", "*")
             request.setHeader("content-type", "text/json")
-            if args == [{}] or args == [None]:
+            if args == [{}]:
                 d = defer.maybeDeferred(function)
             else:
                 d = defer.maybeDeferred(function, *args)
@@ -928,13 +928,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             if status_code is 'loading_wallet', also contains key 'progress': blockchain catchup progress
         """
 
-        r = {'status_code': self.startup_status[0], 'status_message': self.startup_status[1]}
-        try:
-            if self.startup_status[0] == 'loading_wallet':
-                r['status_message'] = r['status_message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
-                r['progress'] = self.session.wallet.catchup_progress
-        except:
-            pass
+        r = {'code': self.startup_status[0], 'message': self.startup_status[1], 'progress': None}
+        if self.startup_status[0] == 'loading_wallet':
+            r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
+            r['progress'] = self.session.wallet.catchup_progress
         log.info("[" + str(datetime.now()) + "] daemon status: " + str(r))
         return self._render_response(r, OK_CODE)
 
