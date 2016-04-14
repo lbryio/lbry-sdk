@@ -99,6 +99,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.announced_startup = False
         self.query_handlers = {}
         self.ui_version = ui_version_info.replace('\n', '')
+        self.git_lbrynet_version = None
+        self.git_lbryum_version = None
         self.wallet_type = wallet_type
         self.session_settings = None
         self.first_run = None
@@ -264,22 +266,30 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def setup(self):
         def _log_starting_vals():
             def _get_lbry_files_json():
-                r = []
-                for f in self.lbry_file_manager.lbry_files:
-                    if f.key:
-                        t = {'completed': f.completed, 'file_name': f.file_name, 'key': binascii.b2a_hex(f.key),
-                             'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
-                             'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
-                             'upload_allowed': f.upload_allowed}
-
-                    else:
-                        t = {'completed': f.completed, 'file_name': f.file_name, 'key': None,
-                             'points_paid': f.points_paid,
-                             'stopped': f.stopped, 'stream_hash': f.stream_hash, 'stream_name': f.stream_name,
-                             'suggested_file_name': f.suggested_file_name, 'upload_allowed': f.upload_allowed}
-
-                    r.append(t)
+                r = self._get_lbry_files()
                 return json.dumps(r)
+
+            def _get_lbryum_version():
+                r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
+                version = next(line.split("=")[1].split("#")[0].replace(" ", "")
+                               for line in r if "ELECTRUM_VERSION" in line)
+                version = version.replace("'", "")
+                log.info("remote lbryum " + str(version) + " > local lbryum " + str(lbryum_version) + " = " + str(
+                    version > lbryum_version))
+                return version
+
+            def _get_lbrynet_version():
+                r = urlopen("https://raw.githubusercontent.com/lbryio/lbry/master/lbrynet/__init__.py").read().split(
+                    '\n')
+                vs = next(i for i in r if 'version =' in i).split("=")[1].replace(" ", "")
+                vt = tuple(int(x) for x in vs[1:-1].split(','))
+                vr = ".".join([str(x) for x in vt])
+                log.info("remote lbrynet " + str(vr) + " > local lbrynet " + str(lbrynet_version) + " = " + str(
+                    vr > lbrynet_version))
+                return vr
+
+            self.git_lbrynet_version = _get_lbrynet_version()
+            self.git_lbryum_version = _get_lbryum_version()
 
             log.info("LBRY Files: " + _get_lbry_files_json())
             log.info("Starting balance: " + str(self.session.wallet.wallet_balance))
@@ -869,6 +879,24 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    def _get_lbry_files(self):
+        r = []
+        for f in self.lbry_file_manager.lbry_files:
+            if f.key:
+                t = {'completed': f.completed, 'file_name': f.file_name, 'key': binascii.b2a_hex(f.key),
+                     'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
+                     'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
+                     'upload_allowed': f.upload_allowed}
+
+            else:
+                t = {'completed': f.completed, 'file_name': f.file_name, 'key': None,
+                     'points_paid': f.points_paid,
+                     'stopped': f.stopped, 'stream_hash': f.stream_hash, 'stream_name': f.stream_name,
+                     'suggested_file_name': f.suggested_file_name, 'upload_allowed': f.upload_allowed}
+
+            r.append(t)
+        return r
+
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
 
@@ -959,12 +987,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'lbrynet version': lbrynet version
             'lbryum version': lbryum version
             'ui_version': commit hash of ui
+            "remote_lbrynet": most recent lbrynet version available from github
+            "remote_lbryum": most recent lbryum version available from github
         """
 
         msg = {
             "lbrynet_version: ": lbrynet_version,
             "lbryum_version: ": lbryum_version,
             "ui_version": self.ui_version,
+            "remote_lbrynet": self.git_lbrynet_version,
+            "remote_lbryum": self.git_lbryum_version,
         }
 
         log.info("[" + str(datetime.now()) + "] Get version info: " + json.dumps(msg))
@@ -1152,21 +1184,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'upload_allowed': bool
         """
 
-        r = []
-        for f in self.lbry_file_manager.lbry_files:
-            if f.key:
-                t = {'completed': f.completed, 'file_name': f.file_name, 'key': binascii.b2a_hex(f.key),
-                     'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
-                     'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
-                     'upload_allowed': f.upload_allowed}
-
-            else:
-                t = {'completed': f.completed, 'file_name': f.file_name, 'key': None, 'points_paid': f.points_paid,
-                     'stopped': f.stopped, 'stream_hash': f.stream_hash, 'stream_name': f.stream_name,
-                     'suggested_file_name': f.suggested_file_name, 'upload_allowed': f.upload_allowed}
-
-            r.append(json.dumps(t))
-
+        r = self._get_lbry_files()
         log.info("[" + str(datetime.now()) + "] Get LBRY files")
         return self._render_response(r, OK_CODE)
 
@@ -1529,26 +1547,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             true/false, true meaning that there is a new version available
         """
 
-        def _get_lbryum_version():
-            r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
-            version = next(line.split("=")[1].split("#")[0].replace(" ", "")
-                           for line in r if "ELECTRUM_VERSION" in line)
-            version = version.replace("'", "")
-            log.info("remote lbryum " + str(version) + " > local lbryum " + str(lbryum_version) + " = " + str(version > lbryum_version))
-            return version
 
-        def _get_lbrynet_version():
-            r = urlopen("https://raw.githubusercontent.com/lbryio/lbry/master/lbrynet/__init__.py").read().split('\n')
-            vs = next(i for i in r if 'version =' in i).split("=")[1].replace(" ", "")
-            vt = tuple(int(x) for x in vs[1:-1].split(','))
-            vr = ".".join([str(x) for x in vt])
-            log.info("remote lbrynet " + str(vr) + " > local lbrynet " + str(lbrynet_version) + " = " + str(vr > lbrynet_version))
-            return vr
 
         def _check_version():
-            git_lbrynet = _get_lbrynet_version()
-            git_lbryum = _get_lbryum_version()
-            if (lbrynet_version >= git_lbrynet) and (lbryum_version >= git_lbryum):
+            if (lbrynet_version >= self.git_lbrynet_version) and (lbryum_version >= self.git_lbryum_version):
                 log.info("[" + str(datetime.now()) + "] Up to date")
                 return self._render_response(False, OK_CODE)
             else:
