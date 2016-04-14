@@ -928,10 +928,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             if status_code is 'loading_wallet', also contains key 'progress': blockchain catchup progress
         """
 
-        r = {'code': self.startup_status[0], 'message': self.startup_status[1], 'progress': None}
+        r = {'code': self.startup_status[0], 'message': self.startup_status[1], 'progress': None, 'is_lagging': None}
         if self.startup_status[0] == 'loading_wallet':
             r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
             r['progress'] = self.session.wallet.catchup_progress
+            r['is_lagging'] = self.session.wallet.is_lagging
+
         log.info("[" + str(datetime.now()) + "] daemon status: " + str(r))
         return self._render_response(r, OK_CODE)
 

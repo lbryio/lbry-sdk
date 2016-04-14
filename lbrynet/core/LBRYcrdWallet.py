@@ -70,6 +70,8 @@ class LBRYWallet(object):
         self.max_expected_payment_time = datetime.timedelta(minutes=3)
         self.stopped = True
 
+        self.is_lagging = None
+
         self.manage_running = False
         self._manage_count = 0
         self._balance_refresh_time = 3
@@ -996,15 +998,17 @@ class LBRYumWallet(LBRYWallet):
                 self._catch_up_check = None
                 blockchain_caught_d.callback(True)
             elif remote_height != 0:
+                self.blocks_behind_alert = remote_height - local_height
+                if self.blocks_behind_alert > self.max_behind:
+                    self.max_behind = self.blocks_behind_alert
+                self.catchup_progress = int(100 * (self.blocks_behind_alert / (5 + self.max_behind)))
                 if self._caught_up_counter == 0:
                     alert.info('Catching up to the blockchain...showing blocks left...')
                 if self._caught_up_counter % 30 == 0:
-                    self.blocks_behind_alert = remote_height - local_height
-                    if self.blocks_behind_alert > self.max_behind:
-                        self.max_behind = self.blocks_behind_alert
-                    self.catchup_progress = int(100 * (self.blocks_behind_alert / (5 + self.max_behind)))
                     alert.info('%d...', (remote_height - local_height))
-                    alert.info("Catching up: " + str(int(100 * (self.blocks_behind_alert / (5 + self.max_behind)))) + "%")
+                    alert.info("Catching up: " + str(self.catchup_progress) + "%")
+                if self._caught_up_counter >= 600:
+                    self.is_lagging = True
 
                 self._caught_up_counter += 1
 
