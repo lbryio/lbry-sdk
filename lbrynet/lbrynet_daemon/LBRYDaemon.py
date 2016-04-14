@@ -65,7 +65,7 @@ log.addHandler(handler)
 STARTUP_STAGES = [
                     ('initializing', 'Initializing...'),
                     ('loading_db', 'Loading databases...'),
-                    ('loading_wallet', 'Catching up with blockchain... %s'),
+                    ('loading_wallet', 'Catching up with the blockchain... %s'),
                     ('loading_file_manager', 'Setting up file manager'),
                     ('loading_server', 'Starting lbrynet'),
                     ('started', 'Started lbrynet')
@@ -930,9 +930,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         r = {'code': self.startup_status[0], 'message': self.startup_status[1], 'progress': None, 'is_lagging': None}
         if self.startup_status[0] == 'loading_wallet':
-            r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
-            r['progress'] = self.session.wallet.catchup_progress
             r['is_lagging'] = self.session.wallet.is_lagging
+            if r['is_lagging'] == True:
+                r['message'] = "Synchronization with the blockchain is lagging... if this continues try restarting LBRY"
+            else:
+                r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
+            r['progress'] = self.session.wallet.catchup_progress
 
         log.info("[" + str(datetime.now()) + "] daemon status: " + str(r))
         return self._render_response(r, OK_CODE)
