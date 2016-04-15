@@ -61,6 +61,7 @@ LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
 log = logging.getLogger(__name__)
 handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=262144, backupCount=5)
 log.addHandler(handler)
+log.setLevel(logging.INFO)
 
 STARTUP_STAGES = [
                     ('initializing', 'Initializing...'),
@@ -1078,12 +1079,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         if not p:
-            return self._render_response(['is_running', 'get_settings', 'set_settings', 'start_fetcher', 'stop_fetcher',
-                                          'fetcher_status', 'get_balance', 'stop', 'get_lbry_files', 'resolve_name',
-                                          'get', 'search_nametrie', 'delete_lbry_file', 'check', 'publish',
-                                          'abandon_name', 'get_name_claims', 'get_time_behind_blockchain',
-                                          'get_new_address', 'toggle_fetcher_verbose', 'check_for_new_version'],
-                                         OK_CODE)
+            return self._render_response(self._listFunctions(), OK_CODE)
         elif 'callable_during_start' in p.keys():
             return self._render_response(ALLOWED_DURING_STARTUP, OK_CODE)
         elif 'function' in p.keys():

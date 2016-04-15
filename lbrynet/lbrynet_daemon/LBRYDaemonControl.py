@@ -8,7 +8,6 @@ import webbrowser
 import sys
 import socket
 
-
 from StringIO import StringIO
 from zipfile import ZipFile
 from urllib import urlopen
@@ -30,13 +29,13 @@ if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
 LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
-
 log = logging.getLogger(__name__)
 handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=262144, backupCount=5)
 log.addHandler(handler)
-logging.basicConfig(level=logging.INFO)
+log.setLevel(logging.INFO)
 
 REMOTE_SERVER = "www.google.com"
+
 
 def test_internet_connection():
     try:
@@ -66,16 +65,14 @@ def start():
                         help="lbrycrd or lbryum, default lbryum",
                         type=str,
                         default=DEFAULT_WALLET)
-    parser.add_argument("--update",
-                        help="True or false, default true",
-                        type=str,
-                        default="True")
     parser.add_argument("--ui",
                         help="path to custom UI folder",
                         default="")
     parser.add_argument("--branch",
                         help="Branch of lbry-web-ui repo to use, defaults on HEAD",
                         default="HEAD")
+    parser.add_argument('--no-launch', dest='launchui', action="store_false")
+    parser.set_defaults(launchui=True)
 
     try:
         JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()
@@ -85,6 +82,11 @@ def start():
         pass
 
     log.info("Starting lbrynet-daemon from command line")
+    print "Starting lbrynet-daemon from command line"
+    print "To view activity, view the log file here: " + LOG_FILENAME
+    print "Web UI is available at http://%s:%i" %(API_INTERFACE, API_PORT)
+    print "JSONRPC API is available at " + API_CONNECTION_STRING
+    print "To quit press ctrl-c or call 'stop' via the API"
 
     args = parser.parse_args()
 
@@ -118,6 +120,7 @@ def start():
         git_version = subprocess.check_output(GIT_CMD_STRING, shell=True)
         if not git_version:
             log.info("You should have been notified to install xcode command line tools, once it's installed you can start LBRY")
+            print "You should have been notified to install xcode command line tools, once it's installed you can start LBRY"
             sys.exit(0)
 
         ui_version_info = git_version
@@ -165,8 +168,11 @@ def start():
         d = getui(args.ui)
         d.addCallback(lambda r: setupserver(r[0], r[1]))
         d.addCallback(lambda r: setupapi(r[0], args.wallet, r[1]))
-        d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
+        if args.launchui:
+            d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
         reactor.run()
+        print "\nClosing lbrynet-daemon"
     else:
         log.info("Not connected to internet, unable to start")
+        print "Not connected to internet, unable to start"
         return
