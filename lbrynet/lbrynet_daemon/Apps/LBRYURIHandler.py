@@ -45,7 +45,7 @@ class LBRYURIHandler(object):
             else:
                 raise Timeout("Timed out trying to start LBRY daemon")
 
-    def handle(self, lbry_name):
+    def handle_osx(self, lbry_name):
         lbry_process = [d for d in subprocess.Popen(['ps','aux'], stdout=subprocess.PIPE).stdout.readlines()
                             if 'LBRY.app' in d and 'LBRYURIHandler' not in d]
         try:
@@ -62,17 +62,33 @@ class LBRYURIHandler(object):
             started = True
 
         if lbry_name == "lbry" or lbry_name == "" and not started:
-            webbrowser.get('safari').open(UI_ADDRESS)
+            webbrowser.open(UI_ADDRESS)
         else:
-            webbrowser.get('safari').open(UI_ADDRESS + "/view?name=" + lbry_name)
+            webbrowser.open(UI_ADDRESS + "/view?name=" + lbry_name)
+
+    def handle_linux(self, lbry_name):
+        try:
+            is_running = self.daemon.is_running()
+            if not is_running:
+                sys.exit(0)
+        except:
+            sys.exit(0)
+
+        if lbry_name == "lbry":
+            webbrowser.open(UI_ADDRESS)
+        else:
+            webbrowser.open(UI_ADDRESS + "/view?name=" + lbry_name)
+
 
 def main(args):
     if len(args) != 1:
         args = ['lbry://lbry']
 
     name = args[0][7:]
-    LBRYURIHandler().handle(lbry_name=name)
-
+    if sys.platform == "darwin":
+        LBRYURIHandler().handle_osx(lbry_name=name)
+    else:
+        LBRYURIHandler().handle_linux(lbry_name=name)
 
 if __name__ == "__main__":
    main(sys.argv[1:])
