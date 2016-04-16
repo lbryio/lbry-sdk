@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 class GetStream(object):
     def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5,
-                                                                                            timeout=DEFAULT_TIMEOUT):
+                                                                    timeout=DEFAULT_TIMEOUT, download_directory=None):
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
@@ -37,6 +37,7 @@ class GetStream(object):
         self.d = defer.Deferred(None)
         self.timeout = timeout
         self.timeout_counter = 0
+        self.download_directory = download_directory
         self.download_path = None
         self.checker = LoopingCall(self.check_status)
 
@@ -68,6 +69,8 @@ class GetStream(object):
                 self.key_fee_address = None
 
             self.stream_hash = self.stream_info['stream_hash']
+            if isinstance(self.stream_hash, dict):
+                self.stream_hash = self.stream_hash['sd_hash']
 
         else:
             log.error("InvalidStreamInfoError in autofetcher: ", stream_info)
@@ -86,7 +89,10 @@ class GetStream(object):
         self.d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
         self.d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         self.d.addCallback(lambda metadata: (next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)), metadata))
-        self.d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata, [self.data_rate, True], self.payment_rate_manager))
+        self.d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata,
+                                                                               [self.data_rate, True],
+                                                                               self.payment_rate_manager,
+                                                                               download_directory=self.download_directory))
         self.d.addErrback(lambda err: err.trap(defer.CancelledError))
         self.d.addErrback(lambda err: log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback()))
         self.d.addCallback(self._start_download)

@@ -70,6 +70,8 @@ class LBRYWallet(object):
         self.max_expected_payment_time = datetime.timedelta(minutes=3)
         self.stopped = True
 
+        self.is_lagging = None
+
         self.manage_running = False
         self._manage_count = 0
         self._balance_refresh_time = 3
@@ -365,7 +367,8 @@ class LBRYWallet(object):
             value['content_license'] = content_license
         if author is not None:
             value['author'] = author
-        if sources is not None:
+        if isinstance(sources, dict):
+            sources['lbry_sd_hash'] = sd_hash
             value['sources'] = sources
 
         d = self._send_name_claim(name, json.dumps(value), amount)
@@ -436,7 +439,8 @@ class LBRYWallet(object):
 
             d.addCallback(set_first_run)
         else:
-            d = defer.succeed(None)
+            d = defer.succeed(self._FIRST_RUN_YES if self._first_run else self._FIRST_RUN_NO)
+
         d.addCallback(lambda _: self._first_run == self._FIRST_RUN_YES)
         return d
 
@@ -900,6 +904,9 @@ class LBRYumWallet(LBRYWallet):
         self._start_check = None
         self._catch_up_check = None
         self._caught_up_counter = 0
+        self.blocks_behind_alert = 0
+        self.catchup_progress = 0
+        self.max_behind = 0
 
     def _start(self):
 
@@ -991,10 +998,18 @@ class LBRYumWallet(LBRYWallet):
                 self._catch_up_check = None
                 blockchain_caught_d.callback(True)
             elif remote_height != 0:
+                self.blocks_behind_alert = remote_height - local_height
+                if self.blocks_behind_alert > self.max_behind:
+                    self.max_behind = self.blocks_behind_alert
+                self.catchup_progress = int(100 * (self.blocks_behind_alert / (5 + self.max_behind)))
                 if self._caught_up_counter == 0:
                     alert.info('Catching up to the blockchain...showing blocks left...')
                 if self._caught_up_counter % 30 == 0:
                     alert.info('%d...', (remote_height - local_height))
+                    alert.info("Catching up: " + str(self.catchup_progress) + "%")
+                if self._caught_up_counter >= 600:
+                    self.is_lagging = True
+
                 self._caught_up_counter += 1
 
 
@@ -1067,11 +1082,12 @@ class LBRYumWallet(LBRYWallet):
         decoded_tx['vout'] = []
         for output in tx.outputs():
             out = {}
-            out['value'] = output[2]
+            out['value'] = Decimal(output[2]) / Decimal(COIN)
             decoded_tx['vout'].append(out)
         return decoded_tx
 
     def _send_abandon(self, txid, address, amount):
+        log.info("Abandon " + str(txid) + " " + str(address) + " " + str(amount))
         cmd = known_commands['abandonclaim']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, txid, address, amount)
@@ -1079,6 +1095,7 @@ class LBRYumWallet(LBRYWallet):
         return d
 
     def _broadcast_transaction(self, raw_tx):
+        log.info("Broadcast: " + str(raw_tx))
         cmd = known_commands['broadcast']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, raw_tx)

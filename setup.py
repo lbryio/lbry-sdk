@@ -26,15 +26,10 @@ console_scripts = ['lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch
 
 requires = ['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
             'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0',
-            'leveldb', 'lbryum', 'jsonrpc', 'simplejson', 'appdirs']
-
-if sys.platform == 'darwin':
-    requires.append('six==1.9.0')
-else:
-    requires.append('six>=1.9.0')
+            'leveldb', 'lbryum>=2.6.0.1', 'jsonrpc', 'simplejson', 'appdirs', 'six==1.9.0', 'base58']
 
 gui_data_files = ['close2.gif', 'lbry-dark-242x80.gif', 'lbry-dark-icon.xbm', 'lbry-dark-icon.ico',
-                  'drop_down.gif', 'show_options.gif', 'hide_options.gif', 'lbry.conf']
+                  'drop_down.gif', 'show_options.gif', 'hide_options.gif', 'lbry.conf', 'lbry.png']
 gui_data_paths = [os.path.join(base_dir, 'lbrynet', 'lbrynet_gui', f) for f in gui_data_files]
 
 setup(name='lbrynet',

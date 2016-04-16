@@ -28,7 +28,7 @@ class LBRYURIHandler(object):
     def check_status(self):
         status = None
         try:
-            status = json.loads(self.daemon.is_running())['result']
+            status = self.daemon.is_running()
             if self.start_timeout < 30 and not status:
                 sleep(1)
                 self.start_timeout += 1
@@ -45,11 +45,11 @@ class LBRYURIHandler(object):
             else:
                 raise Timeout("Timed out trying to start LBRY daemon")
 
-    def handle(self, lbry_name):
+    def handle_osx(self, lbry_name):
         lbry_process = [d for d in subprocess.Popen(['ps','aux'], stdout=subprocess.PIPE).stdout.readlines()
                             if 'LBRY.app' in d and 'LBRYURIHandler' not in d]
         try:
-            status = json.loads(self.daemon.is_running())['result']
+            status = self.daemon.is_running()
         except:
             status = None
 
@@ -62,18 +62,22 @@ class LBRYURIHandler(object):
             started = True
 
         if lbry_name == "lbry" or lbry_name == "" and not started:
-            webbrowser.get('safari').open(UI_ADDRESS)
+            webbrowser.open(UI_ADDRESS)
         else:
-            r = json.loads(self.daemon.get({'name': lbry_name}))
-            if r['code'] == 200:
-                path = r['result']['path'].encode('utf-8')
-                extension = os.path.splitext(path)[1]
-                if extension in ['mp4', 'flv', 'mov', 'ogv']:
-                    webbrowser.get('safari').open(UI_ADDRESS + "/view?name=" + lbry_name)
-                else:
-                    webbrowser.get('safari').open('file://' + path)
-            else:
-                webbrowser.get('safari').open('http://lbry.io/get')
+            webbrowser.open(UI_ADDRESS + "/view?name=" + lbry_name)
+
+    def handle_linux(self, lbry_name):
+        try:
+            is_running = self.daemon.is_running()
+            if not is_running:
+                sys.exit(0)
+        except:
+            sys.exit(0)
+
+        if lbry_name == "lbry":
+            webbrowser.open(UI_ADDRESS)
+        else:
+            webbrowser.open(UI_ADDRESS + "/view?name=" + lbry_name)
 
 
 def main(args):
@@ -81,8 +85,10 @@ def main(args):
         args = ['lbry://lbry']
 
     name = args[0][7:]
-    LBRYURIHandler().handle(lbry_name=name)
-
+    if sys.platform == "darwin":
+        LBRYURIHandler().handle_osx(lbry_name=name)
+    else:
+        LBRYURIHandler().handle_linux(lbry_name=name)
 
 if __name__ == "__main__":
    main(sys.argv[1:])

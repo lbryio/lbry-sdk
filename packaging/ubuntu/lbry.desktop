@@ -1,0 +1,15 @@
+[Desktop Entry]
+Version=0.2.1
+Name=LBRY
+# Only KDE 4 seems to use GenericName, so we reuse the KDE strings.
+# From Ubuntu's language-pack-kde-XX-base packages, version 9.04-20090413.
+GenericName=Filesharing
+# Gnome and KDE 3 uses Comment.
+Comment=Stream. Share. Earn.
+#Exec=/usr/bin/xdg-open http://localhost:5279/view?name=%U
+Exec=/usr/share/python/lbrynet/bin/lbry %U
+Terminal=false
+Icon=/usr/share/python/lbrynet/lbrynet/lbrynet_gui/lbry.png
+Type=Application
+Categories=Network;Internet;Filesharing
+MimeType=x-scheme-handler/lbry;
