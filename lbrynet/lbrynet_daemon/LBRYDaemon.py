@@ -111,6 +111,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.run_server = True
         self.session = None
         self.known_dht_nodes = KNOWN_DHT_NODES
+        self.platform_info = {
+            "processor": platform.processor(),
+            "python_version: ": platform.python_version(),
+            "platform": platform.platform(),
+            "os_release": platform.release(),
+            "os_system": platform.system(),
+            "lbrynet_version: ": lbrynet_version,
+            "lbryum_version: ": lbryum_version,
+            "ui_version": self.ui_version,
+        }
 
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -328,20 +338,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _initial_setup(self):
         def _log_platform():
-            msg = {
-                "processor": platform.processor(),
-                "python version: ": platform.python_version(),
-                "lbrynet version: ": lbrynet_version,
-                "lbryum version: ": lbryum_version,
-                "ui_version": self.ui_version,
-                # 'ip': json.load(urlopen('http://jsonip.com'))['ip'],
-            }
-            if sys.platform == "darwin":
-                msg['osx version'] = platform.mac_ver()[0] + " " + platform.mac_ver()[2]
-            else:
-                msg['platform'] = platform.platform()
-
-            log.info("Platform: " + json.dumps(msg))
+            log.info("Platform: " + json.dumps(self.platform_info))
             return defer.succeed(None)
 
         def _load_daemon_conf():
@@ -987,19 +984,25 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Args:
             None
         Returns:
-            'lbrynet version': lbrynet version
-            'lbryum version': lbryum version
-            'ui_version': commit hash of ui
+            "platform": platform string
+            "os_release": os release string
+            "os_system": os name
+            "lbrynet_version: ": lbrynet_version,
+            "lbryum_version: ": lbryum_version,
+            "ui_version": commit hash of ui version being used
             "remote_lbrynet": most recent lbrynet version available from github
             "remote_lbryum": most recent lbryum version available from github
         """
 
         msg = {
-            "lbrynet_version: ": lbrynet_version,
-            "lbryum_version: ": lbryum_version,
-            "ui_version": self.ui_version,
-            "remote_lbrynet": self.git_lbrynet_version,
-            "remote_lbryum": self.git_lbryum_version,
+            'platform': self.platform_info['platform'],
+            'os_release': self.platform_info['os_release'],
+            'os_system': self.platform_info['os_system'],
+            'lbrynet_version': lbrynet_version,
+            'lbryum_version': lbryum_version,
+            'ui_version': self.ui_version,
+            'remote_lbrynet': self.git_lbrynet_version,
+            'remote_lbryum': self.git_lbryum_version
         }
 
         log.info("[" + str(datetime.now()) + "] Get version info: " + json.dumps(msg))
