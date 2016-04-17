@@ -58,6 +58,13 @@ if not os.path.isdir(log_dir):
 
 LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
 
+if os.path.isfile(LOG_FILENAME):
+    f = open(LOG_FILENAME, 'r')
+    PREVIOUS_LOG = len(f.read())
+    f.close()
+else:
+    PREVIOUS_LOG = 0
+
 log = logging.getLogger(__name__)
 handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=262144, backupCount=5)
 log.addHandler(handler)
@@ -121,6 +128,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             "lbryum_version: ": lbryum_version,
             "ui_version": self.ui_version,
         }
+        try:
+            self.platform_info['ip'] = json.load(urlopen('http://jsonip.com'))['ip']
+        except:
+            self.platform_info['ip'] = "Could not determine"
 
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -185,28 +196,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'dht_node_port': 4444,
             'use_upnp': True,
             'start_lbrycrdd': True,
+            'requested_first_run_credits': False
         }
-        if os.path.isfile(self.daemon_conf):
-            #load given settings, set missing settings to defaults
-            temp_settings = self.default_settings
-            f = open(self.daemon_conf, "r")
-            s = json.loads(f.read())
-            f.close()
-            for k in temp_settings.keys():
-                if k in s.keys():
-                    if type(temp_settings[k]) == type(s[k]):
-                        temp_settings[k] = s[k]
-                        self.__dict__[k] = s[k]
-            f = open(self.daemon_conf, "w")
-            f.write(json.dumps(temp_settings))
-            f.close()
-        else:
-            log.info("Writing default settings: " + json.dumps(self.default_settings) + " --> " + str(self.daemon_conf))
-            f = open(self.daemon_conf, "w")
-            f.write(json.dumps(self.default_settings))
-            f.close()
-            for k in self.default_settings.keys():
-                self.__dict__[k] = self.default_settings[k]
 
     def render(self, request):
         request.content.seek(0, 0)
@@ -290,8 +281,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 return version
 
             def _get_lbrynet_version():
-                r = urlopen("https://raw.githubusercontent.com/lbryio/lbry/master/lbrynet/__init__.py").read().split(
-                    '\n')
+                r = urlopen("https://raw.githubusercontent.com/lbryio/lbry/master/lbrynet/__init__.py").read().split('\n')
                 vs = next(i for i in r if 'version =' in i).split("=")[1].replace(" ", "")
                 vt = tuple(int(x) for x in vs[1:-1].split(','))
                 vr = ".".join([str(x) for x in vt])
@@ -308,10 +298,22 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return defer.succeed(None)
 
         def _announce_startup():
-            self.announced_startup = True
-            self.startup_status = STARTUP_STAGES[5]
-            log.info("[" + str(datetime.now()) + "] Started lbrynet-daemon")
-            return defer.succeed(None)
+            def _announce():
+                self.announced_startup = True
+                self.startup_status = STARTUP_STAGES[5]
+                log.info("[" + str(datetime.now()) + "] Started lbrynet-daemon")
+
+            if self.first_run:
+                d = self._upload_log(name_prefix="fr")
+            else:
+                d = self._upload_log(exclude_previous=True, name_prefix="start")
+
+            if float(self.session.wallet.wallet_balance) == 0.0:
+                d.addCallback(lambda _: self._check_first_run())
+                d.addCallback(self._show_first_run_result)
+
+            d.addCallback(lambda _: _announce())
+            return d
 
         log.info("[" + str(datetime.now()) + "] Starting lbrynet-daemon")
 
@@ -343,13 +345,30 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _load_daemon_conf():
             if os.path.isfile(self.daemon_conf):
-                return json.loads(open(self.daemon_conf, "r").read())
+                f = open(self.daemon_conf, "r")
+                loaded_settings = json.loads(f.read())
+                f.close()
+                missing_settings = {}
+                for k in self.default_settings.keys():
+                    if k not in loaded_settings.keys():
+                        missing_settings[k] = self.default_settings[k]
+                if missing_settings != {}:
+                    for k in missing_settings.keys():
+                        log.info("Adding missing setting: " + k + " with default value: " + str(missing_settings[k]))
+                        loaded_settings[k] = missing_settings[k]
+                    f = open(self.daemon_conf, "w")
+                    f.write(json.dumps(loaded_settings))
+                    f.close()
+                rsettings = loaded_settings
             else:
                 log.info("Writing default settings : " + json.dumps(self.default_settings) + " --> " + str(self.daemon_conf))
                 f = open(self.daemon_conf, "w")
                 f.write(json.dumps(self.default_settings))
                 f.close()
-                return self.default_settings
+                rsettings = self.default_settings
+            for k in rsettings.keys():
+                self.__dict__[k] = rsettings[k]
+            return rsettings
 
         d = _log_platform()
         d.addCallback(lambda _: _load_daemon_conf())
@@ -434,21 +453,36 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         dl.addCallback(_set_query_handlers)
         return dl
 
-    def _upload_log(self):
+    def _upload_log(self, name_prefix=None, exclude_previous=False):
+        if name_prefix:
+            name_prefix = name_prefix + "-" + platform.system()
+        else:
+            name_prefix = platform.system()
+
         if self.session_settings['upload_log']:
             LOG_URL = "https://lbry.io/log-upload"
-            f = open(self.log_file, "r")
+            if exclude_previous:
+                f = open(self.log_file, "r")
+                f.seek(PREVIOUS_LOG)
+                log_contents = f.read()
+                f.close()
+            else:
+                f = open(self.log_file, "r")
+                log_contents = f.read()
+                f.close()
             t = datetime.now()
-            log_name = base58.b58encode(self.lbryid)[:20] + "-" + str(t.month) + "-" + str(t.day) + "-" + str(t.year) + "-" + str(t.hour) + "-" + str(t.minute)
-            params = {'name': log_name, 'log': f.read()}
-            f.close()
+            log_name = name_prefix + "-" + base58.b58encode(self.lbryid)[:20] + "-" + str(t.month) + "-" + str(t.day) + "-" + str(t.year) + "-" + str(t.hour) + "-" + str(t.minute)
+            params = {'name': log_name, 'log': log_contents}
+
             requests.post(LOG_URL, params)
 
         return defer.succeed(None)
 
     def _shutdown(self):
         log.info("Closing lbrynet session")
-        d = self._upload_log()
+        log.info("Status at time of shutdown: " + self.startup_status[0])
+
+        d = self._upload_log(name_prefix="close", exclude_previous=False if self.first_run else True)
         d.addCallback(lambda _: self._stop_server())
         d.addErrback(lambda err: log.info("Bad server shutdown: " + err.getTraceback()))
         if self.session is not None:
@@ -638,8 +672,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         dl.addCallback(combine_results)
         dl.addCallback(create_session)
         dl.addCallback(lambda _: self.session.setup())
-        dl.addCallback(lambda _: self._check_first_run())
-        dl.addCallback(self._show_first_run_result)
+
         return dl
 
     def _check_first_run(self):
@@ -649,18 +682,20 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return 0.0
 
         d = self.session.wallet.is_first_run()
-
-        d.addCallback(lambda is_first_run: self._do_first_run() if is_first_run else _set_first_run_false())
+        d.addCallback(lambda is_first_run: self._do_first_run() if is_first_run or not self.requested_first_run_credits
+                                            else _set_first_run_false())
         return d
 
     def _do_first_run(self):
-        self.first_run = True
-        d = self.session.wallet.get_new_address()
-
         def send_request(url, data):
             log.info("Requesting first run credits")
             r = requests.post(url, json=data)
             if r.status_code == 200:
+                self.requested_first_run_credits = True
+                self.session_settings['requested_first_run_credits'] = True
+                f = open(self.daemon_conf, "w")
+                f.write(json.dumps(self.session_settings))
+                f.close()
                 return r.json()['credits_sent']
             return 0.0
 
@@ -675,7 +710,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addErrback(log_error)
             return d
 
+        self.first_run = True
+        d = self.session.wallet.get_new_address()
         d.addCallback(request_credits)
+
         return d
 
     def _show_first_run_result(self, credits_received):
@@ -1560,6 +1598,24 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return _check_version()
 
+    def jsonrpc_upload_log(self, p=None):
+        if p:
+            if 'name_prefix' in p.keys():
+                prefix = p['name_prefix'] + '_api'
+            else:
+                prefix = None
+            if 'exclude_previous' in p.keys:
+                exclude_previous = p['exclude_previous']
+            else:
+                exclude_previous = True
+        else:
+            prefix = "api"
+            exclude_previous = True
+
+        d = self._upload_log(name_prefix=prefix, exclude_previous=exclude_previous)
+        d.addCallback(lambda _: self._render_response(True, OK_CODE))
+        return d
+
 
 class LBRYDaemonCommandHandler(object):
     def __init__(self, command):
@@ -1600,9 +1656,12 @@ class LBRYFileRender(resource.Resource):
     def render_GET(self, request):
         if 'name' in request.args.keys():
             api = jsonrpc.Proxy(API_CONNECTION_STRING)
-            d = api.callRemote("get", {'name': request.args['name'][0]})
-            d.addCallback(lambda results: static.File(results['path']).render_GET(request))
-
+            if request.args['name'][0] != 'lbry':
+                d = api.callRemote("get", {'name': request.args['name'][0]})
+                d.addCallback(lambda results: static.File(results['path']).render_GET(request))
+            else:
+                request.redirect(UI_ADDRESS)
+                request.finish()
             return server.NOT_DONE_YET
         else:
             return server.failure
