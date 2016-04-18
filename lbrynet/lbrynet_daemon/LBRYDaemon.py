@@ -1643,6 +1643,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return _check_version()
 
     def jsonrpc_upload_log(self, p=None):
+        """
+        Upload log
+
+        Args, optional:
+            'name_prefix': prefix to denote what is requesting the log upload
+             'exclude_previous': true/false, whether or not to exclude previous sessions from upload, defaults on true
+        Returns
+            True
+        """
+
         if p:
             if 'name_prefix' in p.keys():
                 prefix = p['name_prefix'] + '_api'
