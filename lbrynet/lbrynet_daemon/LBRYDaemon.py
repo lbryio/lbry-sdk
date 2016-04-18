@@ -1459,6 +1459,50 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    def jsonrpc_get_transaction_history(self):
+        """
+        Get transaction history
+
+        Args:
+            None
+        Returns:
+            list of transactions
+        """
+
+        d = self.session.wallet.get_history()
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_get_transaction(self, p):
+        """
+        Get a decoded transaction from a txid
+
+        Args:
+            txid: txid hex string
+        Returns:
+            JSON formatted transaction
+        """
+
+
+        txid = p['txid']
+        d = self.session.wallet.get_tx_json(txid)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_get_public_key_from_wallet(self, p):
+        """
+        Get public key from wallet address
+
+        Args:
+            wallet: wallet address, base58
+        Returns:
+            public key
+        """
+
+        wallet = p['wallet']
+        d = self.session.wallet.get_pub_keys(wallet)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+
     def jsonrpc_get_time_behind_blockchain(self):
         """
         Get number of blocks behind the blockchain

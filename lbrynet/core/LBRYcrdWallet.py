@@ -1003,7 +1003,7 @@ class LBRYumWallet(LBRYWallet):
                     self.max_behind = self.blocks_behind_alert
                 self.catchup_progress = int(100 * (self.blocks_behind_alert / (5 + self.max_behind)))
                 if self._caught_up_counter == 0:
-                    alert.info('Catching up to the blockchain...showing blocks left...')
+                    alert.info('Catching up with the blockchain...showing blocks left...')
                 if self._caught_up_counter % 30 == 0:
                     alert.info('%d...', (remote_height - local_height))
                     alert.info("Catching up: " + str(self.catchup_progress) + "%")
@@ -1127,6 +1127,39 @@ class LBRYumWallet(LBRYWallet):
         cmd = known_commands['getclaimtrie']
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func)
+
+    def get_history(self):
+        cmd = known_commands['history']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func)
+
+    def get_tx_json(self, txid):
+        def _decode(raw_tx):
+            tx = Transaction(raw_tx).deserialize()
+            decoded_tx = {}
+            for txkey in tx.keys():
+                if isinstance(tx[txkey], list):
+                    decoded_tx[txkey] = []
+                    for i in tx[txkey]:
+                        tmp = {}
+                        for k in i.keys():
+                            if isinstance(i[k], Decimal):
+                                tmp[k] = float(i[k] / 1e8)
+                            else:
+                                tmp[k] = i[k]
+                        decoded_tx[txkey].append(tmp)
+                else:
+                    decoded_tx[txkey] = tx[txkey]
+            return decoded_tx
+
+        d = self._get_raw_tx(txid)
+        d.addCallback(_decode)
+        return d
+
+    def get_pub_keys(self, wallet):
+        cmd = known_commands['getpubkeys']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, wallet)
 
     def _save_wallet(self, val):
         d = threads.deferToThread(self.wallet.storage.write)

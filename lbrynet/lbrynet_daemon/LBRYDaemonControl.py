@@ -72,7 +72,13 @@ def start():
                         help="Branch of lbry-web-ui repo to use, defaults on HEAD",
                         default="HEAD")
     parser.add_argument('--no-launch', dest='launchui', action="store_false")
-    parser.set_defaults(launchui=True)
+    parser.add_argument('--log-to-console', dest='logtoconsole', action="store_true")
+    parser.add_argument('--quiet', dest='quiet', action="store_true")
+    parser.set_defaults(launchui=True, logtoconsole=False, quiet=False)
+    args = parser.parse_args()
+
+    if args.logtoconsole:
+        logging.basicConfig(level=logging.INFO)
 
     try:
         JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()
@@ -82,13 +88,13 @@ def start():
         pass
 
     log.info("Starting lbrynet-daemon from command line")
-    print "Starting lbrynet-daemon from command line"
-    print "To view activity, view the log file here: " + LOG_FILENAME
-    print "Web UI is available at http://%s:%i" %(API_INTERFACE, API_PORT)
-    print "JSONRPC API is available at " + API_CONNECTION_STRING
-    print "To quit press ctrl-c or call 'stop' via the API"
 
-    args = parser.parse_args()
+    if not args.logtoconsole and not args.quiet:
+        print "Starting lbrynet-daemon from command line"
+        print "To view activity, view the log file here: " + LOG_FILENAME
+        print "Web UI is available at http://%s:%i" %(API_INTERFACE, API_PORT)
+        print "JSONRPC API is available at " + API_CONNECTION_STRING
+        print "To quit press ctrl-c or call 'stop' via the API"
 
     if args.branch == "HEAD":
         GIT_CMD_STRING = "git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep %s | cut -f 1" % args.branch
@@ -171,7 +177,8 @@ def start():
         if args.launchui:
             d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
         reactor.run()
-        print "\nClosing lbrynet-daemon"
+        if not args.logtoconsole and not args.quiet:
+            print "\nClosing lbrynet-daemon"
     else:
         log.info("Not connected to internet, unable to start")
         print "Not connected to internet, unable to start"
