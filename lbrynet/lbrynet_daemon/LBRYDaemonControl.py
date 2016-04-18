@@ -80,9 +80,13 @@ def start():
     if args.logtoconsole:
         logging.basicConfig(level=logging.INFO)
 
+    args = parser.parse_args()
+
     try:
         JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()
         log.info("lbrynet-daemon is already running")
+        if args.launchui:
+            webbrowser.open(UI_ADDRESS)
         return
     except:
         pass

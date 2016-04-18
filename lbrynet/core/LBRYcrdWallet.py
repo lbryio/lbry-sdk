@@ -904,6 +904,7 @@ class LBRYumWallet(LBRYWallet):
         self._start_check = None
         self._catch_up_check = None
         self._caught_up_counter = 0
+        self._lag_counter = 0
         self.blocks_behind_alert = 0
         self.catchup_progress = 0
         self.max_behind = 0
@@ -997,8 +998,18 @@ class LBRYumWallet(LBRYWallet):
                 self._catch_up_check.stop()
                 self._catch_up_check = None
                 blockchain_caught_d.callback(True)
+
             elif remote_height != 0:
+                past_blocks_behind = self.blocks_behind_alert
                 self.blocks_behind_alert = remote_height - local_height
+                if self.blocks_behind_alert < past_blocks_behind:
+                    self._lag_counter = 0
+                    self.is_lagging = False
+                else:
+                    self._lag_counter += 1
+                    if self._lag_counter >= 900:
+                        self.is_lagging = True
+
                 if self.blocks_behind_alert > self.max_behind:
                     self.max_behind = self.blocks_behind_alert
                 self.catchup_progress = int(100 * (self.blocks_behind_alert / (5 + self.max_behind)))
@@ -1006,9 +1017,6 @@ class LBRYumWallet(LBRYWallet):
                     alert.info('Catching up with the blockchain...showing blocks left...')
                 if self._caught_up_counter % 30 == 0:
                     alert.info('%d...', (remote_height - local_height))
-                    alert.info("Catching up: " + str(self.catchup_progress) + "%")
-                if self._caught_up_counter >= 600:
-                    self.is_lagging = True
 
                 self._caught_up_counter += 1
 
