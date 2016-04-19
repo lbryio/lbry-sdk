@@ -74,9 +74,13 @@ def start():
     parser.add_argument('--no-launch', dest='launchui', action="store_false")
     parser.set_defaults(launchui=True)
 
+    args = parser.parse_args()
+
     try:
         JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()
         log.info("lbrynet-daemon is already running")
+        if args.launchui:
+            webbrowser.open(UI_ADDRESS)
         return
     except:
         pass
@@ -87,8 +91,6 @@ def start():
     print "Web UI is available at http://%s:%i" %(API_INTERFACE, API_PORT)
     print "JSONRPC API is available at " + API_CONNECTION_STRING
     print "To quit press ctrl-c or call 'stop' via the API"
-
-    args = parser.parse_args()
 
     if args.branch == "HEAD":
         GIT_CMD_STRING = "git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep %s | cut -f 1" % args.branch
