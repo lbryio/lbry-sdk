@@ -1024,9 +1024,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'is_lagging': flag set to indicate lag, if set message will contain relevant message
         """
 
-        r = {'code': self.startup_status[0], 'message': self.startup_status[1], 'progress': None, 'is_lagging': None}
+        r = {'code': self.startup_status[0], 'message': self.startup_status[1],
+             'progress': None, 'is_lagging': None, 'problem_code': None}
 
         if self.connection_problem:
+            r['problem_code'] = self.connection_problem[0]
             r['message'] = self.connection_problem[1]
             r['is_lagging'] = True
         elif self.startup_status[0] == LOADING_WALLET_CODE:
