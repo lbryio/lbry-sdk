@@ -11,9 +11,11 @@ import base64
 import base58
 import platform
 import json
+import socket
 
 from twisted.web import server, resource, static
 from twisted.internet import defer, threads, error, reactor
+from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
 from txjsonrpc.web import jsonrpc
 from txjsonrpc.web.jsonrpc import Handler
@@ -66,18 +68,32 @@ else:
     PREVIOUS_LOG = 0
 
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=262144, backupCount=5)
+handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
 log.addHandler(handler)
 log.setLevel(logging.INFO)
 
+
+INITIALIZING_CODE = 'initializing'
+LOADING_DB_CODE = 'loading_db'
+LOADING_WALLET_CODE = 'loading_wallet'
+LOADING_FILE_MANAGER_CODE = 'loading_file_manager'
+LOADING_SERVER_CODE = 'loading_server'
+STARTED_CODE = 'started'
 STARTUP_STAGES = [
-                    ('initializing', 'Initializing...'),
-                    ('loading_db', 'Loading databases...'),
-                    ('loading_wallet', 'Catching up with the blockchain... %s'),
-                    ('loading_file_manager', 'Setting up file manager'),
-                    ('loading_server', 'Starting lbrynet'),
-                    ('started', 'Started lbrynet')
+                    (INITIALIZING_CODE, 'Initializing...'),
+                    (LOADING_DB_CODE, 'Loading databases...'),
+                    (LOADING_WALLET_CODE, 'Catching up with the blockchain... %s'),
+                    (LOADING_FILE_MANAGER_CODE, 'Setting up file manager'),
+                    (LOADING_SERVER_CODE, 'Starting lbrynet'),
+                    (STARTED_CODE, 'Started lbrynet')
                   ]
+
+CONNECT_CODE_VERSION_CHECK = 'version_check'
+CONNECT_CODE_NETWORK = 'network_connection'
+CONNECT_CODE_WALLET = 'wallet_catchup_lag'
+CONNECTION_PROBLEM_CODES = [(CONNECT_CODE_VERSION_CHECK, "There was a problem checking for updates on github"),
+                            (CONNECT_CODE_NETWORK, "Your internet connection appears to have been interrupted"),
+                            (CONNECT_CODE_WALLET, "Synchronization with the blockchain is lagging... if this continues try restarting LBRY")]
 
 ALLOWED_DURING_STARTUP = ['is_running', 'is_first_run',
                           'get_time_behind_blockchain', 'stop',
@@ -89,6 +105,9 @@ NOT_FOUND = 404
 OK_CODE = 200
 # TODO add login credentials in a conf file
 # TODO alert if your copy of a lbry file is out of date with the name record
+
+
+REMOTE_SERVER = "www.google.com"
 
 
 class LBRYDaemon(jsonrpc.JSONRPC):
@@ -105,6 +124,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.startup_status = STARTUP_STAGES[0]
         self.startup_message = None
         self.announced_startup = False
+        self.connected_to_internet = True
+        self.connection_problem = None
         self.query_handlers = {}
         self.ui_version = ui_version_info.replace('\n', '')
         self.git_lbrynet_version = None
@@ -171,6 +192,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.wallet_user = None
         self.wallet_password = None
+
+        self.internet_connection_checker = LoopingCall(self._check_network_connection)
+        self.version_checker = LoopingCall(self._check_remote_versions)
+        self.connection_problem_checker = LoopingCall(self._check_connection_problems)
 
         self.sd_identifier = StreamDescriptorIdentifier()
         self.stream_info_manager = TempLBRYFileMetadataManager()
@@ -267,32 +292,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def setup(self):
         def _log_starting_vals():
-            def _get_lbry_files_json():
-                r = self._get_lbry_files()
-                return json.dumps(r)
+            r = json.dumps(self._get_lbry_files())
 
-            def _get_lbryum_version():
-                r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
-                version = next(line.split("=")[1].split("#")[0].replace(" ", "")
-                               for line in r if "ELECTRUM_VERSION" in line)
-                version = version.replace("'", "")
-                log.info("remote lbryum " + str(version) + " > local lbryum " + str(lbryum_version) + " = " + str(
-                    version > lbryum_version))
-                return version
-
-            def _get_lbrynet_version():
-                r = urlopen("https://raw.githubusercontent.com/lbryio/lbry/master/lbrynet/__init__.py").read().split('\n')
-                vs = next(i for i in r if 'version =' in i).split("=")[1].replace(" ", "")
-                vt = tuple(int(x) for x in vs[1:-1].split(','))
-                vr = ".".join([str(x) for x in vt])
-                log.info("remote lbrynet " + str(vr) + " > local lbrynet " + str(lbrynet_version) + " = " + str(
-                    vr > lbrynet_version))
-                return vr
-
-            self.git_lbrynet_version = _get_lbrynet_version()
-            self.git_lbryum_version = _get_lbryum_version()
-
-            log.info("LBRY Files: " + _get_lbry_files_json())
+            log.info("LBRY Files: " + r)
             log.info("Starting balance: " + str(self.session.wallet.wallet_balance))
 
             return defer.succeed(None)
@@ -316,6 +318,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return d
 
         log.info("[" + str(datetime.now()) + "] Starting lbrynet-daemon")
+
+        self.internet_connection_checker.start(60)
+        self.version_checker.start(3600)
+        self.connection_problem_checker.start(1)
 
         d = defer.Deferred()
         d.addCallback(lambda _: self._initial_setup())
@@ -379,8 +385,63 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.session_settings = settings
         return defer.succeed(None)
 
-    def _start_server(self):
+    def _check_network_connection(self):
+        try:
+            host = socket.gethostbyname(REMOTE_SERVER)
+            s = socket.create_connection((host, 80), 2)
+            self.connected_to_internet = True
+        except:
+            log.info("[" + str(datetime.now()) + "] Internet connection not working")
+            self.connected_to_internet = False
 
+    def _check_remote_versions(self):
+        def _get_lbryum_version():
+            try:
+                r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
+                version = next(line.split("=")[1].split("#")[0].replace(" ", "")
+                               for line in r if "ELECTRUM_VERSION" in line)
+                version = version.replace("'", "")
+                log.info("remote lbryum " + str(version) + " > local lbryum " + str(lbryum_version) + " = " + str(
+                    version > lbryum_version))
+                self.git_lbryum_version = version
+                return defer.succeed(None)
+            except:
+                log.info("[" + str(datetime.now()) + "] Failed to get lbryum version from git")
+                self.git_lbryum_version = None
+                return defer.fail(None)
+
+        def _get_lbrynet_version():
+            try:
+                r = urlopen("https://raw.githubusercontent.com/lbryio/lbry/master/lbrynet/__init__.py").read().split('\n')
+                vs = next(i for i in r if 'version =' in i).split("=")[1].replace(" ", "")
+                vt = tuple(int(x) for x in vs[1:-1].split(','))
+                vr = ".".join([str(x) for x in vt])
+                log.info("remote lbrynet " + str(vr) + " > local lbrynet " + str(lbrynet_version) + " = " + str(
+                    vr > lbrynet_version))
+                self.git_lbrynet_version = vr
+                return defer.succeed(None)
+            except:
+                log.info("[" + str(datetime.now()) + "] Failed to get lbrynet version from git")
+                self.git_lbrynet_version = None
+                return defer.fail(None)
+
+        d = _get_lbrynet_version()
+        d.addCallback(lambda _: _get_lbryum_version())
+
+    def _check_connection_problems(self):
+        if not self.git_lbrynet_version or not self.git_lbryum_version:
+            self.connection_problem = CONNECTION_PROBLEM_CODES[0]
+
+        elif self.startup_status[0] == 'loading_wallet':
+            if self.session.wallet.is_lagging:
+                self.connection_problem = CONNECTION_PROBLEM_CODES[2]
+        else:
+            self.connection_problem = None
+
+        if not self.connected_to_internet:
+            self.connection_problem = CONNECTION_PROBLEM_CODES[1]
+
+    def _start_server(self):
         if self.peer_port is not None:
 
             server_factory = ServerProtocolFactory(self.session.rate_limiter,
@@ -402,7 +463,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return defer.succeed(True)
 
     def _setup_server(self):
-
         def restore_running_status(running):
             if running is True:
                 return self._start_server()
@@ -439,7 +499,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return dl
 
     def _add_query_handlers(self, query_handlers):
-
         def _set_query_handlers(statuses):
             from future_builtins import zip
             for handler, (success, status) in zip(query_handlers, statuses):
@@ -959,18 +1018,19 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Args:
             None
         Returns:
-            'status_message': startup status message
-            'status_code': status_code
-            if status_code is 'loading_wallet', also contains key 'progress': blockchain catchup progress
+            'message': startup status message
+            'code': status_code
+            'progress': progress, only used in loading_wallet
+            'is_lagging': flag set to indicate lag, if set message will contain relevant message
         """
 
         r = {'code': self.startup_status[0], 'message': self.startup_status[1], 'progress': None, 'is_lagging': None}
-        if self.startup_status[0] == 'loading_wallet':
-            r['is_lagging'] = self.session.wallet.is_lagging
-            if r['is_lagging'] == True:
-                r['message'] = "Synchronization with the blockchain is lagging... if this continues try restarting LBRY"
-            else:
-                r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
+
+        if self.connection_problem:
+            r['message'] = self.connection_problem[1]
+            r['is_lagging'] = True
+        elif self.startup_status[0] == LOADING_WALLET_CODE:
+            r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
             r['progress'] = self.session.wallet.catchup_progress
 
         log.info("[" + str(datetime.now()) + "] daemon status: " + str(r))
@@ -1200,7 +1260,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self._shutdown()
         d.addCallback(lambda _: _disp_shutdown())
-        d.addCallback(lambda _: reactor.callLater(1.0, reactor.stop))
+        d.addCallback(lambda _: reactor.callLater(0.0, reactor.stop))
 
         return self._render_response("Shutting down", OK_CODE)
 
@@ -1497,6 +1557,50 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    def jsonrpc_get_transaction_history(self):
+        """
+        Get transaction history
+
+        Args:
+            None
+        Returns:
+            list of transactions
+        """
+
+        d = self.session.wallet.get_history()
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_get_transaction(self, p):
+        """
+        Get a decoded transaction from a txid
+
+        Args:
+            txid: txid hex string
+        Returns:
+            JSON formatted transaction
+        """
+
+
+        txid = p['txid']
+        d = self.session.wallet.get_tx_json(txid)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_get_public_key_from_wallet(self, p):
+        """
+        Get public key from wallet address
+
+        Args:
+            wallet: wallet address, base58
+        Returns:
+            public key
+        """
+
+        wallet = p['wallet']
+        d = self.session.wallet.get_pub_keys(wallet)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+
     def jsonrpc_get_time_behind_blockchain(self):
         """
         Get number of blocks behind the blockchain
@@ -1599,6 +1703,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return _check_version()
 
     def jsonrpc_upload_log(self, p=None):
+        """
+        Upload log
+
+        Args, optional:
+            'name_prefix': prefix to indicate what is requesting the log upload
+            'exclude_previous': true/false, whether or not to exclude previous sessions from upload, defaults on true
+        Returns
+            True
+        """
+
         if p:
             if 'name_prefix' in p.keys():
                 prefix = p['name_prefix'] + '_api'

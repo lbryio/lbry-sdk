@@ -30,7 +30,7 @@ if not os.path.isdir(log_dir):
 
 LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=262144, backupCount=5)
+handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
 log.addHandler(handler)
 log.setLevel(logging.INFO)
 
@@ -72,7 +72,13 @@ def start():
                         help="Branch of lbry-web-ui repo to use, defaults on HEAD",
                         default="HEAD")
     parser.add_argument('--no-launch', dest='launchui', action="store_false")
-    parser.set_defaults(launchui=True)
+    parser.add_argument('--log-to-console', dest='logtoconsole', action="store_true")
+    parser.add_argument('--quiet', dest='quiet', action="store_true")
+    parser.set_defaults(launchui=True, logtoconsole=False, quiet=False)
+    args = parser.parse_args()
+
+    if args.logtoconsole:
+        logging.basicConfig(level=logging.INFO)
 
     args = parser.parse_args()
 
@@ -86,11 +92,13 @@ def start():
         pass
 
     log.info("Starting lbrynet-daemon from command line")
-    print "Starting lbrynet-daemon from command line"
-    print "To view activity, view the log file here: " + LOG_FILENAME
-    print "Web UI is available at http://%s:%i" %(API_INTERFACE, API_PORT)
-    print "JSONRPC API is available at " + API_CONNECTION_STRING
-    print "To quit press ctrl-c or call 'stop' via the API"
+
+    if not args.logtoconsole and not args.quiet:
+        print "Starting lbrynet-daemon from command line"
+        print "To view activity, view the log file here: " + LOG_FILENAME
+        print "Web UI is available at http://%s:%i" %(API_INTERFACE, API_PORT)
+        print "JSONRPC API is available at " + API_CONNECTION_STRING
+        print "To quit press ctrl-c or call 'stop' via the API"
 
     if args.branch == "HEAD":
         GIT_CMD_STRING = "git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep %s | cut -f 1" % args.branch
@@ -173,7 +181,8 @@ def start():
         if args.launchui:
             d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
         reactor.run()
-        print "\nClosing lbrynet-daemon"
+        if not args.logtoconsole and not args.quiet:
+            print "\nClosing lbrynet-daemon"
     else:
         log.info("Not connected to internet, unable to start")
         print "Not connected to internet, unable to start"
