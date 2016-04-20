@@ -68,7 +68,7 @@ else:
     PREVIOUS_LOG = 0
 
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=262144, backupCount=5)
+handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
 log.addHandler(handler)
 log.setLevel(logging.INFO)
 
@@ -540,10 +540,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _shutdown(self):
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
-
-        self.internet_connection_checker.stop()
-        self.version_checker.stop()
-        self.connection_problem_checker.stop()
 
         d = self._upload_log(name_prefix="close", exclude_previous=False if self.first_run else True)
         d.addCallback(lambda _: self._stop_server())
@@ -1022,9 +1018,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Args:
             None
         Returns:
-            'status_message': startup status message
-            'status_code': status_code
-            if status_code is 'loading_wallet', also contains key 'progress': blockchain catchup progress
+            'message': startup status message
+            'code': status_code
+            'progress': progress, only used in loading_wallet
+            'is_lagging': flag set to indicate lag, if set message will contain relevant message
         """
 
         r = {'code': self.startup_status[0], 'message': self.startup_status[1], 'progress': None, 'is_lagging': None}
@@ -1263,7 +1260,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self._shutdown()
         d.addCallback(lambda _: _disp_shutdown())
-        d.addCallback(lambda _: reactor.callLater(1.0, reactor.stop))
+        d.addCallback(lambda _: reactor.callLater(0.0, reactor.stop))
 
         return self._render_response("Shutting down", OK_CODE)
 
