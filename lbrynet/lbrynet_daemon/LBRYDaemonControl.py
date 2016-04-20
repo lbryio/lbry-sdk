@@ -17,7 +17,7 @@ from twisted.web import server, static
 from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
 
-from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon, LBRYindex, LBRYFileRender
+from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon, LBRYindex, LBRYFileRender, LBRYBugReport
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, DEFAULT_WALLET, UI_ADDRESS
 
 if sys.platform != "darwin":
@@ -166,6 +166,7 @@ def start():
         root.putChild("img", static.File(os.path.join(ui_dir, "img")))
         root.putChild("js", static.File(os.path.join(ui_dir, "js")))
         root.putChild("view", LBRYFileRender())
+        root.putChild("report", LBRYBugReport())
         return defer.succeed([root, ui_version])
 
     def setupapi(root, wallet, ui_version):

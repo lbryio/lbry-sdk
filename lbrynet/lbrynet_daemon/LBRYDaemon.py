@@ -512,13 +512,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         dl.addCallback(_set_query_handlers)
         return dl
 
-    def _upload_log(self, name_prefix=None, exclude_previous=False):
+    def _upload_log(self, name_prefix=None, exclude_previous=False, force=False):
         if name_prefix:
             name_prefix = name_prefix + "-" + platform.system()
         else:
             name_prefix = platform.system()
 
-        if self.session_settings['upload_log']:
+        if self.session_settings['upload_log'] or force:
             LOG_URL = "https://lbry.io/log-upload"
             if exclude_previous:
                 f = open(self.log_file, "r")
@@ -534,8 +534,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             params = {'name': log_name, 'log': log_contents}
 
             requests.post(LOG_URL, params)
-
-        return defer.succeed(None)
+            return defer.succeed(None)
+        else:
+            return defer.succeed(None)
 
     def _shutdown(self):
         log.info("Closing lbrynet session")
@@ -1720,15 +1721,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 prefix = p['name_prefix'] + '_api'
             else:
                 prefix = None
-            if 'exclude_previous' in p.keys:
+
+            if 'exclude_previous' in p.keys():
                 exclude_previous = p['exclude_previous']
             else:
                 exclude_previous = True
+
+            if 'force' in p.keys():
+                force = p['force']
+            else:
+                force = False
         else:
             prefix = "api"
             exclude_previous = True
 
-        d = self._upload_log(name_prefix=prefix, exclude_previous=exclude_previous)
+        d = self._upload_log(name_prefix=prefix, exclude_previous=exclude_previous, force=force)
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
 
@@ -1781,3 +1788,26 @@ class LBRYFileRender(resource.Resource):
             return server.NOT_DONE_YET
         else:
             return server.failure
+
+class LBRYBugReport(resource.Resource):
+    isLeaf = False
+
+    def _delayed_render(self, request, results):
+        request.write(results)
+        request.finish()
+
+    def render_GET(self, request):
+        return '<html><body><form method="POST">' \
+               '<br>Please describe the problem you experienced and any information you think might be useful to us. Links to screenshots are great!</br>' \
+               '<textarea cols="50" rows="10" name="message" type="text"></textarea>' \
+               '<button>Submit</button>' \
+               '</form></body></html>'
+
+    def render_POST(self, request):
+        msg = request.args["message"][0]
+        log.info("User submitted error report: " + str(msg))
+        api = jsonrpc.Proxy(API_CONNECTION_STRING)
+        d = api.callRemote("upload_log", {'name_prefix': 'report', 'exclude_previous': False, 'force': True})
+        d.addCallback(lambda _: self._delayed_render(request, "<html><body>Your bug report is greatly appreciated! <a href='lbry://lbry'>Click here to return to LBRY</a></body></html>"))
+
+        return server.NOT_DONE_YET
