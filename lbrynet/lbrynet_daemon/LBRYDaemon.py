@@ -3,17 +3,13 @@ import os
 import sys
 import simplejson as json
 import binascii
-import subprocess
-import logging
 import logging.handlers
 import requests
-import base64
 import base58
 import platform
-import json
 import socket
 
-from twisted.web import server, resource, static
+from twisted.web import server
 from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
@@ -31,7 +27,6 @@ from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.lbrynet_console.ControlHandlers import get_time_behind_blockchain
 from lbrynet.core.Error import UnknownNameError
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
@@ -40,7 +35,8 @@ from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream, FetcherDaemon
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE
+from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
+    DEFAULT_WALLET, API_INTERFACE
 from lbrynet.conf import API_CONNECTION_STRING, API_PORT, API_ADDRESS, DEFAULT_TIMEOUT, UI_ADDRESS
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
@@ -117,7 +113,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     isLeaf = True
 
-    def __init__(self, ui_version_info, wallet_type="lbryum"):
+    def __init__(self, ui_version_info, wallet_type=DEFAULT_WALLET):
         jsonrpc.JSONRPC.__init__(self)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
@@ -1693,8 +1689,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             true/false, true meaning that there is a new version available
         """
 
-
-
         def _check_version():
             if (lbrynet_version >= self.git_lbrynet_version) and (lbryum_version >= self.git_lbryum_version):
                 log.info("[" + str(datetime.now()) + "] Up to date")
@@ -1738,76 +1732,3 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = self._upload_log(name_prefix=prefix, exclude_previous=exclude_previous, force=force)
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
-
-
-class LBRYDaemonCommandHandler(object):
-    def __init__(self, command):
-        self._api = jsonrpc.Proxy(API_CONNECTION_STRING)
-        self.command = command
-
-    def run(self, params=None):
-        if params:
-            d = self._api.callRemote(self.command, params)
-        else:
-            d = self._api.callRemote(self.command)
-        return d
-
-
-class LBRYindex(resource.Resource):
-    def __init__(self, ui_dir):
-        resource.Resource.__init__(self)
-        self.ui_dir = ui_dir
-
-    isLeaf = False
-
-    def _delayed_render(self, request, results):
-        request.write(str(results))
-        request.finish()
-
-    def getChild(self, name, request):
-        if name == '':
-            return self
-        return resource.Resource.getChild(self, name, request)
-
-    def render_GET(self, request):
-        return static.File(os.path.join(self.ui_dir, "index.html")).render_GET(request)
-
-
-class LBRYFileRender(resource.Resource):
-    isLeaf = False
-
-    def render_GET(self, request):
-        if 'name' in request.args.keys():
-            api = jsonrpc.Proxy(API_CONNECTION_STRING)
-            if request.args['name'][0] != 'lbry':
-                d = api.callRemote("get", {'name': request.args['name'][0]})
-                d.addCallback(lambda results: static.File(results['path']).render_GET(request))
-            else:
-                request.redirect(UI_ADDRESS)
-                request.finish()
-            return server.NOT_DONE_YET
-        else:
-            return server.failure
-
-class LBRYBugReport(resource.Resource):
-    isLeaf = False
-
-    def _delayed_render(self, request, results):
-        request.write(results)
-        request.finish()
-
-    def render_GET(self, request):
-        return '<html><body><form method="POST">' \
-               '<br>Please describe the problem you experienced and any information you think might be useful to us. Links to screenshots are great!</br>' \
-               '<textarea cols="50" rows="10" name="message" type="text"></textarea>' \
-               '<button>Submit</button>' \
-               '</form></body></html>'
-
-    def render_POST(self, request):
-        msg = request.args["message"][0]
-        log.info("User submitted error report: " + str(msg))
-        api = jsonrpc.Proxy(API_CONNECTION_STRING)
-        d = api.callRemote("upload_log", {'name_prefix': 'report', 'exclude_previous': False, 'force': True})
-        d.addCallback(lambda _: self._delayed_render(request, "<html><body>Your bug report is greatly appreciated! <a href='lbry://lbry'>Click here to return to LBRY</a></body></html>"))
-
-        return server.NOT_DONE_YET
