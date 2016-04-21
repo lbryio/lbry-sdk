@@ -2,7 +2,7 @@ import logging
 import subprocess
 import os
 import shutil
-import jsonrpc
+from txjsonrpc.web import jsonrpc
 import json
 
 from StringIO import StringIO
