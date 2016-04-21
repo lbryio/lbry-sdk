@@ -989,6 +989,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             r.append(t)
         return r
 
+    def _log_to_slack(self, msg):
+        URL = "https://hooks.slack.com/services/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"
+        msg = platform.platform() + ": " + base58.b58encode(self.lbryid)[:20] + ", " + msg
+        requests.post(URL, json.dumps({"text": msg}))
+        return defer.succeed(None)
+
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
 
@@ -1721,6 +1727,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 exclude_previous = True
 
+            if 'message' in p.keys():
+                log.info("[" + str(datetime.now()) + "] Upload log message: " + str(p['message']))
+
             if 'force' in p.keys():
                 force = p['force']
             else:
@@ -1730,5 +1739,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             exclude_previous = True
 
         d = self._upload_log(name_prefix=prefix, exclude_previous=exclude_previous, force=force)
+        if 'message' in p.keys():
+            d.addCallback(lambda _: self._log_to_slack(p['message']))
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d

@@ -83,9 +83,8 @@ class LBRYBugReport(resource.Resource):
 
     def render_POST(self, request):
         msg = request.args["message"][0]
-        log.info("User submitted error report: " + str(msg))
         api = jsonrpc.Proxy(API_CONNECTION_STRING)
-        d = api.callRemote("upload_log", {'name_prefix': 'report', 'exclude_previous': False, 'force': True})
+        d = api.callRemote("upload_log", {'name_prefix': 'report', 'exclude_previous': False, 'force': True, 'message': str(msg)})
         d.addCallback(lambda _: self._delayed_render(request, "<html><body>Your bug report is greatly appreciated! <a href='lbry://lbry'>Click here to return to LBRY</a></body></html>"))
 
         return server.NOT_DONE_YET
