@@ -119,7 +119,8 @@ def start():
         lbry = LBRYDaemonServer()
 
         d = lbry.start(branch=args.branch, user_specified=args.ui)
-        d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
+        if args.launchui:
+            d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
 
         reactor.listenTCP(API_PORT, server.Site(lbry.root), interface=API_INTERFACE)
         reactor.run()

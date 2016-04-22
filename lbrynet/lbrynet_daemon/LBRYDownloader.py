@@ -118,7 +118,7 @@ class GetStream(object):
         downloader.start()
 
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
-        d.addCallback(lambda _: log.info("Downloading " + str(self.stream_hash) + " --> " + str(self.download_path)))
+        log.info("Downloading " + str(self.stream_hash) + " --> " + str(self.download_path))
 
         return d
 

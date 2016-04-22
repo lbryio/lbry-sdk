@@ -58,7 +58,9 @@ class LBRYFileRender(resource.Resource):
             api = jsonrpc.Proxy(API_CONNECTION_STRING)
             if request.args['name'][0] != 'lbry':
                 d = api.callRemote("get", {'name': request.args['name'][0]})
-                d.addCallback(lambda results: static.File(results['path']).render_GET(request))
+                d.addCallback(lambda results: static.File(results['path']))
+                d.addCallback(lambda static_file: static_file.render_GET(request) if static_file.getFileSize() > 0
+                              else server.failure)
             else:
                 request.redirect(UI_ADDRESS)
                 request.finish()
@@ -112,8 +114,11 @@ class LBRYDaemonServer(object):
                 loaded_ui = json.loads(f.read())
                 f.close()
                 self.loaded_git_version = loaded_ui['commit']
+                self.loaded_branch = loaded_ui['branch']
+                version_log.info("[" + str(datetime.now()) + "] Last used " + self.loaded_branch + " commit " + str(self.loaded_git_version).replace("\n", ""))
             except:
                 self.loaded_git_version = None
+                self.loaded_branch = None
 
     def setup(self, branch="HEAD", user_specified=None):
         self.branch = branch
@@ -146,19 +151,20 @@ class LBRYDaemonServer(object):
 
         def _set_git(version):
             self.git_version = version
-            log.info("UI version from git: " + str(self.git_version).replace("\n", ""))
-            version_log.info("UI version from git: " + str(self.git_version).replace("\n", ""))
+            version_log.info("[" + str(datetime.now()) + "] UI branch " + self.branch + " has a most recent commit of: " + str(self.git_version).replace("\n", ""))
 
             if self.git_version == self.loaded_git_version and os.path.isdir(self.ui_dir):
-                log.info("UI is up to date")
-                version_log.info("UI is up to date")
+                version_log.info("[" + str(datetime.now()) + "] local copy of " + self.branch + " is up to date")
                 return defer.succeed(True)
             else:
-                log.info("Downloading UI")
-                version_log.info("Downloading UI")
+                if self.git_version == self.loaded_git_version:
+                    version_log.info("[" + str(datetime.now()) + "] Can't find ui files, downloading them again")
+                else:
+                    version_log.info("[" + str(datetime.now()) + "] local copy of " + self.branch + " branch is out of date, updating")
                 f = open(self.config, "w")
                 f.write(json.dumps({'commit': self.git_version,
-                                    'time': str(datetime.now())}))
+                                    'time': str(datetime.now()),
+                                    'branch': self.branch}))
                 f.close()
                 return defer.succeed(False)
 
@@ -170,7 +176,7 @@ class LBRYDaemonServer(object):
         def _delete_ui_dir():
             if os.path.isdir(self.ui_dir):
                 if self.loaded_git_version:
-                    version_log.info("Removed ui files for commit " + str(self.loaded_git_version))
+                    version_log.info("[" + str(datetime.now()) + "] Removed ui files for commit " + str(self.loaded_git_version).replace("\n", ""))
                 log.info("Removing out of date ui files")
                 shutil.rmtree(self.ui_dir)
             return defer.succeed(None)
@@ -180,8 +186,8 @@ class LBRYDaemonServer(object):
             z = ZipFile(StringIO(url.read()))
             names = [i for i in z.namelist() if '.DS_exStore' not in i and '__MACOSX' not in i]
             z.extractall(self.ui_dir, members=names)
-            version_log.info("[" + str(datetime.now()) + "] Updated branch " + self.branch + " commit: " + str(self.loaded_git_version) + " to " + self.git_version)
-            log.info("Downloaded files for UI commit " + self.git_version)
+            version_log.info("[" + str(datetime.now()) + "] Updated branch " + self.branch + ": " + str(self.loaded_git_version).replace("\n", "") + " --> " + self.git_version.replace("\n", ""))
+            log.info("Downloaded files for UI commit " + str(self.git_version).replace("\n", ""))
             self.loaded_git_version = self.git_version
             return self.branch
 
