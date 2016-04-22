@@ -134,6 +134,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.current_db_revision = 1
         self.run_server = True
         self.session = None
+        self.waiting_on = {}
         self.known_dht_nodes = KNOWN_DHT_NODES
         self.platform_info = {
             "processor": platform.processor(),
@@ -867,6 +868,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         elif not os.path.isdir(download_directory):
             download_directory = self.download_directory
 
+        def _remove_from_wait(r):
+            del self.waiting_on[name]
+            return r
+
         def _disp_file(f):
             file_path = os.path.join(self.download_directory, f.file_name)
             log.info("[" + str(datetime.now()) + "] Already downloaded: " + str(f.stream_hash) + " --> " + file_path)
@@ -891,8 +896,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
             return d
 
+        self.waiting_on[name] = True
         d = self._check_history(name)
         d.addCallback(lambda lbry_file: _get_stream(name) if not lbry_file else _disp_file(lbry_file))
+        d.addCallback(_remove_from_wait)
 
         return d
 
@@ -1382,8 +1389,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         if 'name' in p.keys():
             name = p['name']
-            d = self._download_name(name=name, timeout=timeout, download_directory=download_directory)
-            d.addCallback(lambda message: self._render_response(message, OK_CODE))
+            if p['name'] not in self.waiting_on.keys():
+                d = self._download_name(name=name, timeout=timeout, download_directory=download_directory)
+                d.addCallback(lambda message: self._render_response(message, OK_CODE))
+            else:
+                d = server.failure
         else:
             d = server.failure
 

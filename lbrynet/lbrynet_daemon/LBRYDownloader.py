@@ -123,7 +123,6 @@ class GetStream(object):
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
         d.addCallback(lambda _: log.info("Downloading " + str(self.stream_hash) + " --> " + str(self.download_path)))
         d.addCallback(lambda _: downloader.start())
-        d.callback()
 
 class FetcherDaemon(object):
     def __init__(self, session, lbry_file_manager, lbry_file_metadata_manager, wallet, sd_identifier, autofetcher_conf,
