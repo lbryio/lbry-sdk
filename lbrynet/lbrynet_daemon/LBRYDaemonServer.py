@@ -50,6 +50,11 @@ class LBRYindex(resource.Resource):
         return static.File(os.path.join(self.ui_dir, "index.html")).render_GET(request)
 
 
+class HostedLBRYFile(static.File):
+    def __init__(self, path):
+        static.File.__init__(self, path=path)
+
+
 class LBRYFileRender(resource.Resource):
     isLeaf = False
 
@@ -58,7 +63,7 @@ class LBRYFileRender(resource.Resource):
             api = jsonrpc.Proxy(API_CONNECTION_STRING)
             if request.args['name'][0] != 'lbry':
                 d = api.callRemote("get", {'name': request.args['name'][0]})
-                d.addCallback(lambda results: static.File(results['path']))
+                d.addCallback(lambda results: HostedLBRYFile(results['path']))
                 d.addCallback(lambda static_file: static_file.render_GET(request) if static_file.getFileSize() > 0
                               else server.failure)
             else:

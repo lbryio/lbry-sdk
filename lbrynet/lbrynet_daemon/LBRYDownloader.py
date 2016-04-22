@@ -13,6 +13,7 @@ from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.conf import DEFAULT_TIMEOUT
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 
 class GetStream(object):
@@ -39,22 +40,24 @@ class GetStream(object):
         self.timeout_counter = 0
         self.download_directory = download_directory
         self.download_path = None
+        self.finished = defer.Deferred()
         self.checker = LoopingCall(self.check_status)
-
 
     def check_status(self):
         self.timeout_counter += 1
 
-        if self.download_path and os.path.isfile(self.download_path):
+        if self.download_path:
             self.checker.stop()
-            return defer.succeed(True)
+            self.finished.callback((self.stream_hash, self.download_path))
 
         elif self.timeout_counter >= self.timeout:
-            log.info("Timeout downloading " + str(self.stream_info))
+            log.info("Timeout downloading lbry://" + self.resolved_name + ", " + str(self.stream_info))
             self.checker.stop()
             self.d.cancel()
+            self.finished.callback(False)
 
-    def start(self, stream_info):
+    def start(self, stream_info, name):
+        self.resolved_name = name
         self.stream_info = stream_info
         if 'stream_hash' in self.stream_info.keys():
             self.description = self.stream_info['description']
@@ -84,21 +87,24 @@ class GetStream(object):
         else:
             pass
 
+        def _cause_timeout():
+            self.timeout_counter = self.timeout * 2
+
         self.checker.start(1)
 
         self.d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
         self.d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        self.d.addCallback(lambda metadata: (next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)), metadata))
+        self.d.addCallback(lambda metadata: (
+        next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)),
+        metadata))
         self.d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata,
                                                                                [self.data_rate, True],
                                                                                self.payment_rate_manager,
                                                                                download_directory=self.download_directory))
-        self.d.addErrback(lambda err: err.trap(defer.CancelledError))
-        self.d.addErrback(lambda err: log.error("An exception occurred attempting to load the stream descriptor: %s", err.getTraceback()))
-        self.d.addCallback(self._start_download)
+        self.d.addCallbacks(self._start_download, lambda _: _cause_timeout())
         self.d.callback(None)
 
-        return self.d
+        return self.finished
 
     def _start_download(self, downloader):
         def _pay_key_fee():
@@ -114,14 +120,10 @@ class GetStream(object):
             d = _pay_key_fee()
         else:
             d = defer.Deferred()
-
-        downloader.start()
-
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
-        log.info("Downloading " + str(self.stream_hash) + " --> " + str(self.download_path))
-
-        return d
-
+        d.addCallback(lambda _: log.info("Downloading " + str(self.stream_hash) + " --> " + str(self.download_path)))
+        d.addCallback(lambda _: downloader.start())
+        d.callback()
 
 class FetcherDaemon(object):
     def __init__(self, session, lbry_file_manager, lbry_file_metadata_manager, wallet, sd_identifier, autofetcher_conf,

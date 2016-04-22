@@ -625,6 +625,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     self.session_settings['upload_log'] = settings['upload_log']
                 else:
                     return defer.fail()
+            elif k == 'download_timeout':
+                if type(settings['download_timeout']) is int:
+                    self.session_settings['download_timeout'] = settings['download_timeout']
+                else:
+                    return defer.fail()
 
         self.run_on_startup = self.session_settings['run_on_startup']
         self.data_rate = self.session_settings['data_rate']
@@ -633,6 +638,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.max_upload = self.session_settings['max_upload']
         self.max_download = self.session_settings['max_download']
         self.upload_log = self.session_settings['upload_log']
+        self.download_timeout = self.session_settings['download_timeout']
 
         f = open(self.daemon_conf, "w")
         f.write(json.dumps(self.session_settings))
@@ -864,7 +870,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         def _disp_file(f):
             file_path = os.path.join(self.download_directory, f.file_name)
             log.info("[" + str(datetime.now()) + "] Already downloaded: " + str(f.stream_hash) + " --> " + file_path)
-            return defer.succeed(f)
+            return {'stream_hash': f.stream_hash, 'path': file_path}
 
         def _get_stream(name):
             def _disp(stream):
@@ -880,14 +886,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                                max_key_fee=self.max_key_fee, data_rate=self.data_rate, timeout=timeout,
                                download_directory=download_directory)
             d.addCallback(_disp)
-            d.addCallback(lambda stream_info: stream.start(stream_info))
-            d.addCallback(lambda _: self._path_from_name(name))
+            d.addCallback(lambda stream_info: stream.start(stream_info, name))
+            d.addCallback(lambda r: {'stream_hash': r[0], 'path': r[1]} if r else server.failure)
 
             return d
 
         d = self._check_history(name)
         d.addCallback(lambda lbry_file: _get_stream(name) if not lbry_file else _disp_file(lbry_file))
-        d.addCallback(lambda _: self._path_from_name(name))
 
         return d
 
@@ -933,7 +938,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
             path = os.path.join(self.blobfile_dir, stream_hash)
             if os.path.isfile(path):
-                log.info("[" + str(datetime.now()) + "] Search for lbry_file, returning: " + stream_hash)
+                file_size = os.stat(path).st_size
+                log.info("[" + str(datetime.now()) + "] Search for lbry_file, found " + str(file_size) + " bytes written from stream hash: " + stream_hash)
                 return defer.succeed(_get_lbry_file(path))
             else:
                 log.info("[" + str(datetime.now()) + "] Search for lbry_file didn't return anything")
@@ -1188,6 +1194,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'max_upload': float, 0.0 for unlimited
             'max_download': float, 0.0 for unlimited
             'upload_log': bool,
+            'download_timeout': int
         Returns:
             settings dict
         """
