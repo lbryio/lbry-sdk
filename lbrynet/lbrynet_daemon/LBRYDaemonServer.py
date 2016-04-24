@@ -54,13 +54,20 @@ class LBRYindex(resource.Resource):
 
 
 class LBRYFileProducer(StaticProducer):
-    def __init__(self, request, lbry_stream):
+    def __init__(self, request, lbry_stream, api):
+        self._api = api
         self.stream = lbry_stream
         self.updater = LoopingCall(self._check_for_data)
-        StaticProducer.__init__(self, request, fileObject=file(lbry_stream.file_written_to))
+        self.total_bytes = 0
+        if lbry_stream.file_written_to:
+            file_name = lbry_stream.file_written_to
+        else:
+            file_name = os.path.join(self._api.download_directory, lbry_stream.file_name)
+        StaticProducer.__init__(self, request, fileObject=file(file_name))
 
     def start(self):
         d = self._set_size()
+        self.fileObject.seek(0)
         self.updater.start(5)
 
     def _set_size(self):
@@ -74,17 +81,22 @@ class LBRYFileProducer(StaticProducer):
         return d
 
     def _check_for_data(self):
-        self.fileObject.seek(self.fileObject.tell())
-        data = self.fileObject.read()
-        if data:
-            self.request.write(data)
+        def _write_new_data_to_request():
+            self.fileObject.seek(self.fileObject.tell())
+            data = self.fileObject.read()
+            self.total_bytes += len(data)
+
+            if data:
+                self.request.write(data)
+            return defer.succeed(None)
 
         def _check_status(stream_status):
             if stream_status.running_status == "completed":
                 self.stopProducing()
             return defer.succeed(None)
 
-        d = self.stream.status()
+        d = _write_new_data_to_request()
+        d.addCallback(lambda _: self.stream.status())
         d.addCallback(_check_status)
 
     def resumeProducing(self):
@@ -102,24 +114,22 @@ class HostedLBRYFile(resource.Resource):
         self._api = api
         self.stream = None
         self.streaming_file = None
+        self.producer = None
         resource.Resource.__init__(self)
 
-    def _set_stream(self, stream):
-        self.stream = stream
-
     def makeProducer(self, request, stream):
-        return LBRYFileProducer(request, stream)
+        self.producer = LBRYFileProducer(request, stream, self._api)
+        return self.producer
 
     def render_GET(self, request):
         if 'name' in request.args.keys():
-            if request.args['name'][0] != 'lbry':
-                if request.args['name'][0] != self.streaming_file:
-                    self.streaming_file = request.args['name'][0]
-                    d = self._api._download_name(request.args['name'][0])
-                    d.addCallback(self._set_stream)
-                else:
-                    d = defer.succeed(None)
-                d.addCallback(lambda _: self.makeProducer(request, self.stream).start())
+            if request.args['name'][0] != 'lbry' and request.args['name'][0] not in self._api.waiting_on.keys():
+                d = self._api._download_name(request.args['name'][0])
+                d.addCallback(lambda stream: self.makeProducer(request, stream))
+                d.addCallback(lambda producer: producer.start())
+            elif request.args['name'][0] in self._api.waiting_on.keys():
+                request.redirect(UI_ADDRESS + "/?watch=" + request.args['name'][0])
+                request.finish()
             else:
                 request.redirect(UI_ADDRESS)
                 request.finish()
