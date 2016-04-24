@@ -40,6 +40,7 @@ class GetStream(object):
         self.timeout_counter = 0
         self.download_directory = download_directory
         self.download_path = None
+        self.downloader = None
         self.finished = defer.Deferred()
         self.checker = LoopingCall(self.check_status)
 
@@ -120,9 +121,11 @@ class GetStream(object):
             d = _pay_key_fee()
         else:
             d = defer.Deferred()
+        self.downloader = downloader
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
         d.addCallback(lambda _: log.info("Downloading " + str(self.stream_hash) + " --> " + str(self.download_path)))
-        d.addCallback(lambda _: downloader.start())
+        d.addCallback(lambda _: self.downloader.start())
+
 
 class FetcherDaemon(object):
     def __init__(self, session, lbry_file_manager, lbry_file_metadata_manager, wallet, sd_identifier, autofetcher_conf,

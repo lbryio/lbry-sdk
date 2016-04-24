@@ -24,12 +24,21 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
         LBRYFileSaver.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
                                stream_info_manager, payment_rate_manager, wallet, download_directory,
                                upload_allowed, file_name)
+        self.sd_hash = None
         self.rowid = rowid
         self.lbry_file_manager = lbry_file_manager
         self.saving_status = False
 
     def restore(self):
-        d = self.lbry_file_manager.get_lbry_file_status(self)
+        d = self.stream_info_manager._get_sd_blob_hashes_for_stream(self.stream_hash)
+
+        def _save_sd_hash(sd_hash):
+            self.sd_hash = sd_hash[0]
+            return defer.succeed(None)
+
+        d.addCallback(_save_sd_hash)
+
+        d.addCallback(lambda _: self.lbry_file_manager.get_lbry_file_status(self))
 
         def restore_status(status):
             if status == ManagedLBRYFileDownloader.STATUS_RUNNING:
@@ -86,6 +95,14 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
     def _start(self):
 
         d = LBRYFileSaver._start(self)
+
+        d.addCallback(lambda _: self.stream_info_manager._get_sd_blob_hashes_for_stream(self.stream_hash))
+
+        def _save_sd_hash(sd_hash):
+            self.sd_hash = sd_hash[0]
+            return defer.succeed(None)
+
+        d.addCallback(_save_sd_hash)
 
         d.addCallback(lambda _: self._save_status())
 

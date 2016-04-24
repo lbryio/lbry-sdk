@@ -68,7 +68,6 @@ handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, b
 log.addHandler(handler)
 log.setLevel(logging.INFO)
 
-
 INITIALIZING_CODE = 'initializing'
 LOADING_DB_CODE = 'loading_db'
 LOADING_WALLET_CODE = 'loading_wallet'
@@ -875,7 +874,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         def _disp_file(f):
             file_path = os.path.join(self.download_directory, f.file_name)
             log.info("[" + str(datetime.now()) + "] Already downloaded: " + str(f.stream_hash) + " --> " + file_path)
-            return {'stream_hash': f.stream_hash, 'path': file_path}
+            return f
 
         def _get_stream(name):
             def _disp(stream):
@@ -886,13 +885,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 log.info("[" + str(datetime.now()) + "] Start stream: " + stream_hash)
                 return stream
 
-            d = self.session.wallet.get_stream_info_for_name(name)
-            stream = GetStream(self.sd_identifier, self.session, self.session.wallet, self.lbry_file_manager,
+            stream = GetStream(self.sd_identifier, self.session, self.session.wallet,
+                               self.lbry_file_manager,
                                max_key_fee=self.max_key_fee, data_rate=self.data_rate, timeout=timeout,
                                download_directory=download_directory)
+            d = self.session.wallet.get_stream_info_for_name(name)
             d.addCallback(_disp)
             d.addCallback(lambda stream_info: stream.start(stream_info, name))
-            d.addCallback(lambda r: {'stream_hash': r[0], 'path': r[1]} if r else server.failure)
+            d.addCallback(lambda _: stream.downloader)
 
             return d
 
@@ -1028,16 +1028,59 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 t = {'completed': f.completed, 'file_name': f.file_name, 'key': binascii.b2a_hex(f.key),
                      'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
                      'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
-                     'upload_allowed': f.upload_allowed}
+                     'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash}
 
             else:
                 t = {'completed': f.completed, 'file_name': f.file_name, 'key': None,
                      'points_paid': f.points_paid,
                      'stopped': f.stopped, 'stream_hash': f.stream_hash, 'stream_name': f.stream_name,
-                     'suggested_file_name': f.suggested_file_name, 'upload_allowed': f.upload_allowed}
+                     'suggested_file_name': f.suggested_file_name, 'upload_allowed': f.upload_allowed,
+                     'sd_hash': f.sd_hash}
 
             r.append(t)
         return r
+
+    def _get_lbry_file_by_uri(self, name):
+        d = self.session.wallet.get_stream_info_for_name(name)
+        d.addCallback(lambda info: info['stream_hash'])
+        d.addCallback(lambda sd_hash: next(l for l in self.lbry_file_manager.lbry_files if l.sd_hash == sd_hash))
+        return d
+
+    def _get_lbry_file_by_sd_hash(self, sd_hash):
+        r = next(l for l in self.lbry_file_manager.lbry_files if l.sd_hash == sd_hash)
+        return defer.succeed(r)
+
+    def _get_lbry_file_by_file_name(self, file_name):
+        r = next(l for l in self.lbry_file_manager.lbry_files if l.file_name == file_name)
+        return defer.succeed(r)
+
+    def _get_lbry_file(self, search_by, val):
+        def _show_file(f):
+            if f:
+                if f.key:
+                    t = {'completed': f.completed, 'file_name': f.file_name, 'key': binascii.b2a_hex(f.key),
+                         'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
+                         'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
+                         'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash}
+
+                else:
+                    t = {'completed': f.completed, 'file_name': f.file_name, 'key': None,
+                         'points_paid': f.points_paid,
+                         'stopped': f.stopped, 'stream_hash': f.stream_hash, 'stream_name': f.stream_name,
+                         'suggested_file_name': f.suggested_file_name, 'upload_allowed': f.upload_allowed,
+                         'sd_hash': f.sd_hash}
+                return t
+            else:
+                return False
+
+        if search_by == "name":
+            d = self._get_lbry_file_by_uri(val)
+        elif search_by == "sd_hash":
+            d = self._get_lbry_file_by_sd_hash(val)
+        elif search_by == "file_name":
+            d = self._get_lbry_file_by_file_name(val)
+        d.addCallback(_show_file)
+        return d
 
     def _log_to_slack(self, msg):
         URL = "https://hooks.slack.com/services/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"
@@ -1330,11 +1373,41 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'stream_name': string
             'suggested_file_name': string
             'upload_allowed': bool
+            'sd_hash': string
         """
 
         r = self._get_lbry_files()
         log.info("[" + str(datetime.now()) + "] Get LBRY files")
         return self._render_response(r, OK_CODE)
+
+    def jsonrpc_get_lbry_file(self, p):
+        """
+        Get lbry file
+
+        Args:
+            'name': get file by lbry uri,
+            'sd_hash': get file by the hash in the name claim,
+            'file_name': get file by its name in the downloads folder,
+        Returns:
+            'completed': bool
+            'file_name': string
+            'key': hex string
+            'points_paid': float
+            'stopped': bool
+            'stream_hash': base 58 string
+            'stream_name': string
+            'suggested_file_name': string
+            'upload_allowed': bool
+            'sd_hash': string
+        """
+
+        if p.keys()[0] in ['name', 'sd_hash', 'file_name']:
+            search_type = p.keys()[0]
+            d = self._get_lbry_file(search_type, p[search_type])
+        else:
+            d = defer.fail()
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
 
     def jsonrpc_resolve_name(self, p):
         """
@@ -1391,6 +1464,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             name = p['name']
             if p['name'] not in self.waiting_on.keys():
                 d = self._download_name(name=name, timeout=timeout, download_directory=download_directory)
+                d.addCallback(lambda l: {'stream_hash': l.sd_hash, 'path': os.path.join(self.download_directory, l.file_name)})
                 d.addCallback(lambda message: self._render_response(message, OK_CODE))
             else:
                 d = server.failure

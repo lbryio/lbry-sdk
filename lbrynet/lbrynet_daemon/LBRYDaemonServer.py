@@ -2,6 +2,8 @@ import logging
 import subprocess
 import os
 import shutil
+
+from twisted.internet.task import LoopingCall
 from txjsonrpc.web import jsonrpc
 import json
 
@@ -12,6 +14,7 @@ from datetime import datetime
 from appdirs import user_data_dir
 from twisted.web import server, static, resource
 from twisted.internet import defer
+from twisted.web.static import StaticProducer
 
 from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon
 from lbrynet.conf import API_CONNECTION_STRING, API_ADDRESS, DEFAULT_WALLET, UI_ADDRESS
@@ -50,9 +53,77 @@ class LBRYindex(resource.Resource):
         return static.File(os.path.join(self.ui_dir, "index.html")).render_GET(request)
 
 
-class HostedLBRYFile(static.File):
-    def __init__(self, path):
-        static.File.__init__(self, path=path)
+class LBRYFileProducer(StaticProducer):
+    def __init__(self, request, lbry_stream):
+        self.stream = lbry_stream
+        self.updater = LoopingCall(self._check_for_data)
+        StaticProducer.__init__(self, request, fileObject=file(lbry_stream.file_written_to))
+
+    def start(self):
+        d = self._set_size()
+        self.updater.start(5)
+
+    def _set_size(self):
+        def _set(size):
+            self.request.setHeader('content-length', str(size))
+            self.request.setHeader('content-type', ' application/octet-stream')
+            return defer.succeed(None)
+
+        d = self.stream.get_total_bytes()
+        d.addCallback(_set)
+        return d
+
+    def _check_for_data(self):
+        self.fileObject.seek(self.fileObject.tell())
+        data = self.fileObject.read()
+        if data:
+            self.request.write(data)
+
+        def _check_status(stream_status):
+            if stream_status.running_status == "completed":
+                self.stopProducing()
+            return defer.succeed(None)
+
+        d = self.stream.status()
+        d.addCallback(_check_status)
+
+    def resumeProducing(self):
+        self.updater.start(1)
+
+    def stopProducing(self):
+        self.updater.stop()
+        self.fileObject.close()
+        self.stream.stop()
+        self.request.finish()
+
+
+class HostedLBRYFile(resource.Resource):
+    def __init__(self, api):
+        self._api = api
+        self.stream = None
+        self.streaming_file = None
+        resource.Resource.__init__(self)
+
+    def _set_stream(self, stream):
+        self.stream = stream
+
+    def makeProducer(self, request, stream):
+        return LBRYFileProducer(request, stream)
+
+    def render_GET(self, request):
+        if 'name' in request.args.keys():
+            if request.args['name'][0] != 'lbry':
+                if request.args['name'][0] != self.streaming_file:
+                    self.streaming_file = request.args['name'][0]
+                    d = self._api._download_name(request.args['name'][0])
+                    d.addCallback(self._set_stream)
+                else:
+                    d = defer.succeed(None)
+                d.addCallback(lambda _: self.makeProducer(request, self.stream).start())
+            else:
+                request.redirect(UI_ADDRESS)
+                request.finish()
+            return server.NOT_DONE_YET
 
 
 class LBRYFileRender(resource.Resource):
@@ -63,7 +134,7 @@ class LBRYFileRender(resource.Resource):
             api = jsonrpc.Proxy(API_CONNECTION_STRING)
             if request.args['name'][0] != 'lbry':
                 d = api.callRemote("get", {'name': request.args['name'][0]})
-                d.addCallback(lambda results: HostedLBRYFile(results['path']))
+                d.addCallback(lambda results: static.File(results['path'], defaultType='video/octet-stream'))
                 d.addCallback(lambda static_file: static_file.render_GET(request) if static_file.getFileSize() > 0
                               else server.failure)
             else:
@@ -72,29 +143,6 @@ class LBRYFileRender(resource.Resource):
             return server.NOT_DONE_YET
         else:
             return server.failure
-
-
-class LBRYBugReport(resource.Resource):
-    isLeaf = False
-
-    def _delayed_render(self, request, results):
-        request.write(results)
-        request.finish()
-
-    def render_GET(self, request):
-        return '<html><body><form method="POST">' \
-               '<br>Please describe the problem you experienced and any information you think might be useful to us. Links to screenshots are great!</br>' \
-               '<textarea cols="50" rows="10" name="message" type="text"></textarea>' \
-               '<button>Submit</button>' \
-               '</form></body></html>'
-
-    def render_POST(self, request):
-        msg = request.args["message"][0]
-        api = jsonrpc.Proxy(API_CONNECTION_STRING)
-        d = api.callRemote("upload_log", {'name_prefix': 'report', 'exclude_previous': False, 'force': True, 'message': str(msg)})
-        d.addCallback(lambda _: self._delayed_render(request, "<html><body>Your bug report is greatly appreciated! <a href='lbry://lbry'>Click here to return to LBRY</a></body></html>"))
-
-        return server.NOT_DONE_YET
 
 
 class LBRYDaemonServer(object):
@@ -207,8 +255,8 @@ class LBRYDaemonServer(object):
         self.root.putChild("font", static.File(os.path.join(self.ui_dir, "font")))
         self.root.putChild("img", static.File(os.path.join(self.ui_dir, "img")))
         self.root.putChild("js", static.File(os.path.join(self.ui_dir, "js")))
-        self.root.putChild("view", LBRYFileRender())
-        self.root.putChild("report", LBRYBugReport())
+        # self.root.putChild("view", LBRYFileRender())
+        self.root.putChild("view", HostedLBRYFile(self._api))
         self.root.putChild(API_ADDRESS, self._api)
         return defer.succeed(True)
 
