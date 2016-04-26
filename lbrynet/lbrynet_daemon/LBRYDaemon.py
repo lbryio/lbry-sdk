@@ -392,8 +392,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         log.info("[" + str(datetime.now()) + "] Starting lbrynet-daemon")
 
-        self.internet_connection_checker.start(60)
-        self.version_checker.start(3600)
+        self.internet_connection_checker.start(3600)
+        self.version_checker.start(3600 * 12)
         self.connection_problem_checker.start(1)
 
         d = defer.Deferred()
