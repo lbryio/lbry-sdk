@@ -68,12 +68,12 @@ class LBRYFileProducer(StaticProducer):
     def start(self):
         d = self._set_size()
         self.fileObject.seek(0)
-        self.updater.start(5)
+        self.updater.start(1)
 
     def _set_size(self):
         def _set(size):
             self.request.setHeader('content-length', str(size))
-            self.request.setHeader('content-type', ' application/octet-stream')
+            self.request.setHeader('content-type', 'application/octet-stream')
             return defer.succeed(None)
 
         d = self.stream.get_total_bytes()
@@ -85,6 +85,7 @@ class LBRYFileProducer(StaticProducer):
             self.fileObject.seek(self.fileObject.tell())
             data = self.fileObject.read()
             self.total_bytes += len(data)
+            log.info(str(self.total_bytes))
 
             if data:
                 self.request.write(data)
@@ -93,6 +94,7 @@ class LBRYFileProducer(StaticProducer):
         def _check_status(stream_status):
             if stream_status.running_status == "completed":
                 self.stopProducing()
+
             return defer.succeed(None)
 
         d = _write_new_data_to_request()
