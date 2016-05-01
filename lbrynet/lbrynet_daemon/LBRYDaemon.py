@@ -1601,7 +1601,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if p.keys()[0] in ['name', 'sd_hash', 'file_name']:
             search_type = p.keys()[0]
             d = self._get_lbry_file(search_type, p[search_type], return_json=False)
-            d.addCallback(lambda l: _delete_file(l) if l else "Couldn't find LBRY file to delete")
+            d.addCallback(lambda l: _delete_file(l) if l else False)
 
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
