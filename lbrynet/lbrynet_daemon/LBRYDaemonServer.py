@@ -12,7 +12,7 @@ from urllib import urlopen
 from datetime import datetime
 from appdirs import user_data_dir
 from twisted.web import server, static, resource
-from twisted.internet import defer, interfaces, error, reactor, task
+from twisted.internet import defer, interfaces, error, reactor, task, threads
 from twisted.python.failure import Failure
 from txjsonrpc.web import jsonrpc
 
@@ -76,17 +76,16 @@ class LBRYFileStreamer(object):
         self._stop_pos = size - 1 if stop == '' else int(stop)  #chrome and firefox send range requests for "0-"
         self._cursor = self._start_pos = int(start)
         self._file_size = size
+        self._depth = 0
 
         self._paused = self._sent_bytes = self._stopped = False
-        self._delay = 0.1
+        self._delay = 0.25
         self._deferred = defer.succeed(None)
 
         self._request.setResponseCode(206)
         self._request.setHeader('accept-ranges', 'bytes')
-        # self._request.setHeader('content-type', 'application/octet-stream')
         self._request.setHeader('content-type', self._content_type)
 
-        # self._request.setHeader('content-range', 'bytes %s-%s/%s' % (self._start_pos, self._stop_pos, self._file_size))
         self.resumeProducing()
 
     def pauseProducing(self):
@@ -96,6 +95,7 @@ class LBRYFileStreamer(object):
 
     def resumeProducing(self):
         def _check_for_new_data():
+            self._depth += 1
             self._fileObject.seek(self._start_pos, os.SEEK_END)
             readable_bytes = self._fileObject.tell()
             self._fileObject.seek(self._cursor)
@@ -115,7 +115,8 @@ class LBRYFileStreamer(object):
                         self._request.write(data)
                         self._cursor += 1
 
-                log.info("[" + str(datetime.now()) + "] Wrote range %s-%s/%s, length: %s" % (start_cur, self._cursor - 1, self._file_size, self._cursor - start_cur))
+                log.info("[" + str(datetime.now()) + "] Wrote range %s-%s/%s, length: %s, readable: %s, depth: %s"  %
+                         (start_cur, self._cursor, self._file_size, self._cursor - start_cur, readable_bytes, self._depth))
                 self._sent_bytes = True
 
             if self._cursor == self._stop_pos + 1:
@@ -124,13 +125,12 @@ class LBRYFileStreamer(object):
             elif self._paused or self._stopped:
                 return defer.succeed(None)
             else:
-                self._deferred.addCallback(lambda _: task.deferLater(reactor, self._delay, _check_for_new_data))
+                self._deferred.addCallback(lambda _: threads.deferToThread(reactor.callLater, self._delay, _check_for_new_data))
                 return defer.succeed(None)
 
         log.info("[" + str(datetime.now()) + "] Resuming producer")
         self._paused = False
         self._deferred.addCallback(lambda _: _check_for_new_data())
-        return defer.succeed(None)
 
     def stopProducing(self):
         log.info("[" + str(datetime.now()) + "] Stopping producer")
@@ -141,6 +141,7 @@ class LBRYFileStreamer(object):
         self._deferred.cancel()
         # self._request.finish()
         self._request.unregisterProducer()
+        return defer.succeed(None)
 
 
 class HostedLBRYFile(resource.Resource):
@@ -170,7 +171,9 @@ class HostedLBRYFile(resource.Resource):
         if 'name' in request.args.keys():
             if request.args['name'][0] != 'lbry' and request.args['name'][0] not in self._api.waiting_on.keys():
                 d = self._api._download_name(request.args['name'][0])
-                d.addCallback(lambda stream: self.makeProducer(request, stream))
+                # d.addCallback(lambda stream: self.makeProducer(request, stream))
+                d.addCallback(lambda stream: static.File(os.path.join(self._api.download_directory,
+                                                                          stream.file_name)).render_GET(request))
 
             elif request.args['name'][0] in self._api.waiting_on.keys():
                 request.redirect(UI_ADDRESS + "/?watch=" + request.args['name'][0])
