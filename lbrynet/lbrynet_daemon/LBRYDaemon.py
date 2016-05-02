@@ -991,6 +991,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return d
 
         d.addCallback(lambda _: finish_deletion(lbry_file))
+        d.addCallback(lambda _: log.info("[" + str(datetime.now()) + "] Delete lbry file"))
         return d
 
     def _get_est_cost(self, name):

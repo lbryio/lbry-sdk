@@ -132,3 +132,6 @@ def start():
         if not args.logtoconsole:
             print "Not connected to internet, unable to start"
         return
+
+if __name__ == "__main__":
+    start()
