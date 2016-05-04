@@ -337,8 +337,8 @@ class LBRYDaemonServer(object):
         d.addCallback(lambda _: _dl_ui())
         return d
 
-    def _setup_server(self, ui_ver):
-        self._api = LBRYDaemon(ui_ver, wallet_type=DEFAULT_WALLET)
+    def _setup_server(self, ui_ver, wallet):
+        self._api = LBRYDaemon(ui_ver, wallet_type=wallet)
         self.root = LBRYindex(self.ui_dir)
         self.root.putChild("css", static.File(os.path.join(self.ui_dir, "css")))
         self.root.putChild("font", static.File(os.path.join(self.ui_dir, "font")))
@@ -349,9 +349,9 @@ class LBRYDaemonServer(object):
         self.root.putChild(API_ADDRESS, self._api)
         return defer.succeed(True)
 
-    def start(self, branch="HEAD", user_specified=False):
+    def start(self, branch="HEAD", user_specified=False, wallet=DEFAULT_WALLET):
         d = self.setup(branch=branch, user_specified=user_specified)
-        d.addCallback(lambda v: self._setup_server(v))
+        d.addCallback(lambda v: self._setup_server(v, wallet))
         d.addCallback(lambda _: self._api.setup())
 
         return d

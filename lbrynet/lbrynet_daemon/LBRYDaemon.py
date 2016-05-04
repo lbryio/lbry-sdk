@@ -27,7 +27,7 @@ from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.core.Error import UnknownNameError
+from lbrynet.core.Error import UnknownNameError, InsufficientFundsError
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
@@ -1787,6 +1787,98 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = self.session.wallet.get_new_address()
         d.addCallback(_disp)
         d.addCallback(lambda address: self._render_response(address, OK_CODE))
+        return d
+
+    def jsonrpc_send_amount_to_address(self, p):
+        """
+            Send credits to an address
+
+            Args:
+                amount: the amount to send
+                address: the address of the recipient
+            Returns:
+                True if payment successfully scheduled
+        """
+
+        if 'amount' in p.keys() and 'address' in p.keys():
+            amount = p['amount']
+            address = p['address']
+        else:
+            return server.failure
+
+        reserved_points = self.session.wallet.reserve_points(address, amount)
+        if reserved_points is None:
+            return defer.fail(InsufficientFundsError())
+        d = self.session.wallet.send_points_to_address(reserved_points, amount)
+        d.addCallback(lambda _: self._render_response(True, OK_CODE))
+        return d
+
+    def jsonrpc_get_best_blockhash(self):
+        """
+            Get hash of most recent block
+
+            Args:
+                None
+            Returns:
+                Hash of most recent block
+        """
+
+        d = self.session.wallet.get_best_blockhash()
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_get_block(self, p):
+        """
+            Get contents of a block
+
+            Args:
+                blockhash: hash of the block to look up
+            Returns:
+                requested block
+        """
+
+        if 'blockhash' in p.keys():
+            blockhash = p['blockhash']
+        else:
+            return server.failure
+
+        d = self.session.wallet.get_block(blockhash)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_get_claims_for_tx(self, p):
+        """
+            Get claims for tx
+
+            Args:
+                txid: txid of a name claim transaction
+            Returns:
+                any claims contained in the requested tx
+        """
+
+        if 'txid' in p.keys():
+            txid = p['txid']
+        else:
+            return server.failure
+
+        d = self.session.wallet.get_claims_from_tx(txid)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+
+    def jsonrpc_get_nametrie(self):
+        """
+            Get the nametrie
+
+            Args:
+                None
+            Returns:
+                Name claim trie
+        """
+
+        d = self.session.wallet.get_nametrie()
+        d.addCallback(lambda r: [i for i in r if 'txid' in i.keys()])
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
     # def jsonrpc_update_name(self, metadata):
