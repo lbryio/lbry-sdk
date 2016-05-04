@@ -143,7 +143,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.wallet_type = wallet_type
         self.first_run = None
         self.log_file = LOG_FILENAME
-        self.fetcher = None
         self.current_db_revision = 1
         self.run_server = True
         self.session = None
@@ -679,11 +678,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         f.close()
 
         return defer.succeed(True)
-
-    def _setup_fetcher(self):
-        self.fetcher = FetcherDaemon(self.session, self.lbry_file_manager, self.lbry_file_metadata_manager,
-                                     self.session.wallet, self.sd_identifier, self.autofetcher_conf)
-        return defer.succeed(None)
 
     def _setup_data_directory(self):
         self.startup_status = STARTUP_STAGES[1]
@@ -1288,48 +1282,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             return self._render_response(self.jsonrpc_help.__doc__, OK_CODE)
 
-    def jsonrpc_start_fetcher(self):
-        """
-        Start automatically downloading new name claims as they occur (off by default)
-
-        Args:
-            None
-        Returns:
-            confirmation message
-        """
-
-        self.fetcher.start()
-        log.info('[' + str(datetime.now()) + '] Start autofetcher')
-        # self._log_to_slack('[' + str(datetime.now()) + '] Start autofetcher')
-        return self._render_response("Started autofetching claims", OK_CODE)
-
-    def jsonrpc_stop_fetcher(self):
-        """
-        Stop automatically downloading new name claims as they occur
-
-        Args:
-            None
-        Returns:
-            confirmation message
-        """
-
-        self.fetcher.stop()
-        log.info('[' + str(datetime.now()) + '] Stop autofetcher')
-        return self._render_response("Stopped autofetching claims", OK_CODE)
-
-    def jsonrpc_fetcher_status(self):
-        """
-        Get fetcher status
-
-        Args:
-            None
-        Returns:
-            True/False
-        """
-
-        log.info("[" + str(datetime.now()) + "] Get fetcher status")
-        return self._render_response(self.fetcher.check_if_running(), OK_CODE)
-
     def jsonrpc_get_balance(self):
         """
         Get balance
@@ -1865,7 +1817,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-
     def jsonrpc_get_nametrie(self):
         """
             Get the nametrie
@@ -1900,23 +1851,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     #     d.callback(None)
     #
     #     return d
-
-    def jsonrpc_toggle_fetcher_verbose(self):
-        """
-        Toggle fetcher verbose mode
-
-        Args:
-            None
-        Returns:
-            Fetcher verbose status, bool
-        """
-
-        if self.fetcher.verbose:
-            self.fetcher.verbose = False
-        else:
-            self.fetcher.verbose = True
-
-        return self._render_response(self.fetcher.verbose, OK_CODE)
 
     def jsonrpc_check_for_new_version(self):
         """
