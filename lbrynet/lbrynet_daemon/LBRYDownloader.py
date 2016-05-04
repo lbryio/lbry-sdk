@@ -14,6 +14,19 @@ from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.conf import DEFAULT_TIMEOUT
 
+INITIALIZING_CODE = 'initializing'
+DOWNLOAD_METADATA_CODE = 'downloading_metadata'
+DOWNLOAD_TIMEOUT_CODE = 'timeout'
+DOWNLOAD_RUNNING_CODE = 'running'
+DOWNLOAD_STOPPED_CODE = 'stopped'
+STREAM_STAGES = [
+                    (INITIALIZING_CODE, 'Initializing...'),
+                    (DOWNLOAD_METADATA_CODE, 'Downloading metadata'),
+                    (DOWNLOAD_RUNNING_CODE, 'Started stream'),
+                    (DOWNLOAD_STOPPED_CODE, 'Paused stream'),
+                    (DOWNLOAD_TIMEOUT_CODE, 'Stream timed out')
+                ]
+
 if sys.platform != "darwin":
     log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
 else:
@@ -56,6 +69,7 @@ class GetStream(object):
         self.downloader = None
         self.finished = defer.Deferred()
         self.checker = LoopingCall(self.check_status)
+        self.code = STREAM_STAGES[0]
 
     def check_status(self):
         self.timeout_counter += 1
@@ -68,6 +82,7 @@ class GetStream(object):
             log.info("Timeout downloading lbry://" + self.resolved_name + ", " + str(self.stream_info))
             self.checker.stop()
             self.d.cancel()
+            self.code = STREAM_STAGES[4]
             self.finished.callback(False)
 
     def start(self, stream_info, name):
@@ -104,10 +119,16 @@ class GetStream(object):
         def _cause_timeout():
             self.timeout_counter = self.timeout * 2
 
+        def _set_status(x, status):
+            self.code = next(s for s in STREAM_STAGES if s[0] == status)
+            return x
+
         self.checker.start(1)
 
+        self.d.addCallback(lambda _: _set_status(None, DOWNLOAD_METADATA_CODE))
         self.d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
         self.d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
+        self.d.addCallback(lambda r: _set_status(r, DOWNLOAD_RUNNING_CODE))
         self.d.addCallback(lambda metadata: (
         next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)),
         metadata))

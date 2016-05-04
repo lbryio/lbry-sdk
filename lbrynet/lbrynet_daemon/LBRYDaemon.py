@@ -31,7 +31,7 @@ from lbrynet.core.Error import UnknownNameError, InsufficientFundsError
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream, FetcherDaemon
+from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
@@ -147,6 +147,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.run_server = True
         self.session = None
         self.waiting_on = {}
+        self.streams = {}
         self.known_dht_nodes = KNOWN_DHT_NODES
         self.platform_info = {
             "processor": platform.processor(),
@@ -408,7 +409,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._setup_server())
-        d.addCallback(lambda _: self._setup_fetcher())
         d.addCallback(lambda _: _log_starting_vals())
         d.addCallback(lambda _: _announce_startup())
         d.callback(None)
@@ -891,9 +891,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None):
         """
-        Add a lbry file to the file manager, start the download, and return the new lbry file
-        if it already exists in the file manager, return the existing lbry file
+        Add a lbry file to the file manager, start the download, and return the new lbry file.
+        If it already exists in the file manager, return the existing lbry file
         """
+
         if not download_directory:
             download_directory = self.download_directory
         elif not os.path.isdir(download_directory):
@@ -919,12 +920,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return f
 
         def _get_stream(stream_info):
-            stream = GetStream(self.sd_identifier, self.session, self.session.wallet,
-                               self.lbry_file_manager,
-                               max_key_fee=self.max_key_fee, data_rate=self.data_rate, timeout=timeout,
-                               download_directory=download_directory)
-            d = stream.start(stream_info, name)
-            d.addCallback(lambda _: stream.downloader)
+            self.streams[name] = GetStream(self.sd_identifier, self.session, self.session.wallet,
+                                           self.lbry_file_manager, max_key_fee=self.max_key_fee,
+                                           data_rate=self.data_rate, timeout=timeout,
+                                           download_directory=download_directory)
+            d = self.streams[name].start(stream_info, name)
+            d.addCallback(lambda _: self.streams[name].downloader)
 
             return d
 
@@ -1054,16 +1055,39 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return f
 
         def _get_json_for_return(f):
-            if f:
+            def _generate_reply(size):
                 if f.key:
                     key = binascii.b2a_hex(f.key)
                 else:
                     key = None
+
+                if os.path.isfile(os.path.join(self.download_directory, f.file_name)):
+                    written_file = file(os.path.join(self.download_directory, f.file_name))
+                    written_file.seek(0, os.SEEK_END)
+                    written_bytes = written_file.tell()
+                    written_file.close()
+                else:
+                    written_bytes = False
+
+                if search_by == "name":
+                    if val in self.streams.keys():
+                        status = self.streams[val].code
+                    else:
+                        status = [False, False]
+                else:
+                    status = [False, False]
+
                 t = {'completed': f.completed, 'file_name': f.file_name, 'key': key,
-                     'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
-                     'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
-                     'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash}
+                        'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
+                        'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
+                        'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash, 'total_bytes': size,
+                        'written_bytes': written_bytes, 'code': status[0], 'message': status[1]}
                 return t
+
+            if f:
+                d = f.get_total_bytes()
+                d.addCallback(_generate_reply)
+                return d
             else:
                 return False
 
