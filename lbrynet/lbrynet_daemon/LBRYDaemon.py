@@ -889,7 +889,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
-    def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None):
+    def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None, file_name=None, stream_info=None):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
@@ -923,17 +923,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.streams[name] = GetStream(self.sd_identifier, self.session, self.session.wallet,
                                            self.lbry_file_manager, max_key_fee=self.max_key_fee,
                                            data_rate=self.data_rate, timeout=timeout,
-                                           download_directory=download_directory)
+                                           download_directory=download_directory, file_name=file_name)
             d = self.streams[name].start(stream_info, name)
             d.addCallback(lambda _: self.streams[name].downloader)
 
             return d
 
-        self.waiting_on[name] = True
-        d = self._resolve_name(name)
+        if not stream_info:
+            self.waiting_on[name] = True
+            d = self._resolve_name(name)
+        else:
+            d = defer.succeed(stream_info)
         d.addCallback(_setup_stream)
         d.addCallback(lambda (stream_info, lbry_file): _get_stream(stream_info) if not lbry_file else _disp_file(lbry_file))
-        d.addCallback(_remove_from_wait)
+        if not stream_info:
+            d.addCallback(_remove_from_wait)
 
         return d
 
@@ -1418,7 +1422,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         Args:
             'name': name to download, string
-            optional 'download_directory': path to directory where file will be saved, string
+            'download_directory': optional, path to directory where file will be saved, string
+            'file_name': optional, a user specified name for the downloaded file
+            'stream_info': optional, specified stream info overrides name
         Returns:
             'stream_hash': hex string
             'path': path of download
@@ -1434,10 +1440,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             download_directory = p['download_directory']
 
+        if 'file_name' in p.keys():
+            file_name = p['file_name']
+        else:
+            file_name = None
+
+        if 'stream_info' in p.keys():
+            stream_info = p['stream_info']
+        else:
+            stream_info = None
+
         if 'name' in p.keys():
             name = p['name']
             if p['name'] not in self.waiting_on.keys():
-                d = self._download_name(name=name, timeout=timeout, download_directory=download_directory)
+                d = self._download_name(name=name, timeout=timeout, download_directory=download_directory,
+                                                                stream_info=stream_info, file_name=file_name)
                 d.addCallback(lambda l: {'stream_hash': l.sd_hash, 'path': os.path.join(self.download_directory, l.file_name)})
                 d.addCallback(lambda message: self._render_response(message, OK_CODE))
             else:

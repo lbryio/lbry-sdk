@@ -94,7 +94,7 @@ class LBRYFileManager(object):
         return d
 
     def start_lbry_file(self, rowid, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True,
-                                                                                        download_directory=None):
+                                                                        download_directory=None, file_name=None):
         if not download_directory:
             download_directory = self.download_directory
         payment_rate_manager.min_blob_data_payment_rate = blob_data_rate
@@ -105,16 +105,18 @@ class LBRYFileManager(object):
                                                          self.stream_info_manager, self,
                                                          payment_rate_manager, self.session.wallet,
                                                          download_directory,
-                                                         upload_allowed)
+                                                         upload_allowed,
+                                                         file_name=file_name)
         self.lbry_files.append(lbry_file_downloader)
         d = lbry_file_downloader.set_stream_info()
         d.addCallback(lambda _: lbry_file_downloader)
         return d
 
-    def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True, download_directory=None):
+    def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True,
+                                                                download_directory=None, file_name=None):
         d = self._save_lbry_file(stream_hash, blob_data_rate)
         d.addCallback(lambda rowid: self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
-                                                         blob_data_rate, upload_allowed, download_directory))
+                                                         blob_data_rate, upload_allowed, download_directory, file_name))
         return d
 
     def delete_lbry_file(self, lbry_file):

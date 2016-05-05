@@ -136,7 +136,7 @@ class ManagedLBRYFileDownloaderFactory(object):
     def can_download(self, sd_validator):
         return True
 
-    def make_downloader(self, metadata, options, payment_rate_manager, download_directory=None):
+    def make_downloader(self, metadata, options, payment_rate_manager, download_directory=None, file_name=None):
         data_rate = options[0]
         upload_allowed = options[1]
 
@@ -155,7 +155,8 @@ class ManagedLBRYFileDownloaderFactory(object):
                                                                                payment_rate_manager,
                                                                                data_rate,
                                                                                upload_allowed,
-                                                                               download_directory=download_directory))
+                                                                               download_directory=download_directory,
+                                                                               file_name=file_name))
         return d
 
     @staticmethod

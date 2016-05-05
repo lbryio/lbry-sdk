@@ -44,7 +44,7 @@ log.setLevel(logging.INFO)
 
 class GetStream(object):
     def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5,
-                                                                    timeout=DEFAULT_TIMEOUT, download_directory=None):
+                                                    timeout=DEFAULT_TIMEOUT, download_directory=None, file_name=None):
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
@@ -53,6 +53,7 @@ class GetStream(object):
         self.data_rate = data_rate
         self.pay_key = pay_key
         self.name = None
+        self.file_name = file_name
         self.session = session
         self.payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager)
         self.lbry_file_manager = lbry_file_manager
@@ -135,7 +136,8 @@ class GetStream(object):
         self.d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata,
                                                                                [self.data_rate, True],
                                                                                self.payment_rate_manager,
-                                                                               download_directory=self.download_directory))
+                                                                               download_directory=self.download_directory,
+                                                                               file_name=self.file_name))
         self.d.addCallbacks(self._start_download, lambda _: _cause_timeout())
         self.d.callback(None)
 
