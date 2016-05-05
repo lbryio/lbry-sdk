@@ -90,25 +90,22 @@ class GetStream(object):
         self.resolved_name = name
         self.stream_info = stream_info
         if 'stream_hash' in self.stream_info.keys():
-            self.description = self.stream_info['description']
-            if 'key_fee' in self.stream_info.keys():
-                self.key_fee = float(self.stream_info['key_fee'])
-                if 'key_fee_address' in self.stream_info.keys():
-                    self.key_fee_address = self.stream_info['key_fee_address']
-                else:
-                    self.key_fee_address = None
-            else:
-                self.key_fee = None
-                self.key_fee_address = None
-
             self.stream_hash = self.stream_info['stream_hash']
-            if isinstance(self.stream_hash, dict):
-                self.stream_hash = self.stream_hash['sd_hash']
-
+        elif 'sources' in self.stream_info.keys():
+            self.stream_hash = self.stream_info['sources']['lbry_sd_hash']
         else:
-            log.error("InvalidStreamInfoError in autofetcher: ", stream_info)
             raise InvalidStreamInfoError(self.stream_info)
-
+        if 'description' in self.stream_info.keys():
+            self.description = self.stream_info['description']
+        if 'key_fee' in self.stream_info.keys():
+            self.key_fee = float(self.stream_info['key_fee'])
+            if 'key_fee_address' in self.stream_info.keys():
+                self.key_fee_address = self.stream_info['key_fee_address']
+            else:
+                self.key_fee_address = None
+        else:
+            self.key_fee = None
+            self.key_fee_address = None
         if self.key_fee > self.max_key_fee:
             if self.pay_key:
                 log.info("Key fee (" + str(self.key_fee) + ") above limit of " + str(

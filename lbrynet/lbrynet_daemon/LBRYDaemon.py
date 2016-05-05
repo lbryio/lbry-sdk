@@ -905,9 +905,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return r
 
         def _setup_stream(stream_info):
-            stream_hash = stream_info['stream_hash']
-            if isinstance(stream_hash, dict):
-                stream_hash = stream_hash['sd_hash']
+            if 'sources' in stream_info.keys():
+                stream_hash = stream_info['sources']['lbry_sd_hash']
+            else:
+                stream_hash = stream_info['stream_hash']
+
             d = self._get_lbry_file_by_sd_hash(stream_hash)
             def _add_results(l):
                 return defer.succeed((stream_info, l))
