@@ -33,7 +33,8 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
         d = self.stream_info_manager._get_sd_blob_hashes_for_stream(self.stream_hash)
 
         def _save_sd_hash(sd_hash):
-            self.sd_hash = sd_hash[0]
+            if len(sd_hash):
+                self.sd_hash = sd_hash[0]
             return defer.succeed(None)
 
         d.addCallback(_save_sd_hash)
