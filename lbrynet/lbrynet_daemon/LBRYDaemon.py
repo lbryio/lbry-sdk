@@ -90,7 +90,7 @@ DOWNLOAD_STOPPED_CODE = 'stopped'
 STREAM_STAGES = [
                     (INITIALIZING_CODE, 'Initializing...'),
                     (DOWNLOAD_METADATA_CODE, 'Downloading metadata'),
-                    (DOWNLOAD_RUNNING_CODE, 'Started stream'),
+                    (DOWNLOAD_RUNNING_CODE, 'Started %s, got %s/%s blobs, stream status: %s'),
                     (DOWNLOAD_STOPPED_CODE, 'Paused stream'),
                     (DOWNLOAD_TIMEOUT_CODE, 'Stream timed out')
                 ]
@@ -1061,6 +1061,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return f
 
         def _get_json_for_return(f):
+            def _get_file_status(file_status):
+                message = STREAM_STAGES[2][1] % (file_status.name, file_status.num_completed, file_status.num_known, file_status.running_status)
+                return defer.succeed(message)
+
             def _generate_reply(size):
                 if f.key:
                     key = binascii.b2a_hex(f.key)
@@ -1088,12 +1092,26 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 else:
                     status = [False, False]
 
-                t = {'completed': f.completed, 'file_name': f.file_name, 'key': key,
-                        'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
-                        'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
-                        'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash, 'total_bytes': size,
-                        'written_bytes': written_bytes, 'code': status[0], 'message': status[1]}
-                return t
+                if status[0] == DOWNLOAD_RUNNING_CODE:
+                    d = f.status()
+                    d.addCallback(_get_file_status)
+                    d.addCallback(lambda message: {'completed': f.completed, 'file_name': f.file_name, 'key': key,
+                                                   'points_paid': f.points_paid, 'stopped': f.stopped,
+                                                   'stream_hash': f.stream_hash,
+                                                   'stream_name': f.stream_name,
+                                                   'suggested_file_name': f.suggested_file_name,
+                                                   'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash,
+                                                   'total_bytes': size,
+                                                   'written_bytes': written_bytes, 'code': status[0],
+                                                   'message': message})
+                else:
+                    d = defer.succeed({'completed': f.completed, 'file_name': f.file_name, 'key': key,
+                                       'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
+                                       'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
+                                       'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash, 'total_bytes': size,
+                                       'written_bytes': written_bytes, 'code': status[0], 'message': status[1]})
+
+                return d
 
             if f:
                 d = f.get_total_bytes()
