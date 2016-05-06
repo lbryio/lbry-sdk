@@ -1078,6 +1078,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 if search_by == "name":
                     if val in self.streams.keys():
                         status = self.streams[val].code
+                    elif f in self.lbry_file_manager.lbry_files:
+                        # if f.stopped:
+                        #     status = STREAM_STAGES[3]
+                        # else:
+                        status = STREAM_STAGES[2]
                     else:
                         status = [False, False]
                 else:
@@ -1449,6 +1454,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         if 'stream_info' in p.keys():
             stream_info = p['stream_info']
+            if 'sources' in stream_info.keys():
+                sd_hash = stream_info['sources']['lbry_sd_hash']
+            else:
+                sd_hash = stream_info['stream_hash']
         else:
             stream_info = None
 
@@ -1457,7 +1466,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             if p['name'] not in self.waiting_on.keys():
                 d = self._download_name(name=name, timeout=timeout, download_directory=download_directory,
                                                                 stream_info=stream_info, file_name=file_name)
-                d.addCallback(lambda l: {'stream_hash': l.sd_hash, 'path': os.path.join(self.download_directory, l.file_name)})
+                d.addCallback(lambda l: {'stream_hash': sd_hash,
+                                         'path': os.path.join(self.download_directory, l.file_name)}
+                                         if stream_info else
+                                         {'stream_hash': l.sd_hash,
+                                         'path': os.path.join(self.download_directory, l.file_name)})
                 d.addCallback(lambda message: self._render_response(message, OK_CODE))
             else:
                 d = server.failure
