@@ -5,7 +5,6 @@ import os
 import webbrowser
 import sys
 import socket
-import subprocess
 import platform
 
 from appdirs import user_data_dir
@@ -44,17 +43,6 @@ def test_internet_connection():
         return False
 
 
-def prompt_for_xcode_if_needed():
-    t = subprocess.check_output("git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep HEAD | cut -f 1", shell=True)
-    if not t:
-        if platform.system().lower() != "darwin":
-            print "Please install git"
-            sys.exit(0)
-        else:
-            print "You should have been alerted to install xcode command line tools, please do so and then start lbry"
-            sys.exit(0)
-
-
 def stop():
     def _disp_shutdown():
         print "Shutting down lbrynet-daemon from command line"
@@ -80,8 +68,8 @@ def start():
                         help="path to custom UI folder",
                         default=None)
     parser.add_argument("--branch",
-                        help="Branch of lbry-web-ui repo to use, defaults on HEAD",
-                        default="HEAD")
+                        help="Branch of lbry-web-ui repo to use, defaults on master",
+                        default="master")
     parser.add_argument('--no-launch', dest='launchui', action="store_false")
     parser.add_argument('--log-to-console', dest='logtoconsole', action="store_true")
     parser.add_argument('--quiet', dest='quiet', action="store_true")
@@ -103,8 +91,6 @@ def start():
         return
     except:
         pass
-
-    prompt_for_xcode_if_needed()
 
     log.info("Starting lbrynet-daemon from command line")
 
