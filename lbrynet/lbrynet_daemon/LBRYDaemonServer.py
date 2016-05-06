@@ -273,13 +273,11 @@ class LBRYDaemonServer(object):
                 return defer.succeed("user-specified")
             else:
                 log.info("User specified UI directory doesn't exist, using " + branch)
-        elif branch == "HEAD":
-            log.info("Using UI branch: " + branch)
-            self._gitcmd = "git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep %s | cut -f 1" % branch
-            self._dist_url = "https://raw.githubusercontent.com/lbryio/lbry-web-ui/master/dist.zip"
         else:
             log.info("Using UI branch: " + branch)
-            self._gitcmd = "git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep refs/heads/%s | cut -f 1" % branch
+            if branch == "HEAD":
+              branch = "master"
+            self._git_url = "https://api.github.com/repos/lbryio/lbry.io/git/refs/heads/%s" % branch
             self._dist_url = "https://raw.githubusercontent.com/lbryio/lbry-web-ui/%s/dist.zip" % branch
 
         d = self._up_to_date()
@@ -288,8 +286,9 @@ class LBRYDaemonServer(object):
 
     def _up_to_date(self):
         def _get_git_info():
-            r = subprocess.check_output(self._gitcmd, shell=True)
-            return defer.succeed(r)
+            response = urlopen(self._git_url)
+            data = json.loads(response.read())
+            return defer.succeed(data['object']['sha'])
 
         def _set_git(version):
             self.git_version = version
