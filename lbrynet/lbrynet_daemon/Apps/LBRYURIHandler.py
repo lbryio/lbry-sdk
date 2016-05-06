@@ -36,14 +36,16 @@ class LBRYURIHandler(object):
             elif status:
                 return True
             else:
-                raise Timeout("LBRY daemon is running, but connection timed out")
+                sys.exit(0)
+                # raise Timeout("LBRY daemon is running, but connection timed out")
         except:
             if self.start_timeout < 30:
                 sleep(1)
                 self.start_timeout += 1
                 self.check_status()
             else:
-                raise Timeout("Timed out trying to start LBRY daemon")
+                sys.exit(0)
+                # raise Timeout("Timed out trying to start LBRY daemon")
 
     def handle_osx(self, lbry_name):
         lbry_process = [d for d in subprocess.Popen(['ps','aux'], stdout=subprocess.PIPE).stdout.readlines()
@@ -72,6 +74,7 @@ class LBRYURIHandler(object):
             if not is_running:
                 sys.exit(0)
         except:
+            #start lbrynet-daemon
             sys.exit(0)
 
         if lbry_name == "lbry":
