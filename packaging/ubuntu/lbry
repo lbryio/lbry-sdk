@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+WEB_UI_BRANCH='master'
+
 urlencode() {
   local LANG=C
   local length="${#1}"
@@ -17,7 +19,7 @@ urlencode() {
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 if [ -z "$(pgrep lbrynet-daemon)" ]; then
   echo "running lbrynet-daemon..."
-  $DIR/lbrynet-daemon &
+  $DIR/lbrynet-daemon --branch="$WEB_UI_BRANCH" &
   sleep 3 # let the daemon load before connecting
 fi
 

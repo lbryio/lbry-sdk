@@ -3,11 +3,12 @@
 # Tested on fresh Ubuntu 14.04 install.
 
 # wget https://raw.githubusercontent.com/lbryio/lbry/master/packaging/ubuntu/ubuntu_package_setup.sh
-# bash ubuntu_package_setup.sh master
+# bash ubuntu_package_setup.sh [BRANCH] [WEB-UI-BRANCH]
 
 set -euo pipefail
 
 BRANCH=${1:-master}
+WEB_UI_BRANCH=${2:-}
 
 BUILD_DIR="lbry-build-$(date +%Y%m%d-%H%M%S)"
 mkdir "$BUILD_DIR"
@@ -44,6 +45,13 @@ mkdir control data
 tar -xvzf control.tar.gz --directory control
 tar -xvJf data.tar.xz --directory data
 
+PACKAGING_DIR='lbry/packaging/ubuntu'
+
+# set web ui branch
+if [ -z "$WEB_UI_BRANCH" ]; then
+  sed -i "s/^WEB_UI_BRANCH='[^']\+'/WEB_UI_BRANCH='$WEB_UI_BRANCH'/" "$PACKAGING_DIR/lbry"
+fi
+
 # add files
 function addfile() {
   FILE="$1"
@@ -52,7 +60,6 @@ function addfile() {
   cp "$FILE" "data/$TARGET"
   echo "$(md5sum "data/$TARGET" | cut -d' ' -f1)  $TARGET" >> control/md5sums
 }
-PACKAGING_DIR='lbry/packaging/ubuntu'
 addfile "$PACKAGING_DIR/lbry" usr/share/python/lbrynet/bin/lbry
 addfile "$PACKAGING_DIR/lbry.desktop" usr/share/applications/lbry.desktop
 #addfile lbry/packaging/ubuntu/lbry-init.conf etc/init/lbry.conf
