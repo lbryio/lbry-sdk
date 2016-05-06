@@ -1,5 +1,4 @@
 import logging
-import subprocess
 import os
 import shutil
 import json
@@ -273,11 +272,13 @@ class LBRYDaemonServer(object):
                 return defer.succeed("user-specified")
             else:
                 log.info("User specified UI directory doesn't exist, using " + branch)
+        elif branch == "HEAD":
+            log.info("Using UI branch: " + branch)
+            self._git_url = "https://api.github.com/repos/lbryio/lbry-web-ui/git/refs/heads/master"
+            self._dist_url = "https://raw.githubusercontent.com/lbryio/lbry-web-ui/master/dist.zip"
         else:
             log.info("Using UI branch: " + branch)
-            if branch == "HEAD":
-              branch = "master"
-            self._git_url = "https://api.github.com/repos/lbryio/lbry.io/git/refs/heads/%s" % branch
+            self._git_url = "https://api.github.com/repos/lbryio/lbry-web-ui/git/refs/heads/%s" % branch
             self._dist_url = "https://raw.githubusercontent.com/lbryio/lbry-web-ui/%s/dist.zip" % branch
 
         d = self._up_to_date()
