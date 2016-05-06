@@ -211,10 +211,20 @@ class LBRYFileSaver(LBRYFileDownloader):
                     file_name = "_"
                 if os.path.exists(os.path.join(self.download_directory, file_name)):
                     ext_num = 1
+
+                    def _get_file_name(ext):
+                        if len(file_name.split(".")):
+                            fn = ''.join(file_name.split(".")[:-1])
+                            file_ext = ''.join(file_name.split(".")[-1])
+                            return fn + "-" + str(ext) + "." + file_ext
+                        else:
+                            return file_name + "_" + str(ext)
+
                     while os.path.exists(os.path.join(self.download_directory,
-                                                      file_name + "_" + str(ext_num))):
+                                                      _get_file_name(ext_num))):
                         ext_num += 1
-                    file_name = file_name + "_" + str(ext_num)
+
+                    file_name = _get_file_name(ext_num)
                 try:
                     self.file_handle = open(os.path.join(self.download_directory, file_name), 'wb')
                     self.file_written_to = os.path.join(self.download_directory, file_name)

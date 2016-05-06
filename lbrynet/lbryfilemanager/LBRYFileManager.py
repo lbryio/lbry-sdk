@@ -4,10 +4,7 @@ Keep track of which LBRY Files are downloading and store their LBRY File specifi
 
 import logging
 import os
-import sys
-from datetime import datetime
 
-from twisted.internet.task import LoopingCall
 from twisted.enterprise import adbapi
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
@@ -28,14 +25,12 @@ class LBRYFileManager(object):
     Keeps track of currently opened LBRY Files, their options, and their LBRY File specific metadata.
     """
 
-    def __init__(self, session, stream_info_manager, sd_identifier, delete_data=False, download_directory=None):
+    def __init__(self, session, stream_info_manager, sd_identifier, download_directory=None):
         self.session = session
         self.stream_info_manager = stream_info_manager
         self.sd_identifier = sd_identifier
         self.lbry_files = []
         self.sql_db = None
-        # self.delete_data = delete_data
-        # self.check_exists_loop = LoopingCall(self.check_files_exist)
         if download_directory:
             self.download_directory = download_directory
         else:
@@ -43,34 +38,10 @@ class LBRYFileManager(object):
         log.debug("Download directory for LBRYFileManager: %s", str(self.download_directory))
 
     def setup(self):
-        # self.check_exists_loop.start(10)
-
         d = self._open_db()
         d.addCallback(lambda _: self._add_to_sd_identifier())
         d.addCallback(lambda _: self._start_lbry_files())
         return d
-
-    # def check_files_exist(self):
-    #     def _disp(deleted_files):
-    #         if deleted_files[0][0]:
-    #             for file in bad_files:
-    #                 log.info("[" + str(datetime.now()) + "] Detected " + file.file_name + " was deleted, removing from file manager")
-    #
-    #     def _delete_stream_data(lbry_file):
-    #         s_h = lbry_file.stream_hash
-    #         d = self.get_count_for_stream_hash(s_h)
-    #         # TODO: could possibly be a timing issue here
-    #         d.addCallback(lambda c: self.stream_info_manager.delete_stream(s_h) if c == 0 else True)
-    #         return d
-    #
-    #     bad_files = [lbry_file for lbry_file in self.lbry_files
-    #                                       if lbry_file.completed == True and
-    #                                       os.path.isfile(os.path.join(self.download_directory, lbry_file.file_name)) == False]
-    #     d = defer.DeferredList([self.delete_lbry_file(lbry_file) for lbry_file in bad_files], consumeErrors=True)
-    #     d.addCallback(lambda files: _disp(files) if len(files) else defer.succeed(None))
-    #
-    #     if self.delete_data:
-    #         d2 = defer.DeferredList([_delete_stream_data(lbry_file) for lbry_file in bad_files], consumeErrors=True)
 
     def get_lbry_file_status(self, lbry_file):
         return self._get_lbry_file_status(lbry_file.rowid)
@@ -123,7 +94,7 @@ class LBRYFileManager(object):
         return d
 
     def start_lbry_file(self, rowid, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True,
-                                                                                        download_directory=None):
+                                                                        download_directory=None, file_name=None):
         if not download_directory:
             download_directory = self.download_directory
         payment_rate_manager.min_blob_data_payment_rate = blob_data_rate
@@ -134,16 +105,18 @@ class LBRYFileManager(object):
                                                          self.stream_info_manager, self,
                                                          payment_rate_manager, self.session.wallet,
                                                          download_directory,
-                                                         upload_allowed)
+                                                         upload_allowed,
+                                                         file_name=file_name)
         self.lbry_files.append(lbry_file_downloader)
         d = lbry_file_downloader.set_stream_info()
         d.addCallback(lambda _: lbry_file_downloader)
         return d
 
-    def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True, download_directory=None):
+    def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True,
+                                                                download_directory=None, file_name=None):
         d = self._save_lbry_file(stream_hash, blob_data_rate)
         d.addCallback(lambda rowid: self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
-                                                         blob_data_rate, upload_allowed, download_directory))
+                                                         blob_data_rate, upload_allowed, download_directory, file_name))
         return d
 
     def delete_lbry_file(self, lbry_file):
@@ -183,7 +156,6 @@ class LBRYFileManager(object):
             return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
     def stop(self):
-        # self.check_exists_loop.stop()
 
         ds = []
 

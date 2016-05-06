@@ -11,73 +11,39 @@ API_CONNECTION_STRING = "http://localhost:5279/lbryapi"
 UI_ADDRESS = "http://localhost:5279"
 
 
-class Timeout(Exception):
-    def __init__(self, value):
-        self.parameter = value
-
-    def __str__(self):
-        return repr(self.parameter)
-
-
 class LBRYURIHandler(object):
     def __init__(self):
         self.started_daemon = False
-        self.start_timeout = 0
         self.daemon = JSONRPCProxy.from_url(API_CONNECTION_STRING)
 
-    def check_status(self):
-        status = None
-        try:
-            status = self.daemon.is_running()
-            if self.start_timeout < 30 and not status:
-                sleep(1)
-                self.start_timeout += 1
-                self.check_status()
-            elif status:
-                return True
-            else:
-                raise Timeout("LBRY daemon is running, but connection timed out")
-        except:
-            if self.start_timeout < 30:
-                sleep(1)
-                self.start_timeout += 1
-                self.check_status()
-            else:
-                raise Timeout("Timed out trying to start LBRY daemon")
-
     def handle_osx(self, lbry_name):
-        lbry_process = [d for d in subprocess.Popen(['ps','aux'], stdout=subprocess.PIPE).stdout.readlines()
-                            if 'LBRY.app' in d and 'LBRYURIHandler' not in d]
         try:
             status = self.daemon.is_running()
         except:
-            status = None
-
-        if lbry_process or status:
-            self.check_status()
-            started = False
-        else:
             os.system("open /Applications/LBRY.app")
-            self.check_status()
-            started = True
+            sleep(3)
 
-        if lbry_name == "lbry" or lbry_name == "" and not started:
+        if lbry_name == "lbry" or lbry_name == "":
             webbrowser.open(UI_ADDRESS)
         else:
-            webbrowser.open(UI_ADDRESS + "/view?name=" + lbry_name)
+            webbrowser.open(UI_ADDRESS + "/?watch=" + lbry_name)
 
     def handle_linux(self, lbry_name):
         try:
-            is_running = self.daemon.is_running()
-            if not is_running:
-                sys.exit(0)
+            status = self.daemon.is_running()
         except:
-            sys.exit(0)
+            cmd = r'DIR = "$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"' \
+                  r'if [-z "$(pgrep lbrynet-daemon)"]; then' \
+                    r'echo "running lbrynet-daemon..."' \
+                    r'$DIR / lbrynet - daemon &' \
+                    r'sleep 3  # let the daemon load before connecting' \
+                  r'fi'
+            subprocess.Popen(cmd, shell=True)
 
-        if lbry_name == "lbry":
+        if lbry_name == "lbry" or lbry_name == "":
             webbrowser.open(UI_ADDRESS)
         else:
-            webbrowser.open(UI_ADDRESS + "/view?name=" + lbry_name)
+            webbrowser.open(UI_ADDRESS + "/?watch=" + lbry_name)
 
 
 def main(args):

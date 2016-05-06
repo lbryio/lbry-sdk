@@ -28,7 +28,12 @@ ARG=${1:-}
 if [ -z "$ARG" ]; then
   URL=""
 else
-  URL="view?name=$(urlencode "$(echo "$ARG" | cut -c 8-)")"
+  NAME=$(echo "$ARG" | cut -c 8-)
+  if [ -z "$NAME" -o "$NAME" == "lbry" ]; then
+    URL=""
+  else
+    URL="/?watch=$(urlencode "$NAME")"
+  fi
 fi
 
-/usr/bin/xdg-open "http://localhost:5279/$URL"
+/usr/bin/xdg-open "http://localhost:5279$URL"
