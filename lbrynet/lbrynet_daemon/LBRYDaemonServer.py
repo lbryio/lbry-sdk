@@ -261,7 +261,7 @@ class LBRYDaemonServer(object):
                 self.loaded_git_version = None
                 self.loaded_branch = None
 
-    def setup(self, branch="HEAD", user_specified=None):
+    def setup(self, branch="master", user_specified=None):
         self.branch = branch
         if user_specified:
             if os.path.isdir(user_specified):
@@ -272,10 +272,6 @@ class LBRYDaemonServer(object):
                 return defer.succeed("user-specified")
             else:
                 log.info("User specified UI directory doesn't exist, using " + branch)
-        elif branch == "HEAD":
-            log.info("Using UI branch: " + branch)
-            self._git_url = "https://api.github.com/repos/lbryio/lbry-web-ui/git/refs/heads/master"
-            self._dist_url = "https://raw.githubusercontent.com/lbryio/lbry-web-ui/master/dist.zip"
         else:
             log.info("Using UI branch: " + branch)
             self._git_url = "https://api.github.com/repos/lbryio/lbry-web-ui/git/refs/heads/%s" % branch
@@ -349,7 +345,7 @@ class LBRYDaemonServer(object):
         self.root.putChild(API_ADDRESS, self._api)
         return defer.succeed(True)
 
-    def start(self, branch="HEAD", user_specified=False, wallet=DEFAULT_WALLET):
+    def start(self, branch="master", user_specified=False, wallet=DEFAULT_WALLET):
         d = self.setup(branch=branch, user_specified=user_specified)
         d.addCallback(lambda v: self._setup_server(v, wallet))
         d.addCallback(lambda _: self._api.setup())
