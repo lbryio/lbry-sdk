@@ -1101,6 +1101,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                                                    'stream_name': f.stream_name,
                                                    'suggested_file_name': f.suggested_file_name,
                                                    'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash,
+                                                   'lbry_uri': f.uri, 'txid': f.txid,
                                                    'total_bytes': size,
                                                    'written_bytes': written_bytes, 'code': status[0],
                                                    'message': message})
@@ -1109,7 +1110,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                                        'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
                                        'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
                                        'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash, 'total_bytes': size,
-                                       'written_bytes': written_bytes, 'code': status[0], 'message': status[1]})
+                                       'written_bytes': written_bytes, 'lbry_uri': f.uri, 'txid': f.txid,
+                                       'code': status[0], 'message': status[1]})
 
                 return d
 
