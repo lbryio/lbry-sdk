@@ -74,13 +74,15 @@ LOADING_WALLET_CODE = 'loading_wallet'
 LOADING_FILE_MANAGER_CODE = 'loading_file_manager'
 LOADING_SERVER_CODE = 'loading_server'
 STARTED_CODE = 'started'
+WAITING_FOR_FIRST_RUN_CREDITS = 'waiting_for_credits'
 STARTUP_STAGES = [
                     (INITIALIZING_CODE, 'Initializing...'),
                     (LOADING_DB_CODE, 'Loading databases...'),
                     (LOADING_WALLET_CODE, 'Catching up with the blockchain... %s'),
                     (LOADING_FILE_MANAGER_CODE, 'Setting up file manager'),
                     (LOADING_SERVER_CODE, 'Starting lbrynet'),
-                    (STARTED_CODE, 'Started lbrynet')
+                    (STARTED_CODE, 'Started lbrynet'),
+                    (WAITING_FOR_FIRST_RUN_CREDITS, 'Waiting for first run credits...')
                   ]
 
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'
@@ -372,6 +374,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return d
 
         def _announce_startup():
+            def _wait_for_credits():
+                if float(self.session.wallet.wallet_balance) == 0.0:
+                    self.startup_status = STARTUP_STAGES[6]
+                    return reactor.callLater(1, _wait_for_credits)
+                else:
+                    return _announce()
+
             def _announce():
                 self.announced_startup = True
                 self.startup_status = STARTUP_STAGES[5]
@@ -387,7 +396,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 d.addCallback(lambda _: self._check_first_run())
                 d.addCallback(self._show_first_run_result)
 
-            d.addCallback(lambda _: _announce())
+            d.addCallback(lambda _: _wait_for_credits() if self.requested_first_run_credits else _announce())
             return d
 
         log.info("[" + str(datetime.now()) + "] Starting lbrynet-daemon")
