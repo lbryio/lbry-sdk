@@ -1119,9 +1119,22 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
                 return d
 
+            def _add_metadata(message):
+                def _add_to_dict(metadata):
+                    message['metadata'] = metadata
+                    return defer.succeed(message)
+
+                if f.txid:
+                    d = self._resolve_name(f.uri)
+                    d.addCallback(_add_to_dict)
+                else:
+                    d = defer.succeed(None)
+                return d
+
             if f:
                 d = f.get_total_bytes()
                 d.addCallback(_generate_reply)
+                d.addCallback(_add_metadata)
                 return d
             else:
                 return False
