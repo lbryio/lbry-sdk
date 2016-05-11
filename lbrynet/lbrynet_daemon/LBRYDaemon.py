@@ -1137,7 +1137,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     d = self._resolve_name(f.uri)
                     d.addCallback(_add_to_dict)
                 else:
-                    d = defer.succeed(None)
+                    d = defer.succeed(message)
                 return d
 
             if f:
