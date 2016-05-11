@@ -913,7 +913,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
             d = self._get_lbry_file_by_sd_hash(stream_hash)
             def _add_results(l):
-                return defer.succeed((stream_info, l))
+                if l:
+                    if os.path.isfile(os.path.join(self.download_directory, l.file_name)):
+                        return defer.succeed((stream_info, l))
+                return defer.succeed((stream_info, None))
             d.addCallback(_add_results)
             return d
 
