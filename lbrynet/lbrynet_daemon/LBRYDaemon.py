@@ -593,6 +593,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self._upload_log(name_prefix="close", exclude_previous=False if self.first_run else True)
         d.addCallback(lambda _: self._stop_server())
+        d.addCallback(lambda _: self.lbry_file_manager.stop())
         d.addErrback(lambda err: log.info("Bad server shutdown: " + err.getTraceback()))
         if self.session is not None:
             d.addCallback(lambda _: self.session.shut_down())
