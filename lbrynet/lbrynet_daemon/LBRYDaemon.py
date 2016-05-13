@@ -899,7 +899,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
-    def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None, file_name=None, stream_info=None):
+    def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None,
+                                file_name=None, stream_info=None, wait_for_write=True):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
@@ -929,17 +930,51 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addCallback(_add_results)
             return d
 
+        def _wait_on_lbry_file(f):
+            if os.path.isfile(os.path.join(self.download_directory, f.file_name)):
+                written_file = file(os.path.join(self.download_directory, f.file_name))
+                written_file.seek(0, os.SEEK_END)
+                written_bytes = written_file.tell()
+                written_file.close()
+            else:
+                written_bytes = False
+
+            if not written_bytes:
+                d = defer.succeed(None)
+                d.addCallback(lambda _: reactor.callLater(1, _wait_on_lbry_file, f))
+                return d
+            else:
+                return defer.succeed(_disp_file(f))
+
         def _disp_file(f):
             file_path = os.path.join(self.download_directory, f.file_name)
             log.info("[" + str(datetime.now()) + "] Already downloaded: " + str(f.sd_hash) + " --> " + file_path)
             return f
 
         def _get_stream(stream_info):
+            def _wait_for_write():
+                if os.path.isfile(os.path.join(self.download_directory, self.streams[name].downloader.file_name)):
+                    written_file = file(os.path.join(self.download_directory, self.streams[name].downloader.file_name))
+                    written_file.seek(0, os.SEEK_END)
+                    written_bytes = written_file.tell()
+                    written_file.close()
+                else:
+                    written_bytes = False
+
+                if not written_bytes:
+                    d = defer.succeed(None)
+                    d.addCallback(lambda _: reactor.callLater(1, _wait_for_write))
+                    return d
+                else:
+                    return defer.succeed(None)
+
             self.streams[name] = GetStream(self.sd_identifier, self.session, self.session.wallet,
                                            self.lbry_file_manager, max_key_fee=self.max_key_fee,
                                            data_rate=self.data_rate, timeout=timeout,
                                            download_directory=download_directory, file_name=file_name)
             d = self.streams[name].start(stream_info, name)
+            if wait_for_write:
+                d.addCallback(lambda _: _wait_for_write())
             d.addCallback(lambda _: self.streams[name].downloader)
 
             return d
@@ -950,10 +985,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             d = defer.succeed(stream_info)
         d.addCallback(_setup_stream)
-        d.addCallback(lambda (stream_info, lbry_file): _get_stream(stream_info) if not lbry_file else _disp_file(lbry_file))
+        d.addCallback(lambda (stream_info, lbry_file): _get_stream(stream_info) if not lbry_file else _wait_on_lbry_file(lbry_file))
         if not stream_info:
             d.addCallback(_remove_from_wait)
-
         return d
 
     def _get_long_count_timestamp(self):
@@ -1510,11 +1544,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             stream_info = None
 
+        if 'wait_for_write' in p.keys():
+            wait_for_write = p['wait_for_write']
+        else:
+            wait_for_write = True
+
         if 'name' in p.keys():
             name = p['name']
             if p['name'] not in self.waiting_on.keys():
                 d = self._download_name(name=name, timeout=timeout, download_directory=download_directory,
-                                                                stream_info=stream_info, file_name=file_name)
+                                        stream_info=stream_info, file_name=file_name, wait_for_write=wait_for_write)
                 d.addCallback(lambda l: {'stream_hash': sd_hash,
                                          'path': os.path.join(self.download_directory, l.file_name)}
                                          if stream_info else
