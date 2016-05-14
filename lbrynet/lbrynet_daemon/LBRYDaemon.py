@@ -330,6 +330,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             if functionPath not in ALLOWED_DURING_STARTUP:
                 return server.failure
 
+        if self.wallet_type == "lbryum" and functionPath in ['set_miner', 'get_miner_status']:
+            return server.failure
+
         try:
             function = self._getFunction(functionPath)
         except jsonrpclib.Fault, f:
@@ -1992,6 +1995,39 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self.session.wallet.get_nametrie()
         d.addCallback(lambda r: [i for i in r if 'txid' in i.keys()])
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_set_miner(self, p):
+        """
+            Start of stop the miner, function only available when lbrycrd is set as the wallet
+
+            Args:
+                run: True/False
+            Returns:
+                miner status, True/False
+        """
+
+        stat = p['run']
+        if stat:
+            d = self.session.wallet.start_miner()
+        else:
+            d = self.session.wallet.stop_miner()
+        d.addCallback(lambda _: self.session.wallet.get_miner_status())
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_get_miner_status(self):
+        """
+            Get status of miner
+
+            Args:
+                None
+            Returns:
+                True/False
+        """
+
+        d = self.session.wallet.get_miner_status()
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
