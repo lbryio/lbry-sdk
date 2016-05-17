@@ -530,8 +530,10 @@ class LBRYWallet(object):
                                 "    sd_hash text)")
 
     def _save_name_metadata(self, name, sd_hash, txid):
-        d = self.db.runQuery("insert into name_metadata values (?, ?, ?)",
-                             (name, txid, sd_hash))
+        d = self.db.runQuery("select * from name_metadata where txid=?", (txid,))
+        d.addCallback(lambda r: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash))
+                                if not len(r) else None)
+
         return d
 
     def _get_claim_metadata_for_sd_hash(self, sd_hash):

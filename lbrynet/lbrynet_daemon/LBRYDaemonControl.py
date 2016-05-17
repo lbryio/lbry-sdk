@@ -104,7 +104,7 @@ def start():
     if test_internet_connection():
         lbry = LBRYDaemonServer()
 
-        d = lbry.start(branch=args.branch, user_specified=args.ui)
+        d = lbry.start(branch=args.branch, user_specified=args.ui, wallet=args.wallet)
         if args.launchui:
             d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
 
