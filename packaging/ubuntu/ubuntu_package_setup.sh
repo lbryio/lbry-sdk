@@ -8,7 +8,7 @@
 set -euo pipefail
 
 BRANCH=${1:-master}
-WEB_UI_BRANCH=${2:-}
+WEB_UI_BRANCH=${2:-master}
 
 BUILD_DIR="lbry-build-$(date +%Y%m%d-%H%M%S)"
 mkdir "$BUILD_DIR"
@@ -48,9 +48,7 @@ tar -xvJf data.tar.xz --directory data
 PACKAGING_DIR='lbry/packaging/ubuntu'
 
 # set web ui branch
-if [ -z "$WEB_UI_BRANCH" ]; then
-  sed -i "s/^WEB_UI_BRANCH='[^']\+'/WEB_UI_BRANCH='$WEB_UI_BRANCH'/" "$PACKAGING_DIR/lbry"
-fi
+sed -i "s/^WEB_UI_BRANCH='[^']\+'/WEB_UI_BRANCH='$WEB_UI_BRANCH'/" "$PACKAGING_DIR/lbry"
 
 # add files
 function addfile() {
