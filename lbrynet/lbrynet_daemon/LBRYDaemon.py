@@ -397,9 +397,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 # self.lbrynet_connection_checker.start(3600)
 
             if self.first_run:
-                d = self._upload_log(name_prefix="fr")
+                d = self._upload_log(log_type="first_run")
             else:
-                d = self._upload_log(exclude_previous=True, name_prefix="start")
+                d = self._upload_log(exclude_previous=True, log_type="start")
 
             if float(self.session.wallet.wallet_balance) == 0.0:
                 d.addCallback(lambda _: self._check_first_run())
@@ -579,12 +579,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         dl.addCallback(_set_query_handlers)
         return dl
 
-    def _upload_log(self, name_prefix=None, exclude_previous=False, force=False):
-        if name_prefix:
-            name_prefix = name_prefix + "-" + platform.system()
-        else:
-            name_prefix = platform.system()
-
+    def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
             LOG_URL = "https://lbry.io/log-upload"
             if exclude_previous:
@@ -596,9 +591,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 f = open(self.log_file, "r")
                 log_contents = f.read()
                 f.close()
-            t = datetime.now()
-            log_name = name_prefix + "-" + base58.b58encode(self.lbryid)[:20] + "-" + str(t.month) + "-" + str(t.day) + "-" + str(t.year) + "-" + str(t.hour) + "-" + str(t.minute)
-            params = {'name': log_name, 'log': log_contents}
+            params = {
+                    'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
+                    'hash': base58.b58encode(self.lbryid)[:20],
+                    'sys': platform.system(),
+                    'type': log_type,
+                    'log': log_contents
+                    }
 
             requests.post(LOG_URL, params)
             return defer.succeed(None)
@@ -609,7 +608,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
 
-        d = self._upload_log(name_prefix="close", exclude_previous=False if self.first_run else True)
+        d = self._upload_log(log_type="close", exclude_previous=False if self.first_run else True)
         d.addCallback(lambda _: self._stop_server())
         d.addCallback(lambda _: self.lbry_file_manager.stop())
         d.addErrback(lambda err: log.info("Bad server shutdown: " + err.getTraceback()))
@@ -2084,9 +2083,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         if p:
             if 'name_prefix' in p.keys():
-                prefix = p['name_prefix'] + '_api'
+                log_type = p['name_prefix'] + '_api'
             else:
-                prefix = None
+                log_type = None
 
             if 'exclude_previous' in p.keys():
                 exclude_previous = p['exclude_previous']
@@ -2101,10 +2100,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 force = False
         else:
-            prefix = "api"
+            log_type = "api"
             exclude_previous = True
 
-        d = self._upload_log(name_prefix=prefix, exclude_previous=exclude_previous, force=force)
+        d = self._upload_log(log_type=log_type, exclude_previous=exclude_previous, force=force)
         if 'message' in p.keys():
             d.addCallback(lambda _: self._log_to_slack(p['message']))
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
