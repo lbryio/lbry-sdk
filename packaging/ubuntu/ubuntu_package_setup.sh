@@ -26,13 +26,13 @@ WEB_UI_BRANCH="master"
 
 while getopts :hctb:w:d: FLAG; do
     case $FLAG in
-	c)  
+	c)
 	    CLONE=true
 	    ;;
-	b)  
+	b)
 	    BRANCH=${OPTARG}
 	    ;;
-	w)  
+	w)
 	    WEB_UI_BRANCH=${OPTARG}
 	    ;;
 	d)
@@ -41,7 +41,7 @@ while getopts :hctb:w:d: FLAG; do
 	t)
 	    set -o xtrace
 	    ;;
-	h)  
+	h)
 	    HELP
 	    ;;
 	\?) #unrecognized option - show help
@@ -97,7 +97,7 @@ $SUDO add-apt-repository -y ppa:spotify-jyrki/dh-virtualenv
 $SUDO apt-get ${QUIET} update
 $SUDO apt-get ${QUIET} install -y --no-install-recommends \
       build-essential git python-dev libffi-dev libssl-dev \
-      libgmp3-dev dh-virtualenv debhelper wget python-pip
+      libgmp3-dev dh-virtualenv debhelper wget python-pip fakeroot
 
 # need a modern version of pip (more modern than ubuntu default)
 $SUDO pip install --upgrade pip
