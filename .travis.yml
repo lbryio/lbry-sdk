@@ -30,3 +30,13 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cd packaging/osx/lbry-osx-app; ./setup_app.sh; cd $TRAVIS_BUILD_DIR; fi
   # fail the build if this is a build for a tag and we don't have the versions matching
   - if [[ -n "${TRAVIS_TAG}" ]]; then     if [[ "v`python setup.py -V`" = "${TRAVIS_TAG}" ]]; then true;     else false;     fi; fi
+
+deploy:
+  provider: releases
+  file: "`python setup.py --name`_`python setup.py -V`_amd64.deb"
+  skip_cleanup: true
+  on:
+    tags: true
+  # this is the oauth token for the lbry-ci user
+  api_key:
+    secure: nKdWGROnLNodx9k9nWvq2wezkPvSVL8zF63qjPXjhdOe9kCUbcLp7WnFDYpn9EJj4Pofq/ejeCHwjA+5x7JUP3Szk7SlJV61B4c/5hl64rl7oSKOoKskjdE2jaOG3CJuOUrh0yQ59U3vMMABcsnw/wJaCIuu/erdPIm8g8R+stu1YHOGtl5Y9WiW+zLJn2vc3GooV1TWtki9EnrmFfw0Vrqc4RMVMFB1ojE7ggrK1LIwcmGSbLIYzker1ZRz8SCy+84sGk4//V+2i2NNiz5AkPuG7BBGrU2twE9nD23IlruJAdVdi71P3ytAmi0kKyvxIU4VeNaqyTk9zeL5IB9J5IIgvekHgKcsKhFUZ6QcXT1Xfxl4ELftvWCTHWiewnXFdqLcG9GZiUaE6+7wdalwDAP3tqS2emiibetlBZERHR+RMR00ej+1MBYWGMlTse/0Tglndv0a2qqgAJYLKPRT02hTRYGxZ1MrJe+WGnChRmzwgLVTIgZuiDciFOahN0TYGSORk6OpnZBsxvpzSqDw5UDJx0BmbJ1xMNDFbOs8ubZ9yIpB9yNMGw66FPacOF61XNYnmA68ILC28UtOFKuuHLrUPbM5JmQkDVhtTfFbBnyHefyCLAL4MHvJJKGi1oaOXjYaJ/J095h636/kQ0cHHuVMgoWUQZOQ44xRAz7tMuc=
