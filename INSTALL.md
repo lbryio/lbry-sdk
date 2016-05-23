@@ -12,7 +12,9 @@ Double click the .deb file and follow the prompts. The app can be started by sea
 On both systems you can also open the UI while the app is running by going to lbry://lbry in Firefox or Safari, or localhost:5279 in Chrome.
 
 
+
 #### Installing LBRY command line
+--------------------------
 
 ##### OS X
 You can install LBRY command line by running `curl -sL https://rawgit.com/lbryio/lbry-setup/master/lbry_setup_osx.sh | sudo bash` in a terminal. This script will install lbrynet and its dependancies, as well as the app. You can start LBRY by either starting the app or by running `lbrynet-daemon` from a terminal. 
