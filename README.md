@@ -6,6 +6,10 @@ LBRYnet is a fully decentralized network for distributing data. It consists of p
 and downloading data from other peers, possibly in exchange for payments, and a distributed hash
 table, used by peers to discover other peers.
 
+## Installation
+
+Download the [latest release](https://github.com/lbryio/lbry/releases/latest) or see [INSTALL.md](INSTALL.md) for manual installation.
+
 ## Overview
 
 On LBRYnet, data is broken into chunks, and each chunk is specified by its sha384 hash sum. This
@@ -20,9 +24,9 @@ help peers find each other. For example, an application for which clients don't 
 necessary chunks may use some identifier, chosen by the application, to find clients which do
 know all of the necessary chunks.
 
-## Running
+## For Developers
 
-LBRYnet comes with an file sharing application, called 'lbrynet-console', which breaks
+LBRY comes with an file sharing application, called 'lbrynet-console', which breaks
 files into chunks, encrypts them with a symmetric key, computes their sha384 hash sum, generates
 a special file called a 'stream descriptor' containing the hash sums and some other file metadata,
 and makes the chunks available for download by other peers. A peer wishing to download the file
@@ -30,22 +34,19 @@ must first obtain the 'stream descriptor' and then may open it with his 'lbrynet
 download all of the chunks by locating peers with the chunks via the DHT, and then combine the
 chunks into the original file, according to the metadata included in the 'stream descriptor'.
 
-To install and use this client, see [INSTALL](INSTALL.md) and [RUNNING](RUNNING.md)
+For detailed instructions, see [INSTALL.md](INSTALL.md) and [RUNNING.md](RUNNING.md).
 
-## Installation
+Documentation: doc.lbry.io (may be out of date)
 
-See [INSTALL](INSTALL.md)
-
-## Developers
-
-Documentation: doc.lbry.io
 Source code: https://github.com/lbryio/lbry
 
-To contribute to the development of LBRYnet or lbrynet-console, contact jimmy@lbry.io
+To contribute, [join us on Slack](https://lbry-slackin.herokuapp.com/) or contact josh@lbry.io. Pull requests are also welcome.
 
 ## Support
 
-Send all support requests to jimmy@lbry.io
+Please open an issue and describe your situation in detail. We will respond as soon as we can.
+
+If private issues, contact josh@lbry.io.
 
 ## License
 
