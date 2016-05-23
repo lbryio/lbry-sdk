@@ -1,4 +1,8 @@
 
+(
+
+sleep 10
+
 zenity --question --text="<span size=\"xx-large\">LBRY Installed</span>\n\nRun LBRY now?" --title="LBRY Installed" --ok-label=" Yes" \
   --cancel-label=" No" --icon-name="system-software-install"
 
@@ -20,3 +24,5 @@ lbry://lbry
 
 in your browser." --title="LBRY Installed" --icon-name="system-software-install"
 fi
+
+) &
