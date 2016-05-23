@@ -46,7 +46,7 @@ To contribute, [join us on Slack](https://lbry-slackin.herokuapp.com/) or contac
 
 Please open an issue and describe your situation in detail. We will respond as soon as we can.
 
-If private issues, contact josh@lbry.io.
+For private issues, contact josh@lbry.io.
 
 ## License
 
