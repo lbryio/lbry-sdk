@@ -154,6 +154,8 @@ function addfile() {
 addfile "$PACKAGING_DIR/lbry" usr/share/python/lbrynet/bin/lbry
 addfile "$PACKAGING_DIR/lbry.desktop" usr/share/applications/lbry.desktop
 
+cat "$PACKAGING_DIR/postinst_append" >> control/postinst
+
 # repackage .deb
 $SUDO chown -R root:root control data
 tar -czf control.tar.gz -C control .
