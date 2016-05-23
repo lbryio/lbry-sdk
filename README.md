@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/lbryio/lbry.svg?branch=master)](https://travis-ci.org/lbryio/lbry)
+
 # LBRYnet
 
 LBRYnet is a fully decentralized network for distributing data. It consists of peers uploading
