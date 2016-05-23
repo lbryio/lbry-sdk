@@ -28,3 +28,5 @@ script:
   # py2app fails to find jsonrpc unless json-rpc is installed. why? I don't know.
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install json-rpc; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cd packaging/osx/lbry-osx-app; ./setup_app.sh; cd $TRAVIS_BUILD_DIR; fi
+  # fail the build if this is a build for a tag and we don't have the versions matching
+  - if [[ -n "${TRAVIS_TAG}" ]]; then     if [[ "v`python setup.py -V`" = "${TRAVIS_TAG}" ]]; then true;     else false;     fi; fi
