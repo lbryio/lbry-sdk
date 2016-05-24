@@ -1,0 +1,28 @@
+
+(
+
+sleep 4
+
+zenity --question --text="<span size=\"xx-large\">LBRY Installed</span>\n\nRun LBRY now?" --title="LBRY Installed" --ok-label=" Yes" \
+  --cancel-label=" No" --icon-name="system-software-install"
+
+case $? in
+  0) RUN=1 # yes
+  ;;
+  1) RUN=0 # no
+  ;;
+  *) RUN=0 # timeout or escape or whatever
+  ;;
+esac
+
+if [ $RUN = 1 ]; then
+  xdg-open "lbry://lbry"
+else
+  zenity --info --text="<span size=\"xx-large\">LBRY Installed</span>\n\nNo problem. You can run LBRY later by going to
+
+lbry://lbry
+
+in your browser." --title="LBRY Installed" --icon-name="system-software-install"
+fi
+
+) &

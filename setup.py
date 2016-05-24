@@ -33,7 +33,7 @@ gui_data_files = ['close2.gif', 'lbry-dark-242x80.gif', 'lbry-dark-icon.xbm', 'l
 gui_data_paths = [os.path.join(base_dir, 'lbrynet', 'lbrynet_gui', f) for f in gui_data_files]
 
 setup(name='lbrynet',
-      description='A fully decentralized network for distributing data',
+      description='A fully-decentralized content marketplace',
       version=__version__,
       maintainer='Jimmy Kiselak',
       maintainer_email='jimmy@lbry.io',
