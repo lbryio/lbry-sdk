@@ -1,0 +1,32 @@
+matrix:
+  include:
+  - os: linux
+    sudo: required
+    dist: trust
+    language: generic
+before_install:
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; brew install python; fi
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then sudo pip install --upgrade pip virtualenv;
+  fi
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then virtualenv $HOME/venv; source $HOME/venv/bin/activate;
+  fi
+install: true
+before_script:
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then openssl aes-256-cbc -k "$ENCRYPTION_SECRET"
+  -in packaging/osx/certs/dist.cer.enc -d -a -out packaging/osx/certs/dist.cer; fi
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then openssl aes-256-cbc -k "$ENCRYPTION_SECRET"
+  -in packaging/osx/certs/dist.p12.enc -d -a -out packaging/osx/certs/dist.p12; fi
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then ./packaging/osx/add-key.sh; fi
+script:
+- if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then bash packaging/ubuntu/ubuntu_package_setup.sh;
+  fi
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew upgrade gmp; fi
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install git+https://github.com/metachris/py2app;
+  fi
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install json-rpc; fi
+- if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cd packaging/osx/lbry-osx-app; ./setup_app.sh;
+  cd $TRAVIS_BUILD_DIR; fi
+env:
+  global:
+  - secure: d3glJxXC0goiFETAP0JxMDEQoSNlh1fRDR76D3tjYY4Brxh2UgvUvpNJOAkFApynciA3n8kva4uBsv52jwnKG0VmCy/meaWowouhyi8ChdPpg7HZL84oC7rz3bZ2OA2iuYFPpAQrd6p7OMhmiCkeqhRKtW0YmOKn1F45kaIMnmq+bD0QK3IdP3QBdGz0rf6TQlNSQLSJtDAP0+HO+NaawJ1TQJXHUHA8mKnbOTRal4bH007uxfhvthXysm1QRQOfthGud2q/DN+f6RfCqF2Fv9l7NwR5BwVKluQYgqJjdhk9IOU7D+zW4Ne2fSt6V1PRAASAfyhtDiOA7B3ZUw2igimQ6rWyWao1csilq0RW9EmycOT8S7x5YgXltk0kVdNizdQeHCDII0mOxkIFBF0bs2ZgTgKasZrU5jGnEhV42eACl9CGeoT5/ots7an+zgCBoQ8c4HGkMQyKV4uNnvKD+gq1FPDuwlHEUHhbjy5uRI4kAVMzjsCJX7XBSumFELuwiOpE/XguiJAV/LvjYbN6OFemJ6HUOhep6kgq7Zcoxh+UnaMixiq6NQTSoLpffatSxCM9EG8uBoXZJBH45cS9aD0eP9zjV2COCC0Iom5BQFhkArgMVodYtcrNevPUA3AuvJOjdJpSwKB4fqaU/CDqThw/ieZQlzaZqWIM5RnHf6Y=
+  - secure: n08IQBOLaipKzAwS5aQM+JfFtvLSCrWqFFztTMeElmck6IJOVnPlDvPYRCrRmrXtgFmJ1G6hEU5Vri086MkTaISq3V04ndquhz7nv93Pp1do42vWPmvmFHdMrhaOGPVtYZ4m4XfgNcA+NC79V9X2VQ+MoQgCRhcGlgGomxJBHc924bGxppkIrDMljvSipkR5v9g/UFGRPYJ6BIF0imWrdsHUfqhbZMdAxAmdlBAjx/ZUOmUyPWYttHGYEW4HpLwvkU2K+sJrt1emogvR7GT94CadtqjmRsiKh0Y2lHHhHkqV1J941T08p9hyKU6S4fHQqPHfpkHRiPeJQY8JiipCbuERn0YeGqsp5q0jRE6PFUxCWcvlWqc7XNihOMQAb5JQD8vF2Lvs3YYycFBgZkIOaZQFbemqkx2pnQMjVF7GCZp4u+p5yo8iBeImYFYdkqIBHqPqsKxM9aBfe05XhAmi/6jUP0L2xikVFvJZDNxKP2uyqXVbSMR8KF8v1eaYnsSL3vzBolwkn96zaj2E/lItHaNeNIXvutAsGuy2ybTXeabm5rTaUr+5cmdqx4JqmyGM3DinGFik/fzpLUJCd4GaC1n1taLy6aUUW2oH46QRqLLAAjZ4AWao92Eb4cnFiVxxBqVG3efWaoEt+uW7/hzqG27iieoVqCXs3Hd5g4bCYyo=
