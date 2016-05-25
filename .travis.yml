@@ -7,11 +7,16 @@ matrix:
           # that comes with the system, so we don't want to use anything that
           # travis would try to set-up for us in python
           language: generic
+        - os: osx
+          # Use generic language for osx
+          # python 2.7 is broken on osx on travis, so follow we have to specify the installation ourselves
+          # https://github.com/travis-ci/travis-ci/issues/2312#issuecomment-195620855
+          language: generic
 
 before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; brew install python; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update && brew install python; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then sudo pip install --upgrade pip virtualenv; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then virtualenv $HOME/venv; source $HOME/venv/bin/activate; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then virtualenv $HOME/venv && source $HOME/venv/bin/activate; fi
 
 install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./packaging/travis/install_dependencies_and_run_tests.sh; fi
@@ -27,7 +32,7 @@ script:
   # the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install git+https://github.com/metachris/py2app; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install jsonrpc; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cd packaging/osx/lbry-osx-app; ./setup_app.sh; cd $TRAVIS_BUILD_DIR; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cd packaging/osx/lbry-osx-app && ./setup_app.sh && cd $TRAVIS_BUILD_DIR; fi
   # fail the build if this is a build for a tag and we don't have the versions matching
   - if [[ -n "${TRAVIS_TAG}" ]]; then if [[ "v`python setup.py -V`" = "${TRAVIS_TAG}" ]]; then true; else false; fi; fi
 
@@ -40,3 +45,10 @@ deploy:
   # this is the oauth token for the lbry-ci user
   api_key:
     secure: nKdWGROnLNodx9k9nWvq2wezkPvSVL8zF63qjPXjhdOe9kCUbcLp7WnFDYpn9EJj4Pofq/ejeCHwjA+5x7JUP3Szk7SlJV61B4c/5hl64rl7oSKOoKskjdE2jaOG3CJuOUrh0yQ59U3vMMABcsnw/wJaCIuu/erdPIm8g8R+stu1YHOGtl5Y9WiW+zLJn2vc3GooV1TWtki9EnrmFfw0Vrqc4RMVMFB1ojE7ggrK1LIwcmGSbLIYzker1ZRz8SCy+84sGk4//V+2i2NNiz5AkPuG7BBGrU2twE9nD23IlruJAdVdi71P3ytAmi0kKyvxIU4VeNaqyTk9zeL5IB9J5IIgvekHgKcsKhFUZ6QcXT1Xfxl4ELftvWCTHWiewnXFdqLcG9GZiUaE6+7wdalwDAP3tqS2emiibetlBZERHR+RMR00ej+1MBYWGMlTse/0Tglndv0a2qqgAJYLKPRT02hTRYGxZ1MrJe+WGnChRmzwgLVTIgZuiDciFOahN0TYGSORk6OpnZBsxvpzSqDw5UDJx0BmbJ1xMNDFbOs8ubZ9yIpB9yNMGw66FPacOF61XNYnmA68ILC28UtOFKuuHLrUPbM5JmQkDVhtTfFbBnyHefyCLAL4MHvJJKGi1oaOXjYaJ/J095h636/kQ0cHHuVMgoWUQZOQ44xRAz7tMuc=
+
+env:
+  global:
+    # needed to unlock the identity file when its on the keychain
+    - secure: "aqgVNHfeh6JUqTTWG5+W+tTsIJkePS6HyLkcZlq6ODYrfdGKa90EeV4q4wdGfP5IkrBbf+WBFACDGVp574E7vfMLMNKUDuUtgnGVPwqOIhjG82ud8Xa7qF7lsw50QOnRYYVd2GLlCIzk8sffT5ncjSPN2ClNVM5iTwCkC8TNSAVnEJxu6bG6hcaT4uCWWjs0m+39O1xJwxJ4vTjpE/gy+j2FTSaUR5cNavOVCyJqpeKlga9aoBVsQHWvxlYurdWbwRLwVIV7bDE+sYPnwn1nMFQpx5RZ1AX1Z2UxNFKcYzLJgcWe85OjxLyT4udX+XZ9SLsdOjm1n201OLEKsmTxmHS8yqpbu6+pKQ1rLMEVpgPGfS8DdtqZyb3z0u6q4jztpm+uBe8hnFgwQFGXO63nOQsI0n1PMR3evAnVx7jYt7y/UALs2A9yjosMwDqgql1FMhyd0OJGo8Ky8YpDsr2J5zGVvIqt2/N+lP+SOe2D1J/5EhGlY0o4tqIAFskh3q8/GR6UGm70KT2l4LJqrU1WGrGxPJ+HoOEmvG6eqLesk03fAX3v5+DgXZWErnzXMIOGDPaFVpmx+G9VZTIlmf+3Wbu9TnZE5PRwFTdP1rqjGpjUhHeF0VTc2qgNq1OfL98CBO1wLgA195+em58cELalnwDMWUTmY1Jt1kUuAtCc11U="
+    # used to decypt the aes decrypt the certificate and identity files
+    - secure: "FzftiEBFMngQIci5KZ+tpKs/BubalhWXJ9f8yogGNVa3XplLheUXYgcsNU8sYT2MJaKAHN9fSjHWb67UtKT7yXddXxeOPnW6wJ3ua/FXnpynsmeGKTfh3stvgjpzdXous67uHmCWMMklfb6z7UuDohjUMAe5n5HKw5tq1RzTKpc2kJacOC6qUT5laUOvULyCaO9E9HmbHeR5ZeXAC6pnzX2ccsSrcXvPozHzBIZ9RyothKs+CZw8PEuJo07RRL8meboegqYOUrOYuz6A2gS2mZJoy59ivZKOFxS5shEuv2Jt80RyfyxBoUpKFq8OG3Am5nAEzDiTIGzmIoKDEGKeTagk/sEtSZXiMDkzDT4GX/j1rUNLCBU87bXEFS2zfRsrfg8c1XZPIzDYBT1PY2QtLBdddF5zzDoKdPLJ3sjN+fZFE5RlnwfwnMHriVRZZlzjcdk0Z06gKTBCxUg5BZamnOOK+K8qunMJXVS+Vmi5u4RoTZZiCosUlYKnSKJ8suO9C0+znxoViusPqP4ONprNHgDoZw+UKio84QW3PrZv9h4zH/D+msDgJRZ0ceqDD+6Wz1J8Mm5ptW1GOLh/IU12TPXjxteqh0Um2vv5eIPmjK9uEK666kK7PqtPDkYhAfWvF+nmOOyPMJfbP4MW/i9WHNF4ghsIMbPKfqNhgSmfrYw="
