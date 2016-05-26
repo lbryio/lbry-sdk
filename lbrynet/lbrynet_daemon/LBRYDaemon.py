@@ -151,6 +151,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.waiting_on = {}
         self.streams = {}
         self.known_dht_nodes = KNOWN_DHT_NODES
+        self.first_run_after_update = False
         self.platform_info = {
             "processor": platform.processor(),
             "python_version: ": platform.python_version(),
@@ -197,7 +198,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'use_upnp': True,
             'start_lbrycrdd': True,
             'requested_first_run_credits': False,
-            'cache_time': DEFAULT_CACHE_TIME
+            'cache_time': DEFAULT_CACHE_TIME,
+            'startup_scripts': [],
+            'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}
         }
 
         if os.path.isfile(self.daemon_conf):
@@ -234,6 +237,20 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         self.session_settings = settings_dict
 
+        if 'last_version' in missing_settings.keys():
+            self.session_settings['last_version'] = None
+
+        if self.session_settings['last_version'] != self.default_settings['last_version']:
+            self.session_settings['last_version'] = self.default_settings['last_version']
+            f = open(self.daemon_conf, "w")
+            f.write(json.dumps(self.session_settings))
+            f.close()
+
+            self.first_run_after_update = True
+            log.info("First run after update")
+            if lbrynet_version == '0.2.5':
+                self.session_settings['startup_scripts'].append({'script_name': 'migrateto025', 'run_once': True})
+
         self.run_on_startup = self.session_settings['run_on_startup']
         self.data_rate = self.session_settings['data_rate']
         self.max_key_fee = self.session_settings['max_key_fee']
@@ -252,6 +269,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.start_lbrycrdd = self.session_settings['start_lbrycrdd']
         self.requested_first_run_credits = self.session_settings['requested_first_run_credits']
         self.cache_time = self.session_settings['cache_time']
+        self.startup_scripts = self.session_settings['startup_scripts']
 
         if os.path.isfile(os.path.join(self.db_dir, "stream_info_cache.json")):
             f = open(os.path.join(self.db_dir, "stream_info_cache.json"), "r")
@@ -394,6 +412,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 self.announced_startup = True
                 self.startup_status = STARTUP_STAGES[5]
                 log.info("[" + str(datetime.now()) + "] Started lbrynet-daemon")
+                if len(self.startup_scripts):
+                    log.info("Scheduling scripts")
+                    reactor.callLater(3, self._run_scripts)
+
                 # self.lbrynet_connection_checker.start(3600)
 
             if self.first_run:
@@ -608,6 +630,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _shutdown(self):
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
+        self.internet_connection_checker.stop()
+        self.version_checker.stop()
+        self.connection_problem_checker.stop()
 
         d = self._upload_log(name_prefix="close", exclude_previous=False if self.first_run else True)
         d.addCallback(lambda _: self._stop_server())
@@ -1017,19 +1042,31 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         f.close()
         return defer.succeed(True)
 
-    def _resolve_name(self, name):
+    def _resolve_name(self, name, force_refresh=False):
         def _cache_stream_info(stream_info):
+            def _add_txid(txid):
+                self.name_cache[name]['txid'] = txid
+                return defer.succeed(None)
+
             self.name_cache[name] = {'claim_metadata': stream_info, 'timestamp': self._get_long_count_timestamp()}
-            d = self._update_claim_cache()
+            d = self.session.wallet.get_txid_for_name(name)
+            d.addCallback(_add_txid)
+            d.addCallback(lambda _: self._update_claim_cache())
             d.addCallback(lambda _: self.name_cache[name]['claim_metadata'])
+
             return d
 
-        if name in self.name_cache.keys():
-            if (self._get_long_count_timestamp() - self.name_cache[name]['timestamp']) < self.cache_time:
-                log.info("[" + str(datetime.now()) + "] Returning cached stream info for lbry://" + name)
-                d = defer.succeed(self.name_cache[name]['claim_metadata'])
+        if not force_refresh:
+            if name in self.name_cache.keys():
+                if (self._get_long_count_timestamp() - self.name_cache[name]['timestamp']) < self.cache_time:
+                    log.info("[" + str(datetime.now()) + "] Returning cached stream info for lbry://" + name)
+                    d = defer.succeed(self.name_cache[name]['claim_metadata'])
+                else:
+                    log.info("[" + str(datetime.now()) + "] Refreshing stream info for lbry://" + name)
+                    d = self.session.wallet.get_stream_info_for_name(name)
+                    d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
             else:
-                log.info("[" + str(datetime.now()) + "] Refreshing stream info for lbry://" + name)
+                log.info("[" + str(datetime.now()) + "] Resolving stream info for lbry://" + name)
                 d = self.session.wallet.get_stream_info_for_name(name)
                 d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
         else:
@@ -1219,6 +1256,31 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         URL = "https://hooks.slack.com/services/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"
         msg = platform.platform() + ": " + base58.b58encode(self.lbryid)[:20] + ", " + msg
         requests.post(URL, json.dumps({"text": msg}))
+        return defer.succeed(None)
+
+    def _run_scripts(self):
+        if len([k for k in self.startup_scripts if 'run_once' in k.keys()]):
+            log.info("Removing one time startup scripts")
+            f = open(self.daemon_conf, "r")
+            initialsettings = json.loads(f.read())
+            f.close()
+            t = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
+            initialsettings['startup_scripts'] = t
+            f = open(self.daemon_conf, "w")
+            f.write(json.dumps(initialsettings))
+            f.close()
+
+        for script in self.startup_scripts:
+            if script['script_name'] == 'migrateto025':
+                log.info("Running migrator to 0.2.5")
+                from lbrynet.lbrynet_daemon.daemon_scripts.migrateto025 import run as run_migrate
+                run_migrate(self)
+
+            if script['script_name'] == 'Autofetcher':
+                log.info("Starting autofetcher script")
+                from lbrynet.lbrynet_daemon.daemon_scripts.Autofetcher import run as run_autofetcher
+                run_autofetcher(self)
+
         return defer.succeed(None)
 
     def _render_response(self, result, code):

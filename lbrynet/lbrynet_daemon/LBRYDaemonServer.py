@@ -189,50 +189,6 @@ class HostedLBRYFile(resource.Resource):
         call.cancel()
 
 
-class MyLBRYFiles(resource.Resource):
-    isLeaf = False
-
-    def __init__(self):
-        resource.Resource.__init__(self)
-        self.files_table = None
-
-    def delayed_render(self, request, result):
-        request.write(result.encode('utf-8'))
-        request.finish()
-
-    def render_GET(self, request):
-        self.files_table = None
-        api = jsonrpc.Proxy(API_CONNECTION_STRING)
-        d = api.callRemote("get_lbry_files", {})
-        d.addCallback(self._get_table)
-        d.addCallback(lambda results: self.delayed_render(request, results))
-
-        return server.NOT_DONE_YET
-
-    def _get_table(self, files):
-        if not self.files_table:
-            self.files_table = r'<html><head><title>My LBRY files</title></head><body><table border="1">'
-            self.files_table += r'<tr>'
-            self.files_table += r'<td>Stream name</td>'
-            self.files_table += r'<td>Completed</td>'
-            self.files_table += r'<td>Toggle</td>'
-            self.files_table += r'<td>Remove</td>'
-            self.files_table += r'</tr>'
-            return self._get_table(files)
-        if not len(files):
-            self.files_table += r'</table></body></html>'
-            return self.files_table
-        else:
-            f = files.pop()
-            self.files_table += r'<tr>'
-            self.files_table += r'<td>%s</td>' % (f['stream_name'])
-            self.files_table += r'<td>%s</td>' % (f['completed'])
-            self.files_table += r'<td>Start</td>' if f['stopped'] else r'<td>Stop</td>'
-            self.files_table += r'<td>Delete</td>'
-            self.files_table += r'</tr>'
-            return self._get_table(files)
-
-
 class LBRYDaemonServer(object):
     def __init__(self):
         self.data_dir = user_data_dir("LBRY")
@@ -336,12 +292,9 @@ class LBRYDaemonServer(object):
     def _setup_server(self, ui_ver, wallet):
         self._api = LBRYDaemon(ui_ver, wallet_type=wallet)
         self.root = LBRYindex(self.ui_dir)
-        self.root.putChild("css", static.File(os.path.join(self.ui_dir, "css")))
-        self.root.putChild("font", static.File(os.path.join(self.ui_dir, "font")))
-        self.root.putChild("img", static.File(os.path.join(self.ui_dir, "img")))
-        self.root.putChild("js", static.File(os.path.join(self.ui_dir, "js")))
+        for d in [i[0] for i in os.walk(self.ui_dir) if os.path.dirname(i[0]) == self.ui_dir]:
+            self.root.putChild(os.path.basename(d), static.File(d))
         self.root.putChild("view", HostedLBRYFile(self._api))
-        self.root.putChild("files", MyLBRYFiles())
         self.root.putChild(API_ADDRESS, self._api)
         return defer.succeed(True)
 
