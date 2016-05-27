@@ -13,7 +13,8 @@ before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then sudo pip install --upgrade pip virtualenv; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then virtualenv $HOME/venv; source $HOME/venv/bin/activate; fi
 
-install: true
+install:
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./packaging/travis/install_dependencies_and_run_tests.sh; fi
 
 before_script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then openssl aes-256-cbc -k "$ENCRYPTION_SECRET" -in packaging/osx/certs/dist.cer.enc -d -a -out packaging/osx/certs/dist.cer; fi
