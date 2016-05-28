@@ -33,7 +33,7 @@ script:
 
 deploy:
   provider: releases
-  file: "`python setup.py --name`_`python setup.py -V`_amd64.deb"
+  file: "${TRAVIS_BUILD_DIR}/`python setup.py --name`_`python setup.py -V`_amd64.deb"
   skip_cleanup: true
   on:
     tags: true
