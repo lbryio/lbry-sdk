@@ -110,7 +110,7 @@ CONNECTION_PROBLEM_CODES = [
 ALLOWED_DURING_STARTUP = ['is_running', 'is_first_run',
                           'get_time_behind_blockchain', 'stop',
                           'daemon_status', 'get_start_notice',
-                          'version', 'check_for_new_version']
+                          'version']
 
 BAD_REQUEST = 400
 NOT_FOUND = 404
