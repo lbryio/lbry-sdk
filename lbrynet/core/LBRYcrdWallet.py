@@ -295,6 +295,11 @@ class LBRYWallet(object):
         d.addCallback(self._get_stream_info_from_value, name)
         return d
 
+    def get_txid_for_name(self, name):
+        d = self._get_value_for_name(name)
+        d.addCallback(lambda r: None if 'txid' not in r else r['txid'])
+        return d
+
     def get_stream_info_from_txid(self, name, txid):
         d = self.get_claims_from_tx(txid)
 
