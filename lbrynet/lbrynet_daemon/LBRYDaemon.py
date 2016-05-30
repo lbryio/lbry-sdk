@@ -1217,7 +1217,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 if status[0] == DOWNLOAD_RUNNING_CODE:
                     d = f.status()
                     d.addCallback(_get_file_status)
-                    d.addCallback(lambda message: {'completed': f.completed, 'file_name': f.file_name, 'key': key,
+                    d.addCallback(lambda message: {'completed': f.completed, 'file_name': f.file_name,
+                                                   'download_directory': f.download_directory,'key': key,
                                                    'points_paid': f.points_paid, 'stopped': f.stopped,
                                                    'stream_hash': f.stream_hash,
                                                    'stream_name': f.stream_name,
@@ -1229,6 +1230,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                                                    'message': message})
                 else:
                     d = defer.succeed({'completed': f.completed, 'file_name': f.file_name, 'key': key,
+                                       'download_directory': f.download_directory,
                                        'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
                                        'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
                                        'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash, 'total_bytes': size,
