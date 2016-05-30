@@ -55,6 +55,8 @@ class LBRYUIManager(object):
 
         if not os.path.isfile(os.path.join(self.config)):
             self.loaded_git_version = None
+            self.loaded_branch = None
+            self.loaded_requirements = None
         else:
             try:
                 f = open(self.config, "r")
@@ -75,19 +77,22 @@ class LBRYUIManager(object):
                 log.info("Checking user specified UI directory: " + str(user_specified))
                 self.branch = "user-specified"
                 self.loaded_git_version = "user-specified"
-                self.ui_dir = user_specified
                 d = self.migrate_ui(source=user_specified)
                 d.addCallback(lambda _: self._load_ui())
                 return d
             else:
                 log.info("User specified UI directory doesn't exist, using " + branch)
+        elif self.loaded_branch == "user-specified":
+            log.info("Loading user provided UI")
+            d = self._load_ui()
+            return d
         else:
             log.info("Checking for updates for UI branch: " + branch)
             self._git_url = "https://api.github.com/repos/lbryio/lbry-web-ui/git/refs/heads/%s" % branch
             self._dist_url = "https://raw.githubusercontent.com/lbryio/lbry-web-ui/%s/dist.zip" % branch
 
         d = self._up_to_date()
-        d.addCallback(lambda r: self._download_ui() if not r else self.branch)
+        d.addCallback(lambda r: self._download_ui() if not r else self._load_ui())
         return d
 
     def _up_to_date(self):
