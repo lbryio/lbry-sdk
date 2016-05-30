@@ -13,7 +13,8 @@ from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer
-from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, DEFAULT_WALLET, UI_ADDRESS
+from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, \
+                            DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH
 
 
 if sys.platform != "darwin":
@@ -68,12 +69,11 @@ def start():
                         help="path to custom UI folder",
                         default=None)
     parser.add_argument("--branch",
-                        help="Branch of lbry-web-ui repo to use, defaults on master",
-                        default="master")
+                        help="Branch of lbry-web-ui repo to use, defaults on master")
     parser.add_argument('--no-launch', dest='launchui', action="store_false")
     parser.add_argument('--log-to-console', dest='logtoconsole', action="store_true")
     parser.add_argument('--quiet', dest='quiet', action="store_true")
-    parser.set_defaults(launchui=True, logtoconsole=False, quiet=False)
+    parser.set_defaults(branch=False, launchui=True, logtoconsole=False, quiet=False)
     args = parser.parse_args()
 
     if args.logtoconsole:
@@ -104,7 +104,10 @@ def start():
     if test_internet_connection():
         lbry = LBRYDaemonServer()
 
-        d = lbry.start(branch=args.branch, user_specified=args.ui, wallet=args.wallet)
+        d = lbry.start(branch=args.branch if args.branch else DEFAULT_UI_BRANCH,
+                       user_specified=args.ui,
+                       wallet=args.wallet,
+                       branch_specified=True if args.branch else False)
         if args.launchui:
             d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
 

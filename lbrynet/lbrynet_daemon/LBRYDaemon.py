@@ -382,7 +382,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.error(failure)
         return jsonrpclib.Fault(self.FAILURE, "error")
 
-    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=False):
+    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False):
         def _log_starting_vals():
             d = self._get_lbry_files()
             d.addCallback(lambda r: json.dumps([d[1] for d in r]))
@@ -427,7 +427,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.connection_problem_checker.start(1)
 
         d = defer.Deferred()
-        d.addCallback(lambda _: self.lbry_ui_manager.setup(branch=branch, user_specified=user_specified))
+        d.addCallback(lambda _: self.lbry_ui_manager.setup(branch=branch,
+                                                           user_specified=user_specified,
+                                                           branch_specified=branch_specified))
         d.addCallback(lambda _: self._initial_setup())
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())

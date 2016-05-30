@@ -70,7 +70,7 @@ class LBRYUIManager(object):
                 self.loaded_branch = None
                 self.loaded_requirements = None
 
-    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=None):
+    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=None, branch_specified=False):
         self.branch = branch
         if user_specified:
             if os.path.isdir(user_specified):
@@ -82,7 +82,7 @@ class LBRYUIManager(object):
                 return d
             else:
                 log.info("User specified UI directory doesn't exist, using " + branch)
-        elif self.loaded_branch == "user-specified":
+        elif self.loaded_branch == "user-specified" and not branch_specified:
             log.info("Loading user provided UI")
             d = self._load_ui()
             return d
