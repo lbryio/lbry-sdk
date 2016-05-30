@@ -1,5 +1,6 @@
 import locale
 import os
+import subprocess
 import sys
 import simplejson as json
 import binascii
@@ -1094,7 +1095,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
-    def _delete_lbry_file(self, lbry_file):
+    def _delete_lbry_file(self, lbry_file, delete_file=True):
         d = self.lbry_file_manager.delete_lbry_file(lbry_file)
 
         def finish_deletion(lbry_file):
@@ -1107,7 +1108,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d = self.lbry_file_manager.get_count_for_stream_hash(s_h)
             # TODO: could possibly be a timing issue here
             d.addCallback(lambda c: self.stream_info_manager.delete_stream(s_h) if c == 0 else True)
-            d.addCallback(lambda _: os.remove(os.path.join(self.download_directory, lbry_file.file_name)) if
+            if delete_file:
+                d.addCallback(lambda _: os.remove(os.path.join(self.download_directory, lbry_file.file_name)) if
                           os.path.isfile(os.path.join(self.download_directory, lbry_file.file_name)) else defer.succeed(None))
             return d
 
@@ -1792,14 +1794,19 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             confirmation message
         """
 
+        if 'delete_target_file' in p.keys():
+            delete_file = p['delete_target_file']
+        else:
+            delete_file = True
+
         def _delete_file(f):
             file_name = f.file_name
-            d = self._delete_lbry_file(f)
+            d = self._delete_lbry_file(f, delete_file=delete_file)
             d.addCallback(lambda _: "Deleted LBRY file" + file_name)
             return d
 
-        if p.keys()[0] in ['name', 'sd_hash', 'file_name']:
-            search_type = p.keys()[0]
+        if 'name' in p.keys() or 'sd_hash' in p.keys() or 'file_name' in p.keys():
+            search_type = [k for k in p.keys() if k != 'delete_target_file'][0]
             d = self._get_lbry_file(search_type, p[search_type], return_json=False)
             d.addCallback(lambda l: _delete_file(l) if l else False)
 
@@ -2201,4 +2208,23 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d = self.lbry_ui_manager.setup()
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
 
+        return d
+
+    def jsonrpc_reveal(self, p):
+        """
+        Open a folder in finder/file explorer
+
+        Args:
+            'path': path to be selected in finder
+        Returns:
+            True, opens finder
+        """
+        
+        path = p['path']
+        if sys.platform == "darwin":
+            d = threads.deferToThread(subprocess.Popen, ("open -R %s" % path), shell=True)
+        else:
+            d = threads.deferToThread(subprocess.Popen, ("xdg-open %s" % path), shell=True)
+
+        d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
