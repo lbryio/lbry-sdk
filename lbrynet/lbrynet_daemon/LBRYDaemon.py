@@ -2229,9 +2229,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         
         path = p['path']
         if sys.platform == "darwin":
-            d = threads.deferToThread(subprocess.Popen, ("open -R %s" % path.replace(' ', '\ ')), shell=True)
+            d = threads.deferToThread(subprocess.Popen, ['open', '-R', path])
         else:
-            d = threads.deferToThread(subprocess.Popen, ("xdg-open %s" % path.replace(' ', '\ ')), shell=True)
+            d = threads.deferToThread(subprocess.Popen, ['xdg-open', '-R', path])
 
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
