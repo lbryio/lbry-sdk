@@ -27,5 +27,5 @@ script:
   # the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install git+https://github.com/metachris/py2app; fi
   # py2app fails to find jsonrpc unless json-rpc is installed. why? I don't know.
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install json-rpc; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install jsonrpc; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cd packaging/osx/lbry-osx-app; ./setup_app.sh; cd $TRAVIS_BUILD_DIR; fi
