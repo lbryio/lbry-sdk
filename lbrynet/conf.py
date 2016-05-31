@@ -24,6 +24,8 @@ KNOWN_DHT_NODES = [('104.236.42.182', 4000)]
 POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2424'
 #POINTTRADER_SERVER = 'http://127.0.0.1:2424'
 
+LOG_POST_URL = "https://lbry.io/log-upload"
+
 CRYPTSD_FILE_EXTENSION = ".cryptsd"
 
 API_INTERFACE = "localhost"

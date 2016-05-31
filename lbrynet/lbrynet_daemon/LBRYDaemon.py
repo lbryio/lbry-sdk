@@ -38,7 +38,7 @@ from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
-    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH
+    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
@@ -410,8 +410,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
             if self.first_run:
                 d = self._upload_log(log_type="first_run")
-            else:
+            elif self.upload_log:
                 d = self._upload_log(exclude_previous=True, log_type="start")
+            else:
+                d = defer.succeed(None)
 
             if float(self.session.wallet.wallet_balance) == 0.0:
                 d.addCallback(lambda _: self._check_first_run())
@@ -619,7 +621,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            LOG_URL = "https://lbry.io/log-upload"
             if exclude_previous:
                 f = open(self.log_file, "r")
                 f.seek(PREVIOUS_LOG)
@@ -633,11 +634,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
                     'hash': base58.b58encode(self.lbryid)[:20],
                     'sys': platform.system(),
-                    'type': log_type,
+                    'type': log_type if log_type else 'default',
                     'log': log_contents
                     }
 
-            requests.post(LOG_URL, params)
+            requests.post(LOG_POST_URL, params)
             return defer.succeed(None)
         else:
             return defer.succeed(None)
@@ -713,16 +714,22 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             elif k == 'download_timeout':
                 if type(settings['download_timeout']) is int:
                     self.session_settings['download_timeout'] = settings['download_timeout']
+                elif type(settings['download_timeout']) is float:
+                    self.session_settings['download_timeout'] = int(settings['download_timeout'])
                 else:
                     return defer.fail()
             elif k == 'search_timeout':
                 if type(settings['search_timeout']) is float:
                     self.session_settings['search_timeout'] = settings['search_timeout']
+                elif type(settings['search_timeout']) is int:
+                    self.session_settings['search_timeout'] = float(settings['search_timeout'])
                 else:
                     return defer.fail()
             elif k == 'cache_time':
                 if type(settings['cache_time']) is int:
                     self.session_settings['cache_time'] = settings['cache_time']
+                elif type(settings['cache_time']) is float:
+                    self.session_settings['cache_time'] = int(settings['cache_time'])
                 else:
                     return defer.fail()
         self.run_on_startup = self.session_settings['run_on_startup']
@@ -1482,6 +1489,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             log.info("[" + str(datetime.now()) + "] Set daemon settings to " + json.dumps(self.session_settings))
 
         d = self._update_settings(p)
+        d.addErrback(lambda err: log.info(err.getTraceback()))
         d.addCallback(lambda _: _log_settings_change())
         d.addCallback(lambda _: self._render_response(self.session_settings, OK_CODE))
 
@@ -2145,17 +2153,18 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     #
     #     return d
 
-    def jsonrpc_log(self, message):
+    def jsonrpc_log(self, p):
         """
         Log message
 
         Args:
-            message: message to be logged
+            'message': message to be logged
         Returns:
              True
         """
 
-        log.info(message)
+        message = p['message']
+        log.info("API client log request: %s" % message)
         return self._render_response(True, OK_CODE)
 
     def jsonrpc_upload_log(self, p=None):
@@ -2172,6 +2181,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if p:
             if 'name_prefix' in p.keys():
                 log_type = p['name_prefix'] + '_api'
+            elif 'log_type' in p.keys():
+                log_type = p['log_type'] + '_api'
             else:
                 log_type = None
 
