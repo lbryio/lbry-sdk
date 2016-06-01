@@ -101,7 +101,7 @@ class ValuableBlobHashQueryHandler(ValuableQueryHandler):
             for blob_hash, count in valuable_hashes:
                 hashes_and_scores.append((blob_hash, 1.0 * count / 10.0))
             if len(hashes_and_scores) != 0:
-                log.info("Responding to a valuable blob hashes request with %s blob hashes: %s",
+                log.info("Responding to a valuable blob hashes request with %s blob hashes",
                          str(len(hashes_and_scores)))
                 expected_payment = 1.0 * len(hashes_and_scores) * self.valuable_blob_hash_payment_rate / 1000.0
                 self.wallet.add_expected_payment(self.peer, expected_payment)
@@ -193,7 +193,7 @@ class ValuableBlobLengthQueryHandler(ValuableQueryHandler):
                     if success is True:
                         lengths.append(response_pair)
                 if len(lengths) > 0:
-                    log.info("Responding with %s blob lengths: %s", str(len(lengths)))
+                    log.info("Responding with %s blob lengths", str(len(lengths)))
                     expected_payment = 1.0 * len(lengths) * self.blob_length_payment_rate / 1000.0
                     self.wallet.add_expected_payment(self.peer, expected_payment)
                     self.peer.update_stats('uploaded_valuable_blob_infos', len(lengths))
