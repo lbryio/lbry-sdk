@@ -176,10 +176,10 @@ class DownloaderApp(object):
                                              style="Stop.TButton", cursor=button_cursor)
         self.wallet_menu_button.grid(row=0, column=1, padx=(5, 0))
 
-        def popup(event):
+        def popup_wallet(event):
             self.wallet_menu.tk_popup(event.x_root, event.y_root)
 
-        self.wallet_menu_button.bind("<Button-1>", popup)
+        self.wallet_menu_button.bind("<Button-1>", popup_wallet)
 
         self.uri_frame = ttk.Frame(self.frame, style="B.TFrame")
         self.uri_frame.grid()
@@ -204,7 +204,7 @@ class DownloaderApp(object):
         def paste_command():
             self.uri_entry.event_generate('<Control-v>')
 
-        def popup(event):
+        def popup_uri(event):
             selection_menu = tk.Menu(
                 self.master, tearoff=0
             )
@@ -214,7 +214,7 @@ class DownloaderApp(object):
             selection_menu.add_command(label="    Paste  ", command=paste_command)
             selection_menu.tk_popup(event.x_root, event.y_root)
 
-        self.uri_entry.bind("<Button-3>", popup)
+        self.uri_entry.bind("<Button-3>", popup_uri)
 
         self.uri_button = ttk.Button(
             self.uri_frame, text="Go", command=self._open_stream,
