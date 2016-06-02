@@ -164,3 +164,7 @@ $SUDO chown root:root debian-binary control.tar.gz data.tar.xz
 ar r "$PACKAGE" debian-binary control.tar.gz data.tar.xz
 
 # TODO: we can append to data.tar instead of extracting it all and recompressing
+
+if [[ -n "${TRAVIS_BUILD_DIR}" ]]; then
+    mv "${PACKAGE}" "${TRAVIS_BUILD_DIR}/${PACKAGE}"
+fi
