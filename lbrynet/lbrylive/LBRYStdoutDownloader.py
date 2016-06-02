@@ -1,3 +1,6 @@
+# pylint: skip-file
+# This file is not maintained, but might be used in the future
+#
 import logging
 import sys
 
