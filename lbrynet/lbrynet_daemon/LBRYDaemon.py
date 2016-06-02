@@ -217,8 +217,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 log.info("Loaded lbrynet-daemon configuration")
             settings_dict = loaded_settings
         else:
-            log.info(
-                "Writing default settings : " + json.dumps(self.default_settings) + " --> " + str(self.daemon_conf))
+            missing_settings = self.default_settings
+            log.info("Writing default settings : " + json.dumps(self.default_settings) + " --> " + str(self.daemon_conf))
             f = open(self.daemon_conf, "w")
             f.write(json.dumps(self.default_settings))
             f.close()
