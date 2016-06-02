@@ -131,7 +131,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     isLeaf = True
 
-    def __init__(self, root, wallet_type=DEFAULT_WALLET):
+    def __init__(self, root, wallet_type=None):
         jsonrpc.JSONRPC.__init__(self)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
@@ -250,7 +250,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.search_timeout = self.session_settings['search_timeout']
         self.download_timeout = self.session_settings['download_timeout']
         self.max_search_results = self.session_settings['max_search_results']
-        self.wallet_type = self.session_settings['wallet_type'] if self.session_settings['wallet_type'] in WALLET_TYPES else wallet_type
+        if self.session_settings['wallet_type'] in WALLET_TYPES and not wallet_type:
+            self.wallet_type = self.session_settings['wallet_type']
+            log.info("Using wallet type %s from config" % self.wallet_type)
+        else:
+            self.wallet_type = wallet_type
+            self.session_settings['wallet_type'] = wallet_type
+            log.info("Using wallet type %s specified from command line" % self.wallet_type)
         self.delete_blobs_on_remove = self.session_settings['delete_blobs_on_remove']
         self.peer_port = self.session_settings['peer_port']
         self.dht_node_port = self.session_settings['dht_node_port']

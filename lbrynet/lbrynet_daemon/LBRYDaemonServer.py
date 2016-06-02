@@ -198,7 +198,7 @@ class LBRYDaemonServer(object):
         self.root.putChild(API_ADDRESS, self._api)
         return defer.succeed(True)
 
-    def start(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False, wallet=DEFAULT_WALLET):
-        d = self._setup_server(self._setup_server(wallet))
+    def start(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False, wallet=None):
+        d = self._setup_server(wallet)
         d.addCallback(lambda _: self._api.setup(branch, user_specified, branch_specified))
         return d
