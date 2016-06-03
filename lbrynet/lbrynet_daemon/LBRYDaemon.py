@@ -1,4 +1,5 @@
 import locale
+import mimetypes
 import os
 import subprocess
 import sys
@@ -1234,6 +1235,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     d.addCallback(lambda message: {'completed': f.completed, 'file_name': f.file_name,
                                                    'download_directory': f.download_directory,
                                                    'download_path': os.path.join(f.download_directory, f.file_name),
+                                                   'mime_type': mimetypes.guess_type(os.path.join(f.download_directory, f.file_name))[0],
                                                    'key': key,
                                                    'points_paid': f.points_paid, 'stopped': f.stopped,
                                                    'stream_hash': f.stream_hash,
@@ -1248,6 +1250,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     d = defer.succeed({'completed': f.completed, 'file_name': f.file_name, 'key': key,
                                        'download_directory': f.download_directory,
                                        'download_path': os.path.join(f.download_directory, f.file_name),
+                                       'mime_type': mimetypes.guess_type(os.path.join(f.download_directory, f.file_name))[0],
                                        'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
                                        'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
                                        'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash, 'total_bytes': size,
