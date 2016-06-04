@@ -210,36 +210,33 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             for k in missing_settings.keys():
                 log.info("Adding missing setting: " + k + " with default value: " + str(missing_settings[k]))
                 loaded_settings[k] = missing_settings[k]
+            if loaded_settings['wallet_type'] != self.wallet_type and self.wallet_type:
+                loaded_settings['wallet_type'] = self.wallet_type
+
             if missing_settings or removed_settings:
-                f = open(self.daemon_conf, "w")
-                f.write(json.dumps(loaded_settings))
-                f.close()
+                log.info("Updated and loaded lbrynet-daemon configuration")
             else:
                 log.info("Loaded lbrynet-daemon configuration")
-            settings_dict = loaded_settings
+            self.session_settings = loaded_settings
         else:
             missing_settings = self.default_settings
             log.info("Writing default settings : " + json.dumps(self.default_settings) + " --> " + str(self.daemon_conf))
-            f = open(self.daemon_conf, "w")
-            f.write(json.dumps(self.default_settings))
-            f.close()
-            settings_dict = self.default_settings
-
-        self.session_settings = settings_dict
+            self.session_settings = self.default_settings
 
         if 'last_version' in missing_settings.keys():
             self.session_settings['last_version'] = None
 
         if self.session_settings['last_version'] != self.default_settings['last_version']:
             self.session_settings['last_version'] = self.default_settings['last_version']
-            f = open(self.daemon_conf, "w")
-            f.write(json.dumps(self.session_settings))
-            f.close()
 
             self.first_run_after_update = True
             log.info("First run after update")
             if lbrynet_version == '0.2.5':
                 self.session_settings['startup_scripts'].append({'script_name': 'migrateto025', 'run_once': True})
+
+        f = open(self.daemon_conf, "w")
+        f.write(json.dumps(self.session_settings))
+        f.close()
 
         self.run_on_startup = self.session_settings['run_on_startup']
         self.data_rate = self.session_settings['data_rate']
@@ -1303,16 +1300,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _run_scripts(self):
         if len([k for k in self.startup_scripts if 'run_once' in k.keys()]):
             log.info("Removing one time startup scripts")
-            f = open(self.daemon_conf, "r")
-            initialsettings = json.loads(f.read())
-            f.close()
-            t = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
-            initialsettings['startup_scripts'] = t
+            remaining_scripts = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
+            startup_scripts = self.startup_scripts
+            self.startup_scripts = self.session_settings['startup_scripts'] = remaining_scripts
+
             f = open(self.daemon_conf, "w")
-            f.write(json.dumps(initialsettings))
+            f.write(json.dumps(self.session_settings))
             f.close()
 
-        for script in self.startup_scripts:
+        for script in startup_scripts:
             if script['script_name'] == 'migrateto025':
                 log.info("Running migrator to 0.2.5")
                 from lbrynet.lbrynet_daemon.daemon_scripts.migrateto025 import run as run_migrate
