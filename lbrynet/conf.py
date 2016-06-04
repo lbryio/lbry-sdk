@@ -19,7 +19,10 @@ MIN_VALUABLE_BLOB_INFO_PAYMENT_RATE = .05  # points/1000 infos
 MIN_VALUABLE_BLOB_HASH_PAYMENT_RATE = .05  # points/1000 infos
 MAX_CONNECTIONS_PER_STREAM = 5
 
-KNOWN_DHT_NODES = [('104.236.42.182', 4000)]
+KNOWN_DHT_NODES = [('104.236.42.182', 4000),
+                   ('lbryum1.lbry.io', 4444),
+                   ('lbryum2.lbry.io', 4444),
+                   ('lbryum3.lbry.io', 4444)]
 
 POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2424'
 #POINTTRADER_SERVER = 'http://127.0.0.1:2424'

@@ -20,7 +20,6 @@ class migrator(object):
                 return lbry_file.restore()
 
             r = defer.DeferredList([_restart_lbry_file(lbry_file) for lbry_file in self._api.lbry_file_manager.lbry_files if not lbry_file.txid], consumeErrors=True)
-            r.callback(None)
             return r
 
         d = self._api.session.wallet.get_nametrie()
