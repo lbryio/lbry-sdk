@@ -120,7 +120,7 @@ class CommandHandlerFactory(object):
         return self.control_handler_class.prompt_description
 
     def get_handler(self, console):
-        return self.control_handler_class(console, *self.args)
+        return self.control_handler_class(console, *self.args) # pylint: disable=not-callable
 
 
 class CommandHandler(object):
