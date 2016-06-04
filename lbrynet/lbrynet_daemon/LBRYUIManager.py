@@ -14,20 +14,7 @@ from lbryum.version import ELECTRUM_VERSION as lbryum_version
 from zipfile import ZipFile
 from appdirs import user_data_dir
 
-if sys.platform != "darwin":
-    data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-else:
-    data_dir = user_data_dir("LBRY")
-
-if not os.path.isdir(data_dir):
-    os.mkdir(data_dir)
-version_dir = os.path.join(data_dir, "ui_version_history")
-if not os.path.isdir(version_dir):
-    os.mkdir(version_dir)
-
 log = logging.getLogger(__name__)
-log.addHandler(logging.FileHandler(os.path.join(data_dir, 'lbrynet-daemon.log')))
-log.setLevel(logging.INFO)
 
 
 class LBRYUIManager(object):

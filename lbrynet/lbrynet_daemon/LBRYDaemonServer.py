@@ -5,15 +5,10 @@ import json
 import sys
 import mimetypes
 
-from StringIO import StringIO
-from zipfile import ZipFile
-from urllib import urlopen
 from datetime import datetime
 from appdirs import user_data_dir
 from twisted.web import server, static, resource
 from twisted.internet import defer, interfaces, error, reactor, task, threads
-from twisted.python.failure import Failure
-from txjsonrpc.web import jsonrpc
 
 from zope.interface import implements
 
@@ -25,19 +20,10 @@ if sys.platform != "darwin":
     data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
 else:
     data_dir = user_data_dir("LBRY")
-
 if not os.path.isdir(data_dir):
     os.mkdir(data_dir)
-version_dir = os.path.join(data_dir, "ui_version_history")
-if not os.path.isdir(version_dir):
-    os.mkdir(version_dir)
 
-version_log = logging.getLogger("lbry_version")
-version_log.addHandler(logging.FileHandler(os.path.join(version_dir, "lbry_version.log")))
-version_log.setLevel(logging.INFO)
 log = logging.getLogger(__name__)
-log.addHandler(logging.FileHandler(os.path.join(data_dir, 'lbrynet-daemon.log')))
-log.setLevel(logging.INFO)
 
 
 class LBRYindex(resource.Resource):

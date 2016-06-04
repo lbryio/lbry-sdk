@@ -40,6 +40,7 @@ from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
     DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL
+from lbrynet import LOG_PATH
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
@@ -47,29 +48,23 @@ from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
-
-
-if sys.platform != "darwin":
-    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-else:
-    log_dir = user_data_dir("LBRY")
-
-if not os.path.isdir(log_dir):
-    os.mkdir(log_dir)
-
-LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
-
-if os.path.isfile(LOG_FILENAME):
-    f = open(LOG_FILENAME, 'r')
-    PREVIOUS_LOG = len(f.read())
-    f.close()
-else:
-    PREVIOUS_LOG = 0
+from lbryum.util import LOG_PATH as lbryum_log
+from lbrynet import LOG_PATH as lbrynet_log
 
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
-log.addHandler(handler)
-log.setLevel(logging.INFO)
+
+if os.path.isfile(lbryum_log):
+    f = open(lbryum_log, 'r')
+    PREVIOUS_LBRYUM_LOG = len(f.read())
+    f.close()
+else:
+    PREVIOUS_LBRYUM_LOG = 0
+if os.path.isfile(lbrynet_log):
+    f = open(lbrynet_log, 'r')
+    PREVIOUS_LBRYNET_LOG = len(f.read())
+    f.close()
+else:
+    PREVIOUS_LBRYNET_LOG = 0
 
 INITIALIZING_CODE = 'initializing'
 LOADING_DB_CODE = 'loading_db'
@@ -148,7 +143,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.ip = None
         self.wallet_type = wallet_type
         self.first_run = None
-        self.log_file = LOG_FILENAME
+        self.log_file = LOG_PATH
         self.current_db_revision = 1
         self.run_server = True
         self.session = None
@@ -625,24 +620,26 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            if exclude_previous:
-                f = open(self.log_file, "r")
-                f.seek(PREVIOUS_LOG)
-                log_contents = f.read()
-                f.close()
-            else:
-                f = open(self.log_file, "r")
-                log_contents = f.read()
-                f.close()
-            params = {
-                    'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
-                    'hash': base58.b58encode(self.lbryid)[:20],
-                    'sys': platform.system(),
-                    'type': log_type if log_type else 'default',
-                    'log': log_contents
-                    }
+            for lm, lp in [('lbrynet', lbrynet_log), ('lbryum', lbryum_log)]:
+                if os.path.isfile(lp):
+                    if exclude_previous:
+                        f = open(lp, "r")
+                        f.seek(PREVIOUS_LBRYNET_LOG if lm == 'lbrynet' else PREVIOUS_LBRYUM_LOG)
+                        log_contents = f.read()
+                        f.close()
+                    else:
+                        f = open(lp, "r")
+                        log_contents = f.read()
+                        f.close()
+                    params = {
+                            'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
+                            'hash': base58.b58encode(self.lbryid)[:20],
+                            'sys': platform.system(),
+                            'type': "%s-%s" % (lm, log_type) if log_type else lm,
+                            'log': log_contents
+                            }
+                    requests.post(LOG_POST_URL, params)
 
-            requests.post(LOG_POST_URL, params)
             return defer.succeed(None)
         else:
             return defer.succeed(None)

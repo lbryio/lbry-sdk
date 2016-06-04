@@ -3,9 +3,6 @@ Some network wide and also application specific parameters
 """
 
 
-import os
-
-
 MAX_HANDSHAKE_SIZE = 2**16
 MAX_REQUEST_SIZE = 2**16
 MAX_BLOB_REQUEST_SIZE = 2**16
@@ -27,6 +24,7 @@ KNOWN_DHT_NODES = [('104.236.42.182', 4000),
 POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2424'
 #POINTTRADER_SERVER = 'http://127.0.0.1:2424'
 
+LOG_FILE_NAME = "lbrynet.log"
 LOG_POST_URL = "https://lbry.io/log-upload"
 
 CRYPTSD_FILE_EXTENSION = ".cryptsd"

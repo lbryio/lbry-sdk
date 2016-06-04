@@ -7,7 +7,6 @@ import sys
 import socket
 import platform
 
-from appdirs import user_data_dir
 from twisted.web import server
 from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
@@ -15,22 +14,10 @@ from jsonrpc.proxy import JSONRPCProxy
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, \
                             DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH
+from lbrynet import LOG_PATH
 
 
-if sys.platform != "darwin":
-    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-else:
-    log_dir = user_data_dir("LBRY")
-
-if not os.path.isdir(log_dir):
-    os.mkdir(log_dir)
-
-LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
-log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
-log.addHandler(handler)
-log.setLevel(logging.INFO)
-
+log = logging.getLogger(LOG_PATH)
 
 REMOTE_SERVER = "www.google.com"
 
@@ -96,7 +83,7 @@ def start():
 
     if not args.logtoconsole and not args.quiet:
         print "Starting lbrynet-daemon from command line"
-        print "To view activity, view the log file here: " + LOG_FILENAME
+        print "To view activity, view the log file here: " + LOG_PATH
         print "Web UI is available at http://%s:%i" % (API_INTERFACE, API_PORT)
         print "JSONRPC API is available at " + API_CONNECTION_STRING
         print "To quit press ctrl-c or call 'stop' via the API"
