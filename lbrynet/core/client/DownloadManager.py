@@ -52,7 +52,7 @@ class DownloadManager(object):
 
         def check_stop(result, manager):
             if isinstance(result, failure.Failure):
-                log.error("Failed to stop the %s: %s", manager. result.getErrorMessage())
+                log.error("Failed to stop the %s: %s", manager, result.getErrorMessage())
                 return False
             return True
 
