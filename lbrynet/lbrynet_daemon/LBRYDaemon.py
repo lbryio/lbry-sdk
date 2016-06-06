@@ -48,7 +48,7 @@ from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
-from lbryum.util import LOG_PATH as lbryum_log
+from lbryum import LOG_PATH as lbryum_log
 from lbrynet import LOG_PATH as lbrynet_log
 
 log = logging.getLogger(__name__)
