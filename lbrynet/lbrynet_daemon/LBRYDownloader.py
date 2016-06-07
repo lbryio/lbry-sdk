@@ -12,7 +12,7 @@ from lbrynet.core.Error import InvalidStreamInfoError, InsufficientFundsError
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
-from lbrynet.conf import DEFAULT_TIMEOUT
+from lbrynet.conf import DEFAULT_TIMEOUT, LOG_FILE_NAME
 
 INITIALIZING_CODE = 'initializing'
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'
@@ -35,12 +35,11 @@ else:
 if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
-LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
+lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
+handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
 log.addHandler(handler)
 log.setLevel(logging.INFO)
-
 
 class GetStream(object):
     def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5,

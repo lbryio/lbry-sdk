@@ -8,31 +8,34 @@ from urllib2 import urlopen
 from StringIO import StringIO
 from twisted.web import static
 from twisted.internet import defer
-from lbrynet.conf import DEFAULT_UI_BRANCH
+from lbrynet.conf import DEFAULT_UI_BRANCH, LOG_FILE_NAME
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import ELECTRUM_VERSION as lbryum_version
 from zipfile import ZipFile
 from appdirs import user_data_dir
 
 if sys.platform != "darwin":
-    data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
 else:
-    data_dir = user_data_dir("LBRY")
+    log_dir = user_data_dir("LBRY")
 
-if not os.path.isdir(data_dir):
-    os.mkdir(data_dir)
-version_dir = os.path.join(data_dir, "ui_version_history")
-if not os.path.isdir(version_dir):
-    os.mkdir(version_dir)
+if not os.path.isdir(log_dir):
+    os.mkdir(log_dir)
 
+lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-log.addHandler(logging.FileHandler(os.path.join(data_dir, 'lbrynet-daemon.log')))
+handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
+log.addHandler(handler)
 log.setLevel(logging.INFO)
 
 
 class LBRYUIManager(object):
     def __init__(self, root):
-        self.data_dir = user_data_dir("LBRY")
+        if sys.platform != "darwin":
+            self.data_dir = os.path.join(os.path.expanduser("~"), '.lbrynet')
+        else:
+            self.data_dir = user_data_dir("LBRY")
+
         self.ui_root = os.path.join(self.data_dir, "lbry-ui")
         self.active_dir = os.path.join(self.ui_root, "active")
         self.update_dir = os.path.join(self.ui_root, "update")
@@ -41,10 +44,10 @@ class LBRYUIManager(object):
             os.mkdir(self.data_dir)
         if not os.path.isdir(self.ui_root):
             os.mkdir(self.ui_root)
-        if not os.path.isdir(self.ui_root):
-            os.mkdir(self.ui_root)
-        if not os.path.isdir(self.ui_root):
-            os.mkdir(self.ui_root)
+        if not os.path.isdir(self.active_dir):
+            os.mkdir(self.active_dir)
+        if not os.path.isdir(self.update_dir):
+            os.mkdir(self.update_dir)
 
         self.config = os.path.join(self.ui_root, "active.json")
         self.update_requires = os.path.join(self.update_dir, "requirements.txt")

@@ -1,4 +1,5 @@
 import locale
+import mimetypes
 import os
 import subprocess
 import sys
@@ -38,7 +39,7 @@ from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
-    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH
+    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
@@ -46,6 +47,9 @@ from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
+from lbryum import LOG_PATH as lbryum_log
+
+log = logging.getLogger(__name__)
 
 
 if sys.platform != "darwin":
@@ -56,19 +60,25 @@ else:
 if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
-LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
-
-if os.path.isfile(LOG_FILENAME):
-    f = open(LOG_FILENAME, 'r')
-    PREVIOUS_LOG = len(f.read())
-    f.close()
-else:
-    PREVIOUS_LOG = 0
+lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
+handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
 log.addHandler(handler)
 log.setLevel(logging.INFO)
+
+if os.path.isfile(lbryum_log):
+    f = open(lbryum_log, 'r')
+    PREVIOUS_LBRYUM_LOG = len(f.read())
+    f.close()
+else:
+    PREVIOUS_LBRYUM_LOG = 0
+if os.path.isfile(lbrynet_log):
+    f = open(lbrynet_log, 'r')
+    PREVIOUS_LBRYNET_LOG = len(f.read())
+    f.close()
+else:
+    PREVIOUS_LBRYNET_LOG = 0
 
 INITIALIZING_CODE = 'initializing'
 LOADING_DB_CODE = 'loading_db'
@@ -131,7 +141,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     isLeaf = True
 
-    def __init__(self, root, wallet_type=DEFAULT_WALLET):
+    def __init__(self, root, wallet_type=None):
         jsonrpc.JSONRPC.__init__(self)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
@@ -147,7 +157,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.ip = None
         self.wallet_type = wallet_type
         self.first_run = None
-        self.log_file = LOG_FILENAME
+        self.log_file = lbrynet_log
         self.current_db_revision = 1
         self.run_server = True
         self.session = None
@@ -209,36 +219,33 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             for k in missing_settings.keys():
                 log.info("Adding missing setting: " + k + " with default value: " + str(missing_settings[k]))
                 loaded_settings[k] = missing_settings[k]
+            if loaded_settings['wallet_type'] != self.wallet_type and self.wallet_type:
+                loaded_settings['wallet_type'] = self.wallet_type
+
             if missing_settings or removed_settings:
-                f = open(self.daemon_conf, "w")
-                f.write(json.dumps(loaded_settings))
-                f.close()
+                log.info("Updated and loaded lbrynet-daemon configuration")
             else:
                 log.info("Loaded lbrynet-daemon configuration")
-            settings_dict = loaded_settings
+            self.session_settings = loaded_settings
         else:
-            log.info(
-                "Writing default settings : " + json.dumps(self.default_settings) + " --> " + str(self.daemon_conf))
-            f = open(self.daemon_conf, "w")
-            f.write(json.dumps(self.default_settings))
-            f.close()
-            settings_dict = self.default_settings
-
-        self.session_settings = settings_dict
+            missing_settings = self.default_settings
+            log.info("Writing default settings : " + json.dumps(self.default_settings) + " --> " + str(self.daemon_conf))
+            self.session_settings = self.default_settings
 
         if 'last_version' in missing_settings.keys():
             self.session_settings['last_version'] = None
 
         if self.session_settings['last_version'] != self.default_settings['last_version']:
             self.session_settings['last_version'] = self.default_settings['last_version']
-            f = open(self.daemon_conf, "w")
-            f.write(json.dumps(self.session_settings))
-            f.close()
 
             self.first_run_after_update = True
             log.info("First run after update")
             if lbrynet_version == '0.2.5':
                 self.session_settings['startup_scripts'].append({'script_name': 'migrateto025', 'run_once': True})
+
+        f = open(self.daemon_conf, "w")
+        f.write(json.dumps(self.session_settings))
+        f.close()
 
         self.run_on_startup = self.session_settings['run_on_startup']
         self.data_rate = self.session_settings['data_rate']
@@ -250,7 +257,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.search_timeout = self.session_settings['search_timeout']
         self.download_timeout = self.session_settings['download_timeout']
         self.max_search_results = self.session_settings['max_search_results']
-        self.wallet_type = self.session_settings['wallet_type'] if self.session_settings['wallet_type'] in WALLET_TYPES else wallet_type
+        if self.session_settings['wallet_type'] in WALLET_TYPES and not wallet_type:
+            self.wallet_type = self.session_settings['wallet_type']
+            log.info("Using wallet type %s from config" % self.wallet_type)
+        else:
+            self.wallet_type = wallet_type
+            self.session_settings['wallet_type'] = wallet_type
+            log.info("Using wallet type %s specified from command line" % self.wallet_type)
         self.delete_blobs_on_remove = self.session_settings['delete_blobs_on_remove']
         self.peer_port = self.session_settings['peer_port']
         self.dht_node_port = self.session_settings['dht_node_port']
@@ -410,8 +423,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
             if self.first_run:
                 d = self._upload_log(log_type="first_run")
-            else:
+            elif self.upload_log:
                 d = self._upload_log(exclude_previous=True, log_type="start")
+            else:
+                d = defer.succeed(None)
 
             if float(self.session.wallet.wallet_balance) == 0.0:
                 d.addCallback(lambda _: self._check_first_run())
@@ -619,25 +634,26 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            LOG_URL = "https://lbry.io/log-upload"
-            if exclude_previous:
-                f = open(self.log_file, "r")
-                f.seek(PREVIOUS_LOG)
-                log_contents = f.read()
-                f.close()
-            else:
-                f = open(self.log_file, "r")
-                log_contents = f.read()
-                f.close()
-            params = {
-                    'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
-                    'hash': base58.b58encode(self.lbryid)[:20],
-                    'sys': platform.system(),
-                    'type': log_type,
-                    'log': log_contents
-                    }
+            for lm, lp in [('lbrynet', lbrynet_log), ('lbryum', lbryum_log)]:
+                if os.path.isfile(lp):
+                    if exclude_previous:
+                        f = open(lp, "r")
+                        f.seek(PREVIOUS_LBRYNET_LOG if lm == 'lbrynet' else PREVIOUS_LBRYUM_LOG)
+                        log_contents = f.read()
+                        f.close()
+                    else:
+                        f = open(lp, "r")
+                        log_contents = f.read()
+                        f.close()
+                    params = {
+                            'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
+                            'hash': base58.b58encode(self.lbryid)[:20],
+                            'sys': platform.system(),
+                            'type': "%s-%s" % (lm, log_type) if log_type else lm,
+                            'log': log_contents
+                            }
+                    requests.post(LOG_POST_URL, params)
 
-            requests.post(LOG_URL, params)
             return defer.succeed(None)
         else:
             return defer.succeed(None)
@@ -713,16 +729,22 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             elif k == 'download_timeout':
                 if type(settings['download_timeout']) is int:
                     self.session_settings['download_timeout'] = settings['download_timeout']
+                elif type(settings['download_timeout']) is float:
+                    self.session_settings['download_timeout'] = int(settings['download_timeout'])
                 else:
                     return defer.fail()
             elif k == 'search_timeout':
                 if type(settings['search_timeout']) is float:
                     self.session_settings['search_timeout'] = settings['search_timeout']
+                elif type(settings['search_timeout']) is int:
+                    self.session_settings['search_timeout'] = float(settings['search_timeout'])
                 else:
                     return defer.fail()
             elif k == 'cache_time':
                 if type(settings['cache_time']) is int:
                     self.session_settings['cache_time'] = settings['cache_time']
+                elif type(settings['cache_time']) is float:
+                    self.session_settings['cache_time'] = int(settings['cache_time'])
                 else:
                     return defer.fail()
         self.run_on_startup = self.session_settings['run_on_startup']
@@ -1221,6 +1243,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     d.addCallback(lambda message: {'completed': f.completed, 'file_name': f.file_name,
                                                    'download_directory': f.download_directory,
                                                    'download_path': os.path.join(f.download_directory, f.file_name),
+                                                   'mime_type': mimetypes.guess_type(os.path.join(f.download_directory, f.file_name))[0],
                                                    'key': key,
                                                    'points_paid': f.points_paid, 'stopped': f.stopped,
                                                    'stream_hash': f.stream_hash,
@@ -1235,6 +1258,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     d = defer.succeed({'completed': f.completed, 'file_name': f.file_name, 'key': key,
                                        'download_directory': f.download_directory,
                                        'download_path': os.path.join(f.download_directory, f.file_name),
+                                       'mime_type': mimetypes.guess_type(os.path.join(f.download_directory, f.file_name))[0],
                                        'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
                                        'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
                                        'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash, 'total_bytes': size,
@@ -1287,16 +1311,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _run_scripts(self):
         if len([k for k in self.startup_scripts if 'run_once' in k.keys()]):
             log.info("Removing one time startup scripts")
-            f = open(self.daemon_conf, "r")
-            initialsettings = json.loads(f.read())
-            f.close()
-            t = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
-            initialsettings['startup_scripts'] = t
+            remaining_scripts = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
+            startup_scripts = self.startup_scripts
+            self.startup_scripts = self.session_settings['startup_scripts'] = remaining_scripts
+
             f = open(self.daemon_conf, "w")
-            f.write(json.dumps(initialsettings))
+            f.write(json.dumps(self.session_settings))
             f.close()
 
-        for script in self.startup_scripts:
+        for script in startup_scripts:
             if script['script_name'] == 'migrateto025':
                 log.info("Running migrator to 0.2.5")
                 from lbrynet.lbrynet_daemon.daemon_scripts.migrateto025 import run as run_migrate
@@ -1482,6 +1505,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             log.info("[" + str(datetime.now()) + "] Set daemon settings to " + json.dumps(self.session_settings))
 
         d = self._update_settings(p)
+        d.addErrback(lambda err: log.info(err.getTraceback()))
         d.addCallback(lambda _: _log_settings_change())
         d.addCallback(lambda _: self._render_response(self.session_settings, OK_CODE))
 
@@ -2145,17 +2169,18 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     #
     #     return d
 
-    def jsonrpc_log(self, message):
+    def jsonrpc_log(self, p):
         """
         Log message
 
         Args:
-            message: message to be logged
+            'message': message to be logged
         Returns:
              True
         """
 
-        log.info(message)
+        message = p['message']
+        log.info("API client log request: %s" % message)
         return self._render_response(True, OK_CODE)
 
     def jsonrpc_upload_log(self, p=None):
@@ -2172,6 +2197,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if p:
             if 'name_prefix' in p.keys():
                 log_type = p['name_prefix'] + '_api'
+            elif 'log_type' in p.keys():
+                log_type = p['log_type'] + '_api'
             else:
                 log_type = None
 

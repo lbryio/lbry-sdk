@@ -6,16 +6,15 @@ import webbrowser
 import sys
 import socket
 import platform
-
 from appdirs import user_data_dir
+
 from twisted.web import server
 from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, \
-                            DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH
-
+                            DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
 if sys.platform != "darwin":
     log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
@@ -25,12 +24,11 @@ else:
 if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
-LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
+lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
+handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
 log.addHandler(handler)
 log.setLevel(logging.INFO)
-
 
 REMOTE_SERVER = "www.google.com"
 
@@ -64,7 +62,7 @@ def start():
     parser.add_argument("--wallet",
                         help="lbrycrd or lbryum, default lbryum",
                         type=str,
-                        default=DEFAULT_WALLET)
+                        default='')
     parser.add_argument("--ui",
                         help="path to custom UI folder",
                         default=None)
@@ -96,7 +94,7 @@ def start():
 
     if not args.logtoconsole and not args.quiet:
         print "Starting lbrynet-daemon from command line"
-        print "To view activity, view the log file here: " + LOG_FILENAME
+        print "To view activity, view the log file here: " + lbrynet_log
         print "Web UI is available at http://%s:%i" % (API_INTERFACE, API_PORT)
         print "JSONRPC API is available at " + API_CONNECTION_STRING
         print "To quit press ctrl-c or call 'stop' via the API"

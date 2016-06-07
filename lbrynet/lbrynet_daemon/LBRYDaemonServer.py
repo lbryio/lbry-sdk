@@ -5,38 +5,28 @@ import json
 import sys
 import mimetypes
 
-from StringIO import StringIO
-from zipfile import ZipFile
-from urllib import urlopen
 from datetime import datetime
 from appdirs import user_data_dir
 from twisted.web import server, static, resource
 from twisted.internet import defer, interfaces, error, reactor, task, threads
-from twisted.python.failure import Failure
-from txjsonrpc.web import jsonrpc
 
 from zope.interface import implements
 
 from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon
-from lbrynet.conf import API_CONNECTION_STRING, API_ADDRESS, DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH
+from lbrynet.conf import API_CONNECTION_STRING, API_ADDRESS, DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
 
 if sys.platform != "darwin":
     data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
 else:
     data_dir = user_data_dir("LBRY")
-
 if not os.path.isdir(data_dir):
     os.mkdir(data_dir)
-version_dir = os.path.join(data_dir, "ui_version_history")
-if not os.path.isdir(version_dir):
-    os.mkdir(version_dir)
 
-version_log = logging.getLogger("lbry_version")
-version_log.addHandler(logging.FileHandler(os.path.join(version_dir, "lbry_version.log")))
-version_log.setLevel(logging.INFO)
+lbrynet_log = os.path.join(data_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-log.addHandler(logging.FileHandler(os.path.join(data_dir, 'lbrynet-daemon.log')))
+handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
+log.addHandler(handler)
 log.setLevel(logging.INFO)
 
 
@@ -198,7 +188,7 @@ class LBRYDaemonServer(object):
         self.root.putChild(API_ADDRESS, self._api)
         return defer.succeed(True)
 
-    def start(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False, wallet=DEFAULT_WALLET):
-        d = self._setup_server(self._setup_server(wallet))
+    def start(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False, wallet=None):
+        d = self._setup_server(wallet)
         d.addCallback(lambda _: self._api.setup(branch, user_specified, branch_specified))
         return d

@@ -18,7 +18,8 @@ from twisted.internet import defer, task
 
 class LBRYStdinUploader():
     """This class reads from standard in, creates a stream, and makes it available on the network."""
-    def __init__(self, peer_port, dht_node_port, known_dht_nodes):
+    def __init__(self, peer_port, dht_node_port, known_dht_nodes,
+                 stream_info_manager_class=DBLiveStreamMetadataManager, blob_manager_class=TempBlobManager):
         """
         @param peer_port: the network port on which to listen for peers
 
@@ -28,8 +29,8 @@ class LBRYStdinUploader():
         """
         self.peer_port = peer_port
         self.lbry_server_port = None
-        self.session = LBRYSession(blob_manager_class=TempBlobManager,
-                                   stream_info_manager_class=DBLiveStreamMetadataManager,
+        self.session = LBRYSession(blob_manager_class=blob_manager_class,
+                                   stream_info_manager_class=stream_info_manager_class,
                                    dht_node_class=Node, dht_node_port=dht_node_port,
                                    known_dht_nodes=known_dht_nodes, peer_port=self.peer_port,
                                    use_upnp=False)
