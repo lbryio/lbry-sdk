@@ -18,7 +18,7 @@ from txjsonrpc.web import jsonrpc
 from zope.interface import implements
 
 from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon
-from lbrynet.conf import API_CONNECTION_STRING, API_ADDRESS, DEFAULT_WALLET, UI_ADDRESS
+from lbrynet.conf import API_CONNECTION_STRING, API_ADDRESS, DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH
 
 
 if sys.platform != "darwin":
@@ -149,22 +149,23 @@ class HostedLBRYFile(resource.Resource):
         self._producer = None
         resource.Resource.__init__(self)
 
-    def makeProducer(self, request, stream):
-        def _save_producer(producer):
-            self._producer = producer
-            return defer.succeed(None)
-
-        range_header = request.getAllHeaders()['range'].replace('bytes=', '').split('-')
-        start, stop = int(range_header[0]), range_header[1]
-        log.info("[" + str(datetime.now()) + "] GET range %s-%s" % (start, stop))
-        path = os.path.join(self._api.download_directory, stream.file_name)
-
-        d = stream.get_total_bytes()
-        d.addCallback(lambda size: _save_producer(LBRYFileStreamer(request, path, start, stop, size)))
-        d.addCallback(lambda _: request.registerProducer(self._producer, streaming=True))
-        # request.notifyFinish().addCallback(lambda _: self._producer.stopProducing())
-        request.notifyFinish().addErrback(self._responseFailed, d)
-        return d
+    # todo: fix LBRYFileStreamer and use it instead of static.File
+    # def makeProducer(self, request, stream):
+    #     def _save_producer(producer):
+    #         self._producer = producer
+    #         return defer.succeed(None)
+    #
+    #     range_header = request.getAllHeaders()['range'].replace('bytes=', '').split('-')
+    #     start, stop = int(range_header[0]), range_header[1]
+    #     log.info("[" + str(datetime.now()) + "] GET range %s-%s" % (start, stop))
+    #     path = os.path.join(self._api.download_directory, stream.file_name)
+    #
+    #     d = stream.get_total_bytes()
+    #     d.addCallback(lambda size: _save_producer(LBRYFileStreamer(request, path, start, stop, size)))
+    #     d.addCallback(lambda _: request.registerProducer(self._producer, streaming=True))
+    #     # request.notifyFinish().addCallback(lambda _: self._producer.stopProducing())
+    #     request.notifyFinish().addErrback(self._responseFailed, d)
+    #     return d
 
     def render_GET(self, request):
         if 'name' in request.args.keys():
@@ -182,172 +183,22 @@ class HostedLBRYFile(resource.Resource):
                 request.finish()
             return server.NOT_DONE_YET
 
-    def _responseFailed(self, err, call):
-        call.addErrback(lambda err: err.trap(error.ConnectionDone))
-        call.addErrback(lambda err: err.trap(defer.CancelledError))
-        call.addErrback(lambda err: log.info("Error: " + str(err)))
-        call.cancel()
-
-
-class MyLBRYFiles(resource.Resource):
-    isLeaf = False
-
-    def __init__(self):
-        resource.Resource.__init__(self)
-        self.files_table = None
-
-    def delayed_render(self, request, result):
-        request.write(result.encode('utf-8'))
-        request.finish()
-
-    def render_GET(self, request):
-        self.files_table = None
-        api = jsonrpc.Proxy(API_CONNECTION_STRING)
-        d = api.callRemote("get_lbry_files", {})
-        d.addCallback(self._get_table)
-        d.addCallback(lambda results: self.delayed_render(request, results))
-
-        return server.NOT_DONE_YET
-
-    def _get_table(self, files):
-        if not self.files_table:
-            self.files_table = r'<html><head><title>My LBRY files</title></head><body><table border="1">'
-            self.files_table += r'<tr>'
-            self.files_table += r'<td>Stream name</td>'
-            self.files_table += r'<td>Completed</td>'
-            self.files_table += r'<td>Toggle</td>'
-            self.files_table += r'<td>Remove</td>'
-            self.files_table += r'</tr>'
-            return self._get_table(files)
-        if not len(files):
-            self.files_table += r'</table></body></html>'
-            return self.files_table
-        else:
-            f = files.pop()
-            self.files_table += r'<tr>'
-            self.files_table += r'<td>%s</td>' % (f['stream_name'])
-            self.files_table += r'<td>%s</td>' % (f['completed'])
-            self.files_table += r'<td>Start</td>' if f['stopped'] else r'<td>Stop</td>'
-            self.files_table += r'<td>Delete</td>'
-            self.files_table += r'</tr>'
-            return self._get_table(files)
+    # def _responseFailed(self, err, call):
+    #     call.addErrback(lambda err: err.trap(error.ConnectionDone))
+    #     call.addErrback(lambda err: err.trap(defer.CancelledError))
+    #     call.addErrback(lambda err: log.info("Error: " + str(err)))
+    #     call.cancel()
 
 
 class LBRYDaemonServer(object):
-    def __init__(self):
-        self.data_dir = user_data_dir("LBRY")
-        if not os.path.isdir(self.data_dir):
-            os.mkdir(self.data_dir)
-        self.version_dir = os.path.join(self.data_dir, "ui_version_history")
-        if not os.path.isdir(self.version_dir):
-            os.mkdir(self.version_dir)
-        self.config = os.path.join(self.version_dir, "active.json")
-        self.ui_dir = os.path.join(self.data_dir, "lbry-web-ui")
-        self.git_version = None
-        self._api = None
-        self.root = None
-
-        if not os.path.isfile(os.path.join(self.config)):
-            self.loaded_git_version = None
-        else:
-            try:
-                f = open(self.config, "r")
-                loaded_ui = json.loads(f.read())
-                f.close()
-                self.loaded_git_version = loaded_ui['commit']
-                self.loaded_branch = loaded_ui['branch']
-                version_log.info("[" + str(datetime.now()) + "] Last used " + self.loaded_branch + " commit " + str(self.loaded_git_version).replace("\n", ""))
-            except:
-                self.loaded_git_version = None
-                self.loaded_branch = None
-
-    def setup(self, branch="master", user_specified=None):
-        self.branch = branch
-        if user_specified:
-            if os.path.isdir(user_specified):
-                log.info("Using user specified UI directory: " + str(user_specified))
-                self.branch = "user-specified"
-                self.loaded_git_version = "user-specified"
-                self.ui_dir = user_specified
-                return defer.succeed("user-specified")
-            else:
-                log.info("User specified UI directory doesn't exist, using " + branch)
-        else:
-            log.info("Using UI branch: " + branch)
-            self._git_url = "https://api.github.com/repos/lbryio/lbry-web-ui/git/refs/heads/%s" % branch
-            self._dist_url = "https://raw.githubusercontent.com/lbryio/lbry-web-ui/%s/dist.zip" % branch
-
-        d = self._up_to_date()
-        d.addCallback(lambda r: self._download_ui() if not r else self.branch)
-        return d
-
-    def _up_to_date(self):
-        def _get_git_info():
-            response = urlopen(self._git_url)
-            data = json.loads(response.read())
-            return defer.succeed(data['object']['sha'])
-
-        def _set_git(version):
-            self.git_version = version
-            version_log.info("[" + str(datetime.now()) + "] UI branch " + self.branch + " has a most recent commit of: " + str(self.git_version).replace("\n", ""))
-
-            if self.git_version == self.loaded_git_version and os.path.isdir(self.ui_dir):
-                version_log.info("[" + str(datetime.now()) + "] local copy of " + self.branch + " is up to date")
-                return defer.succeed(True)
-            else:
-                if self.git_version == self.loaded_git_version:
-                    version_log.info("[" + str(datetime.now()) + "] Can't find ui files, downloading them again")
-                else:
-                    version_log.info("[" + str(datetime.now()) + "] local copy of " + self.branch + " branch is out of date, updating")
-                f = open(self.config, "w")
-                f.write(json.dumps({'commit': self.git_version,
-                                    'time': str(datetime.now()),
-                                    'branch': self.branch}))
-                f.close()
-                return defer.succeed(False)
-
-        d = _get_git_info()
-        d.addCallback(_set_git)
-        return d
-
-    def _download_ui(self):
-        def _delete_ui_dir():
-            if os.path.isdir(self.ui_dir):
-                if self.loaded_git_version:
-                    version_log.info("[" + str(datetime.now()) + "] Removed ui files for commit " + str(self.loaded_git_version).replace("\n", ""))
-                log.info("Removing out of date ui files")
-                shutil.rmtree(self.ui_dir)
-            return defer.succeed(None)
-
-        def _dl_ui():
-            url = urlopen(self._dist_url)
-            z = ZipFile(StringIO(url.read()))
-            names = [i for i in z.namelist() if '.DS_exStore' not in i and '__MACOSX' not in i]
-            z.extractall(self.ui_dir, members=names)
-            version_log.info("[" + str(datetime.now()) + "] Updated branch " + self.branch + ": " + str(self.loaded_git_version).replace("\n", "") + " --> " + self.git_version.replace("\n", ""))
-            log.info("Downloaded files for UI commit " + str(self.git_version).replace("\n", ""))
-            self.loaded_git_version = self.git_version
-            return self.branch
-
-        d = _delete_ui_dir()
-        d.addCallback(lambda _: _dl_ui())
-        return d
-
-    def _setup_server(self, ui_ver, wallet):
-        self._api = LBRYDaemon(ui_ver, wallet_type=wallet)
-        self.root = LBRYindex(self.ui_dir)
-        self.root.putChild("css", static.File(os.path.join(self.ui_dir, "css")))
-        self.root.putChild("font", static.File(os.path.join(self.ui_dir, "font")))
-        self.root.putChild("img", static.File(os.path.join(self.ui_dir, "img")))
-        self.root.putChild("js", static.File(os.path.join(self.ui_dir, "js")))
+    def _setup_server(self, wallet):
+        self.root = LBRYindex(os.path.join(os.path.join(data_dir, "lbry-ui"), "active"))
+        self._api = LBRYDaemon(self.root, wallet_type=wallet)
         self.root.putChild("view", HostedLBRYFile(self._api))
-        self.root.putChild("files", MyLBRYFiles())
         self.root.putChild(API_ADDRESS, self._api)
         return defer.succeed(True)
 
-    def start(self, branch="master", user_specified=False, wallet=DEFAULT_WALLET):
-        d = self.setup(branch=branch, user_specified=user_specified)
-        d.addCallback(lambda v: self._setup_server(v, wallet))
-        d.addCallback(lambda _: self._api.setup())
-
+    def start(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False, wallet=DEFAULT_WALLET):
+        d = self._setup_server(self._setup_server(wallet))
+        d.addCallback(lambda _: self._api.setup(branch, user_specified, branch_specified))
         return d

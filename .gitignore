@@ -23,3 +23,5 @@ lbrynet.egg-info/PKG-INFO
 *.pem
 
 *.decTest
+
+.coverage

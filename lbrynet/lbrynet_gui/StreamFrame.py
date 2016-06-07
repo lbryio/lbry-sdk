@@ -118,7 +118,7 @@ class StreamFrame(object):
 
     def cancel(self):
         if self.cancel_func is not None:
-            self.cancel_func()
+            self.cancel_func() # pylint: disable=not-callable
         self.stream_frame.destroy()
         self.app.stream_removed()
 

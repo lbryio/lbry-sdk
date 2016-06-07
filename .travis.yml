@@ -13,7 +13,8 @@ before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then sudo pip install --upgrade pip virtualenv; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then virtualenv $HOME/venv; source $HOME/venv/bin/activate; fi
 
-install: true
+install:
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./packaging/travis/install_dependencies_and_run_tests.sh; fi
 
 before_script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then openssl aes-256-cbc -k "$ENCRYPTION_SECRET" -in packaging/osx/certs/dist.cer.enc -d -a -out packaging/osx/certs/dist.cer; fi
@@ -25,8 +26,7 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew upgrade gmp; fi
   # the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install git+https://github.com/metachris/py2app; fi
-  # py2app fails to find jsonrpc unless json-rpc is installed. why? I don't know.
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install json-rpc; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install jsonrpc; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cd packaging/osx/lbry-osx-app; ./setup_app.sh; cd $TRAVIS_BUILD_DIR; fi
   # fail the build if this is a build for a tag and we don't have the versions matching
   - if [[ -n "${TRAVIS_TAG}" ]]; then if [[ "v`python setup.py -V`" = "${TRAVIS_TAG}" ]]; then true; else false; fi; fi

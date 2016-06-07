@@ -1,7 +1,10 @@
+# pylint: skip-file
+# This file is not maintained, but might be used in the future
+#
 import logging
 import sys
 
-from lbrynet.lbrynet_console.plugins.LBRYLive.LBRYLiveStreamDownloader import LBRYLiveStreamDownloader
+from lbrynet.lbrylive.client.LiveStreamDownloader import LBRYLiveStreamDownloader
 from lbrynet.core.BlobManager import TempBlobManager
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
