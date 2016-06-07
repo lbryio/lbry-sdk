@@ -19,7 +19,11 @@ log = logging.getLogger(__name__)
 
 class LBRYUIManager(object):
     def __init__(self, root):
-        self.data_dir = user_data_dir("LBRY")
+        if sys.platform != "darwin":
+            self.data_dir = os.path.join(os.path.expanduser("~"), '.lbrynet')
+        else:
+            self.data_dir = user_data_dir("LBRY")
+
         self.ui_root = os.path.join(self.data_dir, "lbry-ui")
         self.active_dir = os.path.join(self.ui_root, "active")
         self.update_dir = os.path.join(self.ui_root, "update")
@@ -28,10 +32,10 @@ class LBRYUIManager(object):
             os.mkdir(self.data_dir)
         if not os.path.isdir(self.ui_root):
             os.mkdir(self.ui_root)
-        if not os.path.isdir(self.ui_root):
-            os.mkdir(self.ui_root)
-        if not os.path.isdir(self.ui_root):
-            os.mkdir(self.ui_root)
+        if not os.path.isdir(self.active_dir):
+            os.mkdir(self.active_dir)
+        if not os.path.isdir(self.update_dir):
+            os.mkdir(self.update_dir)
 
         self.config = os.path.join(self.ui_root, "active.json")
         self.update_requires = os.path.join(self.update_dir, "requirements.txt")
