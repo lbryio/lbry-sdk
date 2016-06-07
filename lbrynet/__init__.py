@@ -1,4 +1,5 @@
 import logging
+import logging.handlers
 import sys
 import os
 from lbrynet.conf import LOG_FILE_NAME
