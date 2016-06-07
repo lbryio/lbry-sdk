@@ -24,9 +24,9 @@ else:
 if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
-LOG_FILENAME = os.path.join(log_dir, LOG_FILE_NAME)
+lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
+handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
 log.addHandler(handler)
 log.setLevel(logging.INFO)
 
@@ -94,7 +94,7 @@ def start():
 
     if not args.logtoconsole and not args.quiet:
         print "Starting lbrynet-daemon from command line"
-        print "To view activity, view the log file here: " + LOG_PATH
+        print "To view activity, view the log file here: " + lbrynet_log
         print "Web UI is available at http://%s:%i" % (API_INTERFACE, API_PORT)
         print "JSONRPC API is available at " + API_CONNECTION_STRING
         print "To quit press ctrl-c or call 'stop' via the API"
