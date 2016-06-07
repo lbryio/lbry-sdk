@@ -13,7 +13,7 @@ from twisted.internet import defer, interfaces, error, reactor, task, threads
 from zope.interface import implements
 
 from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon
-from lbrynet.conf import API_CONNECTION_STRING, API_ADDRESS, DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH
+from lbrynet.conf import API_CONNECTION_STRING, API_ADDRESS, DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
 
 if sys.platform != "darwin":
@@ -23,7 +23,11 @@ else:
 if not os.path.isdir(data_dir):
     os.mkdir(data_dir)
 
+LOG_FILENAME = os.path.join(data_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
+handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
+log.addHandler(handler)
+log.setLevel(logging.INFO)
 
 
 class LBRYindex(resource.Resource):

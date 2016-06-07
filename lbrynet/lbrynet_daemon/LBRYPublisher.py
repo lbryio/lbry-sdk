@@ -10,9 +10,22 @@ from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
+from lbrynet.conf import LOG_FILE_NAME
 from twisted.internet import threads, defer
 
+if sys.platform != "darwin":
+    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+else:
+    log_dir = user_data_dir("LBRY")
+
+if not os.path.isdir(log_dir):
+    os.mkdir(log_dir)
+
+LOG_FILENAME = os.path.join(log_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
+handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
+log.addHandler(handler)
+log.setLevel(logging.INFO)
 
 
 class Publisher(object):

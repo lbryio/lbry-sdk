@@ -39,8 +39,7 @@ from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
-    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL
-from lbrynet import LOG_PATH
+    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
@@ -49,9 +48,24 @@ from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 from lbryum import LOG_PATH as lbryum_log
-from lbrynet import LOG_PATH as lbrynet_log
 
 log = logging.getLogger(__name__)
+
+
+if sys.platform != "darwin":
+    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+else:
+    log_dir = user_data_dir("LBRY")
+
+if not os.path.isdir(log_dir):
+    os.mkdir(log_dir)
+
+lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
+
+log = logging.getLogger(__name__)
+handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
+log.addHandler(handler)
+log.setLevel(logging.INFO)
 
 if os.path.isfile(lbryum_log):
     f = open(lbryum_log, 'r')
@@ -143,7 +157,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.ip = None
         self.wallet_type = wallet_type
         self.first_run = None
-        self.log_file = LOG_PATH
+        self.log_file = lbrynet_log
         self.current_db_revision = 1
         self.run_server = True
         self.session = None

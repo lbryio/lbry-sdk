@@ -6,6 +6,7 @@ import webbrowser
 import sys
 import socket
 import platform
+from appdirs import user_data_dir
 
 from twisted.web import server
 from twisted.internet import reactor, defer
@@ -13,11 +14,21 @@ from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, \
-                            DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH
-from lbrynet import LOG_PATH
+                            DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
+if sys.platform != "darwin":
+    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+else:
+    log_dir = user_data_dir("LBRY")
 
-log = logging.getLogger(LOG_PATH)
+if not os.path.isdir(log_dir):
+    os.mkdir(log_dir)
+
+LOG_FILENAME = os.path.join(log_dir, LOG_FILE_NAME)
+log = logging.getLogger(__name__)
+handler = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=2097152, backupCount=5)
+log.addHandler(handler)
+log.setLevel(logging.INFO)
 
 REMOTE_SERVER = "www.google.com"
 
