@@ -26,11 +26,16 @@ know all of the necessary chunks.
 
 ## For Developers
 
-The bundled LBRY application uses the JSONRPC api to LBRYnet found in `lbrynet.lbrynet_daemon.LBRYDaemon`. With a normal installation of the app, lbry command line is not available. To install lbrynet, see [INSTALL.md](INSTALL.md). The following uses the JSONRPC api to show the help for all the available commands:
+The bundled LBRY application uses the lbrynet JSONRPC api found in `lbrynet.lbrynet_daemon.LBRYDaemon`. This api allows for applications and web services like the lbry browser UI to interact with lbrynet. If you've installed lbrynet, you can run `lbrynet-daemon` without running the app. While the app or `lbrynet-daemon` is running, you can use the following to show the help for all the available commands:
 
 ```
 from jsonrpc.proxy import JSONRPCProxy
-from lbrynet.conf import API_CONNECTION_STRING
+
+try:
+  from lbrynet.conf import API_CONNECTION_STRING
+except:
+  print "You don't have lbrynet installed!"
+  API_CONNECTION_STRING = "http://localhost:5279/lbryapi"
   
 api = JSONRPCProxy.from_url(API_CONNECTION_STRING)
 if not api.is_running():
