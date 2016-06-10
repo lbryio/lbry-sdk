@@ -107,7 +107,7 @@ $SUDO pip install make-deb
 #
 # dpkg-buildpackage outputs its results into '..' so
 # we need to move/clone lbry into the build directory
-if [ "$CLONE" == true]; then
+if [ "$CLONE" == true ]; then
     cp -a $SOURCE_DIR lbry
 else
     git clone https://github.com/lbryio/lbry.git
@@ -165,6 +165,10 @@ ar r "$PACKAGE" debian-binary control.tar.gz data.tar.xz
 
 # TODO: we can append to data.tar instead of extracting it all and recompressing
 
-if [[ -n "${TRAVIS_BUILD_DIR}" ]]; then
+if [[ ! -z "${TRAVIS_BUILD_DIR+x}" ]]; then
+    # move it to a consistent place so that later it can be uploaded
+    # to the github releases page
     mv "${PACKAGE}" "${TRAVIS_BUILD_DIR}/${PACKAGE}"
+    # want to be able to check the size of the result in the log
+    ls -l "${TRAVIS_BUILD_DIR}/${PACKAGE}"
 fi
