@@ -2,7 +2,7 @@ matrix:
     include:
         - os: linux
           sudo: required
-          dist: trust
+          dist: trusty
           # dh-virtualenv requires that we use the same python interpreter
           # that comes with the system, so we don't want to use anything that
           # travis would try to set-up for us in python
