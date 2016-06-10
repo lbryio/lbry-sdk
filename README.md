@@ -26,11 +26,25 @@ know all of the necessary chunks.
 
 ## For Developers
 
-LBRY comes with an file sharing application, called 'lbrynet-console', which breaks
+The bundled LBRY application uses the JSONRPC api to LBRYnet found in `lbrynet.lbrynet_daemon.LBRYDaemon`. With a normal installation of the app, lbry command line is not available. To install lbrynet, see [INSTALL.md](INSTALL.md). The following uses the JSONRPC api to show the help for all the available commands:
+
+```
+from jsonrpc.proxy import JSONRPCProxy
+from lbrynet.conf import API_CONNECTION_STRING
+  
+api = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+if not api.is_running():
+  print api.daemon_status()
+else:
+  for func in api.help():
+    print "%s:\n%s" % (func, api.help({'function': func}))
+```
+
+If you've installed lbrynet, it comes with a file sharing application, called `lbrynet-daemon`, which breaks
 files into chunks, encrypts them with a symmetric key, computes their sha384 hash sum, generates
 a special file called a 'stream descriptor' containing the hash sums and some other file metadata,
 and makes the chunks available for download by other peers. A peer wishing to download the file
-must first obtain the 'stream descriptor' and then may open it with his 'lbrynet-console' client,
+must first obtain the 'stream descriptor' and then may open it with his `lbrynet-daemon` client,
 download all of the chunks by locating peers with the chunks via the DHT, and then combine the
 chunks into the original file, according to the metadata included in the 'stream descriptor'.
 
