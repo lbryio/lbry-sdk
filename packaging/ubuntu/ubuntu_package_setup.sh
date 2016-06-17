@@ -108,9 +108,9 @@ $SUDO pip install make-deb
 # dpkg-buildpackage outputs its results into '..' so
 # we need to move/clone lbry into the build directory
 if [ "$CLONE" == true ]; then
-    cp -a $SOURCE_DIR lbry
-else
     git clone https://github.com/lbryio/lbry.git
+else
+    cp -a $SOURCE_DIR lbry
 fi
 (
     cd lbry
