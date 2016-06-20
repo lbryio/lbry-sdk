@@ -1,3 +1,0 @@
-[submodule "packaging/osx/lbry-osx-app"]
-	path = packaging/osx/lbry-osx-app
-	url = https://github.com/lbryio/lbry-osx-app.git
