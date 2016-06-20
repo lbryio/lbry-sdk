@@ -1,0 +1,12 @@
+
+*.pyc
+
+*.pyo
+
+*.so
+
+*.xml
+
+*.iml
+
+id.conf
