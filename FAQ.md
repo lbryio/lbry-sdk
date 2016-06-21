@@ -45,6 +45,12 @@ A: On linux, the relevant directories are `~/.lbrynet`, `~/.lbrycrd`, and `~/.lb
 
 ***********
 
+Q: How can I see the log in the console?
+
+A: Run lbry with the --log-to-console flag set: `lbrynet-daemon --log-to-console`
+
+***********
+
 Q: How do I specify a web-UI to use?
 
 A: If the files for the UI you'd like to use are storred locally on your computer, start lbry with the --ui flag: `lbrynet-daemon --ui=/full/path/to/ui/files/root/folder`
@@ -58,6 +64,8 @@ To reset your ui to pull from lbryio, or to try a UI still in development, run l
 Q: How do I see the list of API functions I can call, and how do I call them?
 
 A: Here is an example script to get the documentation for the various API calls. To use any of the functions displayed, just provide any specified arguments in a dictionary.
+
+Note: the lbry api can only be used while either the app or lbrynet-daemon command line are running
 
     import sys
     from jsonrpc.proxy import JSONRPCProxy
