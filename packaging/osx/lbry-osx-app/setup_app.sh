@@ -41,10 +41,6 @@ codesign -vvvv "${DEST}/dist/LBRYURIHandler.app"
 pip install certifi pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork
 python setup_app.py py2app
 
-echo "Moving in correct libgmp"
-rm "${DEST}/dist/LBRY.app/Contents/Frameworks/libgmp.10.dylib"
-cp "${DEST}/libgmp.10.dylib" "${DEST}/dist/LBRY.app/Contents/Frameworks"
-
 echo "Removing i386 libraries"
 
 remove_arch () {
