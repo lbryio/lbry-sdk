@@ -22,6 +22,8 @@ else
     cd ${TRAVIS_BUILD_DIR}
     LBRY=${TRAVIS_BUILD_DIR}
 fi
+NAME=`python setup.py --name`
+VERSION=`python setup.py -V`
 python setup.py install
 
 echo "Building URI Handler"
@@ -71,3 +73,4 @@ codesign -vvvv "${DEST}/dist/LBRY.app"
 rm -rf $tmp
 mv dist/LBRY.app LBRY.app
 rm -rf dist
+hdiutil create "${NAME}.${VERSION}.dmg" -volname lbry -srcfolder LBRY.app
