@@ -38,8 +38,7 @@ codesign -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/
 codesign --deep -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/MacOS/LBRYURIHandler"
 codesign -vvvv "${DEST}/dist/LBRYURIHandler.app"
 
-# why isn't certifi installed automatically by setup_app.py?
-pip install certifi
+pip install certifi pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork
 python setup_app.py py2app
 
 echo "Moving in correct libgmp"

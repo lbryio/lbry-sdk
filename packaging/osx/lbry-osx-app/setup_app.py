@@ -16,8 +16,10 @@ OPTIONS = {
         'CFBundleIdentifier': 'io.lbry.LBRY',
         'LSUIElement': True,
     },
-    'packages': ['lbrynet', 'lbryum', 'requests', 'unqlite', 'certifi',
-                 'pkg_resources', 'json', 'jsonrpc', 'seccure',],
+    'packages': [
+        'lbrynet', 'lbryum', 'requests', 'unqlite', 'certifi',
+        'pkg_resources', 'json', 'jsonrpc', 'seccure',
+    ],
 }
 
 
