@@ -40,7 +40,9 @@ script:
 
 deploy:
   provider: releases
-  file: "${TRAVIS_BUILD_DIR}/`python setup.py --name`_`python setup.py -V`_amd64.deb"
+  file:
+    - "${TRAVIS_BUILD_DIR}/`python setup.py --name`_`python setup.py -V`_amd64.deb"
+    - "${TRAVIS_BUILD_DIR}/packaging/osx/lbry-osx-app/LBRY.app"
   skip_cleanup: true
   on:
     tags: true
