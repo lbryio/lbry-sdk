@@ -15,8 +15,7 @@ matrix:
           osx_image: xcode7.3
 
 before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew upgrade && brew install python --framework; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install gmp; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then ./packaging/travis/setup_osx.sh; fi
   
 install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./packaging/travis/install_dependencies_and_run_tests.sh; fi

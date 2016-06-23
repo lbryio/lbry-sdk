@@ -29,6 +29,8 @@ fi
 NAME=`python setup.py --name`
 VERSION=`python setup.py -V`
 pip install -r requirements.txt
+# not totally sure if pyOpenSSl is needed (JIE)
+pip install pyOpenSSL
 python setup.py install
 
 echo "Building URI Handler"
