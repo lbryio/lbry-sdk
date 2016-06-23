@@ -12,17 +12,11 @@ matrix:
           # python 2.7 is broken on osx on travis, so follow we have to specify the installation ourselves
           # https://github.com/travis-ci/travis-ci/issues/2312#issuecomment-195620855
           language: generic
+          osx_image: xcode7.3
 
 before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update && brew install python; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then sudo pip install --upgrade pip virtualenv; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then virtualenv $HOME/venv && source $HOME/venv/bin/activate; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew outdated gmp || brew upgrade gmp; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew outdated openssl || brew upgrade openssl; fi
-  # the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install git+https://github.com/metachris/py2app; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install jsonrpc; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then pip install -r requirements.txt; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew upgrade && brew install python --framework; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install gmp; fi
   
 install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./packaging/travis/install_dependencies_and_run_tests.sh; fi
