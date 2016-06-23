@@ -8,6 +8,10 @@ tmp="${DEST}/build"
 
 rm -rf build dist LBRY.app
 
+# the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
+pip install git+https://github.com/metachris/py2app
+pip install jsonrpc
+
 mkdir -p $tmp
 cd $tmp
 
@@ -24,6 +28,7 @@ else
 fi
 NAME=`python setup.py --name`
 VERSION=`python setup.py -V`
+pip install -r requirements.txt
 python setup.py install
 
 echo "Building URI Handler"

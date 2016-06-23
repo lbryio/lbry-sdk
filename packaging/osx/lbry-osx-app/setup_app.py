@@ -10,7 +10,6 @@ DATA_FILES = []
 DATA_FILES.append('app.icns')
 
 OPTIONS = {
-    # 'argv_emulation': True,
     'iconfile': ICON_PATH,
     'plist': {
         'CFBundleIdentifier': 'io.lbry.LBRY',
