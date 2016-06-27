@@ -13,6 +13,11 @@ matrix:
           # https://github.com/travis-ci/travis-ci/issues/2312#issuecomment-195620855
           language: generic
 
+cache:
+  directories:
+    - $HOME/.cache/pip
+    - $HOME/Library/Caches/pip
+
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update && brew install python; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then sudo pip install --upgrade pip virtualenv; fi
