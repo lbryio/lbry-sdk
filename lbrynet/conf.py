@@ -17,9 +17,9 @@ MIN_VALUABLE_BLOB_HASH_PAYMENT_RATE = .05  # points/1000 infos
 MAX_CONNECTIONS_PER_STREAM = 5
 
 KNOWN_DHT_NODES = [('104.236.42.182', 4000),
-                   ('lbryum1.lbry.io', 4444),
-                   ('lbryum2.lbry.io', 4444),
-                   ('lbryum3.lbry.io', 4444)]
+                   ('lbrynet1.lbry.io', 4444),
+                   ('lbrynet2.lbry.io', 4444),
+                   ('lbrynet3.lbry.io', 4444)]
 
 POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2424'
 #POINTTRADER_SERVER = 'http://127.0.0.1:2424'
@@ -35,7 +35,7 @@ API_PORT = 5279
 ICON_PATH = "app.icns"
 APP_NAME = "LBRY"
 API_CONNECTION_STRING = "http://%s:%i/%s" % (API_INTERFACE, API_PORT, API_ADDRESS)
-UI_ADDRESS = "http://" + API_INTERFACE + ":" + str(API_PORT)
+UI_ADDRESS = "http://%s:%i" % (API_INTERFACE, API_PORT)
 PROTOCOL_PREFIX = "lbry"
 
 DEFAULT_WALLET = "lbryum"
@@ -46,3 +46,7 @@ DEFAULT_MAX_KEY_FEE = 100.0
 DEFAULT_SEARCH_TIMEOUT = 3.0
 DEFAULT_CACHE_TIME = 3600
 DEFAULT_UI_BRANCH = "master"
+
+SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
+BASE_METADATA_FIELDS = ['title', 'description', 'author', 'language', 'license', 'content-type']
+OPTIONAL_METADATA_FIELDS = ['thumbnail', 'preview', 'fee', 'contact', 'pubkey']

@@ -1151,12 +1151,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _add_key_fee(data_cost):
             d = self._resolve_name(name)
-            d.addCallback(lambda info: data_cost + info['key_fee'] if 'key_fee' in info.keys() else data_cost)
+            d.addCallback(lambda info: data_cost if 'fee' not in info else data_cost + info['fee']['LBC']['amount'])
             return d
 
         d = self._resolve_name(name)
-        d.addCallback(lambda info: info['stream_hash'] if isinstance(info['stream_hash'], str)
-                                    else info['stream_hash']['sd_hash'])
+        d.addCallback(lambda info: info['sources']['lbry_sd_hash'])
         d.addCallback(lambda sd_hash: download_sd_blob(self.session, sd_hash,
                                                     self.blob_request_payment_rate_manager))
         d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
@@ -1170,10 +1169,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _get_lbry_file_by_uri(self, name):
         def _get_file(stream_info):
-            if isinstance(stream_info['stream_hash'], str) or isinstance(stream_info['stream_hash'], unicode):
-                sd = stream_info['stream_hash']
-            elif isinstance(stream_info['stream_hash'], dict):
-                sd = stream_info['stream_hash']['sd_hash']
+            sd = stream_info['sources']['lbry_sd_hash']
 
             for l in self.lbry_file_manager.lbry_files:
                 if l.sd_hash == sd:
@@ -1791,15 +1787,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             for r in results:
                 t = {}
                 t.update(r[0])
-                if 'name' in r[1].keys():
-                    r[1]['stream_name'] = r[1]['name']
-                    del r[1]['name']
+                if not 'thumbnail' in r[1].keys():
+                    r[1]['thumbnail'] = "img/Free-speech-flag.svg"
                 t.update(r[1])
                 t['cost_est'] = r[2]
-                if not 'thumbnail' in t.keys():
-                    t['thumbnail'] = "img/Free-speech-flag.svg"
                 consolidated_results.append(t)
                 # log.info(str(t))
+
             return consolidated_results
 
         log.info('[' + str(datetime.now()) + '] Search nametrie: ' + search)
@@ -1845,46 +1839,30 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_publish(self, p):
         """
-        Make a new name claim
+        Make a new name claim and publish associated data to lbrynet
 
         Args:
             'name': name to be claimed, string
             'file_path': path to file to be associated with name, string
             'bid': amount of credits to commit in this claim, float
-            optional 'author': author, string
-            optional 'title': title, description
-            optional 'description': content description, string
-            optional 'thumbnail': thumbnail image url
-            optional 'key_fee': key fee to be paid to publisher, float (default 0.0)
-            optional 'key_fee_address': address for key fee to be sent to, string (defaults on new address)
-            optional 'content_license': content license string
-            optional 'sources': alternative sources dict, keys 'lbry_sd_hash', 'btih', 'url'
+            'metadata': metadata dictionary
+            optional 'fee'
         Returns:
-            Confirmation message
+            Claim txid
         """
-
-        metadata_fields = ["name", "file_path", "bid", "author", "title",
-                           "description", "thumbnail", "key_fee", "key_fee_address",
-                           "content_license", "sources"]
-
-        for k in metadata_fields:
-            if k not in p.keys():
-                p[k] = None
+        # start(self, name, file_path, bid, metadata, fee=None, sources=None):
+        name = p['name']
+        bid = p['bid']
+        file_path = p['file_path']
+        metadata = p['metadata']
+        if 'fee' in p:
+            fee = p['fee']
+        else:
+            fee = None
 
         pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
 
-        d = pub.start(p['name'],
-                      p['file_path'],
-                      p['bid'],
-                      title=p['title'],
-                      description=p['description'],
-                      thumbnail=p['thumbnail'],
-                      key_fee=p['key_fee'],
-                      key_fee_address=p['key_fee_address'],
-                      content_license=p['content_license'],
-                      author=p['author'],
-                      sources=p['sources'])
-
+        d = pub.start(name, file_path, bid, metadata, fee)
         d.addCallbacks(lambda msg: self._render_response(msg, OK_CODE),
                        lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
 

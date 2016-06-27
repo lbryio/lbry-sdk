@@ -42,15 +42,14 @@ log.addHandler(handler)
 log.setLevel(logging.INFO)
 
 class GetStream(object):
-    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, pay_key=True, data_rate=0.5,
-                                                    timeout=DEFAULT_TIMEOUT, download_directory=None, file_name=None):
+    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, data_rate=0.5,
+                                    timeout=DEFAULT_TIMEOUT, download_directory=None, file_name=None):
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
         self.key_fee = None
         self.key_fee_address = None
         self.data_rate = data_rate
-        self.pay_key = pay_key
         self.name = None
         self.file_name = file_name
         self.session = session
@@ -79,7 +78,7 @@ class GetStream(object):
             self.finished.callback((self.stream_hash, self.download_path))
 
         elif self.timeout_counter >= self.timeout:
-            log.info("Timeout downloading lbry://" + self.resolved_name + ", " + str(self.stream_info))
+            log.info("Timeout downloading lbry://%s" % self.resolved_name)
             self.checker.stop()
             self.d.cancel()
             self.code = STREAM_STAGES[4]
@@ -88,28 +87,24 @@ class GetStream(object):
     def start(self, stream_info, name):
         self.resolved_name = name
         self.stream_info = stream_info
-        if 'stream_hash' in self.stream_info.keys():
-            self.stream_hash = self.stream_info['stream_hash']
-        elif 'sources' in self.stream_info.keys():
+        if 'sources' in self.stream_info:
             self.stream_hash = self.stream_info['sources']['lbry_sd_hash']
         else:
             raise InvalidStreamInfoError(self.stream_info)
-        if 'description' in self.stream_info.keys():
+        if 'description' in self.stream_info:
             self.description = self.stream_info['description']
-        if 'key_fee' in self.stream_info.keys():
-            self.key_fee = float(self.stream_info['key_fee'])
-            if 'key_fee_address' in self.stream_info.keys():
-                self.key_fee_address = self.stream_info['key_fee_address']
+        if 'fee' in self.stream_info:
+            if 'LBC' in self.stream_info['fee']:
+                self.key_fee = float(self.stream_info['fee']['LBC']['amount'])
+                self.key_fee_address = self.stream_info['fee']['LBC']['address']
             else:
                 self.key_fee_address = None
         else:
             self.key_fee = None
             self.key_fee_address = None
         if self.key_fee > self.max_key_fee:
-            if self.pay_key:
-                log.info("Key fee (" + str(self.key_fee) + ") above limit of " + str(
-                    self.max_key_fee) + ", didn't download lbry://" + str(self.resolved_name))
-                return defer.fail(None)
+            log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.key_fee, self.max_key_fee, self.resolved_name))
+            return defer.fail(None)
         else:
             pass
 
@@ -145,7 +140,7 @@ class GetStream(object):
                 reserved_points = self.wallet.reserve_points(self.key_fee_address, self.key_fee)
                 if reserved_points is None:
                     return defer.fail(InsufficientFundsError())
-                log.info("Key fee: " + str(self.key_fee) + " | " + str(self.key_fee_address))
+                log.info("Key fee: %f --> %s" % (self.key_fee, self.key_fee_address))
                 return self.wallet.send_points_to_address(reserved_points, self.key_fee)
             return defer.succeed(None)
 
@@ -155,5 +150,5 @@ class GetStream(object):
             d = defer.Deferred()
         self.downloader = downloader
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
-        d.addCallback(lambda _: log.info("[" + str(datetime.now()) + "] Downloading " + str(self.stream_hash) + " --> " + str(self.download_path)))
+        d.addCallback(lambda _: log.info("[%s] Downloading %s --> %s" % (datetime.now(), self.stream_hash, self.file_name)))
         d.addCallback(lambda _: self.downloader.start())
