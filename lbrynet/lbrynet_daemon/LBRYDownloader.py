@@ -112,6 +112,7 @@ class GetStream(object):
             self.timeout_counter = self.timeout * 2
 
         def _set_status(x, status):
+            log.info("Download lbry://%s status changed to %s" % (self.resolved_name, status))
             self.code = next(s for s in STREAM_STAGES if s[0] == status)
             return x
 
@@ -121,9 +122,8 @@ class GetStream(object):
         self.d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
         self.d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         self.d.addCallback(lambda r: _set_status(r, DOWNLOAD_RUNNING_CODE))
-        self.d.addCallback(lambda metadata: (
-        next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)),
-        metadata))
+        self.d.addCallback(lambda metadata: (next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)),
+                                             metadata))
         self.d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata,
                                                                                [self.data_rate, True],
                                                                                self.payment_rate_manager,
@@ -144,11 +144,9 @@ class GetStream(object):
                 return self.wallet.send_points_to_address(reserved_points, self.key_fee)
             return defer.succeed(None)
 
-        if self.pay_key:
-            d = _pay_key_fee()
-        else:
-            d = defer.Deferred()
+        d = _pay_key_fee()
         self.downloader = downloader
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
-        d.addCallback(lambda _: log.info("[%s] Downloading %s --> %s" % (datetime.now(), self.stream_hash, self.file_name)))
+        d.addCallback(lambda _: log.info("[%s] Downloading %s --> %s" % (datetime.now(), self.stream_hash, self.downloader.file_name)))
         d.addCallback(lambda _: self.downloader.start())
+

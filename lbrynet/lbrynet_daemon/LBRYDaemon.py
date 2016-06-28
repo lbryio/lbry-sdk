@@ -24,7 +24,7 @@ from appdirs import user_data_dir
 from urllib2 import urlopen
 
 from lbrynet import __version__ as lbrynet_version
-from lbryum.version import LBRYUM_VERSION as lbryum_version
+from lbryum.version import ELECTRUM_VERSION as lbryum_version
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -398,7 +398,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False):
         def _log_starting_vals():
             d = self._get_lbry_files()
-            d.addCallback(lambda r: json.dumps([d[1] for d in r]))
+            d.addCallback(lambda r: json.dumps([d[1] if not isinstance(d[1], UnknownNameError) else {'error': 'Pending claim'} for d in r]))
             d.addCallback(lambda r: log.info("LBRY Files: " + r))
             d.addCallback(lambda _: log.info("Starting balance: " + str(self.session.wallet.wallet_balance)))
             return d
@@ -1038,12 +1038,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _get_stream(stream_info):
             def _wait_for_write():
-                if os.path.isfile(os.path.join(self.download_directory, self.streams[name].downloader.file_name)):
-                    written_file = file(os.path.join(self.download_directory, self.streams[name].downloader.file_name))
-                    written_file.seek(0, os.SEEK_END)
-                    written_bytes = written_file.tell()
-                    written_file.close()
-                else:
+                try:
+                    if os.path.isfile(os.path.join(self.download_directory, self.streams[name].downloader.file_name)):
+                        written_file = file(os.path.join(self.download_directory, self.streams[name].downloader.file_name))
+                        written_file.seek(0, os.SEEK_END)
+                        written_bytes = written_file.tell()
+                        written_file.close()
+                    else:
+                        written_bytes = False
+                except:
                     written_bytes = False
 
                 if not written_bytes:
