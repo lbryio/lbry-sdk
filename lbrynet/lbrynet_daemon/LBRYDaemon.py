@@ -39,7 +39,8 @@ from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
-    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME
+    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, \
+    BASE_METADATA_FIELDS, OPTIONAL_METADATA_FIELDS, SOURCE_TYPES
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
@@ -47,7 +48,7 @@ from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
-from lbryum import LOG_PATH as lbryum_log
+# from lbryum import LOG_PATH as lbryum_log
 
 log = logging.getLogger(__name__)
 
@@ -67,12 +68,13 @@ handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, ba
 log.addHandler(handler)
 log.setLevel(logging.INFO)
 
-if os.path.isfile(lbryum_log):
-    f = open(lbryum_log, 'r')
-    PREVIOUS_LBRYUM_LOG = len(f.read())
-    f.close()
-else:
-    PREVIOUS_LBRYUM_LOG = 0
+# if os.path.isfile(lbryum_log):
+#     f = open(lbryum_log, 'r')
+#     PREVIOUS_LBRYUM_LOG = len(f.read())
+#     f.close()
+# else:
+#     PREVIOUS_LBRYUM_LOG = 0
+
 if os.path.isfile(lbrynet_log):
     f = open(lbrynet_log, 'r')
     PREVIOUS_LBRYNET_LOG = len(f.read())
@@ -634,11 +636,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            for lm, lp in [('lbrynet', lbrynet_log), ('lbryum', lbryum_log)]:
+            for lm, lp in [('lbrynet', lbrynet_log)]: #, ('lbryum', lbryum_log)]:
                 if os.path.isfile(lp):
                     if exclude_previous:
                         f = open(lp, "r")
-                        f.seek(PREVIOUS_LBRYNET_LOG if lm == 'lbrynet' else PREVIOUS_LBRYUM_LOG)
+                        f.seek(PREVIOUS_LBRYNET_LOG) # if lm == 'lbrynet' else PREVIOUS_LBRYUM_LOG)
                         log_contents = f.read()
                         f.close()
                     else:
@@ -2130,25 +2132,26 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    # def jsonrpc_update_name(self, metadata):
-    #     def _disp(x):
-    #         print x
-    #         return x
-    #
-    #     metadata = json.loads(metadata)
-    #
-    #     required = ['name', 'file_path', 'bid']
-    #
-    #     for r in required:
-    #         if not r in metadata.keys():
-    #             return defer.fail()
-    #
-    #     d = defer.Deferred()
-    #     d.addCallback(lambda _: self.session.wallet.update_name(metadata))
-    #     d.addCallback(_disp)
-    #     d.callback(None)
-    #
-    #     return d
+    def jsonrpc_update_name(self, p):
+        """
+        Update name claim
+
+        Args:
+            'name': the uri of the claim to be updated
+            'value': new metadata dict
+            'amount': bid amount of updated claim
+        Returns:
+            txid
+        """
+        
+        name = p['name']
+        value = p['value'] if isinstance(p['value'], dict) else json.loads(p['value'])
+        amount = p['amount']
+
+        d = self.session.wallet.update_name(name, value, amount)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+
+        return d
 
     def jsonrpc_log(self, p):
         """

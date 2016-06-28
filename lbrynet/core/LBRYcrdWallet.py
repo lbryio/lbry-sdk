@@ -408,8 +408,10 @@ class LBRYWallet(object):
         d.addCallback(self._get_decoded_tx)
         return d
 
-    # def update_name(self, name_value):
-    #     return self._update_name(name_value)
+    def update_name(self, name, value, amount):
+        d = self._get_value_for_name(name)
+        d.addCallback(lambda r: self._update_name(r['txid'], json.dumps(value), amount))
+        return d
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
@@ -565,6 +567,9 @@ class LBRYWallet(object):
     def _send_abandon(self, txid, address, amount):
         return defer.fail(NotImplementedError())
 
+    def _update_name(self, txid, value, amount):
+        return defer.fail(NotImplementedError())
+
     def _do_send_many(self, payments_to_send):
         return defer.fail(NotImplementedError())
 
@@ -696,6 +701,9 @@ class LBRYcrdWallet(LBRYWallet):
 
     def _send_abandon(self, txid, address, amount):
         return threads.deferToThread(self._send_abandon_rpc, txid, address, amount)
+
+    def _update_name(self, txid, value, amount):
+        return threads.deferToThread(self._update_name_rpc, txid, value, amount)
 
     def get_claims_from_tx(self, txid):
         return threads.deferToThread(self._get_claims_from_tx_rpc, txid)
@@ -847,9 +855,9 @@ class LBRYcrdWallet(LBRYWallet):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.getvalueforname(name)
 
-    # def _update_name_rpc(self, name_value):
-    #     rpc_conn = self._get_rpc_conn()
-    #     return rpc_conn.updatename(name_value)
+    def _update_name_rpc(self, txid, value, amount):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.updatename(txid, value, amount)
 
     @_catch_connection_error
     def _send_name_claim_rpc(self, name, value, amount):
