@@ -24,7 +24,7 @@ from appdirs import user_data_dir
 from urllib2 import urlopen
 
 from lbrynet import __version__ as lbrynet_version
-from lbryum.version import ELECTRUM_VERSION as lbryum_version
+from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory

@@ -10,7 +10,7 @@ from twisted.web import static
 from twisted.internet import defer
 from lbrynet.conf import DEFAULT_UI_BRANCH, LOG_FILE_NAME
 from lbrynet import __version__ as lbrynet_version
-from lbryum.version import ELECTRUM_VERSION as lbryum_version
+from lbryum.version import LBRYUM_VERSION as lbryum_version
 from zipfile import ZipFile
 from appdirs import user_data_dir
 
