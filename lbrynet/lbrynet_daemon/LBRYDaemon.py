@@ -399,11 +399,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False):
         def _log_starting_vals():
-            d = self._get_lbry_files()
-            d.addCallback(lambda r: json.dumps([d[1] if not isinstance(d[1], UnknownNameError) else {'error': 'Pending claim'} for d in r]))
-            d.addCallback(lambda r: log.info("LBRY Files: " + r))
-            d.addCallback(lambda _: log.info("Starting balance: " + str(self.session.wallet.wallet_balance)))
-            return d
+            log.info("Starting balance: " + str(self.session.wallet.wallet_balance))
+            return defer.succeed(None)
 
         def _announce_startup():
             def _wait_for_credits():
@@ -2138,17 +2135,17 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         Args:
             'name': the uri of the claim to be updated
-            'value': new metadata dict
+            'metadata': new metadata dict
             'amount': bid amount of updated claim
         Returns:
             txid
         """
-        
+
         name = p['name']
-        value = p['value'] if isinstance(p['value'], dict) else json.loads(p['value'])
+        metadata = p['metadata'] if isinstance(p['metadata'], dict) else json.loads(p['metadata'])
         amount = p['amount']
 
-        d = self.session.wallet.update_name(name, value, amount)
+        d = self.session.wallet.update_name(name, metadata, amount)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
 
         return d
