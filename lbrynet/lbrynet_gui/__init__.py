@@ -1,1 +1,0 @@
-"""A gui application for downloading LBRY files from LBRYnet"""
