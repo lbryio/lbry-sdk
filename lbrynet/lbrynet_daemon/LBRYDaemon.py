@@ -427,9 +427,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 d = defer.succeed(None)
 
-            if float(self.session.wallet.wallet_balance) == 0.0:
-                d.addCallback(lambda _: self._check_first_run())
-                d.addCallback(self._show_first_run_result)
+            # if float(self.session.wallet.wallet_balance) == 0.0:
+            #     d.addCallback(lambda _: self._check_first_run())
+            #     d.addCallback(self._show_first_run_result)
 
             d.addCallback(lambda _: _wait_for_credits() if self.requested_first_run_credits else _announce())
             return d
