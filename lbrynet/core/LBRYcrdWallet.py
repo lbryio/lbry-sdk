@@ -410,8 +410,8 @@ class LBRYWallet(object):
 
     def update_name(self, name, value, amount):
         d = self._get_value_for_name(name)
-        d.addCallback(lambda r: (self._update_name(json.loads(r)['txid'], json.dumps(value), amount), json.loads(r)['txid']))
-        d.addCallback(lambda new_txid, old_txid: self._update_name_metadata(name, value['sources']['lbry_sd_hash'], old_txid, new_txid))
+        d.addCallback(lambda r: (self._update_name(r['txid'], json.dumps(value), amount), r['txid']))
+        d.addCallback(lambda (new_txid, old_txid): self._update_name_metadata(name, value['sources']['lbry_sd_hash'], old_txid, new_txid))
         return d
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
@@ -529,7 +529,7 @@ class LBRYWallet(object):
         return d
 
     def _update_name_metadata(self, name, sd_hash, old_txid, new_txid):
-        d = self.db.runQuery("delete from name_metadata where txid=? and sd_hash=?", (old_txid, sd_hash))
+        d = self.db.runQuery("delete * from name_metadata where txid=? and sd_hash=?", (old_txid, sd_hash))
         d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, new_txid, sd_hash)))
         d.addCallback(lambda _: new_txid)
         return d
@@ -864,7 +864,7 @@ class LBRYcrdWallet(LBRYWallet):
 
     def _update_name_rpc(self, txid, value, amount):
         rpc_conn = self._get_rpc_conn()
-        return rpc_conn.updatename(txid, value, amount)
+        return rpc_conn.updateclaim(txid, value, amount)
 
     @_catch_connection_error
     def _send_name_claim_rpc(self, name, value, amount):
