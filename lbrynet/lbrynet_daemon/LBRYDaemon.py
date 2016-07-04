@@ -320,6 +320,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
 
+        if os.name != 'nt':
+            lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
+            if not os.path.isfile(lbrycrdd_path_conf):
+                f = open(lbrycrdd_path_conf)
+                f.write(self.lbrycrdd_path)
+                f.close()
+
         self.created_data_dir = False
         if not os.path.exists(self.db_dir):
             os.mkdir(self.db_dir)
