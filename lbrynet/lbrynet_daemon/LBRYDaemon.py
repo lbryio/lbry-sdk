@@ -293,7 +293,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbryum")
         elif sys.platform == "darwin":
-            self.lbrycrdd_path = "./lbrycrdd"
+            # use the path from the bundle if its available.
+            try:
+                import Foundation
+                bundle = Foundation.NSBundle.mainBundle()
+                self.lbrycrdd_path = bundle.pathForResource_ofType_('lbrycrdd', None)
+            except Exception:
+                log.exception('Failed to get path from bundle, falling back to default')
+                self.lbrycrdd_path = "./lbrycrdd"
             if self.wallet_type == "lbrycrd":
                 self.wallet_dir = user_data_dir("lbrycrd")
             else:
