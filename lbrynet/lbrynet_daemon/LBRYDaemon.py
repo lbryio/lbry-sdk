@@ -143,7 +143,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     isLeaf = True
 
-    def __init__(self, root, wallet_type=None):
+    def __init__(self, root, wallet_type="lbrycrd"):
         jsonrpc.JSONRPC.__init__(self)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 

@@ -183,7 +183,7 @@ class HostedLBRYFile(resource.Resource):
 class LBRYDaemonServer(object):
     def _setup_server(self, wallet):
         self.root = LBRYindex(os.path.join(os.path.join(data_dir, "lbry-ui"), "active"))
-        self._api = LBRYDaemon(self.root, wallet_type=wallet)
+        self._api = LBRYDaemon(self.root, wallet_type="lbrycrd")
         self.root.putChild("view", HostedLBRYFile(self._api))
         self.root.putChild(API_ADDRESS, self._api)
         return defer.succeed(True)
