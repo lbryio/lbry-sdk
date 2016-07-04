@@ -516,7 +516,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             try:
                 r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
                 version = next(line.split("=")[1].split("#")[0].replace(" ", "")
-                               for line in r if "ELECTRUM_VERSION" in line)
+                               for line in r if "LBRYUM_VERSION" in line)
                 version = version.replace("'", "")
                 log.info("remote lbryum " + str(version) + " > local lbryum " + str(lbryum_version) + " = " + str(
                     version > lbryum_version))
