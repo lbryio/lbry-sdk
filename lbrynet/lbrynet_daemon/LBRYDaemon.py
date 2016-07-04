@@ -45,7 +45,7 @@ from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 # from lbryum import LOG_PATH as lbryum_log
@@ -431,7 +431,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             #     d.addCallback(lambda _: self._check_first_run())
             #     d.addCallback(self._show_first_run_result)
 
-            d.addCallback(lambda _: _wait_for_credits() if self.requested_first_run_credits else _announce())
+            # d.addCallback(lambda _: _wait_for_credits() if self.requested_first_run_credits else _announce())
+            d.addCallback(lambda _: _announce())
             return d
 
         log.info("[" + str(datetime.now()) + "] Starting lbrynet-daemon")

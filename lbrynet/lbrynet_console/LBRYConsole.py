@@ -43,7 +43,7 @@ from lbrynet.lbrynet_console.ControlHandlers import ShowServerStatusFactory, Mod
 from lbrynet.lbrynet_console.ControlHandlers import ModifyLBRYFileOptionsChooserFactory, StatusFactory
 from lbrynet.lbrynet_console.ControlHandlers import PeerStatsAndSettingsChooserFactory, PublishFactory
 from lbrynet.lbrynet_console.ControlHandlers import BlockchainStatusFactory
-from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
 
 
 log = logging.getLogger(__name__)
