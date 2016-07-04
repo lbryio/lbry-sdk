@@ -726,7 +726,11 @@ class LBRYcrdWallet(LBRYWallet):
         tries = 0
         try:
             rpc_conn = self._get_rpc_conn()
-            rpc_conn.getinfo()
+            try:
+                rpc_conn.getinfo()
+            except ValueError:
+                log.exception('Failed to get rpc info. Rethrowing with a hopefully more useful error message')
+                raise Exception('Failed to get rpc info from lbrycrdd.  Try restarting lbrycrdd') 
             log.info("lbrycrdd was already running when LBRYcrdWallet was started.")
             return
         except (socket.error, JSONRPCException):
