@@ -1,14 +1,31 @@
 import AppKit
 import webbrowser
 import sys
+import os
 import logging
 import socket
 import platform
+import shutil
+from appdirs import user_data_dir
 
 from PyObjCTools import AppHelper
 
 from twisted.internet import reactor
 from twisted.web import server
+
+import Foundation
+bundle = Foundation.NSBundle.mainBundle()
+lbrycrdd_path = bundle.pathForResource_ofType_('lbrycrdd', None)
+lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
+wallet_dir = user_data_dir("lbrycrd")
+
+if not os.path.isdir(wallet_dir):
+    shutil.os.mkdir(wallet_dir)
+
+if not os.path.isfile(lbrycrdd_path_conf):
+    f = open(lbrycrdd_path_conf)
+    f.write(lbrycrdd_path)
+    f.close()
 
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
