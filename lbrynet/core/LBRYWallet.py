@@ -4,6 +4,7 @@ from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
+from lbrynet.conf import BASE_METADATA_FIELDS, SOURCE_TYPES, OPTIONAL_METADATA_FIELDS
 
 from lbryum import SimpleConfig, Network
 from lbryum.bitcoin import COIN, TYPE_ADDRESS
@@ -318,68 +319,51 @@ class LBRYWallet(object):
         r_dict = {}
         if 'value' in result:
             value = result['value']
+
             try:
                 value_dict = json.loads(value)
             except (ValueError, TypeError):
                 return Failure(InvalidStreamInfoError(name))
-            known_fields = ['stream_hash', 'name', 'description', 'key_fee', 'key_fee_address', 'thumbnail',
-                            'content_license', 'sources', 'fee', 'author']
-            known_sources = ['lbry_sd_hash', 'btih', 'url']
-            known_fee_types = {'LBC': ['amount', 'address']}
-            for field in known_fields:
-                if field in value_dict:
-                    if field == 'sources':
-                        for source in known_sources:
-                            if source in value_dict[field]:
-                                if source == 'lbry_sd_hash':
-                                    r_dict['stream_hash'] = value_dict[field][source]
-                                else:
-                                    r_dict[source] = value_dict[field][source]
-                    elif field == 'fee':
-                        fee = value_dict['fee']
-                        if 'type' in fee:
-                            if fee['type'] in known_fee_types:
-                                fee_fields = known_fee_types[fee['type']]
-                                if all([f in fee for f in fee_fields]):
-                                    r_dict['key_fee'] = fee['amount']
-                                    r_dict['key_fee_address'] = fee['address']
-                                else:
-                                    for f in ['key_fee', 'key_fee_address']:
-                                        if f in r_dict:
-                                            del r_dict[f]
-                    else:
-                        r_dict[field] = value_dict[field]
-            if 'stream_hash' in r_dict and 'txid' in result:
-                d = self._save_name_metadata(name, r_dict['stream_hash'], str(result['txid']))
-            else:
-                d = defer.succeed(True)
+            r_dict['sources'] = value_dict['sources']
+            for field in BASE_METADATA_FIELDS:
+                    r_dict[field] = value_dict[field]
+            for field in value_dict:
+                if field in OPTIONAL_METADATA_FIELDS:
+                    r_dict[field] = value_dict[field]
+
+        if 'txid' in result:
+            d = self._save_name_metadata(name, r_dict['sources']['lbry_sd_hash'], str(result['txid']))
             d.addCallback(lambda _: r_dict)
             return d
         elif 'error' in result:
             log.warning("Got an error looking up a name: %s", result['error'])
-        return Failure(UnknownNameError(name))
+            return Failure(UnknownNameError(name))
+        else:
+            log.warning("Got an error looking up a name: %s", json.dumps(result))
+            return Failure(UnknownNameError(name))
 
-    def claim_name(self, name, sd_hash, amount, description=None, key_fee=None,
-                   key_fee_address=None, thumbnail=None, content_license=None, author=None, sources=None):
-        value = {"sources": {'lbry_sd_hash': sd_hash}}
-        if description is not None:
-            value['description'] = description
-        if key_fee is not None and key_fee_address is not None:
-            value['fee'] = {'type': 'LBC', 'amount': key_fee, 'address': key_fee_address}
-        if thumbnail is not None:
-            value['thumbnail'] = thumbnail
-        if content_license is not None:
-            value['content_license'] = content_license
-        if author is not None:
-            value['author'] = author
-        if isinstance(sources, dict):
-            sources['lbry_sd_hash'] = sd_hash
-            value['sources'] = sources
+    def claim_name(self, name, bid, sources, metadata, fee=None):
+        value = {'sources': {}}
+        for k in SOURCE_TYPES:
+            if k in sources:
+                value['sources'][k] = sources[k]
+        if value['sources'] == {}:
+            return defer.fail("No source given")
+        for k in BASE_METADATA_FIELDS:
+            if k not in metadata:
+                return defer.fail("Missing required field '%s'" % k)
+            value[k] = metadata[k]
+        for k in metadata:
+            if k not in BASE_METADATA_FIELDS:
+                value[k] = metadata[k]
+        if fee is not None:
+            if "LBC" in fee:
+                value['fee'] = {'LBC': {'amount': fee['LBC']['amount'], 'address': fee['LBC']['address']}}
 
-        d = self._send_name_claim(name, json.dumps(value), amount)
+        d = self._send_name_claim(name, json.dumps(value), bid)
 
         def _save_metadata(txid):
-            d = self._save_name_metadata(name, sd_hash, txid)
+            d = self._save_name_metadata(name, value['sources']['lbry_sd_hash'], txid)
             d.addCallback(lambda _: txid)
             return d
 
@@ -409,7 +393,7 @@ class LBRYWallet(object):
         def abandon(results):
             if results[0][0] and results[1][0]:
                 address = results[0][1]
-                amount = results[1][1]
+                amount = float(results[1][1])
                 return self._send_abandon(txid, address, amount)
             elif results[0][0] is False:
                 return defer.fail(Failure(ValueError("Couldn't get a new address")))
@@ -424,8 +408,11 @@ class LBRYWallet(object):
         d.addCallback(self._get_decoded_tx)
         return d
 
-    # def update_name(self, name_value):
-    #     return self._update_name(name_value)
+    def update_name(self, name, value, amount):
+        d = self._get_value_for_name(name)
+        d.addCallback(lambda r: (self._update_name(r['txid'], json.dumps(value), amount), r['txid']))
+        d.addCallback(lambda (new_txid, old_txid): self._update_name_metadata(name, value['sources']['lbry_sd_hash'], old_txid, new_txid))
+        return d
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
@@ -541,6 +528,12 @@ class LBRYWallet(object):
 
         return d
 
+    def _update_name_metadata(self, name, sd_hash, old_txid, new_txid):
+        d = self.db.runQuery("delete * from name_metadata where txid=? and sd_hash=?", (old_txid, sd_hash))
+        d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, new_txid, sd_hash)))
+        d.addCallback(lambda _: new_txid)
+        return d
+
     def _get_claim_metadata_for_sd_hash(self, sd_hash):
         d = self.db.runQuery("select name, txid from name_metadata where sd_hash=?", (sd_hash,))
         d.addCallback(lambda r: r[0] if len(r) else None)
@@ -579,6 +572,9 @@ class LBRYWallet(object):
         return defer.fail(NotImplementedError())
 
     def _send_abandon(self, txid, address, amount):
+        return defer.fail(NotImplementedError())
+
+    def _update_name(self, txid, value, amount):
         return defer.fail(NotImplementedError())
 
     def _do_send_many(self, payments_to_send):
@@ -634,7 +630,7 @@ class LBRYcrdWallet(LBRYWallet):
     def _get_rpc_conf(self):
         settings = {"username": "rpcuser",
                     "password": "rpcpassword",
-                    "rpc_port": 8332}
+                    "rpc_port": 9245}
         if os.path.exists(self.wallet_conf):
             conf = open(self.wallet_conf)
             for l in conf:
@@ -712,6 +708,9 @@ class LBRYcrdWallet(LBRYWallet):
 
     def _send_abandon(self, txid, address, amount):
         return threads.deferToThread(self._send_abandon_rpc, txid, address, amount)
+
+    def _update_name(self, txid, value, amount):
+        return threads.deferToThread(self._update_name_rpc, txid, value, amount)
 
     def get_claims_from_tx(self, txid):
         return threads.deferToThread(self._get_claims_from_tx_rpc, txid)
@@ -826,7 +825,7 @@ class LBRYcrdWallet(LBRYWallet):
     @_catch_connection_error
     def _send_abandon_rpc(self, txid, address, amount):
         rpc_conn = self._get_rpc_conn()
-        return rpc_conn.abandonname(txid, address, amount)
+        return rpc_conn.abandonclaim(txid, address, amount)
 
     @_catch_connection_error
     def _get_blockchain_info_rpc(self):
@@ -846,7 +845,7 @@ class LBRYcrdWallet(LBRYWallet):
     @_catch_connection_error
     def _get_nametrie_rpc(self):
         rpc_conn = self._get_rpc_conn()
-        return rpc_conn.getnametrie()
+        return rpc_conn.getclaimtrie()
 
     @_catch_connection_error
     def _get_wallet_balance_rpc(self):
@@ -863,9 +862,9 @@ class LBRYcrdWallet(LBRYWallet):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.getvalueforname(name)
 
-    # def _update_name_rpc(self, name_value):
-    #     rpc_conn = self._get_rpc_conn()
-    #     return rpc_conn.updatename(name_value)
+    def _update_name_rpc(self, txid, value, amount):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.updateclaim(txid, value, amount)
 
     @_catch_connection_error
     def _send_name_claim_rpc(self, name, value, amount):

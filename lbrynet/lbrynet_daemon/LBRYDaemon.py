@@ -24,7 +24,7 @@ from appdirs import user_data_dir
 from urllib2 import urlopen
 
 from lbrynet import __version__ as lbrynet_version
-from lbryum.version import ELECTRUM_VERSION as lbryum_version
+from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -39,15 +39,16 @@ from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
-    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME
+    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, \
+    BASE_METADATA_FIELDS, OPTIONAL_METADATA_FIELDS, SOURCE_TYPES
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.core.LBRYcrdWallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
-from lbryum import LOG_PATH as lbryum_log
+# from lbryum import LOG_PATH as lbryum_log
 
 log = logging.getLogger(__name__)
 
@@ -67,12 +68,13 @@ handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, ba
 log.addHandler(handler)
 log.setLevel(logging.INFO)
 
-if os.path.isfile(lbryum_log):
-    f = open(lbryum_log, 'r')
-    PREVIOUS_LBRYUM_LOG = len(f.read())
-    f.close()
-else:
-    PREVIOUS_LBRYUM_LOG = 0
+# if os.path.isfile(lbryum_log):
+#     f = open(lbryum_log, 'r')
+#     PREVIOUS_LBRYUM_LOG = len(f.read())
+#     f.close()
+# else:
+#     PREVIOUS_LBRYUM_LOG = 0
+
 if os.path.isfile(lbrynet_log):
     f = open(lbrynet_log, 'r')
     PREVIOUS_LBRYNET_LOG = len(f.read())
@@ -141,7 +143,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     isLeaf = True
 
-    def __init__(self, root, wallet_type=None):
+    def __init__(self, root, wallet_type="lbrycrd"):
         jsonrpc.JSONRPC.__init__(self)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
@@ -397,11 +399,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False):
         def _log_starting_vals():
-            d = self._get_lbry_files()
-            d.addCallback(lambda r: json.dumps([d[1] for d in r]))
-            d.addCallback(lambda r: log.info("LBRY Files: " + r))
-            d.addCallback(lambda _: log.info("Starting balance: " + str(self.session.wallet.wallet_balance)))
-            return d
+            log.info("Starting balance: " + str(self.session.wallet.wallet_balance))
+            return defer.succeed(None)
 
         def _announce_startup():
             def _wait_for_credits():
@@ -428,11 +427,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 d = defer.succeed(None)
 
-            if float(self.session.wallet.wallet_balance) == 0.0:
-                d.addCallback(lambda _: self._check_first_run())
-                d.addCallback(self._show_first_run_result)
+            # if float(self.session.wallet.wallet_balance) == 0.0:
+            #     d.addCallback(lambda _: self._check_first_run())
+            #     d.addCallback(self._show_first_run_result)
 
-            d.addCallback(lambda _: _wait_for_credits() if self.requested_first_run_credits else _announce())
+            # d.addCallback(lambda _: _wait_for_credits() if self.requested_first_run_credits else _announce())
+            d.addCallback(lambda _: _announce())
             return d
 
         log.info("[" + str(datetime.now()) + "] Starting lbrynet-daemon")
@@ -516,7 +516,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             try:
                 r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
                 version = next(line.split("=")[1].split("#")[0].replace(" ", "")
-                               for line in r if "ELECTRUM_VERSION" in line)
+                               for line in r if "LBRYUM_VERSION" in line)
                 version = version.replace("'", "")
                 log.info("remote lbryum " + str(version) + " > local lbryum " + str(lbryum_version) + " = " + str(
                     version > lbryum_version))
@@ -634,11 +634,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            for lm, lp in [('lbrynet', lbrynet_log), ('lbryum', lbryum_log)]:
+            for lm, lp in [('lbrynet', lbrynet_log)]: #, ('lbryum', lbryum_log)]:
                 if os.path.isfile(lp):
                     if exclude_previous:
                         f = open(lp, "r")
-                        f.seek(PREVIOUS_LBRYNET_LOG if lm == 'lbrynet' else PREVIOUS_LBRYUM_LOG)
+                        f.seek(PREVIOUS_LBRYNET_LOG) # if lm == 'lbrynet' else PREVIOUS_LBRYUM_LOG)
                         log_contents = f.read()
                         f.close()
                     else:
@@ -1038,12 +1038,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _get_stream(stream_info):
             def _wait_for_write():
-                if os.path.isfile(os.path.join(self.download_directory, self.streams[name].downloader.file_name)):
-                    written_file = file(os.path.join(self.download_directory, self.streams[name].downloader.file_name))
-                    written_file.seek(0, os.SEEK_END)
-                    written_bytes = written_file.tell()
-                    written_file.close()
-                else:
+                try:
+                    if os.path.isfile(os.path.join(self.download_directory, self.streams[name].downloader.file_name)):
+                        written_file = file(os.path.join(self.download_directory, self.streams[name].downloader.file_name))
+                        written_file.seek(0, os.SEEK_END)
+                        written_bytes = written_file.tell()
+                        written_file.close()
+                    else:
+                        written_bytes = False
+                except:
                     written_bytes = False
 
                 if not written_bytes:
@@ -1151,12 +1154,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _add_key_fee(data_cost):
             d = self._resolve_name(name)
-            d.addCallback(lambda info: data_cost + info['key_fee'] if 'key_fee' in info.keys() else data_cost)
+            d.addCallback(lambda info: data_cost if 'fee' not in info else data_cost + info['fee']['LBC']['amount'])
             return d
 
         d = self._resolve_name(name)
-        d.addCallback(lambda info: info['stream_hash'] if isinstance(info['stream_hash'], str)
-                                    else info['stream_hash']['sd_hash'])
+        d.addCallback(lambda info: info['sources']['lbry_sd_hash'])
         d.addCallback(lambda sd_hash: download_sd_blob(self.session, sd_hash,
                                                     self.blob_request_payment_rate_manager))
         d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
@@ -1170,10 +1172,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _get_lbry_file_by_uri(self, name):
         def _get_file(stream_info):
-            if isinstance(stream_info['stream_hash'], str) or isinstance(stream_info['stream_hash'], unicode):
-                sd = stream_info['stream_hash']
-            elif isinstance(stream_info['stream_hash'], dict):
-                sd = stream_info['stream_hash']['sd_hash']
+            sd = stream_info['sources']['lbry_sd_hash']
 
             for l in self.lbry_file_manager.lbry_files:
                 if l.sd_hash == sd:
@@ -1791,15 +1790,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             for r in results:
                 t = {}
                 t.update(r[0])
-                if 'name' in r[1].keys():
-                    r[1]['stream_name'] = r[1]['name']
-                    del r[1]['name']
+                if not 'thumbnail' in r[1].keys():
+                    r[1]['thumbnail'] = "img/Free-speech-flag.svg"
                 t.update(r[1])
                 t['cost_est'] = r[2]
-                if not 'thumbnail' in t.keys():
-                    t['thumbnail'] = "img/Free-speech-flag.svg"
                 consolidated_results.append(t)
                 # log.info(str(t))
+
             return consolidated_results
 
         log.info('[' + str(datetime.now()) + '] Search nametrie: ' + search)
@@ -1845,46 +1842,30 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_publish(self, p):
         """
-        Make a new name claim
+        Make a new name claim and publish associated data to lbrynet
 
         Args:
             'name': name to be claimed, string
             'file_path': path to file to be associated with name, string
             'bid': amount of credits to commit in this claim, float
-            optional 'author': author, string
-            optional 'title': title, description
-            optional 'description': content description, string
-            optional 'thumbnail': thumbnail image url
-            optional 'key_fee': key fee to be paid to publisher, float (default 0.0)
-            optional 'key_fee_address': address for key fee to be sent to, string (defaults on new address)
-            optional 'content_license': content license string
-            optional 'sources': alternative sources dict, keys 'lbry_sd_hash', 'btih', 'url'
+            'metadata': metadata dictionary
+            optional 'fee'
         Returns:
-            Confirmation message
+            Claim txid
         """
-
-        metadata_fields = ["name", "file_path", "bid", "author", "title",
-                           "description", "thumbnail", "key_fee", "key_fee_address",
-                           "content_license", "sources"]
-
-        for k in metadata_fields:
-            if k not in p.keys():
-                p[k] = None
+        # start(self, name, file_path, bid, metadata, fee=None, sources=None):
+        name = p['name']
+        bid = p['bid']
+        file_path = p['file_path']
+        metadata = p['metadata']
+        if 'fee' in p:
+            fee = p['fee']
+        else:
+            fee = None
 
         pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
 
-        d = pub.start(p['name'],
-                      p['file_path'],
-                      p['bid'],
-                      title=p['title'],
-                      description=p['description'],
-                      thumbnail=p['thumbnail'],
-                      key_fee=p['key_fee'],
-                      key_fee_address=p['key_fee_address'],
-                      content_license=p['content_license'],
-                      author=p['author'],
-                      sources=p['sources'])
-
+        d = pub.start(name, file_path, bid, metadata, fee)
         d.addCallbacks(lambda msg: self._render_response(msg, OK_CODE),
                        lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
 
@@ -2149,25 +2130,26 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    # def jsonrpc_update_name(self, metadata):
-    #     def _disp(x):
-    #         print x
-    #         return x
-    #
-    #     metadata = json.loads(metadata)
-    #
-    #     required = ['name', 'file_path', 'bid']
-    #
-    #     for r in required:
-    #         if not r in metadata.keys():
-    #             return defer.fail()
-    #
-    #     d = defer.Deferred()
-    #     d.addCallback(lambda _: self.session.wallet.update_name(metadata))
-    #     d.addCallback(_disp)
-    #     d.callback(None)
-    #
-    #     return d
+    def jsonrpc_update_name(self, p):
+        """
+        Update name claim
+
+        Args:
+            'name': the uri of the claim to be updated
+            'metadata': new metadata dict
+            'amount': bid amount of updated claim
+        Returns:
+            txid
+        """
+
+        name = p['name']
+        metadata = p['metadata'] if isinstance(p['metadata'], dict) else json.loads(p['metadata'])
+        amount = p['amount']
+
+        d = self.session.wallet.update_name(name, metadata, amount)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+
+        return d
 
     def jsonrpc_log(self, p):
         """

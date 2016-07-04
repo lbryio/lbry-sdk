@@ -12,7 +12,7 @@ from lbrynet.pointtraderclient import pointtraderclient
 from twisted.internet import defer, threads
 from zope.interface import implements
 from twisted.python.failure import Failure
-from lbrynet.core.LBRYcrdWallet import ReservedPoints
+from lbrynet.core.LBRYWallet import ReservedPoints
 
 
 log = logging.getLogger(__name__)

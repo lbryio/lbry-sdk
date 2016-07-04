@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 import os
 import sys
 
@@ -36,42 +37,27 @@ class Publisher(object):
         self.received_file_name = False
         self.file_path = None
         self.file_name = None
-        self.thumbnail = None
-        self.title = None
         self.publish_name = None
         self.bid_amount = None
-        self.key_fee = None
-        self.key_fee_address = None
-        self.key_fee_address_chosen = False
-        self.description = None
         self.verified = False
         self.lbry_file = None
-        self.sd_hash = None
-        self.tx_hash = None
-        self.content_license = None
-        self.author = None
-        self.sources = None
+        self.txid = None
+        self.sources = {}
+        self.fee = None
 
-    def start(self, name, file_path, bid, title=None, description=None, thumbnail=None,
-              key_fee=None, key_fee_address=None, content_license=None, author=None, sources=None):
+    def start(self, name, file_path, bid, metadata, fee=None, sources={}):
 
         def _show_result():
-            message = "[" + str(datetime.now()) + "] Published " + self.file_name + " --> lbry://" + \
-                        str(self.publish_name) + " with txid: " + str(self.tx_hash)
+
+            message = "[%s] Published %s --> lbry://%s txid: %s" % (datetime.now(), self.file_name, self.publish_name, self.txid)
             log.info(message)
-            return defer.succeed(self.tx_hash)
+            return defer.succeed(self.txid)
 
         self.publish_name = name
         self.file_path = file_path
         self.bid_amount = bid
-        self.title = title
-        self.description = description
-        self.thumbnail = thumbnail
-        self.key_fee = key_fee
-        self.key_fee_address = key_fee_address
-        self.content_license = content_license
-        self.author = author
-        self.sources = sources
+        self.fee = fee
+        self.metadata = metadata
 
         d = self._check_file_path(self.file_path)
         d.addCallback(lambda _: create_lbry_file(self.session, self.lbry_file_manager,
@@ -118,20 +104,21 @@ class Publisher(object):
                             self.lbry_file.stream_hash)
 
         def set_sd_hash(sd_hash):
-            self.sd_hash = sd_hash
+            self.sources['lbry_sd_hash'] = sd_hash
 
         d.addCallback(set_sd_hash)
         return d
 
     def _claim_name(self):
-        d = self.wallet.claim_name(self.publish_name, self.sd_hash, self.bid_amount,
-                                   description=self.description, key_fee=self.key_fee,
-                                   key_fee_address=self.key_fee_address, thumbnail=self.thumbnail,
-                                   content_license=self.content_license, author=self.author,
-                                   sources=self.sources)
-
-        def set_tx_hash(tx_hash):
-            self.tx_hash = tx_hash
+        self.metadata['content-type'] = mimetypes.guess_type(os.path.join(self.lbry_file.download_directory,
+                                                                          self.lbry_file.file_name))[0]
+        d = self.wallet.claim_name(self.publish_name,
+                                   self.bid_amount,
+                                   self.sources,
+                                   self.metadata,
+                                   fee=self.fee)
+        def set_tx_hash(txid):
+            self.txid = txid
 
         d.addCallback(set_tx_hash)
         return d
@@ -140,6 +127,7 @@ class Publisher(object):
         log.info(err.getTraceback())
         message = "An error occurred publishing %s to %s. Error: %s."
         if err.check(InsufficientFundsError):
+            d = defer.succeed(True)
             error_message = "Insufficient funds"
         else:
             d = defer.succeed(True)
