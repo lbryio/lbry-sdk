@@ -46,7 +46,13 @@ codesign --deep -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Co
 codesign -vvvv "${DEST}/dist/LBRYURIHandler.app"
 
 pip install certifi pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork
-python setup_app.py py2app
+
+# add lbrycrdd as a resource. Following
+# http://stackoverflow.com/questions/11370012/can-executables-made-with-py2app-include-other-terminal-scripts-and-run-them
+wget https://github.com/lbryio/lbrycrd/releases/download/v0.3-osx/lbrycrdd
+python setup_app.py py2app --resources lbrycrdd
+
+chmod +x "${DEST}/dist/LBRY.app/Contents/Resources/lbrycrdd"
 
 echo "Removing i386 libraries"
 
@@ -74,5 +80,6 @@ codesign -vvvv "${DEST}/dist/LBRY.app"
 
 rm -rf $tmp
 mv dist/LBRY.app LBRY.app
-rm -rf dist
+rm -rf dist "${NAME}.${VERSION}.dmg"
+# TODO: make this pretty!
 hdiutil create "${NAME}.${VERSION}.dmg" -volname lbry -srcfolder LBRY.app
