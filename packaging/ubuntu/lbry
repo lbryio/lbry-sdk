@@ -1,18 +1,30 @@
 #!/bin/bash
 
-if [ -f "~/.lbrycrddpath.conf" ]; then
-    lbrycrdd_path = `cat ~/.lbrycrddpath.conf`
-else
-    mkdir -p "~/.lbrycrd"
-    cd ~/.lbrycrd
+set -euo pipefail
+
+LBRYCRDDPATHCONF="$HOME/.lbrycrddpath.conf"
+LBRYCRDDIR="$HOME/.lbrycrd"
+LBRYCRDDBIN="$LBRYCRDDIR/lbrycrdd"
+LBRYCRDCONF="$LBRYCRDDIR/lbrycrd.conf"
+
+if [ ! -f "$LBRYCRDDBIN" ]; then
+  mkdir -p "$LBRYCRDDIR"
+  (
+    cd "$LBRYCRDDIR"
     echo "Downloading lbrycrd binaries"
     wget http://s3.amazonaws.com/files.lbry.io/bins.zip
     unzip -o bins.zip
     rm bins.zip
-    echo `pwd`/lbrycrdd > ~/.lbrycrddpath.conf
+  )
 fi
 
-set -euo pipefail
+if [ ! -f "$LBRYCRDDPATHCONF" ]; then
+  echo "$LBRYCRDDBIN" > "$LBRYCRDDPATHCONF"
+fi
+
+if [ ! -f "$LBRYCRDCONF" ]; then
+  echo -e "rpcuser=lbryrpc\nrpcpassword=$(env LC_CTYPE=C LC_ALL=C tr -dc A-Za-z0-9 < /dev/urandom | head -c 16 | xargs)" > "$LBRYCRDCONF"
+fi
 
 WEB_UI_BRANCH='master'
 
