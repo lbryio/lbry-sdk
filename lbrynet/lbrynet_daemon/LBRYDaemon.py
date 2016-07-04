@@ -1,8 +1,10 @@
+import string
 import locale
 import mimetypes
 import os
 import subprocess
 import sys
+import random
 import simplejson as json
 import binascii
 import logging.handlers
@@ -327,6 +329,17 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.blob_request_payment_rate_manager = None
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
+
+        if self.wallet_type == "lbrycrd":
+            if os.path.isfile(self.lbrycrd_conf):
+                log.info("Using lbrycrd.conf found at " + self.lbrycrd_conf)
+            else:
+                log.info("No lbrycrd.conf found at " + self.lbrycrd_conf + ". Generating now...")
+                password = "".join(random.SystemRandom().choice(string.ascii_letters + string.digits + "_") for i in range(20))
+                with open(self.lbrycrd_conf, 'w') as f:
+                    f.write("rpcuser=rpcuser\n")
+                    f.write("rpcpassword=" + password)
+                log.info("Done writing lbrycrd.conf")
 
     def render(self, request):
         request.content.seek(0, 0)
