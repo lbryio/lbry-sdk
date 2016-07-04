@@ -1,5 +1,17 @@
 #!/bin/bash
 
+if [ -f "~/.lbrycrddpath.conf" ]; then
+    lbrycrdd_path = `cat ~/.lbrycrddpath.conf`
+else
+    mkdir -p "~/.lbrycrd"
+    cd ~/.lbrycrd
+    echo "Downloading lbrycrd binaries"
+    wget http://s3.amazonaws.com/files.lbry.io/bins.zip
+    unzip -o bins.zip
+    rm bins.zip
+    echo `pwd`/lbrycrdd > ~/.lbrycrddpath.conf
+fi
+
 set -euo pipefail
 
 WEB_UI_BRANCH='master'
