@@ -178,7 +178,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
             self.db_dir = user_data_dir("LBRY")
         else:
-            default_download_directory = os.getcwd()
+            default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
+
+            if os.exists(default_download_directory):
+                if os.isfile(default_download_directory):
+                    # Weird, ~/Downloads is a file, not a directory. Revert to just the home dir.
+                    default_download_directory = os.path.expanduser("~")
+            else:
+                os.makedirs(default_download_directory)
+
             self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
 
         self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.json')
