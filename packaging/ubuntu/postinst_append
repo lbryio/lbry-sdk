@@ -16,7 +16,11 @@ case $? in
 esac
 
 if [ $RUN = 1 ]; then
-  xdg-open "lbry://lbry"
+  if [ -n $SUDO_USER ]; then
+    sudo --user="$SUDO_USER" xdg-open "lbry://lbry"
+  else
+    xdg-open "lbry://lbry"
+  fi
 else
   zenity --info --text="<span size=\"xx-large\">LBRY Installed</span>\n\nNo problem. You can run LBRY later by going to
 
