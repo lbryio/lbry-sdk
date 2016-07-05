@@ -101,7 +101,7 @@ $SUDO apt-get ${QUIET} install -y --no-install-recommends \
 
 # need a modern version of pip (more modern than ubuntu default)
 $SUDO pip install --upgrade pip
-$SUDO pip install make-deb
+$SUDO pip install git+https://github.com/jobevers/make-deb
 
 # build packages
 #
