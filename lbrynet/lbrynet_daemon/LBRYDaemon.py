@@ -321,8 +321,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if os.name != 'nt':
             lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
             if not os.path.isfile(lbrycrdd_path_conf):
-                f = open(lbrycrdd_path_conf)
-                f.write(self.lbrycrdd_path)
+                f = open(lbrycrdd_path_conf, "w")
+                f.write(str(self.lbrycrdd_path))
                 f.close()
 
         self.created_data_dir = False
