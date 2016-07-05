@@ -23,7 +23,7 @@ if not os.path.isdir(wallet_dir):
     shutil.os.mkdir(wallet_dir)
 
 if not os.path.isfile(lbrycrdd_path_conf):
-    f = open(lbrycrdd_path_conf)
+    f = open(lbrycrdd_path_conf, "w")
     f.write(lbrycrdd_path)
     f.close()
 
