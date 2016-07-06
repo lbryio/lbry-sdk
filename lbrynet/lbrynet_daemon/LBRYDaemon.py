@@ -1487,7 +1487,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'lbryum_version': lbryum_version,
             'ui_version': self.ui_version,
             'remote_lbrynet': self.git_lbrynet_version,
-            'remote_lbryum': self.git_lbryum_version
+            'remote_lbryum': self.git_lbryum_version,
+            'lbrynet_update_available': lbrynet_version < self.git_lbrynet_version,
+            'lbryum_update_available': lbryum_version < self.git_lbryum_version
         }
 
         log.info("[" + str(datetime.now()) + "] Get version info: " + json.dumps(msg))
