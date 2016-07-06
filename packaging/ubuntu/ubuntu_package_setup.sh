@@ -164,16 +164,16 @@ addfile "$PACKAGING_DIR/lbry.desktop" usr/share/applications/lbry.desktop
 BINPATH=usr/share/python/lbrynet/bin
 addfile "$PACKAGING_DIR/lbry" "$BINPATH/lbry"
 
-# symlink script into /usr/local/bin
+# symlink script into /usr/bin
 ln -s "/$BINPATH/lbry" "$PACKAGING_DIR/lbry-temp-symlink"
-addfile "$PACKAGING_DIR/lbry-temp-symlink" usr/local/bin/lbry
+addfile "$PACKAGING_DIR/lbry-temp-symlink" usr/bin/lbry
 
 # add lbrycrdd and lbrycrd-cli
 mkdir -p "$PACKAGING_DIR/bins"
-wget http://s3.amazonaws.com/files.lbry.io/bins.zip --output-file "$PACKAGING_DIR/bins.zip"
-unzip -o "$PACKAGING_DIR/bins.zip" -d "$PACKAGING_DIR/bins/"
-addfile "$PACKAGING_DIR/bins/lbrycrdd" usr/local/bin/lbrycrdd
-addfile "$PACKAGING_DIR/bins/lbrycrd-cli" usr/local/bin/lbrycrd-cli
+wget http://s3.amazonaws.com/files.lbry.io/bins.zip --output-document "$PACKAGING_DIR/bins.zip"
+unzip "$PACKAGING_DIR/bins.zip" -d "$PACKAGING_DIR/bins/"
+addfile "$PACKAGING_DIR/bins/lbrycrdd" usr/bin/lbrycrdd
+addfile "$PACKAGING_DIR/bins/lbrycrd-cli" usr/bin/lbrycrd-cli
 
 # add postinstall script
 cat "$PACKAGING_DIR/postinst_append" >> control/postinst
