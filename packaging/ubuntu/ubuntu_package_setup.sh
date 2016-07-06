@@ -160,7 +160,7 @@ addfile "$PACKAGING_DIR/icons/lbry128.png" usr/share/icons/hicolor/128x128/apps/
 addfile "$PACKAGING_DIR/icons/lbry256.png" usr/share/icons/hicolor/256x256/apps/lbry.png
 addfile "$PACKAGING_DIR/lbry.desktop" usr/share/applications/lbry.desktop
 
-$BINPATH=usr/share/python/lbrynet/bin
+BINPATH=usr/share/python/lbrynet/bin
 addfile "$PACKAGING_DIR/lbry" "$BINPATH/lbry"
 
 ln -s "/$BINPATH/lbry" "$PACKAGING_DIR/lbry-temp-symlink"
