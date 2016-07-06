@@ -8,6 +8,7 @@ from urllib2 import urlopen
 from StringIO import StringIO
 from twisted.web import static
 from twisted.internet import defer
+from twisted.internet.task import LoopingCall
 from lbrynet.conf import DEFAULT_UI_BRANCH, LOG_FILE_NAME
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
@@ -52,9 +53,12 @@ class LBRYUIManager(object):
         self.config = os.path.join(self.ui_root, "active.json")
         self.update_requires = os.path.join(self.update_dir, "requirements.txt")
         self.requirements = {}
+        self.check_requirements = True
         self.ui_dir = self.active_dir
         self.git_version = None
         self.root = root
+        self.branch = None
+        self.update_checker = LoopingCall(self.setup)
 
         if not os.path.isfile(os.path.join(self.config)):
             self.loaded_git_version = None
@@ -73,8 +77,11 @@ class LBRYUIManager(object):
                 self.loaded_branch = None
                 self.loaded_requirements = None
 
-    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=None, branch_specified=False):
-        self.branch = branch
+    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=None, branch_specified=False, check_requirements=None):
+        if check_requirements is not None:
+            self.check_requirements = check_requirements
+        if self.branch is not None:
+            self.branch = branch
         if user_specified:
             if os.path.isdir(user_specified):
                 log.info("Checking user specified UI directory: " + str(user_specified))
@@ -84,7 +91,7 @@ class LBRYUIManager(object):
                 d.addCallback(lambda _: self._load_ui())
                 return d
             else:
-                log.info("User specified UI directory doesn't exist, using " + branch)
+                log.info("User specified UI directory doesn't exist, using " + self.branch)
         elif self.loaded_branch == "user-specified" and not branch_specified:
             log.info("Loading user provided UI")
             d = self._load_ui()
@@ -113,8 +120,12 @@ class LBRYUIManager(object):
                 log.info("UI updates available, checking if installation meets requirements")
                 return defer.succeed(False)
 
+        def _use_existing():
+            log.info("Failed to check for new ui version, trying to use cached ui")
+            return defer.succeed(True)
+
         d = _get_git_info()
-        d.addCallback(_set_git)
+        d.addCallbacks(_set_git, lambda _: _use_existing)
         return d
 
     def migrate_ui(self, source=None):
@@ -126,6 +137,10 @@ class LBRYUIManager(object):
             requires_file = os.path.join(source, "requirements.txt")
             source_dir = source
             delete_source = False
+
+        def _skip_requirements():
+            log.info("Skipping ui requirement check")
+            return defer.succeed(True)
 
         def _check_requirements():
             if not os.path.isfile(requires_file):
@@ -197,7 +212,7 @@ class LBRYUIManager(object):
             self.loaded_requirements = loaded_ui['requirements']
             return defer.succeed(True)
 
-        d = _check_requirements()
+        d = _check_requirements() if self.check_requirements else _skip_requirements()
         d.addCallback(lambda r: _do_migrate() if r else _disp_failure())
         return d
 
