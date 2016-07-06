@@ -2243,19 +2243,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_reveal(self, p):
         """
-        Open a folder in finder/file explorer
+        Reveal a file or directory in file browser
 
         Args:
-            'path': path to be selected in finder
+            'path': path to be selected in file browser
         Returns:
-            True, opens finder
+            True, opens file browser
         """
         
         path = p['path']
         if sys.platform == "darwin":
             d = threads.deferToThread(subprocess.Popen, ['open', '-R', path])
         else:
-            d = threads.deferToThread(subprocess.Popen, ['xdg-open', '-R', path])
+            # No easy way to reveal specific files on Linux, so just open the containing directory
+            d = threads.deferToThread(subprocess.Popen, ['xdg-open', os.dirname(path)])
+
 
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
