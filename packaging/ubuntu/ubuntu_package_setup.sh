@@ -148,7 +148,7 @@ function addfile() {
   FILE="$1"
   TARGET="$2"
   mkdir -p "$(dirname "data/$TARGET")"
-  cp "$FILE" "data/$TARGET"
+  cp -d "$FILE" "data/$TARGET"
   echo "$(md5sum "data/$TARGET" | cut -d' ' -f1)  $TARGET" >> control/md5sums
 }
 

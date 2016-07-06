@@ -1,8 +1,8 @@
 [Desktop Entry]
-Version=0.2.2
+Version=0.3.4
 Name=LBRY
 Comment=The world's first user-owned content marketplace
-Icon=/usr/share/python/lbrynet/lbrynet/lbrynet_gui/lbry.png
+Icon=lbry
 GenericName=Content Marketplace
 Categories=Network;Internet;Filesharing
 Terminal=false
