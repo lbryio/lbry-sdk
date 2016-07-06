@@ -247,11 +247,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         if self.session_settings['last_version'] != self.default_settings['last_version']:
             self.session_settings['last_version'] = self.default_settings['last_version']
-
             self.first_run_after_update = True
             log.info("First run after update")
-            if lbrynet_version == '0.2.5':
-                self.session_settings['startup_scripts'].append({'script_name': 'migrateto025', 'run_once': True})
 
         f = open(self.daemon_conf, "w")
         f.write(json.dumps(self.session_settings))
@@ -485,7 +482,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
-        d.addCallback(lambda _: self._get_lbrycrdd_path())
         d.addCallback(lambda _: self._get_session())
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_stream_identifier())
@@ -842,7 +838,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = self.settings.start()
         d.addCallback(lambda _: self.settings.get_lbryid())
         d.addCallback(self._set_lbryid)
-        d.addCallback(lambda _: self._get_lbrycrdd_path())
         return d
 
     def _set_lbryid(self, lbryid):
@@ -882,18 +877,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return d
 
         def get_wallet():
-            if self.wallet_type == "lbrycrd":
+            if self.wallet_type in ["lbrycrd", "lbryum"]: #force lbrycrd wallet no matter what while lbryum is down
                 log.info("Using lbrycrd wallet")
-                lbrycrdd_path = None
-                if self.start_lbrycrdd is True:
-                    lbrycrdd_path = self.lbrycrdd_path
-                    if not lbrycrdd_path:
-                        lbrycrdd_path = self.default_lbrycrdd_path
                 d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.wallet_dir, wallet_conf=self.lbrycrd_conf,
-                                                lbrycrdd_path=lbrycrdd_path))
-            elif self.wallet_type == "lbryum":
-                log.info("Using lbryum wallet")
-                d = defer.succeed(LBRYumWallet(self.db_dir))
+                                                lbrycrdd_path=self.lbrycrdd_path))
+            # elif self.wallet_type == "lbryum":
+            #     log.info("Using lbryum wallet")
+            #     d = defer.succeed(LBRYumWallet(self.db_dir))
             elif self.wallet_type == "ptc":
                 log.info("Using PTC wallet")
                 d = defer.succeed(PTCWallet(self.db_dir))
@@ -983,25 +973,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.startup_message = "Thank you for testing the alpha version of LBRY! You have been given %s for free because we love you. Please hang on for a few minutes for the next block to be mined. When you refresh this page and see your credits you're ready to go!." % points_string
         else:
             self.startup_message = None
-
-    def _get_lbrycrdd_path(self):
-        def get_lbrycrdd_path_conf_file():
-            lbrycrdd_path_conf_path = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
-            if not os.path.exists(lbrycrdd_path_conf_path):
-                return ""
-            lbrycrdd_path_conf = open(lbrycrdd_path_conf_path)
-            lines = lbrycrdd_path_conf.readlines()
-            return lines
-
-        d = threads.deferToThread(get_lbrycrdd_path_conf_file)
-
-        def load_lbrycrdd_path(conf):
-            for line in conf:
-                if len(line.strip()) and line.strip()[0] != "#":
-                    self.lbrycrdd_path = line.strip()
-
-        d.addCallback(load_lbrycrdd_path)
-        return d
 
     def _setup_stream_identifier(self):
         file_saver_factory = LBRYFileSaverFactory(self.session.peer_finder, self.session.rate_limiter,
