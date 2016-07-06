@@ -171,7 +171,7 @@ addfile "$PACKAGING_DIR/lbry-temp-symlink" usr/local/bin/lbry
 # add lbrycrdd and lbrycrd-cli
 mkdir -p "$PACKAGING_DIR/bins"
 wget http://s3.amazonaws.com/files.lbry.io/bins.zip --output-file "$PACKAGING_DIR/bins.zip"
-unzip -o "$PACKAGING_DIR/bins/zip" -d "$PACKAGING_DIR/bins/"
+unzip -o "$PACKAGING_DIR/bins.zip" -d "$PACKAGING_DIR/bins/"
 addfile "$PACKAGING_DIR/bins/lbrycrdd" usr/local/bin/lbrycrdd
 addfile "$PACKAGING_DIR/bins/lbrycrd-cli" usr/local/bin/lbrycrd-cli
 
