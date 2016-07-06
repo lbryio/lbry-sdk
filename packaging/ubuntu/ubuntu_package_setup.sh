@@ -151,8 +151,20 @@ function addfile() {
   cp "$FILE" "data/$TARGET"
   echo "$(md5sum "data/$TARGET" | cut -d' ' -f1)  $TARGET" >> control/md5sums
 }
-addfile "$PACKAGING_DIR/lbry" usr/share/python/lbrynet/bin/lbry
+
+
+addfile "$PACKAGING_DIR/icons/lbry32.png" usr/share/icons/hicolor/32x32/apps/lbry.png
+addfile "$PACKAGING_DIR/icons/lbry48.png" usr/share/icons/hicolor/48x48/apps/lbry.png
+addfile "$PACKAGING_DIR/icons/lbry96.png" usr/share/icons/hicolor/96x96/apps/lbry.png
+addfile "$PACKAGING_DIR/icons/lbry128.png" usr/share/icons/hicolor/128x128/apps/lbry.png
+addfile "$PACKAGING_DIR/icons/lbry256.png" usr/share/icons/hicolor/256x256/apps/lbry.png
 addfile "$PACKAGING_DIR/lbry.desktop" usr/share/applications/lbry.desktop
+
+$BINPATH=usr/share/python/lbrynet/bin
+addfile "$PACKAGING_DIR/lbry" "$BINPATH/lbry"
+
+ln -s "/$BINPATH/lbry" "$PACKAGING_DIR/lbry-temp-symlink"
+addfile "$PACKAGING_DIR/lbry-temp-symlink" usr/local/bin/lbry
 
 cat "$PACKAGING_DIR/postinst_append" >> control/postinst
 
