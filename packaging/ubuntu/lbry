@@ -4,25 +4,14 @@ set -euo pipefail
 
 LBRYCRDDPATHCONF="$HOME/.lbrycrddpath.conf"
 LBRYCRDDIR="$HOME/.lbrycrd"
-LBRYCRDDBIN="$LBRYCRDDIR/lbrycrdd"
 LBRYCRDCONF="$LBRYCRDDIR/lbrycrd.conf"
 
-if [ ! -f "$LBRYCRDDBIN" ]; then
-  mkdir -p "$LBRYCRDDIR"
-  (
-    cd "$LBRYCRDDIR"
-    echo "Downloading lbrycrd binaries"
-    wget http://s3.amazonaws.com/files.lbry.io/bins.zip
-    unzip -o bins.zip
-    rm bins.zip
-  )
-fi
-
 if [ ! -f "$LBRYCRDDPATHCONF" ]; then
-  echo "$LBRYCRDDBIN" > "$LBRYCRDDPATHCONF"
+  echo "/usr/local/bin/lbrycrdd" > "$LBRYCRDDPATHCONF"
 fi
 
 if [ ! -f "$LBRYCRDCONF" ]; then
+  mkdir -p "$LBRYCRDDIR"
   echo -e "rpcuser=lbryrpc\nrpcpassword=$(env LC_CTYPE=C LC_ALL=C tr -dc A-Za-z0-9 < /dev/urandom | head -c 16 | xargs)" > "$LBRYCRDCONF"
 fi
 

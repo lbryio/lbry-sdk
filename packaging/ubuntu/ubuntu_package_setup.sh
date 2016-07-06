@@ -152,7 +152,7 @@ function addfile() {
   echo "$(md5sum "data/$TARGET" | cut -d' ' -f1)  $TARGET" >> control/md5sums
 }
 
-
+# add icons
 addfile "$PACKAGING_DIR/icons/lbry32.png" usr/share/icons/hicolor/32x32/apps/lbry.png
 addfile "$PACKAGING_DIR/icons/lbry48.png" usr/share/icons/hicolor/48x48/apps/lbry.png
 addfile "$PACKAGING_DIR/icons/lbry96.png" usr/share/icons/hicolor/96x96/apps/lbry.png
@@ -160,12 +160,22 @@ addfile "$PACKAGING_DIR/icons/lbry128.png" usr/share/icons/hicolor/128x128/apps/
 addfile "$PACKAGING_DIR/icons/lbry256.png" usr/share/icons/hicolor/256x256/apps/lbry.png
 addfile "$PACKAGING_DIR/lbry.desktop" usr/share/applications/lbry.desktop
 
+# add lbry executable script
 BINPATH=usr/share/python/lbrynet/bin
 addfile "$PACKAGING_DIR/lbry" "$BINPATH/lbry"
 
+# symlink script into /usr/local/bin
 ln -s "/$BINPATH/lbry" "$PACKAGING_DIR/lbry-temp-symlink"
 addfile "$PACKAGING_DIR/lbry-temp-symlink" usr/local/bin/lbry
 
+# add lbrycrdd and lbrycrd-cli
+mkdir -p "$PACKAGING_DIR/bins"
+wget http://s3.amazonaws.com/files.lbry.io/bins.zip --output-file "$PACKAGING_DIR/bins.zip"
+unzip -o "$PACKAGING_DIR/bins/zip" -d "$PACKAGING_DIR/bins/"
+addfile "$PACKAGING_DIR/bins/lbrycrdd" usr/local/bin/lbrycrdd
+addfile "$PACKAGING_DIR/bins/lbrycrd-cli" usr/local/bin/lbrycrd-cli
+
+# add postinstall script
 cat "$PACKAGING_DIR/postinst_append" >> control/postinst
 
 # repackage .deb
