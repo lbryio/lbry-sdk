@@ -1,28 +1,15 @@
 
 (
 
-sleep 4
+if hash zenity 2>/dev/null; then
+  sleep 3
 
-zenity --question --text="<span size=\"xx-large\">LBRY Installed</span>\n\nRun LBRY now?" --title="LBRY Installed" --ok-label=" Yes" \
-  --cancel-label=" No" --icon-name="system-software-install"
+  zenity --info --icon-name="system-software-install" \
+    --text="\
+<span size=\"xx-large\">LBRY Installed</span>\n\nLBRY has been installed.\n\n\
+Please start LBRY by running <b><tt>lbry</tt></b> from the command line or selecting <b>LBRY</b> from the application menu.\n\n\
+If you need help or have any questions, join us on Slack (<tt>https://slack.lbry.io</tt>) or email <tt>hello@lbry.io</tt>.\
+"
 
-case $? in
-  0) RUN=1 # yes
-  ;;
-  1) RUN=0 # no
-  ;;
-  *) RUN=0 # timeout or escape or whatever
-  ;;
-esac
-
-if [ $RUN = 1 ]; then
-  /bin/su - "$(logname)" -c 'xdg-open "lbry://lbry"'
-else
-  zenity --info --text="<span size=\"xx-large\">LBRY Installed</span>\n\nNo problem. You can run LBRY later by going to
-
-lbry://lbry
-
-in your browser." --title="LBRY Installed" --icon-name="system-software-install"
 fi
-
 ) &

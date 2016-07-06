@@ -178,6 +178,9 @@ addfile "$PACKAGING_DIR/bins/lbrycrd-cli" usr/bin/lbrycrd-cli
 # add postinstall script
 cat "$PACKAGING_DIR/postinst_append" >> control/postinst
 
+# change package name from lbrynet to lbry
+sed -i 's/^Package: lbrynet/Package: lbry/' control/control
+
 # repackage .deb
 $SUDO chown -R root:root control data
 tar -czf control.tar.gz -C control .

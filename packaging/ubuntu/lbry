@@ -7,7 +7,7 @@ LBRYCRDDIR="$HOME/.lbrycrd"
 LBRYCRDCONF="$LBRYCRDDIR/lbrycrd.conf"
 
 if [ ! -f "$LBRYCRDDPATHCONF" ]; then
-  echo "/usr/local/bin/lbrycrdd" > "$LBRYCRDDPATHCONF"
+  echo "/usr/bin/lbrycrdd" > "$LBRYCRDDPATHCONF"
 fi
 
 if [ ! -f "$LBRYCRDCONF" ]; then
