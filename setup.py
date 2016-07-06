@@ -21,7 +21,8 @@ console_scripts = ['lbrynet-console = lbrynet.lbrynet_console.LBRYConsole:launch
                   'lbrynet-lookup-hosts-for-hash = lbrynet.dht_scripts:get_hosts_for_hash_in_dht',
                   'lbrynet-announce_hash_to_dht = lbrynet.dht_scripts:announce_hash_to_dht',
                   'lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonControl:start',
-                  'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonControl:stop']
+                  'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonControl:stop',
+                  'lbrynet-cli = lbrynet.lbrynet_daemon.LBRYDaemonCLI:main']
 
 requires = ['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
             'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0',
