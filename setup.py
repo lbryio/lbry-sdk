@@ -29,7 +29,7 @@ requires = ['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
             'leveldb', 'lbryum', 'jsonrpc', 'simplejson', 'appdirs', 'six==1.9.0', 'base58']
 
 setup(name='lbrynet',
-      description='A fully-decentralized content marketplace',
+      description='A decentralized media library and marketplace',
       version=__version__,
       maintainer='Alex Grintsvayg',
       maintainer_email='grin@lbry.io',
