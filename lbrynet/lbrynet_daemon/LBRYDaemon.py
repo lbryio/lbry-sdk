@@ -309,7 +309,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 self.wallet_dir = user_data_dir("LBRY")
         else:
-            self.lbrycrdd_path = "./lbrycrdd"
+            self.lbrycrdd_path = "lbrycrdd"
             if self.wallet_type == "lbrycrd":
                 self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
             else:
