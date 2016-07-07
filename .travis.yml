@@ -14,6 +14,9 @@ matrix:
           language: generic
           osx_image: xcode7.3
 
+notifications:
+  slack: lbry:8biSXNd1yr9jJ76zyI5KhWZv
+
 cache:
   directories:
     - $HOME/.cache/pip
