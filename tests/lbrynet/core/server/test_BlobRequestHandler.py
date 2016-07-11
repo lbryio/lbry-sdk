@@ -1,7 +1,11 @@
+import StringIO
+
 import mock
-from twisted.internet import defer
+from twisted.internet import defer, protocol
+from twisted.test import proto_helpers
 from twisted.trial import unittest
 
+from lbrynet.core import Peer
 from lbrynet.core.server import BlobRequestHandler
 
 
@@ -13,8 +17,9 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
             self.blob_manager, None, self.payment_rate_manager)
 
     def test_empty_response_when_empty_query(self):
-        self.assertEqual({}, self.successResultOf(self.handler.handle_queries({})))
-        
+        self.assertEqual(
+            {}, self.successResultOf(self.handler.handle_queries({})))
+
     def test_error_set_when_rate_is_missing(self):
         query = {'requested_blob': 'blob'}
         deferred = self.handler.handle_queries(query)
@@ -99,6 +104,24 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
             }
         }
         self.assertEqual(response, self.successResultOf(deferred))
-        
 
-        
+
+class TestBlobRequestHandlerSender(unittest.TestCase):
+    def test_nothing_happens_if_not_currently_uploading(self):
+        handler = BlobRequestHandler.BlobRequestHandler(None, None, None)
+        handler.currently_uploading = None
+        deferred = handler.send_blob_if_requested(None)
+        self.assertEqual(True, self.successResultOf(deferred))
+
+    def test_file_is_sent_to_consumer(self):
+        # TODO: also check that the expected payment values are set
+        consumer = proto_helpers.StringTransport()
+        test_file = StringIO.StringIO('test')
+        handler = BlobRequestHandler.BlobRequestHandler(None, None, None)
+        handler.peer = mock.create_autospec(Peer.Peer)
+        handler.currently_uploading = mock.Mock()
+        handler.read_handle = test_file
+        handler.send_blob_if_requested(consumer)
+        while consumer.producer:
+            consumer.producer.resumeProducing()
+        self.assertEqual(consumer.value(), 'test')
