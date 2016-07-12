@@ -7,7 +7,7 @@ from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.conf import BASE_METADATA_FIELDS, SOURCE_TYPES, OPTIONAL_METADATA_FIELDS
 
 from lbryum import SimpleConfig, Network
-from lbryum.bitcoin import COIN, TYPE_ADDRESS
+from lbryum.lbrycrd import COIN, TYPE_ADDRESS
 from lbryum.wallet import WalletStorage, Wallet
 from lbryum.commands import known_commands, Commands
 from lbryum.transaction import Transaction

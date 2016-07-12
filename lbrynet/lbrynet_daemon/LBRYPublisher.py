@@ -127,11 +127,11 @@ class Publisher(object):
         log.info(err.getTraceback())
         message = "An error occurred publishing %s to %s. Error: %s."
         if err.check(InsufficientFundsError):
-            d = defer.succeed(True)
             error_message = "Insufficient funds"
         else:
-            d = defer.succeed(True)
             error_message = err.getErrorMessage()
+
         log.error(error_message)
         log.error(message, str(self.file_name), str(self.publish_name), err.getTraceback())
-        return d
+
+        return defer.succeed(error_message)
