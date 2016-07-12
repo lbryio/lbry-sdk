@@ -180,6 +180,8 @@ cat "$PACKAGING_DIR/postinst_append" >> control/postinst
 
 # change package name from lbrynet to lbry
 sed -i 's/^Package: lbrynet/Package: lbry/' control/control
+echo "Conflicts: lbrynet (<< 0.3.5)" >> control/control
+echo "Replaces: lbrynet (<< 0.3.5)" >> control/control
 
 # repackage .deb
 $SUDO chown -R root:root control data
