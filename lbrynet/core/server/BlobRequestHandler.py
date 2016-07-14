@@ -140,6 +140,7 @@ class BlobRequestHandler(object):
         def set_expected_payment():
             log.info("Setting expected payment")
             if self.blob_bytes_uploaded != 0 and self.blob_data_payment_rate is not None:
+                # TODO: explain why 2**20
                 self.wallet.add_expected_payment(self.peer,
                                                  self.currently_uploading.length * 1.0 *
                                                  self.blob_data_payment_rate / 2**20)
