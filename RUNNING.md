@@ -43,9 +43,9 @@ To stop lbrynet-console, enter the command 'exit'.
 Note: this process takes upwards of an hour and is not necessary to use lbrynet.
 
 ```
+sudo apt-get install build-essential libtool autotools-dev autoconf pkg-config libssl-dev libboost-all-dev libdb-dev libdb++-dev libqt4-dev libprotobuf-dev protobuf-compiler git
 git clone --depth=1 -b alpha https://github.com/lbryio/lbrycrd.git
 cd lbrycrd
-sudo apt-get install build-essential libtool autotools-dev autoconf pkg-config libssl-dev libboost-all-dev libdb-dev libdb++-dev libqt4-dev libprotobuf-dev protobuf-compiler
 ./autogen.sh
 ./configure --with-incompatible-bdb --without-gui
 
