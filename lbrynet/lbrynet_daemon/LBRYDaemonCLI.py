@@ -35,7 +35,7 @@ def main():
     if len(args) > 1:
         if isinstance(args[1], dict):
             params = args[1]
-        elif isinstance(args[1], str, unicode):
+        elif isinstance(args[1], str) or isinstance(args[1], unicode):
             params = json.loads(args[1])
     else:
         params = None
