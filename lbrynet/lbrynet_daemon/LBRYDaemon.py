@@ -1686,6 +1686,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'file_name': optional, a user specified name for the downloaded file
             'stream_info': optional, specified stream info overrides name
             'timout': optional
+            'wait_for_write': optional, defaults to True
         Returns:
             'stream_hash': hex string
             'path': path of download
