@@ -138,6 +138,11 @@ OK_CODE = 200
 REMOTE_SERVER = "www.google.com"
 
 
+class Parameters(object):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
 class LBRYDaemon(jsonrpc.JSONRPC):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
@@ -1651,65 +1656,53 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallbacks(lambda info: self._render_response(info, OK_CODE), lambda _: server.failure)
         return d
 
+    def _process_get_parameters(self, p):
+        """Extract info from input parameters and fill in default values for `get` call."""
+        # TODO: this process can be abstracted s.t. each method
+        #       can spec what parameters it expects and how to set default values
+        timeout = p.get('timeout', self.download_timeout)
+        download_directory = p.get('download_directory', self.download_directory)
+        file_name = p.get('file_name')
+        stream_info = p.get('stream_info')
+        sd_hash = get_sd_hash(stream_info)
+        wait_for_write = p.get('wait_for_write', True)
+        name = p.get('name')
+        return Parameters(
+            timout=timeout,
+            download_directory=download_directory,
+            file_name=file_name,
+            stream_info=stream_info,
+            sd_hash=sd_hash,
+            wait_for_write=wait_for_write,
+            name=name
+        )
+
     def jsonrpc_get(self, p):
-        """
-        Download stream from a LBRY uri
+        """Download stream from a LBRY uri.
 
         Args:
             'name': name to download, string
             'download_directory': optional, path to directory where file will be saved, string
             'file_name': optional, a user specified name for the downloaded file
             'stream_info': optional, specified stream info overrides name
+            'timout': optional
         Returns:
             'stream_hash': hex string
             'path': path of download
         """
-
-        if 'timeout' not in p.keys():
-            timeout = self.download_timeout
-        else:
-            timeout = p['timeout']
-
-        if 'download_directory' not in p.keys():
-            download_directory = self.download_directory
-        else:
-            download_directory = p['download_directory']
-
-        if 'file_name' in p.keys():
-            file_name = p['file_name']
-        else:
-            file_name = None
-
-        if 'stream_info' in p.keys():
-            stream_info = p['stream_info']
-            if 'sources' in stream_info.keys():
-                sd_hash = stream_info['sources']['lbry_sd_hash']
-            else:
-                sd_hash = stream_info['stream_hash']
-        else:
-            stream_info = None
-
-        if 'wait_for_write' in p.keys():
-            wait_for_write = p['wait_for_write']
-        else:
-            wait_for_write = True
-
-        if 'name' in p.keys():
-            name = p['name']
-            if p['name'] not in self.waiting_on.keys():
-                d = self._download_name(name=name, timeout=timeout, download_directory=download_directory,
-                                        stream_info=stream_info, file_name=file_name, wait_for_write=wait_for_write)
-                d.addCallback(lambda l: {'stream_hash': sd_hash,
-                                         'path': os.path.join(self.download_directory, l.file_name)}
-                                         if stream_info else
-                                         {'stream_hash': l.sd_hash,
-                                         'path': os.path.join(self.download_directory, l.file_name)})
-                d.addCallback(lambda message: self._render_response(message, OK_CODE))
-            else:
-                d = server.failure
-        else:
-            d = server.failure
-
+        params = self._process_get_parameters(p)
+        if not params.name:
+            return server.failure
+        if params.name in self.waiting_on:
+            return server.failure
+        d = self._download_name(name=params.name,
+                                timeout=params.timeout,
+                                download_directory=params.download_directory,
+                                stream_info=params.stream_info,
+                                file_name=params.file_name,
+                                wait_for_write=params.wait_for_write)
+        d.addCallback(get_output_callback(params))
+        d.addCallback(lambda message: self._render_response(message, OK_CODE))
         return d
 
     def jsonrpc_stop_lbry_file(self, p):
@@ -2261,3 +2254,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
+
+
+def get_sd_hash(stream_info):
+    if not stream_info:
+        return None
+    try:
+        return stream_info['sources']['lbry_sd_hash']
+    except KeyError:
+        return stream_info.get('stream_hash')
+
+
+def get_output_callback(params):
+    def callback(l):
+        return {
+            'stream_hash': params.sd_hash if params.stream_info else l.sd_hash,
+            'path': os.path.join(params.download_directory, l.file_name)
+        }
+    return callback
