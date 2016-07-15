@@ -2249,7 +2249,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d = threads.deferToThread(subprocess.Popen, ['open', '-R', path])
         else:
             # No easy way to reveal specific files on Linux, so just open the containing directory
-            d = threads.deferToThread(subprocess.Popen, ['xdg-open', os.dirname(path)])
+            d = threads.deferToThread(subprocess.Popen, ['xdg-open', os.path.dirname(path)])
 
 
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
