@@ -1042,38 +1042,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(True)
 
     def _resolve_name(self, name, force_refresh=False):
-        def _cache_stream_info(stream_info):
-            def _add_txid(txid):
-                self.name_cache[name]['txid'] = txid
-                return defer.succeed(None)
+        """Resolves a name. Checks the cache first before going out to the blockchain.
 
-            self.name_cache[name] = {'claim_metadata': stream_info, 'timestamp': self._get_long_count_timestamp()}
-            d = self.session.wallet.get_txid_for_name(name)
-            d.addCallback(_add_txid)
-            d.addCallback(lambda _: self._update_claim_cache())
-            d.addCallback(lambda _: self.name_cache[name]['claim_metadata'])
-
-            return d
-
-        if not force_refresh:
-            if name in self.name_cache.keys():
-                if (self._get_long_count_timestamp() - self.name_cache[name]['timestamp']) < self.cache_time:
-                    log.info("[" + str(datetime.now()) + "] Returning cached stream info for lbry://" + name)
-                    d = defer.succeed(self.name_cache[name]['claim_metadata'])
-                else:
-                    log.info("[" + str(datetime.now()) + "] Refreshing stream info for lbry://" + name)
-                    d = self.session.wallet.get_stream_info_for_name(name)
-                    d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
-            else:
-                log.info("[" + str(datetime.now()) + "] Resolving stream info for lbry://" + name)
-                d = self.session.wallet.get_stream_info_for_name(name)
-                d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
-        else:
-            log.info("[" + str(datetime.now()) + "] Resolving stream info for lbry://" + name)
-            d = self.session.wallet.get_stream_info_for_name(name)
-            d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
-
-        return d
+        Args:
+            name: the lbry://<name> to resolve
+            force_refresh: if True, always go out to the blockchain to resolve.
+        """
+        if name.startswith('lbry://'):
+            raise ValueError('name %s should not start with lbry://')
+        helper = _ResolveNameHelper(self, name, force_refresh)
+        return helper.get_deferred()
 
     def _delete_lbry_file(self, lbry_file, delete_file=True):
         d = self.lbry_file_manager.delete_lbry_file(lbry_file)
@@ -2297,8 +2275,54 @@ class _DownloadNameHelper(object):
         del self.daemon.waiting_on[self.name]
         return r
 
+class _ResolveNameHelper(object):
+    def __init__(self, daemon, name, force_refresh):
+        self.daemon = daemon
+        self.name = name
+        self.force_refresh = force_refresh
 
+    def get_deferred(self):
+        if self.need_fresh_stream():
+            log.info("Resolving stream info for lbry://%s", self.name)
+            d = self.wallet.get_stream_info_for_name(self.name)
+            d.addCallbacks(self._cache_stream_info, lambda _: defer.fail(UnknownNameError))
+        else:
+            log.info("Returning cached stream info for lbry://%s", self.name)
+            d = defer.succeed(self.name_data['claim_metadata'])
+        return d
 
+    @property
+    def name_data(self):
+        return self.daemon.name_cache[self.name]
 
+    @property
+    def wallet(self):
+        return self.daemon.session.wallet
 
+    def now(self):
+        return self.daemon._get_long_count_timestamp()
 
+    def _add_txid(self, txid):
+        self.name_data['txid'] = txid
+        return defer.succeed(None)
+
+    def _cache_stream_info(self, stream_info):
+        self.daemon.name_cache[self.name] = {
+            'claim_metadata': stream_info,
+            'timestamp': self.now()
+        }
+        d = self.wallet.get_txid_for_name(self.name)
+        d.addCallback(self._add_txid)
+        d.addCallback(lambda _: self.daemon._update_claim_cache())
+        d.addCallback(lambda _: self.name_data['claim_metadata'])
+        return d
+
+    def need_fresh_stream(self):
+        return self.force_refresh or not self.is_in_cache() or self.is_cached_name_expired()
+
+    def is_in_cache(self):
+        return self.name in self.daemon.name_cache
+
+    def is_cached_name_expired(self):
+        time_in_cache = self.now() - self.name_data['timestamp']
+        return time_in_cache >= self.daemon.cache_time
