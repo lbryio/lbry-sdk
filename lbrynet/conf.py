@@ -48,5 +48,5 @@ DEFAULT_CACHE_TIME = 3600
 DEFAULT_UI_BRANCH = "master"
 
 SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
-BASE_METADATA_FIELDS = ['title', 'description', 'author', 'language', 'license', 'content-type']
+BASE_METADATA_FIELDS = ['title', 'description', 'author', 'language', 'license', 'content_type']
 OPTIONAL_METADATA_FIELDS = ['thumbnail', 'preview', 'fee', 'contact', 'pubkey']
