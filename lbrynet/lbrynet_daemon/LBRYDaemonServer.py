@@ -79,7 +79,7 @@ class LBRYFileStreamer(object):
 
     def pauseProducing(self):
         self._paused = True
-        log.info("[" + str(datetime.now()) + "] Pausing producer")
+        log.info("Pausing producer")
         return defer.succeed(None)
 
     def resumeProducing(self):
@@ -104,7 +104,7 @@ class LBRYFileStreamer(object):
                         self._request.write(data)
                         self._cursor += 1
 
-                log.info("[" + str(datetime.now()) + "] Wrote range %s-%s/%s, length: %s, readable: %s, depth: %s"  %
+                log.info("Wrote range %s-%s/%s, length: %s, readable: %s, depth: %s"  %
                          (start_cur, self._cursor, self._file_size, self._cursor - start_cur, readable_bytes, self._depth))
                 self._sent_bytes = True
 
@@ -117,12 +117,12 @@ class LBRYFileStreamer(object):
                 self._deferred.addCallback(lambda _: threads.deferToThread(reactor.callLater, self._delay, _check_for_new_data))
                 return defer.succeed(None)
 
-        log.info("[" + str(datetime.now()) + "] Resuming producer")
+        log.info("Resuming producer")
         self._paused = False
         self._deferred.addCallback(lambda _: _check_for_new_data())
 
     def stopProducing(self):
-        log.info("[" + str(datetime.now()) + "] Stopping producer")
+        log.info("Stopping producer")
         self._stopped = True
         # self._fileObject.close()
         self._deferred.addErrback(lambda err: err.trap(defer.CancelledError))
@@ -147,7 +147,7 @@ class HostedLBRYFile(resource.Resource):
     #
     #     range_header = request.getAllHeaders()['range'].replace('bytes=', '').split('-')
     #     start, stop = int(range_header[0]), range_header[1]
-    #     log.info("[" + str(datetime.now()) + "] GET range %s-%s" % (start, stop))
+    #     log.info("GET range %s-%s" % (start, stop))
     #     path = os.path.join(self._api.download_directory, stream.file_name)
     #
     #     d = stream.get_total_bytes()
