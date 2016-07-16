@@ -110,7 +110,7 @@ class Publisher(object):
         return d
 
     def _claim_name(self):
-        self.metadata['content-type'] = mimetypes.guess_type(os.path.join(self.lbry_file.download_directory,
+        self.metadata['content_type'] = mimetypes.guess_type(os.path.join(self.lbry_file.download_directory,
                                                                           self.lbry_file.file_name))[0]
         d = self.wallet.claim_name(self.publish_name,
                                    self.bid_amount,
