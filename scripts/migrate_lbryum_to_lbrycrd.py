@@ -1,5 +1,6 @@
 import argparse
 import hashlib
+import json
 import subprocess
 import sys
 
@@ -21,10 +22,22 @@ def main():
     for addr in addresses[:-1]:
         printBalance(wallet, addr)
         saveAddr(wallet, addr)
+        validateAddress(addr)
     # on the last one, rescan.  Don't rescan early for sake of efficiency
     addr = addresses[-1]
     printBalance(wallet, addr)
     saveAddr(wallet, addr, "true")
+    validateAddress(addr)
+
+
+def validateAddress(addr):
+    raw_output = subprocess.check_output(
+        ['lbrycrd-cli', 'validateaddress', addr])
+    output = json.loads(raw_output)
+    if not output['isvalid']:
+        raise Exception('Address {} is not valid'.format(addr))
+    if not output['ismine']:
+        raise Exception('Address {} is not yours'.format(addr))
 
 
 def printBalance(wallet, addr):
