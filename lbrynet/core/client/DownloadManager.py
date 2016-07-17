@@ -66,7 +66,7 @@ class DownloadManager(object):
 
     def add_blobs_to_download(self, blob_infos):
 
-        log.debug("Adding %s to blobs", str(blob_infos))
+        log.debug("Adding %s blobs to blobs", len(blob_infos))
 
         def add_blob_to_list(blob, blob_num):
             self.blobs[blob_num] = blob
