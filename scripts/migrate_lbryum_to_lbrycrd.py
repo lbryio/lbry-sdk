@@ -17,6 +17,8 @@ def main():
     parser.add_argument('--wallet', help='path to lbryum wallet')
     args = parser.parse_args()
 
+    ensureCliIsOnPathAndServerIsRunning()
+
     wallet = getWallet(args.wallet)
     addresses = wallet.addresses(True)
     for addr in addresses[:-1]:
@@ -28,6 +30,20 @@ def main():
     printBalance(wallet, addr)
     saveAddr(wallet, addr, "true")
     validateAddress(addr)
+
+
+def ensureCliIsOnPathAndServerIsRunning():
+    try:
+        output = subprocess.check_output(['lbrycrd-cli', 'getinfo'])
+    except OSError:
+        print 'Failed to run: lbrycrd-cli needs to be on the PATH'
+        exit(1)
+    except subprocess.CalledProcessError:
+        print 'Failed to run: could not connect to the lbrycrd server.'
+        print 'Make sure it is running and able to be connected to.'
+        print 'One way to do this is to run:'
+        print '      lbrycrdd -server -printtoconsole'
+        exit(1)
 
 
 def validateAddress(addr):
