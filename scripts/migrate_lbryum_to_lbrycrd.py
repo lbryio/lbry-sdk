@@ -71,8 +71,8 @@ def getWallet(path=None):
         path = config.get_wallet_path()
     storage = WalletStorage(path)
     if not storage.file_exists:
-        print "No wallet to migrate"
-        return
+        print "Failed to run: No wallet to migrate"
+        exit(1)
     return Wallet(storage)
 
 
