@@ -19,15 +19,22 @@ def main():
     wallet = getWallet(args.wallet)
     addresses = wallet.addresses(True)
     for addr in addresses[:-1]:
-        balance = getBalance(wallet, addr)
-        print 'Importing private key for %s with balance %s' % (addr, balance)
+        printBalance(wallet, addr)
         saveAddr(wallet, addr)
     # on the last one, rescan.  Don't rescan early for sake of efficiency
-    saveAddr(wallet, addresses[-1], "true")
+    addr = addresses[-1]
+    printBalance(wallet, addr)
+    saveAddr(wallet, addr, "true")
+
+
+def printBalance(wallet, addr):
+    balance = getBalance(wallet, addr)
+    print 'Importing private key for %s with balance %s' % (addr, balance)
 
 
 def getBalance(wallet, addr):
     return sum(wallet.get_addr_balance(addr))
+
 
 def getWallet(path=None):
     if not path:
@@ -39,25 +46,28 @@ def getWallet(path=None):
         return
     return Wallet(storage)
 
-    
+
 def saveAddr(wallet, addr, rescan="false"):
     keys = wallet.get_private_key(addr, None)
-    
     for key in keys:
         # copied from lbrycrd.regenerate_key
         b = lbrycrd.ASecretToSecret(key)
         pkey = b[0:32]
-        wif = pkeyToWif(pkey)
-        print subprocess.check_output(
+        is_compressed = lbrycrd.is_compressed(key)
+        wif = pkeyToWif(pkey, is_compressed)
+        output = subprocess.check_output(
             ['lbrycrd-cli', 'importprivkey', wif, "lbryum import", rescan])
-    print subprocess.check_output(['lbrycrd-cli', 'importaddress', addr])
+        if output:
+            print output
 
 
-def pkeyToWif(pkey):
+def pkeyToWif(pkey, compressed):
     # Follow https://en.bitcoin.it/wiki/Wallet_import_format
     # to convert from a private key to the wallet import format
     prefix = '\x1c'
     wif = prefix + pkey
+    if compressed:
+        wif += '\x01'
     intermediate_checksum = hashlib.sha256(wif).digest()
     checksum = hashlib.sha256(intermediate_checksum).digest()
     wif = wif + checksum[:4]
