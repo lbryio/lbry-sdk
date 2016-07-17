@@ -159,6 +159,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.git_lbryum_version = None
         self.ui_version = None
         self.ip = None
+        # TODO: this is confusing to set here, and then to be reset below.
         self.wallet_type = wallet_type
         self.first_run = None
         self.log_file = lbrynet_log
@@ -264,13 +265,30 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.search_timeout = self.session_settings['search_timeout']
         self.download_timeout = self.session_settings['download_timeout']
         self.max_search_results = self.session_settings['max_search_results']
-        if self.session_settings['wallet_type'] in WALLET_TYPES and not wallet_type:
-            self.wallet_type = self.session_settings['wallet_type']
-            log.info("Using wallet type %s from config" % self.wallet_type)
-        else:
+        ####
+        #
+        # Ignore the saved wallet type. Some users will have their wallet type
+        # saved as lbryum and we want wallets to be lbrycrd unless explicitly
+        # set on the command line to be lbryum.
+        #
+        # if self.session_settings['wallet_type'] in WALLET_TYPES and not wallet_type:
+        #     self.wallet_type = self.session_settings['wallet_type']
+        #     log.info("Using wallet type %s from config" % self.wallet_type)
+        # else:
+        #     self.wallet_type = wallet_type
+        #     self.session_settings['wallet_type'] = wallet_type
+        #     log.info("Using wallet type %s specified from command line" % self.wallet_type)
+        #
+        # Instead, if wallet is not set on the command line, default to the default wallet
+        #
+        if wallet_type:
+            log.info("Using wallet type %s specified from command line", wallet_type)
             self.wallet_type = wallet_type
-            self.session_settings['wallet_type'] = wallet_type
-            log.info("Using wallet type %s specified from command line" % self.wallet_type)
+        else:
+            log.info("Using the default wallet type %s", DEFAULT_WALLET)
+            self.wallet_type = DEFAULT_WALLET
+        #
+        ####
         self.delete_blobs_on_remove = self.session_settings['delete_blobs_on_remove']
         self.peer_port = self.session_settings['peer_port']
         self.dht_node_port = self.session_settings['dht_node_port']
@@ -877,7 +895,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return d
 
         def get_wallet():
-            if self.wallet_type == "lbrycrd": #force lbrycrd wallet no matter what while lbryum is down
+            if self.wallet_type == "lbrycrd":
                 log.info("Using lbrycrd wallet")
                 d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.wallet_dir, wallet_conf=self.lbrycrd_conf,
                                                 lbrycrdd_path=self.lbrycrdd_path))
@@ -888,7 +906,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 log.info("Using PTC wallet")
                 d = defer.succeed(PTCWallet(self.db_dir))
             else:
-                log.info("Requested unknown wallet '%s', using default lbryum" % self.wallet_type)
+                # TODO: should fail here.  Can't switch to lbrycrd because the wallet_dir, conf and path won't be set
+                log.info("Requested unknown wallet '%s', using default lbryum", self.wallet_type)
                 d = defer.succeed(LBRYumWallet(self.db_dir))
 
             d.addCallback(lambda wallet: {"wallet": wallet})
