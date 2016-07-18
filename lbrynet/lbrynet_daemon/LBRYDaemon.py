@@ -268,8 +268,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         ####
         #
         # Ignore the saved wallet type. Some users will have their wallet type
-        # saved as lbryum and we want wallets to be lbrycrd unless explicitly
-        # set on the command line to be lbryum.
+        # saved as lbrycrd and we want wallets to be lbryum unless explicitly
+        # set on the command line to be lbrycrd.
         #
         # if self.session_settings['wallet_type'] in WALLET_TYPES and not wallet_type:
         #     self.wallet_type = self.session_settings['wallet_type']
