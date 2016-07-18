@@ -84,11 +84,8 @@ def saveAddr(wallet, addr, rescan="false"):
     is_compressed = lbrycrd.is_compressed(key)
     wif = pkeyToWif(pkey, is_compressed)
     subprocess.check_call(
-        ['lbrycrd-cli', 'importprivkey', wif, "lbryum import", rescan])
+        ['lbrycrd-cli', 'importprivkey', wif, "", rescan])
     validateAddress(addr)
-    # during the import the account gets set to the label, but lbry
-    # needs the address to be in the default account
-    subprocess.check_call(['lbrycrd-cli', 'setaccount', addr, '""'])
 
 
 def pkeyToWif(pkey, compressed):
