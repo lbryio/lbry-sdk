@@ -24,12 +24,10 @@ def main():
     for addr in addresses[:-1]:
         printBalance(wallet, addr)
         saveAddr(wallet, addr)
-        validateAddress(addr)
     # on the last one, rescan.  Don't rescan early for sake of efficiency
     addr = addresses[-1]
     printBalance(wallet, addr)
     saveAddr(wallet, addr, "true")
-    validateAddress(addr)
 
 
 def ensureCliIsOnPathAndServerIsRunning():
@@ -78,16 +76,19 @@ def getWallet(path=None):
 
 def saveAddr(wallet, addr, rescan="false"):
     keys = wallet.get_private_key(addr, None)
-    for key in keys:
-        # copied from lbrycrd.regenerate_key
-        b = lbrycrd.ASecretToSecret(key)
-        pkey = b[0:32]
-        is_compressed = lbrycrd.is_compressed(key)
-        wif = pkeyToWif(pkey, is_compressed)
-        output = subprocess.check_output(
-            ['lbrycrd-cli', 'importprivkey', wif, "lbryum import", rescan])
-        if output:
-            print output
+    assert len(keys) == 1, 'Address {} has {} keys.  Expected 1'.format(addr, len(keys))
+    key = keys[0]
+    # copied from lbrycrd.regenerate_key
+    b = lbrycrd.ASecretToSecret(key)
+    pkey = b[0:32]
+    is_compressed = lbrycrd.is_compressed(key)
+    wif = pkeyToWif(pkey, is_compressed)
+    subprocess.check_call(
+        ['lbrycrd-cli', 'importprivkey', wif, "lbryum import", rescan])
+    validateAddress(addr)
+    # during the import the account gets set to the label, but lbry
+    # needs the address to be in the default account
+    subprocess.check_call(['lbrycrd-cli', 'setaccount', addr, '""'])
 
 
 def pkeyToWif(pkey, compressed):
