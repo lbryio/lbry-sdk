@@ -53,8 +53,16 @@ MODULES="pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork"
 if [ ${ON_TRAVIS} = true ]; then
     WHEEL_DIR="${TRAVIS_BUILD_DIR}/cache/wheel"
     mkdir -p "${WHEEL_DIR}"
-    pip wheel -w "${WHEEL_DIR}" ${MODULES}
-    pip install "${WHEEL_DIR}"/*
+    # mapping from the package name to the
+    # actual built wheel file is surprisingly
+    # hard so instead of checking for the existance
+    # of each wheel, we mark with a file when they've all been
+    # built and skip when that file exists
+    if [ ! -f "${WHEEL_DIR}"/finished ]; then
+	pip wheel -w "${WHEEL_DIR}" ${MODULES}
+	touch "${WHEEL_DIR}"/finished
+    fi
+    pip install "${WHEEL_DIR}"/*.whl
 else
     pip install $MODULES
 fi
