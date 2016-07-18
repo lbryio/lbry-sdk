@@ -5,6 +5,7 @@ set -o xtrace
 
 DEST=`pwd`
 tmp="${DEST}/build"
+ON_TRAVIS=false
 
 rm -rf build dist LBRY.app
 
@@ -23,6 +24,7 @@ if [ -z ${TRAVIS_BUILD_DIR+x} ]; then
     LBRY="${tmp}/lbry"
 else
     # building on travis
+    ON_TRAVIS=true
     cd ${TRAVIS_BUILD_DIR}
     LBRY=${TRAVIS_BUILD_DIR}
 fi
@@ -45,7 +47,16 @@ codesign -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/
 codesign --deep -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/MacOS/LBRYURIHandler"
 codesign -vvvv "${DEST}/dist/LBRYURIHandler.app"
 
-pip install certifi pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork
+pip install certifi
+MODULES="pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork"
+if [ ${ON_TRAVIS} = true ]; then
+    WHEEL_DIR="${TRAVIS_BUILD_DIR}/cache/wheel"
+    mkdir -p "${WHEEL_DIR}"
+    pip wheel -w "${WHEEL_DIR}" ${MODULES}
+fi
+
+pip install $MODULES
+
 
 # add lbrycrdd as a resource. Following
 # http://stackoverflow.com/questions/11370012/can-executables-made-with-py2app-include-other-terminal-scripts-and-run-them
