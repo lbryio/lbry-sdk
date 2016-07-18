@@ -54,9 +54,10 @@ if [ ${ON_TRAVIS} = true ]; then
     WHEEL_DIR="${TRAVIS_BUILD_DIR}/cache/wheel"
     mkdir -p "${WHEEL_DIR}"
     pip wheel -w "${WHEEL_DIR}" ${MODULES}
+    pip install "${WHEEL_DIR}"/*
+else
+    pip install $MODULES
 fi
-
-pip install $MODULES
 
 
 # add lbrycrdd as a resource. Following
