@@ -1,12 +1,14 @@
-import base64
 import json
 import logging
 import logging.handlers
 import sys
 import traceback
+
+from requests_futures.sessions import FuturesSession
+
 import lbrynet
 from lbrynet import conf
-from requests_futures.sessions import FuturesSession
+from lbrynet.core import utils
 
 session = FuturesSession()
 
@@ -85,7 +87,7 @@ def configure_file_handler(file_name, **kwargs):
 
 
 def get_loggly_url(token=None, version=None):
-    token = token or base64.b64decode(conf.LOGGLY_TOKEN)
+    token = token or utils.deobfuscate(conf.LOGGLY_TOKEN)
     version = version or lbrynet.__version__
     return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
 
