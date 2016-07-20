@@ -45,6 +45,7 @@ deploy:
   - provider: releases
     file: "${TRAVIS_BUILD_DIR}/`python setup.py --name`_`python setup.py -V`_amd64.deb"
     skip_cleanup: true
+    prerelease: true
     on:
       tags: true
       condition: "$TRAVIS_OS_NAME = linux"
@@ -54,6 +55,7 @@ deploy:
   - provider: releases
     file: "${TRAVIS_BUILD_DIR}/packaging/osx/lbry-osx-app/`python setup.py --name`.`python setup.py -V`.dmg"
     skip_cleanup: true
+    prerelease: true
     on:
       tags: true
       condition: "$TRAVIS_OS_NAME = osx"
