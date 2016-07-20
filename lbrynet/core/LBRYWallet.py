@@ -996,7 +996,7 @@ class LBRYumWallet(LBRYWallet):
         blockchain_caught_d = defer.Deferred()
 
         def check_caught_up():
-            local_height = self.network.get_local_height()
+            local_height = self.network.get_catchup_progress()
             remote_height = self.network.get_server_height()
 
             if remote_height != 0 and remote_height - local_height <= 5:
