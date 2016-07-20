@@ -170,6 +170,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.streams = {}
         self.known_dht_nodes = KNOWN_DHT_NODES
         self.first_run_after_update = False
+        self.uploaded_temp_files = []
 
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -708,6 +709,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             return defer.succeed(None)
 
+    def _clean_up_temp_files(self):
+        for path in self.uploaded_temp_files:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
     def _shutdown(self):
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
@@ -719,6 +727,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.connection_problem_checker.stop()
         if self.lbry_ui_manager.update_checker.running:
             self.lbry_ui_manager.update_checker.stop()
+
+        self._clean_up_temp_files()
 
         d = self._upload_log(log_type="close", exclude_previous=False if self.first_run else True)
         d.addCallback(lambda _: self._stop_server())
