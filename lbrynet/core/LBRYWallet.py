@@ -1124,7 +1124,6 @@ class LBRYumWallet(LBRYWallet):
         log.warning("Doing send many. payments to send: %s", str(payments_to_send))
         cmd = known_commands['paytomanyandsend']
         func = getattr(self.cmd_runner, cmd.name)
-        # outputs = [(address, amount) for address, amount in payments_to_send.iteritems()]
         return threads.deferToThread(func, payments_to_send.iteritems())
 
     def _get_value_for_name(self, name):
