@@ -1122,11 +1122,10 @@ class LBRYumWallet(LBRYWallet):
 
     def _do_send_many(self, payments_to_send):
         log.warning("Doing send many. payments to send: %s", str(payments_to_send))
-        outputs = [(TYPE_ADDRESS, address, int(amount*COIN)) for address, amount in payments_to_send.iteritems()]
-        d = threads.deferToThread(self.wallet.mktx, outputs, None, self.config)
-        d.addCallback(lambda tx: threads.deferToThread(self.wallet.sendtx, tx))
-        d.addCallback(self._save_wallet)
-        return d
+        cmd = known_commands['paytomanyandsend']
+        func = getattr(self.cmd_runner, cmd.name)
+        # outputs = [(address, amount) for address, amount in payments_to_send.iteritems()]
+        return threads.deferToThread(func, payments_to_send.iteritems())
 
     def _get_value_for_name(self, name):
         cmd = known_commands['getvalueforname']
