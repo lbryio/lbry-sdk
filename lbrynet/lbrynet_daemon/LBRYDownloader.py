@@ -11,6 +11,7 @@ from twisted.internet.task import LoopingCall
 from lbrynet.core.Error import InvalidStreamInfoError, InsufficientFundsError
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
+from lbrynet.core.LBRYFee import LBRYFee
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.conf import DEFAULT_TIMEOUT, LOG_FILE_NAME
 
@@ -94,14 +95,9 @@ class GetStream(object):
         if 'description' in self.stream_info:
             self.description = self.stream_info['description']
         if 'fee' in self.stream_info:
-            if 'LBC' in self.stream_info['fee']:
-                self.key_fee = float(self.stream_info['fee']['LBC']['amount'])
-                self.key_fee_address = self.stream_info['fee']['LBC']['address']
-            else:
-                self.key_fee_address = None
+            self.fee = LBRYFee.from_dict(stream_info['fee'])
         else:
-            self.key_fee = None
-            self.key_fee_address = None
+            self.fee = None
         if self.key_fee > self.max_key_fee:
             log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.key_fee, self.max_key_fee, self.resolved_name))
             return defer.fail(None)

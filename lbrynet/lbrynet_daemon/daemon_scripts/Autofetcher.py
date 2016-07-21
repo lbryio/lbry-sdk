@@ -2,10 +2,13 @@ import json
 import logging.handlers
 import sys
 import os
+import requests
+from datetime import datetime
 
 from appdirs import user_data_dir
 from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
+from twisted.internet.threads import deferToThread
 
 
 if sys.platform != "darwin":
@@ -39,11 +42,15 @@ class Autofetcher(object):
     def __init__(self, api):
         self._api = api
         self._checker = LoopingCall(self._check_for_new_claims)
+        self._price_checker = LoopingCall(self._update_price)
         self.best_block = None
+        self.last_price = None
+        self.price_updated = None
 
     def start(self):
         reactor.addSystemEventTrigger('before', 'shutdown', self.stop)
         self._checker.start(5)
+        self._price_checker.start(30)
 
     def stop(self):
         log.info("Stopping autofetcher")
@@ -59,8 +66,23 @@ class Autofetcher(object):
                 c = self._api.get_claims_for_tx({'txid': t})
                 if len(c):
                     for i in c:
+                        if 'fee' in json.loads(i['value']):
+
                         log.info("Downloading stream for claim txid: %s" % t)
                         self._api.get({'name': t, 'stream_info': json.loads(i['value'])})
+
+    def _update_price(self):
+        def _check_bittrex():
+            try:
+                r = requests.get("https://bittrex.com/api/v1.1/public/getticker", {'market': 'BTC-LBC'})
+                self.last_price = json.loads(r.text)['result']['Last']
+                self.price_updated = datetime.now()
+                log.info("Updated exchange rate, last BTC-LBC trade: %f" % self.last_price)
+            except:
+                log.info("Failed to update exchange rate")
+                self.last_price = None
+                self.price_updated = datetime.now()
+        return deferToThread(_check_bittrex)
 
 
 def run(api):

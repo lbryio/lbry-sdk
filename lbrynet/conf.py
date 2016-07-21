@@ -42,11 +42,14 @@ DEFAULT_WALLET = "lbryum"
 WALLET_TYPES = ["lbryum", "lbrycrd"]
 DEFAULT_TIMEOUT = 30
 DEFAULT_MAX_SEARCH_RESULTS = 25
-DEFAULT_MAX_KEY_FEE = 100.0
+DEFAULT_MAX_KEY_FEE = {'BTC': {'amount': 0.025}}
 DEFAULT_SEARCH_TIMEOUT = 3.0
 DEFAULT_CACHE_TIME = 3600
 DEFAULT_UI_BRANCH = "master"
 
 SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
-BASE_METADATA_FIELDS = ['title', 'description', 'author', 'language', 'license', 'content-type']
-OPTIONAL_METADATA_FIELDS = ['thumbnail', 'preview', 'fee', 'contact', 'pubkey']
+
+CURRENCIES = [
+                {'BTC': {'type': 'crypto'}},
+                {'LBC': {'type': 'crypto'}},
+]

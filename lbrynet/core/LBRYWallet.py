@@ -349,13 +349,6 @@ class LBRYWallet(object):
                 value['sources'][k] = sources[k]
         if value['sources'] == {}:
             return defer.fail("No source given")
-        for k in BASE_METADATA_FIELDS:
-            if k not in metadata:
-                return defer.fail("Missing required field '%s'" % k)
-            value[k] = metadata[k]
-        for k in metadata:
-            if k not in BASE_METADATA_FIELDS:
-                value[k] = metadata[k]
         if fee is not None:
             if "LBC" in fee:
                 value['fee'] = {'LBC': {'amount': fee['LBC']['amount'], 'address': fee['LBC']['address']}}

@@ -32,6 +32,8 @@ from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerF
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError
+from lbrynet.core.LBRYFee import LBRYFee
+from lbrynet.core.LBRYMetadata import Metadata
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
@@ -41,8 +43,7 @@ from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
-    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, \
-    BASE_METADATA_FIELDS, OPTIONAL_METADATA_FIELDS, SOURCE_TYPES
+    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, SOURCE_TYPES
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
@@ -169,6 +170,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.streams = {}
         self.known_dht_nodes = KNOWN_DHT_NODES
         self.first_run_after_update = False
+        self.last_traded_rate = None
 
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -249,6 +251,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.session_settings['last_version'] = self.default_settings['last_version']
             self.first_run_after_update = True
             log.info("First run after update")
+            log.info("lbrynet %s --> %s" % (self.session_settings['last_version']['lbrynet'], self.default_settings['last_version']['lbrynet']))
+            log.info("lbryum %s --> %s" % (self.session_settings['last_version']['lbryum'], self.default_settings['last_version']['lbryum']))
 
         f = open(self.daemon_conf, "w")
         f.write(json.dumps(self.session_settings))
@@ -337,6 +341,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.internet_connection_checker = LoopingCall(self._check_network_connection)
         self.version_checker = LoopingCall(self._check_remote_versions)
         self.connection_problem_checker = LoopingCall(self._check_connection_problems)
+        self.price_checker = LoopingCall(self._update_exchange)
         # self.lbrynet_connection_checker = LoopingCall(self._check_lbrynet_connection)
 
         self.sd_identifier = StreamDescriptorIdentifier()
@@ -470,6 +475,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.internet_connection_checker.start(3600)
         self.version_checker.start(3600 * 12)
         self.connection_problem_checker.start(1)
+        self.price_checker.start(600)
         if host_ui:
             self.lbry_ui_manager.update_checker.start(1800, now=False)
 
@@ -590,6 +596,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if not self.connected_to_internet:
             self.connection_problem = CONNECTION_PROBLEM_CODES[1]
 
+    def _update_exchange(self):
+        try:
+            r = requests.get("https://bittrex.com/api/v1.1/public/getticker", {'market': 'BTC-LBC'})
+            self.last_traded_rate = float(json.loads(r.text)['result']['Last'])
+        except:
+            self.last_traded_rate = None
+
     def _start_server(self):
         if self.peer_port is not None:
 
@@ -701,6 +714,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.connection_problem_checker.stop()
         if self.lbry_ui_manager.update_checker.running:
             self.lbry_ui_manager.update_checker.stop()
+        if self.price_checker.running:
+            self.price_checker.stop()
 
         d = self._upload_log(log_type="close", exclude_previous=False if self.first_run else True)
         d.addCallback(lambda _: self._stop_server())
@@ -1868,9 +1883,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         name = p['name']
         bid = p['bid']
         file_path = p['file_path']
-        metadata = p['metadata']
+        metadata = Metadata(p['metadata'])
         if 'fee' in p:
-            fee = p['fee']
+            fee = LBRYFee.from_dict(p['fee'])
         else:
             fee = None
 
