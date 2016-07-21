@@ -25,8 +25,13 @@ if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
 lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
+
+DEFAULT_FORMAT = "%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s"
+DEFAULT_FORMATTER = logging.Formatter(DEFAULT_FORMAT)
+
 log = logging.getLogger(__name__)
 handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
+handler.setFormatter(DEFAULT_FORMATTER)
 log.addHandler(handler)
 log.setLevel(logging.INFO)
 
@@ -57,6 +62,13 @@ def stop():
     d.callback(None)
 
 
+def configureConsoleLogger():
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(DEFAULT_FORMATTER)
+    logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(level=logging.INFO)
+
+
 def start():
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
     parser.add_argument("--wallet",
@@ -75,7 +87,7 @@ def start():
     args = parser.parse_args()
 
     if args.logtoconsole:
-        logging.basicConfig(level=logging.INFO)
+        configureConsoleLogger()
 
     args = parser.parse_args()
 
