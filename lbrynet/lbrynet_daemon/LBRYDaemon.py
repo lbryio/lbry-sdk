@@ -1599,13 +1599,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         #       can spec what parameters it expects and how to set default values
         timeout = p.get('timeout', self.download_timeout)
         download_directory = p.get('download_directory', self.download_directory)
-        file_name = p.get('file_name')
-        stream_info = p.get('stream_info')
+        file_name = p.get('file_name', None)
+        stream_info = p.get('stream_info', None)
         sd_hash = get_sd_hash(stream_info)
         wait_for_write = p.get('wait_for_write', True)
         name = p.get('name')
         return Parameters(
-            timout=timeout,
+            timeout=timeout,
             download_directory=download_directory,
             file_name=file_name,
             stream_info=stream_info,
@@ -1633,13 +1633,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return server.failure
         if params.name in self.waiting_on:
             return server.failure
+
         d = self._download_name(name=params.name,
                                 timeout=params.timeout,
                                 download_directory=params.download_directory,
                                 stream_info=params.stream_info,
                                 file_name=params.file_name,
                                 wait_for_write=params.wait_for_write)
-        d.addCallback(get_output_callback(params))
+        # d.addCallback(get_output_callback(params))
         d.addCallback(lambda message: self._render_response(message, OK_CODE))
         return d
 
@@ -2263,13 +2264,15 @@ class _DownloadNameHelper(object):
         return d
 
     def _wait_on_lbry_file(self, f):
-        written_bytes = self.get_written_bytes(f.file_name)
-        if not written_bytes:
-            d = defer.succeed(None)
-            d.addCallback(lambda _: reactor.callLater(1, self._wait_on_lbry_file, f))
-            return d
-        else:
-            return defer.succeed(self._disp_file(f))
+        if f is not None:
+            written_bytes = self.get_written_bytes(f.file_name)
+            if written_bytes:
+                return defer.succeed(self._disp_file(f))
+
+        d = defer.succeed(None)
+        d.addCallback(lambda _: reactor.callLater(1, self._wait_on_lbry_file, f))
+        return d
+
 
     def get_written_bytes(self, file_name):
         try:
