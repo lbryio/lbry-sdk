@@ -48,7 +48,9 @@ class Publisher(object):
     def start(self, name, file_path, bid, metadata, fee=None, sources={}):
 
         def _show_result():
-            log.info("Published %s --> lbry://%s txid: %s", self.file_name, self.publish_name, self.txid)
+
+            message = "[%s] Published %s --> lbry://%s txid: %s" % (datetime.now(), self.file_name, self.publish_name, self.txid)
+            log.info(message)
             return defer.succeed(self.txid)
 
         self.publish_name = name

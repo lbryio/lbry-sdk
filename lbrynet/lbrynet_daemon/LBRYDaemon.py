@@ -66,11 +66,6 @@ if not os.path.isdir(log_dir):
 lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 
 log = logging.getLogger(__name__)
-
-# TODO: configuring a logger on module import drastically reduces the
-# amount of control the caller of this code has over logging
-#
-# Better would be to configure all logging at runtime.
 handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
 log.addHandler(handler)
 log.setLevel(logging.INFO)
@@ -471,7 +466,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             def _announce():
                 self.announced_startup = True
                 self.startup_status = STARTUP_STAGES[5]
-                log.info("Started lbrynet-daemon")
+                log.info("[" + str(datetime.now()) + "] Started lbrynet-daemon")
                 if len(self.startup_scripts):
                     log.info("Scheduling scripts")
                     reactor.callLater(3, self._run_scripts)
@@ -493,7 +488,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addCallback(lambda _: _announce())
             return d
 
-        log.info("Starting lbrynet-daemon")
+        log.info("[" + str(datetime.now()) + "] Starting lbrynet-daemon")
 
         self.internet_connection_checker.start(3600)
         self.version_checker.start(3600 * 12)
@@ -558,14 +553,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             s = socket.create_connection((host, 80), 2)
             self.connected_to_internet = True
         except:
-            log.info("Internet connection not working")
+            log.info("[" + str(datetime.now()) + "] Internet connection not working")
             self.connected_to_internet = False
 
     def _check_lbrynet_connection(self):
         def _log_success():
-            log.info("lbrynet connectivity test passed")
+            log.info("[" + str(datetime.now()) + "] lbrynet connectivity test passed")
         def _log_failure():
-            log.info("lbrynet connectivity test failed")
+            log.info("[" + str(datetime.now()) + "] lbrynet connectivity test failed")
 
         wonderfullife_sh = "6f3af0fa3924be98a54766aa2715d22c6c1509c3f7fa32566df4899a41f3530a9f97b2ecb817fa1dcbf1b30553aefaa7"
         d = download_sd_blob(self.session, wonderfullife_sh, self.session.base_payment_rate_manager)
@@ -583,7 +578,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 self.git_lbryum_version = version
                 return defer.succeed(None)
             except:
-                log.info("Failed to get lbryum version from git")
+                log.info("[" + str(datetime.now()) + "] Failed to get lbryum version from git")
                 self.git_lbryum_version = None
                 return defer.fail(None)
 
@@ -598,7 +593,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 self.git_lbrynet_version = vr
                 return defer.succeed(None)
             except:
-                log.info("Failed to get lbrynet version from git")
+                log.info("[" + str(datetime.now()) + "] Failed to get lbrynet version from git")
                 self.git_lbrynet_version = None
                 return defer.fail(None)
 
@@ -1096,15 +1091,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return d
 
         d.addCallback(lambda _: finish_deletion(lbry_file))
-        d.addCallback(lambda _: log.info("Delete lbry file"))
+        d.addCallback(lambda _: log.info("[" + str(datetime.now()) + "] Delete lbry file"))
         return d
 
     def _get_est_cost(self, name):
         def _check_est(d, name):
             if isinstance(d.result, float):
-                log.info("Cost est for lbry://" + name + ": " + str(d.result) + "LBC")
+                log.info("[" + str(datetime.now()) + "] Cost est for lbry://" + name + ": " + str(d.result) + "LBC")
             else:
-                log.info("Timeout estimating cost for lbry://" + name + ", using key fee")
+                log.info("[" + str(datetime.now()) + "] Timeout estimating cost for lbry://" + name + ", using key fee")
                 d.cancel()
             return defer.succeed(None)
 
@@ -1299,7 +1294,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Returns: true if daemon completed startup, otherwise false
         """
 
-        log.info("is_running: " + str(self.announced_startup))
+        log.info("[" + str(datetime.now()) + "] is_running: " + str(self.announced_startup))
 
         if self.announced_startup:
             return self._render_response(True, OK_CODE)
@@ -1337,7 +1332,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 r['message'] = "Catching up with the blockchain"
                 r['progress'] = 0
-        log.info("daemon status: " + str(r))
+        log.info("[" + str(datetime.now()) + "] daemon status: " + str(r))
         return self._render_response(r, OK_CODE)
 
     def jsonrpc_is_first_run(self):
@@ -1350,7 +1345,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             True if first run, otherwise False
         """
 
-        log.info("Check if is first run")
+        log.info("[" + str(datetime.now()) + "] Check if is first run")
         try:
             d = self.session.wallet.is_first_run()
         except:
@@ -1370,7 +1365,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             Startup message, such as first run notification
         """
 
-        log.info("Get startup notice")
+        log.info("[" + str(datetime.now()) + "] Get startup notice")
 
         if self.first_run and not self.session.wallet.wallet_balance:
             return self._render_response(self.startup_message, OK_CODE)
@@ -1410,7 +1405,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'lbryum_update_available': lbryum_version < self.git_lbryum_version
         }
 
-        log.info("Get version info: " + json.dumps(msg))
+        log.info("[" + str(datetime.now()) + "] Get version info: " + json.dumps(msg))
         return self._render_response(msg, OK_CODE)
 
     def jsonrpc_get_settings(self):
@@ -1438,7 +1433,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'start_lbrycrdd': bool,
         """
 
-        log.info("Get daemon settings")
+        log.info("[" + str(datetime.now()) + "] Get daemon settings")
         return self._render_response(self.session_settings, OK_CODE)
 
     def jsonrpc_set_settings(self, p):
@@ -1459,7 +1454,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         def _log_settings_change():
-            log.info("Set daemon settings to " + json.dumps(self.session_settings))
+            log.info("[" + str(datetime.now()) + "] Set daemon settings to " + json.dumps(self.session_settings))
 
         d = self._update_settings(p)
         d.addErrback(lambda err: log.info(err.getTraceback()))
@@ -1502,7 +1497,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             balance, float
         """
 
-        log.info("Get balance")
+        log.info("[" + str(datetime.now()) + "] Get balance")
         return self._render_response(float(self.session.wallet.wallet_balance), OK_CODE)
 
     def jsonrpc_stop(self):
@@ -1733,7 +1728,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return defer.DeferredList(ds)
 
         def _disp(results):
-            log.info('Found ' + str(len(results)) + ' search results')
+            log.info('[' + str(datetime.now()) + '] Found ' + str(len(results)) + ' search results')
             consolidated_results = []
             for r in results:
                 t = {}
@@ -1747,7 +1742,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
             return consolidated_results
 
-        log.info('Search nametrie: ' + search)
+        log.info('[' + str(datetime.now()) + '] Search nametrie: ' + search)
 
         d = self.session.wallet.get_nametrie()
         d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
@@ -1835,7 +1830,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return server.failure
 
         def _disp(x):
-            log.info("Abandoned name claim tx " + str(x))
+            log.info("[" + str(datetime.now()) + "] Abandoned name claim tx " + str(x))
             return self._render_response(x, OK_CODE)
 
         d = defer.Deferred()
@@ -1946,7 +1941,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         def _disp(address):
-            log.info("Got new wallet address: " + address)
+            log.info("[" + str(datetime.now()) + "] Got new wallet address: " + address)
             return defer.succeed(address)
 
         d = self.session.wallet.get_new_address()
@@ -2138,7 +2133,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 exclude_previous = True
 
             if 'message' in p.keys():
-                log.info("Upload log message: " + str(p['message']))
+                log.info("[" + str(datetime.now()) + "] Upload log message: " + str(p['message']))
 
             if 'force' in p.keys():
                 force = p['force']
@@ -2295,7 +2290,7 @@ class _DownloadNameHelper(object):
 
     def _disp_file(self, f):
         file_path = os.path.join(self.download_directory, f.file_name)
-        log.info("Already downloaded: %s --> %s", f.sd_hash, file_path)
+        log.info("[%s] Already downloaded: %s --> %s", datetime.now(), f.sd_hash, file_path)
         return f
 
     def _remove_from_wait(self, r):
