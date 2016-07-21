@@ -1076,7 +1076,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _disp_file(f):
             file_path = os.path.join(self.download_directory, f.file_name)
-            log.info("[" + str(datetime.now()) + "] Already downloaded: " + str(f.sd_hash) + " --> " + file_path)
+            log.info("Already downloaded: " + str(f.sd_hash) + " --> " + file_path)
             return f
 
         def _get_stream(stream_info):
@@ -1147,18 +1147,18 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if not force_refresh:
             if name in self.name_cache.keys():
                 if (self._get_long_count_timestamp() - self.name_cache[name]['timestamp']) < self.cache_time:
-                    log.info("[" + str(datetime.now()) + "] Returning cached stream info for lbry://" + name)
+                    log.info("Returning cached stream info for lbry://" + name)
                     d = defer.succeed(self.name_cache[name]['claim_metadata'])
                 else:
-                    log.info("[" + str(datetime.now()) + "] Refreshing stream info for lbry://" + name)
+                    log.info("Refreshing stream info for lbry://" + name)
                     d = self.session.wallet.get_stream_info_for_name(name)
                     d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
             else:
-                log.info("[" + str(datetime.now()) + "] Resolving stream info for lbry://" + name)
+                log.info("Resolving stream info for lbry://" + name)
                 d = self.session.wallet.get_stream_info_for_name(name)
                 d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
         else:
-            log.info("[" + str(datetime.now()) + "] Resolving stream info for lbry://" + name)
+            log.info("Resolving stream info for lbry://" + name)
             d = self.session.wallet.get_stream_info_for_name(name)
             d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
 
