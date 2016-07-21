@@ -924,7 +924,7 @@ class LBRYumWallet(LBRYWallet):
         network_start_d = defer.Deferred()
 
         def setup_network():
-            self.config = SimpleConfig()
+            self.config = SimpleConfig({'auto_connect': True})
             self.network = Network(self.config)
             alert.info("Loading the wallet...")
             return defer.succeed(self.network.start())
