@@ -54,7 +54,7 @@ class LBRYDaemonRequest(server.Request):
     memorylimit = 1024*1024*100
 
     # enable/disable debug logging
-    do_log = True
+    do_log = False
 
     # re-defined only for debug/logging purposes
     def gotLength(self, length):
