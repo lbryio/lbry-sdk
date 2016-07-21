@@ -917,7 +917,7 @@ class LBRYumWallet(LBRYWallet):
         network_start_d = defer.Deferred()
 
         def setup_network():
-            self.config = SimpleConfig()
+            self.config = SimpleConfig({'auto_connect': True})
             self.network = Network(self.config)
             alert.info("Loading the wallet...")
             return defer.succeed(self.network.start())
@@ -989,7 +989,7 @@ class LBRYumWallet(LBRYWallet):
         blockchain_caught_d = defer.Deferred()
 
         def check_caught_up():
-            local_height = self.network.get_local_height()
+            local_height = self.network.get_catchup_progress()
             remote_height = self.network.get_server_height()
 
             if remote_height != 0 and remote_height - local_height <= 5:
@@ -1115,11 +1115,9 @@ class LBRYumWallet(LBRYWallet):
 
     def _do_send_many(self, payments_to_send):
         log.warning("Doing send many. payments to send: %s", str(payments_to_send))
-        outputs = [(TYPE_ADDRESS, address, int(amount*COIN)) for address, amount in payments_to_send.iteritems()]
-        d = threads.deferToThread(self.wallet.mktx, outputs, None, self.config)
-        d.addCallback(lambda tx: threads.deferToThread(self.wallet.sendtx, tx))
-        d.addCallback(self._save_wallet)
-        return d
+        cmd = known_commands['paytomanyandsend']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, payments_to_send.iteritems())
 
     def _get_value_for_name(self, name):
         cmd = known_commands['getvalueforname']

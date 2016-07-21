@@ -48,7 +48,6 @@ DEFAULT_CACHE_TIME = 3600
 DEFAULT_UI_BRANCH = "master"
 
 SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
-
 CURRENCIES = [
                 {'BTC': {'type': 'crypto'}},
                 {'LBC': {'type': 'crypto'}},

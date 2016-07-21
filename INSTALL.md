@@ -23,7 +23,7 @@ You can install LBRY command line by running `curl -sL https://rawgit.com/lbryio
 On Ubuntu or Mint you can install the prerequisites and lbrynet by running
  
  ```
- sudo apt-get install libgmp3-dev build-essential python2.7 python2.7-dev python-pip
+ sudo apt-get install libgmp3-dev build-essential python2.7 python2.7-dev python-pip git
  git clone https://github.com/lbryio/lbry.git
  cd lbry
  sudo python setup.py install

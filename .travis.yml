@@ -22,6 +22,7 @@ cache:
   directories:
     - $HOME/.cache/pip
     - $HOME/Library/Caches/pip
+    - $TRAVIS_BUILD_DIR/cache/wheel
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then ./packaging/travis/setup_osx.sh; fi

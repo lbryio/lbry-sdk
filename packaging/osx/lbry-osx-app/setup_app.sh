@@ -5,9 +5,11 @@ set -o xtrace
 
 DEST=`pwd`
 tmp="${DEST}/build"
+ON_TRAVIS=false
 
 rm -rf build dist LBRY.app
 
+pip install wheel
 # the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
 pip install git+https://github.com/metachris/py2app
 pip install jsonrpc
@@ -23,6 +25,7 @@ if [ -z ${TRAVIS_BUILD_DIR+x} ]; then
     LBRY="${tmp}/lbry"
 else
     # building on travis
+    ON_TRAVIS=true
     cd ${TRAVIS_BUILD_DIR}
     LBRY=${TRAVIS_BUILD_DIR}
 fi
@@ -45,7 +48,25 @@ codesign -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/
 codesign --deep -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/MacOS/LBRYURIHandler"
 codesign -vvvv "${DEST}/dist/LBRYURIHandler.app"
 
-pip install certifi pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork
+pip install certifi
+MODULES="pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork"
+if [ ${ON_TRAVIS} = true ]; then
+    WHEEL_DIR="${TRAVIS_BUILD_DIR}/cache/wheel"
+    mkdir -p "${WHEEL_DIR}"
+    # mapping from the package name to the
+    # actual built wheel file is surprisingly
+    # hard so instead of checking for the existance
+    # of each wheel, we mark with a file when they've all been
+    # built and skip when that file exists
+    if [ ! -f "${WHEEL_DIR}"/finished ]; then
+	pip wheel -w "${WHEEL_DIR}" ${MODULES}
+	touch "${WHEEL_DIR}"/finished
+    fi
+    pip install "${WHEEL_DIR}"/*.whl
+else
+    pip install $MODULES
+fi
+
 
 # add lbrycrdd as a resource. Following
 # http://stackoverflow.com/questions/11370012/can-executables-made-with-py2app-include-other-terminal-scripts-and-run-them

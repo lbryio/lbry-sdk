@@ -38,8 +38,8 @@ rm get-pip.py
 
 pip install -r requirements.txt
 
-pip install nose coverage coveralls pylint
-nosetests --with-coverage --cover-package=lbrynet -v -I functional_tests.py tests/
+pip install mock pylint
+trial tests
 # TODO: submit coverage report to coveralls
 
 # TODO: as code quality improves, make pylint be more strict

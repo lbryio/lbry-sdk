@@ -143,6 +143,6 @@ class GetStream(object):
         d = _pay_key_fee()
         self.downloader = downloader
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
-        d.addCallback(lambda _: log.info("[%s] Downloading %s --> %s" % (datetime.now(), self.stream_hash, self.downloader.file_name)))
+        d.addCallback(lambda _: log.info("Downloading %s --> %s", self.stream_hash, self.downloader.file_name))
         d.addCallback(lambda _: self.downloader.start())
 
