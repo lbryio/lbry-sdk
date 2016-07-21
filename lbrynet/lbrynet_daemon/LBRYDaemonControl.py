@@ -12,7 +12,7 @@ from twisted.web import server
 from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
 
-from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer
+from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, \
                             DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
@@ -121,7 +121,9 @@ def start():
         if args.launchui:
             d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
 
-        reactor.listenTCP(API_PORT, server.Site(lbry.root), interface=API_INTERFACE)
+        lbrynet_server = server.Site(lbry.root)
+        lbrynet_server.requestFactory = LBRYDaemonRequest
+        reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
         reactor.run()
 
         if not args.logtoconsole and not args.quiet:
