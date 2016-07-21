@@ -1713,8 +1713,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         #       can spec what parameters it expects and how to set default values
         timeout = p.get('timeout', self.download_timeout)
         download_directory = p.get('download_directory', self.download_directory)
-        file_name = p.get('file_name', None)
-        stream_info = p.get('stream_info', None)
+        file_name = p.get('file_name')
+        stream_info = p.get('stream_info')
         sd_hash = get_sd_hash(stream_info)
         wait_for_write = p.get('wait_for_write', True)
         name = p.get('name')
@@ -1747,14 +1747,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return server.failure
         if params.name in self.waiting_on:
             return server.failure
-
         d = self._download_name(name=params.name,
                                 timeout=params.timeout,
                                 download_directory=params.download_directory,
                                 stream_info=params.stream_info,
                                 file_name=params.file_name,
                                 wait_for_write=params.wait_for_write)
-        # d.addCallback(get_output_callback(params))
+        d.addCallback(get_output_callback(params))
         d.addCallback(lambda message: self._render_response(message, OK_CODE))
         return d
 
@@ -2400,13 +2399,13 @@ class _DownloadNameHelper(object):
                     return defer.succeed((stream_info, l))
             return defer.succeed((stream_info, None))
         return add_results
-    
+
     def wait_or_get_stream(self, args):
         stream_info, lbry_file = args
         if lbry_file:
-            return self._get_stream(stream_info)
-        else:
             return self._wait_on_lbry_file(lbry_file)
+        else:
+            return self._get_stream(stream_info)
 
     def _get_stream(self, stream_info):
         d = self.daemon.add_stream(
@@ -2425,15 +2424,12 @@ class _DownloadNameHelper(object):
         return d
 
     def _wait_on_lbry_file(self, f):
-        if f is not None:
-            written_bytes = self.get_written_bytes(f.file_name)
-            if written_bytes:
-                return defer.succeed(self._disp_file(f))
-
+        written_bytes = self.get_written_bytes(f.file_name)
+        if written_bytes:
+            return defer.succeed(self._disp_file(f))
         d = defer.succeed(None)
         d.addCallback(lambda _: reactor.callLater(1, self._wait_on_lbry_file, f))
         return d
-
 
     def get_written_bytes(self, file_name):
         try:
@@ -2451,7 +2447,7 @@ class _DownloadNameHelper(object):
 
     def _disp_file(self, f):
         file_path = os.path.join(self.download_directory, f.file_name)
-        log.info("[%s] Already downloaded: %s --> %s", datetime.now(), f.sd_hash, file_path)
+        log.info("Already downloaded: %s --> %s", f.sd_hash, file_path)
         return f
 
     def _remove_from_wait(self, r):
