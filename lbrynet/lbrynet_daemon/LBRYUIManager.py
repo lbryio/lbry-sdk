@@ -98,8 +98,8 @@ class LBRYUIManager(object):
             return d
         else:
             log.info("Checking for updates for UI branch: " + branch)
-            self._git_url = "https://api.github.com/repos/lbryio/lbry-web-ui/git/refs/heads/%s" % branch
-            self._dist_url = "https://raw.githubusercontent.com/lbryio/lbry-web-ui/%s/dist.zip" % branch
+            self._git_url = "https://s3.amazonaws.com/lbry-ui/{}/data.json".format(branch)
+            self._dist_url = "https://s3.amazonaws.com/lbry-ui/{}/dist.zip".format(branch)
 
         d = self._up_to_date()
         d.addCallback(lambda r: self._download_ui() if not r else self._load_ui())
@@ -109,7 +109,7 @@ class LBRYUIManager(object):
         def _get_git_info():
             response = urlopen(self._git_url)
             data = json.loads(response.read())
-            return defer.succeed(data['object']['sha'])
+            return defer.succeed(data['sha'])
 
         def _set_git(version):
             self.git_version = version.replace('\n', '')
