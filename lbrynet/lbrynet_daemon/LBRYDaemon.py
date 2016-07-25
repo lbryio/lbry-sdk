@@ -5,6 +5,8 @@ import os
 import subprocess
 import sys
 import random
+
+import pkg_resources
 import simplejson as json
 import binascii
 import logging.handlers
@@ -32,7 +34,6 @@ from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerF
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError
-from lbrynet.core.LBRYFee import LBRYFee
 from lbrynet.core.LBRYMetadata import Metadata
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
@@ -40,7 +41,7 @@ from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifi
 from lbrynet.lbrynet_daemon.LBRYUIManager import LBRYUIManager
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
-from lbrynet.core.utils import generate_id
+from lbrynet.core.utils import generate_id, version_is_greater_than
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
     DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, SOURCE_TYPES
@@ -161,8 +162,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.connected_to_internet = True
         self.connection_problem = None
         self.query_handlers = {}
-        self.git_lbrynet_version = None
-        self.git_lbryum_version = None
+        self.pip_lbrynet_version = None
+        self.pip_lbryum_version = None
         self.ui_version = None
         self.ip = None
         # TODO: this is confusing to set here, and then to be reset below.
@@ -576,39 +577,33 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _check_remote_versions(self):
         def _get_lbryum_version():
             try:
-                r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
-                version = next(line.split("=")[1].split("#")[0].replace(" ", "")
-                               for line in r if "LBRYUM_VERSION" in line)
-                version = version.replace("'", "")
-                log.info("remote lbryum " + str(version) + " > local lbryum " + str(lbryum_version) + " = " + str(
-                    version > lbryum_version))
-                self.git_lbryum_version = version
+                r = pkg_resources.get_distribution("lbryum").version
+                log.info("Local lbryum: %s" % lbryum_version)
+                log.info("Available lbryum: %s" % r)
+                self.pip_lbryum_version = r
                 return defer.succeed(None)
             except:
                 log.info("Failed to get lbryum version from git")
-                self.git_lbryum_version = None
+                self.pip_lbryum_version = None
                 return defer.fail(None)
 
         def _get_lbrynet_version():
             try:
-                r = urlopen("https://raw.githubusercontent.com/lbryio/lbry/master/lbrynet/__init__.py").read().split('\n')
-                vs = next(i for i in r if '__version__ =' in i).split("=")[1].replace(" ", "")
-                vt = tuple(int(x) for x in vs[1:-1].split('.'))
-                vr = ".".join([str(x) for x in vt])
-                log.info("remote lbrynet " + str(vr) + " > local lbrynet " + str(lbrynet_version) + " = " + str(
-                    vr > lbrynet_version))
-                self.git_lbrynet_version = vr
+                r = pkg_resources.get_distribution("lbrynet").version
+                log.info("Local lbrynet: %s" % lbrynet_version)
+                log.info("Available lbrynet: %s" % r)
+                self.pip_lbrynet_version = r
                 return defer.succeed(None)
             except:
                 log.info("Failed to get lbrynet version from git")
-                self.git_lbrynet_version = None
+                self.pip_lbrynet_version = None
                 return defer.fail(None)
 
         d = _get_lbrynet_version()
         d.addCallback(lambda _: _get_lbryum_version())
 
     def _check_connection_problems(self):
-        if not self.git_lbrynet_version or not self.git_lbryum_version:
+        if not self.pip_lbrynet_version or not self.pip_lbryum_version:
             self.connection_problem = CONNECTION_PROBLEM_CODES[0]
 
         elif self.startup_status[0] == 'loading_wallet':
@@ -1091,7 +1086,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _disp_file(f):
             file_path = os.path.join(self.download_directory, f.file_name)
-            log.info("[" + str(datetime.now()) + "] Already downloaded: " + str(f.sd_hash) + " --> " + file_path)
+            log.info("Already downloaded: " + str(f.sd_hash) + " --> " + file_path)
             return f
 
         def _get_stream(stream_info):
@@ -1162,18 +1157,18 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if not force_refresh:
             if name in self.name_cache.keys():
                 if (self._get_long_count_timestamp() - self.name_cache[name]['timestamp']) < self.cache_time:
-                    log.info("[" + str(datetime.now()) + "] Returning cached stream info for lbry://" + name)
+                    log.info("Returning cached stream info for lbry://" + name)
                     d = defer.succeed(self.name_cache[name]['claim_metadata'])
                 else:
-                    log.info("[" + str(datetime.now()) + "] Refreshing stream info for lbry://" + name)
+                    log.info("Refreshing stream info for lbry://" + name)
                     d = self.session.wallet.get_stream_info_for_name(name)
                     d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
             else:
-                log.info("[" + str(datetime.now()) + "] Resolving stream info for lbry://" + name)
+                log.info("Resolving stream info for lbry://" + name)
                 d = self.session.wallet.get_stream_info_for_name(name)
                 d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
         else:
-            log.info("[" + str(datetime.now()) + "] Resolving stream info for lbry://" + name)
+            log.info("Resolving stream info for lbry://" + name)
             d = self.session.wallet.get_stream_info_for_name(name)
             d.addCallbacks(_cache_stream_info, lambda _: defer.fail(UnknownNameError))
 
@@ -1506,10 +1501,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'lbrynet_version': lbrynet_version,
             'lbryum_version': lbryum_version,
             'ui_version': self.ui_version,
-            'remote_lbrynet': self.git_lbrynet_version,
-            'remote_lbryum': self.git_lbryum_version,
-            'lbrynet_update_available': lbrynet_version < self.git_lbrynet_version,
-            'lbryum_update_available': lbryum_version < self.git_lbryum_version
+            'remote_lbrynet': self.pip_lbrynet_version,
+            'remote_lbryum': self.pip_lbryum_version,
+            'lbrynet_update_available': version_is_greater_than(self.pip_lbrynet_version, lbrynet_version),
+            'lbryum_update_available': version_is_greater_than(self.pip_lbryum_version, lbryum_version),
         }
 
         log.info("Get version info: " + json.dumps(msg))

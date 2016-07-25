@@ -26,3 +26,25 @@ def is_valid_blobhash(blobhash):
         if l not in "0123456789abcdef":
             return False
     return True
+
+
+def version_is_greater_than(version1, version2):
+    """
+    handles differing numbers of subversions, ie 0.3.10 > 0.3.9.9
+    """
+
+    v1, v2 = version1.split("."), version2.split(".")
+    r = True
+    if len(v2) > len(v1):
+        for j in range(len(v2) - len(v1)):
+            v1.append("0")
+    elif len(v2) < len(v1):
+        for j in range(len(v1) - len(v2)):
+            v2.append("0")
+    for c in range(len(v1)):
+        if int(v2[c]) > int(v1[c]):
+            r = False
+            break
+        elif c == len(v1) - 1 and int(v1[c]) == int(v2[c]):
+            r = False
+    return r
