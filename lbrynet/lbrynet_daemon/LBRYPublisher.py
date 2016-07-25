@@ -10,6 +10,7 @@ from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.core.PaymentRateManager import PaymentRateManager
+from lbrynet.core.LBRYMetadata import Metadata, CURRENT_METADATA_VERSION
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.conf import LOG_FILE_NAME
 from twisted.internet import threads, defer
@@ -42,10 +43,9 @@ class Publisher(object):
         self.verified = False
         self.lbry_file = None
         self.txid = None
-        self.sources = {}
-        self.fee = None
+        self.metadata = {}
 
-    def start(self, name, file_path, bid, metadata, fee=None, sources={}):
+    def start(self, name, file_path, bid, metadata):
 
         def _show_result():
             log.info("Published %s --> lbry://%s txid: %s", self.file_name, self.publish_name, self.txid)
@@ -54,7 +54,6 @@ class Publisher(object):
         self.publish_name = name
         self.file_path = file_path
         self.bid_amount = bid
-        self.fee = fee
         self.metadata = metadata
 
         d = self._check_file_path(self.file_path)
@@ -75,16 +74,6 @@ class Publisher(object):
             return True
         return threads.deferToThread(check_file_threaded)
 
-    def _get_new_address(self):
-        d = self.wallet.get_new_address()
-
-        def set_address(address):
-            self.key_fee_address = address
-            return True
-
-        d.addCallback(set_address)
-        return d
-
     def set_status(self, lbry_file_downloader):
         self.lbry_file = lbry_file_downloader
         d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file, ManagedLBRYFileDownloader.STATUS_FINISHED)
@@ -102,7 +91,9 @@ class Publisher(object):
                             self.lbry_file.stream_hash)
 
         def set_sd_hash(sd_hash):
-            self.sources['lbry_sd_hash'] = sd_hash
+            if 'sources' not in self.metadata:
+                self.metadata['sources'] = {}
+            self.metadata['sources']['lbry_sd_hash'] = sd_hash
 
         d.addCallback(set_sd_hash)
         return d
@@ -110,11 +101,10 @@ class Publisher(object):
     def _claim_name(self):
         self.metadata['content-type'] = mimetypes.guess_type(os.path.join(self.lbry_file.download_directory,
                                                                           self.lbry_file.file_name))[0]
+        self.metadata['ver'] = CURRENT_METADATA_VERSION
         d = self.wallet.claim_name(self.publish_name,
                                    self.bid_amount,
-                                   self.sources,
-                                   self.metadata,
-                                   fee=self.fee)
+                                   Metadata(self.metadata))
         def set_tx_hash(txid):
             self.txid = txid
 

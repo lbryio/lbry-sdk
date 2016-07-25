@@ -4,7 +4,8 @@ from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
-from lbrynet.conf import BASE_METADATA_FIELDS, SOURCE_TYPES, OPTIONAL_METADATA_FIELDS
+from lbrynet.conf import SOURCE_TYPES
+from lbrynet.core.LBRYMetadata import Metadata
 
 from lbryum import SimpleConfig, Network
 from lbryum.lbrycrd import COIN, TYPE_ADDRESS
@@ -316,7 +317,6 @@ class LBRYWallet(object):
         return d
 
     def _get_stream_info_from_value(self, result, name):
-        r_dict = {}
         if 'value' in result:
             value = result['value']
 
@@ -324,16 +324,11 @@ class LBRYWallet(object):
                 value_dict = json.loads(value)
             except (ValueError, TypeError):
                 return Failure(InvalidStreamInfoError(name))
-            r_dict['sources'] = value_dict['sources']
-            for field in BASE_METADATA_FIELDS:
-                    r_dict[field] = value_dict[field]
-            for field in value_dict:
-                if field in OPTIONAL_METADATA_FIELDS:
-                    r_dict[field] = value_dict[field]
-
+            m = Metadata(value_dict)
         if 'txid' in result:
-            d = self._save_name_metadata(name, r_dict['sources']['lbry_sd_hash'], str(result['txid']))
-            d.addCallback(lambda _: r_dict)
+            d = self._save_name_metadata(name, m['sources']['lbry_sd_hash'], str(result['txid']))
+            d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, m.metaversion)))
+            d.addCallback(lambda _: m)
             return d
         elif 'error' in result:
             log.warning("Got an error looking up a name: %s", result['error'])
@@ -342,21 +337,14 @@ class LBRYWallet(object):
             log.warning("Got an error looking up a name: %s", json.dumps(result))
             return Failure(UnknownNameError(name))
 
-    def claim_name(self, name, bid, sources, metadata, fee=None):
-        value = {'sources': {}}
-        for k in SOURCE_TYPES:
-            if k in sources:
-                value['sources'][k] = sources[k]
-        if value['sources'] == {}:
-            return defer.fail("No source given")
-        if fee is not None:
-            if "LBC" in fee:
-                value['fee'] = {'LBC': {'amount': fee['LBC']['amount'], 'address': fee['LBC']['address']}}
+    def claim_name(self, name, bid, m):
 
-        d = self._send_name_claim(name, json.dumps(value), bid)
+        metadata = Metadata(m)
+
+        d = self._send_name_claim(name, json.dumps(metadata), bid)
 
         def _save_metadata(txid):
-            d = self._save_name_metadata(name, value['sources']['lbry_sd_hash'], txid)
+            d = self._save_name_metadata(name, metadata['sources']['lbry_sd_hash'], txid)
             d.addCallback(lambda _: txid)
             return d
 

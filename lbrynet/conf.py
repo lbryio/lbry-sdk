@@ -51,4 +51,6 @@ SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
 CURRENCIES = [
                 {'BTC': {'type': 'crypto'}},
                 {'LBC': {'type': 'crypto'}},
+                {'USD': {'type': 'fiat'}},
+
 ]

@@ -54,8 +54,6 @@ from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 # from lbryum import LOG_PATH as lbryum_log
 
-log = logging.getLogger(__name__)
-
 
 if sys.platform != "darwin":
     log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
@@ -67,13 +65,12 @@ if not os.path.isdir(log_dir):
 
 lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 
-log = logging.getLogger(__name__)
-
 # TODO: configuring a logger on module import drastically reduces the
 # amount of control the caller of this code has over logging
 #
 # Better would be to configure all logging at runtime.
 handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
+log = logging.getLogger(__name__)
 log.addHandler(handler)
 log.setLevel(logging.INFO)
 
@@ -1908,19 +1905,30 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Returns:
             Claim txid
         """
-        # start(self, name, file_path, bid, metadata, fee=None, sources=None):
+
         name = p['name']
         bid = p['bid']
         file_path = p['file_path']
-        metadata = Metadata(p['metadata'])
+        metadata = p['metadata']
+
+        def _set_address(address):
+            metadata['fee']['address'] = address
+            return defer.succeed(None)
+
         if 'fee' in p:
-            fee = LBRYFee.from_dict(p['fee'])
+            metadata['fee'] = p['fee']
+            if 'address' not in metadata['fee']:
+                d = self.session.wallet.get_new_address()
+                d.addCallback(_set_address)
+            else:
+                d = defer.succeed(None)
         else:
-            fee = None
+            d = defer.succeed(None)
+
 
         pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
 
-        d = pub.start(name, file_path, bid, metadata, fee)
+        d.addCallback(lambda _: pub.start(name, file_path, bid, metadata))
         d.addCallbacks(lambda msg: self._render_response(msg, OK_CODE),
                        lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
 

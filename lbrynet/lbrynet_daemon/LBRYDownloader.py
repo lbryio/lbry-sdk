@@ -11,7 +11,7 @@ from twisted.internet.task import LoopingCall
 from lbrynet.core.Error import InvalidStreamInfoError, InsufficientFundsError
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.core.LBRYFee import LBRYFee
+from lbrynet.core.LBRYMetadata import Metadata, fee_from_dict
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.conf import DEFAULT_TIMEOUT, LOG_FILE_NAME
 
@@ -48,8 +48,7 @@ class GetStream(object):
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
-        self.key_fee = None
-        self.key_fee_address = None
+        self.fee = None
         self.data_rate = data_rate
         self.name = None
         self.file_name = file_name
@@ -59,7 +58,7 @@ class GetStream(object):
         self.sd_identifier = sd_identifier
         self.stream_hash = None
         self.max_key_fee = max_key_fee
-        self.stream_info = None
+        self.metadata = None
         self.stream_info_manager = None
         self.d = defer.Deferred(None)
         self.timeout = timeout
@@ -87,22 +86,14 @@ class GetStream(object):
 
     def start(self, stream_info, name):
         self.resolved_name = name
-        self.stream_info = stream_info
-        if 'sources' in self.stream_info:
-            self.stream_hash = self.stream_info['sources']['lbry_sd_hash']
-        else:
-            raise InvalidStreamInfoError(self.stream_info)
-        if 'description' in self.stream_info:
-            self.description = self.stream_info['description']
-        if 'fee' in self.stream_info:
-            self.fee = LBRYFee.from_dict(stream_info['fee'])
-        else:
-            self.fee = None
-        if self.key_fee > self.max_key_fee:
-            log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.key_fee, self.max_key_fee, self.resolved_name))
-            return defer.fail(None)
-        else:
-            pass
+        self.metadata = stream_info
+        self.stream_hash = self.metadata['sources']['lbry_sd_hash']
+
+        if 'fee' in self.metadata:
+            fee = fee_from_dict(self.metadata['fee'])
+            if fee.convert(amount_only=True) > self.max_key_fee:
+                log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.key_fee, self.max_key_fee, self.resolved_name))
+                return defer.fail(None)
 
         def _cause_timeout():
             self.timeout_counter = self.timeout * 2
@@ -132,8 +123,8 @@ class GetStream(object):
 
     def _start_download(self, downloader):
         def _pay_key_fee():
-            if self.key_fee is not None and self.key_fee_address is not None:
-                reserved_points = self.wallet.reserve_points(self.key_fee_address, self.key_fee)
+            if self.fee is not None:
+                reserved_points = self.wallet.reserve_points(self.fee.address, self.fee.convert(amount_only=True))
                 if reserved_points is None:
                     return defer.fail(InsufficientFundsError())
                 log.info("Key fee: %f --> %s" % (self.key_fee, self.key_fee_address))
