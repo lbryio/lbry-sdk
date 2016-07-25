@@ -42,5 +42,6 @@ pip install mock pylint
 trial tests
 # TODO: submit coverage report to coveralls
 
+# Ignoring distutils because: https://github.com/PyCQA/pylint/issues/73
 # TODO: as code quality improves, make pylint be more strict
-pylint -E --disable=inherit-non-class --disable=no-member lbrynet
+pylint -E --disable=inherit-non-class --disable=no-member --ignored-modules=distutils lbrynet
