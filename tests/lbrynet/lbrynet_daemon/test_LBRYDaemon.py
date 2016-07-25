@@ -36,3 +36,6 @@ class MiscTests(unittest.TestCase):
     def test_error_is_thrown_when_version_cant_be_parsed(self):
         with self.assertRaises(Exception):
             LBRYDaemon.get_version_from_tag('garbage')
+
+    def test_compare_versions_isnot_lexographic(self):
+        self.assertTrue(LBRYDaemon.compare_versions('0.3.10', '0.3.6'))

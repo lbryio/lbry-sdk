@@ -1,6 +1,7 @@
 import binascii
 from datetime import datetime
 from decimal import Decimal
+import distutils.version
 import locale
 import logging.handlers
 import mimetypes
@@ -2314,4 +2315,4 @@ def get_version_from_tag(tag):
 
 def compare_versions(a, b):
     """Returns True if version a is more recent than version b"""
-    return a > b
+    return distutils.version.StrictVersion(a) > distutils.version.StrictVersion(b)
