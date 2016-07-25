@@ -39,6 +39,7 @@ from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifi
 from lbrynet.lbrynet_daemon.LBRYUIManager import LBRYUIManager
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
+from lbrynet.core import utils
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
@@ -573,8 +574,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 version = next(line.split("=")[1].split("#")[0].replace(" ", "")
                                for line in r if "LBRYUM_VERSION" in line)
                 version = version.replace("'", "")
-                log.info("remote lbryum " + str(version) + " > local lbryum " + str(lbryum_version) + " = " + str(
-                    version > lbryum_version))
+                log.info(
+                    "remote lbryum %s > local lbryum %s = %s",
+                    version, lbryum_version,
+                    utils.version_is_greater_than(version, lbryum_version)
+                )
                 self.git_lbryum_version = version
                 return defer.succeed(None)
             except:
@@ -587,7 +591,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 version = get_lbrynet_version_from_github()
                 log.info(
                     "remote lbrynet %s > local lbrynet %s = %s",
-                    version, lbrynet_version, compare_versions(version, lbrynet_version)
+                    version, lbrynet_version,
+                    utils.version_is_greater_than(version, lbrynet_version)
                 )
                 self.git_lbrynet_version = version
                 return defer.succeed(None)
@@ -1491,8 +1496,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'ui_version': self.ui_version,
             'remote_lbrynet': self.git_lbrynet_version,
             'remote_lbryum': self.git_lbryum_version,
-            'lbrynet_update_available': lbrynet_version < self.git_lbrynet_version,
-            'lbryum_update_available': lbryum_version < self.git_lbryum_version
+            'lbrynet_update_available': utils.version_is_greater_than(
+                self.git_lbrynet_version, lbrynet_version),
+            'lbryum_update_available': utils.version_is_greater_than(
+                self.git_lbryum_version, lbryum_version)
         }
 
         log.info("Get version info: " + json.dumps(msg))
@@ -2311,8 +2318,3 @@ def get_version_from_tag(tag):
         return match.group(1)
     else:
         raise Exception('Failed to parse version from tag {}'.format(tag))
-
-
-def compare_versions(a, b):
-    """Returns True if version a is more recent than version b"""
-    return distutils.version.StrictVersion(a) > distutils.version.StrictVersion(b)
