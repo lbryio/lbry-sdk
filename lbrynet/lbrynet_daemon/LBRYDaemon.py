@@ -1,30 +1,29 @@
-import string
+import binascii
+from datetime import datetime
+from decimal import Decimal
 import locale
+import logging.handlers
 import mimetypes
 import os
+import platform
+import random
 import re
+import socket
+import string
 import subprocess
 import sys
-import random
-import simplejson as json
-import binascii
-import logging.handlers
-import requests
-import base58
-import platform
-import socket
+from urllib2 import urlopen
 
+from appdirs import user_data_dir
+import base58
+import requests
+import simplejson as json
 from twisted.web import server
 from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
 from txjsonrpc.web import jsonrpc
 from txjsonrpc.web.jsonrpc import Handler
-
-from datetime import datetime
-from decimal import Decimal
-from appdirs import user_data_dir
-from urllib2 import urlopen
 
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
@@ -52,8 +51,6 @@ from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 # from lbryum import LOG_PATH as lbryum_log
-
-log = logging.getLogger(__name__)
 
 
 if sys.platform != "darwin":
