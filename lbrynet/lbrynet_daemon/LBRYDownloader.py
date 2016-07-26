@@ -8,7 +8,7 @@ from datetime import datetime
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
-from lbrynet.core.Error import InvalidStreamInfoError, InsufficientFundsError
+from lbrynet.core.Error import InvalidStreamInfoError, InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.core.LBRYMetadata import Metadata, LBRYFee
@@ -124,17 +124,34 @@ class GetStream(object):
     def _start_download(self, downloader):
         def _pay_key_fee():
             if self.fee is not None:
-                x = self.fee.to_lbc()
-                reserved_points = self.wallet.reserve_points(self.fee.address, x)
-                if reserved_points is None:
-                    return defer.fail(InsufficientFundsError())
-                log.info("Key fee: %f --> %s" % (x, self.fee.address))
-                return self.wallet.send_points_to_address(reserved_points, self.fee.address)
+                if isinstance(self.max_key_fee, int):
+                    fee_lbc = self.fee.to_lbc()
+                    if fee_lbc > self.max_key_fee:
+                        return defer.fail(KeyFeeAboveMaxAllowed())
+                    reserved_points = self.wallet.reserve_points(self.fee.address, fee_lbc)
+                    if reserved_points is None:
+                        return defer.fail(InsufficientFundsError())
+                    log.info("Key fee: %f --> %s" % (fee_lbc, self.fee.address))
+                    return self.wallet.send_points_to_address(reserved_points, self.fee.address)
+                else:
+                    assert "USD" in self.max_key_fee
+                    max_fee = LBRYFee(self.max_key_fee, {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
+                    fee_lbc = self.fee.to_lbc()
+                    if fee_lbc > max_fee.to_lbc():
+                        return defer.fail(KeyFeeAboveMaxAllowed())
+                    reserved_points = self.wallet.reserve_points(self.fee.address, fee_lbc)
+                    if reserved_points is None:
+                        return defer.fail(InsufficientFundsError())
+                    log.info("Key fee: %f --> %s" % (fee_lbc, self.fee.address))
+                    return self.wallet.send_points_to_address(reserved_points, self.fee.address)
+
+
             return defer.succeed(None)
 
-        d = _pay_key_fee()
         self.downloader = downloader
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
+
+        d = _pay_key_fee()
         d.addCallback(lambda _: log.info("Downloading %s --> %s", self.stream_hash, self.downloader.file_name))
         d.addCallback(lambda _: self.downloader.start())
 
