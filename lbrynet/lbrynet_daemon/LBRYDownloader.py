@@ -91,9 +91,15 @@ class GetStream(object):
 
         if 'fee' in self.metadata:
             self.fee = LBRYFee(self.metadata['fee'], {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
-            if self.fee.to_lbc() > self.max_key_fee:
-                log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.to_lbc(), self.max_key_fee, self.resolved_name))
-                return defer.fail(None)
+            if isinstance(self.max_key_fee, float):
+                if self.fee.to_lbc() > self.max_key_fee:
+                    log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.to_lbc(), self.max_key_fee, self.resolved_name))
+                    return defer.fail(KeyFeeAboveMaxAllowed())
+            elif isinstance(self.max_key_fee, dict):
+                max_key = LBRYFee(self.max_key_fee, {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
+                if self.fee.to_lbc() > max_key.to_lbc():
+                    log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.to_lbc(), max_key.to_lbc(), self.resolved_name))
+                    return defer.fail(KeyFeeAboveMaxAllowed())
 
         def _cause_timeout():
             self.timeout_counter = self.timeout * 2
@@ -124,27 +130,13 @@ class GetStream(object):
     def _start_download(self, downloader):
         def _pay_key_fee():
             if self.fee is not None:
-                if isinstance(self.max_key_fee, int):
-                    fee_lbc = self.fee.to_lbc()
-                    if fee_lbc > self.max_key_fee:
-                        return defer.fail(KeyFeeAboveMaxAllowed())
-                    reserved_points = self.wallet.reserve_points(self.fee.address, fee_lbc)
-                    if reserved_points is None:
-                        return defer.fail(InsufficientFundsError())
-                    log.info("Key fee: %f --> %s" % (fee_lbc, self.fee.address))
-                    return self.wallet.send_points_to_address(reserved_points, self.fee.address)
-                else:
-                    assert "USD" in self.max_key_fee
-                    max_fee = LBRYFee(self.max_key_fee, {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
-                    fee_lbc = self.fee.to_lbc()
-                    if fee_lbc > max_fee.to_lbc():
-                        return defer.fail(KeyFeeAboveMaxAllowed())
-                    reserved_points = self.wallet.reserve_points(self.fee.address, fee_lbc)
-                    if reserved_points is None:
-                        return defer.fail(InsufficientFundsError())
-                    log.info("Key fee: %f --> %s" % (fee_lbc, self.fee.address))
-                    return self.wallet.send_points_to_address(reserved_points, self.fee.address)
-
+                fee_lbc = self.fee.to_lbc()
+                reserved_points = self.wallet.reserve_points(self.fee.address, fee_lbc)
+                if reserved_points is None:
+                    return defer.fail(InsufficientFundsError())
+                log.info("Key fee: %f --> %s" % (fee_lbc, self.fee.address))
+                d = self.wallet.send_points_to_address(reserved_points, self.fee.address)
+                return d
 
             return defer.succeed(None)
 

@@ -73,10 +73,10 @@ class LBRYFee(object):
         return float(btc) / self._USDBTC['spot']
 
     def _btc_to_lbc(self, btc):
-        return float(btc) / self._BTCLBC['spot'] / (1.0 - BITTREX_FEE)
+        return float(btc) * self._BTCLBC['spot'] / (1.0 - BITTREX_FEE)
 
     def _lbc_to_btc(self, lbc):
-        return self._BTCLBC['spot'] * float(lbc)
+        return self._BTCLBC['spot'] / float(lbc)
 
 
 class LBRYFeeFormat(dict):
