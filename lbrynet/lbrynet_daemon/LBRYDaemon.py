@@ -1899,20 +1899,19 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         file_path = p['file_path']
         metadata = p['metadata']
 
-        def _set_address(address):
-            metadata['fee']['address'] = address
+        d = defer.succeed(None)
+
+        def _set_address(address, currency):
+            metadata['fee'][currency]['address'] = address
             return defer.succeed(None)
 
         if 'fee' in p:
             metadata['fee'] = p['fee']
-            if 'address' not in metadata['fee']:
-                d = self.session.wallet.get_new_address()
-                d.addCallback(_set_address)
-            else:
-                d = defer.succeed(None)
-        else:
-            d = defer.succeed(None)
-
+            assert len(metadata['fee']) == 1, "Too many fees"
+            for c in metadata['fee']:
+                if 'address' not in metadata['fee'][c]:
+                    d = self.session.wallet.get_new_address()
+                    d.addCallback(lambda addr: _set_address(addr, c))
 
         pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
 

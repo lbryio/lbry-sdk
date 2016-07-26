@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 
+from copy import deepcopy
 from appdirs import user_data_dir
 from datetime import datetime
 from twisted.internet import defer
@@ -58,7 +59,7 @@ class GetStream(object):
         self.sd_identifier = sd_identifier
         self.stream_hash = None
         self.max_key_fee = max_key_fee
-        self.metadata = None
+        self.stream_info = None
         self.stream_info_manager = None
         self.d = defer.Deferred(None)
         self.timeout = timeout
@@ -86,20 +87,23 @@ class GetStream(object):
 
     def start(self, stream_info, name):
         self.resolved_name = name
-        self.metadata = stream_info
-        self.stream_hash = self.metadata['sources']['lbry_sd_hash']
+        self.stream_info = deepcopy(stream_info)
+        self.description = self.stream_info['description']
+        self.stream_hash = self.stream_info['sources']['lbry_sd_hash']
 
-        if 'fee' in self.metadata:
-            self.fee = LBRYFee(self.metadata['fee'], {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
+        if 'fee' in self.stream_info:
+            self.fee = LBRYFee(self.stream_info['fee'], {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
             if isinstance(self.max_key_fee, float):
                 if self.fee.to_lbc() > self.max_key_fee:
                     log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.to_lbc(), self.max_key_fee, self.resolved_name))
                     return defer.fail(KeyFeeAboveMaxAllowed())
+                log.info("Key fee %f below limit of %f, downloading lbry://%s" % (self.fee.to_lbc(), self.max_key_fee, self.resolved_name))
             elif isinstance(self.max_key_fee, dict):
-                max_key = LBRYFee(self.max_key_fee, {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
+                max_key = LBRYFee(deepcopy(self.max_key_fee), {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
                 if self.fee.to_lbc() > max_key.to_lbc():
                     log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.to_lbc(), max_key.to_lbc(), self.resolved_name))
                     return defer.fail(KeyFeeAboveMaxAllowed())
+                log.info("Key fee %f below limit of %f, downloading lbry://%s" % (self.fee.to_lbc(), max_key.to_lbc(), self.resolved_name))
 
         def _cause_timeout():
             self.timeout_counter = self.timeout * 2
@@ -130,20 +134,19 @@ class GetStream(object):
     def _start_download(self, downloader):
         def _pay_key_fee():
             if self.fee is not None:
-                fee_lbc = self.fee.to_lbc()
+                fee_lbc = float(self.fee.to_lbc())
                 reserved_points = self.wallet.reserve_points(self.fee.address, fee_lbc)
                 if reserved_points is None:
                     return defer.fail(InsufficientFundsError())
-                log.info("Key fee: %f --> %s" % (fee_lbc, self.fee.address))
-                d = self.wallet.send_points_to_address(reserved_points, self.fee.address)
-                return d
+                return self.wallet.send_points_to_address(reserved_points, fee_lbc)
 
             return defer.succeed(None)
+
+        d = _pay_key_fee()
 
         self.downloader = downloader
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
 
-        d = _pay_key_fee()
         d.addCallback(lambda _: log.info("Downloading %s --> %s", self.stream_hash, self.downloader.file_name))
         d.addCallback(lambda _: self.downloader.start())
 
