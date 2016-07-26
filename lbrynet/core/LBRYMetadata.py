@@ -124,5 +124,5 @@ class Metadata(dict):
                 self.metaversion = version
                 break
         if 'fee' in m:
-            self.update({'fee': LBRYFeeFormat(m.pop('fee'))})
+            self['fee'] = LBRYFeeFormat(m.pop('fee'))
         assert m == {}, "Unknown metadata keys: %s" % json.dumps(m.keys())
