@@ -25,3 +25,6 @@ lbrynet.egg-info/PKG-INFO
 *.decTest
 
 .coverage
+
+# temporary files from the twisted.trial test runner
+_trial_temp/
