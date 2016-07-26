@@ -149,6 +149,10 @@ class LBRYWallet(object):
     def stop(self):
 
         self.stopped = True
+
+        if self._exchange_rate_updater.running:
+            self._exchange_rate_updater.stop()
+            
         # If self.next_manage_call is None, then manage is currently running or else
         # start has not been called, so set stopped and do nothing else.
         if self.next_manage_call is not None:
