@@ -241,7 +241,7 @@ class Node(object):
 
         def log_error(err, n):
             log.error("error storing blob_hash %s at %s", binascii.hexlify(blob_hash), str(n))
-            log.error(binascii.hexlify(err.getErrorMessage()))
+            log.error(err.getErrorMessage())
             log.error(err.getTraceback())
 
         def log_success(res):
