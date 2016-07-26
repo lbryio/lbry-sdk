@@ -174,7 +174,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.streams = {}
         self.known_dht_nodes = KNOWN_DHT_NODES
         self.first_run_after_update = False
-        self.last_traded_rate = None
         self.uploaded_temp_files = []
 
         if os.name == "nt":
@@ -363,7 +362,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.internet_connection_checker = LoopingCall(self._check_network_connection)
         self.version_checker = LoopingCall(self._check_remote_versions)
         self.connection_problem_checker = LoopingCall(self._check_connection_problems)
-        self.price_checker = LoopingCall(self._update_exchange)
         # self.lbrynet_connection_checker = LoopingCall(self._check_lbrynet_connection)
 
         self.sd_identifier = StreamDescriptorIdentifier()
@@ -497,7 +495,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.internet_connection_checker.start(3600)
         self.version_checker.start(3600 * 12)
         self.connection_problem_checker.start(1)
-        self.price_checker.start(600)
         if host_ui:
             self.lbry_ui_manager.update_checker.start(1800, now=False)
 
@@ -611,13 +608,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         if not self.connected_to_internet:
             self.connection_problem = CONNECTION_PROBLEM_CODES[1]
-
-    def _update_exchange(self):
-        try:
-            r = requests.get("https://bittrex.com/api/v1.1/public/getticker", {'market': 'BTC-LBC'})
-            self.last_traded_rate = float(json.loads(r.text)['result']['Last'])
-        except:
-            self.last_traded_rate = None
 
     def _start_server(self):
         if self.peer_port is not None:
@@ -737,8 +727,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.connection_problem_checker.stop()
         if self.lbry_ui_manager.update_checker.running:
             self.lbry_ui_manager.update_checker.stop()
-        if self.price_checker.running:
-            self.price_checker.stop()
 
         self._clean_up_temp_files()
 
