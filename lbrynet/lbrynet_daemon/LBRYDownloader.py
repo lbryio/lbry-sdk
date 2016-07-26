@@ -67,7 +67,7 @@ class GetStream(object):
         self.download_directory = download_directory
         self.download_path = None
         self.downloader = None
-        self.finished = defer.Deferred()
+        self.finished = defer.Deferred(None)
         self.checker = LoopingCall(self.check_status)
         self.code = STREAM_STAGES[0]
 
@@ -105,7 +105,9 @@ class GetStream(object):
                     return defer.fail(KeyFeeAboveMaxAllowed())
                 log.info("Key fee %f below limit of %f, downloading lbry://%s" % (self.fee.to_lbc(), max_key.to_lbc(), self.resolved_name))
 
-        def _cause_timeout():
+        def _cause_timeout(err):
+            log.error(err)
+            log.debug('Forcing a timeout')
             self.timeout_counter = self.timeout * 2
 
         def _set_status(x, status):
@@ -113,20 +115,29 @@ class GetStream(object):
             self.code = next(s for s in STREAM_STAGES if s[0] == status)
             return x
 
+        def get_downloader_factory(metadata):
+            for factory in metadata.factories:
+                if isinstance(factory, ManagedLBRYFileDownloaderFactory):
+                    return factory, metadata
+            raise Exception('No suitable factory was found in {}'.format(metadata.factories))
+
+        def make_downloader(args):
+            factory, metadata = args
+            return factory.make_downloader(metadata,
+                                           [self.data_rate, True],
+                                           self.payment_rate_manager,
+                                           download_directory=self.download_directory,
+                                           file_name=self.file_name)
+
         self.checker.start(1)
 
         self.d.addCallback(lambda _: _set_status(None, DOWNLOAD_METADATA_CODE))
         self.d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
         self.d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         self.d.addCallback(lambda r: _set_status(r, DOWNLOAD_RUNNING_CODE))
-        self.d.addCallback(lambda metadata: (next(factory for factory in metadata.factories if isinstance(factory, ManagedLBRYFileDownloaderFactory)),
-                                             metadata))
-        self.d.addCallback(lambda (factory, metadata): factory.make_downloader(metadata,
-                                                                               [self.data_rate, True],
-                                                                               self.payment_rate_manager,
-                                                                               download_directory=self.download_directory,
-                                                                               file_name=self.file_name))
-        self.d.addCallbacks(self._start_download, lambda _: _cause_timeout())
+        self.d.addCallback(get_downloader_factory)
+        self.d.addCallback(make_downloader)
+        self.d.addCallbacks(self._start_download, _cause_timeout)
         self.d.callback(None)
 
         return self.finished
