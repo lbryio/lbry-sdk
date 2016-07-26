@@ -68,7 +68,6 @@ class LBRYDaemonRequest(server.Request):
         from twisted.web.http import parse_qs
         if self.do_log:
             print '%f Request Received' % time.time()
-        print self.content
 
         self.content.seek(0,0)
         self.args = {}
