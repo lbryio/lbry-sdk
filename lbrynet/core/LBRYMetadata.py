@@ -88,18 +88,17 @@ class LBRYFeeFormat(dict):
         for currency in fee_dict:
             assert currency in CURRENCIES, "Unsupported currency: %s" % str(currency)
             self.update({currency: {}})
-
             for version in FEE_REVISIONS:
                 for k in FEE_REVISIONS[version]['required']:
-                    assert k in fee_dict, "Missing required fee field: %s" % k
-                    self[currency].update({k: f.pop(k)})
+                    assert k in fee_dict[currency], "Missing required fee field: %s" % k
+                    self[currency].update({k: f[currency].pop(k)})
                 for k in FEE_REVISIONS[version]['optional']:
-                    if k in fee_dict:
-                        self[currency].update({k: f.pop(k)})
+                    if k in fee_dict[currency]:
+                        self[currency].update({k: f[currency].pop(k)})
                 if not len(f):
                     self.fee_version = version
                     break
-            assert f == {}, "Unknown fee keys: %s" % json.dumps(f.keys())
+            assert f[currency] == {}, "Unknown fee keys: %s" % json.dumps(f.keys())
 
 
 class Metadata(dict):
