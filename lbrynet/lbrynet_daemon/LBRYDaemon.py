@@ -1902,6 +1902,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = defer.succeed(None)
 
         def _set_address(address, currency):
+            log.info("Generated new address for key fee: " + str(address))
             metadata['fee'][currency]['address'] = address
             return defer.succeed(None)
 
