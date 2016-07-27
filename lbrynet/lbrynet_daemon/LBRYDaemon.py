@@ -56,6 +56,7 @@ from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, 
 # from lbryum import LOG_PATH as lbryum_log
 
 
+# TODO: this code snippet is everywhere. Make it go away
 if sys.platform != "darwin":
     log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
 else:
@@ -66,26 +67,11 @@ if not os.path.isdir(log_dir):
 
 lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 
-# TODO: configuring a logger on module import drastically reduces the
-# amount of control the caller of this code has over logging
-#
-# Better would be to configure all logging at runtime.
-handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
 log = logging.getLogger(__name__)
-log.addHandler(handler)
-log.setLevel(logging.INFO)
-
-# if os.path.isfile(lbryum_log):
-#     f = open(lbryum_log, 'r')
-#     PREVIOUS_LBRYUM_LOG = len(f.read())
-#     f.close()
-# else:
-#     PREVIOUS_LBRYUM_LOG = 0
 
 if os.path.isfile(lbrynet_log):
-    f = open(lbrynet_log, 'r')
-    PREVIOUS_LBRYNET_LOG = len(f.read())
-    f.close()
+    with open(lbrynet_log, 'r') as f:
+        PREVIOUS_LBRYNET_LOG = len(f.read())
 else:
     PREVIOUS_LBRYNET_LOG = 0
 

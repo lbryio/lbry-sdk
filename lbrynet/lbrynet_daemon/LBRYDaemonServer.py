@@ -20,6 +20,7 @@ from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon
 from lbrynet.conf import API_CONNECTION_STRING, API_ADDRESS, DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
 
+# TODO: omg, this code is essentially duplicated in LBRYDaemon
 if sys.platform != "darwin":
     data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
 else:
@@ -29,9 +30,7 @@ if not os.path.isdir(data_dir):
 
 lbrynet_log = os.path.join(data_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
-log.addHandler(handler)
-log.setLevel(logging.INFO)
+
 
 class LBRYDaemonRequest(server.Request):
     """
