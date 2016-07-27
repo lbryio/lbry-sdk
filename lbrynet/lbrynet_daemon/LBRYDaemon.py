@@ -1904,8 +1904,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         file_path = p['file_path']
         metadata = p['metadata']
 
-        update = False
-
         def _set_address(address, currency):
             log.info("Generated new address for key fee: " + str(address))
             metadata['fee'][currency]['address'] = address
@@ -1930,7 +1928,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
         d.addCallback(lambda _: self._get_lbry_file_by_uri(name))
-        d.addCallback(lambda l: None if not l else _delete_data(l))
+        d.addCallbacks(lambda l: None if not l else _delete_data(l), lambda _: None)
         d.addCallback(lambda r: pub.start(name, file_path, bid, metadata, r))
         d.addCallbacks(lambda msg: self._render_response(msg, OK_CODE),
                        lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
