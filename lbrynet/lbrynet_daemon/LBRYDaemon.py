@@ -1680,10 +1680,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             metadata from name claim
         """
 
-        if 'force' in p:
-            force = p['force']
-        else:
-            force = False
+        force = p.get('force', False)
 
         if 'name' in p:
             name = p['name']
