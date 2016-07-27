@@ -1918,6 +1918,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return d
 
         d = self._resolve_name(name, force_refresh=True)
+        d.addErrback(lambda _: None)
 
         if 'fee' in p:
             metadata['fee'] = p['fee']
