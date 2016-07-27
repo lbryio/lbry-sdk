@@ -1311,7 +1311,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
                 if f.txid:
                     d = self._resolve_name(f.uri)
-                    d.addCallback(_add_to_dict)
+                    d.addCallbacks(_add_to_dict, lambda _: _add_to_dict("Pending confirmation"))
                 else:
                     d = defer.succeed(message)
                 return d
