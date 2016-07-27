@@ -46,7 +46,7 @@ class Publisher(object):
         self.stream_hash = None
         self.metadata = {}
 
-    def start(self, name, file_path, bid, metadata, old_txid=None):
+    def start(self, name, file_path, bid, metadata, old_txid):
 
         def _show_result():
             log.info("Published %s --> lbry://%s txid: %s", self.file_name, self.publish_name, self.txid)
@@ -111,10 +111,12 @@ class Publisher(object):
         self.metadata['ver'] = CURRENT_METADATA_VERSION
 
         if self.old_txid:
-            d = self.wallet.update_name(self.publish_name,
-                                        self.bid_amount,
-                                        Metadata(self.metadata),
-                                        self.old_txid)
+
+            d = self.wallet.abandon_name(self.old_txid)
+            d.addCallback(lambda tx: log.info("Abandoned tx %s" % str(tx)))
+            d.addCallback(lambda _: self.wallet.claim_name(self.publish_name,
+                                       self.bid_amount,
+                                       Metadata(self.metadata)))
         else:
             d = self.wallet.claim_name(self.publish_name,
                                        self.bid_amount,

@@ -1911,7 +1911,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             metadata['fee'][currency]['address'] = address
             return defer.succeed(None)
 
-        d = defer.succeed(None)
+        def _delete_data(lbry_file):
+            txid = lbry_file.txid
+            d = self._delete_lbry_file(lbry_file, delete_file=False)
+            d.addCallback(lambda _: txid)
+            return d
+
+        d = self._resolve_name(name, force_refresh=True)
 
         if 'fee' in p:
             metadata['fee'] = p['fee']
@@ -1923,7 +1929,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
         d.addCallback(lambda _: self._get_lbry_file_by_uri(name))
-        d.addCallback(lambda r: pub.start(name, file_path, bid, metadata, None if r is None else r.txid))
+        d.addCallback(lambda l: None if not l else _delete_data(l))
+        d.addCallback(lambda r: pub.start(name, file_path, bid, metadata, r))
         d.addCallbacks(lambda msg: self._render_response(msg, OK_CODE),
                        lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
 
