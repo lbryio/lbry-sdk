@@ -1899,24 +1899,26 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         file_path = p['file_path']
         metadata = p['metadata']
 
-        d = defer.succeed(None)
+        update = False
 
         def _set_address(address, currency):
             log.info("Generated new address for key fee: " + str(address))
             metadata['fee'][currency]['address'] = address
             return defer.succeed(None)
 
+        d = defer.succeed(None)
+
         if 'fee' in p:
             metadata['fee'] = p['fee']
             assert len(metadata['fee']) == 1, "Too many fees"
             for c in metadata['fee']:
                 if 'address' not in metadata['fee'][c]:
-                    d = self.session.wallet.get_new_address()
+                    d.addCallback(lambda _: self.session.wallet.get_new_address())
                     d.addCallback(lambda addr: _set_address(addr, c))
 
         pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
-
-        d.addCallback(lambda _: pub.start(name, file_path, bid, metadata))
+        d.addCallback(lambda _: self._get_lbry_file_by_uri(name))
+        d.addCallback(lambda r: pub.start(name, file_path, bid, metadata, r.txid))
         d.addCallbacks(lambda msg: self._render_response(msg, OK_CODE),
                        lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
 
@@ -2179,27 +2181,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self.session.wallet.get_miner_status()
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
-    def jsonrpc_update_name(self, p):
-        """
-        Update name claim
-
-        Args:
-            'name': the uri of the claim to be updated
-            'metadata': new metadata dict
-            'amount': bid amount of updated claim
-        Returns:
-            txid
-        """
-
-        name = p['name']
-        metadata = p['metadata'] if isinstance(p['metadata'], dict) else json.loads(p['metadata'])
-        amount = p['amount']
-
-        d = self.session.wallet.update_name(name, metadata, amount)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-
         return d
 
     def jsonrpc_log(self, p):

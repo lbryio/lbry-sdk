@@ -380,7 +380,7 @@ class LBRYWallet(object):
                 return Failure(InvalidStreamInfoError(name))
             m = Metadata(value_dict)
         if 'txid' in result:
-            d = self._save_name_metadata(name, m['sources']['lbry_sd_hash'], str(result['txid']))
+            d = self._save_name_metadata(name, str(result['txid']), m['sources']['lbry_sd_hash'])
             d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, m.metaversion)))
             d.addCallback(lambda _: m)
             return d
@@ -398,7 +398,8 @@ class LBRYWallet(object):
         d = self._send_name_claim(name, json.dumps(metadata), bid)
 
         def _save_metadata(txid):
-            d = self._save_name_metadata(name, metadata['sources']['lbry_sd_hash'], txid)
+            log.info("Saving metadata for claim %s" % txid)
+            d = self._save_name_metadata(name, txid, metadata['sources']['lbry_sd_hash'])
             d.addCallback(lambda _: txid)
             return d
 
@@ -443,10 +444,12 @@ class LBRYWallet(object):
         d.addCallback(self._get_decoded_tx)
         return d
 
-    def update_name(self, name, value, amount):
+    def update_name(self, name, bid, value, old_txid):
         d = self._get_value_for_name(name)
-        d.addCallback(lambda r: (self._update_name(r['txid'], json.dumps(value), amount), r['txid']))
-        d.addCallback(lambda (new_txid, old_txid): self._update_name_metadata(name, value['sources']['lbry_sd_hash'], old_txid, new_txid))
+        d.addCallback(lambda r: self.abandon_name(r['txid'] if not old_txid else old_txid))
+        d.addCallback(lambda r: log.info("Abandon claim tx %s" % str(r)))
+        d.addCallback(lambda _: self.claim_name(name, bid, value))
+
         return d
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
@@ -556,17 +559,11 @@ class LBRYWallet(object):
                                 "    txid text, " +
                                 "    sd_hash text)")
 
-    def _save_name_metadata(self, name, sd_hash, txid):
-        d = self.db.runQuery("select * from name_metadata where txid=?", (txid,))
+    def _save_name_metadata(self, name, txid, sd_hash):
+        d = self.db.runQuery("select * from name_metadata where name=? and txid=? and sd_hash=?", (name, txid, sd_hash))
         d.addCallback(lambda r: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash))
                                 if not len(r) else None)
 
-        return d
-
-    def _update_name_metadata(self, name, sd_hash, old_txid, new_txid):
-        d = self.db.runQuery("delete * from name_metadata where txid=? and sd_hash=?", (old_txid, sd_hash))
-        d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, new_txid, sd_hash)))
-        d.addCallback(lambda _: new_txid)
         return d
 
     def _get_claim_metadata_for_sd_hash(self, sd_hash):
