@@ -1671,12 +1671,17 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             metadata from name claim
         """
 
-        if 'name' in p.keys():
+        if 'force' in p:
+            force = p['force']
+        else:
+            force = False
+
+        if 'name' in p:
             name = p['name']
         else:
             return self._render_response(None, BAD_REQUEST)
 
-        d = self._resolve_name(name)
+        d = self._resolve_name(name, force_refresh=force)
         d.addCallbacks(lambda info: self._render_response(info, OK_CODE), lambda _: server.failure)
         return d
 
