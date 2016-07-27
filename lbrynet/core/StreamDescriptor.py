@@ -198,7 +198,7 @@ class StreamDescriptorIdentifier(object):
         return self._stream_downloader_factories[stream_type]
 
     def _get_validator(self, stream_type):
-        if not stream_type in self._stream_downloader_factories:
+        if not stream_type in self._sd_info_validators:
             raise UnknownStreamTypeError(stream_type)
         return self._sd_info_validators[stream_type]
 

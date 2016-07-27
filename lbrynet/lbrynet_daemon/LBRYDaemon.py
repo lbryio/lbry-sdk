@@ -2,6 +2,7 @@ import string
 import locale
 import mimetypes
 import os
+import re
 import subprocess
 import sys
 import random
@@ -2308,7 +2309,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Returns:
             True, opens file browser
         """
-        
         path = p['path']
         if sys.platform == "darwin":
             d = threads.deferToThread(subprocess.Popen, ['open', '-R', path])
@@ -2319,3 +2319,27 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
+
+
+def get_lbrynet_version_from_github():
+    """Return the latest released version from github."""
+    response = requests.get('https://api.github.com/repos/lbryio/lbry/releases/latest')
+    release = response.json()
+    tag = release['tag_name']
+    # githubs documentation claims this should never happen, but we'll check just in case
+    if release['prerelease']:
+        raise Exception('Release {} is a pre-release'.format(tag))
+    return get_version_from_tag(tag)
+
+
+def get_version_from_tag(tag):
+    match = re.match('v([\d.]+)', tag)
+    if match:
+        return match.group(1)
+    else:
+        raise Exception('Failed to parse version from tag {}'.format(tag))
+
+
+def compare_versions(a, b):
+    """Returns True if version a is more recent than version b"""
+    return a > b

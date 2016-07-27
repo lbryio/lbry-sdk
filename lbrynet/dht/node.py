@@ -240,9 +240,9 @@ class Node(object):
         known_nodes = {}
 
         def log_error(err, n):
-            log.debug("error storing blob_hash %s at %s", binascii.hexlify(blob_hash), str(n))
-            log.debug(binascii.hexlify(err.getErrorMessage()))
-            log.debug(err.getTraceback())
+            log.error("error storing blob_hash %s at %s", binascii.hexlify(blob_hash), str(n))
+            log.error(err.getErrorMessage())
+            log.error(err.getTraceback())
 
         def log_success(res):
             log.debug("Response to store request: %s", str(res))

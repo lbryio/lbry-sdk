@@ -7,6 +7,7 @@
 # The docstrings in this module contain epytext markup; API documentation
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
+import binascii
 import time
 
 from twisted.internet import protocol, defer
@@ -23,6 +24,13 @@ reactor = twisted.internet.reactor
 
 class TimeoutError(Exception):
     """ Raised when a RPC times out """
+    def __init__(self, remote_contact_id):
+        # remote_contact_id is a binary blob so we need to convert it
+        # into something more readable
+        msg = 'Timeout connecting to {}'.format(binascii.hexlify(remote_contact_id))
+        Exception.__init__(self, msg)
+        self.remote_contact_id = remote_contact_id
+
 
 class KademliaProtocol(protocol.DatagramProtocol):
     """ Implements all low-level network-related functions of a Kademlia node """

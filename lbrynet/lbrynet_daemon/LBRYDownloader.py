@@ -74,6 +74,7 @@ class GetStream(object):
     def check_status(self):
         self.timeout_counter += 1
 
+        # TODO: Why is this the stopping condition for the finished callback?
         if self.download_path:
             self.checker.stop()
             self.finished.callback((self.stream_hash, self.download_path))

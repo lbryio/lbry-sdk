@@ -61,7 +61,6 @@ class LBRYWallet(object):
     _FIRST_RUN_NO = 2
 
     def __init__(self, db_dir):
-
         self.db_dir = db_dir
         self.db = None
         self.next_manage_call = None
@@ -663,7 +662,7 @@ class LBRYcrdWallet(LBRYWallet):
         settings = {"username": "rpcuser",
                     "password": "rpcpassword",
                     "rpc_port": 9245}
-        if os.path.exists(self.wallet_conf):
+        if self.wallet_conf and os.path.exists(self.wallet_conf):
             conf = open(self.wallet_conf)
             for l in conf:
                 if l.startswith("rpcuser="):
