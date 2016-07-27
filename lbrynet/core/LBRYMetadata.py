@@ -55,8 +55,9 @@ class LBRYFeeFormat(dict):
 
 
 class LBRYFee(LBRYFeeFormat):
-    def __init__(self, fee_dict, rate_dict):
+    def __init__(self, fee_dict, rate_dict, bittrex_fee=None):
         LBRYFeeFormat.__init__(self, fee_dict)
+        self.bittrex_fee = BITTREX_FEE if bittrex_fee is None else bittrex_fee
         rates = deepcopy(rate_dict)
 
         assert 'BTCLBC' in rates and 'USDBTC' in rates
@@ -88,23 +89,15 @@ class LBRYFee(LBRYFeeFormat):
         return r
 
     def _usd_to_btc(self, usd):
-        # log.error("usd to btc: " + str(usd))
-        # log.error("%f * %f = %f" % (self._USDBTC['spot'], float(usd), self._USDBTC['spot'] * float(usd)))
         return self._USDBTC['spot'] * float(usd)
 
     def _btc_to_usd(self, btc):
-        # log.error("btc to usd: " + str(btc))
-        # log.error("%f / %f = %f" % (float(btc), self._USDBTC['spot'], float(btc) / self._USDBTC['spot']))
         return float(btc) / self._USDBTC['spot']
 
     def _btc_to_lbc(self, btc):
-        # log.error("btc to lbc: " + str(btc))
-        # log.error("%f * %f = %f" % (float(btc), self._BTCLBC['spot'], float(btc) * self._BTCLBC['spot'] / (1.0 - BITTREX_FEE)))
-        return float(btc) * self._BTCLBC['spot'] / (1.0 - BITTREX_FEE)
+        return float(btc) * self._BTCLBC['spot'] / (1.0 - self.bittrex_fee)
 
     def _lbc_to_btc(self, lbc):
-        # log.error("lbc to btc: " + str(lbc))
-        # log.error("%f / %f = %f" % (self._BTCLBC['spot'], float(lbc), self._BTCLBC['spot'] / float(lbc)))
         return self._BTCLBC['spot'] / float(lbc)
 
 
