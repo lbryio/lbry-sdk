@@ -32,7 +32,6 @@ from lbrynet.conf import SOURCE_TYPES
 from lbrynet.core.LBRYMetadata import Metadata
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
 alert = logging.getLogger("lbryalert." + __name__)
 
 

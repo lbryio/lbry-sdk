@@ -8,7 +8,6 @@ from lbrynet.conf import CURRENCIES
 import logging
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
 
 BITTREX_FEE = 0.0025
 
@@ -16,14 +15,13 @@ SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
 BASE_METADATA_FIELDS = ['title', 'description', 'author', 'language', 'license', 'content-type', 'sources']
 OPTIONAL_METADATA_FIELDS = ['thumbnail', 'preview', 'fee', 'contact', 'pubkey']
 
-#v0.0.1 metadata
+# v0.0.1 metadata
 METADATA_REVISIONS = {'0.0.1': {'required': BASE_METADATA_FIELDS, 'optional': OPTIONAL_METADATA_FIELDS}}
-#v0.0.2 metadata additions
+# v0.0.2 metadata additions
 METADATA_REVISIONS['0.0.2'] = {'required': ['nsfw', 'ver'], 'optional': ['license_url']}
 CURRENT_METADATA_VERSION = '0.0.2'
 
-
-#v0.0.1 fee
+# v0.0.1 fee
 FEE_REVISIONS = {'0.0.1': {'required': ['amount', 'address'], 'optional': []}}
 CURRENT_FEE_REVISION = '0.0.1'
 
