@@ -1,5 +1,8 @@
-from lbrynet.core.cryptoutils import get_lbry_hash_obj
+import distutils.version
 import random
+
+from lbrynet.core.cryptoutils import get_lbry_hash_obj
+
 
 
 blobhash_length = get_lbry_hash_obj().digest_size * 2  # digest_size is in bytes, and blob hashes are hex encoded
@@ -26,3 +29,11 @@ def is_valid_blobhash(blobhash):
         if l not in "0123456789abcdef":
             return False
     return True
+
+
+def version_is_greater_than(a, b):
+    """Returns True if version a is more recent than version b"""
+    try:
+        return distutils.version.StrictVersion(a) > distutils.version.StrictVersion(b)
+    except ValueError:
+        return distutils.version.LooseVersion(a) > distutils.version.LooseVersion(b)

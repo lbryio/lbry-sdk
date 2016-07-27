@@ -1,30 +1,30 @@
-import string
+import binascii
+from datetime import datetime
+from decimal import Decimal
+import distutils.version
 import locale
+import logging.handlers
 import mimetypes
 import os
+import platform
+import random
 import re
+import socket
+import string
 import subprocess
 import sys
-import random
-import simplejson as json
-import binascii
-import logging.handlers
-import requests
-import base58
-import platform
-import socket
+from urllib2 import urlopen
 
+from appdirs import user_data_dir
+import base58
+import requests
+import simplejson as json
 from twisted.web import server
 from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
 from txjsonrpc.web import jsonrpc
 from txjsonrpc.web.jsonrpc import Handler
-
-from datetime import datetime
-from decimal import Decimal
-from appdirs import user_data_dir
-from urllib2 import urlopen
 
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
@@ -39,6 +39,7 @@ from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifi
 from lbrynet.lbrynet_daemon.LBRYUIManager import LBRYUIManager
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
+from lbrynet.core import utils
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
@@ -52,8 +53,6 @@ from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
 # from lbryum import LOG_PATH as lbryum_log
-
-log = logging.getLogger(__name__)
 
 
 # TODO: this code snippet is everywhere. Make it go away
@@ -561,8 +560,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 version = next(line.split("=")[1].split("#")[0].replace(" ", "")
                                for line in r if "LBRYUM_VERSION" in line)
                 version = version.replace("'", "")
-                log.info("remote lbryum " + str(version) + " > local lbryum " + str(lbryum_version) + " = " + str(
-                    version > lbryum_version))
+                log.info(
+                    "remote lbryum %s > local lbryum %s = %s",
+                    version, lbryum_version,
+                    utils.version_is_greater_than(version, lbryum_version)
+                )
                 self.git_lbryum_version = version
                 return defer.succeed(None)
             except:
@@ -575,7 +577,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 version = get_lbrynet_version_from_github()
                 log.info(
                     "remote lbrynet %s > local lbrynet %s = %s",
-                    version, lbrynet_version, compare_versions(version, lbrynet_version)
+                    version, lbrynet_version,
+                    utils.version_is_greater_than(version, lbrynet_version)
                 )
                 self.git_lbrynet_version = version
                 return defer.succeed(None)
@@ -1479,8 +1482,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'ui_version': self.ui_version,
             'remote_lbrynet': self.git_lbrynet_version,
             'remote_lbryum': self.git_lbryum_version,
-            'lbrynet_update_available': lbrynet_version < self.git_lbrynet_version,
-            'lbryum_update_available': lbryum_version < self.git_lbryum_version
+            'lbrynet_update_available': utils.version_is_greater_than(
+                self.git_lbrynet_version, lbrynet_version),
+            'lbryum_update_available': utils.version_is_greater_than(
+                self.git_lbryum_version, lbryum_version)
         }
 
         log.info("Get version info: " + json.dumps(msg))
@@ -2299,8 +2304,3 @@ def get_version_from_tag(tag):
         return match.group(1)
     else:
         raise Exception('Failed to parse version from tag {}'.format(tag))
-
-
-def compare_versions(a, b):
-    """Returns True if version a is more recent than version b"""
-    return a > b
