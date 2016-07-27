@@ -1918,7 +1918,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
         d.addCallback(lambda _: self._get_lbry_file_by_uri(name))
-        d.addCallback(lambda r: pub.start(name, file_path, bid, metadata, r.txid))
+        d.addCallback(lambda r: pub.start(name, file_path, bid, metadata, None if r is None else r.txid))
         d.addCallbacks(lambda msg: self._render_response(msg, OK_CODE),
                        lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
 
