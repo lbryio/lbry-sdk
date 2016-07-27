@@ -43,6 +43,7 @@ class Publisher(object):
         self.verified = False
         self.lbry_file = None
         self.txid = None
+        self.stream_hash = None
         self.metadata = {}
 
     def start(self, name, file_path, bid, metadata, old_txid=None):
@@ -63,6 +64,7 @@ class Publisher(object):
         d.addCallback(self.add_to_lbry_files)
         d.addCallback(lambda _: self._create_sd_blob())
         d.addCallback(lambda _: self._claim_name())
+        d.addCallback(lambda _: self.set_status())
         d.addCallbacks(lambda _: _show_result(), self._show_publish_error)
 
         return d
@@ -75,16 +77,15 @@ class Publisher(object):
             return True
         return threads.deferToThread(check_file_threaded)
 
-    def set_status(self, lbry_file_downloader):
+    def set_lbry_file(self, lbry_file_downloader):
         self.lbry_file = lbry_file_downloader
-        d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file, ManagedLBRYFileDownloader.STATUS_FINISHED)
-        d.addCallback(lambda _: lbry_file_downloader.restore())
-        return d
+        return defer.succeed(None)
 
     def add_to_lbry_files(self, stream_hash):
+        self.stream_hash = stream_hash
         prm = PaymentRateManager(self.session.base_payment_rate_manager)
         d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
-        d.addCallback(self.set_status)
+        d.addCallback(self.set_lbry_file)
         return d
 
     def _create_sd_blob(self):
@@ -97,6 +98,11 @@ class Publisher(object):
             self.metadata['sources']['lbry_sd_hash'] = sd_hash
 
         d.addCallback(set_sd_hash)
+        return d
+
+    def set_status(self):
+        d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file, ManagedLBRYFileDownloader.STATUS_FINISHED)
+        d.addCallback(lambda _: self.lbry_file.restore())
         return d
 
     def _claim_name(self):
