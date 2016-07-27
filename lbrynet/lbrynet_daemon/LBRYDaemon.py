@@ -172,6 +172,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.session = None
         self.waiting_on = {}
         self.streams = {}
+        self.pending_claims = {}
         self.known_dht_nodes = KNOWN_DHT_NODES
         self.first_run_after_update = False
         self.uploaded_temp_files = []
@@ -362,6 +363,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.internet_connection_checker = LoopingCall(self._check_network_connection)
         self.version_checker = LoopingCall(self._check_remote_versions)
         self.connection_problem_checker = LoopingCall(self._check_connection_problems)
+        self.pending_claim_checker = LoopingCall(self._check_pending_claims)
         # self.lbrynet_connection_checker = LoopingCall(self._check_lbrynet_connection)
 
         self.sd_identifier = StreamDescriptorIdentifier()
@@ -609,6 +611,24 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if not self.connected_to_internet:
             self.connection_problem = CONNECTION_PROBLEM_CODES[1]
 
+    def _add_to_pending_claims(self, name, txid):
+        log.info("Adding lbry://%s to pending claims, txid %s" % (name, txid))
+        self.pending_claims[name] = txid
+        return txid
+
+    def _check_pending_claims(self):
+        def _start_file(name):
+            d = defer.succeed(self.pending_claims.pop(name))
+            d.addCallback(lambda _: self._get_lbry_file("name", name, return_json=False))
+            d.addCallback(lambda l: _start_file(l) if l.stopped else "LBRY file was already running")
+
+        for name in self.pending_claims:
+            log.info("Checking if new claim for lbry://%s is confirmed" % name)
+            d = self._resolve_name(name, force_refresh=True)
+            d.addCallback(lambda _: self._get_lbry_file_by_uri(name))
+            d.addCallbacks(lambda lbry_file: _start_file(name) if self.pending_claims[name] == lbry_file['txid'] and not isinstance(lbry_file['metadata'], str) else self._add_to_pending_claims(name, self.pending_claims.pop(name)),
+                           self._add_to_pending_claims(name, self.pending_claims.pop(name)))
+
     def _start_server(self):
         if self.peer_port is not None:
 
@@ -727,6 +747,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.connection_problem_checker.stop()
         if self.lbry_ui_manager.update_checker.running:
             self.lbry_ui_manager.update_checker.stop()
+        if self.pending_claim_checker.running:
+            self.pending_claim_checker.stop()
 
         self._clean_up_temp_files()
 
@@ -1915,6 +1937,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addCallback(lambda _: txid)
             return d
 
+        if not self.pending_claim_checker.running:
+            self.pending_claim_checker.start(30)
+
         d = self._resolve_name(name, force_refresh=True)
         d.addErrback(lambda _: None)
 
@@ -1930,8 +1955,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._get_lbry_file_by_uri(name))
         d.addCallbacks(lambda l: None if not l else _delete_data(l), lambda _: None)
         d.addCallback(lambda r: pub.start(name, file_path, bid, metadata, r))
-        d.addCallbacks(lambda msg: self._render_response(msg, OK_CODE),
-                       lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
+        d.addCallback(lambda txid: self._add_to_pending_claims(name, txid))
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addErrback(lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
 
         return d
 
