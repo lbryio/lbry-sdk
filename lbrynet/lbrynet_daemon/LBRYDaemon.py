@@ -610,8 +610,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addCallback(lambda l: _start_file(l) if l.stopped else "LBRY file was already running")
 
         def _process_lbry_file(name, lbry_file):
+            # lbry_file is an instance of ManagedLBRYFileDownloader or None
             ready_to_start = (
-                self.pending_claims[name] == lbry_file['txid'] and
+                lbry_file and
+                self.pending_claims[name] == lbry_file.txid and
                 not isinstance(lbry_file['metadata'], str)
             )
             if ready_to_start:
@@ -620,7 +622,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 re_add_to_pending_claims(name)
 
         def re_add_to_pending_claims(name):
-            self._add_to_pending_claims(name, self.pending_claims.pop(name)),
+            txid = self.pending_claims.pop(name)
+            self._add_to_pending_claims(name, txid)
 
         for name in self.pending_claims:
             log.info("Checking if new claim for lbry://%s is confirmed" % name)
