@@ -12,10 +12,12 @@ from twisted.web import server
 from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
 
+from lbrynet.core import log_support
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, \
                             DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
+# TODO: stop it!
 if sys.platform != "darwin":
     log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
 else:
@@ -25,15 +27,8 @@ if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
 lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
-
-DEFAULT_FORMAT = "%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s"
-DEFAULT_FORMATTER = logging.Formatter(DEFAULT_FORMAT)
-
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
-handler.setFormatter(DEFAULT_FORMATTER)
-log.addHandler(handler)
-log.setLevel(logging.INFO)
+
 
 REMOTE_SERVER = "www.google.com"
 
@@ -62,13 +57,6 @@ def stop():
     d.callback(None)
 
 
-def configureConsoleLogger():
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(DEFAULT_FORMATTER)
-    logging.getLogger().addHandler(handler)
-    logging.getLogger().setLevel(level=logging.INFO)
-
-
 def start():
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
     parser.add_argument("--wallet",
@@ -86,10 +74,11 @@ def start():
     parser.set_defaults(branch=False, launchui=True, logtoconsole=False, quiet=False)
     args = parser.parse_args()
 
-    if args.logtoconsole:
-        configureConsoleLogger()
 
-    args = parser.parse_args()
+    log_support.configureFileHandler(lbrynet_log)
+    if args.logtoconsole:
+        log_support.configureConsole()
+
 
     try:
         JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()

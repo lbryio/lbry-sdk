@@ -37,9 +37,7 @@ if not os.path.isdir(log_dir):
 
 lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-handler = logging.handlers.RotatingFileHandler(lbrynet_log, maxBytes=2097152, backupCount=5)
-log.addHandler(handler)
-log.setLevel(logging.INFO)
+
 
 class GetStream(object):
     def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, data_rate=0.5,
