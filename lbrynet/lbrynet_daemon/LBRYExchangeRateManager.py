@@ -58,7 +58,7 @@ class MarketFeed(object):
 
     def start(self):
         if not self._updater.running:
-            self._updater.start(15)
+            self._updater.start(300)
 
     def stop(self):
         if self._updater.running:
