@@ -1,5 +1,6 @@
 import mock
 from lbrynet.core import LBRYMetadata
+from lbrynet.lbrynet_daemon import LBRYExchangeRateManager
 
 from twisted.trial import unittest
 
@@ -33,8 +34,8 @@ class LBRYFeeTest(unittest.TestCase):
             }
         }
         rates = {'BTCLBC': {'spot': 3.0, 'ts': 2}, 'USDBTC': {'spot': 2.0, 'ts': 3}}
-        fee = LBRYMetadata.LBRYFee(fee_dict, rates, 0)
-        self.assertEqual(60.0, fee.to_lbc())
+        manager = LBRYExchangeRateManager.DummyExchangeRateManager(rates)
+        self.assertEqual(60.0, manager.to_lbc(fee_dict).amount)
 
 
 class MetadataTest(unittest.TestCase):

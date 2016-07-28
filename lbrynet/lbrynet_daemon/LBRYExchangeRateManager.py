@@ -148,3 +148,51 @@ class ExchangeRateManager(object):
                                         'address': fee.address
                                     }
         })
+
+
+class DummyBTCLBCFeed(MarketFeed):
+    def __init__(self):
+        MarketFeed.__init__(
+            self,
+            "BTCLBC",
+            "market name",
+            "derp.com",
+            None,
+            0.0
+        )
+
+
+class DummyUSDBTCFeed(MarketFeed):
+    def __init__(self):
+        MarketFeed.__init__(
+            self,
+            "USDBTC",
+            "market name",
+            "derp.com",
+            None,
+            0.0
+        )
+
+
+class DummyExchangeRateManager(object):
+    def __init__(self, rates):
+        self.market_feeds = [DummyBTCLBCFeed(), DummyUSDBTCFeed()]
+        for feed in self.market_feeds:
+            feed.rate = rates[feed.market]
+
+    def convert_currency(self, from_currency, to_currency, amount):
+        log.info("Converting %f %s to %s" % (amount, from_currency, to_currency))
+        for market in self.market_feeds:
+            if market.rate.currency_pair == (from_currency, to_currency):
+                return amount * market.rate.spot
+        for market in self.market_feeds:
+            if market.rate.currency_pair[0] == from_currency:
+                return self.convert_currency(market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
+
+    def to_lbc(self, fee):
+        return LBRYFeeValidator({fee.currency_symbol:
+            {
+                'amount': self.convert_currency(fee.currency_symbol, "LBC", fee.amount),
+                'address': fee.address
+            }
+        })
