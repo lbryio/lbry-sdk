@@ -147,10 +147,8 @@ class ExchangeRateManager(object):
     def to_lbc(self, fee):
         if fee is None:
             return None
-        if not isinstance(fee, LBRYFeeValidator):
-            fee_in = LBRYFeeValidator(fee)
-        else:
-            fee_in = fee
+
+        fee_in = LBRYFeeValidator(fee)
 
         return LBRYFeeValidator({fee_in.currency_symbol:
                                     {
@@ -202,10 +200,8 @@ class DummyExchangeRateManager(object):
     def to_lbc(self, fee):
         if fee is None:
             return None
-        if not isinstance(fee, LBRYFeeValidator):
-            fee_in = LBRYFeeValidator(fee)
-        else:
-            fee_in = fee
+
+        fee_in = LBRYFeeValidator(fee)
 
         return LBRYFeeValidator({fee_in.currency_symbol:
                                     {
