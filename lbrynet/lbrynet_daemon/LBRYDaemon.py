@@ -618,6 +618,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addCallback(lambda _: self._get_lbry_file("name", name, return_json=False))
             d.addCallback(lambda l: _start_file(l) if l.stopped else "LBRY file was already running")
 
+        def re_add_to_pending_claims(name):
+            txid = self.pending_claims.pop(name)
+            self._add_to_pending_claims(name, txid)
+
         def _process_lbry_file(name, lbry_file):
             # lbry_file is an instance of ManagedLBRYFileDownloader or None
             # TODO: check for sd_hash in addition to txid
@@ -626,13 +630,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 self.pending_claims[name] == lbry_file.txid
             )
             if ready_to_start:
-                _get_and_start_file(name, lbry_file)
+                _get_and_start_file(name)
             else:
                 re_add_to_pending_claims(name)
-
-        def re_add_to_pending_claims(name):
-            txid = self.pending_claims.pop(name)
-            self._add_to_pending_claims(name, txid)
 
         for name in self.pending_claims:
             log.info("Checking if new claim for lbry://%s is confirmed" % name)
