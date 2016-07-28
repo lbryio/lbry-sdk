@@ -178,7 +178,7 @@ class DummyExchangeRateManager(object):
     def __init__(self, rates):
         self.market_feeds = [DummyBTCLBCFeed(), DummyUSDBTCFeed()]
         for feed in self.market_feeds:
-            feed.rate = ExchangeRate(feed, rates[feed]['spot'], rates[feed]['ts'])
+            feed.rate = ExchangeRate(feed, rates[feed.market]['spot'], rates[feed.market]['ts'])
 
     def convert_currency(self, from_currency, to_currency, amount):
         log.info("Converting %f %s to %s" % (amount, from_currency, to_currency))
