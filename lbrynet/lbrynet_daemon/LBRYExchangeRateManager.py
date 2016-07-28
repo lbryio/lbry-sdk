@@ -189,7 +189,8 @@ class DummyExchangeRateManager(object):
             if market.rate.currency_pair[0] == from_currency:
                 return self.convert_currency(market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
 
-    def to_lbc(self, fee):
+    def to_lbc(self, f):
+        fee = LBRYFeeValidator(f)
         return LBRYFeeValidator({fee.currency_symbol:
             {
                 'amount': self.convert_currency(fee.currency_symbol, "LBC", fee.amount),
