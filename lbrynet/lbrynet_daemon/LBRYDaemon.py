@@ -1718,6 +1718,17 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallbacks(lambda info: self._render_response(info, OK_CODE), lambda _: server.failure)
         return d
 
+    def jsonrpc_get_claim_info(self, p):
+        def _convert_amount_to_float(r):
+            r['amount'] = float(r['amount']) / 10**8
+            return r
+
+        name = p['name']
+        d = self.session.wallet.get_claim_info(name)
+        d.addCallback(_convert_amount_to_float)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
     def jsonrpc_get(self, p):
         """
         Download stream from a LBRY uri

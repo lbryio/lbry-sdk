@@ -320,25 +320,56 @@ class LBRYWallet(object):
         return d
 
     def _get_stream_info_from_value(self, result, name):
-        if 'value' in result:
-            value = result['value']
+        def _check_result_fields(r):
+            for k in ['value', 'txid', 'n', 'height', 'amount']:
+                assert k in r, "getvalueforname response missing field %s" % k
 
-            try:
-                value_dict = json.loads(value)
-            except (ValueError, TypeError):
-                return Failure(InvalidStreamInfoError(name))
-            m = Metadata(value_dict)
-        if 'txid' in result:
-            d = self._save_name_metadata(name, str(result['txid']), m['sources']['lbry_sd_hash'])
-            d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, m.meta_version)))
-            d.addCallback(lambda _: m)
-            return d
-        elif 'error' in result:
+        if 'error' in result:
             log.warning("Got an error looking up a name: %s", result['error'])
             return Failure(UnknownNameError(name))
-        else:
-            log.warning("Got an error looking up a name: %s", json.dumps(result))
+
+        _check_result_fields(result)
+
+        try:
+            metadata = Metadata(json.loads(result['value']))
+        except (ValueError, TypeError):
+            return Failure(InvalidStreamInfoError(name))
+
+        d = self._save_name_metadata(name, str(result['txid']), metadata['sources']['lbry_sd_hash'])
+        d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, metadata.meta_version)))
+        d.addCallback(lambda _: metadata)
+        return d
+
+    def _get_claim_info(self, result, name):
+        def _check_result_fields(r):
+            for k in ['value', 'txid', 'n', 'height', 'amount']:
+                assert k in r, "getvalueforname response missing field %s" % k
+
+        def _build_response(m, result):
+            result['value'] = m
+            return result
+
+        if 'error' in result:
+            log.warning("Got an error looking up a name: %s", result['error'])
             return Failure(UnknownNameError(name))
+
+        _check_result_fields(result)
+
+        try:
+            metadata = Metadata(json.loads(result['value']))
+        except (ValueError, TypeError):
+            return Failure(InvalidStreamInfoError(name))
+
+        d = self._save_name_metadata(name, str(result['txid']), metadata['sources']['lbry_sd_hash'])
+        d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, metadata.meta_version)))
+        d.addCallback(lambda _: _build_response(metadata, result))
+        return d
+
+    def get_claim_info(self, name):
+        d = self._get_value_for_name(name)
+        d.addCallback(lambda r: self._get_claim_info(r, name))
+        return d
+
 
     def claim_name(self, name, bid, m):
 
