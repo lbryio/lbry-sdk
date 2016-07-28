@@ -26,35 +26,50 @@ FEE_REVISIONS = {'0.0.1': {'required': ['amount', 'address'], 'optional': []}}
 CURRENT_FEE_REVISION = '0.0.1'
 
 
-class LBRYFeeFormat(dict):
+class LBRYFeeValidator(dict):
     def __init__(self, fee_dict):
         dict.__init__(self)
-        self.fee_version = None
-        f = deepcopy(fee_dict)
         assert len(fee_dict) == 1
-        for currency in fee_dict:
-            assert currency in CURRENCIES, "Unsupported currency: %s" % str(currency)
-            self.currency_symbol = currency
-            self.update({currency: {}})
-            for version in FEE_REVISIONS:
-                for k in FEE_REVISIONS[version]['required']:
-                    assert k in fee_dict[currency], "Missing required fee field: %s" % k
-                    self[currency].update({k: f[currency].pop(k)})
-                for k in FEE_REVISIONS[version]['optional']:
-                    if k in fee_dict[currency]:
-                        self[currency].update({k: f[currency].pop(k)})
-                if not len(f):
-                    self.fee_version = version
-                    break
-            assert f[currency] == {}, "Unknown fee keys: %s" % json.dumps(f.keys())
+        self.fee_version = None
 
-        self.amount = self[self.currency_symbol]['amount'] if isinstance(self[self.currency_symbol]['amount'], float) else float(self[self.currency_symbol]['amount'])
+        fee_to_load = deepcopy(fee_dict)
+
+        for currency in fee_dict:
+            self._verify_fee(currency, fee_to_load)
+
+        self.amount = self._get_amount()
         self.address = self[self.currency_symbol]['address']
 
+    def _get_amount(self):
+        if isinstance(self[self.currency_symbol]['amount'], float):
+            return self[self.currency_symbol]['amount']
+        else:
+            return float(self[self.currency_symbol]['amount'])
 
-class LBRYFee(LBRYFeeFormat):
+    def _verify_fee(self, currency, f):
+        # str in case someone made a claim with a wierd fee
+        assert currency in CURRENCIES, "Unsupported currency: %s" % str(currency)
+        self.currency_symbol = currency
+        self.update({currency: {}})
+        for version in FEE_REVISIONS:
+            self._load_revision(version, f)
+            if not f:
+                self.fee_version = version
+                break
+        assert f[self.currency_symbol] == {}, "Unknown fee keys: %s" % json.dumps(f.keys())
+
+    def _load_revision(self, version, f):
+        for k in FEE_REVISIONS[version]['required']:
+            assert k in f[self.currency_symbol], "Missing required fee field: %s" % k
+            self[self.currency_symbol].update({k: f[self.currency_symbol].pop(k)})
+        for k in FEE_REVISIONS[version]['optional']:
+            if k in f[self.currency_symbol]:
+                self[self.currency_symbol].update({k: f[self.currency_symbol].pop(k)})
+
+
+class LBRYFee(LBRYFeeValidator):
     def __init__(self, fee_dict, rate_dict, bittrex_fee=None):
-        LBRYFeeFormat.__init__(self, fee_dict)
+        LBRYFeeValidator.__init__(self, fee_dict)
         self.bittrex_fee = BITTREX_FEE if bittrex_fee is None else bittrex_fee
         rates = deepcopy(rate_dict)
 
@@ -102,25 +117,35 @@ class LBRYFee(LBRYFeeFormat):
 class Metadata(dict):
     def __init__(self, metadata):
         dict.__init__(self)
-        self.metaversion = None
-        m = deepcopy(metadata)
+        self.meta_version = None
+        metadata_to_load = deepcopy(metadata)
 
+        self._verify_sources(metadata_to_load)
+        self._verify_metadata(metadata_to_load)
+
+    def _load_revision(self, version, metadata):
+        for k in METADATA_REVISIONS[version]['required']:
+            assert k in metadata, "Missing required metadata field: %s" % k
+            self.update({k: metadata.pop(k)})
+        for k in METADATA_REVISIONS[version]['optional']:
+            if k == 'fee':
+                self['fee'] = LBRYFeeValidator(metadata.pop('fee'))
+            elif k in metadata:
+                self.update({k: metadata.pop(k)})
+
+    def _load_fee(self, metadata):
+        if 'fee' in metadata:
+            self['fee'] = LBRYFeeValidator(metadata.pop('fee'))
+
+    def _verify_sources(self, metadata):
         assert "sources" in metadata, "No sources given"
         for source in metadata['sources']:
             assert source in SOURCE_TYPES, "Unknown source type"
 
+    def _verify_metadata(self, metadata):
         for version in METADATA_REVISIONS:
-            for k in METADATA_REVISIONS[version]['required']:
-                assert k in metadata, "Missing required metadata field: %s" % k
-                self.update({k: m.pop(k)})
-            for k in METADATA_REVISIONS[version]['optional']:
-                if k == 'fee':
-                    pass
-                elif k in metadata:
-                    self.update({k: m.pop(k)})
-            if not len(m) or m.keys() == ['fee']:
-                self.metaversion = version
+            self._load_revision(version, metadata)
+            if not metadata:
+                self.meta_version = version
                 break
-        if 'fee' in m:
-            self['fee'] = LBRYFeeFormat(m.pop('fee'))
-        assert m == {}, "Unknown metadata keys: %s" % json.dumps(m.keys())
+        assert metadata == {}, "Unknown metadata keys: %s" % json.dumps(metadata.keys())

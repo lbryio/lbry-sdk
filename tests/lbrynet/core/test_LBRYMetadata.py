@@ -12,7 +12,7 @@ class LBRYFeeFormatTest(unittest.TestCase):
                 'address': None
             }
         }
-        fee = LBRYMetadata.LBRYFeeFormat(fee_dict)
+        fee = LBRYMetadata.LBRYFeeValidator(fee_dict)
         self.assertEqual(10, fee['USD']['amount'])
 
 
@@ -68,7 +68,7 @@ class MetadataTest(unittest.TestCase):
             'content-type': None,
         }
         m = LBRYMetadata.Metadata(metadata)
-        self.assertEquals('0.0.1', m.metaversion)
+        self.assertEquals('0.0.1', m.meta_version)
 
     def test_assertion_if_there_is_an_extra_field(self):
         metadata = {
@@ -97,6 +97,6 @@ class MetadataTest(unittest.TestCase):
             'ver': None
         }
         m = LBRYMetadata.Metadata(metadata)
-        self.assertEquals('0.0.2', m.metaversion)
+        self.assertEquals('0.0.2', m.meta_version)
 
 

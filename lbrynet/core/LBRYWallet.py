@@ -379,7 +379,7 @@ class LBRYWallet(object):
             m = Metadata(value_dict)
         if 'txid' in result:
             d = self._save_name_metadata(name, str(result['txid']), m['sources']['lbry_sd_hash'])
-            d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, m.metaversion)))
+            d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, m.meta_version)))
             d.addCallback(lambda _: m)
             return d
         elif 'error' in result:

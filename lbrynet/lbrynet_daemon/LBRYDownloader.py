@@ -84,26 +84,14 @@ class GetStream(object):
             self.code = STREAM_STAGES[4]
             self.finished.callback(False)
 
+    def _convert_max_fee(self):
+        if isinstance(self.max_key_fee, dict):
+            max_fee = deepcopy(self.max_key_fee)
+            return LBRYFee(max_fee, {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC}).to_lbc()
+        elif isinstance(self.max_key_fee, float):
+            return float(self.max_key_fee)
+
     def start(self, stream_info, name):
-        self.resolved_name = name
-        self.stream_info = deepcopy(stream_info)
-        self.description = self.stream_info['description']
-        self.stream_hash = self.stream_info['sources']['lbry_sd_hash']
-
-        if 'fee' in self.stream_info:
-            self.fee = LBRYFee(self.stream_info['fee'], {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
-            if isinstance(self.max_key_fee, float):
-                if self.fee.to_lbc() > self.max_key_fee:
-                    log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.to_lbc(), self.max_key_fee, self.resolved_name))
-                    return defer.fail(KeyFeeAboveMaxAllowed())
-                log.info("Key fee %f below limit of %f, downloading lbry://%s" % (self.fee.to_lbc(), self.max_key_fee, self.resolved_name))
-            elif isinstance(self.max_key_fee, dict):
-                max_key = LBRYFee(deepcopy(self.max_key_fee), {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
-                if self.fee.to_lbc() > max_key.to_lbc():
-                    log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.to_lbc(), max_key.to_lbc(), self.resolved_name))
-                    return defer.fail(KeyFeeAboveMaxAllowed())
-                log.info("Key fee %f below limit of %f, downloading lbry://%s" % (self.fee.to_lbc(), max_key.to_lbc(), self.resolved_name))
-
         def _cause_timeout(err):
             log.error(err)
             log.debug('Forcing a timeout')
@@ -127,6 +115,23 @@ class GetStream(object):
                                            self.payment_rate_manager,
                                            download_directory=self.download_directory,
                                            file_name=self.file_name)
+
+        self.resolved_name = name
+        self.stream_info = deepcopy(stream_info)
+        self.description = self.stream_info['description']
+        self.stream_hash = self.stream_info['sources']['lbry_sd_hash']
+
+        if 'fee' in self.stream_info:
+            self.fee = LBRYFee(self.stream_info['fee'], {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
+            max_key_fee = self._convert_max_fee()
+            if self.fee.to_lbc() > max_key_fee:
+                log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.to_lbc(),
+                                                                                     self.max_key_fee,
+                                                                                     self.resolved_name))
+                return defer.fail(KeyFeeAboveMaxAllowed())
+            log.info("Key fee %f below limit of %f, downloading lbry://%s" % (self.fee.to_lbc(),
+                                                                              max_key_fee,
+                                                                              self.resolved_name))
 
         self.checker.start(1)
 
