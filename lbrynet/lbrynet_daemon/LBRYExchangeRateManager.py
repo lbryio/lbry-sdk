@@ -131,12 +131,15 @@ class ExchangeRateManager(object):
 
     def convert_currency(self, from_currency, to_currency, amount):
         log.info("Converting %f %s to %s" % (amount, from_currency, to_currency))
+        if from_currency == to_currency:
+            return amount
         for market in self.market_feeds:
             if market.rate.currency_pair == (from_currency, to_currency):
                 return amount * market.rate.spot
         for market in self.market_feeds:
             if market.rate.currency_pair[0] == from_currency:
                 return self.convert_currency(market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
+        raise Exception('Unable to convert {} from {} to {}'.format(amount, from_current, to_currency))
 
     def fee_dict(self):
         return {market: market.rate.as_dict() for market in self.market_feeds}

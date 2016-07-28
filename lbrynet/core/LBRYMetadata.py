@@ -43,10 +43,15 @@ class LBRYFeeValidator(dict):
         self.address = self[self.currency_symbol]['address']
 
     def _get_amount(self):
-        if isinstance(self[self.currency_symbol]['amount'], float):
-            return self[self.currency_symbol]['amount']
+        amt = self[self.currency_symbol]['amount']
+        if isinstance(amt, float):
+            return amt
         else:
-            return float(self[self.currency_symbol]['amount'])
+            try:
+                return float(amt)
+            except TypeError:
+                log.error('Failed to convert %s to float', amt)
+                raise
 
     def _verify_fee(self, currency, f):
         # str in case someone made a claim with a wierd fee
