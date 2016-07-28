@@ -12,19 +12,27 @@ log = logging.getLogger(__name__)
 
 BITTREX_FEE = 0.0025
 
+# Metadata version
 SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
 BASE_METADATA_FIELDS = ['title', 'description', 'author', 'language', 'license', 'content-type', 'sources']
 OPTIONAL_METADATA_FIELDS = ['thumbnail', 'preview', 'fee', 'contact', 'pubkey']
 
-# v0.0.1 metadata
-METADATA_REVISIONS = {'0.0.1': {'required': BASE_METADATA_FIELDS, 'optional': OPTIONAL_METADATA_FIELDS}}
-# v0.0.2 metadata additions
-METADATA_REVISIONS['0.0.2'] = {'required': ['nsfw', 'ver'], 'optional': ['license_url']}
-CURRENT_METADATA_VERSION = '0.0.2'
+MV001 = "0.0.1"
+MV002 = "0.0.2"
+CURRENT_METADATA_VERSION = MV002
 
-# v0.0.1 fee
-FEE_REVISIONS = {'0.0.1': {'required': ['amount', 'address'], 'optional': []}}
-CURRENT_FEE_REVISION = '0.0.1'
+METADATA_REVISIONS = {}
+METADATA_REVISIONS[MV001] = {'required': BASE_METADATA_FIELDS, 'optional': OPTIONAL_METADATA_FIELDS}
+METADATA_REVISIONS[MV002] = {'required': ['nsfw', 'ver'], 'optional': ['license_url']}
+
+# Fee version
+BASE_FEE_FIELDS = ['amount', 'address']
+
+FV001 = "0.0.1"
+CURRENT_FEE_REVISION = FV001
+
+FEE_REVISIONS = {}
+FEE_REVISIONS[FV001] = {'required': BASE_FEE_FIELDS, 'optional': []}
 
 
 class LBRYFeeValidator(dict):
