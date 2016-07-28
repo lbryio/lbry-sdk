@@ -417,6 +417,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return server.NOT_DONE_YET
 
     def _cbRender(self, result, request, id, version):
+        def default_decimal(obj):
+            if isinstance(obj, Decimal):
+                return float(obj)
+
         if isinstance(result, Handler):
             result = result.result
 
@@ -428,7 +432,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 result = (result,)
             # Convert the result (python) to JSON-RPC
         try:
-            s = jsonrpclib.dumps(result, version=version)
+            s = jsonrpclib.dumps(result, version=version, default=default_decimal)
         except:
             f = jsonrpclib.Fault(self.FAILURE, "can't serialize output")
             s = jsonrpclib.dumps(f, version=version)
