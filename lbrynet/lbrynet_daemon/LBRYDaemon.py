@@ -609,12 +609,30 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addCallback(lambda _: self._get_lbry_file("name", name, return_json=False))
             d.addCallback(lambda l: _start_file(l) if l.stopped else "LBRY file was already running")
 
+        def _process_lbry_file(name, lbry_file):
+            # lbry_file is an instance of ManagedLBRYFileDownloader or None
+            ready_to_start = (
+                lbry_file and
+                self.pending_claims[name] == lbry_file.txid and
+                not isinstance(lbry_file['metadata'], str)
+            )
+            if ready_to_start:
+                _start_file(name)
+            else:
+                re_add_to_pending_claims(name)
+
+        def re_add_to_pending_claims(name):
+            txid = self.pending_claims.pop(name)
+            self._add_to_pending_claims(name, txid)
+
         for name in self.pending_claims:
             log.info("Checking if new claim for lbry://%s is confirmed" % name)
             d = self._resolve_name(name, force_refresh=True)
             d.addCallback(lambda _: self._get_lbry_file_by_uri(name))
-            d.addCallbacks(lambda lbry_file: _start_file(name) if self.pending_claims[name] == lbry_file['txid'] and not isinstance(lbry_file['metadata'], str) else self._add_to_pending_claims(name, self.pending_claims.pop(name)),
-                           self._add_to_pending_claims(name, self.pending_claims.pop(name)))
+            d.addCallbacks(
+                lambda lbry_file: _process_lbry_file(name, lbry_file),
+                lambda _: re_add_to_pending_claims(name)
+            )
 
     def _start_server(self):
         if self.peer_port is not None:
