@@ -145,10 +145,17 @@ class ExchangeRateManager(object):
         return {market: market.rate.as_dict() for market in self.market_feeds}
 
     def to_lbc(self, fee):
-        return LBRYFeeValidator({fee.currency_symbol:
+        if fee is None:
+            return None
+        if not isinstance(fee, LBRYFeeValidator):
+            fee_in = LBRYFeeValidator(fee)
+        else:
+            fee_in = fee
+
+        return LBRYFeeValidator({fee_in.currency_symbol:
                                     {
-                                        'amount': self.convert_currency(fee.currency_symbol, "LBC", fee.amount),
-                                        'address': fee.address
+                                        'amount': self.convert_currency(fee.currency_symbol, "LBC", fee_in.amount),
+                                        'address': fee_in.address
                                     }
         })
 
@@ -192,11 +199,17 @@ class DummyExchangeRateManager(object):
             if market.rate.currency_pair[0] == from_currency:
                 return self.convert_currency(market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
 
-    def to_lbc(self, f):
-        fee = LBRYFeeValidator(f)
-        return LBRYFeeValidator({fee.currency_symbol:
-            {
-                'amount': self.convert_currency(fee.currency_symbol, "LBC", fee.amount),
-                'address': fee.address
-            }
+    def to_lbc(self, fee):
+        if fee is None:
+            return None
+        if not isinstance(fee, LBRYFeeValidator):
+            fee_in = LBRYFeeValidator(fee)
+        else:
+            fee_in = fee
+
+        return LBRYFeeValidator({fee_in.currency_symbol:
+                                    {
+                                        'amount': self.convert_currency(fee.currency_symbol, "LBC", fee_in.amount),
+                                        'address': fee_in.address
+                                    }
         })

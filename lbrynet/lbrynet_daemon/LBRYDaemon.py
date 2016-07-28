@@ -34,7 +34,6 @@ from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerF
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError
-from lbrynet.core.LBRYMetadata import Metadata
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
@@ -1228,7 +1227,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def _add_key_fee(data_cost):
             d = self._resolve_name(name)
-            d.addCallback(lambda info: data_cost if 'fee' not in info else data_cost + info['fee']['LBC']['amount'])
+            d.addCallback(lambda info: self.exchange_rate_manager.to_lbc(info.get('fee', None)))
+            d.addCallback(lambda fee: data_cost if fee is None else data_cost + fee.amount)
             return d
 
         d = self._resolve_name(name)
@@ -1238,8 +1238,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         d.addCallback(lambda metadata: metadata.validator.info_to_show())
         d.addCallback(lambda info: int(dict(info)['stream_size']) / 1000000 * self.data_rate)
-        d.addCallback(_add_key_fee)
-        d.addErrback(lambda _: _add_key_fee(0.0))
+        d.addCallbacks(_add_key_fee, lambda _: _add_key_fee(0.0))
         reactor.callLater(self.search_timeout, _check_est, d, name)
 
         return d
@@ -1404,6 +1403,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 run_autofetcher(self)
 
         return defer.succeed(None)
+
+    def _search(self, search):
+        d = self.session.wallet.get_nametrie()
+        d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
+        return d
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
@@ -1719,6 +1723,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return d
 
     def jsonrpc_get_claim_info(self, p):
+        """
+            Resolve claim info from a LBRY uri
+
+            Args:
+                'name': name to look up, string, do not include lbry:// prefix
+            Returns:
+                txid, amount, value, n, height
+        """
+
         def _convert_amount_to_float(r):
             r['amount'] = float(r['amount']) / 10**8
             return r
@@ -1839,6 +1852,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    def jsonrpc_get_est_cost(self, p):
+        """
+        Get estimated cost for a lbry uri
+
+        Args:
+            'name': lbry uri
+        Returns:
+            estimated cost
+        """
+
+        name = p['name']
+        d = self._get_est_cost(name)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
     def jsonrpc_search_nametrie(self, p):
         """
         Search the nametrie for claims beginning with search (yes, this is a dumb search, it'll be made better)
@@ -1890,8 +1918,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         log.info('Search nametrie: ' + search)
 
-        d = self.session.wallet.get_nametrie()
-        d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
+        d = self._search(search)
         d.addCallback(lambda claims: claims[:self.max_search_results])
         d.addCallback(resolve_claims)
         d.addCallback(_clean)
@@ -2336,7 +2363,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             # No easy way to reveal specific files on Linux, so just open the containing directory
             d = threads.deferToThread(subprocess.Popen, ['xdg-open', os.dirname(path)])
-
 
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
