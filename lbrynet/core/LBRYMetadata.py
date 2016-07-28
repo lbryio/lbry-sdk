@@ -5,6 +5,7 @@ import time
 from copy import deepcopy
 from googlefinance import getQuotes
 from lbrynet.conf import CURRENCIES
+from lbrynet.core import utils
 import logging
 
 log = logging.getLogger(__name__)
@@ -147,5 +148,7 @@ class Metadata(dict):
             self._load_revision(version, metadata)
             if not metadata:
                 self.meta_version = version
+                if utils.version_is_greater_than(self.meta_version, "0.0.1"):
+                    assert self.meta_version == self['ver'], "version mismatch"
                 break
         assert metadata == {}, "Unknown metadata keys: %s" % json.dumps(metadata.keys())
