@@ -33,7 +33,7 @@ from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.core.Error import UnknownNameError, InsufficientFundsError
+from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
 from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
@@ -42,6 +42,7 @@ from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
 from lbrynet.core import utils
+from lbrynet.core.LBRYMetadata import verify_name_characters
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
@@ -1165,6 +1166,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(True)
 
     def _resolve_name(self, name, force_refresh=False):
+        try:
+            verify_name_characters(name)
+        except:
+            log.error("Bad name")
+            return defer.fail(InvalidNameError("Bad name"))
+
         def _cache_stream_info(stream_info):
             def _add_txid(txid):
                 self.name_cache[name]['txid'] = txid
@@ -1975,6 +1982,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         name = p['name']
+        try:
+            verify_name_characters(name)
+        except:
+            log.error("Bad name")
+            return defer.fail(InvalidNameError("Bad name"))
         bid = p['bid']
         file_path = p['file_path']
         metadata = p['metadata']

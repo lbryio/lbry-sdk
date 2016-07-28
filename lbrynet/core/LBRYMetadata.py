@@ -14,6 +14,7 @@ BITTREX_FEE = 0.0025
 
 # Metadata version
 SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
+NAME_ALLOWED_CHARSET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0987654321-'
 BASE_METADATA_FIELDS = ['title', 'description', 'author', 'language', 'license', 'content-type', 'sources']
 OPTIONAL_METADATA_FIELDS = ['thumbnail', 'preview', 'fee', 'contact', 'pubkey']
 
@@ -33,6 +34,12 @@ CURRENT_FEE_REVISION = FV001
 
 FEE_REVISIONS = {}
 FEE_REVISIONS[FV001] = {'required': BASE_FEE_FIELDS, 'optional': []}
+
+
+def verify_name_characters(name):
+    for c in name:
+        assert c in NAME_ALLOWED_CHARSET, "Invalid character"
+    return True
 
 
 class LBRYFeeValidator(dict):
