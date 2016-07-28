@@ -41,6 +41,7 @@ from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifi
 from lbrynet.lbrynet_daemon.LBRYUIManager import LBRYUIManager
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
+from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
 from lbrynet.core import utils
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
@@ -157,6 +158,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.current_db_revision = 1
         self.run_server = True
         self.session = None
+        self.exchange_rate_manager = ExchangeRateManager()
         self.waiting_on = {}
         self.streams = {}
         self.pending_claims = {}
@@ -484,6 +486,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.internet_connection_checker.start(3600)
         self.version_checker.start(3600 * 12)
         self.connection_problem_checker.start(1)
+        self.exchange_rate_manager.start()
+
         if host_ui:
             self.lbry_ui_manager.update_checker.start(1800, now=False)
 
@@ -1122,8 +1126,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     return defer.succeed(None)
 
             self.streams[name] = GetStream(self.sd_identifier, self.session, self.session.wallet,
-                                           self.lbry_file_manager, max_key_fee=self.max_key_fee,
-                                           data_rate=self.data_rate, timeout=timeout,
+                                           self.lbry_file_manager, self.exchange_rate_manager,
+                                           max_key_fee=self.max_key_fee, data_rate=self.data_rate, timeout=timeout,
                                            download_directory=download_directory, file_name=file_name)
             d = self.streams[name].start(stream_info, name)
             if wait_for_write:

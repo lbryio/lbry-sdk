@@ -12,7 +12,7 @@ from twisted.internet.task import LoopingCall
 from lbrynet.core.Error import InvalidStreamInfoError, InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.core.LBRYMetadata import Metadata, LBRYFee
+from lbrynet.core.LBRYMetadata import Metadata, LBRYFeeValidator
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.conf import DEFAULT_TIMEOUT, LOG_FILE_NAME
 
@@ -42,8 +42,8 @@ log = logging.getLogger(__name__)
 
 
 class GetStream(object):
-    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, max_key_fee, data_rate=0.5,
-                                    timeout=DEFAULT_TIMEOUT, download_directory=None, file_name=None):
+    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, exchange_rate_manager,
+                 max_key_fee, data_rate=0.5, timeout=DEFAULT_TIMEOUT, download_directory=None, file_name=None):
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
@@ -52,6 +52,7 @@ class GetStream(object):
         self.name = None
         self.file_name = file_name
         self.session = session
+        self.exchange_rate_manager = exchange_rate_manager
         self.payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager)
         self.lbry_file_manager = lbry_file_manager
         self.sd_identifier = sd_identifier
@@ -86,8 +87,10 @@ class GetStream(object):
 
     def _convert_max_fee(self):
         if isinstance(self.max_key_fee, dict):
-            max_fee = deepcopy(self.max_key_fee)
-            return LBRYFee(max_fee, {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC}).to_lbc()
+            max_fee = LBRYFeeValidator(self.max_key_fee)
+            if max_fee.currency_symbol == "LBC":
+                return max_fee.amount
+            return self.exchange_rate_manager.to_lbc(self.fee).amount
         elif isinstance(self.max_key_fee, float):
             return float(self.max_key_fee)
 
@@ -122,14 +125,14 @@ class GetStream(object):
         self.stream_hash = self.stream_info['sources']['lbry_sd_hash']
 
         if 'fee' in self.stream_info:
-            self.fee = LBRYFee(self.stream_info['fee'], {'USDBTC': self.wallet._USDBTC, 'BTCLBC': self.wallet._BTCLBC})
+            self.fee = LBRYFeeValidator(self.stream_info['fee'])
             max_key_fee = self._convert_max_fee()
-            if self.fee.to_lbc() > max_key_fee:
-                log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.to_lbc(),
+            if self.exchange_rate_manager.to_lbc(self.fee).amount > max_key_fee:
+                log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.amount,
                                                                                      self.max_key_fee,
                                                                                      self.resolved_name))
                 return defer.fail(KeyFeeAboveMaxAllowed())
-            log.info("Key fee %f below limit of %f, downloading lbry://%s" % (self.fee.to_lbc(),
+            log.info("Key fee %s below limit of %f, downloading lbry://%s" % (json.dumps(self.fee),
                                                                               max_key_fee,
                                                                               self.resolved_name))
 
@@ -149,7 +152,7 @@ class GetStream(object):
     def _start_download(self, downloader):
         def _pay_key_fee():
             if self.fee is not None:
-                fee_lbc = float(self.fee.to_lbc())
+                fee_lbc = self.exchange_rate_manager.to_lbc(self.fee).amount
                 reserved_points = self.wallet.reserve_points(self.fee.address, fee_lbc)
                 if reserved_points is None:
                     return defer.fail(InsufficientFundsError())

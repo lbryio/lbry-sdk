@@ -32,6 +32,7 @@ class LBRYFeeValidator(dict):
         dict.__init__(self)
         assert len(fee_dict) == 1
         self.fee_version = None
+        self.currency_symbol = None
 
         fee_to_load = deepcopy(fee_dict)
 
@@ -66,53 +67,6 @@ class LBRYFeeValidator(dict):
         for k in FEE_REVISIONS[version]['optional']:
             if k in f[self.currency_symbol]:
                 self[self.currency_symbol].update({k: f[self.currency_symbol].pop(k)})
-
-
-class LBRYFee(LBRYFeeValidator):
-    def __init__(self, fee_dict, rate_dict, bittrex_fee=None):
-        LBRYFeeValidator.__init__(self, fee_dict)
-        self.bittrex_fee = BITTREX_FEE if bittrex_fee is None else bittrex_fee
-        rates = deepcopy(rate_dict)
-
-        assert 'BTCLBC' in rates and 'USDBTC' in rates
-        for fx in rate_dict:
-            assert int(time.time()) - int(rates[fx]['ts']) < 3600, "%s quote is out of date" % fx
-        self._USDBTC = {'spot': rates['USDBTC']['spot'], 'ts': rates['USDBTC']['ts']}
-        self._BTCLBC = {'spot': rates['BTCLBC']['spot'], 'ts': rates['BTCLBC']['ts']}
-
-    def to_lbc(self):
-        r = None
-        if self.currency_symbol == "LBC":
-            r = round(float(self.amount), 5)
-        elif self.currency_symbol == "BTC":
-            r = round(float(self._btc_to_lbc(self.amount)), 5)
-        elif self.currency_symbol == "USD":
-            r = round(float(self._btc_to_lbc(self._usd_to_btc(self.amount))), 5)
-        assert r is not None
-        return r
-
-    def to_usd(self):
-        r = None
-        if self.currency_symbol == "USD":
-            r = round(float(self.amount), 5)
-        elif self.currency_symbol == "BTC":
-            r = round(float(self._btc_to_usd(self.amount)), 5)
-        elif self.currency_symbol == "LBC":
-            r = round(float(self._btc_to_usd(self._lbc_to_btc(self.amount))), 5)
-        assert r is not None
-        return r
-
-    def _usd_to_btc(self, usd):
-        return self._USDBTC['spot'] * float(usd)
-
-    def _btc_to_usd(self, btc):
-        return float(btc) / self._USDBTC['spot']
-
-    def _btc_to_lbc(self, btc):
-        return float(btc) * self._BTCLBC['spot'] / (1.0 - self.bittrex_fee)
-
-    def _lbc_to_btc(self, lbc):
-        return self._BTCLBC['spot'] / float(lbc)
 
 
 class Metadata(dict):

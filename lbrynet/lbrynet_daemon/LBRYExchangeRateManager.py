@@ -1,0 +1,150 @@
+import time
+import requests
+import logging
+import json
+import googlefinance
+from twisted.internet import defer, reactor
+from twisted.internet.task import LoopingCall
+
+from lbrynet.core.LBRYMetadata import LBRYFeeValidator
+
+log = logging.getLogger(__name__)
+
+CURRENCY_PAIRS = ["USDBTC", "BTCLBC"]
+BITTREX_FEE = 0.0025
+COINBASE_FEE = 0.0 #add fee
+
+
+class ExchangeRate(object):
+    def __init__(self, market, spot, ts):
+        assert int(time.time()) - ts < 600
+        self.currency_pair = (market[0:3], market[3:6])
+        self.spot = spot
+        self.ts = ts
+
+    def as_dict(self):
+        return {'spot': self.spot, 'ts': self.ts}
+
+
+class MarketFeed(object):
+    def __init__(self, market, name, url, params, fee):
+        self.market = market
+        self.name = name
+        self.url = url
+        self.params = params
+        self.fee = fee
+        self.rate = None
+        self._updater = LoopingCall(self._update_price)
+
+    def _make_request(self):
+        r = requests.get(self.url, self.params)
+        return r.text
+
+    def _handle_response(self, response):
+        return NotImplementedError
+
+    def _subtract_fee(self, from_amount):
+        return defer.succeed(from_amount / (1.0 - self.fee))
+
+    def _save_price(self, price):
+        log.info("Saving price update %f for %s" % (price, self.market))
+        self.rate = ExchangeRate(self.market, price, int(time.time()))
+
+    def _update_price(self):
+        d = defer.succeed(self._make_request())
+        d.addCallback(self._handle_response)
+        d.addCallback(self._subtract_fee)
+        d.addCallback(self._save_price)
+
+    def start(self):
+        if not self._updater.running:
+            self._updater.start(15)
+
+    def stop(self):
+        if self._updater.running:
+            self._updater.stop()
+
+
+class BittrexFeed(MarketFeed):
+    def __init__(self):
+        MarketFeed.__init__(
+            self,
+            "BTCLBC",
+            "Bittrex",
+            "https://bittrex.com/api/v1.1/public/getmarkethistory",
+            {'market': 'BTC-LBC', 'count': 50},
+            BITTREX_FEE
+        )
+
+    def _handle_response(self, response):
+        trades = json.loads(response)['result']
+        vwap = sum([i['Total'] for i in trades]) / sum([i['Quantity'] for i in trades])
+        return defer.succeed(float(1.0 / vwap))
+
+
+class GoogleBTCFeed(MarketFeed):
+    def __init__(self):
+        MarketFeed.__init__(
+            self,
+            "USDBTC",
+            "Coinbase via Google finance",
+            None,
+            None,
+            COINBASE_FEE
+        )
+
+    def _make_request(self):
+        return googlefinance.getQuotes('CURRENCY:USDBTC')[0]
+
+    def _handle_response(self, response):
+        return float(response['LastTradePrice'])
+
+
+def get_default_market_feed(currency_pair):
+    currencies = None
+    if isinstance(currency_pair, str):
+        currencies = (currency_pair[0:3], currency_pair[3:6])
+    elif isinstance(currency_pair, tuple):
+        currencies = currency_pair
+    assert currencies is not None
+
+    if currencies == ("USD", "BTC"):
+        return GoogleBTCFeed()
+    elif currencies == ("BTC", "LBC"):
+        return BittrexFeed()
+
+
+class ExchangeRateManager(object):
+    def __init__(self):
+        reactor.addSystemEventTrigger('before', 'shutdown', self.stop)
+        self.market_feeds = [get_default_market_feed(currency_pair) for currency_pair in CURRENCY_PAIRS]
+
+    def start(self):
+        log.info("Starting exchange rate manager")
+        for feed in self.market_feeds:
+            feed.start()
+
+    def stop(self):
+        log.info("Stopping exchange rate manager")
+        for source in self.market_feeds:
+            source.stop()
+
+    def convert_currency(self, from_currency, to_currency, amount):
+        log.info("Converting %f %s to %s" % (amount, from_currency, to_currency))
+        for market in self.market_feeds:
+            if market.rate.currency_pair == (from_currency, to_currency):
+                return amount * market.rate.spot
+        for market in self.market_feeds:
+            if market.rate.currency_pair[0] == from_currency:
+                return self.convert_currency(market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
+
+    def fee_dict(self):
+        return {market: market.rate.as_dict() for market in self.market_feeds}
+
+    def to_lbc(self, fee):
+        return LBRYFeeValidator({fee.currency_symbol:
+                                    {
+                                        'amount': self.convert_currency(fee.currency_symbol, "LBC", fee.amount),
+                                        'address': fee.address
+                                    }
+        })

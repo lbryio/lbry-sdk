@@ -82,58 +82,12 @@ class LBRYWallet(object):
         self._batch_count = 20
         self._first_run = self._FIRST_RUN_UNKNOWN
 
-        self._USDBTC = None
-        self._BTCLBC = None
-        self._exchange_rate_updater = task.LoopingCall(self._update_exchange_rates)
-
-    def _usd_to_btc(self):
-        if self._USDBTC is not None:
-            if int(time.time()) - int(self._USDBTC['ts']) < 600:
-                log.info("USDBTC quote is new enough")
-                return defer.succeed({})
-
-        log.info("Getting new USDBTC quote")
-        x = float(getQuotes('CURRENCY:USDBTC')[0]['LastTradePrice'])
-        return defer.succeed({'USDBTC': {'spot': x, 'ts': int(time.time())}})
-
-    def _btc_to_lbc(self):
-        if self._BTCLBC is not None:
-            if int(time.time()) - int(self._BTCLBC['ts']) < 600:
-                log.info("BTCLBC quote is new enough")
-                return defer.succeed({})
-
-        log.info("Getting new BTCLBC quote")
-        r = requests.get("https://bittrex.com/api/v1.1/public/getmarkethistory", {'market': 'BTC-LBC', 'count': 50})
-        trades = json.loads(r.text)['result']
-        vwap = sum([i['Total'] for i in trades]) / sum([i['Quantity'] for i in trades])
-        x = (1.0 / float(vwap)) / 0.99975
-
-        return defer.succeed({'BTCLBC': {'spot': x, 'ts': int(time.time())}})
-
-    def _set_exchange_rates(self, rates):
-        if 'USDBTC' in rates:
-            assert int(time.time()) - int(rates['USDBTC']['ts']) < 3600, "new USDBTC quote is too old"
-            self._USDBTC = {'spot': rates['USDBTC']['spot'], 'ts': rates['USDBTC']['ts']}
-            log.info("Updated USDBTC rate: %s" % json.dumps(self._USDBTC))
-        if 'BTCLBC' in rates:
-            assert int(time.time()) - int(rates['BTCLBC']['ts']) < 3600, "new BTCLBC quote is too old"
-            self._BTCLBC = {'spot': rates['BTCLBC']['spot'], 'ts': rates['BTCLBC']['ts']}
-            log.info("Updated BTCLBC rate: %s" % json.dumps(self._BTCLBC))
-
-    def _update_exchange_rates(self):
-        d = self._usd_to_btc()
-        d.addCallbacks(self._set_exchange_rates, lambda _: reactor.callLater(30, self._update_exchange_rates))
-        d.addCallback(lambda _: self._btc_to_lbc())
-        d.addCallbacks(self._set_exchange_rates, lambda _: reactor.callLater(30, self._update_exchange_rates))
-
     def start(self):
 
         def start_manage():
             self.stopped = False
             self.manage()
             return True
-
-        self._exchange_rate_updater.start(1800)
 
         d = self._open_db()
         d.addCallback(lambda _: self._start())
@@ -147,9 +101,6 @@ class LBRYWallet(object):
     def stop(self):
 
         self.stopped = True
-
-        if self._exchange_rate_updater.running:
-            self._exchange_rate_updater.stop()
             
         # If self.next_manage_call is None, then manage is currently running or else
         # start has not been called, so set stopped and do nothing else.
