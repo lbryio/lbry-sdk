@@ -44,6 +44,21 @@ class MetadataTest(unittest.TestCase):
         with self.assertRaises(AssertionError):
             LBRYMetadata.Metadata(metadata)
 
+    def test_metadata_works_without_fee(self):
+        metadata = {
+            'license': 'Oscilloscope Laboratories',
+            'description': 'Four couples meet for Sunday brunch only to discover they are stuck in a house together as the world may be about to end.',
+            'language': 'en',
+            'title': "It's a Disaster",
+            'author': 'Written and directed by Todd Berger',
+            'sources': {
+                'lbry_sd_hash': '8d0d6ea64d09f5aa90faf5807d8a761c32a27047861e06f81f41e35623a348a4b0104052161d5f89cf190f9672bc4ead'},
+            'content-type': 'audio/mpeg',
+            'thumbnail': 'http://ia.media-imdb.com/images/M/MV5BMTQwNjYzMTQ0Ml5BMl5BanBnXkFtZTcwNDUzODM5Nw@@._V1_SY1000_CR0,0,673,1000_AL_.jpg'
+        }
+        m = LBRYMetadata.Metadata(metadata)
+        self.assertFalse('key' in m)
+
     def test_assertion_if_invalid_source(self):
         metadata = {
             'license': 'Oscilloscope Laboratories',

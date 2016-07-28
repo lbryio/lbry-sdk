@@ -89,7 +89,7 @@ class Metadata(dict):
             self.update({k: metadata.pop(k)})
         for k in METADATA_REVISIONS[version]['optional']:
             if k == 'fee':
-                self['fee'] = LBRYFeeValidator(metadata.pop('fee'))
+                self._load_fee(metadata)
             elif k in metadata:
                 self.update({k: metadata.pop(k)})
 
