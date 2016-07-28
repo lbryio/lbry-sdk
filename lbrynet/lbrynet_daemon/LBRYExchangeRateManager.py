@@ -139,7 +139,7 @@ class ExchangeRateManager(object):
         for market in self.market_feeds:
             if market.rate.currency_pair[0] == from_currency:
                 return self.convert_currency(market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
-        raise Exception('Unable to convert {} from {} to {}'.format(amount, from_current, to_currency))
+        raise Exception('Unable to convert {} from {} to {}'.format(amount, from_currency, to_currency))
 
     def fee_dict(self):
         return {market: market.rate.as_dict() for market in self.market_feeds}
