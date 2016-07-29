@@ -25,7 +25,7 @@ from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
 from txjsonrpc.web import jsonrpc
-from txjsonrpc.web.jsonrpc import Handler
+from txjsonrpc.web.jsonrpc import Handler, Proxy
 
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
@@ -47,6 +47,7 @@ from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
     DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, SOURCE_TYPES
+from lbrynet.conf import SEARCH_SERVER
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
@@ -1228,6 +1229,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return d
 
     def _get_est_cost(self, name):
+        log.info("Estimating cost for " + name)
         def _check_est(d, name):
             if isinstance(d.result, float):
                 log.info("Cost est for lbry://" + name + ": " + str(d.result) + "LBC")
@@ -1416,8 +1418,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(None)
 
     def _search(self, search):
-        d = self.session.wallet.get_nametrie()
-        d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
+        proxy = Proxy(SEARCH_SERVER)
+
+        d = proxy.callRemote('search', search)
+        # d = se.search(search)
+        # d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
         return d
 
     def _render_response(self, result, code):
@@ -1897,43 +1902,38 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             t = []
             for i in n:
                 if i[0]:
-                    if i[1][0][0] and i[1][1][0] and i[1][2][0]:
-                        i[1][0][1]['value'] = str(i[1][0][1]['value'])
-                        t.append([i[1][0][1], i[1][1][1], i[1][2][1]])
+                    tr = {}
+                    tr.update(i[1][0])
+                    thumb = tr.get('thumbnail', None)
+                    if thumb is None:
+                        tr['thumbnail'] = "img/Free-speech-flag.svg"
+                    tr['cost_est'] = i[1][1]
+                    t.append(tr)
             return t
 
-        def resolve_claims(claims):
-            ds = []
-            for claim in claims:
-                d1 = defer.succeed(claim)
-                d2 = self._resolve_name(claim['name'])
-                d3 = self._get_est_cost(claim['name'])
-                dl = defer.DeferredList([d1, d2, d3], consumeErrors=True)
-                ds.append(dl)
-            return defer.DeferredList(ds)
+        def get_est_costs(results):
+            def _get_costs(search_result):
+                log.info("**" + search_result['name'])
+                d = self._get_est_cost(search_result['name'])
+                d.addCallback(lambda p: _save_cost(search_result, p))
+                return d
 
-        def _disp(results):
-            log.info('Found ' + str(len(results)) + ' search results')
-            consolidated_results = []
-            for r in results:
-                t = {}
-                t.update(r[0])
-                if not 'thumbnail' in r[1].keys():
-                    r[1]['thumbnail'] = "img/Free-speech-flag.svg"
-                t.update(r[1])
-                t['cost_est'] = r[2]
-                consolidated_results.append(t)
-                # log.info(str(t))
+            def _save_cost(value, cost):
+                log.info("Save cost")
+                log.info(value)
+                log.info(cost)
+                return [value, cost]
 
-            return consolidated_results
+            log.info("Estimating costs")
+            dl = defer.DeferredList([_get_costs(r) for r in results], consumeErrors=True)
+            return dl
 
         log.info('Search nametrie: ' + search)
 
         d = self._search(search)
         d.addCallback(lambda claims: claims[:self.max_search_results])
-        d.addCallback(resolve_claims)
+        d.addCallback(get_est_costs)
         d.addCallback(_clean)
-        d.addCallback(_disp)
         d.addCallback(lambda results: self._render_response(results, OK_CODE))
 
         return d
