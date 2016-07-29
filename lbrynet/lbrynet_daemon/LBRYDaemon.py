@@ -1229,7 +1229,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return d
 
     def _get_est_cost(self, name):
-        log.info("Estimating cost for " + name)
         def _check_est(d, name):
             if isinstance(d.result, float):
                 log.info("Cost est for lbry://" + name + ": " + str(d.result) + "LBC")
@@ -1419,11 +1418,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _search(self, search):
         proxy = Proxy(SEARCH_SERVER)
-
-        d = proxy.callRemote('search', search)
-        # d = se.search(search)
-        # d.addCallback(lambda trie: [claim for claim in trie if claim['name'].startswith(search) and 'txid' in claim])
-        return d
+        return proxy.callRemote('search', search)
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
@@ -1919,12 +1914,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 return d
 
             def _save_cost(value, cost):
-                log.info("Save cost")
-                log.info(value)
-                log.info(cost)
                 return [value, cost]
 
-            log.info("Estimating costs")
             dl = defer.DeferredList([_get_costs(r) for r in results], consumeErrors=True)
             return dl
 
