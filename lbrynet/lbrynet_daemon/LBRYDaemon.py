@@ -1898,10 +1898,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             for i in n:
                 if i[0]:
                     tr = {}
-                    tr.update(i[1][0])
+                    tr.update(i[1][0]['value'])
                     thumb = tr.get('thumbnail', None)
                     if thumb is None:
                         tr['thumbnail'] = "img/Free-speech-flag.svg"
+                    tr['name'] = i[1][0]['name']
                     tr['cost_est'] = i[1][1]
                     t.append(tr)
             return t
