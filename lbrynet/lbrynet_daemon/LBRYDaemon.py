@@ -1909,7 +1909,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         def get_est_costs(results):
             def _get_costs(search_result):
-                log.info("**" + search_result['name'])
                 d = self._get_est_cost(search_result['name'])
                 d.addCallback(lambda p: _save_cost(search_result, p))
                 return d
