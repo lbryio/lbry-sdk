@@ -1,16 +1,12 @@
 import sys
-from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, ILBRYWallet
-from lbrynet.core.client.ClientRequest import ClientRequest
-from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
-from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.sqlite_helpers import rerun_if_locked
-from lbrynet.conf import BASE_METADATA_FIELDS, SOURCE_TYPES, OPTIONAL_METADATA_FIELDS
-
-from lbryum import SimpleConfig, Network
-from lbryum.lbrycrd import COIN, TYPE_ADDRESS
-from lbryum.wallet import WalletStorage, Wallet
-from lbryum.commands import known_commands, Commands
-from lbryum.transaction import Transaction
+import datetime
+import logging
+import json
+import subprocess
+import socket
+import time
+import os
+import requests
 
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 from twisted.internet import threads, reactor, defer, task
@@ -19,13 +15,21 @@ from twisted.enterprise import adbapi
 from collections import defaultdict, deque
 from zope.interface import implements
 from decimal import Decimal
-import datetime
-import logging
-import json
-import subprocess
-import socket
-import time
-import os
+from googlefinance import getQuotes
+
+from lbryum import SimpleConfig, Network
+from lbryum.lbrycrd import COIN, TYPE_ADDRESS
+from lbryum.wallet import WalletStorage, Wallet
+from lbryum.commands import known_commands, Commands
+from lbryum.transaction import Transaction
+
+from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, ILBRYWallet
+from lbrynet.core.client.ClientRequest import ClientRequest
+from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
+from lbrynet.core.Error import InsufficientFundsError
+from lbrynet.core.sqlite_helpers import rerun_if_locked
+from lbrynet.conf import SOURCE_TYPES
+from lbrynet.core.LBRYMetadata import Metadata
 
 log = logging.getLogger(__name__)
 alert = logging.getLogger("lbryalert." + __name__)
@@ -97,6 +101,7 @@ class LBRYWallet(object):
     def stop(self):
 
         self.stopped = True
+            
         # If self.next_manage_call is None, then manage is currently running or else
         # start has not been called, so set stopped and do nothing else.
         if self.next_manage_call is not None:
@@ -315,54 +320,66 @@ class LBRYWallet(object):
         return d
 
     def _get_stream_info_from_value(self, result, name):
-        r_dict = {}
-        if 'value' in result:
-            value = result['value']
+        def _check_result_fields(r):
+            for k in ['value', 'txid', 'n', 'height', 'amount']:
+                assert k in r, "getvalueforname response missing field %s" % k
 
-            try:
-                value_dict = json.loads(value)
-            except (ValueError, TypeError):
-                return Failure(InvalidStreamInfoError(name))
-            r_dict['sources'] = value_dict['sources']
-            for field in BASE_METADATA_FIELDS:
-                    r_dict[field] = value_dict[field]
-            for field in value_dict:
-                if field in OPTIONAL_METADATA_FIELDS:
-                    r_dict[field] = value_dict[field]
-
-        if 'txid' in result:
-            d = self._save_name_metadata(name, r_dict['sources']['lbry_sd_hash'], str(result['txid']))
-            d.addCallback(lambda _: r_dict)
-            return d
-        elif 'error' in result:
+        if 'error' in result:
             log.warning("Got an error looking up a name: %s", result['error'])
             return Failure(UnknownNameError(name))
-        else:
-            log.warning("Got an error looking up a name: %s", json.dumps(result))
+
+        _check_result_fields(result)
+
+        try:
+            metadata = Metadata(json.loads(result['value']))
+        except (ValueError, TypeError):
+            return Failure(InvalidStreamInfoError(name))
+
+        d = self._save_name_metadata(name, str(result['txid']), metadata['sources']['lbry_sd_hash'])
+        d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, metadata.meta_version)))
+        d.addCallback(lambda _: metadata)
+        return d
+
+    def _get_claim_info(self, result, name):
+        def _check_result_fields(r):
+            for k in ['value', 'txid', 'n', 'height', 'amount']:
+                assert k in r, "getvalueforname response missing field %s" % k
+
+        def _build_response(m, result):
+            result['value'] = m
+            return result
+
+        if 'error' in result:
+            log.warning("Got an error looking up a name: %s", result['error'])
             return Failure(UnknownNameError(name))
 
-    def claim_name(self, name, bid, sources, metadata, fee=None):
-        value = {'sources': {}}
-        for k in SOURCE_TYPES:
-            if k in sources:
-                value['sources'][k] = sources[k]
-        if value['sources'] == {}:
-            return defer.fail("No source given")
-        for k in BASE_METADATA_FIELDS:
-            if k not in metadata:
-                return defer.fail("Missing required field '%s'" % k)
-            value[k] = metadata[k]
-        for k in metadata:
-            if k not in BASE_METADATA_FIELDS:
-                value[k] = metadata[k]
-        if fee is not None:
-            if "LBC" in fee:
-                value['fee'] = {'LBC': {'amount': fee['LBC']['amount'], 'address': fee['LBC']['address']}}
+        _check_result_fields(result)
 
-        d = self._send_name_claim(name, json.dumps(value), bid)
+        try:
+            metadata = Metadata(json.loads(result['value']))
+        except (ValueError, TypeError):
+            return Failure(InvalidStreamInfoError(name))
+
+        d = self._save_name_metadata(name, str(result['txid']), metadata['sources']['lbry_sd_hash'])
+        d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, metadata.meta_version)))
+        d.addCallback(lambda _: _build_response(metadata, result))
+        return d
+
+    def get_claim_info(self, name):
+        d = self._get_value_for_name(name)
+        d.addCallback(lambda r: self._get_claim_info(r, name))
+        return d
+
+
+    def claim_name(self, name, bid, m):
+
+        metadata = Metadata(m)
+
+        d = self._send_name_claim(name, json.dumps(metadata), bid)
 
         def _save_metadata(txid):
-            d = self._save_name_metadata(name, value['sources']['lbry_sd_hash'], txid)
+            log.info("Saving metadata for claim %s" % txid)
+            d = self._save_name_metadata(name, txid, metadata['sources']['lbry_sd_hash'])
             d.addCallback(lambda _: txid)
             return d
 
@@ -407,10 +424,12 @@ class LBRYWallet(object):
         d.addCallback(self._get_decoded_tx)
         return d
 
-    def update_name(self, name, value, amount):
+    def update_name(self, name, bid, value, old_txid):
         d = self._get_value_for_name(name)
-        d.addCallback(lambda r: (self._update_name(r['txid'], json.dumps(value), amount), r['txid']))
-        d.addCallback(lambda (new_txid, old_txid): self._update_name_metadata(name, value['sources']['lbry_sd_hash'], old_txid, new_txid))
+        d.addCallback(lambda r: self.abandon_name(r['txid'] if not old_txid else old_txid))
+        d.addCallback(lambda r: log.info("Abandon claim tx %s" % str(r)))
+        d.addCallback(lambda _: self.claim_name(name, bid, value))
+
         return d
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
@@ -520,17 +539,11 @@ class LBRYWallet(object):
                                 "    txid text, " +
                                 "    sd_hash text)")
 
-    def _save_name_metadata(self, name, sd_hash, txid):
-        d = self.db.runQuery("select * from name_metadata where txid=?", (txid,))
+    def _save_name_metadata(self, name, txid, sd_hash):
+        d = self.db.runQuery("select * from name_metadata where name=? and txid=? and sd_hash=?", (name, txid, sd_hash))
         d.addCallback(lambda r: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash))
                                 if not len(r) else None)
 
-        return d
-
-    def _update_name_metadata(self, name, sd_hash, old_txid, new_txid):
-        d = self.db.runQuery("delete * from name_metadata where txid=? and sd_hash=?", (old_txid, sd_hash))
-        d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, new_txid, sd_hash)))
-        d.addCallback(lambda _: new_txid)
         return d
 
     def _get_claim_metadata_for_sd_hash(self, sd_hash):

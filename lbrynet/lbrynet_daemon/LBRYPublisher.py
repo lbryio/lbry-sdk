@@ -10,6 +10,7 @@ from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.core.PaymentRateManager import PaymentRateManager
+from lbrynet.core.LBRYMetadata import Metadata, CURRENT_METADATA_VERSION
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.conf import LOG_FILE_NAME
 from twisted.internet import threads, defer
@@ -39,10 +40,10 @@ class Publisher(object):
         self.verified = False
         self.lbry_file = None
         self.txid = None
-        self.sources = {}
-        self.fee = None
+        self.stream_hash = None
+        self.metadata = {}
 
-    def start(self, name, file_path, bid, metadata, fee=None, sources={}):
+    def start(self, name, file_path, bid, metadata, old_txid):
 
         def _show_result():
             log.info("Published %s --> lbry://%s txid: %s", self.file_name, self.publish_name, self.txid)
@@ -51,8 +52,8 @@ class Publisher(object):
         self.publish_name = name
         self.file_path = file_path
         self.bid_amount = bid
-        self.fee = fee
         self.metadata = metadata
+        self.old_txid = old_txid
 
         d = self._check_file_path(self.file_path)
         d.addCallback(lambda _: create_lbry_file(self.session, self.lbry_file_manager,
@@ -60,6 +61,7 @@ class Publisher(object):
         d.addCallback(self.add_to_lbry_files)
         d.addCallback(lambda _: self._create_sd_blob())
         d.addCallback(lambda _: self._claim_name())
+        d.addCallback(lambda _: self.set_status())
         d.addCallbacks(lambda _: _show_result(), self._show_publish_error)
 
         return d
@@ -72,26 +74,15 @@ class Publisher(object):
             return True
         return threads.deferToThread(check_file_threaded)
 
-    def _get_new_address(self):
-        d = self.wallet.get_new_address()
-
-        def set_address(address):
-            self.key_fee_address = address
-            return True
-
-        d.addCallback(set_address)
-        return d
-
-    def set_status(self, lbry_file_downloader):
+    def set_lbry_file(self, lbry_file_downloader):
         self.lbry_file = lbry_file_downloader
-        d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file, ManagedLBRYFileDownloader.STATUS_FINISHED)
-        d.addCallback(lambda _: lbry_file_downloader.restore())
-        return d
+        return defer.succeed(None)
 
     def add_to_lbry_files(self, stream_hash):
+        self.stream_hash = stream_hash
         prm = PaymentRateManager(self.session.base_payment_rate_manager)
         d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
-        d.addCallback(self.set_status)
+        d.addCallback(self.set_lbry_file)
         return d
 
     def _create_sd_blob(self):
@@ -99,19 +90,34 @@ class Publisher(object):
                             self.lbry_file.stream_hash)
 
         def set_sd_hash(sd_hash):
-            self.sources['lbry_sd_hash'] = sd_hash
+            if 'sources' not in self.metadata:
+                self.metadata['sources'] = {}
+            self.metadata['sources']['lbry_sd_hash'] = sd_hash
 
         d.addCallback(set_sd_hash)
+        return d
+
+    def set_status(self):
+        d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file, ManagedLBRYFileDownloader.STATUS_FINISHED)
+        d.addCallback(lambda _: self.lbry_file.restore())
         return d
 
     def _claim_name(self):
         self.metadata['content-type'] = mimetypes.guess_type(os.path.join(self.lbry_file.download_directory,
                                                                           self.lbry_file.file_name))[0]
-        d = self.wallet.claim_name(self.publish_name,
-                                   self.bid_amount,
-                                   self.sources,
-                                   self.metadata,
-                                   fee=self.fee)
+        self.metadata['ver'] = CURRENT_METADATA_VERSION
+
+        if self.old_txid:
+
+            d = self.wallet.abandon_name(self.old_txid)
+            d.addCallback(lambda tx: log.info("Abandoned tx %s" % str(tx)))
+            d.addCallback(lambda _: self.wallet.claim_name(self.publish_name,
+                                       self.bid_amount,
+                                       Metadata(self.metadata)))
+        else:
+            d = self.wallet.claim_name(self.publish_name,
+                                       self.bid_amount,
+                                       Metadata(self.metadata))
         def set_tx_hash(txid):
             self.txid = txid
 

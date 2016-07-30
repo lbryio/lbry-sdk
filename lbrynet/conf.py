@@ -10,6 +10,7 @@ MAX_RESPONSE_INFO_SIZE = 2**16
 MAX_BLOB_INFOS_TO_REQUEST = 20
 BLOBFILES_DIR = ".blobfiles"
 BLOB_SIZE = 2**21
+
 MIN_BLOB_DATA_PAYMENT_RATE = .005  # points/megabyte
 MIN_BLOB_INFO_PAYMENT_RATE = .02  # points/1000 infos
 MIN_VALUABLE_BLOB_INFO_PAYMENT_RATE = .05  # points/1000 infos
@@ -23,6 +24,9 @@ KNOWN_DHT_NODES = [('104.236.42.182', 4000),
 
 POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2424'
 #POINTTRADER_SERVER = 'http://127.0.0.1:2424'
+SEARCH_SERVERS = ["http://lighthouse1.lbry.io:50005",
+                  "http://lighthouse2.lbry.io:50005",
+                  "http://lighthouse3.lbry.io:50005"]
 
 LOG_FILE_NAME = "lbrynet.log"
 LOG_POST_URL = "https://lbry.io/log-upload"
@@ -42,11 +46,14 @@ DEFAULT_WALLET = "lbryum"
 WALLET_TYPES = ["lbryum", "lbrycrd"]
 DEFAULT_TIMEOUT = 30
 DEFAULT_MAX_SEARCH_RESULTS = 25
-DEFAULT_MAX_KEY_FEE = 100.0
+DEFAULT_MAX_KEY_FEE = {'USD': {'amount': 25.0, 'address': ''}}
 DEFAULT_SEARCH_TIMEOUT = 3.0
 DEFAULT_CACHE_TIME = 3600
 DEFAULT_UI_BRANCH = "master"
 
 SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
-BASE_METADATA_FIELDS = ['title', 'description', 'author', 'language', 'license', 'content-type']
-OPTIONAL_METADATA_FIELDS = ['thumbnail', 'preview', 'fee', 'contact', 'pubkey']
+CURRENCIES = {
+                'BTC': {'type': 'crypto'},
+                'LBC': {'type': 'crypto'},
+                'USD': {'type': 'fiat'},
+             }

@@ -25,7 +25,7 @@ console_scripts = ['lbrynet-stdin-uploader = lbrynet.lbrynet_console.LBRYStdinUp
 
 requires = ['pycrypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
             'python-bitcoinrpc==0.1', 'txJSON-RPC', 'requests>=2.4.2', 'unqlite==0.2.0',
-            'leveldb', 'lbryum', 'jsonrpc', 'simplejson', 'appdirs', 'six==1.9.0', 'base58']
+            'leveldb', 'lbryum', 'jsonrpc', 'simplejson', 'appdirs', 'six==1.9.0', 'base58', 'googlefinance']
 
 setup(name='lbrynet',
       description='A decentralized media library and marketplace',
