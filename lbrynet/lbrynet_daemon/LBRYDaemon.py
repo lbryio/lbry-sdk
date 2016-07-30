@@ -148,8 +148,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.connected_to_internet = True
         self.connection_problem = None
         self.query_handlers = {}
-        self.pip_lbrynet_version = None
-        self.pip_lbryum_version = None
+        self.git_lbrynet_version = None
+        self.git_lbryum_version = None
         self.ui_version = None
         self.ip = None
         # TODO: this is confusing to set here, and then to be reset below.
@@ -569,33 +569,42 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _check_remote_versions(self):
         def _get_lbryum_version():
             try:
-                r = pkg_resources.get_distribution("lbryum").version
-                log.info("Local lbryum: %s" % lbryum_version)
-                log.info("Available lbryum: %s" % r)
-                self.pip_lbryum_version = r
+                r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
+                version = next(line.split("=")[1].split("#")[0].replace(" ", "")
+                               for line in r if "LBRYUM_VERSION" in line)
+                version = version.replace("'", "")
+                log.info(
+                    "remote lbryum %s > local lbryum %s = %s",
+                    version, lbryum_version,
+                    utils.version_is_greater_than(version, lbryum_version)
+                )
+                self.git_lbryum_version = version
                 return defer.succeed(None)
             except:
                 log.info("Failed to get lbryum version from git")
-                self.pip_lbryum_version = None
+                self.git_lbryum_version = None
                 return defer.fail(None)
 
         def _get_lbrynet_version():
             try:
-                r = pkg_resources.get_distribution("lbrynet").version
-                log.info("Local lbrynet: %s" % lbrynet_version)
-                log.info("Available lbrynet: %s" % r)
-                self.pip_lbrynet_version = r
+                version = get_lbrynet_version_from_github()
+                log.info(
+                    "remote lbrynet %s > local lbrynet %s = %s",
+                    version, lbrynet_version,
+                    utils.version_is_greater_than(version, lbrynet_version)
+                )
+                self.git_lbrynet_version = version
                 return defer.succeed(None)
             except:
                 log.info("Failed to get lbrynet version from git")
-                self.pip_lbrynet_version = None
+                self.git_lbrynet_version = None
                 return defer.fail(None)
 
         d = _get_lbrynet_version()
         d.addCallback(lambda _: _get_lbryum_version())
 
     def _check_connection_problems(self):
-        if not self.pip_lbrynet_version or not self.pip_lbryum_version:
+        if not self.git_lbrynet_version or not self.git_lbryum_version:
             self.connection_problem = CONNECTION_PROBLEM_CODES[0]
 
         elif self.startup_status[0] == 'loading_wallet':
@@ -1537,10 +1546,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'lbrynet_version': lbrynet_version,
             'lbryum_version': lbryum_version,
             'ui_version': self.ui_version,
-            'remote_lbrynet': self.pip_lbrynet_version,
-            'remote_lbryum': self.pip_lbryum_version,
-            'lbrynet_update_available': utils.version_is_greater_than(self.pip_lbrynet_version, lbrynet_version),
-            'lbryum_update_available': utils.version_is_greater_than(self.pip_lbryum_version, lbryum_version),
+            'remote_lbrynet': self.git_lbrynet_version,
+            'remote_lbryum': self.git_lbryum_version,
+            'lbrynet_update_available': utils.version_is_greater_than(self.git_lbrynet_version, lbrynet_version),
+            'lbryum_update_available': utils.version_is_greater_than(self.git_lbryum_version, lbryum_version),
         }
 
         log.info("Get version info: " + json.dumps(msg))
