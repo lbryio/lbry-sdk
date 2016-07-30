@@ -24,7 +24,9 @@ KNOWN_DHT_NODES = [('104.236.42.182', 4000),
 
 POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2424'
 #POINTTRADER_SERVER = 'http://127.0.0.1:2424'
-SEARCH_SERVER = "http://45.63.4.203:50005"
+SEARCH_SERVERS = ["http://lighthouse1.lbry.io:50005",
+                  "http://lighthouse2.lbry.io:50005",
+                  "http://lighthouse3.lbry.io:50005"]
 
 LOG_FILE_NAME = "lbrynet.log"
 LOG_POST_URL = "https://lbry.io/log-upload"

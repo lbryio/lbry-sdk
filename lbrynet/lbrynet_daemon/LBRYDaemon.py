@@ -47,7 +47,7 @@ from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
     DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, SOURCE_TYPES
-from lbrynet.conf import SEARCH_SERVER
+from lbrynet.conf import SEARCH_SERVERS
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import LBRYSession
@@ -1417,7 +1417,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(None)
 
     def _search(self, search):
-        proxy = Proxy(SEARCH_SERVER)
+        proxy = Proxy(random.choice(SEARCH_SERVERS))
         return proxy.callRemote('search', search)
 
     def _render_response(self, result, code):
