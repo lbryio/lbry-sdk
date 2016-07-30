@@ -1889,13 +1889,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def jsonrpc_search_nametrie(self, p):
         """
-        Search the nametrie for claims beginning with search (yes, this is a dumb search, it'll be made better)
+        Search the nametrie for claims
 
         Args:
             'search': search query, string
         Returns:
             List of search results
         """
+
+        # TODO: change this function to "search", and use cached stream size info from the search server
 
         if 'search' in p.keys():
             search = p['search']
