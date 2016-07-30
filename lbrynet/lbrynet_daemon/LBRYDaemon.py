@@ -1178,7 +1178,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _resolve_name(self, name, force_refresh=False):
         try:
             verify_name_characters(name)
-        except:
+        except AssertionError:
             log.error("Bad name")
             return defer.fail(InvalidNameError("Bad name"))
 
