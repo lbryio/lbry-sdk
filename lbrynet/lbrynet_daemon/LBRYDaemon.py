@@ -1917,15 +1917,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return t
 
         def get_est_costs(results):
-            def _get_costs(search_result):
+            def _save_cost(search_result):
                 d = self._get_est_cost(search_result['name'])
-                d.addCallback(lambda p: _save_cost(search_result, p))
+                d.addCallback(lambda p: [search_result, p])
                 return d
 
-            def _save_cost(value, cost):
-                return [value, cost]
-
-            dl = defer.DeferredList([_get_costs(r) for r in results], consumeErrors=True)
+            dl = defer.DeferredList([_save_cost(r) for r in results], consumeErrors=True)
             return dl
 
         log.info('Search nametrie: ' + search)
