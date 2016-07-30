@@ -1925,7 +1925,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             dl = defer.DeferredList([_save_cost(r) for r in results], consumeErrors=True)
             return dl
 
-        log.info('Search nametrie: ' + search)
+        log.info('Search: %s' % search)
 
         d = self._search(search)
         d.addCallback(lambda claims: claims[:self.max_search_results])
