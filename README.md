@@ -1,8 +1,14 @@
+[![Build Status](https://travis-ci.org/lbryio/lbry.svg?branch=master)](https://travis-ci.org/lbryio/lbry)
+
 # LBRYnet
 
 LBRYnet is a fully decentralized network for distributing data. It consists of peers uploading
 and downloading data from other peers, possibly in exchange for payments, and a distributed hash
 table, used by peers to discover other peers.
+
+## Installation
+
+Download the [latest release](https://github.com/lbryio/lbry/releases/latest) or see [INSTALL.md](INSTALL.md) for manual installation.
 
 ## Overview
 
@@ -18,32 +24,48 @@ help peers find each other. For example, an application for which clients don't 
 necessary chunks may use some identifier, chosen by the application, to find clients which do
 know all of the necessary chunks.
 
-## Running
+## For Developers
 
-LBRYnet comes with an file sharing application, called 'lbrynet-console', which breaks
+The bundled LBRY application uses the lbrynet JSONRPC api found in `lbrynet.lbrynet_daemon.LBRYDaemon`. This api allows for applications and web services like the lbry browser UI to interact with lbrynet. If you've installed lbrynet, you can run `lbrynet-daemon` without running the app. While the app or `lbrynet-daemon` is running, you can use the following to show the help for all the available commands:
+
+```
+from jsonrpc.proxy import JSONRPCProxy
+
+try:
+  from lbrynet.conf import API_CONNECTION_STRING
+except:
+  print "You don't have lbrynet installed!"
+  API_CONNECTION_STRING = "http://localhost:5279/lbryapi"
+  
+api = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+if not api.is_running():
+  print api.daemon_status()
+else:
+  for func in api.help():
+    print "%s:\n%s" % (func, api.help({'function': func}))
+```
+
+If you've installed lbrynet, it comes with a file sharing application, called `lbrynet-daemon`, which breaks
 files into chunks, encrypts them with a symmetric key, computes their sha384 hash sum, generates
 a special file called a 'stream descriptor' containing the hash sums and some other file metadata,
 and makes the chunks available for download by other peers. A peer wishing to download the file
-must first obtain the 'stream descriptor' and then may open it with his 'lbrynet-console' client,
+must first obtain the 'stream descriptor' and then may open it with his `lbrynet-daemon` client,
 download all of the chunks by locating peers with the chunks via the DHT, and then combine the
 chunks into the original file, according to the metadata included in the 'stream descriptor'.
 
-To install and use this client, see [INSTALL](INSTALL.md) and [RUNNING](RUNNING.md)
+For detailed instructions, see [INSTALL.md](INSTALL.md) and [RUNNING.md](RUNNING.md).
 
-## Installation
+Documentation: doc.lbry.io (may be out of date)
 
-See [INSTALL](INSTALL.md)
+Source code: https://github.com/lbryio/lbry
 
-## Developers
-
-Documentation: doc.lbry.io
-Source code: trac.lbry.io/browser
-
-To contribute to the development of LBRYnet or lbrynet-console, contact jimmy@lbry.io
+To contribute, [join us on Slack](https://lbry-slackin.herokuapp.com/) or contact josh@lbry.io. Pull requests are also welcome.
 
 ## Support
 
-Send all support requests to jimmy@lbry.io
+Please open an issue and describe your situation in detail. We will respond as soon as we can.
+
+For private issues, contact josh@lbry.io.
 
 ## License
 

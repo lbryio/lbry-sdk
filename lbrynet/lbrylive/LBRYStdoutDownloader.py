@@ -1,7 +1,10 @@
+# pylint: skip-file
+# This file is not maintained, but might be used in the future
+#
 import logging
 import sys
 
-from lbrynet.lbrynet_console.plugins.LBRYLive.LBRYLiveStreamDownloader import LBRYLiveStreamDownloader
+from lbrynet.lbrylive.client.LiveStreamDownloader import LBRYLiveStreamDownloader
 from lbrynet.core.BlobManager import TempBlobManager
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
@@ -15,15 +18,17 @@ from twisted.internet import task
 
 class LBRYStdoutDownloader():
     """This class downloads a live stream from the network and outputs it to standard out."""
-    def __init__(self, dht_node_port, known_dht_nodes):
+    def __init__(self, dht_node_port, known_dht_nodes,
+                 stream_info_manager_class=DBLiveStreamMetadataManager, blob_manager_class=TempBlobManager):
         """
         @param dht_node_port: the network port on which to listen for DHT node requests
 
         @param known_dht_nodes: a list of (ip_address, dht_port) which will be used to join the DHT network
 
         """
-        self.session = LBRYSession(blob_manager_class=TempBlobManager,
-                                   stream_info_manager_class=DBLiveStreamMetadataManager,
+
+        self.session = LBRYSession(blob_manager_class=blob_manager_class,
+                                   stream_info_manager_class=stream_info_manager_class,
                                    dht_node_class=Node, dht_node_port=dht_node_port, known_dht_nodes=known_dht_nodes,
                                    use_upnp=False)
         self.payment_rate_manager = BaseLiveStreamPaymentRateManager()

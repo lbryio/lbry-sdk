@@ -3,17 +3,16 @@ Keep track of which LBRY Files are downloading and store their LBRY File specifi
 """
 
 import logging
+import os
 
 from twisted.enterprise import adbapi
+from twisted.internet import defer, task, reactor
+from twisted.python.failure import Failure
 
-import os
-import sys
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
 from lbrynet.core.PaymentRateManager import PaymentRateManager
-from twisted.internet import defer, task, reactor
-from twisted.python.failure import Failure
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError, CurrentlyStoppingError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
@@ -26,14 +25,14 @@ class LBRYFileManager(object):
     Keeps track of currently opened LBRY Files, their options, and their LBRY File specific metadata.
     """
 
-    def __init__(self, session, stream_info_manager, sd_identifier):
+    def __init__(self, session, stream_info_manager, sd_identifier, download_directory=None):
         self.session = session
         self.stream_info_manager = stream_info_manager
         self.sd_identifier = sd_identifier
         self.lbry_files = []
         self.sql_db = None
-        if sys.platform.startswith("darwin"):
-            self.download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
+        if download_directory:
+            self.download_directory = download_directory
         else:
             self.download_directory = os.getcwd()
         log.debug("Download directory for LBRYFileManager: %s", str(self.download_directory))
@@ -94,7 +93,10 @@ class LBRYFileManager(object):
         d.addCallback(start_lbry_files)
         return d
 
-    def start_lbry_file(self, rowid, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True):
+    def start_lbry_file(self, rowid, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True,
+                                                                        download_directory=None, file_name=None):
+        if not download_directory:
+            download_directory = self.download_directory
         payment_rate_manager.min_blob_data_payment_rate = blob_data_rate
         lbry_file_downloader = ManagedLBRYFileDownloader(rowid, stream_hash,
                                                          self.session.peer_finder,
@@ -102,17 +104,19 @@ class LBRYFileManager(object):
                                                          self.session.blob_manager,
                                                          self.stream_info_manager, self,
                                                          payment_rate_manager, self.session.wallet,
-                                                         self.download_directory,
-                                                         upload_allowed)
+                                                         download_directory,
+                                                         upload_allowed,
+                                                         file_name=file_name)
         self.lbry_files.append(lbry_file_downloader)
         d = lbry_file_downloader.set_stream_info()
         d.addCallback(lambda _: lbry_file_downloader)
         return d
 
-    def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True):
+    def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True,
+                                                                download_directory=None, file_name=None):
         d = self._save_lbry_file(stream_hash, blob_data_rate)
         d.addCallback(lambda rowid: self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
-                                                         blob_data_rate, upload_allowed))
+                                                         blob_data_rate, upload_allowed, download_directory, file_name))
         return d
 
     def delete_lbry_file(self, lbry_file):
@@ -152,6 +156,7 @@ class LBRYFileManager(object):
             return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
     def stop(self):
+
         ds = []
 
         def wait_for_finished(lbry_file, count=2):

@@ -28,7 +28,7 @@ class LBRYSession(object):
     def __init__(self, blob_data_payment_rate, db_dir=None, lbryid=None, peer_manager=None, dht_node_port=None,
                  known_dht_nodes=None, peer_finder=None, hash_announcer=None,
                  blob_dir=None, blob_manager=None, peer_port=None, use_upnp=True,
-                 rate_limiter=None, wallet=None):
+                 rate_limiter=None, wallet=None, dht_node_class=node.Node):
         """
         @param blob_data_payment_rate: The default payment rate for blob data
 
@@ -99,7 +99,7 @@ class LBRYSession(object):
         self.upnp_redirects = []
 
         self.wallet = wallet
-
+        self.dht_node_class = dht_node_class
         self.dht_node = None
 
         self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
@@ -220,8 +220,11 @@ class LBRYSession(object):
             d.addCallback(match_port, port)
             ds.append(d)
 
-        self.dht_node = node.Node(udpPort=self.dht_node_port, lbryid=self.lbryid,
-                                  externalIP=self.external_ip)
+        self.dht_node = self.dht_node_class(
+            udpPort=self.dht_node_port,
+            lbryid=self.lbryid,
+            externalIP=self.external_ip
+        )
         self.peer_finder = DHTPeerFinder(self.dht_node, self.peer_manager)
         if self.hash_announcer is None:
             self.hash_announcer = DHTHashAnnouncer(self.dht_node, self.peer_port)

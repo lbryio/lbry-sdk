@@ -22,7 +22,19 @@ class ConnectionClosedBeforeResponseError(Exception):
     pass
 
 
+class KeyFeeAboveMaxAllowed(Exception):
+    pass
+
+
 class UnknownNameError(Exception):
+    def __init__(self, name):
+        self.name = name
+
+    def __str__(self):
+        return repr(self.name)
+
+
+class InvalidNameError(Exception):
     def __init__(self, name):
         self.name = name
 

@@ -241,7 +241,7 @@ class Node(object):
 
         def log_error(err, n):
             log.error("error storing blob_hash %s at %s", binascii.hexlify(blob_hash), str(n))
-            log.error(binascii.hexlify(err.getErrorMessage()))
+            log.error(err.getErrorMessage())
             log.error(err.getTraceback())
 
         def log_success(res):
@@ -516,7 +516,7 @@ class Node(object):
             else:
                 raise TypeError, 'No NodeID given. Therefore we can\'t store this node'
 
-        if self_store is True and self.externalIP is not None:
+        if self_store is True and self.externalIP:
             contact = Contact(self.id, self.externalIP, self.port, None, None)
             compact_ip = contact.compact_ip()
         elif '_rpcNodeContact' in kwargs:

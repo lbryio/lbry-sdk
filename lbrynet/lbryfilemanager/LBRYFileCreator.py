@@ -131,7 +131,8 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
 
     def make_stream_desc_file(stream_hash):
         log.debug("creating the stream descriptor file")
-        descriptor_writer = PlainStreamDescriptorWriter(file_name + conf.CRYPTSD_FILE_EXTENSION)
+        descriptor_file_path = os.path.join(session.db_dir, file_name + conf.CRYPTSD_FILE_EXTENSION)
+        descriptor_writer = PlainStreamDescriptorWriter(descriptor_file_path)
 
         d = get_sd_info(lbry_file_manager.stream_info_manager, stream_hash, True)
 

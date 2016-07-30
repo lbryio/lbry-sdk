@@ -17,3 +17,14 @@ lbrynet.egg-info/PKG-INFO
 /build
 
 /dist
+
+*.so
+
+*.pem
+
+*.decTest
+
+.coverage
+
+# temporary files from the twisted.trial test runner
+_trial_temp/

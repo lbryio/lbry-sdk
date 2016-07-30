@@ -1,43 +1,35 @@
-Prerequisites
--------------
-
-To use the LBRYWallet, which enables spending and accepting LBRYcrds in exchange for data, the
-LBRYcrd application (insert link to LBRYcrd website here) must be installed and running. If
-this is not desired, the testing client can be used to simulate trading points, which is
-built into LBRYnet.
-
-on Ubuntu:
-
-```
-sudo apt-get install libgmp3-dev build-essential python-dev python-pip
-```
-
-Getting the source
-------------------
-
-Don't you already have it?
-
-Setting up the environment
+#### Installing the LBRY app
 --------------------------
 
-It's recommended that you use a virtualenv
+Installing LBRY is simple. You can get a dmg installer for OS X (Mavericks and up) or a .deb for linux [here](https://lbry.io/get). 
 
-```
-sudo apt-get install python-virtualenv
-cd <source base directory>
-virtualenv .
-source bin/activate
-```
+##### OS X
+Just drag and drop LBRY.app into your applications folder (replacing any older versions). When it's running you'll have a LBRY icon in your status bar.
 
-(to deactivate the virtualenv, enter 'deactivate')
+##### Linux
+Double click the .deb file and follow the prompts. The app can be started by searching "LBRY", and it can be turned off by clicking the red 'x' in the browser interface.
 
-```
-python setup.py install
-```
+On both systems you can also open the UI while the app is running by going to lbry://lbry in Firefox or Safari, or localhost:5279 in Chrome.
 
-this will install all of the libraries and a few applications
 
-For running the file sharing application, see [RUNNING](RUNNING.md)
+
+#### Installing LBRY command line
+--------------------------
+
+##### OS X
+You can install LBRY command line by running `curl -sL https://rawgit.com/lbryio/lbry-setup/master/lbry_setup_osx.sh | sudo bash` in a terminal. This script will install lbrynet and its dependancies, as well as the app. You can start LBRY by either starting the app or by running `lbrynet-daemon` from a terminal. 
+
+##### Linux
+On Ubuntu or Mint you can install the prerequisites and lbrynet by running
+ 
+ ```
+ sudo apt-get install libgmp3-dev build-essential python2.7 python2.7-dev python-pip git
+ git clone https://github.com/lbryio/lbry.git
+ cd lbry
+ sudo python setup.py install
+ ```
+
+To start LBRY, run `lbrynet-daemon` in a terminal.
 
 #### On windows:
 

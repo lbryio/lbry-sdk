@@ -24,12 +24,33 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
         LBRYFileSaver.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
                                stream_info_manager, payment_rate_manager, wallet, download_directory,
                                upload_allowed, file_name)
+        self.sd_hash = None
+        self.txid = None
+        self.uri = None
         self.rowid = rowid
         self.lbry_file_manager = lbry_file_manager
         self.saving_status = False
 
     def restore(self):
-        d = self.lbry_file_manager.get_lbry_file_status(self)
+        d = self.stream_info_manager._get_sd_blob_hashes_for_stream(self.stream_hash)
+
+        def _save_sd_hash(sd_hash):
+            if len(sd_hash):
+                self.sd_hash = sd_hash[0]
+                d = self.wallet._get_claim_metadata_for_sd_hash(self.sd_hash)
+            else:
+                d = defer.succeed(None)
+
+            return d
+
+        def _save_claim(name, txid):
+            self.uri = name
+            self.txid = txid
+            return defer.succeed(None)
+
+        d.addCallback(_save_sd_hash)
+        d.addCallback(lambda r: _save_claim(r[0], r[1]) if r else None)
+        d.addCallback(lambda _: self.lbry_file_manager.get_lbry_file_status(self))
 
         def restore_status(status):
             if status == ManagedLBRYFileDownloader.STATUS_RUNNING:
@@ -87,6 +108,24 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
 
         d = LBRYFileSaver._start(self)
 
+        d.addCallback(lambda _: self.stream_info_manager._get_sd_blob_hashes_for_stream(self.stream_hash))
+
+        def _save_sd_hash(sd_hash):
+            if len(sd_hash):
+                self.sd_hash = sd_hash[0]
+                d = self.wallet._get_claim_metadata_for_sd_hash(self.sd_hash)
+            else:
+                d = defer.succeed(None)
+
+            return d
+
+        def _save_claim(name, txid):
+            self.uri = name
+            self.txid = txid
+            return defer.succeed(None)
+
+        d.addCallback(_save_sd_hash)
+        d.addCallback(lambda r: _save_claim(r[0], r[1]) if r else None)
         d.addCallback(lambda _: self._save_status())
 
         return d
@@ -119,7 +158,7 @@ class ManagedLBRYFileDownloaderFactory(object):
     def can_download(self, sd_validator):
         return True
 
-    def make_downloader(self, metadata, options, payment_rate_manager):
+    def make_downloader(self, metadata, options, payment_rate_manager, download_directory=None, file_name=None):
         data_rate = options[0]
         upload_allowed = options[1]
 
@@ -137,7 +176,9 @@ class ManagedLBRYFileDownloaderFactory(object):
         d.addCallback(lambda stream_hash: self.lbry_file_manager.add_lbry_file(stream_hash,
                                                                                payment_rate_manager,
                                                                                data_rate,
-                                                                               upload_allowed))
+                                                                               upload_allowed,
+                                                                               download_directory=download_directory,
+                                                                               file_name=file_name))
         return d
 
     @staticmethod
