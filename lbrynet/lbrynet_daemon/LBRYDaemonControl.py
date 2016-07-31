@@ -32,6 +32,9 @@ log = logging.getLogger(__name__)
 
 REMOTE_SERVER = "www.google.com"
 
+if getattr(sys, 'frozen', False):
+    os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(os.getcwd(), "cacert.pem")
+
 
 def test_internet_connection():
     try:
