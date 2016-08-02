@@ -1072,6 +1072,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
+    def _download_sd_blob(self, sd_hash):
+        d = download_sd_blob(self.session, sd_hash, PaymentRateManager(self.session.base_payment_rate_manager))
+        d.addCallback(BlobStreamDescriptorReader)
+        d.addCallback(lambda blob: blob.get_info())
+        return d
+
     def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None,
                                 file_name=None, stream_info=None, wait_for_write=True):
         """
@@ -2247,10 +2253,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         sd_hash = p['sd_hash']
-
-        d = download_sd_blob(self.session, sd_hash, PaymentRateManager(self.session.base_payment_rate_manager))
-        d.addCallback(BlobStreamDescriptorReader)
-        d.addCallback(lambda blob: blob.get_info())
+        d = self._download_sd_blob(sd_hash)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
