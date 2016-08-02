@@ -41,6 +41,7 @@ from lbrynet.lbrynet_daemon.LBRYUIManager import LBRYUIManager
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
+from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
 from lbrynet.core import utils
 from lbrynet.core.LBRYMetadata import verify_name_characters
 from lbrynet.core.utils import generate_id
@@ -160,6 +161,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.run_server = True
         self.session = None
         self.exchange_rate_manager = ExchangeRateManager()
+        self.lighthouse_client = LighthouseClient()
         self.waiting_on = {}
         self.streams = {}
         self.pending_claims = {}
@@ -625,6 +627,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         # TODO: this was blatantly copied from jsonrpc_start_lbry_file. Be DRY.
         def _start_file(f):
             d = self.lbry_file_manager.toggle_lbry_file_running(f)
+            d.addCallback(lambda _: self.lighthouse_client.announce_sd(f.sd_hash))
             return defer.succeed("Started LBRY file")
 
         def _get_and_start_file(name):
@@ -1444,8 +1447,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(None)
 
     def _search(self, search):
-        proxy = Proxy(random.choice(SEARCH_SERVERS))
-        return proxy.callRemote('search', search)
+        return self.lighthouse_client.search(search)
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
