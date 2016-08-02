@@ -1074,7 +1074,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _download_sd_blob(self, sd_hash):
         def cb(result):
-            r.callback(result)
+            if not r.called:
+                r.callback(result)
 
         def eb():
             if not r.called:
