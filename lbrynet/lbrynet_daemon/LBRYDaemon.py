@@ -1922,6 +1922,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             return self._render_response(None, BAD_REQUEST)
 
+        # TODO: have ui accept the actual outputs
         def _clean(n):
             t = []
             for i in n:
