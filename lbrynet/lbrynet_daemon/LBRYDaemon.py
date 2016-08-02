@@ -1073,10 +1073,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(True)
 
     def _download_sd_blob(self, sd_hash):
+        def cb(result):
+            r.callback(result)
+
+        def eb():
+            if not r.called:
+                r.errback(Exception("sd timeout"))
+
+        r = defer.Deferred(None)
+        reactor.callLater(3, eb)
         d = download_sd_blob(self.session, sd_hash, PaymentRateManager(self.session.base_payment_rate_manager))
         d.addCallback(BlobStreamDescriptorReader)
         d.addCallback(lambda blob: blob.get_info())
-        return d
+        d.addCallback(cb)
+
+        return r
 
     def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None,
                                 file_name=None, stream_info=None, wait_for_write=True):
@@ -2251,10 +2262,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Returns
             sd blob, dict
         """
-
         sd_hash = p['sd_hash']
+
         d = self._download_sd_blob(sd_hash)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: self._render_response(False, OK_CODE))
         return d
 
     def jsonrpc_get_nametrie(self):
