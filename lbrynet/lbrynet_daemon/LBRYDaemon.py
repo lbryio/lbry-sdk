@@ -49,7 +49,7 @@ from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS,
     DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, SOURCE_TYPES
 from lbrynet.conf import SEARCH_SERVERS
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
+from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
@@ -2233,6 +2233,24 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return server.failure
 
         d = self.session.wallet.get_claims_from_tx(txid)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_download_descriptor(self, p):
+        """
+        Download and return a sd blob
+
+        Args:
+            sd_hash
+        Returns
+            sd blob, dict
+        """
+
+        sd_hash = p['sd_hash']
+
+        d = download_sd_blob(self.session, sd_hash, PaymentRateManager(self.session.base_payment_rate_manager))
+        d.addCallback(BlobStreamDescriptorReader)
+        d.addCallback(lambda blob: blob.get_info())
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
