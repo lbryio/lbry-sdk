@@ -1925,31 +1925,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         def _clean(n):
             t = []
             for i in n:
-                if i[0]:
-                    tr = {}
-                    tr.update(i[1][0]['value'])
-                    thumb = tr.get('thumbnail', None)
-                    if thumb is None:
-                        tr['thumbnail'] = "img/Free-speech-flag.svg"
-                    tr['name'] = i[1][0]['name']
-                    tr['cost_est'] = i[1][1]
-                    t.append(tr)
+                td = {k: i['value'][k] for k in i['value']}
+                td['cost_est'] = float(i['cost'])
+                td['thumbnail'] = i['value'].get('thumbnail', "img/Free-speech-flag.svg")
+                td['name'] = i['name']
+                t.append(td)
             return t
-
-        def get_est_costs(results):
-            def _save_cost(search_result):
-                d = self._get_est_cost(search_result['name'])
-                d.addCallback(lambda p: [search_result, p])
-                return d
-
-            dl = defer.DeferredList([_save_cost(r) for r in results], consumeErrors=True)
-            return dl
 
         log.info('Search: %s' % search)
 
         d = self._search(search)
-        d.addCallback(lambda claims: claims[:self.max_search_results])
-        d.addCallback(get_est_costs)
         d.addCallback(_clean)
         d.addCallback(lambda results: self._render_response(results, OK_CODE))
 
