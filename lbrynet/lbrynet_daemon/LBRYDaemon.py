@@ -206,7 +206,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'requested_first_run_credits': False,
             'cache_time': DEFAULT_CACHE_TIME,
             'startup_scripts': [],
-            'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}
+            'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version},
+            'language': 'en'
         }
 
         if os.path.isfile(self.daemon_conf):
@@ -263,6 +264,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.search_timeout = self.session_settings['search_timeout']
         self.download_timeout = self.session_settings['download_timeout']
         self.max_search_results = self.session_settings['max_search_results']
+        self.language = self.session_settings['language']
         ####
         #
         # Ignore the saved wallet type. Some users will have their wallet type
@@ -859,6 +861,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     self.session_settings['cache_time'] = int(settings['cache_time'])
                 else:
                     return defer.fail()
+            elif k == 'language':
+                if type(settings['language']) is str:
+                    self.session_settings['language'] = settings['language']
+                else:
+                    return defer.fail()
+
         self.run_on_startup = self.session_settings['run_on_startup']
         self.data_rate = self.session_settings['data_rate']
         self.max_key_fee = self.session_settings['max_key_fee']
@@ -869,6 +877,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.download_timeout = self.session_settings['download_timeout']
         self.search_timeout = self.session_settings['search_timeout']
         self.cache_time = self.session_settings['cache_time']
+        self.language = self.session_settings['language']
 
         f = open(self.daemon_conf, "w")
         f.write(json.dumps(self.session_settings))
