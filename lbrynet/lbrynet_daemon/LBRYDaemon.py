@@ -49,7 +49,7 @@ from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS,
     DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, SOURCE_TYPES
 from lbrynet.conf import SEARCH_SERVERS
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
+from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
@@ -1072,6 +1072,24 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
+    def _download_sd_blob(self, sd_hash):
+        def cb(result):
+            if not r.called:
+                r.callback(result)
+
+        def eb():
+            if not r.called:
+                r.errback(Exception("sd timeout"))
+
+        r = defer.Deferred(None)
+        reactor.callLater(3, eb)
+        d = download_sd_blob(self.session, sd_hash, PaymentRateManager(self.session.base_payment_rate_manager))
+        d.addCallback(BlobStreamDescriptorReader)
+        d.addCallback(lambda blob: blob.get_info())
+        d.addCallback(cb)
+
+        return r
+
     def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None,
                                 file_name=None, stream_info=None, wait_for_write=True):
         """
@@ -1904,34 +1922,20 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             return self._render_response(None, BAD_REQUEST)
 
+        # TODO: have ui accept the actual outputs
         def _clean(n):
             t = []
             for i in n:
-                if i[0]:
-                    tr = {}
-                    tr.update(i[1][0]['value'])
-                    thumb = tr.get('thumbnail', None)
-                    if thumb is None:
-                        tr['thumbnail'] = "img/Free-speech-flag.svg"
-                    tr['name'] = i[1][0]['name']
-                    tr['cost_est'] = i[1][1]
-                    t.append(tr)
+                td = {k: i['value'][k] for k in i['value']}
+                td['cost_est'] = float(i['cost'])
+                td['thumbnail'] = i['value'].get('thumbnail', "img/Free-speech-flag.svg")
+                td['name'] = i['name']
+                t.append(td)
             return t
-
-        def get_est_costs(results):
-            def _save_cost(search_result):
-                d = self._get_est_cost(search_result['name'])
-                d.addCallback(lambda p: [search_result, p])
-                return d
-
-            dl = defer.DeferredList([_save_cost(r) for r in results], consumeErrors=True)
-            return dl
 
         log.info('Search: %s' % search)
 
         d = self._search(search)
-        d.addCallback(lambda claims: claims[:self.max_search_results])
-        d.addCallback(get_est_costs)
         d.addCallback(_clean)
         d.addCallback(lambda results: self._render_response(results, OK_CODE))
 
@@ -2234,6 +2238,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self.session.wallet.get_claims_from_tx(txid)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_download_descriptor(self, p):
+        """
+        Download and return a sd blob
+
+        Args:
+            sd_hash
+        Returns
+            sd blob, dict
+        """
+        sd_hash = p['sd_hash']
+
+        d = self._download_sd_blob(sd_hash)
+        d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: self._render_response(False, OK_CODE))
         return d
 
     def jsonrpc_get_nametrie(self):
