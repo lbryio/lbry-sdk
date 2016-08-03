@@ -173,14 +173,23 @@ class LBRYSession(object):
                         self.upnp_redirects.append((self.peer_port, 'TCP'))
                         log.info("Set UPnP redirect for TCP port %d", self.peer_port)
                     else:
+                        # see comment below
                         log.warning("UPnP redirect already set for TCP port %d", self.peer_port)
+                        self.upnp_redirects.append((self.peer_port, 'TCP'))
                 if self.dht_node_port is not None:
                     if u.getspecificportmapping(self.dht_node_port, 'UDP') is None:
                         u.addportmapping(self.dht_node_port, 'UDP', u.lanaddr, self.dht_node_port, 'LBRY DHT port', '')
                         self.upnp_redirects.append((self.dht_node_port, 'UDP'))
                         log.info("Set UPnP redirect for UPD port %d", self.dht_node_port)
                     else:
+                        # TODO: check that the existing redirect was put up by an old lbrynet session before grabbing it
+                        # if such a disconnected redirect exists, then upnp won't work unless the redirect is appended
+                        # or is torn down and set back up. a bad shutdown of lbrynet could leave such a redirect up
+                        # and cause problems on the next start.
+                        # this could be problematic if a previous lbrynet session didn't make the redirect, and it was
+                        # made by another application
                         log.warning("UPnP redirect already set for UDP port %d", self.dht_node_port)
+                        self.upnp_redirects.append((self.dht_node_port, 'UDP'))
                 return True
             return False
 

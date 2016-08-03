@@ -41,13 +41,14 @@ from lbrynet.lbrynet_daemon.LBRYUIManager import LBRYUIManager
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
+from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
 from lbrynet.core import utils
 from lbrynet.core.LBRYMetadata import verify_name_characters
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
     DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, SOURCE_TYPES
-from lbrynet.conf import SEARCH_SERVERS
+from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
 from lbrynet.core.Session import LBRYSession
@@ -160,6 +161,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.run_server = True
         self.session = None
         self.exchange_rate_manager = ExchangeRateManager()
+        self.lighthouse_client = LighthouseClient()
         self.waiting_on = {}
         self.streams = {}
         self.pending_claims = {}
@@ -375,6 +377,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     f.write("rpcpassword=" + password)
                 log.info("Done writing lbrycrd.conf")
 
+    def _responseFailed(self, err, call):
+        call.cancel()
+
     def render(self, request):
         request.content.seek(0, 0)
         # Unmarshal the JSON-RPC data.
@@ -414,6 +419,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 d = defer.maybeDeferred(function)
             else:
                 d = defer.maybeDeferred(function, *args)
+
+            # cancel the response if the connection is broken
+            request.notifyFinish().addErrback(self._responseFailed, d)
+
             d.addErrback(self._ebRender, id)
             d.addCallback(self._cbRender, request, id, version)
         return server.NOT_DONE_YET
@@ -438,6 +447,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         except:
             f = jsonrpclib.Fault(self.FAILURE, "can't serialize output")
             s = jsonrpclib.dumps(f, version=version)
+
         request.setHeader("content-length", str(len(s)))
         request.write(s)
         request.finish()
@@ -625,6 +635,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         # TODO: this was blatantly copied from jsonrpc_start_lbry_file. Be DRY.
         def _start_file(f):
             d = self.lbry_file_manager.toggle_lbry_file_running(f)
+            d.addCallback(lambda _: self.lighthouse_client.announce_sd(f.sd_hash))
             return defer.succeed("Started LBRY file")
 
         def _get_and_start_file(name):
@@ -1072,7 +1083,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
-    def _download_sd_blob(self, sd_hash):
+    def _download_sd_blob(self, sd_hash, timeout=DEFAULT_SD_DOWNLOAD_TIMEOUT):
         def cb(result):
             if not r.called:
                 r.callback(result)
@@ -1082,7 +1093,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 r.errback(Exception("sd timeout"))
 
         r = defer.Deferred(None)
-        reactor.callLater(3, eb)
+        reactor.callLater(timeout, eb)
         d = download_sd_blob(self.session, sd_hash, PaymentRateManager(self.session.base_payment_rate_manager))
         d.addCallback(BlobStreamDescriptorReader)
         d.addCallback(lambda blob: blob.get_info())
@@ -1444,8 +1455,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(None)
 
     def _search(self, search):
-        proxy = Proxy(random.choice(SEARCH_SERVERS))
-        return proxy.callRemote('search', search)
+        return self.lighthouse_client.search(search)
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
@@ -2250,8 +2260,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             sd blob, dict
         """
         sd_hash = p['sd_hash']
+        timeout = p.get('timeout', DEFAULT_SD_DOWNLOAD_TIMEOUT)
 
-        d = self._download_sd_blob(sd_hash)
+        d = self._download_sd_blob(sd_hash, timeout)
         d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: self._render_response(False, OK_CODE))
         return d
 
@@ -2399,6 +2410,23 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d = threads.deferToThread(subprocess.Popen, ['xdg-open', os.dirname(path)])
 
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
+        return d
+
+    def jsonrpc_get_peers_for_hash(self, p):
+        """
+        Get peers for blob hash
+
+        Args:
+            'blob_hash': blob hash
+        Returns:
+            List of contacts
+        """
+
+        blob_hash = p['blob_hash']
+
+        d = self.session.peer_finder.find_peers_for_blob(blob_hash)
+        d.addCallback(lambda r: [[c.host, c.port, c.is_available()] for c in r])
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
 
