@@ -2403,6 +2403,23 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
 
+    def jsonrpc_get_peers_for_hash(self, p):
+        """
+        Get peers for blob hash
+
+        Args:
+            'blob_hash': blob hash
+        Returns:
+            List of contacts
+        """
+
+        blob_hash = p['blob_hash']
+
+        d = self.session.peer_finder.find_peers_for_blob(blob_hash)
+        d.addCallback(lambda r: [[c.host, c.port, c.is_available()] for c in r])
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
 
 def get_lbrynet_version_from_github():
     """Return the latest released version from github."""
