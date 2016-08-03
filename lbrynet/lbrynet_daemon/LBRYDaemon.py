@@ -419,7 +419,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 d = defer.maybeDeferred(function)
             else:
                 d = defer.maybeDeferred(function, *args)
+
+            # cancel the response if the connection is broken
             request.notifyFinish().addErrback(self._responseFailed, d)
+
             d.addErrback(self._ebRender, id)
             d.addCallback(self._cbRender, request, id, version)
         return server.NOT_DONE_YET
