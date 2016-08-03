@@ -2,14 +2,14 @@ import logging
 import random
 from txjsonrpc.web.jsonrpc import Proxy
 from twisted.internet import defer
-from lbrynet.conf import  SEARCH_SERVERS
+from lbrynet.conf import SEARCH_SERVERS
 
 log = logging.getLogger(__name__)
 
 
 class LighthouseClient(object):
-    def __init__(self):
-        self.servers = SEARCH_SERVERS
+    def __init__(self, servers=None):
+        self.servers = servers or SEARCH_SERVERS
 
     def _get_random_server(self):
         return Proxy(random.choice(self.servers))
