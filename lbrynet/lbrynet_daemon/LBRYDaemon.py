@@ -48,7 +48,7 @@ from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
     DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, SOURCE_TYPES
-from lbrynet.conf import SEARCH_SERVERS
+from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
 from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
 from lbrynet.core.Session import LBRYSession
@@ -1083,7 +1083,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
         return defer.succeed(True)
 
-    def _download_sd_blob(self, sd_hash):
+    def _download_sd_blob(self, sd_hash, timeout=DEFAULT_SD_DOWNLOAD_TIMEOUT):
         def cb(result):
             if not r.called:
                 r.callback(result)
@@ -1093,7 +1093,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 r.errback(Exception("sd timeout"))
 
         r = defer.Deferred(None)
-        reactor.callLater(3, eb)
+        reactor.callLater(timeout, eb)
         d = download_sd_blob(self.session, sd_hash, PaymentRateManager(self.session.base_payment_rate_manager))
         d.addCallback(BlobStreamDescriptorReader)
         d.addCallback(lambda blob: blob.get_info())
@@ -2260,8 +2260,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             sd blob, dict
         """
         sd_hash = p['sd_hash']
+        timeout = p.get('timeout', DEFAULT_SD_DOWNLOAD_TIMEOUT)
 
-        d = self._download_sd_blob(sd_hash)
+        d = self._download_sd_blob(sd_hash, timeout)
         d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: self._render_response(False, OK_CODE))
         return d
 
