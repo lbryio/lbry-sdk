@@ -377,6 +377,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     f.write("rpcpassword=" + password)
                 log.info("Done writing lbrycrd.conf")
 
+    def _responseFailed(self, err, call):
+        call.cancel()
+
     def render(self, request):
         request.content.seek(0, 0)
         # Unmarshal the JSON-RPC data.
@@ -416,6 +419,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 d = defer.maybeDeferred(function)
             else:
                 d = defer.maybeDeferred(function, *args)
+            request.notifyFinish().addErrback(self._responseFailed, d)
             d.addErrback(self._ebRender, id)
             d.addCallback(self._cbRender, request, id, version)
         return server.NOT_DONE_YET
@@ -440,6 +444,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         except:
             f = jsonrpclib.Fault(self.FAILURE, "can't serialize output")
             s = jsonrpclib.dumps(f, version=version)
+
         request.setHeader("content-length", str(len(s)))
         request.write(s)
         request.finish()
