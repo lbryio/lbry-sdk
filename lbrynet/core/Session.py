@@ -174,6 +174,7 @@ class LBRYSession(object):
                         log.info("Set UPnP redirect for TCP port %d", self.peer_port)
                     else:
                         log.warning("UPnP redirect already set for TCP port %d", self.peer_port)
+                        self.upnp_redirects.append((self.peer_port, 'TCP'))
                 if self.dht_node_port is not None:
                     if u.getspecificportmapping(self.dht_node_port, 'UDP') is None:
                         u.addportmapping(self.dht_node_port, 'UDP', u.lanaddr, self.dht_node_port, 'LBRY DHT port', '')
@@ -181,6 +182,7 @@ class LBRYSession(object):
                         log.info("Set UPnP redirect for UPD port %d", self.dht_node_port)
                     else:
                         log.warning("UPnP redirect already set for UDP port %d", self.dht_node_port)
+                        self.upnp_redirects.append((self.dht_node_port, 'UDP'))
                 return True
             return False
 
