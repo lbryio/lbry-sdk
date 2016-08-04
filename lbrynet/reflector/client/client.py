@@ -92,6 +92,13 @@ class LBRYFileReflectorClient(Protocol):
                 self.blob_hashes_to_send.append(blob_hash)
 
         d.addCallback(set_blobs)
+
+        d.addCallback(lambda _: stream_info_manager.get_sd_blob_hashes_for_stream)
+
+        def set_sd_blobs(sd_blob_hashes):
+            for sd_blob_hash, in sd_blob_hashes:
+                self.blob_hashes_to_send.append(sd_blob_hash)
+        d.addCallback(set_sd_blobs)
         return d
 
     def parse_response(self, buff):
