@@ -324,6 +324,10 @@ class LBRYWallet(object):
             for k in ['value', 'txid', 'n', 'height', 'amount']:
                 assert k in r, "getvalueforname response missing field %s" % k
 
+        def _log_success(claim_id):
+            log.info("lbry://%s complies with %s, claimid: %s" % (name, metadata.meta_version, claim_id))
+            return defer.succeed(None)
+
         if 'error' in result:
             log.warning("Got an error looking up a name: %s", result['error'])
             return Failure(UnknownNameError(name))
@@ -335,8 +339,11 @@ class LBRYWallet(object):
         except (ValueError, TypeError):
             return Failure(InvalidStreamInfoError(name))
 
-        d = self._save_name_metadata(name, str(result['txid']), metadata['sources']['lbry_sd_hash'])
-        d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, metadata.meta_version)))
+        txid = result['txid']
+        sd_hash = metadata['sources']['lbry_sd_hash']
+        d = self._save_name_metadata(name, txid, sd_hash)
+        d.addCallback(lambda _: self.get_claimid(name, txid))
+        d.addCallback(lambda cid: _log_success(cid))
         d.addCallback(lambda _: metadata)
         return d
 
@@ -345,8 +352,10 @@ class LBRYWallet(object):
             for k in ['value', 'txid', 'n', 'height', 'amount']:
                 assert k in r, "getvalueforname response missing field %s" % k
 
-        def _build_response(m, result):
+        def _build_response(m, result, claim_id):
             result['value'] = m
+            result['claim_id'] = claim_id
+            log.info("lbry://%s complies with %s, claimid: %s" % (name, m.meta_version, claim_id))
             return result
 
         if 'error' in result:
@@ -360,16 +369,32 @@ class LBRYWallet(object):
         except (ValueError, TypeError):
             return Failure(InvalidStreamInfoError(name))
 
-        d = self._save_name_metadata(name, str(result['txid']), metadata['sources']['lbry_sd_hash'])
-        d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, metadata.meta_version)))
-        d.addCallback(lambda _: _build_response(metadata, result))
+        sd_hash = metadata['sources']['lbry_sd_hash']
+        txid = result['txid']
+
+        d = self._save_name_metadata(name, txid, sd_hash)
+        d.addCallback(lambda _: self.get_claimid(name, txid))
+        d.addCallback(lambda claim_id: _build_response(metadata, result, claim_id))
+        return d
+
+    def get_claimid(self, name, txid):
+        def _get_id_for_return(claim_id):
+            if claim_id:
+                return defer.succeed(claim_id)
+            else:
+                d = self.get_claims_from_tx(txid)
+                d.addCallback(lambda claims: next(c['claimId'] for c in claims if c['name'] == name))
+                d.addCallback(lambda cid: self._update_claimid(cid, name, txid))
+                return d
+
+        d = self._get_claimid_for_tx(name, txid)
+        d.addCallback(_get_id_for_return)
         return d
 
     def get_claim_info(self, name):
         d = self._get_value_for_name(name)
         d.addCallback(lambda r: self._get_claim_info(r, name))
         return d
-
 
     def claim_name(self, name, bid, m):
 
@@ -534,10 +559,18 @@ class LBRYWallet(object):
     def _open_db(self):
         self.db = adbapi.ConnectionPool('sqlite3', os.path.join(self.db_dir, "blockchainname.db"),
                                         check_same_thread=False)
-        return self.db.runQuery("create table if not exists name_metadata (" +
+
+        def create_tables(transaction):
+            transaction.execute("create table if not exists name_metadata (" +
                                 "    name text, " +
                                 "    txid text, " +
                                 "    sd_hash text)")
+            transaction.execute("create table if not exists claim_ids (" +
+                                "    claimId text, " +
+                                "    name text, " +
+                                "    txid text)")
+
+        return self.db.runInteraction(create_tables)
 
     def _save_name_metadata(self, name, txid, sd_hash):
         d = self.db.runQuery("select * from name_metadata where name=? and txid=? and sd_hash=?", (name, txid, sd_hash))
@@ -549,6 +582,17 @@ class LBRYWallet(object):
     def _get_claim_metadata_for_sd_hash(self, sd_hash):
         d = self.db.runQuery("select name, txid from name_metadata where sd_hash=?", (sd_hash,))
         d.addCallback(lambda r: r[0] if len(r) else None)
+        return d
+
+    def _update_claimid(self, claim_id, name, txid):
+        d = self.db.runQuery("delete from claim_ids where claimId=? and name=?", (claim_id, name))
+        d.addCallback(lambda r: self.db.runQuery("insert into claim_ids values (?, ?, ?)", (claim_id, name, txid)))
+        d.addCallback(lambda _: claim_id)
+        return d
+
+    def _get_claimid_for_tx(self, name, txid):
+        d = self.db.runQuery("select claimId from claim_ids where name=? and txid=?", (name, txid))
+        d.addCallback(lambda r: None if not r else r[0][0])
         return d
 
     ######### Must be overridden #########
