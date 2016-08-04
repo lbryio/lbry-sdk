@@ -2430,6 +2430,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return d
 
 
+    def jsonrpc_update_claim(self, p):
+        def _x(r):
+            log.info(str(r))
+            return r
+
+        metadata = p['metadata']
+        bid = p['bid']
+        name = p['name']
+        tx = p['txid']
+        d = self.session.wallet.update_name(name, bid, metadata, tx)
+        d.addCallback(_x)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+
 def get_lbrynet_version_from_github():
     """Return the latest released version from github."""
     response = requests.get('https://api.github.com/repos/lbryio/lbry/releases/latest')

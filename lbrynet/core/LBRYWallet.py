@@ -425,12 +425,12 @@ class LBRYWallet(object):
         return d
 
     def update_name(self, name, bid, value, old_txid):
-        d = self._get_value_for_name(name)
-        d.addCallback(lambda r: self.abandon_name(r['txid'] if not old_txid else old_txid))
-        d.addCallback(lambda r: log.info("Abandon claim tx %s" % str(r)))
-        d.addCallback(lambda _: self.claim_name(name, bid, value))
-
-        return d
+        # d = self._get_value_for_name(name)
+        # d.addCallback(lambda r: self.abandon_name(r['txid'] if not old_txid else old_txid))
+        # d.addCallback(lambda r: log.info("Abandon claim tx %s" % str(r)))
+        # d.addCallback(lambda _: self.claim_name(name, bid, value))
+        # return d
+        return defer.fail(NotImplementedError())
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
@@ -1063,6 +1063,13 @@ class LBRYumWallet(LBRYWallet):
         d.addCallback(Decimal)
         return d
 
+    def update_name(self, name, bid, value, txid):
+        serialized = Metadata(value).serialize()
+        d = self.get_claims_from_tx(txid)
+        d.addCallback(lambda claims: next(claim['claimId'] for claim in claims if claim['name'] == name))
+        d.addCallback(lambda claim_id: self._send_claim_update(txid, bid, name, claim_id, serialized))
+        return d
+
     def get_new_address(self):
         d = threads.deferToThread(self.wallet.create_new_address)
         d.addCallback(self._save_wallet)
@@ -1105,6 +1112,16 @@ class LBRYumWallet(LBRYWallet):
         d.addCallback(send_claim)
         d.addCallback(self._broadcast_transaction)
         return d
+
+    def _send_claim_update(self, txid, amount, name, claim_id, val):
+        def send_claim(address):
+            cmd = known_commands['updateclaim']
+            func = getattr(self.cmd_runner, cmd.name)
+            return threads.deferToThread(func, txid, address, amount, name, claim_id, val)
+        log.info("Update lbry://%s %s %f %s %s" % (name, txid, amount, claim_id, val))
+        d = self.get_new_address()
+        d.addCallback(send_claim)
+        d.addCallback(self._broadcast_transaction)
 
     def _get_decoded_tx(self, raw_tx):
         tx = Transaction(raw_tx)

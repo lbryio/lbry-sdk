@@ -90,10 +90,10 @@ class LBRYFeeValidator(dict):
 
 
 class Metadata(dict):
-    def __init__(self, metadata):
+    def __init__(self, metadata, is_hex=False):
         dict.__init__(self)
         self.meta_version = None
-        metadata_to_load = deepcopy(metadata)
+        metadata_to_load = deepcopy(metadata if not is_hex else json.loads(metadata.decode("hex")))
 
         self._verify_sources(metadata_to_load)
         self._verify_metadata(metadata_to_load)
@@ -126,3 +126,6 @@ class Metadata(dict):
                     assert self.meta_version == self['ver'], "version mismatch"
                 break
         assert metadata == {}, "Unknown metadata keys: %s" % json.dumps(metadata.keys())
+
+    def serialize(self):
+        return json.dumps(self).encode("hex")
