@@ -1229,7 +1229,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if not force_refresh:
             if name in self.name_cache.keys():
                 if (self._get_long_count_timestamp() - self.name_cache[name]['timestamp']) < self.cache_time:
-                    log.info("Returning cached stream info for lbry://" + name)
+                    log.debug("Returning cached stream info for lbry://" + name)
                     d = defer.succeed(self.name_cache[name]['claim_metadata'])
                 else:
                     log.info("Refreshing stream info for lbry://" + name)
@@ -1417,7 +1417,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d = self._get_lbry_file_by_sd_hash(val)
         elif search_by == "file_name":
             d = self._get_lbry_file_by_file_name(val)
-        d.addCallback(_log_get_lbry_file)
+        # d.addCallback(_log_get_lbry_file)
         if return_json:
             d.addCallback(_get_json_for_return)
         return d
