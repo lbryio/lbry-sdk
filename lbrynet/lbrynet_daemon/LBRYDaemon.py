@@ -1132,6 +1132,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                                        self.session,
                                        self.session.wallet,
                                        self.lbry_file_manager,
+                                       self.exchange_rate_manager,
                                        max_key_fee=self.max_key_fee,
                                        data_rate=self.data_rate,
                                        timeout=timeout,
