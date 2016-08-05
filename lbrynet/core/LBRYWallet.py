@@ -595,7 +595,7 @@ class LBRYWallet(object):
 
     def _get_claim_metadata_for_sd_hash(self, sd_hash):
         d = self.db.runQuery("select name, txid from name_metadata where sd_hash=?", (sd_hash,))
-        d.addCallback(lambda r: r[0] if len(r) else None)
+        d.addCallback(lambda r: r[0] if r else None)
         return d
 
     def _update_claimid(self, claim_id, name, txid):
