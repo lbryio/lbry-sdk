@@ -1754,6 +1754,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                                 stream_info=params.stream_info,
                                 file_name=params.file_name,
                                 wait_for_write=params.wait_for_write)
+        # TODO: downloading can timeout.  Not sure what to do when that happens
         d.addCallback(get_output_callback(params))
         d.addCallback(lambda message: self._render_response(message, OK_CODE))
         return d
@@ -2411,6 +2412,13 @@ class _DownloadNameHelper(object):
     def _get_stream(self, stream_info):
         d = self.daemon.add_stream(
             self.name, self.timeout, self.download_directory, self.file_name, stream_info)
+
+        def _raiseErrorOnTimeout(args):
+            was_successful, _, _ = args
+            if not was_successful:
+                raise Exception('What am I supposed to do with a timed-out downloader?')
+        d.addCallback(_raiseErrorOnTimeout)
+
         if self.wait_for_write:
             d.addCallback(lambda _: self._wait_for_write())
         d.addCallback(lambda _: self.daemon.streams[self.name].downloader)

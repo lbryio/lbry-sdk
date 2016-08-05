@@ -76,14 +76,14 @@ class GetStream(object):
         # TODO: Why is this the stopping condition for the finished callback?
         if self.download_path:
             self.checker.stop()
-            self.finished.callback((self.stream_hash, self.download_path))
+            self.finished.callback((True, self.stream_hash, self.download_path))
 
         elif self.timeout_counter >= self.timeout:
             log.info("Timeout downloading lbry://%s" % self.resolved_name)
             self.checker.stop()
             self.d.cancel()
             self.code = STREAM_STAGES[4]
-            self.finished.callback(False)
+            self.finished.callback((False, None, None))
 
     def _convert_max_fee(self):
         if isinstance(self.max_key_fee, dict):
