@@ -150,21 +150,19 @@ class GetStream(object):
         return self.finished
 
     def _start_download(self, downloader):
-        def _pay_key_fee():
-            if self.fee is not None:
-                fee_lbc = self.exchange_rate_manager.to_lbc(self.fee).amount
-                reserved_points = self.wallet.reserve_points(self.fee.address, fee_lbc)
-                if reserved_points is None:
-                    return defer.fail(InsufficientFundsError())
-                return self.wallet.send_points_to_address(reserved_points, fee_lbc)
-
-            return defer.succeed(None)
-
-        d = _pay_key_fee()
-
+        log.info('Starting download for %s', self.name)
         self.downloader = downloader
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
 
+        d = self._pay_key_fee()
         d.addCallback(lambda _: log.info("Downloading %s --> %s", self.stream_hash, self.downloader.file_name))
         d.addCallback(lambda _: self.downloader.start())
 
+    def _pay_key_fee(self):
+        if self.fee is not None:
+            fee_lbc = self.exchange_rate_manager.to_lbc(self.fee).amount
+            reserved_points = self.wallet.reserve_points(self.fee.address, fee_lbc)
+            if reserved_points is None:
+                return defer.fail(InsufficientFundsError())
+            return self.wallet.send_points_to_address(reserved_points, fee_lbc)
+        return defer.succeed(None)
