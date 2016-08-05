@@ -599,7 +599,7 @@ class LBRYWallet(object):
         return d
 
     def _update_claimid(self, claim_id, name, txid):
-        d = self.db.runQuery("delete from claim_ids where claimId=? and name=?", (claim_id, name))
+        d = self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=?", (claim_id, name, txid))
         d.addCallback(lambda r: self.db.runQuery("insert into claim_ids values (?, ?, ?)", (claim_id, name, txid)))
         d.addCallback(lambda _: claim_id)
         return d
