@@ -396,19 +396,27 @@ class LBRYWallet(object):
         d.addCallback(_get_id_for_return)
         return d
 
-    def get_claim_info(self, name, force_good_metadata=True):
-        log.info("get claim info")
-        log.info(name)
-        log.info(force_good_metadata)
+    def get_claim_info(self, name, force_good_metadata=True, is_mine=False):
+        def _filter_my_claims(claim):
+            d = self.get_name_claims()
+            d.addCallback(lambda my_claims: claim if claim['txid'] in [c['txid'] for c in my_claims] else False)
+            return d
+
         d = self._get_value_for_name(name)
         d.addCallback(lambda r: self._get_claim_info(r, name, force_good_metadata))
+        d.addErrback(lambda _: False)
+        if is_mine:
+            d.addCallback(lambda claim: _filter_my_claims(claim) if claim is not False else False)
         return d
 
     def claim_name(self, name, bid, m):
-
-        metadata = Metadata(m)
-
-        d = self._send_name_claim(name, json.dumps(metadata), bid)
+        def _make_update(old_claim_info):
+            txid = old_claim_info['txid']
+            log.info("Updating from claim tx %s" % txid)
+            r = old_claim_info['value'] if isinstance(old_claim_info['value'], dict) else {}
+            for k in metadata:
+                r[k] = metadata[k]
+            return self.update_name(name, txid, json.dumps(Metadata(r)), bid)
 
         def _save_metadata(txid):
             log.info("Saving metadata for claim %s" % txid)
@@ -416,6 +424,10 @@ class LBRYWallet(object):
             d.addCallback(lambda _: txid)
             return d
 
+        metadata = Metadata(m)
+
+        d = self.get_claim_info(name, force_good_metadata=False, is_mine=True)
+        d.addCallback(lambda r: _make_update(r) if r else self._send_name_claim(name, json.dumps(metadata), bid))
         d.addCallback(_save_metadata)
         return d
 
@@ -577,10 +589,8 @@ class LBRYWallet(object):
         return self.db.runInteraction(create_tables)
 
     def _save_name_metadata(self, name, txid, sd_hash):
-        d = self.db.runQuery("select * from name_metadata where name=? and txid=? and sd_hash=?", (name, txid, sd_hash))
-        d.addCallback(lambda r: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash))
-                                if not len(r) else None)
-
+        d = self.db.runQuery("delete from name_metadata where name=? and txid=? and sd_hash=?", (name, txid, sd_hash))
+        d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash)))
         return d
 
     def _get_claim_metadata_for_sd_hash(self, sd_hash):
@@ -596,7 +606,7 @@ class LBRYWallet(object):
 
     def _get_claimid_for_tx(self, name, txid):
         d = self.db.runQuery("select claimId from claim_ids where name=? and txid=?", (name, txid))
-        d.addCallback(lambda r: None if not r else r[0][0])
+        d.addCallback(lambda r: r[0][0] if r else None)
         return d
 
     ######### Must be overridden #########

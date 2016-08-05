@@ -379,6 +379,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 log.info("Done writing lbrycrd.conf")
 
     def _responseFailed(self, err, call):
+        log.error(err.getTraceback())
         call.cancel()
 
     def render(self, request):
@@ -2010,12 +2011,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             metadata['fee'][currency]['address'] = address
             return defer.succeed(None)
 
-        def _delete_data(lbry_file):
-            txid = lbry_file.txid
-            d = self._delete_lbry_file(lbry_file, delete_file=False)
-            d.addCallback(lambda _: txid)
-            return d
-
         if not self.pending_claim_checker.running:
             self.pending_claim_checker.start(30)
 
@@ -2031,9 +2026,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     d.addCallback(lambda addr: _set_address(addr, c))
 
         pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
-        d.addCallback(lambda _: self._get_lbry_file_by_uri(name))
-        d.addCallbacks(lambda l: None if not l else _delete_data(l), lambda _: None)
-        d.addCallback(lambda r: pub.start(name, file_path, bid, metadata, r))
+        d.addCallback(lambda _: pub.start(name, file_path, bid, metadata))
         d.addCallback(lambda txid: self._add_to_pending_claims(name, txid))
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         d.addErrback(lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
