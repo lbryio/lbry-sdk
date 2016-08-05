@@ -2417,12 +2417,16 @@ class _DownloadNameHelper(object):
         return d
 
     def _wait_for_write(self):
-        file_name = self.daemon.streams[self.name].downloader.file_name
-        written_bytes = self.get_written_bytes(file_name)
         d = defer.succeed(None)
-        if not written_bytes:
+        if not self.has_downloader_wrote():
             d.addCallback(lambda _: reactor.callLater(1, self._wait_for_write))
         return d
+
+    def has_downloader_wrote(self):
+        downloader = self.daemon.streams[self.name].downloader
+        if not downloader:
+            return False
+        return self.get_written_bytes(downloader.file_name)
 
     def _wait_on_lbry_file(self, f):
         written_bytes = self.get_written_bytes(f.file_name)
@@ -2433,6 +2437,10 @@ class _DownloadNameHelper(object):
         return d
 
     def get_written_bytes(self, file_name):
+        """Returns the number of bytes written to `file_name`.
+
+        Returns False if there were issues reading `file_name`.
+        """
         try:
             file_path = os.path.join(self.download_directory, file_name)
             if os.path.isfile(file_path):
