@@ -125,7 +125,7 @@ class ServerRequestHandler(object):
 
     def send_response(self, msg):
         m = json.dumps(msg)
-        log.info("Sending a response of length %s", str(len(m)))
+        log.debug("Sending a response of length %s", str(len(m)))
         log.debug("Response: %s", str(m))
         self.response_buff = self.response_buff + m
         self._produce_more()
