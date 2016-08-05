@@ -347,7 +347,7 @@ class LBRYWallet(object):
         d.addCallback(lambda _: metadata)
         return d
 
-    def _get_claim_info(self, result, name):
+    def _get_claim_info(self, result, name, force_good_metadata=True):
         def _check_result_fields(r):
             for k in ['value', 'txid', 'n', 'height', 'amount']:
                 assert k in r, "getvalueforname response missing field %s" % k
@@ -355,7 +355,9 @@ class LBRYWallet(object):
         def _build_response(m, result, claim_id):
             result['value'] = m
             result['claim_id'] = claim_id
-            log.info("lbry://%s complies with %s, claimid: %s" % (name, m.meta_version, claim_id))
+            log.info("lbry://%s complies with %s, claimid: %s" % (name,
+                                                                  m.meta_version if force_good_metadata else "not checked",
+                                                                  claim_id))
             return result
 
         if 'error' in result:
@@ -364,16 +366,19 @@ class LBRYWallet(object):
 
         _check_result_fields(result)
 
-        try:
-            metadata = Metadata(json.loads(result['value']))
-        except (ValueError, TypeError):
-            return Failure(InvalidStreamInfoError(name))
-
-        sd_hash = metadata['sources']['lbry_sd_hash']
         txid = result['txid']
 
-        d = self._save_name_metadata(name, txid, sd_hash)
-        d.addCallback(lambda _: self.get_claimid(name, txid))
+        if force_good_metadata:
+            try:
+                metadata = Metadata(json.loads(result['value']))
+            except (ValueError, TypeError):
+                return Failure(InvalidStreamInfoError(name))
+            sd_hash = metadata['sources']['lbry_sd_hash']
+            d = self._save_name_metadata(name, txid, sd_hash)
+            d.addCallback(lambda _: self.get_claimid(name, txid))
+        else:
+            metadata = result['value']
+            d = self.get_claimid(name, txid)
         d.addCallback(lambda claim_id: _build_response(metadata, result, claim_id))
         return d
 
@@ -391,9 +396,12 @@ class LBRYWallet(object):
         d.addCallback(_get_id_for_return)
         return d
 
-    def get_claim_info(self, name):
+    def get_claim_info(self, name, force_good_metadata=True):
+        log.info("get claim info")
+        log.info(name)
+        log.info(force_good_metadata)
         d = self._get_value_for_name(name)
-        d.addCallback(lambda r: self._get_claim_info(r, name))
+        d.addCallback(lambda r: self._get_claim_info(r, name, force_good_metadata))
         return d
 
     def claim_name(self, name, bid, m):
@@ -449,13 +457,9 @@ class LBRYWallet(object):
         d.addCallback(self._get_decoded_tx)
         return d
 
-    def update_name(self, name, bid, value, old_txid):
-        # d = self._get_value_for_name(name)
-        # d.addCallback(lambda r: self.abandon_name(r['txid'] if not old_txid else old_txid))
-        # d.addCallback(lambda r: log.info("Abandon claim tx %s" % str(r)))
-        # d.addCallback(lambda _: self.claim_name(name, bid, value))
-        # return d
-        return defer.fail(NotImplementedError())
+    def update_name(self, name, txid, value, amount):
+        d = self._update_name(name, txid, value, amount)
+        return d
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
@@ -630,7 +634,7 @@ class LBRYWallet(object):
     def _send_abandon(self, txid, address, amount):
         return defer.fail(NotImplementedError())
 
-    def _update_name(self, txid, value, amount):
+    def _update_name(self, name, txid, value, amount):
         return defer.fail(NotImplementedError())
 
     def _do_send_many(self, payments_to_send):
@@ -765,7 +769,7 @@ class LBRYcrdWallet(LBRYWallet):
     def _send_abandon(self, txid, address, amount):
         return threads.deferToThread(self._send_abandon_rpc, txid, address, amount)
 
-    def _update_name(self, txid, value, amount):
+    def _update_name(self, name, txid, value, amount):
         return threads.deferToThread(self._update_name_rpc, txid, value, amount)
 
     def get_claims_from_tx(self, txid):
@@ -922,6 +926,7 @@ class LBRYcrdWallet(LBRYWallet):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.getvalueforname(name)
 
+    @_catch_connection_error
     def _update_name_rpc(self, txid, value, amount):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.updateclaim(txid, value, amount)
@@ -1107,11 +1112,10 @@ class LBRYumWallet(LBRYWallet):
         d.addCallback(Decimal)
         return d
 
-    def update_name(self, name, bid, value, txid):
-        serialized = Metadata(value).serialize()
-        d = self.get_claims_from_tx(txid)
-        d.addCallback(lambda claims: next(claim['claimId'] for claim in claims if claim['name'] == name))
-        d.addCallback(lambda claim_id: self._send_claim_update(txid, bid, name, claim_id, serialized))
+    def _update_name(self, name, txid, value, amount):
+        serialized_metadata = Metadata(value).serialize()
+        d = self.get_claimid(name, txid)
+        d.addCallback(lambda claim_id: self._send_claim_update(txid, amount, name, claim_id, serialized_metadata))
         return d
 
     def get_new_address(self):
@@ -1178,7 +1182,7 @@ class LBRYumWallet(LBRYWallet):
         return decoded_tx
 
     def _send_abandon(self, txid, address, amount):
-        log.info("Abandon " + str(txid) + " " + str(address) + " " + str(amount))
+        log.info("Abandon %s %s %f" % (txid, address, amount))
         cmd = known_commands['abandonclaim']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, txid, address, amount)
@@ -1186,7 +1190,7 @@ class LBRYumWallet(LBRYWallet):
         return d
 
     def _broadcast_transaction(self, raw_tx):
-        log.info("Broadcast: " + str(raw_tx))
+        log.info("Broadcast: %s" % str(raw_tx))
         cmd = known_commands['broadcast']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, raw_tx)

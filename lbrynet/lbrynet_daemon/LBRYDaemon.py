@@ -42,6 +42,7 @@ from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
+from lbrynet.core.LBRYMetadata import Metadata
 from lbrynet.core import utils
 from lbrynet.core.LBRYMetadata import verify_name_characters
 from lbrynet.core.utils import generate_id
@@ -2429,17 +2430,25 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-
     def jsonrpc_update_claim(self, p):
         def _x(r):
             log.info(str(r))
             return r
 
+        def _get_metadata_and_txid(old_claim_info):
+            txid = old_claim_info['txid']
+            r = old_claim_info['value'] if isinstance(old_claim_info['value'], dict) else {}
+            for k in metadata:
+                r[k] = metadata[k]
+            return txid, json.dumps(Metadata(r))
+
         metadata = p['metadata']
         bid = p['bid']
         name = p['name']
-        tx = p['txid']
-        d = self.session.wallet.update_name(name, bid, metadata, tx)
+
+        d = self.session.wallet.get_claim_info(name, force_good_metadata=False)
+        d.addCallback(_get_metadata_and_txid)
+        d.addCallback(lambda (txid, s): self.session.wallet.update_name(name, txid, s, bid))
         d.addCallback(_x)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
