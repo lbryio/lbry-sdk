@@ -355,9 +355,10 @@ class LBRYWallet(object):
         def _build_response(m, result, claim_id):
             result['value'] = m
             result['claim_id'] = claim_id
-            log.info("lbry://%s complies with %s, claimid: %s" % (name,
-                                                                  m.meta_version if force_good_metadata else "not checked",
-                                                                  claim_id))
+            log.info("lbry://%s complies with %s, claimid: %s",
+                     name,
+                     m.meta_version if force_good_metadata else "not checked",
+                     claim_id)
             return result
 
         if 'error' in result:
@@ -409,15 +410,13 @@ class LBRYWallet(object):
             d.addCallback(lambda claim: _filter_my_claims(claim) if claim is not False else False)
         return d
 
-    def claim_name(self, name, bid, m):
-        def _make_update(old_claim_info):
-            txid = old_claim_info['txid']
-            log.info("Updating from claim tx %s" % txid)
-            r = old_claim_info['value'] if isinstance(old_claim_info['value'], dict) else {}
-            for k in metadata:
-                r[k] = metadata[k]
-            return self.update_name(name, txid, json.dumps(Metadata(r)), bid)
+    def update_metadata(self, new_metadata, old_metadata):
+        meta_for_return = old_metadata if isinstance(old_metadata, dict) else {}
+        for k in new_metadata:
+            meta_for_return[k] = new_metadata[k]
+        return Metadata(meta_for_return)
 
+    def claim_name(self, name, bid, m):
         def _save_metadata(txid):
             log.info("Saving metadata for claim %s" % txid)
             d = self._save_name_metadata(name, txid, metadata['sources']['lbry_sd_hash'])
@@ -427,7 +426,18 @@ class LBRYWallet(object):
         metadata = Metadata(m)
 
         d = self.get_claim_info(name, force_good_metadata=False, is_mine=True)
-        d.addCallback(lambda r: _make_update(r) if r else self._send_name_claim(name, json.dumps(metadata), bid))
+        d.addCallback(lambda r: self.update_name(
+                                    name,
+                                    r['txid'],
+                                    json.dumps(self.update_metadata(metadata, r['value'])),
+                                    bid
+                                )
+                                if r else self._send_name_claim(
+                                    name,
+                                    json.dumps(metadata),
+                                    bid
+                                )
+                      )
         d.addCallback(_save_metadata)
         return d
 
