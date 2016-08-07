@@ -1996,20 +1996,28 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             Claim txid
         """
 
-        name = p['name']
-        try:
-            verify_name_characters(name)
-        except:
-            log.error("Bad name")
-            return defer.fail(InvalidNameError("Bad name"))
-        bid = p['bid']
-        file_path = p['file_path']
-        metadata = p['metadata']
-
         def _set_address(address, currency):
             log.info("Generated new address for key fee: " + str(address))
             metadata['fee'][currency]['address'] = address
             return defer.succeed(None)
+
+        name = p['name']
+
+        try:
+            verify_name_characters(name)
+        except AssertionError:
+            log.error("Bad name")
+            return defer.fail(InvalidNameError("Bad name"))
+
+        bid = p['bid']
+
+        try:
+            metadata = Metadata(p['metadata'])
+            make_lbry_file = False
+        except AssertionError:
+            make_lbry_file = True
+            metadata = p['metadata']
+            file_path = p['file_path']
 
         if not self.pending_claim_checker.running:
             self.pending_claim_checker.start(30)
@@ -2024,9 +2032,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 if 'address' not in metadata['fee'][c]:
                     d.addCallback(lambda _: self.session.wallet.get_new_address())
                     d.addCallback(lambda addr: _set_address(addr, c))
-
-        pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
-        d.addCallback(lambda _: pub.start(name, file_path, bid, metadata))
+        if make_lbry_file:
+            pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
+            d.addCallback(lambda _: pub.start(name, file_path, bid, metadata))
+        else:
+            d.addErrback(lambda _: self.session.wallet.claim_name(name, bid, metadata))
         d.addCallback(lambda txid: self._add_to_pending_claims(name, txid))
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         d.addErrback(lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
@@ -2420,29 +2430,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self.session.peer_finder.find_peers_for_blob(blob_hash)
         d.addCallback(lambda r: [[c.host, c.port, c.is_available()] for c in r])
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
-    def jsonrpc_update_claim(self, p):
-        def _x(r):
-            log.info(str(r))
-            return r
-
-        def _get_metadata_and_txid(old_claim_info):
-            txid = old_claim_info['txid']
-            r = old_claim_info['value'] if isinstance(old_claim_info['value'], dict) else {}
-            for k in metadata:
-                r[k] = metadata[k]
-            return txid, json.dumps(Metadata(r))
-
-        metadata = p['metadata']
-        bid = p['bid']
-        name = p['name']
-
-        d = self.session.wallet.get_claim_info(name, force_good_metadata=False)
-        d.addCallback(_get_metadata_and_txid)
-        d.addCallback(lambda (txid, s): self.session.wallet.update_name(name, txid, s, bid))
-        d.addCallback(_x)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
