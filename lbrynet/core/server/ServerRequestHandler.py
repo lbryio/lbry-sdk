@@ -99,8 +99,8 @@ class ServerRequestHandler(object):
                     d.addCallback(lambda _: self.blob_sender.send_blob_if_requested(self))
                 d.addCallbacks(lambda _: self.finished_response(), self.request_failure_handler)
             else:
-                log.info("Request buff not a valid json message")
-                log.info("Request buff: %s", str(self.request_buff))
+                log.debug("Request buff not a valid json message")
+                log.debug("Request buff: %s", str(self.request_buff))
         else:
             log.warning("The client sent data when we were uploading a file. This should not happen")
 
