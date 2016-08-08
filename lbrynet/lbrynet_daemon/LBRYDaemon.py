@@ -320,14 +320,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbryum")
         elif sys.platform == "darwin":
-            # use the path from the bundle if its available.
-            try:
-                import Foundation
-                bundle = Foundation.NSBundle.mainBundle()
-                self.lbrycrdd_path = bundle.pathForResource_ofType_('lbrycrdd', None)
-            except Exception:
-                log.exception('Failed to get path from bundle, falling back to default')
-                self.lbrycrdd_path = "./lbrycrdd"
+            self.lbrycrdd_path = get_darwin_lbrycrdd_path()
             if self.wallet_type == "lbrycrd":
                 self.wallet_dir = user_data_dir("lbrycrd")
             else:
@@ -2382,6 +2375,24 @@ def get_output_callback(params):
             'path': os.path.join(params.download_directory, l.file_name)
         }
     return callback
+
+
+def get_darwin_lbrycrdd_path():
+    # use the path from the bundle if its available.
+    default = "./lbrycrdd"
+    try:
+        import Foundation
+    except ImportError:
+        log.warning('Foundation module not installed, falling back to default lbrycrdd path')
+        return default
+    else:
+        try:
+            bundle = Foundation.NSBundle.mainBundle()
+            return bundle.pathForResource_ofType_('lbrycrdd', None)
+        except Exception:
+            log.exception('Failed to get path from bundle, falling back to default')
+            return default
+
 
 
 class _DownloadNameHelper(object):
