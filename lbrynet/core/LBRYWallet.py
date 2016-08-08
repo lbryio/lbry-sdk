@@ -425,7 +425,7 @@ class LBRYWallet(object):
         return Metadata(meta_for_return)
 
     def claim_name(self, name, bid, m):
-        def _save_metadata(txid):
+        def _save_metadata(txid, metadata):
             log.info("Saving metadata for claim %s" % txid)
             d = self._save_name_metadata(name, txid, metadata['sources']['lbry_sd_hash'])
             d.addCallback(lambda _: txid)
@@ -446,7 +446,7 @@ class LBRYWallet(object):
 
         d = self.get_claim_info(name)
         d.addCallback(lambda claim: _claim_or_update(claim, meta, bid))
-        d.addCallback(_save_metadata)
+        d.addCallback(lambda txid: _save_metadata(txid, meta))
         return d
 
     def abandon_name(self, txid):
