@@ -11,7 +11,6 @@ from lbrynet import conf
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from twisted.protocols.basic import FileSender
-from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 
 
 log = logging.getLogger(__name__)

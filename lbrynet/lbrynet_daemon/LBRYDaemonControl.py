@@ -5,7 +5,6 @@ import os
 import webbrowser
 import sys
 import socket
-import platform
 from appdirs import user_data_dir
 
 from twisted.web import server
@@ -14,8 +13,8 @@ from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.core import log_support
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
-from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_ADDRESS, API_PORT, \
-                            DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
+from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_PORT, \
+                         UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
 # TODO: stop it!
 if sys.platform != "darwin":

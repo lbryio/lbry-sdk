@@ -1,6 +1,4 @@
 import binascii
-import distutils.version
-import locale
 import logging.handlers
 import mimetypes
 import os
@@ -14,7 +12,6 @@ import sys
 import base58
 import requests
 import simplejson as json
-import pkg_resources
 
 from urllib2 import urlopen
 from appdirs import user_data_dir
@@ -25,7 +22,7 @@ from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
 from txjsonrpc.web import jsonrpc
-from txjsonrpc.web.jsonrpc import Handler, Proxy
+from txjsonrpc.web.jsonrpc import Handler
 
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
@@ -46,10 +43,12 @@ from lbrynet.core import utils
 from lbrynet.core.LBRYMetadata import verify_name_characters
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, \
-    DEFAULT_WALLET, DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, LOG_POST_URL, LOG_FILE_NAME, SOURCE_TYPES
+from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, \
+                         KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, DEFAULT_WALLET, \
+                         DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, \
+                         LOG_POST_URL, LOG_FILE_NAME
 from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
-from lbrynet.conf import DEFAULT_TIMEOUT, WALLET_TYPES
+from lbrynet.conf import DEFAULT_TIMEOUT
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
