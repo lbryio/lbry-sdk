@@ -2518,7 +2518,7 @@ class _ResolveNameHelper(object):
             d = self.wallet.get_stream_info_for_name(self.name)
             d.addCallbacks(self._cache_stream_info, lambda _: defer.fail(UnknownNameError))
         else:
-            log.info("Returning cached stream info for lbry://%s", self.name)
+            log.debug("Returning cached stream info for lbry://%s", self.name)
             d = defer.succeed(self.name_data['claim_metadata'])
         return d
 
