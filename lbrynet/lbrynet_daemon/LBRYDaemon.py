@@ -1946,7 +1946,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
             d.addCallback(lambda _: pub.start(name, file_path, bid, metadata))
         else:
-            d.addErrback(lambda _: self.session.wallet.claim_name(name, bid, metadata))
+            d.addCallback(lambda _: self.session.wallet.claim_name(name, bid, metadata))
         d.addCallback(lambda txid: self._add_to_pending_claims(name, txid))
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         d.addErrback(lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
