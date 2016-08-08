@@ -347,40 +347,9 @@ class LBRYWallet(object):
         d.addCallback(lambda _: metadata)
         return d
 
-    def _get_claim_info(self, result, name, force_good_metadata=True):
-        def _check_result_fields(r):
-            for k in ['value', 'txid', 'n', 'height', 'amount']:
-                assert k in r, "getvalueforname response missing field %s" % k
-
-        def _build_response(m, result, claim_id):
-            result['value'] = m
-            result['claim_id'] = claim_id
-            log.info("lbry://%s complies with %s, claimid: %s",
-                     name,
-                     m.meta_version if force_good_metadata else "not checked",
-                     claim_id)
-            return result
-
-        if 'error' in result:
-            log.warning("Got an error looking up a name: %s", result['error'])
-            return Failure(UnknownNameError(name))
-
-        _check_result_fields(result)
-
-        txid = result['txid']
-
-        if force_good_metadata:
-            try:
-                metadata = Metadata(json.loads(result['value']))
-            except (ValueError, TypeError):
-                return Failure(InvalidStreamInfoError(name))
-            sd_hash = metadata['sources']['lbry_sd_hash']
-            d = self._save_name_metadata(name, txid, sd_hash)
-            d.addCallback(lambda _: self.get_claimid(name, txid))
-        else:
-            metadata = result['value']
-            d = self.get_claimid(name, txid)
-        d.addCallback(lambda claim_id: _build_response(metadata, result, claim_id))
+    def get_claim(self, name, claim_id):
+        d = self.get_claims_for_name(name)
+        d.addCallback(lambda claims: next(claim for claim in claims['claims'] if claim['claimId'] == claim_id))
         return d
 
     def get_claimid(self, name, txid):
@@ -397,17 +366,54 @@ class LBRYWallet(object):
         d.addCallback(_get_id_for_return)
         return d
 
-    def get_claim_info(self, name, force_good_metadata=True, is_mine=False):
-        def _filter_my_claims(claim):
-            d = self.get_name_claims()
-            d.addCallback(lambda my_claims: claim if claim['txid'] in [c['txid'] for c in my_claims] else False)
+    def get_claim_info(self, name, txid=None):
+        if not txid:
+            d = self._get_value_for_name(name)
+            d.addCallback(lambda r: self._get_claim_info(name, r['txid']))
+        else:
+            d = self._get_claim_info(name, txid)
+        d.addErrback(lambda _: False)
+        return d
+
+    def _get_claim_info(self, name, txid):
+        def _build_response(claim):
+            result = {}
+            try:
+                metadata = Metadata(json.loads(claim['value']))
+                meta_ver = metadata.meta_version
+                sd_hash = metadata['sources']['lbry_sd_hash']
+                d = self._save_name_metadata(name, txid, sd_hash)
+            except AssertionError:
+                metadata = claim['value']
+                meta_ver = "Non-compliant"
+                d = defer.succeed(None)
+
+            claim_id = claim['claimId']
+            result['claim_id'] = claim_id
+            result['amount'] = claim['nEffectiveAmount']
+            result['height'] = claim['nHeight']
+            result['name'] = name
+            result['txid'] = txid
+            result['value'] = metadata
+            result['supports'] = [{'txid': support['txid'], 'n': support['n']} for support in claim['supports']]
+            result['meta_version'] = meta_ver
+
+            log.info("lbry://%s metadata:  %s, claimid: %s", name, meta_ver, claim_id)
+
+            d.addCallback(lambda _: self.get_name_claims())
+            d.addCallback(lambda r: [c['txid'] for c in r])
+            d.addCallback(lambda my_claims: _add_is_mine(result, my_claims))
             return d
 
-        d = self._get_value_for_name(name)
-        d.addCallback(lambda r: self._get_claim_info(r, name, force_good_metadata))
-        d.addErrback(lambda _: False)
-        if is_mine:
-            d.addCallback(lambda claim: _filter_my_claims(claim) if claim is not False else False)
+        def _add_is_mine(response, my_txs):
+            response['is_mine'] = response['txid'] in my_txs
+            return response
+
+        d = self.get_claimid(name, txid)
+        d.addCallback(lambda claim_id: self.get_claim(name, claim_id))
+        d.addCallback(_build_response)
+        return d
+
     def get_claims_for_name(self, name):
         d = self._get_claims_for_name(name)
         return d
@@ -425,21 +431,21 @@ class LBRYWallet(object):
             d.addCallback(lambda _: txid)
             return d
 
-        metadata = Metadata(m)
+        def _claim_or_update(claim, metadata, _bid):
+            if not claim:
+                log.info("No claim yet, making a new one")
+                return self._send_name_claim(name, json.dumps(metadata), _bid)
+            if not claim['is_mine']:
+                log.info("Making a contesting claim")
+                return self._send_name_claim(name, json.dumps(metadata), _bid)
+            else:
+                log.info("Updating over own claim")
+                return self.update_name(name, claim['txid'], json.dumps(self.update_metadata(metadata, claim['value'])), _bid)
 
-        d = self.get_claim_info(name, force_good_metadata=False, is_mine=True)
-        d.addCallback(lambda r: self.update_name(
-                                    name,
-                                    r['txid'],
-                                    json.dumps(self.update_metadata(metadata, r['value'])),
-                                    bid
-                                )
-                                if r else self._send_name_claim(
-                                    name,
-                                    json.dumps(metadata),
-                                    bid
-                                )
-                      )
+        meta = Metadata(m)
+
+        d = self.get_claim_info(name)
+        d.addCallback(lambda claim: _claim_or_update(claim, meta, bid))
         d.addCallback(_save_metadata)
         return d
 
