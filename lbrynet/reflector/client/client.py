@@ -26,7 +26,7 @@ Client Info Request:
 Server Info Response (sent in response to Client Info Request):
 
 {
-    'response': ['YES', 'NO']
+    'send_blob': True|False
 }
 
 If response is 'YES', client may send a Client Blob Request or a Client Info Request.
@@ -41,7 +41,7 @@ Client Blob Request:
 
 Server Blob Response (sent in response to Client Blob Request):
 {
-    'received': True
+    'received_blob': True
 }
 
 Client may now send another Client Info Request
@@ -49,6 +49,7 @@ Client may now send another Client Info Request
 """
 import json
 import logging
+from twisted.protocols.basic import FileSender
 from twisted.internet.protocol import Protocol, ClientFactory
 
 
@@ -60,13 +61,19 @@ class IncompleteResponseError(Exception):
 
 
 class LBRYFileReflectorClient(Protocol):
+
+    #  Protocol stuff
+
     def connectionMade(self):
-        self.peer = self.factory.peer
+        self.blob_manager = self.factory.blob_manager
         self.response_buff = ''
         self.outgoing_buff = ''
         self.blob_hashes_to_send = []
         self.next_blob_to_send = None
+        self.blob_read_handle = None
         self.received_handshake_response = False
+        self.protocol_version = None
+        self.file_sender = None
         d = self.get_blobs_to_send(self.factory.stream_info_manager, self.factory.stream_hash)
         d.addCallback(lambda _: self.send_handshake())
 
@@ -83,6 +90,17 @@ class LBRYFileReflectorClient(Protocol):
 
     def connectionLost(self, reason):
         pass
+
+    #  IConsumer stuff
+
+    def registerProducer(self, producer, streaming):
+        assert streaming is True
+
+    def unregisterProducer(self):
+        self.transport.loseConnection()
+
+    def write(self, data):
+        self.transport.write(data)
 
     def get_blobs_to_send(self, stream_info_manager, stream_hash):
         d = stream_info_manager.get_blobs_for_stream(stream_hash)
@@ -109,33 +127,86 @@ class LBRYFileReflectorClient(Protocol):
 
     def handle_response(self, response_dict):
         if self.received_handshake_response is False:
-            self.handle_handshake_response(response_dict)
+            return self.handle_handshake_response(response_dict)
         else:
-            self.handle_normal_response(response_dict)
+            return self.handle_normal_response(response_dict)
+
+    def set_not_uploading(self):
+        if self.currently_uploading is not None:
+            self.currently_uploading.close_read_handle(self.read_handle)
+            self.read_handle = None
+            self.currently_uploading = None
+        self.file_sender = None
+
+    def start_transfer(self):
+        self.write(json.dumps("{}"))
+        log.info("Starting the file upload")
+        assert self.read_handle is not None, "self.read_handle was None when trying to start the transfer"
+        d = self.file_sender.beginFileTransfer(self.read_handle, self)
+        return d
 
     def handle_handshake_response(self, response_dict):
-        pass
+        if 'version' not in response_dict:
+            raise ValueError("Need protocol version number!")
+        self.protocol_version = int(response_dict['version'])
+        if self.protocol_version != 0:
+            raise ValueError("I can't handle protocol version {}!".format(self.protocol_version))
+        self.received_handshake_response = True
 
     def handle_normal_response(self, response_dict):
-        pass
+        if self.next_blob_to_send is not None:  # Expecting Server Info Response
+            if 'send_blob' not in response_dict:
+                raise ValueError("I don't know whether to send the blob or not!")
+            if response_dict['send_blob'] is True:
+                self.file_sender = FileSender()
+                return True
+            else:
+                return self.set_not_uploading()
+        else:  # Expecting Server Blob Response
+            if 'received_blob' not in response_dict:
+                raise ValueError("I don't know if the blob made it to the intended destination!")
+            else:
+                return self.set_not_uploading()
+
+    def open_blob_for_reading(self, blob):
+        if blob.is_validated():
+            read_handle = blob.open_for_reading()
+            if read_handle is not None:
+                self.next_blob_to_send = blob
+                self.read_handle = read_handle
+                return None
+        raise ValueError("Couldn't open that blob for some reason")
+
+    def send_blob_info(self):
+        assert self.next_blob_to_send is not None, "need to have a next blob to send at this point"
+        self.write(json.dumps({
+            'blob_hash': self.next_blob_to_send.blob_hash,
+            'blob_length': self.next_blob_to_send.length
+        }))
 
     def send_next_request(self):
-        if self.next_blob_to_send is not None:
+        if self.file_sender is not None:
             # send the blob
-            pass
-        elif self.blobs_to_send:
+            return self.start_transfer()
+        elif self.blob_hashes_to_send:
+            # open the next blob to send
+            blob_hash = self.blob_hashes_to_send[0]
+            self.blob_hashes_to_send = self.blob_hashes_to_send[1:]
+            d = self.blob_manager.get_blob(blob_hash, True)
+            d.addCallback(self.open_blob_for_reading)
             # send the server the next blob hash + length
-            pass
+            d.addCallback(lambda _: self.send_blob_info())
+            return d
         else:
             # close connection
-            pass
+            self.transport.loseConnection()
 
 
 class LBRYFileReflectorClientFactory(ClientFactory):
     protocol = LBRYFileReflectorClient
 
-    def __init__(self, stream_info_manager, peer, stream_hash):
-        self.peer = peer
+    def __init__(self, blob_manager, stream_info_manager, stream_hash):
+        self.blob_manager = blob_manager
         self.stream_info_manager = stream_info_manager
         self.stream_hash = stream_hash
         self.p = None
