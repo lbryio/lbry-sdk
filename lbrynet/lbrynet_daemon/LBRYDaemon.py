@@ -42,6 +42,7 @@ from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
+from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.core.LBRYMetadata import verify_name_characters
 from lbrynet.core.utils import generate_id
@@ -932,6 +933,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = self.settings.start()
         d.addCallback(lambda _: self.settings.get_lbryid())
         d.addCallback(self._set_lbryid)
+        d.addCallback(lambda _: self._modify_loggly_formatter())
         return d
 
     def _set_lbryid(self, lbryid):
@@ -946,6 +948,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.info("Generated new LBRY ID: " + base58.b58encode(self.lbryid))
         d = self.settings.save_lbryid(self.lbryid)
         return d
+
+    def _modify_loggly_formatter(self):
+        session_id = base58.b58encode(generate_id())
+        log_support.configure_loggly_handler(
+            lbry_id=base58.b58encode(self.lbryid),
+            session_id=session_id
+        )
+
 
     def _setup_lbry_file_manager(self):
         self.startup_status = STARTUP_STAGES[3]

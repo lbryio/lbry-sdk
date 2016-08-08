@@ -76,6 +76,7 @@ def start():
 
     log_support.disable_noisy_loggers()
     log_support.configure_file_handler(lbrynet_log)
+    log_support.configure_loggly_handler()
     if args.logtoconsole:
         log_support.configure_console()
 
