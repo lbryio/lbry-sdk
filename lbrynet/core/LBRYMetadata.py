@@ -90,10 +90,14 @@ class LBRYFeeValidator(dict):
 
 
 class Metadata(dict):
-    def __init__(self, metadata, is_hex=False):
+    @classmethod
+    def load_from_hex(cls, metadata):
+        return cls(json.loads(metadata.decode('hex')))
+
+    def __init__(self, metadata):
         dict.__init__(self)
         self.meta_version = None
-        metadata_to_load = deepcopy(metadata if not is_hex else json.loads(metadata.decode("hex")))
+        metadata_to_load = deepcopy(metadata)
 
         self._verify_sources(metadata_to_load)
         self._verify_metadata(metadata_to_load)
