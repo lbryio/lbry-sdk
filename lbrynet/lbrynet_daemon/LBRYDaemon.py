@@ -1999,6 +1999,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    def jsonrpc_get_claims_for_name(self, p):
+        """
+        Get claims for a name
+
+        Args:
+            'name': name
+        Returns
+            list of name claims
+        """
+
+        name = p['name']
+        d = self.session.wallet.get_claims_for_name(name)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
     def jsonrpc_get_transaction_history(self):
         """
         Get transaction history
