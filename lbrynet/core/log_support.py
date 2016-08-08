@@ -25,6 +25,10 @@ def _log_decorator(fn):
     return helper
 
 
+def disable_noisy_loggers():
+    logging.getLogger('requests').setLevel(logging.WARNING)
+
+
 @_log_decorator
 def configure_console(**kwargs):
     """Convenience function to configure a logger that outputs to stdout"""

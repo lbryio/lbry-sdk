@@ -74,6 +74,7 @@ def start():
     parser.set_defaults(branch=False, launchui=True, logtoconsole=False, quiet=False)
     args = parser.parse_args()
 
+    log_support.disable_noisy_loggers()
     log_support.configure_file_handler(lbrynet_log)
     if args.logtoconsole:
         log_support.configure_console()
