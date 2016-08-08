@@ -1188,11 +1188,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _get_est_cost(self, name):
         def _check_est(d, name):
-            if isinstance(d.result, float):
-                log.info("Cost est for lbry://" + name + ": " + str(d.result) + "LBC")
-            else:
-                log.info("Timeout estimating cost for lbry://" + name + ", using key fee")
-                d.cancel()
+            try:
+                if d.result:
+                    log.info("Cost est for lbry://" + name + ": " + str(d.result) + "LBC")
+                    return defer.succeed(None)
+            except AttributeError:
+                pass
+            log.info("Timeout estimating cost for lbry://" + name + ", using key fee")
+            d.cancel()
             return defer.succeed(None)
 
         def _add_key_fee(data_cost):
