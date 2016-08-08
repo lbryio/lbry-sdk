@@ -478,8 +478,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     log.info("Scheduling scripts")
                     reactor.callLater(3, self._run_scripts)
 
-                # self.lbrynet_connection_checker.start(3600)
-
             if self.first_run:
                 d = self._upload_log(log_type="first_run")
             elif self.upload_log:
@@ -487,11 +485,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 d = defer.succeed(None)
 
-            # if float(self.session.wallet.wallet_balance) == 0.0:
-            #     d.addCallback(lambda _: self._check_first_run())
-            #     d.addCallback(self._show_first_run_result)
-
-            # d.addCallback(lambda _: _wait_for_credits() if self.requested_first_run_credits else _announce())
             d.addCallback(lambda _: _announce())
             return d
 
@@ -1015,62 +1008,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         dl.addCallback(lambda _: self.session.setup())
 
         return dl
-
-    # def _check_first_run(self):
-    #     def _set_first_run_false():
-    #         log.info("Not first run")
-    #         self.first_run = False
-    #         self.session_settings['requested_first_run_credits'] = True
-    #         f = open(self.daemon_conf, "w")
-    #         f.write(json.dumps(self.session_settings))
-    #         f.close()
-    #         return 0.0
-    #
-    #     if self.wallet_type == 'lbryum':
-    #         d = self.session.wallet.is_first_run()
-    #         d.addCallback(lambda is_first_run: self._do_first_run() if is_first_run or not self.requested_first_run_credits
-    #                                             else _set_first_run_false())
-    #     else:
-    #         d = defer.succeed(None)
-    #         d.addCallback(lambda _: _set_first_run_false())
-    #     return d
-    #
-    # def _do_first_run(self):
-    #     def send_request(url, data):
-    #         log.info("Requesting first run credits")
-    #         r = requests.post(url, json=data)
-    #         if r.status_code == 200:
-    #             self.requested_first_run_credits = True
-    #             self.session_settings['requested_first_run_credits'] = True
-    #             f = open(self.daemon_conf, "w")
-    #             f.write(json.dumps(self.session_settings))
-    #             f.close()
-    #             return r.json()['credits_sent']
-    #         return 0.0
-    #
-    #     def log_error(err):
-    #         log.warning("unable to request free credits. %s", err.getErrorMessage())
-    #         return 0.0
-    #
-    #     def request_credits(address):
-    #         url = "http://credreq.lbry.io/requestcredits"
-    #         data = {"address": address}
-    #         d = threads.deferToThread(send_request, url, data)
-    #         d.addErrback(log_error)
-    #         return d
-    #
-    #     self.first_run = True
-    #     d = self.session.wallet.get_new_address()
-    #     d.addCallback(request_credits)
-    #
-    #     return d
-    #
-    # def _show_first_run_result(self, credits_received):
-    #     if credits_received != 0.0:
-    #         points_string = locale.format_string("%.2f LBC", (round(credits_received, 2),), grouping=True)
-    #         self.startup_message = "Thank you for testing the alpha version of LBRY! You have been given %s for free because we love you. Please hang on for a few minutes for the next block to be mined. When you refresh this page and see your credits you're ready to go!." % points_string
-    #     else:
-    #         self.startup_message = None
 
     def _setup_stream_identifier(self):
         file_saver_factory = LBRYFileSaverFactory(self.session.peer_finder, self.session.rate_limiter,
