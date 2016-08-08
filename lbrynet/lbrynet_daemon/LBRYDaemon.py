@@ -1708,7 +1708,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return r
 
         name = p['name']
-        d = self.session.wallet.get_claim_info(name)
+        txid = p.get('txid', None)
+        d = self.session.wallet.get_claim_info(name, txid)
         d.addCallback(_convert_amount_to_float)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -1837,7 +1838,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             List of search results
         """
 
-        # TODO: change this function to "search", and use cached stream size info from the search server
+        # TODO: change this function to "search"
 
         if 'search' in p.keys():
             search = p['search']
