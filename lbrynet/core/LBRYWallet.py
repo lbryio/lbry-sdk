@@ -90,6 +90,7 @@ class LBRYWallet(object):
             return True
 
         d = self._open_db()
+        d.addCallback(lambda _: self._clean_bad_records())
         d.addCallback(lambda _: self._start())
         d.addCallback(lambda _: start_manage())
         return d
@@ -609,7 +610,12 @@ class LBRYWallet(object):
 
         return self.db.runInteraction(create_tables)
 
+    def _clean_bad_records(self):
+        d = self.db.runQuery("delete from name_metadata where length(txid) > 64 or txid is null")
+        return d
+
     def _save_name_metadata(self, name, txid, sd_hash):
+        assert len(txid) == 64, "That's not a txid: %s" % str(txid)
         d = self.db.runQuery("delete from name_metadata where name=? and txid=? and sd_hash=?", (name, txid, sd_hash))
         d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash)))
         return d
@@ -620,12 +626,14 @@ class LBRYWallet(object):
         return d
 
     def _update_claimid(self, claim_id, name, txid):
+        assert len(txid) == 64, "That's not a txid: %s" % str(txid)
         d = self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=?", (claim_id, name, txid))
         d.addCallback(lambda r: self.db.runQuery("insert into claim_ids values (?, ?, ?)", (claim_id, name, txid)))
         d.addCallback(lambda _: claim_id)
         return d
 
     def _get_claimid_for_tx(self, name, txid):
+        assert len(txid) == 64, "That's not a txid: %s" % str(txid)
         d = self.db.runQuery("select claimId from claim_ids where name=? and txid=?", (name, txid))
         d.addCallback(lambda r: r[0][0] if r else None)
         return d
@@ -1259,10 +1267,10 @@ class LBRYumWallet(LBRYWallet):
         return d
 
     def _broadcast_transaction(self, raw_tx):
-        log.info("Broadcast: %s" % str(raw_tx))
         cmd = known_commands['broadcast']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, raw_tx)
+        d.addCallback(lambda r: r if len(r) == 64 else Exception("Transaction rejected"))
         d.addCallback(self._save_wallet)
         return d
 
