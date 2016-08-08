@@ -1979,6 +1979,25 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    def jsonrpc_support_claim(self, p):
+        """
+        Support a name claim
+
+        Args:
+            'name': name
+            'claim_id': claim id of claim to support
+            'amount': amount to support by
+        Return:
+            txid
+        """
+
+        name = p['name']
+        claim_id = p['claim_id']
+        amount = p['amount']
+        d = self.session.wallet.support_claim(name, claim_id, amount)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
     def jsonrpc_get_name_claims(self):
         """
         Get my name claims

@@ -482,6 +482,9 @@ class LBRYWallet(object):
         dl.addCallback(abandon)
         return dl
 
+    def support_claim(self, name, claim_id, amount):
+        return self._support_claim(name, claim_id, amount)
+
     def get_tx(self, txid):
         d = self._get_raw_tx(txid)
         d.addCallback(self._get_decoded_tx)
@@ -668,6 +671,9 @@ class LBRYWallet(object):
     def _update_name(self, name, txid, value, amount):
         return defer.fail(NotImplementedError())
 
+    def _support_claim(self, name, claim_id, amount):
+        return defer.fail(NotImplementedError())
+
     def _do_send_many(self, payments_to_send):
         return defer.fail(NotImplementedError())
 
@@ -802,6 +808,9 @@ class LBRYcrdWallet(LBRYWallet):
 
     def _update_name(self, name, txid, value, amount):
         return threads.deferToThread(self._update_name_rpc, txid, value, amount)
+
+    def _support_claim(self, name, claim_id, amount):
+        return threads.deferToThread(self._support_claim_rpc, name, claim_id, amount)
 
     def _get_claims_for_name(self, name):
         return threads.deferToThread(self._get_claims_for_name_rpc, name)
@@ -980,6 +989,11 @@ class LBRYcrdWallet(LBRYWallet):
                 raise InsufficientFundsError()
             elif 'message' in e.error:
                 raise ValueError(e.error['message'])
+
+    @_catch_connection_error
+    def _support_claim_rpc(self, name, claim_id, amount):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.supportclaim(name, claim_id, amount)
 
     @_catch_connection_error
     def _get_num_addresses_rpc(self):
@@ -1230,6 +1244,17 @@ class LBRYumWallet(LBRYWallet):
         cmd = known_commands['abandonclaim']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, txid, address, amount)
+        d.addCallback(self._broadcast_transaction)
+        return d
+
+    def _support_claim(self, name, claim_id, amount):
+        def _send_support(d, a, n, c):
+            cmd = known_commands['supportclaim']
+            func = getattr(self.cmd_runner, cmd.name)
+            d = threads.deferToThread(func, d, a, n, c)
+            return d
+        d = self.get_new_address()
+        d.addCallback(lambda address: _send_support(address, amount, name, claim_id))
         d.addCallback(self._broadcast_transaction)
         return d
 
