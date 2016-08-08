@@ -408,6 +408,8 @@ class LBRYWallet(object):
         d.addErrback(lambda _: False)
         if is_mine:
             d.addCallback(lambda claim: _filter_my_claims(claim) if claim is not False else False)
+    def get_claims_for_name(self, name):
+        d = self._get_claims_for_name(name)
         return d
 
     def update_metadata(self, new_metadata, old_metadata):
@@ -639,6 +641,9 @@ class LBRYWallet(object):
     def get_name_claims(self):
         return defer.fail(NotImplementedError())
 
+    def _get_claims_for_name(self, name):
+        return defer.fail(NotImplementedError())
+
     def _check_first_run(self):
         return defer.fail(NotImplementedError())
 
@@ -792,6 +797,9 @@ class LBRYcrdWallet(LBRYWallet):
     def _update_name(self, name, txid, value, amount):
         return threads.deferToThread(self._update_name_rpc, txid, value, amount)
 
+    def _get_claims_for_name(self, name):
+        return threads.deferToThread(self._get_claims_for_name_rpc, name)
+
     def get_claims_from_tx(self, txid):
         return threads.deferToThread(self._get_claims_from_tx_rpc, txid)
 
@@ -925,6 +933,11 @@ class LBRYcrdWallet(LBRYWallet):
     def _get_claims_from_tx_rpc(self, txid):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.getclaimsfortx(txid)
+
+    @_catch_connection_error
+    def _get_claims_for_name_rpc(self, name):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.getclaimsforname(name)
 
     @_catch_connection_error
     def _get_nametrie_rpc(self):
@@ -1180,6 +1193,11 @@ class LBRYumWallet(LBRYWallet):
         d.addCallback(send_claim)
         d.addCallback(self._broadcast_transaction)
         return d
+
+    def _get_claims_for_name(self, name):
+        cmd = known_commands['getclaimsforname']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, name)
 
     def _send_claim_update(self, txid, amount, name, claim_id, val):
         def send_claim(address):
