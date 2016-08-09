@@ -322,7 +322,7 @@ class LBRYWallet(object):
                 assert k in r, "getvalueforname response missing field %s" % k
 
         def _log_success(claim_id):
-            log.info("lbry://%s complies with %s, claimid: %s" % (name, metadata.meta_version, claim_id))
+            log.info("lbry://%s complies with %s, claimid: %s", name, metadata.meta_version, claim_id)
             return defer.succeed(None)
 
         if 'error' in result:
