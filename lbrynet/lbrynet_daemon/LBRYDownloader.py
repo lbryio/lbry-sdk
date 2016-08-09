@@ -5,14 +5,13 @@ import sys
 
 from copy import deepcopy
 from appdirs import user_data_dir
-from datetime import datetime
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
-from lbrynet.core.Error import InvalidStreamInfoError, InsufficientFundsError, KeyFeeAboveMaxAllowed
+from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.core.LBRYMetadata import Metadata, LBRYFeeValidator
+from lbrynet.core.LBRYMetadata import LBRYFeeValidator
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.conf import DEFAULT_TIMEOUT, LOG_FILE_NAME
 

@@ -4,7 +4,6 @@ import os
 import sys
 
 from appdirs import user_data_dir
-from datetime import datetime
 
 from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file

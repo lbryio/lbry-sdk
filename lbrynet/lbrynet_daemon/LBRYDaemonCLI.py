@@ -1,7 +1,7 @@
 import sys
 import json
 
-from lbrynet.conf import API_CONNECTION_STRING, LOG_FILE_NAME
+from lbrynet.conf import API_CONNECTION_STRING
 from jsonrpc.proxy import JSONRPCProxy
 
 help_msg = "Useage: lbrynet-cli method json-args\n" \

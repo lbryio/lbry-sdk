@@ -1,9 +1,6 @@
-import requests
 import json
-import time
 
 from copy import deepcopy
-from googlefinance import getQuotes
 from lbrynet.conf import CURRENCIES
 from lbrynet.core import utils
 import logging
