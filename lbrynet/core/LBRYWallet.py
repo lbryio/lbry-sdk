@@ -1221,11 +1221,11 @@ class LBRYumWallet(LBRYWallet):
 
     def _send_name_claim_update(self, name, claim_id, txid, value, amount):
         def send_claim_update(address):
-            serialized_metadata = Metadata(value).as_json() #serialize()
-            log.info("updateclaim %s %s %f %s %s %s" % (txid, address, amount, name, claim_id, serialized_metadata))
+            metadata = Metadata(value).as_json()
+            log.info("updateclaim %s %s %f %s %s %s" % (txid, address, amount, name, claim_id, metadata))
             cmd = known_commands['updateclaim']
             func = getattr(self.cmd_runner, cmd.name)
-            return threads.deferToThread(func, txid, address, amount, name, claim_id.decode('hex'), serialized_metadata)
+            return threads.deferToThread(func, txid, address, amount, name, claim_id.decode('hex'), metadata)
 
         d = self.get_new_address()
         d.addCallback(send_claim_update)
