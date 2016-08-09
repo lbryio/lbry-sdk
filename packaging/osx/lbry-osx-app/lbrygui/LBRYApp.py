@@ -27,7 +27,7 @@ if not os.path.isfile(lbrycrdd_path_conf):
     f.write(lbrycrdd_path)
     f.close()
 
-from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer
+from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
 from lbrynet.conf import UI_ADDRESS
 
@@ -74,16 +74,13 @@ class LBRYDaemonApp(AppKit.NSApplication):
                 LBRYNotify("LBRY needs an internet connection to start, try again when one is available")
             sys.exit(0)
 
-        # if not subprocess.check_output("git ls-remote https://github.com/lbryio/lbry-web-ui.git | grep HEAD | cut -f 1",
-        #                                shell=True):
-        #     LBRYNotify(
-        #         "You should have been prompted to install xcode command line tools, please do so and then start LBRY")
-        #     sys.exit(0)
 
         lbry = LBRYDaemonServer()
         d = lbry.start()
         d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
-        reactor.listenTCP(API_PORT, server.Site(lbry.root), interface=API_INTERFACE)
+        lbrynet_server = server.Site(lbry.root)
+        lbrynet_server.requestFactory = LBRYDaemonRequest
+        reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
 
     def openui_(self, sender):
         webbrowser.open(UI_ADDRESS)
