@@ -56,6 +56,7 @@ from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
+from lbrynet.reflector.server import ReflectorServerFactory
 # from lbryum import LOG_PATH as lbryum_log
 
 
@@ -203,6 +204,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'delete_blobs_on_remove': True,
             'peer_port': 3333,
             'dht_node_port': 4444,
+            'reflector_port': 5566,
             'use_upnp': True,
             'start_lbrycrdd': True,
             'requested_first_run_credits': False,
@@ -291,6 +293,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         ####
         self.delete_blobs_on_remove = self.session_settings['delete_blobs_on_remove']
         self.peer_port = self.session_settings['peer_port']
+        self.reflector_port = self.session_settings['reflector_port']
         self.dht_node_port = self.session_settings['dht_node_port']
         self.use_upnp = self.session_settings['use_upnp']
         self.start_lbrycrdd = self.session_settings['start_lbrycrdd']
@@ -670,10 +673,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _start_server(self):
         if self.peer_port is not None:
-
             server_factory = ServerProtocolFactory(self.session.rate_limiter,
                                                    self.query_handlers,
                                                    self.session.peer_manager)
+
             try:
                 self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
             except error.CannotListenError as e:
@@ -681,6 +684,27 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 log.error("Couldn't bind to port %d. %s", self.peer_port, traceback.format_exc())
                 raise ValueError("%s lbrynet may already be running on your computer.", str(e))
         return defer.succeed(True)
+
+    def _start_reflector(self):
+        if self.reflector_port is not None:
+            reflector_factory = ReflectorServerFactory(self.session.peer_manager, self.session.blob_manager)
+            try:
+                self.reflector_server_port = reactor.listenTCP(self.reflector_port, reflector_factory)
+            except error.CannotListenError as e:
+                import traceback
+                log.error("Couldn't bind reflector to port %d. %s", self.reflector, traceback.format_exc())
+                raise ValueError("%s lbrynet may already be running on your computer.", str(e))
+        return defer.succeed(True)
+
+    def _stop_reflector(self):
+        try:
+            if self.reflector_server_port is not None:
+                self.reflector_server_port, p = None, self.reflector_server_port
+                return defer.maybeDeferred(p.stopListening)
+            else:
+                return defer.succeed(True)
+        except AttributeError:
+            return defer.succeed(True)
 
     def _stop_server(self):
         try:
@@ -695,7 +719,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _setup_server(self):
         def restore_running_status(running):
             if running is True:
-                return self._start_server()
+                d = self._start_server()
+                d.addCallback(lambda _: self._start_reflector())
             return defer.succeed(True)
 
         self.startup_status = STARTUP_STAGES[4]
@@ -793,6 +818,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self._upload_log(log_type="close", exclude_previous=False if self.first_run else True)
         d.addCallback(lambda _: self._stop_server())
+        d.addCallback(lambda _: self._stop_reflector())
         d.addErrback(lambda err: True)
         d.addCallback(lambda _: self.lbry_file_manager.stop())
         d.addErrback(lambda err: True)

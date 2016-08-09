@@ -12,6 +12,7 @@ from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.LBRYMetadata import Metadata, CURRENT_METADATA_VERSION
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
+from lbrynet.reflector.client import LBRYFileReflectorClientFactory
 from lbrynet.conf import LOG_FILE_NAME
 from twisted.internet import threads, defer
 
@@ -41,6 +42,7 @@ class Publisher(object):
         self.lbry_file = None
         self.txid = None
         self.stream_hash = None
+        self.reflector_client = None
         self.metadata = {}
 
     def start(self, name, file_path, bid, metadata, old_txid):
@@ -62,9 +64,15 @@ class Publisher(object):
         d.addCallback(lambda _: self._create_sd_blob())
         d.addCallback(lambda _: self._claim_name())
         d.addCallback(lambda _: self.set_status())
+        d.addCallback(lambda _: self.start_reflector())
         d.addCallbacks(lambda _: _show_result(), self._show_publish_error)
 
         return d
+
+    def start_reflector(self):
+        self.reflector_client = LBRYFileReflectorClientFactory(self.session.blob_manager,
+                                                               self.lbry_file_manager.stream_info_manager,
+                                                               self.stream_hash)
 
     def _check_file_path(self, file_path):
         def check_file_threaded():
