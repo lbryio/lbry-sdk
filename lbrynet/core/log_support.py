@@ -3,11 +3,41 @@ import json
 import logging
 import logging.handlers
 import sys
-
-import loggly.handlers
-
+import traceback
 import lbrynet
 from lbrynet import conf
+from requests_futures.sessions import FuturesSession
+
+session = FuturesSession()
+
+
+def bg_cb(sess, resp):
+    """ Don't do anything with the response """
+    pass
+
+
+class HTTPSHandler(logging.Handler):
+    def __init__(self, url, fqdn=False, localname=None, facility=None):
+        logging.Handler.__init__(self)
+        self.url = url
+        self.fqdn = fqdn
+        self.localname = localname
+        self.facility = facility
+
+    def get_full_message(self, record):
+        if record.exc_info:
+            return '\n'.join(traceback.format_exception(*record.exc_info))
+        else:
+            return record.getMessage()
+
+    def emit(self, record):
+        try:
+            payload = self.format(record)
+            session.post(self.url, data=payload, background_callback=bg_cb)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except:
+            self.handleError(record)
 
 
 DEFAULT_FORMAT = "%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s"
@@ -75,7 +105,7 @@ def configure_loggly_handler(url=None, **kwargs):
     }
     json_format.update(kwargs)
     formatter = logging.Formatter(json.dumps(json_format))
-    handler = loggly.handlers.HTTPSHandler(url)
+    handler = HTTPSHandler(url)
     handler.setFormatter(formatter)
     handler.name = 'loggly'
     return handler
