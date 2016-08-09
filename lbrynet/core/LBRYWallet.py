@@ -6,7 +6,6 @@ import subprocess
 import socket
 import time
 import os
-import requests
 
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 from twisted.internet import threads, reactor, defer, task
@@ -15,10 +14,9 @@ from twisted.enterprise import adbapi
 from collections import defaultdict, deque
 from zope.interface import implements
 from decimal import Decimal
-from googlefinance import getQuotes
 
 from lbryum import SimpleConfig, Network
-from lbryum.lbrycrd import COIN, TYPE_ADDRESS
+from lbryum.lbrycrd import COIN
 from lbryum.wallet import WalletStorage, Wallet
 from lbryum.commands import known_commands, Commands
 from lbryum.transaction import Transaction
@@ -27,8 +25,6 @@ from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHand
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.sqlite_helpers import rerun_if_locked
-from lbrynet.conf import SOURCE_TYPES
 from lbrynet.core.LBRYMetadata import Metadata
 
 log = logging.getLogger(__name__)

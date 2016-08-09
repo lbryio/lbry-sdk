@@ -1,5 +1,5 @@
 import binascii
-from twisted.internet import defer, task, reactor
+from twisted.internet import defer, reactor
 import collections
 
 
