@@ -39,6 +39,7 @@ from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
+from lbrynet.core.LBRYMetadata import Metadata
 from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.core.LBRYMetadata import verify_name_characters
@@ -376,6 +377,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 log.info("Done writing lbrycrd.conf")
 
     def _responseFailed(self, err, call):
+        log.error(err.getTraceback())
         call.cancel()
 
     def render(self, request):
@@ -1125,11 +1127,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _get_est_cost(self, name):
         def _check_est(d, name):
-            if isinstance(d.result, float):
-                log.info("Cost est for lbry://" + name + ": " + str(d.result) + "LBC")
-            else:
-                log.info("Timeout estimating cost for lbry://" + name + ", using key fee")
-                d.cancel()
+            try:
+                if d.result:
+                    log.info("Cost est for lbry://" + name + ": " + str(d.result) + "LBC")
+                    return defer.succeed(None)
+            except AttributeError:
+                pass
+            log.info("Timeout estimating cost for lbry://" + name + ", using key fee")
+            d.cancel()
             return defer.succeed(None)
 
         def _add_key_fee(data_cost):
@@ -1229,7 +1234,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                                                    'stream_name': f.stream_name,
                                                    'suggested_file_name': f.suggested_file_name,
                                                    'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash,
-                                                   'lbry_uri': f.uri, 'txid': f.txid,
+                                                   'lbry_uri': f.uri, 'txid': f.txid, 'claim_id': f.claim_id,
                                                    'total_bytes': size,
                                                    'written_bytes': written_bytes, 'code': status[0],
                                                    'message': message})
@@ -1241,7 +1246,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                                        'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
                                        'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
                                        'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash, 'total_bytes': size,
-                                       'written_bytes': written_bytes, 'lbry_uri': f.uri, 'txid': f.txid,
+                                       'written_bytes': written_bytes, 'lbry_uri': f.uri, 'txid': f.txid, 'claim_id': f.claim_id,
                                        'code': status[0], 'message': status[1]})
 
                 return d
@@ -1272,7 +1277,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d = self._get_lbry_file_by_sd_hash(val)
         elif search_by == "file_name":
             d = self._get_lbry_file_by_file_name(val)
-        d.addCallback(_log_get_lbry_file)
+        # d.addCallback(_log_get_lbry_file)
         if return_json:
             d.addCallback(_get_json_for_return)
         return d
@@ -1638,11 +1643,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         def _convert_amount_to_float(r):
-            r['amount'] = float(r['amount']) / 10**8
-            return r
+            if not r:
+                return False
+            else:
+                r['amount'] = float(r['amount']) / 10**8
+                return r
 
         name = p['name']
-        d = self.session.wallet.get_claim_info(name)
+        txid = p.get('txid', None)
+        d = self.session.wallet.get_claim_info(name, txid)
         d.addCallback(_convert_amount_to_float)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -1771,7 +1780,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             List of search results
         """
 
-        # TODO: change this function to "search", and use cached stream size info from the search server
+        # TODO: change this function to "search"
 
         if 'search' in p.keys():
             search = p['search']
@@ -1840,26 +1849,31 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             Claim txid
         """
 
+        def _set_address(address, currency, m):
+            log.info("Generated new address for key fee: " + str(address))
+            m['fee'][currency]['address'] = address
+            return m
+
         name = p['name']
+
+        log.info("Publish: ")
+        log.info(p)
+
         try:
             verify_name_characters(name)
-        except:
+        except AssertionError:
             log.error("Bad name")
             return defer.fail(InvalidNameError("Bad name"))
+
         bid = p['bid']
-        file_path = p['file_path']
-        metadata = p['metadata']
 
-        def _set_address(address, currency):
-            log.info("Generated new address for key fee: " + str(address))
-            metadata['fee'][currency]['address'] = address
-            return defer.succeed(None)
-
-        def _delete_data(lbry_file):
-            txid = lbry_file.txid
-            d = self._delete_lbry_file(lbry_file, delete_file=False)
-            d.addCallback(lambda _: txid)
-            return d
+        try:
+            metadata = Metadata(p['metadata'])
+            make_lbry_file = False
+        except AssertionError:
+            make_lbry_file = True
+            metadata = p['metadata']
+            file_path = p['file_path']
 
         if not self.pending_claim_checker.running:
             self.pending_claim_checker.start(30)
@@ -1873,15 +1887,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             for c in metadata['fee']:
                 if 'address' not in metadata['fee'][c]:
                     d.addCallback(lambda _: self.session.wallet.get_new_address())
-                    d.addCallback(lambda addr: _set_address(addr, c))
-
-        pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
-        d.addCallback(lambda _: self._get_lbry_file_by_uri(name))
-        d.addCallbacks(lambda l: None if not l else _delete_data(l), lambda _: None)
-        d.addCallback(lambda r: pub.start(name, file_path, bid, metadata, r))
+                    d.addCallback(lambda addr: _set_address(addr, c, metadata))
+        else:
+            d.addCallback(lambda _: metadata)
+        if make_lbry_file:
+            pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
+            d.addCallback(lambda meta: pub.start(name, file_path, bid, meta))
+        else:
+            d.addCallback(lambda meta: self.session.wallet.claim_name(name, bid, meta))
         d.addCallback(lambda txid: self._add_to_pending_claims(name, txid))
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        d.addErrback(lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
 
         return d
 
@@ -1911,6 +1926,25 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    def jsonrpc_support_claim(self, p):
+        """
+        Support a name claim
+
+        Args:
+            'name': name
+            'claim_id': claim id of claim to support
+            'amount': amount to support by
+        Return:
+            txid
+        """
+
+        name = p['name']
+        claim_id = p['claim_id']
+        amount = p['amount']
+        d = self.session.wallet.support_claim(name, claim_id, amount)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
     def jsonrpc_get_name_claims(self):
         """
         Get my name claims
@@ -1932,6 +1966,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(_clean)
         d.addCallback(lambda claims: self._render_response(claims, OK_CODE))
 
+        return d
+
+    def jsonrpc_get_claims_for_name(self, p):
+        """
+        Get claims for a name
+
+        Args:
+            'name': name
+        Returns
+            list of name claims
+        """
+
+        name = p['name']
+        d = self.session.wallet.get_claims_for_name(name)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
     def jsonrpc_get_transaction_history(self):
@@ -2433,7 +2482,7 @@ class _ResolveNameHelper(object):
             d = self.wallet.get_stream_info_for_name(self.name)
             d.addCallbacks(self._cache_stream_info, lambda _: defer.fail(UnknownNameError))
         else:
-            log.info("Returning cached stream info for lbry://%s", self.name)
+            log.debug("Returning cached stream info for lbry://%s", self.name)
             d = defer.succeed(self.name_data['claim_metadata'])
         return d
 

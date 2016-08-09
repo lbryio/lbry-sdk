@@ -80,13 +80,16 @@ class LBRYFileManager(object):
             d.addCallback(lambda downloader: downloader.restore())
             return d
 
-        def log_error(err):
+        def log_error(err, rowid, stream_hash, options):
             log.error("An error occurred while starting a lbry file: %s", err.getErrorMessage())
+            log.error(rowid)
+            log.error(stream_hash)
+            log.error(options)
 
         def start_lbry_files(lbry_files_and_options):
             for rowid, stream_hash, options in lbry_files_and_options:
                 d = set_options_and_restore(rowid, stream_hash, options)
-                d.addErrback(log_error)
+                d.addErrback(lambda err: log_error(err, rowid, stream_hash, options))
             return True
 
         d = self._get_all_lbry_files()

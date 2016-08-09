@@ -42,7 +42,7 @@ class Publisher(object):
         self.stream_hash = None
         self.metadata = {}
 
-    def start(self, name, file_path, bid, metadata, old_txid):
+    def start(self, name, file_path, bid, metadata):
 
         def _show_result():
             log.info("Published %s --> lbry://%s txid: %s", self.file_name, self.publish_name, self.txid)
@@ -52,7 +52,6 @@ class Publisher(object):
         self.file_path = file_path
         self.bid_amount = bid
         self.metadata = metadata
-        self.old_txid = old_txid
 
         d = self._check_file_path(self.file_path)
         d.addCallback(lambda _: create_lbry_file(self.session, self.lbry_file_manager,
@@ -105,21 +104,12 @@ class Publisher(object):
         self.metadata['content-type'] = mimetypes.guess_type(os.path.join(self.lbry_file.download_directory,
                                                                           self.lbry_file.file_name))[0]
         self.metadata['ver'] = CURRENT_METADATA_VERSION
+        m = Metadata(self.metadata)
 
-        if self.old_txid:
-
-            d = self.wallet.abandon_name(self.old_txid)
-            d.addCallback(lambda tx: log.info("Abandoned tx %s" % str(tx)))
-            d.addCallback(lambda _: self.wallet.claim_name(self.publish_name,
-                                       self.bid_amount,
-                                       Metadata(self.metadata)))
-        else:
-            d = self.wallet.claim_name(self.publish_name,
-                                       self.bid_amount,
-                                       Metadata(self.metadata))
         def set_tx_hash(txid):
             self.txid = txid
 
+        d = self.wallet.claim_name(self.publish_name, self.bid_amount, m)
         d.addCallback(set_tx_hash)
         return d
 
@@ -134,4 +124,4 @@ class Publisher(object):
         log.error(error_message)
         log.error(message, str(self.file_name), str(self.publish_name), err.getTraceback())
 
-        return defer.succeed(error_message)
+        return defer.fail(Exception("Publish failed"))
