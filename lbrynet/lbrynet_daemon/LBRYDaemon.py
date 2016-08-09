@@ -170,6 +170,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.first_run_after_update = False
         self.uploaded_temp_files = []
 
+        # change this to enable reflector server
+        self.run_reflector_server = False
+
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
             default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
@@ -686,25 +689,26 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return defer.succeed(True)
 
     def _start_reflector(self):
-        if self.reflector_port is not None:
-            reflector_factory = ReflectorServerFactory(self.session.peer_manager, self.session.blob_manager)
-            try:
-                self.reflector_server_port = reactor.listenTCP(self.reflector_port, reflector_factory)
-            except error.CannotListenError as e:
-                import traceback
-                log.error("Couldn't bind reflector to port %d. %s", self.reflector_port, traceback.format_exc())
-                raise ValueError("%s lbrynet may already be running on your computer.", str(e))
+        if self.run_reflector_server:
+            if self.reflector_port is not None:
+                reflector_factory = ReflectorServerFactory(self.session.peer_manager, self.session.blob_manager)
+                try:
+                    self.reflector_server_port = reactor.listenTCP(self.reflector_port, reflector_factory)
+                except error.CannotListenError as e:
+                    import traceback
+                    log.error("Couldn't bind reflector to port %d. %s", self.reflector_port, traceback.format_exc())
+                    raise ValueError("%s lbrynet may already be running on your computer.", str(e))
         return defer.succeed(True)
 
     def _stop_reflector(self):
-        try:
-            if self.reflector_server_port is not None:
-                self.reflector_server_port, p = None, self.reflector_server_port
-                return defer.maybeDeferred(p.stopListening)
-            else:
+        if self.run_reflector_server:
+            try:
+                if self.reflector_server_port is not None:
+                    self.reflector_server_port, p = None, self.reflector_server_port
+                    return defer.maybeDeferred(p.stopListening)
+            except AttributeError:
                 return defer.succeed(True)
-        except AttributeError:
-            return defer.succeed(True)
+        return defer.succeed(True)
 
     def _stop_server(self):
         try:
