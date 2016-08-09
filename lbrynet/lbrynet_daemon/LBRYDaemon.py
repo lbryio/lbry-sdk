@@ -1704,8 +1704,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         def _convert_amount_to_float(r):
-            r['amount'] = float(r['amount']) / 10**8
-            return r
+            if not r:
+                return False
+            else:
+                r['amount'] = float(r['amount']) / 10**8
+                return r
 
         name = p['name']
         txid = p.get('txid', None)
@@ -1907,12 +1910,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             Claim txid
         """
 
-        def _set_address(address, currency):
+        def _set_address(address, currency, m):
             log.info("Generated new address for key fee: " + str(address))
-            metadata['fee'][currency]['address'] = address
-            return defer.succeed(None)
+            m['fee'][currency]['address'] = address
+            return m
 
         name = p['name']
+
+        log.info("Publish: ")
+        log.info(p)
 
         try:
             verify_name_characters(name)
@@ -1942,15 +1948,16 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             for c in metadata['fee']:
                 if 'address' not in metadata['fee'][c]:
                     d.addCallback(lambda _: self.session.wallet.get_new_address())
-                    d.addCallback(lambda addr: _set_address(addr, c))
+                    d.addCallback(lambda addr: _set_address(addr, c, metadata))
+        else:
+            d.addCallback(lambda _: metadata)
         if make_lbry_file:
             pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
-            d.addCallback(lambda _: pub.start(name, file_path, bid, metadata))
+            d.addCallback(lambda meta: pub.start(name, file_path, bid, meta))
         else:
-            d.addCallback(lambda _: self.session.wallet.claim_name(name, bid, metadata))
+            d.addCallback(lambda meta: self.session.wallet.claim_name(name, bid, meta))
         d.addCallback(lambda txid: self._add_to_pending_claims(name, txid))
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        d.addErrback(lambda err: self._render_response(err.getTraceback(), BAD_REQUEST))
 
         return d
 

@@ -125,4 +125,4 @@ class Publisher(object):
         log.error(error_message)
         log.error(message, str(self.file_name), str(self.publish_name), err.getTraceback())
 
-        return defer.succeed(error_message)
+        return defer.fail(Exception("Publish failed"))

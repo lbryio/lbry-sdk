@@ -399,7 +399,7 @@ class LBRYWallet(object):
             result['supports'] = [{'txid': support['txid'], 'n': support['n']} for support in claim['supports']]
             result['meta_version'] = meta_ver
 
-            log.info("lbry://%s metadata:  %s, claimid: %s", name, meta_ver, claim_id)
+            log.info("get claim info lbry://%s metadata: %s, claimid: %s", name, meta_ver, claim_id)
 
             d.addCallback(lambda _: self.get_name_claims())
             d.addCallback(lambda r: [c['txid'] for c in r])
@@ -423,7 +423,7 @@ class LBRYWallet(object):
         meta_for_return = old_metadata if isinstance(old_metadata, dict) else {}
         for k in new_metadata:
             meta_for_return[k] = new_metadata[k]
-        return Metadata(meta_for_return)
+        return defer.succeed(Metadata(meta_for_return))
 
     def claim_name(self, name, bid, m):
         def _save_metadata(txid, metadata):
@@ -435,13 +435,15 @@ class LBRYWallet(object):
         def _claim_or_update(claim, metadata, _bid):
             if not claim:
                 log.info("No claim yet, making a new one")
-                return self._send_name_claim(name, json.dumps(metadata), _bid)
+                return self._send_name_claim(name, metadata.as_json(), _bid)
             if not claim['is_mine']:
                 log.info("Making a contesting claim")
-                return self._send_name_claim(name, json.dumps(metadata), _bid)
+                return self._send_name_claim(name, metadata.as_json(), _bid)
             else:
                 log.info("Updating over own claim")
-                return self.update_name(name, claim['txid'], json.dumps(self.update_metadata(metadata, claim['value'])), _bid)
+                d = self.update_metadata(metadata, claim['value'])
+                d.addCallback(lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'], claim['txid'], new_metadata, _bid))
+                return d
 
         meta = Metadata(m)
 
@@ -489,10 +491,6 @@ class LBRYWallet(object):
     def get_tx(self, txid):
         d = self._get_raw_tx(txid)
         d.addCallback(self._get_decoded_tx)
-        return d
-
-    def update_name(self, name, txid, value, amount):
-        d = self._update_name(name, txid, value, amount)
         return d
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
@@ -676,7 +674,7 @@ class LBRYWallet(object):
     def _send_abandon(self, txid, address, amount):
         return defer.fail(NotImplementedError())
 
-    def _update_name(self, name, txid, value, amount):
+    def _send_name_claim_update(self, name, claim_id, txid, value, amount):
         return defer.fail(NotImplementedError())
 
     def _support_claim(self, name, claim_id, amount):
@@ -814,7 +812,7 @@ class LBRYcrdWallet(LBRYWallet):
     def _send_abandon(self, txid, address, amount):
         return threads.deferToThread(self._send_abandon_rpc, txid, address, amount)
 
-    def _update_name(self, name, txid, value, amount):
+    def _send_name_claim_update(self, name, claim_id, txid, value, amount):
         return threads.deferToThread(self._update_name_rpc, txid, value, amount)
 
     def _support_claim(self, name, claim_id, amount):
@@ -1173,12 +1171,6 @@ class LBRYumWallet(LBRYWallet):
         d.addCallback(Decimal)
         return d
 
-    def _update_name(self, name, txid, value, amount):
-        serialized_metadata = Metadata(value).serialize()
-        d = self.get_claimid(name, txid)
-        d.addCallback(lambda claim_id: self._send_claim_update(txid, amount, name, claim_id, serialized_metadata))
-        return d
-
     def get_new_address(self):
         d = threads.deferToThread(self.wallet.create_new_address)
         d.addCallback(self._save_wallet)
@@ -1227,15 +1219,18 @@ class LBRYumWallet(LBRYWallet):
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func, name)
 
-    def _send_claim_update(self, txid, amount, name, claim_id, val):
-        def send_claim(address):
+    def _send_name_claim_update(self, name, claim_id, txid, value, amount):
+        def send_claim_update(address):
+            serialized_metadata = Metadata(value).as_json() #serialize()
+            log.info("updateclaim %s %s %f %s %s %s" % (txid, address, amount, name, claim_id, serialized_metadata))
             cmd = known_commands['updateclaim']
             func = getattr(self.cmd_runner, cmd.name)
-            return threads.deferToThread(func, txid, address, amount, name, claim_id, val)
-        log.info("Update lbry://%s %s %f %s %s" % (name, txid, amount, claim_id, val))
+            return threads.deferToThread(func, txid, address, amount, name, claim_id.decode('hex'), serialized_metadata)
+
         d = self.get_new_address()
-        d.addCallback(send_claim)
+        d.addCallback(send_claim_update)
         d.addCallback(self._broadcast_transaction)
+        return d
 
     def _get_decoded_tx(self, raw_tx):
         tx = Transaction(raw_tx)
@@ -1267,10 +1262,14 @@ class LBRYumWallet(LBRYWallet):
         return d
 
     def _broadcast_transaction(self, raw_tx):
+        def _log_tx(r):
+            log.info("Broadcast tx: %s", r)
+            return r
         cmd = known_commands['broadcast']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, raw_tx)
-        d.addCallback(lambda r: r if len(r) == 64 else Exception("Transaction rejected"))
+        d.addCallback(_log_tx)
+        d.addCallback(lambda r: r if len(r) == 64 else defer.fail(Exception("Transaction rejected")))
         d.addCallback(self._save_wallet)
         return d
 

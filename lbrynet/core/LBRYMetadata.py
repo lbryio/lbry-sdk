@@ -133,3 +133,6 @@ class Metadata(dict):
 
     def serialize(self):
         return json.dumps(self).encode("hex")
+
+    def as_json(self):
+        return json.dumps(self)
