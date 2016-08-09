@@ -692,7 +692,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 self.reflector_server_port = reactor.listenTCP(self.reflector_port, reflector_factory)
             except error.CannotListenError as e:
                 import traceback
-                log.error("Couldn't bind reflector to port %d. %s", self.reflector, traceback.format_exc())
+                log.error("Couldn't bind reflector to port %d. %s", self.reflector_port, traceback.format_exc())
                 raise ValueError("%s lbrynet may already be running on your computer.", str(e))
         return defer.succeed(True)
 
