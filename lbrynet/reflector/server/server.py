@@ -1,6 +1,6 @@
 import logging
 from twisted.python import failure
-from twisted.internet import error
+from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ServerFactory
 import json
 
@@ -72,7 +72,8 @@ class ReflectorServer(Protocol):
         self.peer_version = int(request_dict['version'])
         if self.peer_version != 0:
             raise ValueError("I don't know that version!")
-        return {'version': 0}
+        self.received_handshake = True
+        return defer.succeed({'version': 0})
 
     def determine_blob_needed(self, blob):
         if blob.is_validated():
@@ -87,6 +88,7 @@ class ReflectorServer(Protocol):
         self.blob_write = None
         self.cancel_write = None
         self.incoming_blob = None
+        self.receiving_blob = False
 
     def handle_normal_request(self, request_dict):
         if self.blob_write is None:
@@ -113,11 +115,10 @@ class ReflectorServer(Protocol):
             d = self.blob_finished_d
             d.addCallback(lambda _: self.close_blob())
             d.addCallback(lambda _: {'received_blob': True})
-        d.addCallback(self.send_response)
         return d
 
     def send_response(self, response_dict):
-        self.write(json.dumps(response_dict))
+        self.transport.write(json.dumps(response_dict))
 
     def handle_error(self, err):
         pass
