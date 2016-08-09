@@ -39,6 +39,7 @@ from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
+from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.core.LBRYMetadata import verify_name_characters
 from lbrynet.core.utils import generate_id
@@ -318,14 +319,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbryum")
         elif sys.platform == "darwin":
-            # use the path from the bundle if its available.
-            try:
-                import Foundation
-                bundle = Foundation.NSBundle.mainBundle()
-                self.lbrycrdd_path = bundle.pathForResource_ofType_('lbrycrdd', None)
-            except Exception:
-                log.exception('Failed to get path from bundle, falling back to default')
-                self.lbrycrdd_path = "./lbrycrdd"
+            self.lbrycrdd_path = get_darwin_lbrycrdd_path()
             if self.wallet_type == "lbrycrd":
                 self.wallet_dir = user_data_dir("lbrycrd")
             else:
@@ -483,8 +477,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     log.info("Scheduling scripts")
                     reactor.callLater(3, self._run_scripts)
 
-                # self.lbrynet_connection_checker.start(3600)
-
             if self.first_run:
                 d = self._upload_log(log_type="first_run")
             elif self.upload_log:
@@ -492,11 +484,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             else:
                 d = defer.succeed(None)
 
-            # if float(self.session.wallet.wallet_balance) == 0.0:
-            #     d.addCallback(lambda _: self._check_first_run())
-            #     d.addCallback(self._show_first_run_result)
-
-            # d.addCallback(lambda _: _wait_for_credits() if self.requested_first_run_credits else _announce())
             d.addCallback(lambda _: _announce())
             return d
 
@@ -931,6 +918,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = self.settings.start()
         d.addCallback(lambda _: self.settings.get_lbryid())
         d.addCallback(self._set_lbryid)
+        d.addCallback(lambda _: self._modify_loggly_formatter())
         return d
 
     def _set_lbryid(self, lbryid):
@@ -945,6 +933,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.info("Generated new LBRY ID: " + base58.b58encode(self.lbryid))
         d = self.settings.save_lbryid(self.lbryid)
         return d
+
+    def _modify_loggly_formatter(self):
+        session_id = base58.b58encode(generate_id())
+        log_support.configure_loggly_handler(
+            lbry_id=base58.b58encode(self.lbryid),
+            session_id=session_id
+        )
+
 
     def _setup_lbry_file_manager(self):
         self.startup_status = STARTUP_STAGES[3]
@@ -1011,62 +1007,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         dl.addCallback(lambda _: self.session.setup())
 
         return dl
-
-    # def _check_first_run(self):
-    #     def _set_first_run_false():
-    #         log.info("Not first run")
-    #         self.first_run = False
-    #         self.session_settings['requested_first_run_credits'] = True
-    #         f = open(self.daemon_conf, "w")
-    #         f.write(json.dumps(self.session_settings))
-    #         f.close()
-    #         return 0.0
-    #
-    #     if self.wallet_type == 'lbryum':
-    #         d = self.session.wallet.is_first_run()
-    #         d.addCallback(lambda is_first_run: self._do_first_run() if is_first_run or not self.requested_first_run_credits
-    #                                             else _set_first_run_false())
-    #     else:
-    #         d = defer.succeed(None)
-    #         d.addCallback(lambda _: _set_first_run_false())
-    #     return d
-    #
-    # def _do_first_run(self):
-    #     def send_request(url, data):
-    #         log.info("Requesting first run credits")
-    #         r = requests.post(url, json=data)
-    #         if r.status_code == 200:
-    #             self.requested_first_run_credits = True
-    #             self.session_settings['requested_first_run_credits'] = True
-    #             f = open(self.daemon_conf, "w")
-    #             f.write(json.dumps(self.session_settings))
-    #             f.close()
-    #             return r.json()['credits_sent']
-    #         return 0.0
-    #
-    #     def log_error(err):
-    #         log.warning("unable to request free credits. %s", err.getErrorMessage())
-    #         return 0.0
-    #
-    #     def request_credits(address):
-    #         url = "http://credreq.lbry.io/requestcredits"
-    #         data = {"address": address}
-    #         d = threads.deferToThread(send_request, url, data)
-    #         d.addErrback(log_error)
-    #         return d
-    #
-    #     self.first_run = True
-    #     d = self.session.wallet.get_new_address()
-    #     d.addCallback(request_credits)
-    #
-    #     return d
-    #
-    # def _show_first_run_result(self, credits_received):
-    #     if credits_received != 0.0:
-    #         points_string = locale.format_string("%.2f LBC", (round(credits_received, 2),), grouping=True)
-    #         self.startup_message = "Thank you for testing the alpha version of LBRY! You have been given %s for free because we love you. Please hang on for a few minutes for the next block to be mined. When you refresh this page and see your credits you're ready to go!." % points_string
-    #     else:
-    #         self.startup_message = None
 
     def _setup_stream_identifier(self):
         file_saver_factory = LBRYFileSaverFactory(self.session.peer_finder, self.session.rate_limiter,
@@ -2371,6 +2311,24 @@ def get_output_callback(params):
             'path': os.path.join(params.download_directory, l.file_name)
         }
     return callback
+
+
+def get_darwin_lbrycrdd_path():
+    # use the path from the bundle if its available.
+    default = "./lbrycrdd"
+    try:
+        import Foundation
+    except ImportError:
+        log.warning('Foundation module not installed, falling back to default lbrycrdd path')
+        return default
+    else:
+        try:
+            bundle = Foundation.NSBundle.mainBundle()
+            return bundle.pathForResource_ofType_('lbrycrdd', None)
+        except Exception:
+            log.exception('Failed to get path from bundle, falling back to default')
+            return default
+
 
 
 class _DownloadNameHelper(object):

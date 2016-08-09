@@ -58,3 +58,5 @@ CURRENCIES = {
                 'LBC': {'type': 'crypto'},
                 'USD': {'type': 'fiat'},
              }
+
+LOGGLY_TOKEN = 'YWRmNGU4NmEtNjkwNC00YjM2LTk3ZjItMGZhODM3ZDhkYzBi'

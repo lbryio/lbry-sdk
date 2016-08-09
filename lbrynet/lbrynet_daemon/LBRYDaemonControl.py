@@ -73,11 +73,11 @@ def start():
     parser.set_defaults(branch=False, launchui=True, logtoconsole=False, quiet=False)
     args = parser.parse_args()
 
-
-    log_support.configureFileHandler(lbrynet_log)
+    log_support.disable_noisy_loggers()
+    log_support.configure_file_handler(lbrynet_log)
+    log_support.configure_loggly_handler()
     if args.logtoconsole:
-        log_support.configureConsole()
-
+        log_support.configure_console()
 
     try:
         JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()
