@@ -2,9 +2,9 @@ import logging
 import mimetypes
 import os
 import sys
+import random
 
 from appdirs import user_data_dir
-from datetime import datetime
 
 from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
@@ -13,8 +13,8 @@ from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.LBRYMetadata import Metadata, CURRENT_METADATA_VERSION
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.reflector.client import LBRYFileReflectorClientFactory
-from lbrynet.conf import LOG_FILE_NAME
-from twisted.internet import threads, defer
+from lbrynet.conf import LOG_FILE_NAME, REFLECTOR_SERVERS
+from twisted.internet import threads, defer, reactor
 
 if sys.platform != "darwin":
     log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
@@ -42,7 +42,8 @@ class Publisher(object):
         self.lbry_file = None
         self.txid = None
         self.stream_hash = None
-        self.reflector_client = None
+        reflector_server = random.choice(REFLECTOR_SERVERS)
+        self.reflector_server, self.reflector_port = reflector_server[0], reflector_server[1]
         self.metadata = {}
 
     def start(self, name, file_path, bid, metadata, old_txid):
@@ -70,9 +71,11 @@ class Publisher(object):
         return d
 
     def start_reflector(self):
-        self.reflector_client = LBRYFileReflectorClientFactory(self.session.blob_manager,
+        factory = LBRYFileReflectorClientFactory(self.session.blob_manager,
                                                                self.lbry_file_manager.stream_info_manager,
                                                                self.stream_hash)
+        reactor.connectTCP(self.reflector_server, self.reflector_port, factory)
+        return factory.finished_deferred
 
     def _check_file_path(self, file_path):
         def check_file_threaded():
