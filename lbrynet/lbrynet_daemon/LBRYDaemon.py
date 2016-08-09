@@ -377,8 +377,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 log.info("Done writing lbrycrd.conf")
 
     def _responseFailed(self, err, call):
-        log.error(err.getTraceback())
-        call.cancel()
+        log.debug(err.getTraceback())
+        if call.active():
+            call.cancel()
 
     def render(self, request):
         request.content.seek(0, 0)
@@ -421,10 +422,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 d = defer.maybeDeferred(function, *args)
 
             # cancel the response if the connection is broken
-            request.notifyFinish().addErrback(self._responseFailed, d)
-
+            notify_finish = request.notifyFinish()
+            notify_finish.addErrback(self._responseFailed, d)
             d.addErrback(self._ebRender, id)
             d.addCallback(self._cbRender, request, id, version)
+            d.addErrback(notify_finish.errback)
         return server.NOT_DONE_YET
 
     def _cbRender(self, result, request, id, version):
@@ -1128,7 +1130,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _get_est_cost(self, name):
         def _check_est(d, name):
             try:
-                if d.result:
+                if isinstance(d.result, float):
                     log.info("Cost est for lbry://" + name + ": " + str(d.result) + "LBC")
                     return defer.succeed(None)
             except AttributeError:
