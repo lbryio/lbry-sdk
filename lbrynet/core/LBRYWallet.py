@@ -6,7 +6,6 @@ import subprocess
 import socket
 import time
 import os
-import requests
 
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 from twisted.internet import threads, reactor, defer, task
@@ -15,10 +14,9 @@ from twisted.enterprise import adbapi
 from collections import defaultdict, deque
 from zope.interface import implements
 from decimal import Decimal
-from googlefinance import getQuotes
 
 from lbryum import SimpleConfig, Network
-from lbryum.lbrycrd import COIN, TYPE_ADDRESS
+from lbryum.lbrycrd import COIN
 from lbryum.wallet import WalletStorage, Wallet
 from lbryum.commands import known_commands, Commands
 from lbryum.transaction import Transaction
@@ -27,8 +25,6 @@ from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHand
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.sqlite_helpers import rerun_if_locked
-from lbrynet.conf import SOURCE_TYPES
 from lbrynet.core.LBRYMetadata import Metadata
 
 log = logging.getLogger(__name__)
@@ -90,6 +86,7 @@ class LBRYWallet(object):
             return True
 
         d = self._open_db()
+        d.addCallback(lambda _: self._clean_bad_records())
         d.addCallback(lambda _: self._start())
         d.addCallback(lambda _: start_manage())
         return d
@@ -324,6 +321,10 @@ class LBRYWallet(object):
             for k in ['value', 'txid', 'n', 'height', 'amount']:
                 assert k in r, "getvalueforname response missing field %s" % k
 
+        def _log_success(claim_id):
+            log.info("lbry://%s complies with %s, claimid: %s", name, metadata.meta_version, claim_id)
+            return defer.succeed(None)
+
         if 'error' in result:
             log.warning("Got an error looking up a name: %s", result['error'])
             return Failure(UnknownNameError(name))
@@ -335,55 +336,116 @@ class LBRYWallet(object):
         except (ValueError, TypeError):
             return Failure(InvalidStreamInfoError(name))
 
-        d = self._save_name_metadata(name, str(result['txid']), metadata['sources']['lbry_sd_hash'])
-        d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, metadata.meta_version)))
+        txid = result['txid']
+        sd_hash = metadata['sources']['lbry_sd_hash']
+        d = self._save_name_metadata(name, txid, sd_hash)
+        d.addCallback(lambda _: self.get_claimid(name, txid))
+        d.addCallback(lambda cid: _log_success(cid))
         d.addCallback(lambda _: metadata)
         return d
 
-    def _get_claim_info(self, result, name):
-        def _check_result_fields(r):
-            for k in ['value', 'txid', 'n', 'height', 'amount']:
-                assert k in r, "getvalueforname response missing field %s" % k
-
-        def _build_response(m, result):
-            result['value'] = m
-            return result
-
-        if 'error' in result:
-            log.warning("Got an error looking up a name: %s", result['error'])
-            return Failure(UnknownNameError(name))
-
-        _check_result_fields(result)
-
-        try:
-            metadata = Metadata(json.loads(result['value']))
-        except (ValueError, TypeError):
-            return Failure(InvalidStreamInfoError(name))
-
-        d = self._save_name_metadata(name, str(result['txid']), metadata['sources']['lbry_sd_hash'])
-        d.addCallback(lambda _: log.info("lbry://%s complies with %s" % (name, metadata.meta_version)))
-        d.addCallback(lambda _: _build_response(metadata, result))
+    def get_claim(self, name, claim_id):
+        d = self.get_claims_for_name(name)
+        d.addCallback(lambda claims: next(claim for claim in claims['claims'] if claim['claimId'] == claim_id))
         return d
 
-    def get_claim_info(self, name):
-        d = self._get_value_for_name(name)
-        d.addCallback(lambda r: self._get_claim_info(r, name))
+    def get_claimid(self, name, txid):
+        def _get_id_for_return(claim_id):
+            if claim_id:
+                return defer.succeed(claim_id)
+            else:
+                d = self.get_claims_from_tx(txid)
+                d.addCallback(lambda claims: next(c['claimId'] for c in claims if c['name'] == name))
+                d.addCallback(lambda cid: self._update_claimid(cid, name, txid))
+                return d
+
+        d = self._get_claimid_for_tx(name, txid)
+        d.addCallback(_get_id_for_return)
         return d
 
+    def get_claim_info(self, name, txid=None):
+        if not txid:
+            d = self._get_value_for_name(name)
+            d.addCallback(lambda r: self._get_claim_info(name, r['txid']))
+        else:
+            d = self._get_claim_info(name, txid)
+        d.addErrback(lambda _: False)
+        return d
+
+    def _get_claim_info(self, name, txid):
+        def _build_response(claim):
+            result = {}
+            try:
+                metadata = Metadata(json.loads(claim['value']))
+                meta_ver = metadata.meta_version
+                sd_hash = metadata['sources']['lbry_sd_hash']
+                d = self._save_name_metadata(name, txid, sd_hash)
+            except AssertionError:
+                metadata = claim['value']
+                meta_ver = "Non-compliant"
+                d = defer.succeed(None)
+
+            claim_id = claim['claimId']
+            result['claim_id'] = claim_id
+            result['amount'] = claim['nEffectiveAmount']
+            result['height'] = claim['nHeight']
+            result['name'] = name
+            result['txid'] = txid
+            result['value'] = metadata
+            result['supports'] = [{'txid': support['txid'], 'n': support['n']} for support in claim['supports']]
+            result['meta_version'] = meta_ver
+
+            log.info("get claim info lbry://%s metadata: %s, claimid: %s", name, meta_ver, claim_id)
+
+            d.addCallback(lambda _: self.get_name_claims())
+            d.addCallback(lambda r: [c['txid'] for c in r])
+            d.addCallback(lambda my_claims: _add_is_mine(result, my_claims))
+            return d
+
+        def _add_is_mine(response, my_txs):
+            response['is_mine'] = response['txid'] in my_txs
+            return response
+
+        d = self.get_claimid(name, txid)
+        d.addCallback(lambda claim_id: self.get_claim(name, claim_id))
+        d.addCallback(_build_response)
+        return d
+
+    def get_claims_for_name(self, name):
+        d = self._get_claims_for_name(name)
+        return d
+
+    def update_metadata(self, new_metadata, old_metadata):
+        meta_for_return = old_metadata if isinstance(old_metadata, dict) else {}
+        for k in new_metadata:
+            meta_for_return[k] = new_metadata[k]
+        return defer.succeed(Metadata(meta_for_return))
 
     def claim_name(self, name, bid, m):
-
-        metadata = Metadata(m)
-
-        d = self._send_name_claim(name, json.dumps(metadata), bid)
-
-        def _save_metadata(txid):
+        def _save_metadata(txid, metadata):
             log.info("Saving metadata for claim %s" % txid)
             d = self._save_name_metadata(name, txid, metadata['sources']['lbry_sd_hash'])
             d.addCallback(lambda _: txid)
             return d
 
-        d.addCallback(_save_metadata)
+        def _claim_or_update(claim, metadata, _bid):
+            if not claim:
+                log.info("No claim yet, making a new one")
+                return self._send_name_claim(name, metadata.as_json(), _bid)
+            if not claim['is_mine']:
+                log.info("Making a contesting claim")
+                return self._send_name_claim(name, metadata.as_json(), _bid)
+            else:
+                log.info("Updating over own claim")
+                d = self.update_metadata(metadata, claim['value'])
+                d.addCallback(lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'], claim['txid'], new_metadata, _bid))
+                return d
+
+        meta = Metadata(m)
+
+        d = self.get_claim_info(name)
+        d.addCallback(lambda claim: _claim_or_update(claim, meta, bid))
+        d.addCallback(lambda txid: _save_metadata(txid, meta))
         return d
 
     def abandon_name(self, txid):
@@ -419,17 +481,12 @@ class LBRYWallet(object):
         dl.addCallback(abandon)
         return dl
 
+    def support_claim(self, name, claim_id, amount):
+        return self._support_claim(name, claim_id, amount)
+
     def get_tx(self, txid):
         d = self._get_raw_tx(txid)
         d.addCallback(self._get_decoded_tx)
-        return d
-
-    def update_name(self, name, bid, value, old_txid):
-        d = self._get_value_for_name(name)
-        d.addCallback(lambda r: self.abandon_name(r['txid'] if not old_txid else old_txid))
-        d.addCallback(lambda r: log.info("Abandon claim tx %s" % str(r)))
-        d.addCallback(lambda _: self.claim_name(name, bid, value))
-
         return d
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
@@ -534,21 +591,45 @@ class LBRYWallet(object):
     def _open_db(self):
         self.db = adbapi.ConnectionPool('sqlite3', os.path.join(self.db_dir, "blockchainname.db"),
                                         check_same_thread=False)
-        return self.db.runQuery("create table if not exists name_metadata (" +
+
+        def create_tables(transaction):
+            transaction.execute("create table if not exists name_metadata (" +
                                 "    name text, " +
                                 "    txid text, " +
                                 "    sd_hash text)")
+            transaction.execute("create table if not exists claim_ids (" +
+                                "    claimId text, " +
+                                "    name text, " +
+                                "    txid text)")
+
+        return self.db.runInteraction(create_tables)
+
+    def _clean_bad_records(self):
+        d = self.db.runQuery("delete from name_metadata where length(txid) > 64 or txid is null")
+        return d
 
     def _save_name_metadata(self, name, txid, sd_hash):
-        d = self.db.runQuery("select * from name_metadata where name=? and txid=? and sd_hash=?", (name, txid, sd_hash))
-        d.addCallback(lambda r: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash))
-                                if not len(r) else None)
-
+        assert len(txid) == 64, "That's not a txid: %s" % str(txid)
+        d = self.db.runQuery("delete from name_metadata where name=? and txid=? and sd_hash=?", (name, txid, sd_hash))
+        d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash)))
         return d
 
     def _get_claim_metadata_for_sd_hash(self, sd_hash):
         d = self.db.runQuery("select name, txid from name_metadata where sd_hash=?", (sd_hash,))
-        d.addCallback(lambda r: r[0] if len(r) else None)
+        d.addCallback(lambda r: r[0] if r else None)
+        return d
+
+    def _update_claimid(self, claim_id, name, txid):
+        assert len(txid) == 64, "That's not a txid: %s" % str(txid)
+        d = self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=?", (claim_id, name, txid))
+        d.addCallback(lambda r: self.db.runQuery("insert into claim_ids values (?, ?, ?)", (claim_id, name, txid)))
+        d.addCallback(lambda _: claim_id)
+        return d
+
+    def _get_claimid_for_tx(self, name, txid):
+        assert len(txid) == 64, "That's not a txid: %s" % str(txid)
+        d = self.db.runQuery("select claimId from claim_ids where name=? and txid=?", (name, txid))
+        d.addCallback(lambda r: r[0][0] if r else None)
         return d
 
     ######### Must be overridden #########
@@ -571,6 +652,9 @@ class LBRYWallet(object):
     def get_name_claims(self):
         return defer.fail(NotImplementedError())
 
+    def _get_claims_for_name(self, name):
+        return defer.fail(NotImplementedError())
+
     def _check_first_run(self):
         return defer.fail(NotImplementedError())
 
@@ -586,7 +670,10 @@ class LBRYWallet(object):
     def _send_abandon(self, txid, address, amount):
         return defer.fail(NotImplementedError())
 
-    def _update_name(self, txid, value, amount):
+    def _send_name_claim_update(self, name, claim_id, txid, value, amount):
+        return defer.fail(NotImplementedError())
+
+    def _support_claim(self, name, claim_id, amount):
         return defer.fail(NotImplementedError())
 
     def _do_send_many(self, payments_to_send):
@@ -721,8 +808,14 @@ class LBRYcrdWallet(LBRYWallet):
     def _send_abandon(self, txid, address, amount):
         return threads.deferToThread(self._send_abandon_rpc, txid, address, amount)
 
-    def _update_name(self, txid, value, amount):
+    def _send_name_claim_update(self, name, claim_id, txid, value, amount):
         return threads.deferToThread(self._update_name_rpc, txid, value, amount)
+
+    def _support_claim(self, name, claim_id, amount):
+        return threads.deferToThread(self._support_claim_rpc, name, claim_id, amount)
+
+    def _get_claims_for_name(self, name):
+        return threads.deferToThread(self._get_claims_for_name_rpc, name)
 
     def get_claims_from_tx(self, txid):
         return threads.deferToThread(self._get_claims_from_tx_rpc, txid)
@@ -859,6 +952,11 @@ class LBRYcrdWallet(LBRYWallet):
         return rpc_conn.getclaimsfortx(txid)
 
     @_catch_connection_error
+    def _get_claims_for_name_rpc(self, name):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.getclaimsforname(name)
+
+    @_catch_connection_error
     def _get_nametrie_rpc(self):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.getclaimtrie()
@@ -878,6 +976,7 @@ class LBRYcrdWallet(LBRYWallet):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.getvalueforname(name)
 
+    @_catch_connection_error
     def _update_name_rpc(self, txid, value, amount):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.updateclaim(txid, value, amount)
@@ -892,6 +991,11 @@ class LBRYcrdWallet(LBRYWallet):
                 raise InsufficientFundsError()
             elif 'message' in e.error:
                 raise ValueError(e.error['message'])
+
+    @_catch_connection_error
+    def _support_claim_rpc(self, name, claim_id, amount):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.supportclaim(name, claim_id, amount)
 
     @_catch_connection_error
     def _get_num_addresses_rpc(self):
@@ -1106,6 +1210,25 @@ class LBRYumWallet(LBRYWallet):
         d.addCallback(self._broadcast_transaction)
         return d
 
+    def _get_claims_for_name(self, name):
+        cmd = known_commands['getclaimsforname']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, name)
+
+    def _send_name_claim_update(self, name, claim_id, txid, value, amount):
+        def send_claim_update(address):
+            decoded_claim_id = claim_id.decode('hex')[::-1]
+            metadata = Metadata(value).as_json()
+            log.info("updateclaim %s %s %f %s %s '%s'", txid, address, amount, name, decoded_claim_id.encode('hex'), json.dumps(metadata))
+            cmd = known_commands['updateclaim']
+            func = getattr(self.cmd_runner, cmd.name)
+            return threads.deferToThread(func, txid, address, amount, name, decoded_claim_id, metadata)
+
+        d = self.get_new_address()
+        d.addCallback(send_claim_update)
+        d.addCallback(self._broadcast_transaction)
+        return d
+
     def _get_decoded_tx(self, raw_tx):
         tx = Transaction(raw_tx)
         decoded_tx = {}
@@ -1117,18 +1240,33 @@ class LBRYumWallet(LBRYWallet):
         return decoded_tx
 
     def _send_abandon(self, txid, address, amount):
-        log.info("Abandon " + str(txid) + " " + str(address) + " " + str(amount))
+        log.info("Abandon %s %s %f" % (txid, address, amount))
         cmd = known_commands['abandonclaim']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, txid, address, amount)
         d.addCallback(self._broadcast_transaction)
         return d
 
+    def _support_claim(self, name, claim_id, amount):
+        def _send_support(d, a, n, c):
+            cmd = known_commands['supportclaim']
+            func = getattr(self.cmd_runner, cmd.name)
+            d = threads.deferToThread(func, d, a, n, c)
+            return d
+        d = self.get_new_address()
+        d.addCallback(lambda address: _send_support(address, amount, name, claim_id))
+        d.addCallback(self._broadcast_transaction)
+        return d
+
     def _broadcast_transaction(self, raw_tx):
-        log.info("Broadcast: " + str(raw_tx))
+        def _log_tx(r):
+            log.info("Broadcast tx: %s", r)
+            return r
         cmd = known_commands['broadcast']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, raw_tx)
+        d.addCallback(_log_tx)
+        d.addCallback(lambda r: r if len(r) == 64 else defer.fail(Exception("Transaction rejected")))
         d.addCallback(self._save_wallet)
         return d
 

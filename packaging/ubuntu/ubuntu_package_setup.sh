@@ -170,7 +170,7 @@ addfile "$PACKAGING_DIR/lbry-temp-symlink" usr/bin/lbry
 
 # add lbrycrdd and lbrycrd-cli
 mkdir -p "$PACKAGING_DIR/bins"
-wget http://s3.amazonaws.com/files.lbry.io/bins.zip --output-document "$PACKAGING_DIR/bins.zip"
+wget "$(curl https://api.github.com/repos/lbryio/lbrycrd/releases/latest | grep 'browser_download_url' | grep linux | cut -d'"' -f4)" --output-document "$PACKAGING_DIR/bins.zip"
 unzip "$PACKAGING_DIR/bins.zip" -d "$PACKAGING_DIR/bins/"
 addfile "$PACKAGING_DIR/bins/lbrycrdd" usr/bin/lbrycrdd
 addfile "$PACKAGING_DIR/bins/lbrycrd-cli" usr/bin/lbrycrd-cli

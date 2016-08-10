@@ -1,7 +1,6 @@
 import logging
 import random
 from txjsonrpc.web.jsonrpc import Proxy
-from twisted.internet import defer
 from lbrynet.conf import SEARCH_SERVERS
 
 log = logging.getLogger(__name__)
