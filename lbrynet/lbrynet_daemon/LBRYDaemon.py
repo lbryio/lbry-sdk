@@ -175,9 +175,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.first_run_after_update = False
         self.uploaded_temp_files = []
 
-        # change this to enable reflector server
-        self.run_reflector_server = False
-
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
             default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
@@ -216,6 +213,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'use_upnp': True,
             'start_lbrycrdd': True,
             'requested_first_run_credits': False,
+            'run_reflector_server': False,
             'cache_time': DEFAULT_CACHE_TIME,
             'startup_scripts': [],
             'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}
@@ -275,6 +273,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.search_timeout = self.session_settings['search_timeout']
         self.download_timeout = self.session_settings['download_timeout']
         self.max_search_results = self.session_settings['max_search_results']
+        self.run_reflector_server = self.session_settings['run_reflector_server']
         ####
         #
         # Ignore the saved wallet type. Some users will have their wallet type
@@ -684,6 +683,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _start_reflector(self):
         if self.run_reflector_server:
+            log.info("Starting reflector server")
             if self.reflector_port is not None:
                 reflector_factory = reflector.ServerFactory(
                     self.session.peer_manager,
@@ -698,6 +698,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _stop_reflector(self):
         if self.run_reflector_server:
+            log.info("Stopping reflector server")
             try:
                 if self.reflector_server_port is not None:
                     self.reflector_server_port, p = None, self.reflector_server_port

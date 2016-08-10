@@ -70,6 +70,7 @@ class Publisher(object):
         return d
 
     def start_reflector(self):
+        log.info("Start reflector client")
         factory = reflector.ClientFactory(
             self.session.blob_manager,
             self.lbry_file_manager.stream_info_manager,

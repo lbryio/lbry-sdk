@@ -118,10 +118,12 @@ class LBRYFileReflectorClient(Protocol):
             reactor.callLater(0, self.producer.resumeProducing)
 
     def get_blobs_to_send(self, stream_info_manager, stream_hash):
+        log.info("Get blobs to send to reflector")
         d = stream_info_manager.get_blobs_for_stream(stream_hash)
 
         def set_blobs(blob_hashes):
             for blob_hash, position, iv, length in blob_hashes:
+                log.info("Preparing to send %s", blob_hash)
                 if blob_hash is not None:
                     self.blob_hashes_to_send.append(blob_hash)
 
@@ -202,6 +204,7 @@ class LBRYFileReflectorClient(Protocol):
         raise ValueError("Couldn't open that blob for some reason. blob_hash: {}".format(blob.blob_hash))
 
     def send_blob_info(self):
+        log.info("Send blob info for %s", self.next_blob_to_send.blob_hash)
         assert self.next_blob_to_send is not None, "need to have a next blob to send at this point"
         self.write(json.dumps({
             'blob_hash': self.next_blob_to_send.blob_hash,
