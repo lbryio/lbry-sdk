@@ -45,23 +45,22 @@ class ReflectorServer(Protocol):
         extra_data = None
         response = None
         curr_pos = 0
-        size_of_message = len(response_msg)
         while 1:
             next_close_paren = response_msg.find('}', curr_pos)
             if next_close_paren != -1:
                 curr_pos = next_close_paren + 1
                 try:
                     response = json.loads(response_msg[:curr_pos])
-                    failed_to_decode = False
                 except ValueError:
-                    failed_to_decode = True
+                    if curr_pos > 100:
+                        raise Exception("error decoding response")
+                    else:
+                        pass
                 else:
                     extra_data = response_msg[curr_pos:]
                     break
             else:
                 break
-        if size_of_message > 100 and failed_to_decode:
-            raise Exception("error decoding response")
         return response, extra_data
 
     def handle_request(self, request_dict):
