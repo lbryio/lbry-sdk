@@ -57,8 +57,7 @@ from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
-from lbrynet.reflector.server import ReflectorServerFactory
-# from lbryum import LOG_PATH as lbryum_log
+from lbrynet import reflector
 
 
 # TODO: this code snippet is everywhere. Make it go away
@@ -686,13 +685,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _start_reflector(self):
         if self.run_reflector_server:
             if self.reflector_port is not None:
-                reflector_factory = ReflectorServerFactory(self.session.peer_manager, self.session.blob_manager)
+                reflector_factory = reflector.ServerFactory(
+                    self.session.peer_manager,
+                    self.session.blob_manager
+                )
                 try:
                     self.reflector_server_port = reactor.listenTCP(self.reflector_port, reflector_factory)
                 except error.CannotListenError as e:
-                    import traceback
-                    log.error("Couldn't bind reflector to port %d. %s", self.reflector_port, traceback.format_exc())
-                    raise ValueError("%s lbrynet may already be running on your computer.", str(e))
+                    log.exception("Couldn't bind reflector to port %d", self.reflector_port)
+                    raise ValueError("{} lbrynet may already be running on your computer.".format(e))
         return defer.succeed(True)
 
     def _stop_reflector(self):

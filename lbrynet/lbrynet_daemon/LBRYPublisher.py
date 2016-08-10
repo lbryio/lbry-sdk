@@ -12,7 +12,7 @@ from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.LBRYMetadata import Metadata, CURRENT_METADATA_VERSION
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
-from lbrynet.reflector.client import LBRYFileReflectorClientFactory
+from lbrynet import reflector
 from lbrynet.conf import LOG_FILE_NAME, REFLECTOR_SERVERS
 from twisted.internet import threads, defer, reactor
 
@@ -70,9 +70,11 @@ class Publisher(object):
         return d
 
     def start_reflector(self):
-        factory = LBRYFileReflectorClientFactory(self.session.blob_manager,
-                                                               self.lbry_file_manager.stream_info_manager,
-                                                               self.stream_hash)
+        factory = reflector.ClientFactory(
+            self.session.blob_manager,
+            self.lbry_file_manager.stream_info_manager,
+            self.stream_hash
+        )
         reactor.connectTCP(self.reflector_server, self.reflector_port, factory)
         return factory.finished_deferred
 
