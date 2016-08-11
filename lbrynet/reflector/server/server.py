@@ -11,9 +11,9 @@ log = logging.getLogger(__name__)
 
 
 class ReflectorServer(Protocol):
+
     def connectionMade(self):
         peer_info = self.transport.getPeer()
-        log.debug('Connection made to %s', peer_info)
         self.peer = self.factory.peer_manager.get_peer(peer_info.host, peer_info.port)
         self.blob_manager = self.factory.blob_manager
         self.received_handshake = False
@@ -29,21 +29,17 @@ class ReflectorServer(Protocol):
         pass
 
     def dataReceived(self, data):
-        log.debug('Recieved data: %s', data)
-        if self.receiving_blob:
-            log.debug('Writing data to blob')
-            self.blob_write(data)
-        else:
-            log.debug('Not yet recieving blob, data needs further processing')
+        if self.receiving_blob is False:
             self.request_buff += data
             msg, extra_data = self._get_valid_response(self.request_buff)
-            if msg:
+            if msg is not None:
                 self.request_buff = ''
                 d = self.handle_request(msg)
                 d.addCallbacks(self.send_response, self.handle_error)
-                if self.receiving_blob and extra_data:
-                    log.debug('Writing extra data to blog')
+                if self.receiving_blob is True and len(extra_data) != 0:
                     self.blob_write(extra_data)
+        else:
+            self.blob_write(data)
 
     def _get_valid_response(self, response_msg):
         extra_data = None
@@ -74,7 +70,6 @@ class ReflectorServer(Protocol):
             return self.handle_normal_request(request_dict)
 
     def handle_handshake(self, request_dict):
-        log.debug('Handling handshake')
         if 'version' not in request_dict:
             raise ValueError("Client should send version")
         self.peer_version = int(request_dict['version'])
@@ -108,7 +103,6 @@ class ReflectorServer(Protocol):
                 raise ValueError("Expected a blob hash and a blob size")
             if not is_valid_blobhash(request_dict['blob_hash']):
                 raise ValueError("Got a bad blob hash: {}".format(request_dict['blob_hash']))
-            log.debug('Recieved info for blob: %s', request_dict['blob_hash'])
             d = self.blob_manager.get_blob(
                 request_dict['blob_hash'],
                 True,
@@ -120,7 +114,6 @@ class ReflectorServer(Protocol):
             #  important in it. to the deferred that fires when the blob is done,
             #  add a callback which returns a nice response dict saying to keep
             #  sending, and then return that deferred
-            log.debug('blob is already open')
             self.receiving_blob = True
             d = self.blob_finished_d
             d.addCallback(lambda _: self.close_blob())
@@ -141,7 +134,3 @@ class ReflectorServerFactory(ServerFactory):
     def __init__(self, peer_manager, blob_manager):
         self.peer_manager = peer_manager
         self.blob_manager = blob_manager
-
-    def buildProtocol(self, addr):
-        log.debug('Creating a protocol for %s', addr)
-        ServerFactory.buildProtocol(self, addr)
