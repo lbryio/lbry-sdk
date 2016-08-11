@@ -48,7 +48,7 @@ from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, \
                          KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, DEFAULT_WALLET, \
                          DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, \
-                         LOG_POST_URL, LOG_FILE_NAME
+                         LOG_POST_URL, LOG_FILE_NAME, REFLECTOR_SERVERS
 from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
 from lbrynet.conf import DEFAULT_TIMEOUT
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
@@ -1889,6 +1889,27 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             m['fee'][currency]['address'] = address
             return m
 
+        def _reflect_if_possible(sd_hash, txid):
+            log.info("Trying to start reflector")
+            d = self._get_lbry_file('sd_hash', sd_hash, return_json=False)
+            d.addCallback(lambda r: False if not r else _start_reflector(r.stream_hash))
+            d.addCallback(lambda _: txid)
+            return d
+
+        def _start_reflector(stream_hash):
+            reflector_server = random.choice(REFLECTOR_SERVERS)
+            reflector_address, reflector_port = reflector_server[0], reflector_server[1]
+            log.info("Start reflector client")
+            factory = reflector.ClientFactory(
+                self.session.blob_manager,
+                self.lbry_file_manager.stream_info_manager,
+                stream_hash
+            )
+            d = reactor.resolve(reflector_address)
+            d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
+            d.addCallback(lambda _: factory.finished_deferred)
+            return d
+
         name = p['name']
 
         log.info("Publish: ")
@@ -1905,8 +1926,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         try:
             metadata = Metadata(p['metadata'])
             make_lbry_file = False
+            sd_hash = metadata['sources']['lbry_sd_hash']
         except AssertionError:
             make_lbry_file = True
+            sd_hash = None
             metadata = p['metadata']
             file_path = p['file_path']
 
@@ -1930,6 +1953,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addCallback(lambda meta: pub.start(name, file_path, bid, meta))
         else:
             d.addCallback(lambda meta: self.session.wallet.claim_name(name, bid, meta))
+            if sd_hash:
+                d.addCallback(lambda txid: _reflect_if_possible(sd_hash, txid))
+
         d.addCallback(lambda txid: self._add_to_pending_claims(name, txid))
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
 

@@ -70,14 +70,18 @@ class Publisher(object):
         return d
 
     def start_reflector(self):
+        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Start reflector client")
         factory = reflector.ClientFactory(
             self.session.blob_manager,
             self.lbry_file_manager.stream_info_manager,
             self.stream_hash
         )
-        reactor.connectTCP(self.reflector_server, self.reflector_port, factory)
-        return factory.finished_deferred
+        d = reactor.resolve(reflector_address)
+        d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
+        d.addCallback(lambda _: factory.finished_deferred)
+        return d
 
     def _check_file_path(self, file_path):
         def check_file_threaded():
