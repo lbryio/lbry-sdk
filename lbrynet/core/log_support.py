@@ -55,6 +55,10 @@ def _log_decorator(fn):
     def helper(*args, **kwargs):
         log = kwargs.pop('log', logging.getLogger())
         level = kwargs.pop('level', logging.INFO)
+        if not isinstance(level, int):
+            # despite the name, getLevelName returns
+            # the numeric level when passed a text level
+            level = logging.getLevelName(level)
         handler = fn(*args, **kwargs)
         if handler.name:
             remove_handlers(log, handler.name)
