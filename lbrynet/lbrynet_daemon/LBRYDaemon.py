@@ -213,7 +213,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'use_upnp': True,
             'start_lbrycrdd': True,
             'requested_first_run_credits': False,
-            'run_reflector_server': False,
+            'run_reflector_server': True,
             'cache_time': DEFAULT_CACHE_TIME,
             'startup_scripts': [],
             'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}
@@ -683,8 +683,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _start_reflector(self):
         if self.run_reflector_server:
-            log.info("Starting reflector server")
             if self.reflector_port is not None:
+                log.info("Starting reflector server listening to %s", self.reflector_port)
                 reflector_factory = reflector.ServerFactory(
                     self.session.peer_manager,
                     self.session.blob_manager

@@ -74,8 +74,8 @@ def start():
     args = parser.parse_args()
 
     log_support.disable_noisy_loggers()
-    log_support.configure_file_handler(lbrynet_log)
-    log_support.configure_loggly_handler()
+    log_support.configure_file_handler(lbrynet_log, level=10)
+    log_support.configure_loggly_handler(level=10)
     if args.logtoconsole:
         log_support.configure_console(level='DEBUG')
 

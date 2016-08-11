@@ -58,8 +58,10 @@ def _log_decorator(fn):
         handler = fn(*args, **kwargs)
         if handler.name:
             remove_handlers(log, handler.name)
+        handler.setLevel(level)
         log.addHandler(handler)
-        log.setLevel(level)
+        if log.level > level:
+            log.setLevel(level)
     return helper
 
 
