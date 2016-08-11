@@ -28,7 +28,7 @@ SEARCH_SERVERS = ["http://lighthouse1.lbry.io:50005",
                   "http://lighthouse2.lbry.io:50005",
                   "http://lighthouse3.lbry.io:50005"]
 
-REFLECTOR_SERVERS = [("http://reflector.lbry.io", 5566)]
+REFLECTOR_SERVERS = [("reflector.lbry.io", 5566)]
 
 LOG_FILE_NAME = "lbrynet.log"
 LOG_POST_URL = "https://lbry.io/log-upload"
