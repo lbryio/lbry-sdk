@@ -235,7 +235,7 @@ class LBRYFileReflectorClient(Protocol):
         else:
             # close connection
             log.debug('No more blob hashes, closing connection')
-            self.transport.closeConnection()
+            self.transport.loseConnection()
 
 
 class LBRYFileReflectorClientFactory(ClientFactory):

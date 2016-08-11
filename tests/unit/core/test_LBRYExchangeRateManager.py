@@ -19,12 +19,10 @@ class LBRYFeeFormatTest(unittest.TestCase):
 
 class LBRYFeeTest(unittest.TestCase):
     def setUp(self):
-        self.patcher = mock.patch('time.time')
-        self.time = self.patcher.start()
+        patcher = mock.patch('time.time')
+        self.time = patcher.start()
         self.time.return_value = 0
-
-    def tearDown(self):
-        self.time.stop()
+        self.addCleanup(patcher.stop)
 
     def test_fee_converts_to_lbc(self):
         fee_dict = {
