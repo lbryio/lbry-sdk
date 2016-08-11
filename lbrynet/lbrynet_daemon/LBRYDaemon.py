@@ -2398,7 +2398,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = self.session.blob_manager.immediate_announce_all_blobs()
         d.addCallback(lambda _: self._render_response("Announced", OK_CODE))
         return d
-    
+
 
 def get_lbrynet_version_from_github():
     """Return the latest released version from github."""
