@@ -263,9 +263,7 @@ class LBRYFileReflectorClientFactory(ClientFactory):
 
     def clientConnectionLost(self, connector, reason):
         """If we get disconnected, reconnect to server."""
-        connector.connect()
+        log.debug("connection lost: %s", reason)
 
     def clientConnectionFailed(self, connector, reason):
-        print("connection failed:", reason)
-        from twisted.internet import reactor
-        reactor.stop()
+        log.debug("connection failed: %s", reason)
