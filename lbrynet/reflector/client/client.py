@@ -82,6 +82,7 @@ class LBRYFileReflectorClient(Protocol):
         d.addErrback(lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
 
     def dataReceived(self, data):
+        log.debug('Recieved %s', data)
         self.response_buff += data
         try:
             msg = self.parse_response(self.response_buff)
@@ -95,8 +96,10 @@ class LBRYFileReflectorClient(Protocol):
 
     def connectionLost(self, reason):
         if reason.check(error.ConnectionDone):
+            log.debug('Finished sending data via reflector')
             self.factory.finished_deferred.callback(True)
         else:
+            log.debug('reflector finished: %s', reason)
             self.factory.finished_deferred.callback(reason)
 
     #  IConsumer stuff
@@ -118,7 +121,7 @@ class LBRYFileReflectorClient(Protocol):
             reactor.callLater(0, self.producer.resumeProducing)
 
     def get_blobs_to_send(self, stream_info_manager, stream_hash):
-        log.info("Get blobs to send to reflector")
+        log.debug('Getting blobs from stream hash: %s', stream_hash)
         d = stream_info_manager.get_blobs_for_stream(stream_hash)
 
         def set_blobs(blob_hashes):
@@ -139,6 +142,7 @@ class LBRYFileReflectorClient(Protocol):
         return d
 
     def send_handshake(self):
+        log.debug('Sending handshake')
         self.write(json.dumps({'version': 0}))
 
     def parse_response(self, buff):
@@ -198,6 +202,7 @@ class LBRYFileReflectorClient(Protocol):
         if blob.is_validated():
             read_handle = blob.open_for_reading()
             if read_handle is not None:
+                log.debug('Getting ready to send %s', blob.blob_hash)
                 self.next_blob_to_send = blob
                 self.read_handle = read_handle
                 return None
@@ -206,6 +211,7 @@ class LBRYFileReflectorClient(Protocol):
     def send_blob_info(self):
         log.info("Send blob info for %s", self.next_blob_to_send.blob_hash)
         assert self.next_blob_to_send is not None, "need to have a next blob to send at this point"
+        log.debug('sending blob info')
         self.write(json.dumps({
             'blob_hash': self.next_blob_to_send.blob_hash,
             'blob_size': self.next_blob_to_send.length
@@ -214,10 +220,12 @@ class LBRYFileReflectorClient(Protocol):
     def send_next_request(self):
         if self.file_sender is not None:
             # send the blob
+            log.debug('Sending the blob')
             return self.start_transfer()
         elif self.blob_hashes_to_send:
             # open the next blob to send
             blob_hash = self.blob_hashes_to_send[0]
+            log.debug('No current blob, sending the next one: %s', blob_hash)
             self.blob_hashes_to_send = self.blob_hashes_to_send[1:]
             d = self.blob_manager.get_blob(blob_hash, True)
             d.addCallback(self.open_blob_for_reading)
@@ -226,7 +234,8 @@ class LBRYFileReflectorClient(Protocol):
             return d
         else:
             # close connection
-            self.transport.loseConnection()
+            log.debug('No more blob hashes, closing connection')
+            self.transport.closeConnection()
 
 
 class LBRYFileReflectorClientFactory(ClientFactory):
@@ -244,3 +253,19 @@ class LBRYFileReflectorClientFactory(ClientFactory):
         p.factory = self
         self.p = p
         return p
+
+    def startFactory(self):
+        log.debug('Starting reflector factory')
+        ClientFactory.startFactory(self)
+    
+    def startedConnecting(self, connector):
+        log.debug('Started connecting')
+
+    def clientConnectionLost(self, connector, reason):
+        """If we get disconnected, reconnect to server."""
+        connector.connect()
+
+    def clientConnectionFailed(self, connector, reason):
+        print("connection failed:", reason)
+        from twisted.internet import reactor
+        reactor.stop()

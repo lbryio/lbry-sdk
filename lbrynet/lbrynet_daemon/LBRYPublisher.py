@@ -47,9 +47,9 @@ class Publisher(object):
         self.metadata = {}
 
     def start(self, name, file_path, bid, metadata):
-
+        log.info('Starting publish for %s', name)
         def _show_result():
-            log.info("Published %s --> lbry://%s txid: %s", self.file_name, self.publish_name, self.txid)
+            log.info("Success! Published %s --> lbry://%s txid: %s", self.file_name, self.publish_name, self.txid)
             return defer.succeed(self.txid)
 
         self.publish_name = name
@@ -99,10 +99,13 @@ class Publisher(object):
         return d
 
     def _create_sd_blob(self):
-        d = publish_sd_blob(self.lbry_file_manager.stream_info_manager, self.session.blob_manager,
+        log.debug('Creating stream descriptor blob')
+        d = publish_sd_blob(self.lbry_file_manager.stream_info_manager,
+                            self.session.blob_manager,
                             self.lbry_file.stream_hash)
 
         def set_sd_hash(sd_hash):
+            log.debug('stream descriptor hash: %s', sd_hash)
             if 'sources' not in self.metadata:
                 self.metadata['sources'] = {}
             self.metadata['sources']['lbry_sd_hash'] = sd_hash
@@ -111,22 +114,28 @@ class Publisher(object):
         return d
 
     def set_status(self):
+        log.debug('Setting status')
         d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file, ManagedLBRYFileDownloader.STATUS_FINISHED)
         d.addCallback(lambda _: self.lbry_file.restore())
         return d
 
     def _claim_name(self):
-        self.metadata['content-type'] = mimetypes.guess_type(os.path.join(self.lbry_file.download_directory,
-                                                                          self.lbry_file.file_name))[0]
-        self.metadata['ver'] = CURRENT_METADATA_VERSION
+        log.debug('Claiming name')
+        self._update_metadata()
         m = Metadata(self.metadata)
 
         def set_tx_hash(txid):
+            log.debug('Name claimed using txid: %s', txid)
             self.txid = txid
 
         d = self.wallet.claim_name(self.publish_name, self.bid_amount, m)
         d.addCallback(set_tx_hash)
         return d
+
+    def _update_metadata(self):
+        filename = os.path.join(self.lbry_file.download_directory, self.lbry_file.file_name)
+        self.metadata['content-type'] = get_content_type(filename)
+        self.metadata['ver'] = CURRENT_METADATA_VERSION        
 
     def _show_publish_error(self, err):
         log.info(err.getTraceback())
@@ -140,3 +149,7 @@ class Publisher(object):
         log.error(message, str(self.file_name), str(self.publish_name), err.getTraceback())
 
         return defer.fail(Exception("Publish failed"))
+
+
+def get_content_type(filename):
+    return mimetypes.guess_type(filename)[0]

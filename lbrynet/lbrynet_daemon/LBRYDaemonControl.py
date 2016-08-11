@@ -77,7 +77,7 @@ def start():
     log_support.configure_file_handler(lbrynet_log)
     log_support.configure_loggly_handler()
     if args.logtoconsole:
-        log_support.configure_console()
+        log_support.configure_console(level='DEBUG')
 
     try:
         JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()

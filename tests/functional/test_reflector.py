@@ -104,7 +104,7 @@ class TestReflector(unittest.TestCase):
         d.addCallback(lambda _: self.server_blob_manager.setup())
 
         def verify_equal(sd_info):
-            self.assertEqual(sd_info, mocks.create_stream_sd_file)
+            self.assertEqual(mocks.create_stream_sd_file, sd_info)
 
         def save_sd_blob_hash(sd_hash):
             self.expected_blobs.append((sd_hash, 923))
@@ -121,12 +121,6 @@ class TestReflector(unittest.TestCase):
             d.addCallback(save_sd_blob_hash)
             d.addCallback(lambda _: stream_hash)
             return d
-
-        def iv_generator():
-            iv = 0
-            while 1:
-                iv += 1
-                yield "%016d" % iv
 
         def create_stream():
             test_file = mocks.GenFile(5209343, b''.join([chr(i + 3) for i in xrange(0, 64, 6)]))
@@ -187,3 +181,10 @@ class TestReflector(unittest.TestCase):
         d.addCallback(verify_stream_descriptor_file)
         d.addCallback(upload_to_reflector)
         return d
+
+
+def iv_generator():
+    iv = 0
+    while True:
+        iv += 1
+        yield "%016d" % iv
