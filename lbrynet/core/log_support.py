@@ -58,13 +58,19 @@ def _log_decorator(fn):
         handler = fn(*args, **kwargs)
         if handler.name:
             remove_handlers(log, handler.name)
+        handler.setLevel(level)
         log.addHandler(handler)
-        log.setLevel(level)
+        if log.level > level:
+            log.setLevel(level)
     return helper
 
 
-def disable_noisy_loggers():
+def disable_third_party_loggers():
     logging.getLogger('requests').setLevel(logging.WARNING)
+
+
+def disable_noisy_loggers():
+    logging.getLogger('lbrynet.dht').setLevel(logging.INFO)
 
 
 @_log_decorator

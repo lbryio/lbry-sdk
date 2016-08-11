@@ -14,6 +14,7 @@ class ReflectorServer(Protocol):
 
     def connectionMade(self):
         peer_info = self.transport.getPeer()
+        log.debug('Connection made to %s', peer_info)
         self.peer = self.factory.peer_manager.get_peer(peer_info.host, peer_info.port)
         self.blob_manager = self.factory.blob_manager
         self.received_handshake = False
@@ -45,7 +46,7 @@ class ReflectorServer(Protocol):
         extra_data = None
         response = None
         curr_pos = 0
-        while 1:
+        while True:
             next_close_paren = response_msg.find('}', curr_pos)
             if next_close_paren != -1:
                 curr_pos = next_close_paren + 1
