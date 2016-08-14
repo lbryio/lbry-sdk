@@ -9,7 +9,7 @@ from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.core.PaymentRateManager import PaymentRateManager
-from lbrynet.core.LBRYMetadata import Metadata, CURRENT_METADATA_VERSION
+from lbrynet.core.LBRYMetadata import Metadata
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.conf import LOG_FILE_NAME
 from twisted.internet import threads, defer
@@ -101,9 +101,9 @@ class Publisher(object):
         return d
 
     def _claim_name(self):
-        self.metadata['content-type'] = mimetypes.guess_type(os.path.join(self.lbry_file.download_directory,
+        self.metadata['content_type'] = mimetypes.guess_type(os.path.join(self.lbry_file.download_directory,
                                                                           self.lbry_file.file_name))[0]
-        self.metadata['ver'] = CURRENT_METADATA_VERSION
+        self.metadata['ver'] = Metadata.current_version
         m = Metadata(self.metadata)
 
         def set_tx_hash(txid):

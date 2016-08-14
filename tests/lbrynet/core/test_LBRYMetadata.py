@@ -21,7 +21,7 @@ class MetadataTest(unittest.TestCase):
             'thumbnail': 'http://ia.media-imdb.com/images/M/MV5BMTQwNjYzMTQ0Ml5BMl5BanBnXkFtZTcwNDUzODM5Nw@@._V1_SY1000_CR0,0,673,1000_AL_.jpg'
         }
         m = LBRYMetadata.Metadata(metadata)
-        self.assertFalse('key' in m)
+        self.assertFalse('fee' in m)
 
     def test_assertion_if_invalid_source(self):
         metadata = {
