@@ -323,7 +323,7 @@ class Metadata(Validator):
     ]
 
     MIGRATE_MV002_TO_MV003 = [
-        (Validator.IF_VAL, 'ver', MV002, (Validator.UPDATE, 'content-type', 'content_type'), Validator.DO_NOTHING),
+        (Validator.IF_KEY, 'content-type', (Validator.UPDATE, 'content-type', 'content_type'), Validator.DO_NOTHING),
         (Validator.IF_VAL, 'ver', MV002, (Validator.LOAD, 'ver', MV003), Validator.DO_NOTHING),
     ]
 

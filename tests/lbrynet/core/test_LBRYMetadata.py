@@ -3,8 +3,21 @@ from twisted.trial import unittest
 
 
 class MetadataTest(unittest.TestCase):
-    def test_assertion_if_source_is_missing(self):
+    def test_assertion_if_no_metadata(self):
         metadata = {}
+        with self.assertRaises(AssertionError):
+            LBRYMetadata.Metadata(metadata)
+
+    def test_assertion_if_source_is_missing(self):
+        metadata = {
+            'license': 'Oscilloscope Laboratories',
+            'description': 'Four couples meet for Sunday brunch only to discover they are stuck in a house together as the world may be about to end.',
+            'language': 'en',
+            'title': "It's a Disaster",
+            'author': 'Written and directed by Todd Berger',
+            'content-type': 'audio/mpeg',
+            'thumbnail': 'http://ia.media-imdb.com/images/M/MV5BMTQwNjYzMTQ0Ml5BMl5BanBnXkFtZTcwNDUzODM5Nw@@._V1_SY1000_CR0,0,673,1000_AL_.jpg',
+        }
         with self.assertRaises(AssertionError):
             LBRYMetadata.Metadata(metadata)
 
@@ -81,9 +94,8 @@ class MetadataTest(unittest.TestCase):
             'thumbnail': 'http://ia.media-imdb.com/images/M/MV5BMTQwNjYzMTQ0Ml5BMl5BanBnXkFtZTcwNDUzODM5Nw@@._V1_SY1000_CR0,0,673,1000_AL_.jpg',
             'MYSTERYFIELD': '?'
         }
-        m = LBRYMetadata.Metadata(metadata, process_now=False)
         with self.assertRaises(AssertionError):
-            LBRYMetadata.Metadata(metadata)
+            LBRYMetadata.Metadata(metadata, process_now=False)
 
     def test_version_is_002_if_all_fields_are_present(self):
         metadata = {
