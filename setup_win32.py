@@ -3,7 +3,9 @@
 To create local builds and distributable .msi, run the following command:
 python setup_win32.py build bdist_msi
 """
+import opcode
 import os
+import pkg_resources
 import sys
 
 from cx_Freeze import setup, Executable
@@ -11,7 +13,12 @@ import requests.certs
 
 from lbrynet import __version__
 
+wordlist_path = pkg_resources.resource_filename('lbryum', 'wordlist')
 base_dir = os.path.abspath(os.path.dirname(__file__))
+
+# Allow virtualenv to find distutils of base python installation
+distutils_path = os.path.join(os.path.dirname(opcode.__file__), 'distutils')
+
 
 def find_data_file(filename):
     if getattr(sys, 'frozen', False):
@@ -64,24 +71,56 @@ bdist_msi_options = {
 build_exe_options = {
     'include_msvcr': True,
     'includes': [],
-    'packages': ['Crypto', 'twisted', 'miniupnpc', 'yapsy', 'seccure',
-                 'bitcoinrpc', 'txjsonrpc', 'requests', 'unqlite', 'lbryum',
-                 'jsonrpc', 'simplejson', 'appdirs', 'six', 'base58', 'googlefinance',
-                 'ecdsa', 'pbkdf2', 'qrcode', 'jsonrpclib',
-                 'os', 'cython', 'win32api', 'pkg_resources', 'zope.interface',
-                 'argparse', 'colorama', 'certifi'
-                 # 'gmpy', 'wsgiref', 'slowaes', 'dnspython', 'protobuf', 'google', 'google.protobuf'
+    'packages': ['cython',
+                 'twisted',
+                 'yapsy',
+                 'appdirs',
+                 'argparse',
+                 'base58',
+                 'colorama',
+                 'cx_Freeze',
+                 'dns',
+                 'ecdsa',
+                 'gmpy',
+                 'googlefinance',
+                 'jsonrpc',
+                 'jsonrpclib',
+                 'lbryum',
+                 'miniupnpc',
+                 'pbkdf2',
+                 'google.protobuf',
+                 'Crypto',
+                 'bitcoinrpc',
+                 'win32api',
+                 'qrcode',
+                 'requests',
+                 'seccure',
+                 'simplejson',
+                 'six',
+                 'aes',
+                 'txjsonrpc',
+                 'unqlite',
+                 'wsgiref',
+                 'zope.interface',
+                 'os',
+                 'pkg_resources'
                  ],
-    'excludes': ['collections.sys', 'collections._weakref', 'tkinter', 'tk', 'tcl'
-                 'zope.interface._zope_interface_coptimizations', 'matplotlib', 'numpy', 'pillow', 'pandas'],
-    'include_files': [(requests.certs.where(), 'cacert.pem')],
+    'excludes': ['distutils', 'collections.sys', 'collections._weakref', 'collections.abc',
+                 'Tkinter', 'tk', 'tcl', 'PyQt4'
+                 'zope.interface._zope_interface_coptimizations'],
+    'include_files': [(distutils_path, 'distutils'), (requests.certs.where(), 'cacert.pem'),
+                      (os.path.join(wordlist_path, 'chinese_simplified.txt'), os.path.join('wordlist', 'chinese_simplified.txt')),
+                      (os.path.join(wordlist_path, 'english.txt'), os.path.join('wordlist', 'english.txt')),
+                      (os.path.join(wordlist_path, 'japanese.txt'), os.path.join('wordlist', 'japanese.txt')),
+                      (os.path.join(wordlist_path, 'portuguese.txt'), os.path.join('wordlist', 'portuguese.txt')),
+                      (os.path.join(wordlist_path, 'spanish.txt'), os.path.join('wordlist', 'spanish.txt'))
+                      ],
     'namespace_packages': ['zope']}
 
 exe = Executable(
     script=os.path.join('lbrynet', 'lbrynet_daemon', 'LBRYDaemonControl.py'),
     # base='Win32GUI',
     icon=os.path.join('packaging', 'windows', 'icons', 'lbry256.ico'),
-    # icon=os.path.join('lbry-dark-icon.ico'),
     compress=True,
     shortcutName='lbrynet',
     shortcutDir='DesktopFolder',
@@ -96,7 +135,6 @@ setup(
     url='lbry.io',
     author='',
     keywords='LBRY',
-    # entry_points={'console_scripts': console_scripts},
     data_files=[
       ('lbrynet/lbrynet_console/plugins',
        [
