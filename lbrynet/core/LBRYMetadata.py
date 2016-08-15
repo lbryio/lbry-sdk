@@ -3,6 +3,7 @@ import logging
 from copy import deepcopy
 from lbrynet.conf import CURRENCIES
 from distutils.version import StrictVersion
+from lbrynet.core.utils import version_is_greater_than
 
 log = logging.getLogger(__name__)
 
@@ -17,49 +18,74 @@ def verify_name_characters(name):
 
 
 def skip_validate(value):
-    pass
+    return True
 
 
 def verify_supported_currency(fee):
     assert len(fee) == 1
     for c in fee:
         assert c in CURRENCIES
+    return True
 
 
 def validate_sources(sources):
     for source in sources:
-        assert source in SOURCE_TYPES, "Unknown source type"
+        assert source in SOURCE_TYPES, "Unknown source type: %s" % str(source)
+    return True
 
 
+def verify_amount(x):
+    return isinstance(x, float) and x > 0
+
+
+def processor(cls):
+    for methodname in dir(cls):
+        method = getattr(cls, methodname)
+        if hasattr(method, 'cmd_name'):
+            cls.commands.update({method.cmd_name: methodname})
+    return cls
+
+
+def cmd(cmd_name):
+    def wrapper(func):
+        func.cmd_name = cmd_name
+        return func
+    return wrapper
+
+
+@processor
 class Validator(dict):
     """
     Base class for validated dictionaries
     """
 
-    DO_NOTHING = "pass"
-    UPDATE = "update_key"
-    IF_KEY = "if_key_exists"
-    REQUIRE = "require"
-    SKIP = "skip"
-    OPTIONAL = "add_optional"
-    ADD = "add"
-    IF_VAL = "if_val"
-    SUPERSEDE = "supersede"
-
     # override these
     current_version = None
     versions = None
     migrations = None
-    supersessions = None
+
+    # built in commands
+    DO_NOTHING = "do_nothing"
+    UPDATE = "update_key"
+    IF_KEY = "if_key"
+    REQUIRE = "require"
+    SKIP = "skip"
+    OPTIONAL = "optional"
+    LOAD = "load"
+    IF_VAL = "if_val"
+
+    commands = {}
 
     @classmethod
     def load_from_hex(cls, hex_val):
         return cls(json.loads(hex_val.decode('hex')))
 
-    def process(self):
-        unprocessed = deepcopy(self)
-        if self.migrations is not None:
-            self._migrate_value(unprocessed)
+    @classmethod
+    def validate(cls, value):
+        if cls(value):
+            return True
+        else:
+            return False
 
     def serialize(self):
         return json.dumps(self).encode("hex")
@@ -67,91 +93,90 @@ class Validator(dict):
     def as_json(self):
         return json.dumps(self)
 
-    def __init__(self, value, process_now=True):
+    def __init__(self, value, process_now=False):
         dict.__init__(self)
         self._skip = []
         value_to_load = deepcopy(value)
-        if self.supersessions is not None:
-            self._run_supersessions(value_to_load)
-        self._verify_value(value_to_load)
-        self._raw = deepcopy(self)
-        self.version = self.get('ver', "0.0.1")
         if process_now:
-            self.process()
+            self.process(value_to_load)
+        self._verify_value(value_to_load)
+        self.version = self.get('ver', "0.0.1")
+
+    def process(self, value):
+        if self.migrations is not None:
+            self._migrate_value(value)
+
+    @cmd(DO_NOTHING)
+    def _do_nothing(self):
+        pass
+
+    @cmd(SKIP)
+    def _add_to_skipped(self, rx_value, key):
+        if key not in self._skip:
+            self._skip.append(key)
+
+    @cmd(UPDATE)
+    def _update(self, rx_value, old_key, new_key):
+        rx_value.update({new_key: rx_value.pop(old_key)})
+
+    @cmd(IF_KEY)
+    def _if_key(self, rx_value, key, if_true, if_else):
+        if key in rx_value:
+            self._handle(if_true, rx_value)
+        self._handle(if_else, rx_value)
+
+    @cmd(IF_VAL)
+    def _if_val(self, rx_value, key, val, if_true, if_else):
+        if key in rx_value:
+            if rx_value[key] == val:
+                self._handle(if_true, rx_value)
+        self._handle(if_else, rx_value)
+
+    @cmd(LOAD)
+    def _load(self, rx_value, key, value):
+        rx_value.update({key: value})
+
+    @cmd(REQUIRE)
+    def _require(self, rx_value, key, validator=None):
+        if key not in self._skip:
+            assert key in rx_value, "Key is missing: %s" % key
+            if isinstance(validator, type):
+                assert isinstance(rx_value[key], validator), "%s: %s isn't required %s" % (key, type(rx_value[key]), validator)
+            elif callable(validator):
+                assert validator(rx_value[key]), "Failed to validate %s" % key
+            self.update({key: rx_value.pop(key)})
+
+    @cmd(OPTIONAL)
+    def _optional(self, rx_value, key, validator=None):
+        if key in rx_value and key not in self._skip:
+            if isinstance(validator, type):
+                assert isinstance(rx_value[key], validator), "%s type %s isn't required %s" % (key, type(rx_value[key]), validator)
+            elif callable(validator):
+                assert validator(rx_value[key]), "Failed to validate %s" % key
+            self.update({key: rx_value.pop(key)})
 
     def _handle(self, cmd_tpl, value):
-        if cmd_tpl == self.DO_NOTHING:
+        if cmd_tpl == Validator.DO_NOTHING:
             return
-
-        cmd = cmd_tpl[0]
-
-        if cmd == self.IF_KEY:
-            key, on_key, on_else = cmd_tpl[1:]
-            if key in value:
-                return self._handle(on_key, value)
-            elif on_else:
-                return self._handle(on_else, value)
-            return
-
-        elif cmd == self.IF_VAL:
-            key, v, on_val, on_else = cmd_tpl[1:]
-            if key not in value:
-                return self._handle(on_else, value)
-            if value[key] == v:
-                return self._handle(on_val, value)
-            elif on_else:
-                return self._handle(on_else, value)
-            return
-
-        elif cmd == self.UPDATE:
-            old_key, new_key = cmd_tpl[1:]
-            value.update({new_key: value.pop(old_key)})
-
-        elif cmd == self.REQUIRE:
-            required, validator = cmd_tpl[1:]
-            if required not in self._skip:
-                assert required in value if required not in self else True, "Missing required field: %s, %s" % (required, self.as_json())
-                if required not in self._skip and required in value:
-                    self.update({required: value.pop(required)})
-                    validator(self[required])
-            else:
-                pass
-
-        elif cmd == self.OPTIONAL:
-            optional, validator = cmd_tpl[1:]
-            if optional in value and optional not in self._skip:
-                self.update({optional: value.pop(optional)})
-                validator(self[optional])
-            else:
-                pass
-
-        elif cmd == self.SKIP:
-            to_skip = cmd_tpl[1]
-            self._skip.append(to_skip)
-
-        elif cmd == self.ADD:
-            key, pushed_val = cmd_tpl[1:]
-            self.update({key: pushed_val})
-
-        elif cmd == self.SUPERSEDE:
-            ver = cmd_tpl[1]
-            self.update({'ver': ver})
-            self.version = ver
+        command = cmd_tpl[0]
+        f = getattr(self, self.commands[command])
+        if len(cmd_tpl) > 1:
+            args = (value,) + cmd_tpl[1:]
+            f(*args)
+        else:
+            f()
 
     def _load_revision(self, version, value):
         for k in self.versions[version]:
             self._handle(k, value)
 
     def _verify_value(self, value):
-        for version in sorted(self.versions, key=StrictVersion):
+        val_ver = value.get('ver', "0.0.1")
+        # verify version requirements in reverse order starting from the version asserted in the value
+        versions = sorted([v for v in self.versions if not version_is_greater_than(v, val_ver)], key=StrictVersion, reverse=True)
+        for version in versions:
             self._load_revision(version, value)
-            if not value:
-                self['ver'] = version
-                break
-        for skip in self._skip:
-            if skip in value:
-                value.pop(skip)
-        assert value == {}, "Unknown keys: %s, %s" % (json.dumps(value.keys()), self.as_json())
+        assert value == {} or value.keys() == self._skip, "Unknown keys: %s" % json.dumps(value)
 
     def _migrate_value(self, value):
         for migration in self.migrations:
@@ -159,10 +184,6 @@ class Validator(dict):
 
     def _run_migration(self, commands, value):
         for cmd in commands:
-            self._handle(cmd, value)
-
-    def _run_supersessions(self, value):
-        for cmd in self.supersessions:
             self._handle(cmd, value)
 
 
@@ -173,7 +194,7 @@ class LBCFeeValidator(Validator):
     FEE_REVISIONS = {}
 
     FEE_REVISIONS[FV001] = [
-        (Validator.REQUIRE, 'amount', skip_validate),
+        (Validator.REQUIRE, 'amount', verify_amount),
         (Validator.REQUIRE, 'address', skip_validate),
     ]
 
@@ -194,11 +215,12 @@ class BTCFeeValidator(Validator):
     FEE_REVISIONS = {}
 
     FEE_REVISIONS[FV001] = [
-        (Validator.REQUIRE, 'amount', skip_validate),
+        (Validator.REQUIRE, 'amount',verify_amount),
         (Validator.REQUIRE, 'address', skip_validate),
     ]
 
     FEE_MIGRATIONS = None
+
     current_version = CURRENT_FEE_VERSION
     versions = FEE_REVISIONS
     migrations = FEE_MIGRATIONS
@@ -214,11 +236,12 @@ class USDFeeValidator(Validator):
     FEE_REVISIONS = {}
 
     FEE_REVISIONS[FV001] = [
-        (Validator.REQUIRE, 'amount', skip_validate),
+        (Validator.REQUIRE, 'amount',verify_amount),
         (Validator.REQUIRE, 'address', skip_validate),
     ]
 
     FEE_MIGRATIONS = None
+
     current_version = CURRENT_FEE_VERSION
     versions = FEE_REVISIONS
     migrations = FEE_MIGRATIONS
@@ -234,9 +257,9 @@ class LBRYFeeValidator(Validator):
     CURRENCY_REVISIONS = {}
 
     CURRENCY_REVISIONS[CV001] = [
-        (Validator.OPTIONAL, 'BTC', BTCFeeValidator),
-        (Validator.OPTIONAL, 'USD', USDFeeValidator),
-        (Validator.OPTIONAL, 'LBC', LBCFeeValidator),
+        (Validator.OPTIONAL, 'BTC', BTCFeeValidator.validate),
+        (Validator.OPTIONAL, 'USD', USDFeeValidator.validate),
+        (Validator.OPTIONAL, 'LBC', LBCFeeValidator.validate),
     ]
 
     CURRENCY_MIGRATIONS = None
@@ -301,13 +324,13 @@ class Metadata(Validator):
     ]
 
     MIGRATE_MV001_TO_MV002 = [
-        (Validator.IF_KEY, 'nsfw', Validator.DO_NOTHING, (Validator.ADD, 'nsfw', False)),
-        (Validator.IF_KEY, 'ver', Validator.DO_NOTHING, (Validator.SUPERSEDE, MV002)),
+        (Validator.IF_KEY, 'nsfw', Validator.DO_NOTHING, (Validator.LOAD, 'nsfw', False)),
+        (Validator.IF_KEY, 'ver', Validator.DO_NOTHING, (Validator.LOAD, 'ver', MV002)),
     ]
+
     MIGRATE_MV002_TO_MV003 = [
-        (Validator.IF_KEY, 'content_type', Validator.DO_NOTHING, (Validator.UPDATE, 'content-type', 'content_type')),
-        (Validator.IF_KEY, 'ver', Validator.DO_NOTHING, (Validator.SUPERSEDE, MV003)),
-        (Validator.IF_VAL, 'ver', MV002, (Validator.SUPERSEDE, MV003), Validator.DO_NOTHING),
+        (Validator.IF_VAL, 'ver', MV002, (Validator.UPDATE, 'content-type', 'content_type'), Validator.DO_NOTHING),
+        (Validator.IF_VAL, 'ver', MV002, (Validator.LOAD, 'ver', MV003), Validator.DO_NOTHING),
     ]
 
     METADATA_MIGRATIONS = [
@@ -315,20 +338,16 @@ class Metadata(Validator):
         MIGRATE_MV002_TO_MV003,
     ]
 
-    SUPERSESSIONS = [
-        (Validator.SKIP, 'content-type'),
-    ]
-
     current_version = CURRENT_METADATA_VERSION
     versions = METADATA_REVISIONS
     migrations = METADATA_MIGRATIONS
-    supersessions = SUPERSESSIONS
 
-    def __init__(self, metadata):
-        Validator.__init__(self, metadata)
+    def __init__(self, metadata, process_now=True):
+        Validator.__init__(self, metadata, process_now)
         self.meta_version = self.get('ver', Metadata.MV001)
         self._load_fee()
 
     def _load_fee(self):
         if 'fee' in self:
             self.update({'fee': LBRYFeeValidator(self['fee'])})
+
