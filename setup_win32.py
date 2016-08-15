@@ -14,6 +14,14 @@ import requests.certs
 from lbrynet import __version__
 
 wordlist_path = pkg_resources.resource_filename('lbryum', 'wordlist')
+
+# protobuf needs a blank __init__.py in the site-packages/google folder for cx_freeze to find
+protobuf_path = os.path.dirname(os.path.dirname(pkg_resources.resource_filename('google.protobuf', '__init__.py')))
+protobuf_init = os.path.join(protobuf_path, '__init__.py')
+if not os.path.isfile(protobuf_init):
+    with open(protobuf_init, 'w') as f:
+        f.write('')
+
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
 # Allow virtualenv to find distutils of base python installation
