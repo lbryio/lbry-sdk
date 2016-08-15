@@ -322,7 +322,7 @@ class LBRYWallet(object):
                 assert k in r, "getvalueforname response missing field %s" % k
 
         def _log_success(claim_id):
-            log.info("lbry://%s complies with %s, claimid: %s", name, metadata.meta_version, claim_id)
+            log.info("lbry://%s complies with %s, claimid: %s", name, metadata.version, claim_id)
             return defer.succeed(None)
 
         if 'error' in result:
@@ -377,7 +377,7 @@ class LBRYWallet(object):
             result = {}
             try:
                 metadata = Metadata(json.loads(claim['value']))
-                meta_ver = metadata.meta_version
+                meta_ver = metadata.version
                 sd_hash = metadata['sources']['lbry_sd_hash']
                 d = self._save_name_metadata(name, txid, sd_hash)
             except AssertionError:
