@@ -116,15 +116,15 @@ class Validator(dict):
     @cmd(IF_KEY)
     def _if_key(self, rx_value, key, if_true, if_else):
         if key in rx_value:
-            self._handle(if_true, rx_value)
-        self._handle(if_else, rx_value)
+            return self._handle(if_true, rx_value)
+        return self._handle(if_else, rx_value)
 
     @cmd(IF_VAL)
     def _if_val(self, rx_value, key, val, if_true, if_else):
         if key in rx_value:
             if rx_value[key] == val:
-                self._handle(if_true, rx_value)
-        self._handle(if_else, rx_value)
+                return self._handle(if_true, rx_value)
+        return self._handle(if_else, rx_value)
 
     @cmd(LOAD)
     def _load(self, rx_value, key, value):
