@@ -87,12 +87,6 @@ class Validator(dict):
         else:
             return False
 
-    def serialize(self):
-        return json.dumps(self).encode("hex")
-
-    def as_json(self):
-        return json.dumps(self)
-
     def __init__(self, value, process_now=False):
         dict.__init__(self)
         self._skip = []

@@ -1218,7 +1218,7 @@ class LBRYumWallet(LBRYWallet):
     def _send_name_claim_update(self, name, claim_id, txid, value, amount):
         def send_claim_update(address):
             decoded_claim_id = claim_id.decode('hex')[::-1]
-            metadata = Metadata(value).as_json()
+            metadata = json.dumps(Metadata(value))
             log.info("updateclaim %s %s %f %s %s '%s'", txid, address, amount, name, decoded_claim_id.encode('hex'), json.dumps(metadata))
             cmd = known_commands['updateclaim']
             func = getattr(self.cmd_runner, cmd.name)
