@@ -61,8 +61,8 @@ class Validator(dict):
 
     # override these
     current_version = None
-    versions = None
-    migrations = None
+    versions = {}
+    migrations = []
 
     # built in commands
     DO_NOTHING = "do_nothing"
@@ -192,7 +192,7 @@ class LBCFeeValidator(Validator):
         (Validator.REQUIRE, 'address', skip_validate),
     ]
 
-    FEE_MIGRATIONS = None
+    FEE_MIGRATIONS = []
 
     current_version = CURRENT_FEE_VERSION
     versions = FEE_REVISIONS
@@ -213,7 +213,7 @@ class BTCFeeValidator(Validator):
         (Validator.REQUIRE, 'address', skip_validate),
     ]
 
-    FEE_MIGRATIONS = None
+    FEE_MIGRATIONS = []
 
     current_version = CURRENT_FEE_VERSION
     versions = FEE_REVISIONS
@@ -234,7 +234,7 @@ class USDFeeValidator(Validator):
         (Validator.REQUIRE, 'address', skip_validate),
     ]
 
-    FEE_MIGRATIONS = None
+    FEE_MIGRATIONS = []
 
     current_version = CURRENT_FEE_VERSION
     versions = FEE_REVISIONS
@@ -256,7 +256,7 @@ class LBRYFeeValidator(Validator):
         (Validator.OPTIONAL, 'LBC', LBCFeeValidator.validate),
     ]
 
-    CURRENCY_MIGRATIONS = None
+    CURRENCY_MIGRATIONS = []
 
     current_version = CURRENT_CURRENCY_VERSION
     versions = CURRENCY_REVISIONS
