@@ -9,15 +9,14 @@ import tempfile
 import time
 import cgi
 
-from datetime import datetime
 from appdirs import user_data_dir
 from twisted.web import server, static, resource
-from twisted.internet import defer, interfaces, error, reactor, task, threads
+from twisted.internet import defer, interfaces, error, reactor, threads
 
 from zope.interface import implements
 
 from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon
-from lbrynet.conf import API_CONNECTION_STRING, API_ADDRESS, DEFAULT_WALLET, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
+from lbrynet.conf import API_ADDRESS, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
 
 # TODO: omg, this code is essentially duplicated in LBRYDaemon

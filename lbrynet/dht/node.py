@@ -7,7 +7,7 @@
 # The docstrings in this module contain epytext markup; API documentation
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
-import hashlib, random, struct, time, math, binascii
+import hashlib, random, struct, time, binascii
 import argparse
 from twisted.internet import defer, error
 import constants
