@@ -27,6 +27,7 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
         self.sd_hash = None
         self.txid = None
         self.uri = None
+        self.claim_id = None
         self.rowid = rowid
         self.lbry_file_manager = lbry_file_manager
         self.saving_status = False
@@ -43,10 +44,16 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
 
             return d
 
+        def _save_claim_id(claim_id):
+            self.claim_id = claim_id
+            return defer.succeed(None)
+
         def _save_claim(name, txid):
             self.uri = name
             self.txid = txid
-            return defer.succeed(None)
+            d = self.wallet.get_claimid(name, txid)
+            d.addCallback(_save_claim_id)
+            return d
 
         d.addCallback(_save_sd_hash)
         d.addCallback(lambda r: _save_claim(r[0], r[1]) if r else None)

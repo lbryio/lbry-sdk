@@ -48,7 +48,7 @@ class DBLBRYFileMetadataManager(object):
         return self._add_blobs_to_stream(stream_hash, blobs, ignore_duplicate_error=True)
 
     def get_blobs_for_stream(self, stream_hash, start_blob=None, end_blob=None, count=None, reverse=False):
-        log.info("Getting blobs for a stream. Count is %s", str(count))
+        log.debug("Getting blobs for a stream. Count is %s", str(count))
 
         def get_positions_of_start_and_end():
             if start_blob is not None:

@@ -48,6 +48,7 @@ DEFAULT_TIMEOUT = 30
 DEFAULT_MAX_SEARCH_RESULTS = 25
 DEFAULT_MAX_KEY_FEE = {'USD': {'amount': 25.0, 'address': ''}}
 DEFAULT_SEARCH_TIMEOUT = 3.0
+DEFAULT_SD_DOWNLOAD_TIMEOUT = 3
 DEFAULT_CACHE_TIME = 3600
 DEFAULT_UI_BRANCH = "master"
 
@@ -57,3 +58,5 @@ CURRENCIES = {
                 'LBC': {'type': 'crypto'},
                 'USD': {'type': 'fiat'},
              }
+
+LOGGLY_TOKEN = 'YWRmNGU4NmEtNjkwNC00YjM2LTk3ZjItMGZhODM3ZDhkYzBi'

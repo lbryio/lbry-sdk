@@ -20,7 +20,7 @@
 
 
 
-import os, sys, time, signal, hashlib, random
+import sys, hashlib, random
 import twisted.internet.reactor
 from lbrynet.dht.node import Node
 #from entangled.kademlia.datastore import SQLiteDataStore
@@ -106,7 +106,7 @@ def stop():
 
 if __name__ == '__main__':
     
-    import sys, os
+    import sys
     if len(sys.argv) < 2:
         print 'Usage:\n%s UDP_PORT [KNOWN_NODE_IP  KNOWN_NODE_PORT]' % sys.argv[0]
         print 'or:\n%s UDP_PORT [FILE_WITH_KNOWN_NODES]' % sys.argv[0]

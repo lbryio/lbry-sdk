@@ -1,18 +1,12 @@
-import json
 import logging
-from time import sleep
 
-from bitcoinrpc.authproxy import AuthServiceProxy
-from twisted.internet.task import LoopingCall
 from zope.interface import implements
-#from lbrynet.core.StreamDescriptor import PlainStreamDescriptorWriter, BlobStreamDescriptorWriter
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
-# from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob, create_plain_sd
 from lbrynet.lbrynet_console.interfaces import ICommandHandler, ICommandHandlerFactory
-from lbrynet.core.StreamDescriptor import download_sd_blob#, BlobStreamDescriptorReader
+from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.core.Error import UnknownNameError, InvalidBlobHashError, InsufficientFundsError
 from lbrynet.core.Error import InvalidStreamInfoError
 from lbrynet.core.utils import is_valid_blobhash
