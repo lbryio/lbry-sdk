@@ -31,6 +31,8 @@ fi
 
 pip install wheel dmgbuild jsonrpc certifi
 
+echo $PATH
+export PATH=${PATH}:/Users/travis/Library/Python/2.7/bin
 which dmgbuild
 dmgbuild --help
 
