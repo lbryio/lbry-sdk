@@ -10,6 +10,10 @@ ON_TRAVIS=false
 rm -rf build dist LBRY.app
 
 pip install wheel dmgbuild jsonrpc
+
+which dmgbuild
+dmgbuild --help
+
 # the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
 pip install git+https://github.com/metachris/py2app
 
