@@ -9,6 +9,19 @@ ON_TRAVIS=false
 
 rm -rf build dist LBRY.app
 
+echo "Updating lbrynet"
+if [ -z ${TRAVIS_BUILD_DIR+x} ]; then
+    # building locally
+    git clone --depth 1 http://github.com/lbryio/lbry.git
+    cd lbry
+    LBRY="${tmp}/lbry"
+else
+    # building on travis
+    ON_TRAVIS=true
+    cd ${TRAVIS_BUILD_DIR}
+    LBRY=${TRAVIS_BUILD_DIR}
+fi
+
 MODULES="pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork pyobjc-framework-Quartz"
 if [ ${ON_TRAVIS} = true ]; then
     WHEEL_DIR="${TRAVIS_BUILD_DIR}/cache/wheel"
@@ -42,18 +55,6 @@ pip install git+https://github.com/metachris/py2app
 mkdir -p $tmp
 cd $tmp
 
-echo "Updating lbrynet"
-if [ -z ${TRAVIS_BUILD_DIR+x} ]; then
-    # building locally
-    git clone --depth 1 http://github.com/lbryio/lbry.git
-    cd lbry
-    LBRY="${tmp}/lbry"
-else
-    # building on travis
-    ON_TRAVIS=true
-    cd ${TRAVIS_BUILD_DIR}
-    LBRY=${TRAVIS_BUILD_DIR}
-fi
 NAME=`python setup.py --name`
 VERSION=`python setup.py -V`
 pip install -r requirements.txt
