@@ -22,6 +22,7 @@ else
     LBRY=${TRAVIS_BUILD_DIR}
 fi
 
+pip install wheel
 MODULES="pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork pyobjc-framework-Quartz"
 if [ ${ON_TRAVIS} = true ]; then
     WHEEL_DIR="${TRAVIS_BUILD_DIR}/cache/wheel"
@@ -42,7 +43,7 @@ else
     pip install $MODULES
 fi
 
-pip install wheel dmgbuild jsonrpc certifi
+pip install dmgbuild jsonrpc certifi
 
 echo $PATH
 export PATH=${PATH}:/Users/travis/Library/Python/2.7/bin
