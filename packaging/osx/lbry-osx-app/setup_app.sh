@@ -45,9 +45,10 @@ fi
 
 pip install dmgbuild jsonrpc certifi
 
+which pip
+which python
 echo $PATH
 export PATH=${PATH}:/Users/travis/Library/Python/2.7/bin
-which dmgbuild
 dmgbuild --help
 
 # the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
