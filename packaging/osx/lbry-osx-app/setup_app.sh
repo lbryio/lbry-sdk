@@ -9,10 +9,9 @@ ON_TRAVIS=false
 
 rm -rf build dist LBRY.app
 
-pip install wheel
+pip install wheel dmgbuild jsonrpc
 # the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
 pip install git+https://github.com/metachris/py2app
-pip install jsonrpc
 
 mkdir -p $tmp
 cd $tmp
@@ -73,7 +72,7 @@ fi
 # LBRYCRDD_URL="$(curl https://api.github.com/repos/lbryio/lbrycrd/releases/latest | grep 'browser_download_url' | grep osx | cut -d'"' -f4)"
 LBRYCRDD_URL="https://github.com/lbryio/lbrycrd/releases/download/v0.3.15/lbrycrd-osx.zip"
 wget "${LBRYCRDD_URL}" --output-document lbrycrd-osx.zip
-unzip lbrycrd-osx.zip
+unzip -o lbrycrd-osx.zip
 python setup_app.py py2app --resources lbrycrdd
 
 chmod +x "${DEST}/dist/LBRY.app/Contents/Resources/lbrycrdd"
@@ -105,5 +104,4 @@ codesign -vvvv "${DEST}/dist/LBRY.app"
 rm -rf $tmp
 mv dist/LBRY.app LBRY.app
 rm -rf dist "${NAME}.${VERSION}.dmg"
-# TODO: make this pretty!
-hdiutil create "${NAME}.${VERSION}.dmg" -volname lbry -srcfolder LBRY.app
+dmgbuild -s dmg_settings.py "LBRY" "${NAME}.${VERSION}.dmg"
