@@ -43,13 +43,16 @@ else
     pip install $MODULES
 fi
 
-pip install dmgbuild jsonrpc certifi
+
+pip install --user dmgbuild
 
 which pip
 which python
 echo $PATH
-export PATH=${PATH}:/Users/travis/Library/Python/2.7/bin
+export PATH=${PATH}:$HOME/.local/bin/
 dmgbuild --help
+
+pip install jsonrpc certifi
 
 # the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
 pip install git+https://github.com/metachris/py2app
