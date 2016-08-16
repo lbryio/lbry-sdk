@@ -44,12 +44,10 @@ else
 fi
 
 
-pip install --user dmgbuild
+pip install dmgbuild
+pip show dmgbuild
 
-which pip
-which python
-echo $PATH
-export PATH=${PATH}:$HOME/.local/bin/
+export PATH=${PATH}:/Library/Frameworks/Python.framework/Versions/2.7/bin
 dmgbuild --help
 
 pip install jsonrpc certifi
