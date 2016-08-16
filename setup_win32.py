@@ -15,13 +15,6 @@ from lbrynet import __version__
 
 wordlist_path = pkg_resources.resource_filename('lbryum', 'wordlist')
 
-# protobuf needs a blank __init__.py in the site-packages/google folder for cx_freeze to find
-protobuf_path = os.path.dirname(os.path.dirname(pkg_resources.resource_filename('google.protobuf', '__init__.py')))
-protobuf_init = os.path.join(protobuf_path, '__init__.py')
-if not os.path.isfile(protobuf_init):
-    with open(protobuf_init, 'w') as f:
-        f.write('')
-
 base_dir = os.path.abspath(os.path.dirname(__file__))
 
 # Allow virtualenv to find distutils of base python installation
@@ -116,7 +109,7 @@ build_exe_options = {
                  'pkg_resources'
                  ],
     'excludes': ['distutils', 'collections.sys', 'collections._weakref', 'collections.abc',
-                 'Tkinter', 'tk', 'tcl', 'PyQt4'
+                 'Tkinter', 'tk', 'tcl', 'PyQt4', 'nose', 'mock'
                  'zope.interface._zope_interface_coptimizations'],
     'include_files': [(distutils_path, 'distutils'), (requests.certs.where(), 'cacert.pem'),
                       (os.path.join(wordlist_path, 'chinese_simplified.txt'), os.path.join('wordlist', 'chinese_simplified.txt')),
@@ -125,7 +118,7 @@ build_exe_options = {
                       (os.path.join(wordlist_path, 'portuguese.txt'), os.path.join('wordlist', 'portuguese.txt')),
                       (os.path.join(wordlist_path, 'spanish.txt'), os.path.join('wordlist', 'spanish.txt'))
                       ],
-    'namespace_packages': ['zope']}
+    'namespace_packages': ['zope', 'google']}
 
 exe = Executable(
     script=os.path.join('lbrynet', 'lbrynet_daemon', 'LBRYDaemonControl.py'),
