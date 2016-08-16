@@ -12,6 +12,8 @@ rm -rf build dist LBRY.app
 echo "Updating lbrynet"
 if [ -z ${TRAVIS_BUILD_DIR+x} ]; then
     # building locally
+    mkdir -p $tmp
+    cd $tmp
     git clone --depth 1 http://github.com/lbryio/lbry.git
     cd lbry
     LBRY="${tmp}/lbry"
@@ -43,7 +45,6 @@ else
     pip install $MODULES
 fi
 
-
 pip install dmgbuild
 pip show dmgbuild
 
@@ -54,9 +55,6 @@ pip install jsonrpc certifi
 
 # the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
 pip install git+https://github.com/metachris/py2app
-
-mkdir -p $tmp
-cd $tmp
 
 NAME=`python setup.py --name`
 VERSION=`python setup.py -V`
