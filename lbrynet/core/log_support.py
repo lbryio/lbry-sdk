@@ -1,12 +1,14 @@
-import base64
 import json
 import logging
 import logging.handlers
 import sys
 import traceback
+
+from requests_futures.sessions import FuturesSession
+
 import lbrynet
 from lbrynet import conf
-from requests_futures.sessions import FuturesSession
+from lbrynet.core import utils
 
 session = FuturesSession()
 
@@ -55,16 +57,26 @@ def _log_decorator(fn):
     def helper(*args, **kwargs):
         log = kwargs.pop('log', logging.getLogger())
         level = kwargs.pop('level', logging.INFO)
+        if not isinstance(level, int):
+            # despite the name, getLevelName returns
+            # the numeric level when passed a text level
+            level = logging.getLevelName(level)
         handler = fn(*args, **kwargs)
         if handler.name:
             remove_handlers(log, handler.name)
+        handler.setLevel(level)
         log.addHandler(handler)
-        log.setLevel(level)
+        if log.level > level:
+            log.setLevel(level)
     return helper
 
 
-def disable_noisy_loggers():
+def disable_third_party_loggers():
     logging.getLogger('requests').setLevel(logging.WARNING)
+
+
+def disable_noisy_loggers():
+    logging.getLogger('lbrynet.dht').setLevel(logging.INFO)
 
 
 @_log_decorator
@@ -85,7 +97,7 @@ def configure_file_handler(file_name, **kwargs):
 
 
 def get_loggly_url(token=None, version=None):
-    token = token or base64.b64decode(conf.LOGGLY_TOKEN)
+    token = token or utils.deobfuscate(conf.LOGGLY_TOKEN)
     version = version or lbrynet.__version__
     return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
 
