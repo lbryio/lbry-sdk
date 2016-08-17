@@ -26,6 +26,7 @@ from txjsonrpc.web.jsonrpc import Handler
 
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
+from lbrynet import analytics
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -174,6 +175,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.known_dht_nodes = KNOWN_DHT_NODES
         self.first_run_after_update = False
         self.uploaded_temp_files = []
+        self._session_id = base58.b58encode(generate_id())
 
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -515,6 +517,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
+        d.addCallback(lambda _: self._set_events())
         d.addCallback(lambda _: self._get_session())
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_stream_identifier())
@@ -524,21 +527,33 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: _log_starting_vals())
         d.addCallback(lambda _: _announce_startup())
+        d.addCallback(lambda _: self._load_analytics_api())
+        # TODO: handle errors here
         d.callback(None)
 
         return defer.succeed(None)
 
+    def _load_analytics_api(self):
+        self.analytics_api = analytics.Api.load()
+        self.send_heartbeat = LoopingCall(self._send_heartbeat)
+        self.send_heartbeat.start(60)
+
+    def _send_heartbeat(self):
+        log.debug('Sending heartbeat')
+        heartbeat = self._events.heartbeat()
+        self.analytics_api.track(heartbeat)
+
     def _get_platform(self):
         r =  {
             "processor": platform.processor(),
-            "python_version: ": platform.python_version(),
+            "python_version": platform.python_version(),
             "platform": platform.platform(),
             "os_release": platform.release(),
             "os_system": platform.system(),
-            "lbrynet_version: ": lbrynet_version,
-            "lbryum_version: ": lbryum_version,
+            "lbrynet_version": lbrynet_version,
+            "lbryum_version": lbryum_version,
             "ui_version": self.lbry_ui_manager.loaded_git_version,
-            }
+        }
         if not self.ip:
             try:
                 r['ip'] = json.load(urlopen('http://jsonip.com'))['ip']
@@ -550,12 +565,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _initial_setup(self):
         def _log_platform():
-            log.info("Platform: " + json.dumps(self._get_platform()))
+            log.info("Platform: %s", json.dumps(self._get_platform()))
             return defer.succeed(None)
 
         d = _log_platform()
-
         return d
+
+    def _set_events(self):
+        context = analytics.make_context(self._get_platform(), self.wallet_type)
+        self._events = analytics.Events(context, base58.b58encode(self.lbryid), self._session_id)
 
     def _check_network_connection(self):
         try:
@@ -944,10 +962,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return d
 
     def _modify_loggly_formatter(self):
-        session_id = base58.b58encode(generate_id())
         log_support.configure_loggly_handler(
             lbry_id=base58.b58encode(self.lbryid),
-            session_id=session_id
+            session_id=self._session_id
         )
 
 
@@ -1773,7 +1790,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         name = p['name']
-        d = self._get_est_cost(name)
+        force = p.get('force', False)
+
+        if force:
+            d = self._get_est_cost(name)
+        else:
+            d = self._search(name)
+            d.addCallback(lambda r: [i['cost'] for i in r][0])
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 

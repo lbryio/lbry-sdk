@@ -1,3 +1,4 @@
+import base64
 import distutils.version
 import random
 
@@ -37,3 +38,11 @@ def version_is_greater_than(a, b):
         return distutils.version.StrictVersion(a) > distutils.version.StrictVersion(b)
     except ValueError:
         return distutils.version.LooseVersion(a) > distutils.version.LooseVersion(b)
+
+
+def deobfuscate(obfustacated):
+    return base64.b64decode(obfustacated.decode('rot13'))
+
+
+def obfuscate(plain):
+    return base64.b64encode(plain).encode('rot13')
