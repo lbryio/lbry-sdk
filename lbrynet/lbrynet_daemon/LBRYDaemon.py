@@ -40,10 +40,9 @@ from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
-from lbrynet.core.LBRYMetadata import Metadata
+from lbrynet.metadata.LBRYMetadata import Metadata, verify_name_characters
 from lbrynet.core import log_support
 from lbrynet.core import utils
-from lbrynet.core.LBRYMetadata import verify_name_characters
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, \

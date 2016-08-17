@@ -11,7 +11,7 @@ from twisted.internet.task import LoopingCall
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.core.LBRYMetadata import LBRYFeeValidator
+from lbrynet.metadata.LBRYFee import LBRYFeeValidator
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.conf import DEFAULT_TIMEOUT, LOG_FILE_NAME
 

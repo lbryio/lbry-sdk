@@ -25,7 +25,7 @@ from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHand
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.LBRYMetadata import Metadata
+from lbrynet.metadata.LBRYMetadata import Metadata
 
 log = logging.getLogger(__name__)
 alert = logging.getLogger("lbryalert." + __name__)
