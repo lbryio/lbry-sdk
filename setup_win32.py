@@ -49,7 +49,7 @@ shortcut_table = [
      'DesktopFolder',  # Directory
      'lbrynet',  # Name
      'TARGETDIR',  # Component
-     '[TARGETDIR]\lbrynet.exe',  # Target
+     '[TARGETDIR]\LBRY.exe',  # Target
      None,  # Arguments
      None,  # Description
      None,  # Hotkey
@@ -66,7 +66,7 @@ msi_data = {'Shortcut': shortcut_table}
 bdist_msi_options = {
     # 'upgrade_code': '{66620F3A-DC3A-11E2-B341-002219E9B01F}',
     'add_to_path': False,
-    'initial_target_dir': r'[LocalAppDataFolder]\lbrynet',
+    'initial_target_dir': r'[LocalAppDataFolder]\LBRY',
     'data': msi_data,
     }
 
@@ -126,18 +126,18 @@ exe = Executable(
     # base='Win32GUI',
     icon=win_icon,
     compress=True,
-    shortcutName='lbrynet',
+    shortcutName='LBRY',
     shortcutDir='DesktopFolder',
-    targetName='lbrynet.exe'
+    targetName='LBRY.exe'
     # targetDir="LocalAppDataFolder"
     )
 
 setup(
-    name='lbrynet',
+    name='LBRY',
     version=__version__,
     description='A decentralized media library and marketplace',
     url='lbry.io',
-    author='',
+    author='LBRY, Inc.',
     keywords='LBRY',
     data_files=[],
     options={'build_exe': build_exe_options,
