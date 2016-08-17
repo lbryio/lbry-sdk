@@ -1,15 +1,25 @@
 import binascii
+import functools
 import json
-import unqlite
 import logging
 import os
+
 from twisted.internet import threads, defer
+import unqlite
 
 
 log = logging.getLogger(__name__)
 
 
+def run_in_thread(fn):
+    @functools.wraps(fn)
+    def wrapped(*args, **kwargs):
+        return threads.deferToThread(fn, *args, **kwargs)
+    return wrapped
+
+
 class LBRYSettings(object):
+    NAME = "settings.db"
     def __init__(self, db_dir):
         self.db_dir = db_dir
         self.db = None
@@ -18,47 +28,39 @@ class LBRYSettings(object):
         return self._open_db()
 
     def stop(self):
+        self.db.close()
         self.db = None
         return defer.succeed(True)
 
     def _open_db(self):
-        log.debug("Opening %s as the settings database", str(os.path.join(self.db_dir, "settings.db")))
-        self.db = unqlite.UnQLite(os.path.join(self.db_dir, "settings.db"))
+        filename = os.path.join(self.db_dir, self.NAME)
+        log.debug("Opening %s as the settings database", filename)
+        self.db = unqlite.UnQLite(filename)
         return defer.succeed(True)
 
+    @run_in_thread
     def save_lbryid(self, lbryid):
+        self.db['lbryid'] = binascii.hexlify(lbryid)
+        self.db.commit()
 
-        def save_lbryid():
-            self.db['lbryid'] = binascii.hexlify(lbryid)
-
-        return threads.deferToThread(save_lbryid)
-
+    @run_in_thread
     def get_lbryid(self):
+        if 'lbryid' in self.db:
+            return binascii.unhexlify(self.db['lbryid'])
+        else:
+            return None
 
-        def get_lbryid():
-            if 'lbryid' in self.db:
-                return binascii.unhexlify(self.db['lbryid'])
-            else:
-                return None
-
-        return threads.deferToThread(get_lbryid)
-
+    @run_in_thread
     def get_server_running_status(self):
+        if 'server_running' in self.db:
+            return json.loads(self.db['server_running'])
+        else:
+            return True
 
-        def get_status():
-            if 'server_running' in self.db:
-                return json.loads(self.db['server_running'])
-            else:
-                return True
-
-        return threads.deferToThread(get_status)
-
+    @run_in_thread
     def save_server_running_status(self, running):
-
-        def save_status():
-            self.db['server_running'] = json.dumps(running)
-
-        return threads.deferToThread(save_status)
+        self.db['server_running'] = json.dumps(running)
+        self.db.commit()
 
     def get_default_data_payment_rate(self):
         return self._get_payment_rate("default_data_payment_rate")
@@ -78,35 +80,27 @@ class LBRYSettings(object):
     def save_server_crypt_info_payment_rate(self, rate):
         return self._save_payment_rate("server_crypt_info_payment_rate", rate)
 
+    @run_in_thread
     def _get_payment_rate(self, rate_type):
+        if rate_type in self.db:
+            return json.loads(self.db[rate_type])
+        else:
+            return None
 
-        def get_rate():
-            if rate_type in self.db:
-                return json.loads(self.db[rate_type])
-            else:
-                return None
-
-        return threads.deferToThread(get_rate)
-
+    @run_in_thread
     def _save_payment_rate(self, rate_type, rate):
+        if rate is not None:
+            self.db[rate_type] = json.dumps(rate)
+        elif rate_type in self.db:
+            del self.db[rate_type]
+        self.db.commit()
 
-        def save_rate():
-            if rate is not None:
-                self.db[rate_type] = json.dumps(rate)
-            elif rate_type in self.db:
-                del self.db[rate_type]
-
-        return threads.deferToThread(save_rate)
-
+    @run_in_thread
     def get_query_handler_status(self, query_identifier):
-
-        def get_status():
-            if json.dumps(('q_h', query_identifier)) in self.db:
-                return json.loads(self.db[(json.dumps(('q_h', query_identifier)))])
-            else:
-                return True
-
-        return threads.deferToThread(get_status)
+        if json.dumps(('q_h', query_identifier)) in self.db:
+            return json.loads(self.db[(json.dumps(('q_h', query_identifier)))])
+        else:
+            return True
 
     def enable_query_handler(self, query_identifier):
         return self._set_query_handler_status(query_identifier, True)
@@ -114,7 +108,7 @@ class LBRYSettings(object):
     def disable_query_handler(self, query_identifier):
         return self._set_query_handler_status(query_identifier, False)
 
+    @run_in_thread
     def _set_query_handler_status(self, query_identifier, status):
-        def set_status():
-            self.db[json.dumps(('q_h', query_identifier))] = json.dumps(status)
-        return threads.deferToThread(set_status)
+        self.db[json.dumps(('q_h', query_identifier))] = json.dumps(status)
+        self.db.commit()
