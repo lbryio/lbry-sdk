@@ -10,3 +10,11 @@
 *.iml
 
 id.conf
+
+lbrycrd-cli
+lbrycrd-osx.zip
+lbrycrd-tx
+lbrycrdd
+
+lbrynet.*.dmg
+LBRY.app
