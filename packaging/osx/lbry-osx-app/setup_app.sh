@@ -9,17 +9,11 @@ ON_TRAVIS=false
 
 rm -rf build dist LBRY.app
 
-pip install wheel
-# the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
-pip install git+https://github.com/metachris/py2app
-pip install jsonrpc
-
-mkdir -p $tmp
-cd $tmp
-
 echo "Updating lbrynet"
 if [ -z ${TRAVIS_BUILD_DIR+x} ]; then
     # building locally
+    mkdir -p $tmp
+    cd $tmp
     git clone --depth 1 http://github.com/lbryio/lbry.git
     cd lbry
     LBRY="${tmp}/lbry"
@@ -29,6 +23,39 @@ else
     cd ${TRAVIS_BUILD_DIR}
     LBRY=${TRAVIS_BUILD_DIR}
 fi
+
+pip install wheel
+MODULES="pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork pyobjc-framework-Quartz"
+if [ ${ON_TRAVIS} = true ]; then
+    WHEEL_DIR="${TRAVIS_BUILD_DIR}/cache/wheel"
+    mkdir -p "${WHEEL_DIR}"
+    # mapping from the package name to the
+    # actual built wheel file is surprisingly
+    # hard so instead of checking for the existance
+    # of each wheel, we mark with a file when they've all been
+    # built and skip when that file exists
+    for MODULE in ${MODULES}; do
+	if [ ! -f "${WHEEL_DIR}"/${MODULE}.finished ]; then
+	    pip wheel -w "${WHEEL_DIR}" ${MODULE}
+	    touch "${WHEEL_DIR}"/${MODULE}.finished
+	fi
+    done
+    pip install "${WHEEL_DIR}"/*.whl
+else
+    pip install $MODULES
+fi
+
+pip install dmgbuild
+pip show dmgbuild
+
+export PATH=${PATH}:/Library/Frameworks/Python.framework/Versions/2.7/bin
+dmgbuild --help
+
+pip install jsonrpc certifi
+
+# the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
+pip install git+https://github.com/metachris/py2app
+
 NAME=`python setup.py --name`
 VERSION=`python setup.py -V`
 pip install -r requirements.txt
@@ -48,32 +75,12 @@ codesign -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/
 codesign --deep -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/MacOS/LBRYURIHandler"
 codesign -vvvv "${DEST}/dist/LBRYURIHandler.app"
 
-pip install certifi
-MODULES="pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork"
-if [ ${ON_TRAVIS} = true ]; then
-    WHEEL_DIR="${TRAVIS_BUILD_DIR}/cache/wheel"
-    mkdir -p "${WHEEL_DIR}"
-    # mapping from the package name to the
-    # actual built wheel file is surprisingly
-    # hard so instead of checking for the existance
-    # of each wheel, we mark with a file when they've all been
-    # built and skip when that file exists
-    if [ ! -f "${WHEEL_DIR}"/finished ]; then
-	pip wheel -w "${WHEEL_DIR}" ${MODULES}
-	touch "${WHEEL_DIR}"/finished
-    fi
-    pip install "${WHEEL_DIR}"/*.whl
-else
-    pip install $MODULES
-fi
-
-
 # add lbrycrdd as a resource. Following
 # http://stackoverflow.com/questions/11370012/can-executables-made-with-py2app-include-other-terminal-scripts-and-run-them
 # LBRYCRDD_URL="$(curl https://api.github.com/repos/lbryio/lbrycrd/releases/latest | grep 'browser_download_url' | grep osx | cut -d'"' -f4)"
 LBRYCRDD_URL="https://github.com/lbryio/lbrycrd/releases/download/v0.3.15/lbrycrd-osx.zip"
 wget "${LBRYCRDD_URL}" --output-document lbrycrd-osx.zip
-unzip lbrycrd-osx.zip
+unzip -o lbrycrd-osx.zip
 python setup_app.py py2app --resources lbrycrdd
 
 chmod +x "${DEST}/dist/LBRY.app/Contents/Resources/lbrycrdd"
@@ -105,5 +112,4 @@ codesign -vvvv "${DEST}/dist/LBRY.app"
 rm -rf $tmp
 mv dist/LBRY.app LBRY.app
 rm -rf dist "${NAME}.${VERSION}.dmg"
-# TODO: make this pretty!
-hdiutil create "${NAME}.${VERSION}.dmg" -volname lbry -srcfolder LBRY.app
+dmgbuild -s dmg_settings.py "LBRY" "${NAME}.${VERSION}.dmg"

@@ -61,4 +61,7 @@ CURRENCIES = {
                 'USD': {'type': 'fiat'},
              }
 
-LOGGLY_TOKEN = 'YWRmNGU4NmEtNjkwNC00YjM2LTk3ZjItMGZhODM3ZDhkYzBi'
+LOGGLY_TOKEN = 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv'
+
+ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
+ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
