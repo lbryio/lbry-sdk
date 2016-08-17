@@ -18,7 +18,7 @@ from appdirs import user_data_dir
 from datetime import datetime
 from decimal import Decimal
 from twisted.web import server
-from twisted.internet import defer, threads, error, reactor
+from twisted.internet import defer, threads, error, reactor, task
 from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
 from txjsonrpc.web import jsonrpc
@@ -2417,8 +2417,10 @@ class _DownloadNameHelper(object):
     def wait_or_get_stream(self, args):
         stream_info, lbry_file = args
         if lbry_file:
+            log.debug('Wait on lbry_file')
             return self._wait_on_lbry_file(lbry_file)
         else:
+            log.debug('No lbry_file, need to get stream')
             return self._get_stream(stream_info)
 
     def _get_stream(self, stream_info):
@@ -2445,9 +2447,7 @@ class _DownloadNameHelper(object):
         written_bytes = self.get_written_bytes(f.file_name)
         if written_bytes:
             return defer.succeed(self._disp_file(f))
-        d = defer.succeed(None)
-        d.addCallback(lambda _: reactor.callLater(1, self._wait_on_lbry_file, f))
-        return d
+        return task.deferLater(reactor, 1, self._wait_on_lbry_file, f)
 
     def get_written_bytes(self, file_name):
         """Returns the number of bytes written to `file_name`.
@@ -2528,4 +2528,3 @@ class _ResolveNameHelper(object):
     def is_cached_name_expired(self):
         time_in_cache = self.now() - self.name_data['timestamp']
         return time_in_cache >= self.daemon.cache_time
-
