@@ -13,6 +13,7 @@ import requests.certs
 
 from lbrynet import __version__
 
+win_icon = os.path.join('packaging', 'windows', 'icons', 'lbry256.ico')
 wordlist_path = pkg_resources.resource_filename('lbryum', 'wordlist')
 
 base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -52,7 +53,7 @@ shortcut_table = [
      None,  # Arguments
      None,  # Description
      None,  # Hotkey
-     os.path.join('lbry-dark-icon.ico'),  # Icon
+     win_icon,  # Icon
      None,  # IconIndex
      None,  # ShowCmd
      'TARGETDIR',  # WkDir
@@ -123,7 +124,7 @@ build_exe_options = {
 exe = Executable(
     script=os.path.join('lbrynet', 'lbrynet_daemon', 'LBRYDaemonControl.py'),
     # base='Win32GUI',
-    icon=os.path.join('packaging', 'windows', 'icons', 'lbry256.ico'),
+    icon=win_icon,
     compress=True,
     shortcutName='lbrynet',
     shortcutDir='DesktopFolder',
@@ -138,14 +139,7 @@ setup(
     url='lbry.io',
     author='',
     keywords='LBRY',
-    data_files=[
-      ('lbrynet/lbrynet_console/plugins',
-       [
-           os.path.join(base_dir, 'lbrynet', 'lbrynet_console', 'plugins',
-                        'blindrepeater.yapsy-plugin')
-       ]
-       ),
-    ],
+    data_files=[],
     options={'build_exe': build_exe_options,
              'bdist_msi': bdist_msi_options},
     executables=[exe],
