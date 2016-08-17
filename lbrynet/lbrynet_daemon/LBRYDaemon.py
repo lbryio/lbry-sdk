@@ -1785,7 +1785,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         name = p['name']
-        d = self._get_est_cost(name)
+        force = p.get('force', False)
+
+        if force:
+            d = self._get_est_cost(name)
+        else:
+            d = self._search(name)
+            d.addCallback(lambda r: [i['cost'] for i in r][0])
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
