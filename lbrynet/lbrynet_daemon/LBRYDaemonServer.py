@@ -375,7 +375,10 @@ class LBRYFileUpload(resource.Resource):
         # Move to a new temporary dir and restore the original file name
         newdirpath = tempfile.mkdtemp()
         newpath = os.path.join(newdirpath, origfilename)
-        shutil.move(uploaded_file.name, newpath)
+        try:
+            shutil.move(uploaded_file.name, newpath)
+        except WindowsError:
+            pass
         self._api.uploaded_temp_files.append(newpath)
 
         return json.dumps(newpath)
