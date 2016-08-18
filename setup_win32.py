@@ -44,30 +44,30 @@ console_scripts = ['lbrynet-stdin-uploader = lbrynet.lbrynet_console.LBRYStdinUp
                   'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonControl:stop',
                   'lbrynet-cli = lbrynet.lbrynet_daemon.LBRYDaemonCLI:main']
 
-shortcut_table = [
-    ('DesktopShortcut',  # Shortcut
-     'DesktopFolder',  # Directory
-     'lbrynet',  # Name
-     'TARGETDIR',  # Component
-     '[TARGETDIR]\LBRY.exe',  # Target
-     None,  # Arguments
-     None,  # Description
-     None,  # Hotkey
-     win_icon,  # Icon
-     None,  # IconIndex
-     None,  # ShowCmd
-     'TARGETDIR',  # WkDir
-     ),
-    ]
-
-# Now create the table dictionary
-msi_data = {'Shortcut': shortcut_table}
+# shortcut_table = [
+#     ('DesktopShortcut',  # Shortcut
+#      'DesktopFolder',  # Directory
+#      'LBRY 1',  # Name
+#      'TARGETDIR',  # Component
+#      '[TARGETDIR]\LBRY.exe',  # Target
+#      None,  # Arguments
+#      None,  # Description
+#      None,  # Hotkey
+#      win_icon,  # Icon
+#      None,  # IconIndex
+#      None,  # ShowCmd
+#      'TARGETDIR',  # WkDir
+#      ),
+#     ]
+#
+# # Now create the table dictionary
+# msi_data = {'Shortcut': shortcut_table}
 
 bdist_msi_options = {
     # 'upgrade_code': '{66620F3A-DC3A-11E2-B341-002219E9B01F}',
     'add_to_path': False,
     'initial_target_dir': r'[LocalAppDataFolder]\LBRY',
-    'data': msi_data,
+    # 'data': msi_data,
     }
 
 build_exe_options = {
