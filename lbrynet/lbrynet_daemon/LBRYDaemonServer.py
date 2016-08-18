@@ -226,6 +226,8 @@ class LBRYindex(resource.Resource):
         return resource.Resource.getChild(self, name, request)
 
     def render_GET(self, request):
+        request.setHeader('cache-control','no-cache, no-store, must-revalidate')
+	    request.setHeader('expires', '0')
         return static.File(os.path.join(self.ui_dir, "index.html")).render_GET(request)
 
 
