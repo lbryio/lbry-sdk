@@ -1,4 +1,4 @@
-from lbrynet.core import LBRYMetadata
+from lbrynet.metadata import LBRYMetadata
 from twisted.trial import unittest
 
 
