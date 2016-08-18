@@ -42,7 +42,7 @@ class ReflectorServer(Protocol):
                 d = self.handle_request(msg)
                 d.addCallbacks(self.send_response, self.handle_error)
                 if self.receiving_blob and extra_data:
-                    log.debug('Writing extra data to blog')
+                    log.debug('Writing extra data to blob')
                     self.blob_write(extra_data)
 
     def _get_valid_response(self, response_msg):
