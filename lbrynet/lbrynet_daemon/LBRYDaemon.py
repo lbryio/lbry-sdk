@@ -362,6 +362,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.version_checker = LoopingCall(self._check_remote_versions)
         self.connection_problem_checker = LoopingCall(self._check_connection_problems)
         self.pending_claim_checker = LoopingCall(self._check_pending_claims)
+        self.send_heartbeat = LoopingCall(self._send_heartbeat)
         # self.lbrynet_connection_checker = LoopingCall(self._check_lbrynet_connection)
 
         self.sd_identifier = StreamDescriptorIdentifier()
@@ -535,7 +536,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _load_analytics_api(self):
         self.analytics_api = analytics.Api.load()
-        self.send_heartbeat = LoopingCall(self._send_heartbeat)
         self.send_heartbeat.start(60)
 
     def _send_heartbeat(self):
@@ -806,6 +806,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.lbry_ui_manager.update_checker.stop()
         if self.pending_claim_checker.running:
             self.pending_claim_checker.stop()
+        if self.send_heartbeat.running:
+            self.send_heartbeat.stop()
 
         self._clean_up_temp_files()
 

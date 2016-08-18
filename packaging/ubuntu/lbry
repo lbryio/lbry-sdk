@@ -42,7 +42,7 @@ DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 if [ -z "$(pgrep lbrynet-daemon)" ]; then
   echo "running lbrynet-daemon..."
-  $DIR/lbrynet-daemon --branch="$WEB_UI_BRANCH" &
+  $DIR/lbrynet-daemon --no-launch --branch="$WEB_UI_BRANCH" &
   sleep 3 # let the daemon load before connecting
 fi
 
