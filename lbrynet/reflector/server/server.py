@@ -85,11 +85,12 @@ class ReflectorServer(Protocol):
 
     def determine_blob_needed(self, blob):
         if blob.is_validated():
-            return {'send_blob': False}
+            d = self.blob_manager.blob_completed(blob)
+            d.addCallback(lambda _: {'send_blob': False})
+            return d
         else:
             self.incoming_blob = blob
             self.blob_finished_d, self.blob_write, self.cancel_write = blob.open_for_writing(self.peer)
-            self.blob_finished_d.addCallback(lambda _: self.blob_manager.blob_completed(blob))
             return {'send_blob': True}
 
     def close_blob(self):
