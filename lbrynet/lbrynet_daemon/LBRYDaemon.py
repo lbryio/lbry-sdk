@@ -1338,6 +1338,29 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = defer.DeferredList([self._get_lbry_file('sd_hash', l.sd_hash) for l in self.lbry_file_manager.lbry_files])
         return d
 
+    def _reflect(self, lbry_file):
+        if not lbry_file:
+            return defer.fail(Exception("no lbry file given to reflect"))
+
+        sd_hash = lbry_file.sd_hash
+        stream_hash = lbry_file.stream_hash
+        
+        if sd_hash is None or stream_hash is None:
+            return defer.fail(Exception("unpopulated lbry file fields"))
+
+        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_address, reflector_port = reflector_server[0], reflector_server[1]
+        log.info("Start reflector client")
+        factory = reflector.ClientFactory(
+            self.session.blob_manager,
+            self.lbry_file_manager.stream_info_manager,
+            stream_hash
+        )
+        d = reactor.resolve(reflector_address)
+        d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
+        d.addCallback(lambda _: factory.finished_deferred)
+        return d
+
     def _log_to_slack(self, msg):
         URL = "https://hooks.slack.com/services/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"
         msg = platform.platform() + ": " + base58.b58encode(self.lbryid)[:20] + ", " + msg
@@ -2420,6 +2443,22 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self.session.blob_manager.immediate_announce_all_blobs()
         d.addCallback(lambda _: self._render_response("Announced", OK_CODE))
+        return d
+
+    def jsonrpc_reflect(self, p):
+        """
+        Reflect a stream
+
+        Args:
+            sd_hash
+        Returns:
+            True or traceback
+        """
+
+        sd_hash = p['sd_hash']
+        d = self._get_lbry_file('sd_hash', sd_hash, return_json=False)
+        d.addCallback(self._reflect)
+        d.addCallbacks(lambda _: self._render_response(True, OK_CODE), lambda err: self._render_response(err.getTraceback(), OK_CODE))
         return d
 
 
