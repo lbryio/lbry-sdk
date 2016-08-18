@@ -833,6 +833,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self.lbry_ui_manager.update_checker.stop()
         if self.pending_claim_checker.running:
             self.pending_claim_checker.stop()
+        if self.send_heartbeat.running:
+            self.send_heartbeat.stop()
 
         self._clean_up_temp_files()
 
