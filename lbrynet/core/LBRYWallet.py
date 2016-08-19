@@ -489,6 +489,10 @@ class LBRYWallet(object):
         d.addCallback(self._get_decoded_tx)
         return d
 
+    def get_history(self):
+        d = self._get_history()
+        return d
+
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
         d.addCallback(lambda name_txid: self._get_status_of_claim(name_txid[1], name_txid[0], sd_hash) if name_txid is not None else None)
@@ -688,6 +692,9 @@ class LBRYWallet(object):
     def _get_balance_for_address(self, address):
         return defer.fail(NotImplementedError())
 
+    def _get_history(self):
+        return defer.fail(NotImplementedError())
+
     def _start(self):
         pass
 
@@ -822,6 +829,9 @@ class LBRYcrdWallet(LBRYWallet):
 
     def _get_value_for_name(self, name):
         return threads.deferToThread(self._get_value_for_name_rpc, name)
+
+    def _get_history(self):
+        return threads.deferToThread(self._list_transactions_rpc)
 
     def _get_rpc_conn(self):
         return AuthServiceProxy(self.rpc_conn_string)
@@ -1006,6 +1016,11 @@ class LBRYcrdWallet(LBRYWallet):
     def _get_best_blockhash_rpc(self):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.getbestblockhash()
+
+    @_catch_connection_error
+    def _list_transactions_rpc(self):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.listtransactions()
 
     @_catch_connection_error
     def _stop_rpc(self):
@@ -1294,7 +1309,7 @@ class LBRYumWallet(LBRYWallet):
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func)
 
-    def get_history(self):
+    def _get_history(self):
         cmd = known_commands['history']
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func)
