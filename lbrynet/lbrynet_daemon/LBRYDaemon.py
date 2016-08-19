@@ -2463,6 +2463,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallbacks(lambda _: self._render_response(True, OK_CODE), lambda err: self._render_response(err.getTraceback(), OK_CODE))
         return d
 
+    def jsonrpc_get_blobs(self):
+        """
+        return all blobs
+        """
+
+        d = defer.succeed(self.session.blob_manager.blobs)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
 
 def get_lbrynet_version_from_github():
     """Return the latest released version from github."""

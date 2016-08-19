@@ -80,6 +80,7 @@ def disable_noisy_loggers():
     logging.getLogger('lbrynet.core.client.ConnectionManager').setLevel(logging.INFO)
     logging.getLogger('lbrynet.core.client.BlobRequester').setLevel(logging.INFO)
     logging.getLogger('lbrynet.core.client.ClientProtocol').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.analytics.api').setLevel(logging.INFO)
 
 
 @_log_decorator
