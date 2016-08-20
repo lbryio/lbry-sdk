@@ -4,7 +4,7 @@ import json
 from lbrynet.conf import API_CONNECTION_STRING
 from jsonrpc.proxy import JSONRPCProxy
 
-help_msg = "Useage: lbrynet-cli method json-args\n" \
+help_msg = "Usage: lbrynet-cli method json-args\n" \
              + "Examples: " \
              + "lbrynet-cli resolve_name '{\"name\": \"what\"}'\n" \
              + "lbrynet-cli get_balance\n" \
