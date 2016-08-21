@@ -72,7 +72,7 @@ class Publisher(object):
     def start_reflector(self):
         reflector_server = random.choice(REFLECTOR_SERVERS)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-        log.info("Start reflector client")
+        log.info("Reflecting new publication")
         factory = reflector.ClientFactory(
             self.session.blob_manager,
             self.lbry_file_manager.stream_info_manager,

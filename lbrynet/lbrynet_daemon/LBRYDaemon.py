@@ -1344,11 +1344,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         if not lbry_file:
             return defer.fail(Exception("no lbry file given to reflect"))
 
-        sd_hash = lbry_file.sd_hash
         stream_hash = lbry_file.stream_hash
         
-        if sd_hash is None or stream_hash is None:
-            return defer.fail(Exception("unpopulated lbry file fields"))
+        if stream_hash is None:
+            return defer.fail(Exception("no stream hash"))
+
+        log.info("Reflecting stream: %s" % stream_hash)
 
         reflector_server = random.choice(REFLECTOR_SERVERS)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
@@ -1938,24 +1939,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return m
 
         def _reflect_if_possible(sd_hash, txid):
-            log.info("Trying to start reflector")
             d = self._get_lbry_file('sd_hash', sd_hash, return_json=False)
-            d.addCallback(lambda r: False if not r else _start_reflector(r.stream_hash))
+            d.addCallback(self._reflect)
             d.addCallback(lambda _: txid)
-            return d
-
-        def _start_reflector(stream_hash):
-            reflector_server = random.choice(REFLECTOR_SERVERS)
-            reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-            log.info("Start reflector client")
-            factory = reflector.ClientFactory(
-                self.session.blob_manager,
-                self.lbry_file_manager.stream_info_manager,
-                stream_hash
-            )
-            d = reactor.resolve(reflector_address)
-            d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
-            d.addCallback(lambda _: factory.finished_deferred)
             return d
 
         name = p['name']
