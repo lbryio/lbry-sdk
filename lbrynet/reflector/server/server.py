@@ -27,11 +27,11 @@ class ReflectorServer(Protocol):
         self.request_buff = ""
 
     def connectionLost(self, reason=failure.Failure(error.ConnectionDone())):
-        pass
+        log.info("Reflector upload from %s finished" % self.peer.host)
 
     def dataReceived(self, data):
         if self.receiving_blob:
-            log.debug('Writing data to blob')
+            # log.debug('Writing data to blob')
             self.blob_write(data)
         else:
             log.debug('Not yet recieving blob, data needs further processing')
