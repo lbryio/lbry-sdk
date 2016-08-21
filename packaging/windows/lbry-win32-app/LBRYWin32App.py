@@ -258,7 +258,7 @@ def main():
 
     icon = os.path.join(ICON_PATH, 'lbry16.ico')
     hover_text = APP_NAME
-    menu_options = (('Open UI', icon, openui_),)
+    menu_options = (('Open', icon, openui_),)
 
     if not test_internet_connection():
         log.warn('No Internet Connection')
