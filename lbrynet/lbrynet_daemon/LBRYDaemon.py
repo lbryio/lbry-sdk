@@ -197,6 +197,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.json')
 
         self.default_settings = {
+            'show_nsfw': False,
             'run_on_startup': False,
             'data_rate': MIN_BLOB_DATA_PAYMENT_RATE,
             'max_key_fee': DEFAULT_MAX_KEY_FEE,
@@ -265,6 +266,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         f.write(json.dumps(self.session_settings))
         f.close()
 
+        self.show_nsfw = self.session_settings['show_nsfw']
         self.run_on_startup = self.session_settings['run_on_startup']
         self.data_rate = self.session_settings['data_rate']
         self.max_key_fee = self.session_settings['max_key_fee']
@@ -851,6 +853,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _update_settings(self, settings):
         for k in settings.keys():
+            if k == 'show_nsfw':
+                if type(settings['show_nsfw']) is bool:
+                    self.session_settings['show_nsfw'] = settings['show_nsfw']
+                else:
+                    return defer.fail()
             if k == 'run_on_startup':
                 if type(settings['run_on_startup']) is bool:
                     self.session_settings['run_on_startup'] = settings['run_on_startup']
@@ -918,6 +925,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     self.session_settings['cache_time'] = int(settings['cache_time'])
                 else:
                     return defer.fail()
+        self.show_nsfw = self.session_settings['show_nsfw']
         self.run_on_startup = self.session_settings['run_on_startup']
         self.data_rate = self.session_settings['data_rate']
         self.max_key_fee = self.session_settings['max_key_fee']
@@ -1530,6 +1538,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Args:
             None
         Returns:
+            'show_nsfw': bool,
             'run_on_startup': bool,
             'data_rate': float,
             'max_key_fee': float,
@@ -1556,6 +1565,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Set lbrynet daemon settings
 
         Args:
+            'show_nsfw': bool,
             'run_on_startup': bool,
             'data_rate': float,
             'max_key_fee': float,
