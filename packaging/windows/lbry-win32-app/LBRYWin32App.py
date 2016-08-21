@@ -256,7 +256,10 @@ def main():
     def stop(sysTrayIcon):
         replyToApplicationShouldTerminate_()
 
-    icon = os.path.join(ICON_PATH, 'lbry16.ico')
+    if getattr(sys, 'frozen', False) and os.name == "nt":
+        icon = os.path.join(os.path.dirname(sys.executable), ICON_PATH, 'lbry16.ico')
+    else:
+        icon = os.path.join(ICON_PATH, 'lbry16.ico')
     hover_text = APP_NAME
     menu_options = (('Open', icon, openui_),)
 
