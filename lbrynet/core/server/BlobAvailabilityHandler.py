@@ -44,6 +44,7 @@ class BlobAvailabilityHandler(object):
             d = self._get_available_blobs(queries[self.query_identifiers[0]])
 
             def set_field(available_blobs):
+                log.debug("available blobs: %s", str(available_blobs))
                 return {'available_blobs': available_blobs}
 
             d.addCallback(set_field)
