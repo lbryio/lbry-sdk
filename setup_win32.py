@@ -13,7 +13,7 @@ import requests.certs
 
 from lbrynet import __version__
 
-win_icon = os.path.join('packaging', 'windows', 'icons', 'lbry256.ico')
+win_icon = os.path.join('packaging', 'windows', 'lbry-win32-app', 'icons', 'lbry256.ico')
 wordlist_path = pkg_resources.resource_filename('lbryum', 'wordlist')
 
 base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -113,7 +113,10 @@ build_exe_options = {
                  'Tkinter', 'tk', 'tcl', 'PyQt4', 'nose', 'mock'
                  'zope.interface._zope_interface_coptimizations'],
     'include_files': [(distutils_path, 'distutils'), (requests.certs.where(), 'cacert.pem'),
-                      (os.path.join(wordlist_path, 'chinese_simplified.txt'), os.path.join('wordlist', 'chinese_simplified.txt')),
+                      (os.path.join('packaging', 'windows', 'lbry-win32-app', 'icons', 'lbry16.ico'),
+                       os.path.join('icons', 'lbry16.ico')),
+                      (os.path.join(wordlist_path, 'chinese_simplified.txt'),
+                       os.path.join('wordlist', 'chinese_simplified.txt')),
                       (os.path.join(wordlist_path, 'english.txt'), os.path.join('wordlist', 'english.txt')),
                       (os.path.join(wordlist_path, 'japanese.txt'), os.path.join('wordlist', 'japanese.txt')),
                       (os.path.join(wordlist_path, 'portuguese.txt'), os.path.join('wordlist', 'portuguese.txt')),
@@ -122,8 +125,8 @@ build_exe_options = {
     'namespace_packages': ['zope', 'google']}
 
 exe = Executable(
-    script=os.path.join('lbrynet', 'lbrynet_daemon', 'LBRYDaemonControl.py'),
-    # base='Win32GUI',
+    script=os.path.join('packaging', 'windows', 'lbry-win32-app', 'LBRYWin32App.py'),
+    base='Win32GUI',
     icon=win_icon,
     compress=True,
     shortcutName='LBRY',
