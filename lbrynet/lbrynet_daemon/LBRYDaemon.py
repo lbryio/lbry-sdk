@@ -49,7 +49,7 @@ from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, \
                          KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, DEFAULT_WALLET, \
                          DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, \
-                         LOG_POST_URL, LOG_FILE_NAME
+                         LOG_POST_URL, LOG_FILE_NAME, REFLECTOR_SERVERS
 from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
 from lbrynet.conf import DEFAULT_TIMEOUT
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
@@ -58,7 +58,7 @@ from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
 from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
-# from lbryum import LOG_PATH as lbryum_log
+from lbrynet import reflector
 
 
 # TODO: this code snippet is everywhere. Make it go away
@@ -211,9 +211,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             'delete_blobs_on_remove': True,
             'peer_port': 3333,
             'dht_node_port': 4444,
+            'reflector_port': 5566,
             'use_upnp': True,
             'start_lbrycrdd': True,
             'requested_first_run_credits': False,
+            'run_reflector_server': False,
             'cache_time': DEFAULT_CACHE_TIME,
             'startup_scripts': [],
             'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}
@@ -273,6 +275,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.search_timeout = self.session_settings['search_timeout']
         self.download_timeout = self.session_settings['download_timeout']
         self.max_search_results = self.session_settings['max_search_results']
+        self.run_reflector_server = self.session_settings['run_reflector_server']
         ####
         #
         # Ignore the saved wallet type. Some users will have their wallet type
@@ -299,6 +302,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         ####
         self.delete_blobs_on_remove = self.session_settings['delete_blobs_on_remove']
         self.peer_port = self.session_settings['peer_port']
+        self.reflector_port = self.session_settings['reflector_port']
         self.dht_node_port = self.session_settings['dht_node_port']
         self.use_upnp = self.session_settings['use_upnp']
         self.start_lbrycrdd = self.session_settings['start_lbrycrdd']
@@ -683,16 +687,43 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _start_server(self):
         if self.peer_port is not None:
-
             server_factory = ServerProtocolFactory(self.session.rate_limiter,
                                                    self.query_handlers,
                                                    self.session.peer_manager)
+
             try:
                 self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
             except error.CannotListenError as e:
                 import traceback
                 log.error("Couldn't bind to port %d. %s", self.peer_port, traceback.format_exc())
                 raise ValueError("%s lbrynet may already be running on your computer.", str(e))
+        return defer.succeed(True)
+
+    def _start_reflector(self):
+        if self.run_reflector_server:
+            log.info("Starting reflector server")
+            if self.reflector_port is not None:
+                reflector_factory = reflector.ServerFactory(
+                    self.session.peer_manager,
+                    self.session.blob_manager
+                )
+                try:
+                    self.reflector_server_port = reactor.listenTCP(self.reflector_port, reflector_factory)
+                    log.info('Started reflector on port %s', self.reflector_port)
+                except error.CannotListenError as e:
+                    log.exception("Couldn't bind reflector to port %d", self.reflector_port)
+                    raise ValueError("{} lbrynet may already be running on your computer.".format(e))
+        return defer.succeed(True)
+
+    def _stop_reflector(self):
+        if self.run_reflector_server:
+            log.info("Stopping reflector server")
+            try:
+                if self.reflector_server_port is not None:
+                    self.reflector_server_port, p = None, self.reflector_server_port
+                    return defer.maybeDeferred(p.stopListening)
+            except AttributeError:
+                return defer.succeed(True)
         return defer.succeed(True)
 
     def _stop_server(self):
@@ -708,7 +739,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _setup_server(self):
         def restore_running_status(running):
             if running is True:
-                return self._start_server()
+                d = self._start_server()
+                d.addCallback(lambda _: self._start_reflector())
             return defer.succeed(True)
 
         self.startup_status = STARTUP_STAGES[4]
@@ -808,6 +840,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self._upload_log(log_type="close", exclude_previous=False if self.first_run else True)
         d.addCallback(lambda _: self._stop_server())
+        d.addCallback(lambda _: self._stop_reflector())
         d.addErrback(lambda err: True)
         d.addCallback(lambda _: self.lbry_file_manager.stop())
         d.addErrback(lambda err: True)
@@ -1305,6 +1338,30 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _get_lbry_files(self):
         d = defer.DeferredList([self._get_lbry_file('sd_hash', l.sd_hash) for l in self.lbry_file_manager.lbry_files])
+        return d
+
+    def _reflect(self, lbry_file):
+        if not lbry_file:
+            return defer.fail(Exception("no lbry file given to reflect"))
+
+        stream_hash = lbry_file.stream_hash
+        
+        if stream_hash is None:
+            return defer.fail(Exception("no stream hash"))
+
+        log.info("Reflecting stream: %s" % stream_hash)
+
+        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_address, reflector_port = reflector_server[0], reflector_server[1]
+        log.info("Start reflector client")
+        factory = reflector.ClientFactory(
+            self.session.blob_manager,
+            self.lbry_file_manager.stream_info_manager,
+            stream_hash
+        )
+        d = reactor.resolve(reflector_address)
+        d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
+        d.addCallback(lambda _: factory.finished_deferred)
         return d
 
     def _log_to_slack(self, msg):
@@ -1881,6 +1938,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             m['fee'][currency]['address'] = address
             return m
 
+        def _reflect_if_possible(sd_hash, txid):
+            d = self._get_lbry_file('sd_hash', sd_hash, return_json=False)
+            d.addCallback(self._reflect)
+            d.addCallback(lambda _: txid)
+            return d
+
         name = p['name']
 
         log.info("Publish: ")
@@ -1897,8 +1960,10 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         try:
             metadata = Metadata(p['metadata'])
             make_lbry_file = False
+            sd_hash = metadata['sources']['lbry_sd_hash']
         except AssertionError:
             make_lbry_file = True
+            sd_hash = None
             metadata = p['metadata']
             file_path = p['file_path']
 
@@ -1922,6 +1987,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             d.addCallback(lambda meta: pub.start(name, file_path, bid, meta))
         else:
             d.addCallback(lambda meta: self.session.wallet.claim_name(name, bid, meta))
+            if sd_hash:
+                d.addCallback(lambda txid: _reflect_if_possible(sd_hash, txid))
+
         d.addCallback(lambda txid: self._add_to_pending_claims(name, txid))
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
 
@@ -2348,6 +2416,45 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self.session.peer_finder.find_peers_for_blob(blob_hash)
         d.addCallback(lambda r: [[c.host, c.port, c.is_available()] for c in r])
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_announce_all_blobs_to_dht(self):
+        """
+        Announce all blobs to the dht
+
+        Args:
+            None
+        Returns:
+
+        """
+
+        d = self.session.blob_manager.immediate_announce_all_blobs()
+        d.addCallback(lambda _: self._render_response("Announced", OK_CODE))
+        return d
+
+    def jsonrpc_reflect(self, p):
+        """
+        Reflect a stream
+
+        Args:
+            sd_hash
+        Returns:
+            True or traceback
+        """
+
+        sd_hash = p['sd_hash']
+        d = self._get_lbry_file('sd_hash', sd_hash, return_json=False)
+        d.addCallback(self._reflect)
+        d.addCallbacks(lambda _: self._render_response(True, OK_CODE), lambda err: self._render_response(err.getTraceback(), OK_CODE))
+        return d
+
+    def jsonrpc_get_blobs(self):
+        """
+        return all blobs
+        """
+
+        d = defer.succeed(self.session.blob_manager.blobs)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 

@@ -73,7 +73,7 @@ class ClientProtocol(Protocol):
             return defer.fail(failure.Failure(ValueError("There is already a request for that response active")))
         self._next_request.update(request.request_dict)
         d = defer.Deferred()
-        log.debug("Adding a request. Request: %s", str(request))
+        log.debug("Adding a request. Request: %s", str(request.request_dict))
         self._response_deferreds[request.response_identifier] = d
         return d
 
