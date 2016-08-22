@@ -493,6 +493,29 @@ class LBRYWallet(object):
         d = self._get_history()
         return d
 
+    def get_tx_json(self, txid):
+        def _decode(raw_tx):
+            tx = Transaction(raw_tx).deserialize()
+            decoded_tx = {}
+            for txkey in tx.keys():
+                if isinstance(tx[txkey], list):
+                    decoded_tx[txkey] = []
+                    for i in tx[txkey]:
+                        tmp = {}
+                        for k in i.keys():
+                            if isinstance(i[k], Decimal):
+                                tmp[k] = float(i[k] / 1e8)
+                            else:
+                                tmp[k] = i[k]
+                        decoded_tx[txkey].append(tmp)
+                else:
+                    decoded_tx[txkey] = tx[txkey]
+            return decoded_tx
+
+        d = self._get_raw_tx(txid)
+        d.addCallback(_decode)
+        return d
+
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
         d.addCallback(lambda name_txid: self._get_status_of_claim(name_txid[1], name_txid[0], sd_hash) if name_txid is not None else None)
@@ -1313,29 +1336,6 @@ class LBRYumWallet(LBRYWallet):
         cmd = known_commands['history']
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func)
-
-    def get_tx_json(self, txid):
-        def _decode(raw_tx):
-            tx = Transaction(raw_tx).deserialize()
-            decoded_tx = {}
-            for txkey in tx.keys():
-                if isinstance(tx[txkey], list):
-                    decoded_tx[txkey] = []
-                    for i in tx[txkey]:
-                        tmp = {}
-                        for k in i.keys():
-                            if isinstance(i[k], Decimal):
-                                tmp[k] = float(i[k] / 1e8)
-                            else:
-                                tmp[k] = i[k]
-                        decoded_tx[txkey].append(tmp)
-                else:
-                    decoded_tx[txkey] = tx[txkey]
-            return decoded_tx
-
-        d = self._get_raw_tx(txid)
-        d.addCallback(_decode)
-        return d
 
     def get_pub_keys(self, wallet):
         cmd = known_commands['getpubkeys']
