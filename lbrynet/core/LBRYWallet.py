@@ -989,7 +989,7 @@ class LBRYcrdWallet(LBRYWallet):
     @_catch_connection_error
     def _update_name_rpc(self, txid, value, amount):
         rpc_conn = self._get_rpc_conn()
-        return rpc_conn.updateclaim(txid, value, amount)
+        return rpc_conn.updateclaim(txid, json.dumps(value), amount)
 
     @_catch_connection_error
     def _send_name_claim_rpc(self, name, value, amount):
