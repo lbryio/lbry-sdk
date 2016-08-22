@@ -172,7 +172,8 @@ class ConnectionManager(object):
         def pick_best_peer(peers):
             # TODO: Eventually rank them based on past performance/reputation. For now
             # TODO: just pick the first to which we don't have an open connection
-            log.debug("Got a list of peers to choose from: %s", str(["%s:%i" % (p.host, p.port) for p in peers]))
+
+            log.debug("Got a list of peers to choose from: %s", str(peers))
             if peers is None:
                 return None
             for peer in peers:
