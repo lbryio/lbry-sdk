@@ -59,7 +59,7 @@ class Publisher(object):
 
         d = self._check_file_path(self.file_path)
         d.addCallback(lambda _: create_lbry_file(self.session, self.lbry_file_manager,
-                                                 self.file_name, open(self.file_path)))
+                                                 self.file_name, open(self.file_path, 'rb')))
         d.addCallback(self.add_to_lbry_files)
         d.addCallback(lambda _: self._create_sd_blob())
         d.addCallback(lambda _: self._claim_name())
