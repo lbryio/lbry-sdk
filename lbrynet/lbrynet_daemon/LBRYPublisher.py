@@ -57,9 +57,14 @@ class Publisher(object):
         self.bid_amount = bid
         self.metadata = metadata
 
+        if os.name == "nt":
+            file_mode = 'rb'
+        else:
+            file_mode = 'r'
+
         d = self._check_file_path(self.file_path)
         d.addCallback(lambda _: create_lbry_file(self.session, self.lbry_file_manager,
-                                                 self.file_name, open(self.file_path, 'rb')))
+                                                 self.file_name, open(self.file_path, file_mode)))
         d.addCallback(self.add_to_lbry_files)
         d.addCallback(lambda _: self._create_sd_blob())
         d.addCallback(lambda _: self._claim_name())
