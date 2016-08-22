@@ -289,7 +289,7 @@ class LBRYWallet(object):
             d = self._do_send_many(payments_to_send)
             d.addCallback(lambda txid: log.debug("Sent transaction %s", txid))
             return d
-        log.info("There were no payments to send")
+        log.debug("There were no payments to send")
         return defer.succeed(True)
 
     def get_stream_info_for_name(self, name):
