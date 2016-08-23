@@ -14,7 +14,7 @@ init:
         mingw32-make.exe -f Makefile.mingw
         C:\Python27\python.exe C:\temp\miniupnpc-1.9\setupmingw32.py build --compiler=mingw32
         C:\Python27\python.exe C:\temp\miniupnpc-1.9\setupmingw32.py install
-- ps: Invoke-WebRequest "https://github.com/DaveA50/lbry/raw/master/packaging/windows/libs/gmpy-1.17-cp27-none-win32.whl" -OutFile "C:\temp\gmpy-1.17-cp27-none-win32.whl"
+- ps: Invoke-WebRequest "https://github.com/lbryio/lbry/raw/master/packaging/windows/libs/gmpy-1.17-cp27-none-win32.whl" -OutFile "C:\temp\gmpy-1.17-cp27-none-win32.whl"
 - ps: C:\Python27\Scripts\pip.exe install "C:\temp\gmpy-1.17-cp27-none-win32.whl"
 - ps: C:\Python27\Scripts\pip.exe install pypiwin32==219
 - ps: C:\Python27\Scripts\pip.exe install six==1.9.0
