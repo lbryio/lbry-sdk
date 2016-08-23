@@ -383,14 +383,14 @@ class LBRYFileUpload(resource.Resource):
 
             # TODO deal with pylint error in cleaner fashion than this
             try:
-                excp = WindowsError
-            except Exception as e:
+                from exceptions import WindowsError as win_except
+            except ImportError as e:
                 log.error("This shouldn't happen")
-                excp = Exception
+                win_except = Exception
 
             try:
                 os.remove(uploaded_file.name)
-            except excp as e:
+            except win_except as e:
                 pass
         else:
             shutil.move(uploaded_file.name, newpath)
