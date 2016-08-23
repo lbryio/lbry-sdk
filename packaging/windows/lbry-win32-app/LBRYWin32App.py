@@ -5,7 +5,7 @@ import sys
 import threading
 import webbrowser
 
-from twisted.internet import reactor
+from twisted.internet import reactor, error
 from twisted.web import server
 import win32api
 import win32con
@@ -235,20 +235,26 @@ class SysTrayIcon(object):
     def execute_menu_option(self, id):
         menu_action = self.menu_actions_by_id[id]
         if menu_action == self.QUIT:
-            win32gui.DestroyWindow(self.hwnd)
+            self.exit_app()
         else:
             menu_action(self)
+
+    def exit_app(self):
+        win32gui.DestroyWindow(self.hwnd)
 
 
 def main():
     def LBRYApp():
-        SysTrayIcon(icon, hover_text, menu_options, on_quit=stop)
+        return SysTrayIcon(icon, hover_text, menu_options, on_quit=stop)
 
     def openui_(sender):
         webbrowser.open(UI_ADDRESS)
 
     def replyToApplicationShouldTerminate_():
-        reactor.stop()
+        try:
+            reactor.stop()
+        except error.ReactorNotRunning:
+            log.debug('Reactor already stopped')
 
     def stop(sysTrayIcon):
         replyToApplicationShouldTerminate_()
@@ -257,6 +263,7 @@ def main():
         icon = os.path.join(os.path.dirname(sys.executable), ICON_PATH, 'lbry16.ico')
     else:
         icon = os.path.join(ICON_PATH, 'lbry16.ico')
+
     hover_text = APP_NAME
     menu_options = (('Open', icon, openui_),)
 
@@ -265,6 +272,7 @@ def main():
         sys.exit(1)
 
     systray_thread = threading.Thread(target=LBRYApp)
+    systray_thread.daemon = True
     systray_thread.start()
 
     lbry = LBRYDaemonServer()
