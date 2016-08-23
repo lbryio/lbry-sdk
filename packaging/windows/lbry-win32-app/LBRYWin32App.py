@@ -5,11 +5,8 @@ import sys
 import threading
 import webbrowser
 
-# from appdirs import user_data_dir
 from twisted.internet import reactor
 from twisted.web import server
-# from twisted.internet.cfreactor import install
-# install(runner=AppHelper.runEventLoop)
 import win32api
 import win32con
 import win32gui_struct
@@ -276,7 +273,6 @@ def main():
     lbrynet_server = server.Site(lbry.root)
     lbrynet_server.requestFactory = LBRYDaemonRequest
     reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
-    # reactor.addSystemEventTrigger("after", "shutdown", AppHelper.stopEventLoop)
     reactor.run()
 
 if __name__ == '__main__':
