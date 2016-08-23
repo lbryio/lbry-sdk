@@ -380,9 +380,17 @@ class LBRYFileUpload(resource.Resource):
         if os.name == "nt":
             shutil.copy(uploaded_file.name, newpath)
             # TODO Still need to remove the file
+
+            # TODO deal with pylint error in cleaner fashion than this
+            try:
+                excp = WindowsError
+            except Exception as e:
+                log.error("This shouldn't happen")
+                excp = Exception
+
             try:
                 os.remove(uploaded_file.name)
-            except WindowsError as e:
+            except excp as e:
                 pass
         else:
             shutil.move(uploaded_file.name, newpath)
