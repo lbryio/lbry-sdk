@@ -181,6 +181,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
             default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
             self.db_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrynet")
+            try:
+                os.makedirs(self.db_dir)
+            except OSError:
+                if not os.path.isdir(self.db_dir):
+                    raise
         elif sys.platform == "darwin":
             default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
             self.db_dir = user_data_dir("LBRY")

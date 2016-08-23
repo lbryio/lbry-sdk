@@ -1,6 +1,7 @@
 """
 Some network wide and also application specific parameters
 """
+import os
 
 
 MAX_HANDSHAKE_SIZE = 2**16
@@ -38,7 +39,10 @@ CRYPTSD_FILE_EXTENSION = ".cryptsd"
 API_INTERFACE = "localhost"
 API_ADDRESS = "lbryapi"
 API_PORT = 5279
-ICON_PATH = "app.icns"
+if os.name == "nt":
+    ICON_PATH = "icons"
+else:
+    ICON_PATH = "app.icns"
 APP_NAME = "LBRY"
 API_CONNECTION_STRING = "http://%s:%i/%s" % (API_INTERFACE, API_PORT, API_ADDRESS)
 UI_ADDRESS = "http://%s:%i" % (API_INTERFACE, API_PORT)
