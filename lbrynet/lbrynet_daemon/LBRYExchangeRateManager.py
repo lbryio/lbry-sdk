@@ -47,7 +47,7 @@ class MarketFeed(object):
         return defer.succeed(from_amount / (1.0 - self.fee))
 
     def _save_price(self, price):
-        log.info("Saving price update %f for %s" % (price, self.market))
+        log.debug("Saving price update %f for %s" % (price, self.market))
         self.rate = ExchangeRate(self.market, price, int(time.time()))
 
     def _update_price(self):
@@ -191,7 +191,7 @@ class DummyExchangeRateManager(object):
             feed.rate = ExchangeRate(feed.market, rates[feed.market]['spot'], rates[feed.market]['ts'])
 
     def convert_currency(self, from_currency, to_currency, amount):
-        log.info("Converting %f %s to %s" % (amount, from_currency, to_currency))
+        log.debug("Converting %f %s to %s" % (amount, from_currency, to_currency))
         for market in self.market_feeds:
             if market.rate.currency_pair == (from_currency, to_currency):
                 return amount * market.rate.spot

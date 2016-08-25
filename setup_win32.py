@@ -3,11 +3,24 @@
 To create local builds and distributable .msi, run the following command:
 python setup_win32.py build bdist_msi
 """
+import opcode
 import os
+import pkg_resources
 import sys
 
 from cx_Freeze import setup, Executable
 import requests.certs
+
+from lbrynet import __version__
+
+win_icon = os.path.join('packaging', 'windows', 'lbry-win32-app', 'icons', 'lbry256.ico')
+wordlist_path = pkg_resources.resource_filename('lbryum', 'wordlist')
+
+base_dir = os.path.abspath(os.path.dirname(__file__))
+
+# Allow virtualenv to find distutils of base python installation
+distutils_path = os.path.join(os.path.dirname(opcode.__file__), 'distutils')
+
 
 def find_data_file(filename):
     if getattr(sys, 'frozen', False):
@@ -19,58 +32,102 @@ def find_data_file(filename):
         data_dir = os.path.dirname(__file__)
     return os.path.join(data_dir, filename)
 
-shortcut_table = [
-    ('DesktopShortcut',  # Shortcut
-     'DesktopFolder',  # Directory
-     'LBRY',  # Name
-     'TARGETDIR',  # Component
-     '[TARGETDIR]\LBRY.exe',  # Target
-     None,  # Arguments
-     None,  # Description
-     None,  # Hotkey
-     os.path.join('lbrynet', 'lbrynet_gui', 'lbry-dark-icon.ico'),  # Icon
-     None,  # IconIndex
-     None,  # ShowCmd
-     'TARGETDIR',  # WkDir
-     ),
-    ]
+console_scripts = ['lbrynet-stdin-uploader = lbrynet.lbrynet_console.LBRYStdinUploader:launch_stdin_uploader',
+                  'lbrynet-stdout-downloader = lbrynet.lbrynet_console.LBRYStdoutDownloader:launch_stdout_downloader',
+                  'lbrynet-create-network = lbrynet.create_network:main',
+                  'lbrynet-launch-node = lbrynet.dht.node:main',
+                  'lbrynet-launch-rpc-node = lbrynet.rpc_node:main',
+                  'lbrynet-rpc-node-cli = lbrynet.node_rpc_cli:main',
+                  'lbrynet-lookup-hosts-for-hash = lbrynet.dht_scripts:get_hosts_for_hash_in_dht',
+                  'lbrynet-announce_hash_to_dht = lbrynet.dht_scripts:announce_hash_to_dht',
+                  'lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonControl:start',
+                  'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonControl:stop',
+                  'lbrynet-cli = lbrynet.lbrynet_daemon.LBRYDaemonCLI:main']
 
-# Now create the table dictionary
-msi_data = {'Shortcut': shortcut_table}
+# shortcut_table = [
+#     ('DesktopShortcut',  # Shortcut
+#      'DesktopFolder',  # Directory
+#      'LBRY 1',  # Name
+#      'TARGETDIR',  # Component
+#      '[TARGETDIR]\LBRY.exe',  # Target
+#      None,  # Arguments
+#      None,  # Description
+#      None,  # Hotkey
+#      win_icon,  # Icon
+#      None,  # IconIndex
+#      None,  # ShowCmd
+#      'TARGETDIR',  # WkDir
+#      ),
+#     ]
+#
+# # Now create the table dictionary
+# msi_data = {'Shortcut': shortcut_table}
 
 bdist_msi_options = {
-    'upgrade_code': '{66620F3A-DC3A-11E2-B341-002219E9B01F}',
+    # 'upgrade_code': '{66620F3A-DC3A-11E2-B341-002219E9B01F}',
     'add_to_path': False,
     'initial_target_dir': r'[LocalAppDataFolder]\LBRY',
-    'data': msi_data,
+    # 'data': msi_data,
     }
 
 build_exe_options = {
     'include_msvcr': True,
     'includes': [],
-    'packages': ['six', 'os', 'twisted', 'miniupnpc', 'unqlite', 'seccure',
-                 'requests', 'bitcoinrpc', 'txjsonrpc', 'win32api', 'Crypto',
-                 'gmpy', 'yapsy', 'lbryum', 'google.protobuf'],
-    'excludes': ['zope.interface._zope_interface_coptimizations'],
-    'include_files': [os.path.join('lbrynet', 'lbrynet_gui', 'close.gif'),
-                      os.path.join('lbrynet', 'lbrynet_gui', 'close1.png'),
-                      os.path.join('lbrynet', 'lbrynet_gui', 'close2.gif'),
-                      os.path.join('lbrynet', 'lbrynet_gui', 'drop_down.gif'),
-                      os.path.join('lbrynet', 'lbrynet_gui', 'hide_options.gif'),
-                      os.path.join('lbrynet', 'lbrynet_gui', 'lbry-dark-242x80.gif'),
-                      os.path.join('lbrynet', 'lbrynet_gui', 'lbry-dark-icon.ico'),
-                      os.path.join('lbrynet', 'lbrynet_gui', 'lbry-dark-icon.xbm'),
-                      os.path.join('lbrynet', 'lbrynet_gui', 'show_options.gif'),
-                      os.path.join('lbrycrdd.exe'),  # Not included in repo
-                      os.path.join('lbrycrd-cli.exe'),  # Not included in repo
-                      (requests.certs.where(), 'cacert.pem'),
+    'packages': ['cython',
+                 'twisted',
+                 'yapsy',
+                 'appdirs',
+                 'argparse',
+                 'base58',
+                 'colorama',
+                 'cx_Freeze',
+                 'dns',
+                 'ecdsa',
+                 'gmpy',
+                 'googlefinance',
+                 'jsonrpc',
+                 'jsonrpclib',
+                 'lbryum',
+                 'loggly',
+                 'miniupnpc',
+                 'pbkdf2',
+                 'google.protobuf',
+                 'Crypto',
+                 'bitcoinrpc',
+                 'win32api',
+                 'qrcode',
+                 'requests',
+                 'requests_futures',
+                 'seccure',
+                 'simplejson',
+                 'six',
+                 'aes',
+                 'txjsonrpc',
+                 'unqlite',
+                 'wsgiref',
+                 'zope.interface',
+                 'os',
+                 'pkg_resources'
+                 ],
+    'excludes': ['distutils', 'collections.sys', 'collections._weakref', 'collections.abc',
+                 'Tkinter', 'tk', 'tcl', 'PyQt4', 'nose', 'mock'
+                 'zope.interface._zope_interface_coptimizations'],
+    'include_files': [(distutils_path, 'distutils'), (requests.certs.where(), 'cacert.pem'),
+                      (os.path.join('packaging', 'windows', 'lbry-win32-app', 'icons', 'lbry16.ico'),
+                       os.path.join('icons', 'lbry16.ico')),
+                      (os.path.join(wordlist_path, 'chinese_simplified.txt'),
+                       os.path.join('wordlist', 'chinese_simplified.txt')),
+                      (os.path.join(wordlist_path, 'english.txt'), os.path.join('wordlist', 'english.txt')),
+                      (os.path.join(wordlist_path, 'japanese.txt'), os.path.join('wordlist', 'japanese.txt')),
+                      (os.path.join(wordlist_path, 'portuguese.txt'), os.path.join('wordlist', 'portuguese.txt')),
+                      (os.path.join(wordlist_path, 'spanish.txt'), os.path.join('wordlist', 'spanish.txt'))
                       ],
-    'namespace_packages': ['zope']}
+    'namespace_packages': ['zope', 'google']}
 
 exe = Executable(
-    script=os.path.join('lbrynet', 'lbrynet_gui', 'gui.py'),
+    script=os.path.join('packaging', 'windows', 'lbry-win32-app', 'LBRYWin32App.py'),
     base='Win32GUI',
-    icon=os.path.join('lbrynet', 'lbrynet_gui', 'lbry-dark-icon.ico'),
+    icon=win_icon,
     compress=True,
     shortcutName='LBRY',
     shortcutDir='DesktopFolder',
@@ -80,11 +137,12 @@ exe = Executable(
 
 setup(
     name='LBRY',
-    version='0.0.4',
-    description='A fully decentralized network for distributing data',
+    version=__version__,
+    description='A decentralized media library and marketplace',
     url='lbry.io',
-    author='',
+    author='LBRY, Inc.',
     keywords='LBRY',
+    data_files=[],
     options={'build_exe': build_exe_options,
              'bdist_msi': bdist_msi_options},
     executables=[exe],

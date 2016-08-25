@@ -377,7 +377,23 @@ class LBRYFileUpload(resource.Resource):
         # Move to a new temporary dir and restore the original file name
         newdirpath = tempfile.mkdtemp()
         newpath = os.path.join(newdirpath, origfilename)
-        shutil.move(uploaded_file.name, newpath)
+        if os.name == "nt":
+            shutil.copy(uploaded_file.name, newpath)
+            # TODO Still need to remove the file
+
+            # TODO deal with pylint error in cleaner fashion than this
+            try:
+                from exceptions import WindowsError as win_except
+            except ImportError as e:
+                log.error("This shouldn't happen")
+                win_except = Exception
+
+            try:
+                os.remove(uploaded_file.name)
+            except win_except as e:
+                pass
+        else:
+            shutil.move(uploaded_file.name, newpath)
         self._api.uploaded_temp_files.append(newpath)
 
         return json.dumps(newpath)

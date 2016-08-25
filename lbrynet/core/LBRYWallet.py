@@ -289,7 +289,7 @@ class LBRYWallet(object):
             d = self._do_send_many(payments_to_send)
             d.addCallback(lambda txid: log.debug("Sent transaction %s", txid))
             return d
-        log.info("There were no payments to send")
+        log.debug("There were no payments to send")
         return defer.succeed(True)
 
     def get_stream_info_for_name(self, name):
@@ -487,6 +487,33 @@ class LBRYWallet(object):
     def get_tx(self, txid):
         d = self._get_raw_tx(txid)
         d.addCallback(self._get_decoded_tx)
+        return d
+
+    def get_history(self):
+        d = self._get_history()
+        return d
+
+    def get_tx_json(self, txid):
+        def _decode(raw_tx):
+            tx = Transaction(raw_tx).deserialize()
+            decoded_tx = {}
+            for txkey in tx.keys():
+                if isinstance(tx[txkey], list):
+                    decoded_tx[txkey] = []
+                    for i in tx[txkey]:
+                        tmp = {}
+                        for k in i.keys():
+                            if isinstance(i[k], Decimal):
+                                tmp[k] = float(i[k] / 1e8)
+                            else:
+                                tmp[k] = i[k]
+                        decoded_tx[txkey].append(tmp)
+                else:
+                    decoded_tx[txkey] = tx[txkey]
+            return decoded_tx
+
+        d = self._get_raw_tx(txid)
+        d.addCallback(_decode)
         return d
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
@@ -688,6 +715,9 @@ class LBRYWallet(object):
     def _get_balance_for_address(self, address):
         return defer.fail(NotImplementedError())
 
+    def _get_history(self):
+        return defer.fail(NotImplementedError())
+
     def _start(self):
         pass
 
@@ -822,6 +852,9 @@ class LBRYcrdWallet(LBRYWallet):
 
     def _get_value_for_name(self, name):
         return threads.deferToThread(self._get_value_for_name_rpc, name)
+
+    def _get_history(self):
+        return threads.deferToThread(self._list_transactions_rpc)
 
     def _get_rpc_conn(self):
         return AuthServiceProxy(self.rpc_conn_string)
@@ -979,7 +1012,7 @@ class LBRYcrdWallet(LBRYWallet):
     @_catch_connection_error
     def _update_name_rpc(self, txid, value, amount):
         rpc_conn = self._get_rpc_conn()
-        return rpc_conn.updateclaim(txid, value, amount)
+        return rpc_conn.updateclaim(txid, json.dumps(value), amount)
 
     @_catch_connection_error
     def _send_name_claim_rpc(self, name, value, amount):
@@ -1006,6 +1039,11 @@ class LBRYcrdWallet(LBRYWallet):
     def _get_best_blockhash_rpc(self):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.getbestblockhash()
+
+    @_catch_connection_error
+    def _list_transactions_rpc(self):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.listtransactions()
 
     @_catch_connection_error
     def _stop_rpc(self):
@@ -1294,33 +1332,10 @@ class LBRYumWallet(LBRYWallet):
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func)
 
-    def get_history(self):
+    def _get_history(self):
         cmd = known_commands['history']
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func)
-
-    def get_tx_json(self, txid):
-        def _decode(raw_tx):
-            tx = Transaction(raw_tx).deserialize()
-            decoded_tx = {}
-            for txkey in tx.keys():
-                if isinstance(tx[txkey], list):
-                    decoded_tx[txkey] = []
-                    for i in tx[txkey]:
-                        tmp = {}
-                        for k in i.keys():
-                            if isinstance(i[k], Decimal):
-                                tmp[k] = float(i[k] / 1e8)
-                            else:
-                                tmp[k] = i[k]
-                        decoded_tx[txkey].append(tmp)
-                else:
-                    decoded_tx[txkey] = tx[txkey]
-            return decoded_tx
-
-        d = self._get_raw_tx(txid)
-        d.addCallback(_decode)
-        return d
 
     def get_pub_keys(self, wallet):
         cmd = known_commands['getpubkeys']
