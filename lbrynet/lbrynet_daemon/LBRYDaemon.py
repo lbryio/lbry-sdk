@@ -2454,12 +2454,17 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallbacks(lambda _: self._render_response(True, OK_CODE), lambda err: self._render_response(err.getTraceback(), OK_CODE))
         return d
 
-    def jsonrpc_get_blobs(self):
+    def jsonrpc_get_blob_hashes(self):
         """
-        return all blobs
+        Returns all blob hashes
+
+        Args:
+            None
+        Returns:
+            list of blob hashes
         """
 
-        d = defer.succeed(self.session.blob_manager.blobs)
+        d = self.session.blob_manager.get_all_verified_blobs()
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
