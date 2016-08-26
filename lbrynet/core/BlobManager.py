@@ -67,6 +67,9 @@ class BlobManager(DHTHashSupplier):
     def blob_paid_for(self, blob_hash, amount):
         pass
 
+    def get_all_verified_blobs(self):
+        pass
+
 
 class DiskBlobManager(BlobManager):
     """This class stores blobs on the hard disk"""
@@ -78,7 +81,7 @@ class DiskBlobManager(BlobManager):
         self.blob_type = BlobFile
         self.blob_creator_type = BlobFileCreator
         self.blobs = {}
-        self.blob_hashes_to_delete = {}  # {blob_hash: being_deleted (True/False)}
+        self.blob_hashes_to_delete = {} # {blob_hash: being_deleted (True/False)}
         self._next_manage_call = None
 
     def setup(self):
@@ -176,6 +179,11 @@ class DiskBlobManager(BlobManager):
 
     def check_consistency(self):
         return self._check_consistency()
+
+    def get_all_verified_blobs(self):
+        d = self._get_all_verified_blob_hashes()
+        d.addCallback(self.completed_blobs)
+        return d
 
     def _manage(self):
         from twisted.internet import reactor
@@ -461,6 +469,10 @@ class TempBlobManager(BlobManager):
     def completed_blobs(self, blobs_to_check):
         blobs = [b.blob_hash for b in self.blobs.itervalues() if b.blob_hash in blobs_to_check and b.is_validated()]
         return defer.succeed(blobs)
+
+    def get_all_verified_blobs(self):
+        d = self.completed_blobs(self.blobs)
+        return d
 
     def hashes_to_announce(self):
         now = time.time()
