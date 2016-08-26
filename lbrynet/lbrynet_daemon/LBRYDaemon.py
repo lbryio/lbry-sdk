@@ -1359,10 +1359,28 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         reflector_server = random.choice(REFLECTOR_SERVERS)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Start reflector client")
-        factory = reflector.ClientFactory(
+        factory = reflector.LBRYFileReflectorClientFactory(
             self.session.blob_manager,
             self.lbry_file_manager.stream_info_manager,
             stream_hash
+        )
+        d = reactor.resolve(reflector_address)
+        d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
+        d.addCallback(lambda _: factory.finished_deferred)
+        return d
+
+    def _reflect_blobs(self, blob_hashes):
+        if not blob_hashes:
+            return defer.fail(Exception("no lbry file given to reflect"))
+
+        log.info("Reflecting %i blobs" % len(blob_hashes))
+
+        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_address, reflector_port = reflector_server[0], reflector_server[1]
+        log.info("Start reflector client")
+        factory = reflector.LBRYBlobReflectorClient(
+            self.session.blob_manager,
+            blob_hashes
         )
         d = reactor.resolve(reflector_address)
         d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
@@ -2444,7 +2462,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Reflect a stream
 
         Args:
-            sd_hash
+            sd_hash: sd_hash of lbry file
         Returns:
             True or traceback
         """
@@ -2466,6 +2484,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         d = self.session.blob_manager.get_all_verified_blobs()
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_reflect_all_blobs(self):
+        """
+        Reflects all saved blobs
+
+        Args:
+            None
+        Returns:
+            True
+        """
+
+        d = self.session.blob_manager.get_all_verified_blobs()
+        d.addCallback(self._reflect_blobs)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
