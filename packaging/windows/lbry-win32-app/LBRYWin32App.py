@@ -4,12 +4,13 @@ import socket
 import sys
 import threading
 import webbrowser
-
-from twisted.internet import reactor, error
-from twisted.web import server
 import win32api
+
 import win32con
 import win32gui_struct
+from jsonrpc.proxy import JSONRPCProxy
+from twisted.internet import reactor, error
+from twisted.web import server
 
 try:
     import winxpgui as win32gui
@@ -18,7 +19,8 @@ except ImportError:
 
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
-from lbrynet.conf import UI_ADDRESS
+from lbrynet.conf import UI_ADDRESS, API_CONNECTION_STRING
+from lbrynet.packaging.LBRYURIHandler import LBRYURIHandler
 
 
 if getattr(sys, 'frozen', False) and os.name == "nt":
@@ -243,7 +245,7 @@ class SysTrayIcon(object):
         win32gui.DestroyWindow(self.hwnd)
 
 
-def main():
+def main(lbry_name=None):
     def LBRYApp():
         return SysTrayIcon(icon, hover_text, menu_options, on_quit=stop)
 
@@ -277,11 +279,26 @@ def main():
 
     lbry = LBRYDaemonServer()
     d = lbry.start()
-    d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
+    d.addCallback(lambda _: LBRYURIHandler.open_address(lbry_name))
     lbrynet_server = server.Site(lbry.root)
     lbrynet_server.requestFactory = LBRYDaemonRequest
     reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
     reactor.run()
 
 if __name__ == '__main__':
-    main()
+    lbry_daemon = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+
+    try:
+        started_daemon = lbry_daemon.is_running()
+    except:
+        started_daemon = False
+
+    try:
+        lbry_name = LBRYURIHandler.parse_name(sys.argv[1])
+    except IndexError:
+        lbry_name = None
+
+    if started_daemon:
+        LBRYURIHandler.open_address(lbry_name)
+    else:
+        main(lbry_name)

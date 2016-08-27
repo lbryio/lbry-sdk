@@ -13,6 +13,8 @@ import requests.certs
 
 from lbrynet import __version__
 
+name = 'LBRY'
+description = 'A decentralized media library and marketplace'
 win_icon = os.path.join('packaging', 'windows', 'lbry-win32-app', 'icons', 'lbry256.ico')
 wordlist_path = pkg_resources.resource_filename('lbryum', 'wordlist')
 
@@ -47,27 +49,27 @@ console_scripts = ['lbrynet-stdin-uploader = lbrynet.lbrynet_console.LBRYStdinUp
 # shortcut_table = [
 #     ('DesktopShortcut',  # Shortcut
 #      'DesktopFolder',  # Directory
-#      'LBRY 1',  # Name
+#      name,  # Name
 #      'TARGETDIR',  # Component
-#      '[TARGETDIR]\LBRY.exe',  # Target
+#      '[TARGETDIR]\{0}.exe'.format(name),  # Target
 #      None,  # Arguments
-#      None,  # Description
+#      description,  # Description
 #      None,  # Hotkey
-#      win_icon,  # Icon
+#      win_icon,  # Icon (doesn't work for some reason?)
 #      None,  # IconIndex
 #      None,  # ShowCmd
 #      'TARGETDIR',  # WkDir
 #      ),
 #     ]
 #
-# # Now create the table dictionary
 # msi_data = {'Shortcut': shortcut_table}
 
 bdist_msi_options = {
-    # 'upgrade_code': '{66620F3A-DC3A-11E2-B341-002219E9B01F}',
+    'upgrade_code': '{18c0e933-ad08-44e8-a413-1d0ed624c100}',
     'add_to_path': False,
-    'initial_target_dir': r'[LocalAppDataFolder]\LBRY',
-    # 'data': msi_data,
+    # Default install path is 'C:\Program Files\' for 32-bit or 'C:\Program Files (x86)\' for 64-bit
+    # 'initial_target_dir': r'[LocalAppDataFolder]\{0}'.format(name),
+    # 'data': msi_data
     }
 
 build_exe_options = {
@@ -129,16 +131,16 @@ exe = Executable(
     base='Win32GUI',
     icon=win_icon,
     compress=True,
-    shortcutName='LBRY',
+    shortcutName=name,
     shortcutDir='DesktopFolder',
-    targetName='LBRY.exe'
+    targetName='{0}.exe'.format(name)
     # targetDir="LocalAppDataFolder"
     )
 
 setup(
-    name='LBRY',
+    name=name,
     version=__version__,
-    description='A decentralized media library and marketplace',
+    description=name + ": " + description,
     url='lbry.io',
     author='LBRY, Inc.',
     keywords='LBRY',
