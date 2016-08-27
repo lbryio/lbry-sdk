@@ -1,10 +1,10 @@
 #### Installing the LBRY app
 --------------------------
 
-Installing LBRY is simple. You can get a dmg installer for OS X (Mavericks and up) or a .deb for linux [here](https://lbry.io/get). 
+Installing LBRY is simple. You can get a dmg installer for OS X or a .deb for linux [here](https://github.com/lbryio/lbry/releases/latest). 
 
 ##### OS X
-Just drag and drop LBRY.app into your applications folder (replacing any older versions). When it's running you'll have a LBRY icon in your status bar.
+Just drag and drop LBRY.app into your applications folder (replacing any older versions). When it's running you'll have a LBRY icon in your status bar and the browser will open to the UI.
 
 ##### Linux
 Double click the .deb file and follow the prompts. The app can be started by searching "LBRY", and it can be turned off by clicking the red 'x' in the browser interface.
@@ -17,7 +17,7 @@ On both systems you can also open the UI while the app is running by going to lb
 --------------------------
 
 ##### OS X
-You can install LBRY command line by running `curl -sL https://rawgit.com/lbryio/lbry-setup/master/lbry_setup_osx.sh | sudo bash` in a terminal. This script will install lbrynet and its dependancies, as well as the app. You can start LBRY by either starting the app or by running `lbrynet-daemon` from a terminal. 
+You can install LBRY command line by running `curl -sL https://raw.githubusercontent.com/lbryio/lbry/master/packaging/osx/install_lbry_source.sh | sudo bash` in a terminal. This script will install lbrynet and its dependencies. You can start LBRY by running `lbrynet-daemon` from a terminal. 
 
 ##### Linux
 On Ubuntu or Mint you can install the prerequisites and lbrynet by running
