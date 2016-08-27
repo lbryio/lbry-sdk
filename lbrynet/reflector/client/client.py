@@ -329,6 +329,7 @@ class LBRYBlobReflectorClient(Protocol):
     def send_handshake(self):
         log.debug('Sending handshake')
         self.write(json.dumps({'version': 0}))
+        return defer.succeed(None)
 
     def parse_response(self, buff):
         try:

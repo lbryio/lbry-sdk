@@ -1378,7 +1378,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         reflector_server = random.choice(REFLECTOR_SERVERS)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Start reflector client")
-        factory = reflector.LBRYBlobReflectorClient(
+        factory = reflector.LBRYBlobReflectorClientFactory(
             self.session.blob_manager,
             blob_hashes
         )
