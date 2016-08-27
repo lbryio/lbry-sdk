@@ -78,7 +78,7 @@ class Publisher(object):
         reflector_server = random.choice(REFLECTOR_SERVERS)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Reflecting new publication")
-        factory = reflector.LBRYFileReflectorClientFactory(
+        factory = reflector.ClientFactory(
             self.session.blob_manager,
             self.lbry_file_manager.stream_info_manager,
             self.stream_hash
