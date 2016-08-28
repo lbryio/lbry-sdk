@@ -47,11 +47,7 @@ init:
 - ps: C:\Python27\Scripts\pip.exe install base58==0.2.2
 - ps: C:\Python27\Scripts\pip.exe install googlefinance==0.7
 - ps: C:\Python27\Scripts\pip.exe install git+https://github.com/lbryio/lbryum.git
-- ps: cd C:\temp
-- ps: Invoke-WebRequest "https://github.com/lbryio/lbry/archive/v0.4.0.tar.gz" -OutFile "C:\temp\lbrynet-v0-4-0.tar.gz"
-- ps: 7z e lbrynet-v0-4-0.tar.gz
-- ps: 7z x lbrynet-v0-4-0.tar
-- ps: cd C:\temp\lbrynet-v0-4-0
+- ps: cd C:\projects\lbry
 
 build_script:
 - cmd: C:\Python27\python.exe setup_win32.py build bdist_msi
