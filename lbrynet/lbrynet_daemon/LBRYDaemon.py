@@ -1368,6 +1368,24 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: factory.finished_deferred)
         return d
 
+    def _reflect_blobs(self, blob_hashes):
+        if not blob_hashes:
+            return defer.fail(Exception("no lbry file given to reflect"))
+
+        log.info("Reflecting %i blobs" % len(blob_hashes))
+
+        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_address, reflector_port = reflector_server[0], reflector_server[1]
+        log.info("Start reflector client")
+        factory = reflector.BlobClientFactory(
+            self.session.blob_manager,
+            blob_hashes
+        )
+        d = reactor.resolve(reflector_address)
+        d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
+        d.addCallback(lambda _: factory.finished_deferred)
+        return d
+
     def _log_to_slack(self, msg):
         URL = "https://hooks.slack.com/services/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"
         msg = platform.platform() + ": " + base58.b58encode(self.lbryid)[:20] + ", " + msg
@@ -2443,7 +2461,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Reflect a stream
 
         Args:
-            sd_hash
+            sd_hash: sd_hash of lbry file
         Returns:
             True or traceback
         """
@@ -2465,6 +2483,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         d = self.session.blob_manager.get_all_verified_blobs()
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_reflect_all_blobs(self):
+        """
+        Reflects all saved blobs
+
+        Args:
+            None
+        Returns:
+            True
+        """
+
+        d = self.session.blob_manager.get_all_verified_blobs()
+        d.addCallback(self._reflect_blobs)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
