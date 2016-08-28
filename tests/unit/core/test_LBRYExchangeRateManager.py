@@ -1,5 +1,5 @@
 import mock
-from lbrynet.core import LBRYMetadata
+from lbrynet.metadata import LBRYMetadata
 from lbrynet.lbrynet_daemon import LBRYExchangeRateManager
 
 from twisted.trial import unittest
