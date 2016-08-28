@@ -4,8 +4,8 @@ import socket
 import sys
 import threading
 import webbrowser
-import win32api
 
+import win32api
 import win32con
 import win32gui_struct
 from jsonrpc.proxy import JSONRPCProxy
@@ -20,7 +20,7 @@ except ImportError:
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
 from lbrynet.conf import UI_ADDRESS, API_CONNECTION_STRING
-from lbrynet.packaging.LBRYURIHandler import LBRYURIHandler
+from packaging.uri_handler.LBRYURIHandler import LBRYURIHandler
 
 
 if getattr(sys, 'frozen', False) and os.name == "nt":
