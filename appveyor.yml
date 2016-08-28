@@ -57,3 +57,5 @@ artifacts:
   name: msi
 - path: build/exe.win32-2.7/
   name: lbry-portable
+- path: packaging/windows/lbry-win32-app/LBRY-URI.reg
+  name: LBRY-URI
