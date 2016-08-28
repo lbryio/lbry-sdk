@@ -10,7 +10,7 @@ from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.core.PaymentRateManager import PaymentRateManager
-from lbrynet.core.LBRYMetadata import Metadata, CURRENT_METADATA_VERSION
+from lbrynet.metadata.LBRYMetadata import Metadata
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet import reflector
 from lbrynet.conf import LOG_FILE_NAME, REFLECTOR_SERVERS
@@ -143,8 +143,8 @@ class Publisher(object):
 
     def _update_metadata(self):
         filename = os.path.join(self.lbry_file.download_directory, self.lbry_file.file_name)
-        self.metadata['content-type'] = get_content_type(filename)
-        self.metadata['ver'] = CURRENT_METADATA_VERSION        
+        self.metadata['content_type'] = get_content_type(filename)
+        self.metadata['ver'] = Metadata.current_version
 
     def _show_publish_error(self, err):
         log.info(err.getTraceback())

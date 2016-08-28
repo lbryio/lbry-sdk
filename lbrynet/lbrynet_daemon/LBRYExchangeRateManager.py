@@ -6,7 +6,7 @@ import googlefinance
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 
-from lbrynet.core.LBRYMetadata import LBRYFeeValidator
+from lbrynet.metadata.LBRYFee import LBRYFeeValidator
 
 log = logging.getLogger(__name__)
 

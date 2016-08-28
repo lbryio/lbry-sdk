@@ -40,10 +40,9 @@ from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
-from lbrynet.core.LBRYMetadata import Metadata
+from lbrynet.metadata.LBRYMetadata import Metadata, verify_name_characters
 from lbrynet.core import log_support
 from lbrynet.core import utils
-from lbrynet.core.LBRYMetadata import verify_name_characters
 from lbrynet.core.utils import generate_id
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, \
@@ -1369,6 +1368,24 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: factory.finished_deferred)
         return d
 
+    def _reflect_blobs(self, blob_hashes):
+        if not blob_hashes:
+            return defer.fail(Exception("no lbry file given to reflect"))
+
+        log.info("Reflecting %i blobs" % len(blob_hashes))
+
+        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_address, reflector_port = reflector_server[0], reflector_server[1]
+        log.info("Start reflector client")
+        factory = reflector.BlobClientFactory(
+            self.session.blob_manager,
+            blob_hashes
+        )
+        d = reactor.resolve(reflector_address)
+        d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
+        d.addCallback(lambda _: factory.finished_deferred)
+        return d
+
     def _log_to_slack(self, msg):
         URL = "https://hooks.slack.com/services/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"
         msg = platform.platform() + ": " + base58.b58encode(self.lbryid)[:20] + ", " + msg
@@ -1785,6 +1802,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                                 stream_info=params.stream_info,
                                 file_name=params.file_name,
                                 wait_for_write=params.wait_for_write)
+        # TODO: downloading can timeout.  Not sure what to do when that happens
         d.addCallback(get_output_callback(params))
         d.addCallback(lambda message: self._render_response(message, OK_CODE))
         return d
@@ -2443,7 +2461,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Reflect a stream
 
         Args:
-            sd_hash
+            sd_hash: sd_hash of lbry file
         Returns:
             True or traceback
         """
@@ -2454,12 +2472,32 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallbacks(lambda _: self._render_response(True, OK_CODE), lambda err: self._render_response(err.getTraceback(), OK_CODE))
         return d
 
-    def jsonrpc_get_blobs(self):
+    def jsonrpc_get_blob_hashes(self):
         """
-        return all blobs
+        Returns all blob hashes
+
+        Args:
+            None
+        Returns:
+            list of blob hashes
         """
 
-        d = defer.succeed(self.session.blob_manager.blobs)
+        d = self.session.blob_manager.get_all_verified_blobs()
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
+    def jsonrpc_reflect_all_blobs(self):
+        """
+        Reflects all saved blobs
+
+        Args:
+            None
+        Returns:
+            True
+        """
+
+        d = self.session.blob_manager.get_all_verified_blobs()
+        d.addCallback(self._reflect_blobs)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
@@ -2558,6 +2596,13 @@ class _DownloadNameHelper(object):
     def _get_stream(self, stream_info):
         d = self.daemon.add_stream(
             self.name, self.timeout, self.download_directory, self.file_name, stream_info)
+
+        def _raiseErrorOnTimeout(args):
+            was_successful, _, _ = args
+            if not was_successful:
+                raise Exception('What am I supposed to do with a timed-out downloader?')
+        d.addCallback(_raiseErrorOnTimeout)
+
         if self.wait_for_write:
             d.addCallback(lambda _: self._wait_for_write())
         d.addCallback(lambda _: self.daemon.streams[self.name].downloader)

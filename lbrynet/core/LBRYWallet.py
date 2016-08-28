@@ -25,7 +25,7 @@ from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHand
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.LBRYMetadata import Metadata
+from lbrynet.metadata.LBRYMetadata import Metadata
 
 log = logging.getLogger(__name__)
 alert = logging.getLogger("lbryalert." + __name__)
@@ -322,7 +322,7 @@ class LBRYWallet(object):
                 assert k in r, "getvalueforname response missing field %s" % k
 
         def _log_success(claim_id):
-            log.info("lbry://%s complies with %s, claimid: %s", name, metadata.meta_version, claim_id)
+            log.info("lbry://%s complies with %s, claimid: %s", name, metadata.version, claim_id)
             return defer.succeed(None)
 
         if 'error' in result:
@@ -377,7 +377,7 @@ class LBRYWallet(object):
             result = {}
             try:
                 metadata = Metadata(json.loads(claim['value']))
-                meta_ver = metadata.meta_version
+                meta_ver = metadata.version
                 sd_hash = metadata['sources']['lbry_sd_hash']
                 d = self._save_name_metadata(name, txid, sd_hash)
             except AssertionError:
@@ -1256,7 +1256,7 @@ class LBRYumWallet(LBRYWallet):
     def _send_name_claim_update(self, name, claim_id, txid, value, amount):
         def send_claim_update(address):
             decoded_claim_id = claim_id.decode('hex')[::-1]
-            metadata = Metadata(value).as_json()
+            metadata = json.dumps(Metadata(value))
             log.info("updateclaim %s %s %f %s %s '%s'", txid, address, amount, name, decoded_claim_id.encode('hex'), json.dumps(metadata))
             cmd = known_commands['updateclaim']
             func = getattr(self.cmd_runner, cmd.name)

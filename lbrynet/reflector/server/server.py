@@ -3,7 +3,6 @@ from twisted.python import failure
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ServerFactory
 import json
-
 from lbrynet.core.utils import is_valid_blobhash
 
 
