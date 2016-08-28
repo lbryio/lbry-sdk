@@ -1,5 +1,11 @@
 version: 1.0.{build}
 
+branches:
+  only:
+  - /appveyor
+
+clone_folder: c:\projects\lbry
+
 init:
 - ps: $env:Path += ";C:\MinGW\bin\"
 - ps: gcc --version
@@ -10,10 +16,9 @@ init:
 - ps: 7z e miniupnpc-1.9.tar.gz
 - ps: 7z x miniupnpc-1.9.tar
 - ps: cd C:\temp\miniupnpc-1.9
-- ps: |
-        mingw32-make.exe -f Makefile.mingw
-        C:\Python27\python.exe C:\temp\miniupnpc-1.9\setupmingw32.py build --compiler=mingw32
-        C:\Python27\python.exe C:\temp\miniupnpc-1.9\setupmingw32.py install
+- ps: mingw32-make.exe -f Makefile.mingw
+- ps: C:\Python27\python.exe C:\temp\miniupnpc-1.9\setupmingw32.py build --compiler=mingw32
+- ps: C:\Python27\python.exe C:\temp\miniupnpc-1.9\setupmingw32.py install
 - ps: Invoke-WebRequest "https://github.com/lbryio/lbry/raw/master/packaging/windows/libs/gmpy-1.17-cp27-none-win32.whl" -OutFile "C:\temp\gmpy-1.17-cp27-none-win32.whl"
 - ps: C:\Python27\Scripts\pip.exe install "C:\temp\gmpy-1.17-cp27-none-win32.whl"
 - ps: C:\Python27\Scripts\pip.exe install pypiwin32==219
@@ -47,10 +52,12 @@ init:
 - ps: C:\Python27\Scripts\pip.exe install base58==0.2.2
 - ps: C:\Python27\Scripts\pip.exe install googlefinance==0.7
 - ps: C:\Python27\Scripts\pip.exe install git+https://github.com/lbryio/lbryum.git
+- ps: cd C:\projects\lbry
 
 build_script:
-- cmd: cd C:\projects\lbry
 - cmd: C:\Python27\python.exe setup_win32.py build bdist_msi
+
+test: off
 
 artifacts:
 - path: dist/*.msi
