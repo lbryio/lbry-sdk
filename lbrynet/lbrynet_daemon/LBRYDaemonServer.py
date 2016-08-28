@@ -255,6 +255,7 @@ class LBRYFileStreamer(object):
         self._request.setResponseCode(206)
         self._request.setHeader('accept-ranges', 'bytes')
         self._request.setHeader('content-type', self._content_type)
+        self._request.setHeader("Content-Security-Policy", "sandbox")
 
         self.resumeProducing()
 
@@ -339,6 +340,7 @@ class HostedLBRYFile(resource.Resource):
     #     return d
 
     def render_GET(self, request):
+        request.setHeader("Content-Security-Policy", "sandbox")
         if 'name' in request.args.keys():
             if request.args['name'][0] != 'lbry' and request.args['name'][0] not in self._api.waiting_on.keys():
                 d = self._api._download_name(request.args['name'][0])
