@@ -4,6 +4,8 @@ Some network wide and also application specific parameters
 import os
 
 
+IS_DEVELOPMENT_VERSION = True
+
 MAX_HANDSHAKE_SIZE = 2**16
 MAX_REQUEST_SIZE = 2**16
 MAX_BLOB_REQUEST_SIZE = 2**16
@@ -25,9 +27,13 @@ KNOWN_DHT_NODES = [('104.236.42.182', 4000),
 
 POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2424'
 #POINTTRADER_SERVER = 'http://127.0.0.1:2424'
-SEARCH_SERVERS = ["http://lighthouse1.lbry.io:50005",
-                  "http://lighthouse2.lbry.io:50005",
-                  "http://lighthouse3.lbry.io:50005"]
+
+if IS_DEVELOPMENT_VERSION:
+    SEARCH_SERVERS = ["http://107.170.207.64:50005"]
+else:
+    SEARCH_SERVERS = ["http://lighthouse1.lbry.io:50005",
+                      "http://lighthouse2.lbry.io:50005",
+                      "http://lighthouse3.lbry.io:50005"]
 
 REFLECTOR_SERVERS = [("reflector.lbry.io", 5566)]
 
