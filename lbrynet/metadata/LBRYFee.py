@@ -14,7 +14,7 @@ def verify_supported_currency(fee):
 
 
 def verify_amount(x):
-    return isinstance(x, float) and x > 0
+    return isinstance(x, float) or isinstance(x, int) and x > 0
 
 
 class LBCFeeValidator(Validator):
