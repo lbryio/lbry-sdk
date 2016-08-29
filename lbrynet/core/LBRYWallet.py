@@ -431,10 +431,10 @@ class LBRYWallet(object):
         def _claim_or_update(claim, metadata, _bid):
             if not claim:
                 log.info("No claim yet, making a new one")
-                return self._send_name_claim(name, metadata.as_json(), _bid)
+                return self._send_name_claim(name, json.dumps(metadata), _bid)
             if not claim['is_mine']:
                 log.info("Making a contesting claim")
-                return self._send_name_claim(name, metadata.as_json(), _bid)
+                return self._send_name_claim(name, json.dump(metadata), _bid)
             else:
                 log.info("Updating over own claim")
                 d = self.update_metadata(metadata, claim['value'])
