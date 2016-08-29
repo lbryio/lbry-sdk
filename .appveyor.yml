@@ -106,7 +106,7 @@ install:
 build_script:
 - cmd: C:\Python27\python.exe setup_win32.py build bdist_msi
 
-test:
+test_script:
 - ps: >-
     C:\Python27\Scripts\pip.exe install mock
 
