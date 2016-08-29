@@ -431,10 +431,10 @@ class LBRYWallet(object):
         def _claim_or_update(claim, metadata, _bid):
             if not claim:
                 log.info("No claim yet, making a new one")
-                return self._send_name_claim(name, json.dumps(metadata), _bid)
+                return self._send_name_claim(name, metadata, _bid)
             if not claim['is_mine']:
                 log.info("Making a contesting claim")
-                return self._send_name_claim(name, json.dump(metadata), _bid)
+                return self._send_name_claim(name, metadata, _bid)
             else:
                 log.info("Updating over own claim")
                 d = self.update_metadata(metadata, claim['value'])
@@ -1018,7 +1018,7 @@ class LBRYcrdWallet(LBRYWallet):
     def _send_name_claim_rpc(self, name, value, amount):
         rpc_conn = self._get_rpc_conn()
         try:
-            return str(rpc_conn.claimname(name, value, amount))
+            return str(rpc_conn.claimname(name, json.dumps(value), amount))
         except JSONRPCException as e:
             if 'message' in e.error and e.error['message'] == "Insufficient funds":
                 raise InsufficientFundsError()
@@ -1242,7 +1242,7 @@ class LBRYumWallet(LBRYWallet):
         def send_claim(address):
             cmd = known_commands['claimname']
             func = getattr(self.cmd_runner, cmd.name)
-            return threads.deferToThread(func, address, amount, name, val)
+            return threads.deferToThread(func, address, amount, name, json.dumps(val))
         d = self.get_new_address()
         d.addCallback(send_claim)
         d.addCallback(self._broadcast_transaction)
@@ -1256,8 +1256,8 @@ class LBRYumWallet(LBRYWallet):
     def _send_name_claim_update(self, name, claim_id, txid, value, amount):
         def send_claim_update(address):
             decoded_claim_id = claim_id.decode('hex')[::-1]
-            metadata = json.dumps(Metadata(value))
-            log.info("updateclaim %s %s %f %s %s '%s'", txid, address, amount, name, decoded_claim_id.encode('hex'), json.dumps(metadata))
+            metadata = json.dumps(value)
+            log.info("updateclaim %s %s %f %s %s '%s'", txid, address, amount, name, decoded_claim_id.encode('hex'), metadata)
             cmd = known_commands['updateclaim']
             func = getattr(self.cmd_runner, cmd.name)
             return threads.deferToThread(func, txid, address, amount, name, decoded_claim_id, metadata)
