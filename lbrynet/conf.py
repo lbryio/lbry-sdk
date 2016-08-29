@@ -4,7 +4,7 @@ Some network wide and also application specific parameters
 import os
 
 
-IS_DEVELOPMENT_VERSION = True
+IS_DEVELOPMENT_VERSION = False
 
 MAX_HANDSHAKE_SIZE = 2**16
 MAX_REQUEST_SIZE = 2**16
