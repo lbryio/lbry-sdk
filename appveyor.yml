@@ -47,7 +47,9 @@ init:
 - ps: C:\Python27\Scripts\pip.exe install base58==0.2.2
 - ps: C:\Python27\Scripts\pip.exe install googlefinance==0.7
 - ps: C:\Python27\Scripts\pip.exe install git+https://github.com/lbryio/lbryum.git
-- ps: cd C:\projects\lbry
+- ps: cd C:\temp
+- ps: git clone --depth 1 https://github.com/lbryio/lbry.git
+- ps: cd C:\temp\lbry
 
 build_script:
 - cmd: C:\Python27\python.exe setup_win32.py build bdist_msi
