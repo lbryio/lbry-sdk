@@ -114,8 +114,6 @@ test_script:
 
     C:\Python27\python.exe C:\Python27\Scripts\trial.py C:\projects\lbry\tests
 
-    C:\Python27\Scripts\pylint.exe -E --disable=inherit-non-class --disable=no-member --ignored-modules=distutils --enable=unused-import lbrynet
-
 artifacts:
 - path: dist/*.msi
   name: msi
