@@ -1,8 +1,9 @@
 version: 1.0.{build}
 
-- provider: Slack
-  incoming_webhook:
-    secure: SyfpZAVQA8PEPdjqqc6Yav3i5wNOCFxNcoHx3oJPYSLs13PdDLpSPKPiYJgxTYogspCIFcskc8nMUkXC0s7P8AWCzTKtusjKchd8D+pJR2I=
+notifications:
+  - provider: Slack
+    incoming_webhook:
+      secure: SyfpZAVQA8PEPdjqqc6Yav3i5wNOCFxNcoHx3oJPYSLs13PdDLpSPKPiYJgxTYogspCIFcskc8nMUkXC0s7P8AWCzTKtusjKchd8D+pJR2I=
 
 branches:
   only:
