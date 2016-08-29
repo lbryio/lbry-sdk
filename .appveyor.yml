@@ -100,10 +100,21 @@ init:
 
     cd C:\projects\lbry
 
+install:
+- cmd: C:\Python27\python.exe setup_win32.py install
+
 build_script:
 - cmd: C:\Python27\python.exe setup_win32.py build bdist_msi
 
-test: off
+test:
+- ps: >-
+    C:\Python27\Scripts\pip.exe install mock
+
+    C:\Python27\Scripts\pip.exe install pylint
+
+    C:\Python27\python.exe C:\Python27\Scripts\trial.py C:\projects\lbry\tests
+
+    pylint -E --disable=inherit-non-class --disable=no-member --ignored-modules=distutils --enable=unused-import lbrynet
 
 artifacts:
 - path: dist/*.msi
