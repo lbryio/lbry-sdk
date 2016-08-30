@@ -1200,8 +1200,10 @@ class LBRYumWallet(LBRYWallet):
     def get_balance(self):
         cmd = known_commands['getbalance']
         func = getattr(self.cmd_runner, cmd.name)
-        d = threads.deferToThread(func)
-        d.addCallback(lambda result: result['unmatured'] if 'unmatured' in result else result['confirmed'])
+        accounts = None
+        exclude_claimtrietx = True
+        d = threads.deferToThread(func, accounts, exclude_claimtrietx)
+        d.addCallback(lambda result: result['confirmed'])
         d.addCallback(Decimal)
         return d
 
