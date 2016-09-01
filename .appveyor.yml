@@ -115,12 +115,10 @@ init:
     cd C:\projects\lbry
 
 install:
-- ps: >-
-    C:\Python27\python.exe setup.py install
+- nuget install secure-file -ExcludeVersion
+- secure-file\tools\secure-file -decrypt packaging\windows\certs\lbry2.pfx.enc -secret %pfx_key%
+- cmd: C:\Python27\python.exe setup.py install
 
-    nuget install secure-file -ExcludeVersion
-
-    secure-file\tools\secure-file -decrypt "C:\projects\lbry\packaging\windows\certs\lbry2.pfx.enc" -secret %pfx_key%
 
 build_script:
 - ps: >-
