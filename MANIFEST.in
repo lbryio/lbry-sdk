@@ -1,2 +1,1 @@
 include lbrynet/lbrynet_console/plugins/blindrepeater.yapsy-plugin
-recursive-include lbrynet/lbrynet_gui *.gif *.ico *.xbm *.conf

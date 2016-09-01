@@ -279,11 +279,16 @@ class LBRYWallet(object):
     def _send_payments(self):
         payments_to_send = {}
         for address, points in self.queued_payments.items():
-            log.info("Should be sending %s points to %s", str(points), str(address))
-            payments_to_send[address] = points
-            self.total_reserved_points -= points
-            self.wallet_balance -= points
+            if points > 0:
+                log.info("Should be sending %s points to %s", str(points), str(address))
+                payments_to_send[address] = points
+                self.total_reserved_points -= points
+                self.wallet_balance -= points
+            else:
+                log.info("Skipping dust")
+
             del self.queued_payments[address]
+
         if payments_to_send:
             log.info("Creating a transaction with outputs %s", str(payments_to_send))
             d = self._do_send_many(payments_to_send)
@@ -1200,8 +1205,10 @@ class LBRYumWallet(LBRYWallet):
     def get_balance(self):
         cmd = known_commands['getbalance']
         func = getattr(self.cmd_runner, cmd.name)
-        d = threads.deferToThread(func)
-        d.addCallback(lambda result: result['unmatured'] if 'unmatured' in result else result['confirmed'])
+        accounts = None
+        exclude_claimtrietx = True
+        d = threads.deferToThread(func, accounts, exclude_claimtrietx)
+        d.addCallback(lambda result: result['confirmed'])
         d.addCallback(Decimal)
         return d
 
