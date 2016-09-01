@@ -289,16 +289,17 @@ if __name__ == '__main__':
     lbry_daemon = JSONRPCProxy.from_url(API_CONNECTION_STRING)
 
     try:
-        started_daemon = lbry_daemon.is_running()
+        daemon_running = lbry_daemon.is_running()
+        start_daemon = False
     except:
-        started_daemon = False
+        start_daemon = True
 
     try:
         lbry_name = LBRYURIHandler.parse_name(sys.argv[1])
     except IndexError:
         lbry_name = None
 
-    if started_daemon:
-        LBRYURIHandler.open_address(lbry_name)
-    else:
+    if start_daemon:
         main(lbry_name)
+    else:
+        LBRYURIHandler.open_address(lbry_name)

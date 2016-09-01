@@ -167,7 +167,7 @@ class LBRYConsole():
             log.debug("Created the blobfile directory: %s", str(self.blobfile_dir))
 
     def _check_db_migration(self):
-        old_revision = 0
+        old_revision = 1
         db_revision_file = os.path.join(self.db_dir, "db_revision")
         if os.path.exists(db_revision_file):
             old_revision = int(open(db_revision_file).read().strip())
