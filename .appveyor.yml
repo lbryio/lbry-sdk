@@ -120,13 +120,13 @@ install:
 
     nuget install secure-file -ExcludeVersion
 
-    secure-file\tools\secure-file -decrypt "C:\projects\lbry\packaging\certs\pfx.enc" -secret %pfx_key% -out "C:\projects\lbry\packaging\certs\lbry.pfx"
+    secure-file\tools\secure-file -decrypt "C:\projects\lbry\packaging\windows\certs\pfx.enc" -secret %pfx_key% -out "C:\projects\lbry\packaging\windows\certs\lbry.pfx"
 
 build_script:
 - ps: >-
     C:\Python27\python.exe setup.py build bdist_msi
 
-    signtool sign /f "C:\projects\lbry\packaging\certs\lbry.pfx" /p %key_pass% /tr http://tsa.starfieldtech.com /td SHA256 /fd SHA256 "C:\projects\lbry\dist\*.msi"
+    signtool sign /f "C:\projects\lbry\packaging\windows\certs\lbry.pfx" /p %key_pass% /tr http://tsa.starfieldtech.com /td SHA256 /fd SHA256 "C:\projects\lbry\dist\*.msi"
 
 
 test_script:
