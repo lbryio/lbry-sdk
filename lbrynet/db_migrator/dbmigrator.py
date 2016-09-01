@@ -1,5 +1,5 @@
 import logging
-import os
+# import os
 
 
 def migrate_db(db_dir, start, end):
