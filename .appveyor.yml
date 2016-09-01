@@ -9,6 +9,7 @@ branches:
   only:
     - master
     - appveyor
+    - windows-setup
 
 clone_folder: c:\projects\lbry
 
@@ -107,10 +108,10 @@ init:
     cd C:\projects\lbry
 
 install:
-- cmd: C:\Python27\python.exe setup_win32.py install
+- cmd: C:\Python27\python.exe setup.py install
 
 build_script:
-- cmd: C:\Python27\python.exe setup_win32.py build bdist_msi
+- cmd: C:\Python27\python.exe setup.py build bdist_msi
 
 test_script:
 - ps: >-
