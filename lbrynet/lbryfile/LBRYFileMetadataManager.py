@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 class DBLBRYFileMetadataManager(object):
-    """Store and provide access to LBRY file metadata using leveldb files"""
+    """Store and provide access to LBRY file metadata using sqlite"""
 
     def __init__(self, db_dir):
         self.db_dir = db_dir
