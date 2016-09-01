@@ -24,6 +24,8 @@ init:
 - ps: >-
     $env:Path += ";C:\MinGW\bin\"
 
+    $env:Path += ";C:\Program Files (x86)\Windows Kits\10\bin\x86\"
+
     gcc --version
 
     mingw32-make --version
@@ -124,7 +126,7 @@ build_script:
 - ps: >-
     C:\Python27\python.exe setup.py build bdist_msi
 
-    signtool sign /f "C:\projects\lbry\packaging\windows\certs\lbry2.pfx" /p %key_pass% /tr http://tsa.starfieldtech.com /td SHA256 /fd SHA256 "C:\projects\lbry\dist\*.msi"
+    signtool.exe sign /f "C:\projects\lbry\packaging\windows\certs\lbry2.pfx" /p %key_pass% /tr http://tsa.starfieldtech.com /td SHA256 /fd SHA256 "C:\projects\lbry\dist\*.msi"
 
 
 test_script:
