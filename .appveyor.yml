@@ -126,7 +126,7 @@ build_script:
 - ps: >-
     C:\Python27\python.exe setup.py build bdist_msi
 
-    signtool.exe sign /f "C:\projects\lbry\packaging\windows\certs\lbry2.pfx" /p "%key_pass%" /tr http://tsa.starfieldtech.com /td SHA256 /fd SHA256 "C:\projects\lbry\dist\*.msi"
+    signtool.exe sign /f packaging\windows\certs\lbry2.pfx /p %key_pass% /tr http://tsa.starfieldtech.com /td SHA256 /fd SHA256 dist\*.msi
 
 
 test_script:
