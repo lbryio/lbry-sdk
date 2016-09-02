@@ -2131,6 +2131,24 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    def jsonrpc_address_is_mine(self, p):
+        """
+        Checks if an address is associated with the current wallet.
+
+        Args:
+            address: string
+        Returns:
+            is_mine: bool
+        """
+
+        address = p['address']
+
+        d = self.session.wallet.address_is_mine(address)
+        d.addCallback(lambda is_mine: self._render_response(is_mine, OK_CODE))
+
+        return d
+
+
     def jsonrpc_get_public_key_from_wallet(self, p):
         """
         Get public key from wallet address
