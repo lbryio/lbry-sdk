@@ -124,7 +124,9 @@ elif platform == WINDOWS:
     from cx_Freeze import setup, Executable
     import requests.certs
 
-    win_icon = os.path.join('packaging', 'windows', 'lbry-win32-app', 'icons', 'lbry256.ico')
+    app_dir = os.path.join('packaging', 'windows', 'lbry-win32-app')
+    daemon_dir = os.path.join('lbrynet', 'lbrynet_daemon')
+    win_icon = os.path.join(app_dir, 'icons', 'lbry256.ico')
     wordlist_path = pkg_resources.resource_filename('lbryum', 'wordlist')
 
     # Allow virtualenv to find distutils of base python installation
@@ -140,26 +142,8 @@ elif platform == WINDOWS:
             data_dir = os.path.dirname(__file__)
         return os.path.join(data_dir, filename)
 
-    if os.path.isdir("C:\Program Files (x86)"):
-        shortcut_icon = 'C:\Program Files (x86)\lbrynet\icons\lbry256.ico'
-    else:
-        shortcut_icon = 'C:\Program Files\lbrynet\icons\lbry256.ico'
-
     shortcut_table = [
-        ('DesktopShortcut',  # Shortcut
-         'DesktopFolder',  # Directory
-         'lbrynet-daemon',  # Name
-         'TARGETDIR',  # Component
-         '[TARGETDIR]\lbrynet-daemon.exe',  # Target
-         '--log-to-console',  # Arguments
-         description,  # Description
-         None,  # Hotkey
-         shortcut_icon,  # Icon
-         None,  # IconIndex
-         None,  # ShowCmd
-         'TARGETDIR',  # WkDir
-         ),
-        ('DaemonShortcut',  # Shortcut
+        ('LBRYShortcut',  # Shortcut
          'DesktopFolder',  # Directory
          'LBRY',  # Name
          'TARGETDIR',  # Component
@@ -167,7 +151,20 @@ elif platform == WINDOWS:
          None,  # Arguments
          description,  # Description
          None,  # Hotkey
-         shortcut_icon,  # Icon
+         None,  # Icon
+         None,  # IconIndex
+         None,  # ShowCmd
+         'TARGETDIR',  # WkDir
+         ),
+        ('DaemonShortcut',  # Shortcut
+         'DesktopFolder',  # Directory
+         'lbrynet-daemon',  # Name
+         'TARGETDIR',  # Component
+         '[TARGETDIR]\lbrynet-daemon.exe',  # Target
+         '--log-to-console',  # Arguments
+         description,  # Description
+         None,  # Hotkey
+         None,  # Icon
          None,  # IconIndex
          None,  # ShowCmd
          'TARGETDIR',  # WkDir
@@ -180,7 +177,49 @@ elif platform == WINDOWS:
          None,  # Arguments
          description,  # Description
          None,  # Hotkey
-         shortcut_icon,  # Icon
+         None,  # Icon
+         None,  # IconIndex
+         None,  # ShowCmd
+         'TARGETDIR',  # WkDir
+         ),
+        ('ProgramMenuLBRYShortcut',  # Shortcut
+         'ProgramMenuFolder',  # Directory
+         # r'[ProgramMenuFolder]\lbrynet',  # Directory
+         'LBRY',  # Name
+         'TARGETDIR',  # Component
+         '[TARGETDIR]\{0}.exe'.format(dist_name),  # Target
+         None,  # Arguments
+         description,  # Description
+         None,  # Hotkey
+         None,  # Icon
+         None,  # IconIndex
+         None,  # ShowCmd
+         'TARGETDIR',  # WkDir
+         ),
+        ('ProgramMenuDaemonShortcut',  # Shortcut
+         'ProgramMenuFolder',  # Directory
+         # r'[ProgramMenuFolder]\lbrynet',  # Directory
+         'lbrynet-daemon',  # Name
+         'TARGETDIR',  # Component
+         '[TARGETDIR]\lbrynet-daemon.exe',  # Target
+         '--log-to-console',  # Arguments
+         description,  # Description
+         None,  # Hotkey
+         None,  # Icon
+         None,  # IconIndex
+         None,  # ShowCmd
+         'TARGETDIR',  # WkDir
+         ),
+        ('ProgramMenuDaemonCLIShortcut',  # Shortcut
+         'ProgramMenuFolder',  # Directory
+         # r'[ProgramMenuFolder]\lbrynet',  # Directory
+         'lbrynet-cli',  # Name
+         'TARGETDIR',  # Component
+         '[TARGETDIR]\lbrynet-cli.exe',  # Target
+         None,  # Arguments
+         description,  # Description
+         None,  # Hotkey
+         None,  # Icon
          None,  # IconIndex
          None,  # ShowCmd
          'TARGETDIR',  # WkDir
@@ -240,10 +279,8 @@ elif platform == WINDOWS:
                      'Tkinter', 'tk', 'tcl', 'PyQt4', 'nose', 'mock'
                      'zope.interface._zope_interface_coptimizations', 'leveldb'],
         'include_files': [(distutils_path, 'distutils'), (requests.certs.where(), 'cacert.pem'),
-                          (os.path.join('packaging', 'windows', 'lbry-win32-app', 'icons', 'lbry16.ico'),
-                           os.path.join('icons', 'lbry16.ico')),
-                          (os.path.join('packaging', 'windows', 'lbry-win32-app', 'icons', 'lbry256.ico'),
-                           os.path.join('icons', 'lbry256.ico')),
+                          (os.path.join(app_dir, 'icons', 'lbry16.ico'), os.path.join('icons', 'lbry16.ico')),
+                          (os.path.join(app_dir, 'icons', 'lbry256.ico'), os.path.join('icons', 'lbry256.ico')),
                           (os.path.join(wordlist_path, 'chinese_simplified.txt'),
                            os.path.join('wordlist', 'chinese_simplified.txt')),
                           (os.path.join(wordlist_path, 'english.txt'), os.path.join('wordlist', 'english.txt')),
@@ -254,30 +291,28 @@ elif platform == WINDOWS:
         'namespace_packages': ['zope', 'google']}
 
     tray_app = Executable(
-        script=os.path.join('packaging', 'windows', 'lbry-win32-app', 'LBRYWin32App.py'),
+        script=os.path.join(app_dir, 'LBRYWin32App.py'),
         base='Win32GUI',
         icon=win_icon,
         compress=True,
-        shortcutName=dist_name,
-        shortcutDir='DesktopFolder',
+        # shortcutName=dist_name,
+        # shortcutDir='DesktopFolder',
         targetName='{0}.exe'.format(dist_name)
-        # targetDir="LocalAppDataFolder"
     )
 
-    daemon_dir = os.path.join('lbrynet', 'lbrynet_daemon')
     daemon_exe = Executable(
         script=os.path.join(daemon_dir, 'LBRYDaemonControl.py'),
         icon=win_icon,
-        shortcutName="lbrynet-daemon",
-        shortcutDir='DesktopFolder',
+        # shortcutName="lbrynet-daemon",
+        # shortcutDir='DesktopFolder',
         targetName='lbrynet-daemon.exe'
     )
 
     cli_exe = Executable(
         script=os.path.join(daemon_dir, 'LBRYDaemonCLI.py'),
         icon=win_icon,
-        shortcutName="lbrynet-cli",
-        shortcutDir='DesktopFolder',
+        # shortcutName="lbrynet-cli",
+        # shortcutDir='DesktopFolder',
         targetName='lbrynet-cli.exe'
     )
 
