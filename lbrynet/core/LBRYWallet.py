@@ -498,6 +498,10 @@ class LBRYWallet(object):
         d = self._get_history()
         return d
 
+    def address_is_mine(self, address):
+        d = self._address_is_mine(address)
+        return d
+
     def get_tx_json(self, txid):
         def _decode(raw_tx):
             tx = Transaction(raw_tx).deserialize()
@@ -723,6 +727,9 @@ class LBRYWallet(object):
     def _get_history(self):
         return defer.fail(NotImplementedError())
 
+    def _address_is_mine(self, address):
+        return defer.fail(NotImplementedError())
+
     def _start(self):
         pass
 
@@ -860,6 +867,9 @@ class LBRYcrdWallet(LBRYWallet):
 
     def _get_history(self):
         return threads.deferToThread(self._list_transactions_rpc)
+
+    def _address_is_mine(self, address):
+        return threads.deferToThread(self._get_address_is_mine_rpc, address)
 
     def _get_rpc_conn(self):
         return AuthServiceProxy(self.rpc_conn_string)
@@ -1049,6 +1059,11 @@ class LBRYcrdWallet(LBRYWallet):
     def _list_transactions_rpc(self):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.listtransactions()
+
+    @_catch_connection_error
+    def _get_address_is_mine_rpc(self, address):
+        rpc_conn = self._get_rpc_conn()
+        return address in rpc_conn.getaddressesbyaccount("")
 
     @_catch_connection_error
     def _stop_rpc(self):
@@ -1343,6 +1358,11 @@ class LBRYumWallet(LBRYWallet):
         cmd = known_commands['history']
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func)
+
+    def _address_is_mine(self, address):
+        cmd = known_commands['ismine']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, address)
 
     def get_pub_keys(self, wallet):
         cmd = known_commands['getpubkeys']
