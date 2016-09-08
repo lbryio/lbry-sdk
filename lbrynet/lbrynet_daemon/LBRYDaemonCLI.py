@@ -46,7 +46,7 @@ def main():
                 r = api.call(meth, params)
             else:
                 r = api.call(meth)
-           print json.dumps(r, sort_keys=True)
+            print json.dumps(r, sort_keys=True)
         except:
             print "Something went wrong, here's the usage for %s:" % meth
             print api.help({'function': meth})
