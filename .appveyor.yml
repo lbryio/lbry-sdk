@@ -2,21 +2,15 @@ version: 1.0.{build}
 
 environment:
   key_pass:
-    secure: UQOSEsEsXFmZvp1k18+7Lbd19NNPEEniq2euQgU0giz3OYHu0qWvQP9qecUayCtagAeG4C75RfwChkS2r+DjWZaePnr2OtPK46sM2pjXTx4=
+    secure: u6DydPcdrUJlxGL9uc7yQRYG8+5rY6aAEE9nfCSzFyNzZlX9NniOp8Uh5ZKQqX7bGEngLI6ipbLfiJvn0XFnhbn2iTkOuMqOXVJVOehvwlQ=
   pfx_key:
-    secure: qBgsWfnk50nFMs/Ft9T6lRx11eudnE17Z+paEtSJJ7tdn9F29Huy4rrw1bDjVC9LrmYch+09hZJm9WHGYuc4YuWPFBlvtngGqYsYD4r2gnQ=
+    secure: 1mwqyRy7hDqDjDK+TIAoaXyXzpNgwruFNA6TPkinUcVM7A+NLD33RQLnfnwVy+R5ovD2pUfhQ6+N0Fqebv6tZh436LIEsock+6IOdpgFwrg=
 
 
 notifications:
   - provider: Slack
     incoming_webhook:
-      secure: SyfpZAVQA8PEPdjqqc6Yav3i5wNOCFxNcoHx3oJPYSLs13PdDLpSPKPiYJgxTYogspCIFcskc8nMUkXC0s7P8AWCzTKtusjKchd8D+pJR2I=
-
-branches:
-  only:
-    - master
-    - appveyor
-    - windows-setup
+      secure: LuxwG5OZnnA//gmSXzCKu8/FRqYjCgGfVFqajSsGHeQ1HQNp7rYNhQpsO8/3PK63xKJj3wzt86DJekf9q9Q5OcHa9AHXUQbEveX0psd7elw=
 
 clone_folder: c:\projects\lbry
 
