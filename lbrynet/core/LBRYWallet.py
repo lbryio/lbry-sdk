@@ -494,6 +494,10 @@ class LBRYWallet(object):
         d.addCallback(self._get_decoded_tx)
         return d
 
+    def get_block_info(self, height):
+        d = self._get_blockhash(height)
+        return d
+
     def get_history(self):
         d = self._get_history()
         return d
@@ -862,6 +866,9 @@ class LBRYcrdWallet(LBRYWallet):
     def get_claims_from_tx(self, txid):
         return threads.deferToThread(self._get_claims_from_tx_rpc, txid)
 
+    def _get_blockhash(self, blockhash):
+        return threads.deferToThread(self._get_blockhash_rpc, blockhash)
+
     def _get_value_for_name(self, name):
         return threads.deferToThread(self._get_value_for_name_rpc, name)
 
@@ -993,6 +1000,11 @@ class LBRYcrdWallet(LBRYWallet):
     def _get_block_rpc(self, blockhash):
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.getblock(blockhash)
+
+    @_catch_connection_error
+    def _get_blockhash_rpc(self, height):
+        rpc_conn = self._get_rpc_conn()
+        return rpc_conn.getblockhash(height)
 
     @_catch_connection_error
     def _get_claims_from_tx_rpc(self, txid):
@@ -1243,6 +1255,11 @@ class LBRYumWallet(LBRYWallet):
 
     def get_best_blockhash(self):
         height = self.network.get_local_height()
+        d = threads.deferToThread(self.network.blockchain.read_header, height)
+        d.addCallback(lambda header: self.network.blockchain.hash_header(header))
+        return d
+
+    def _get_blockhash(self, height):
         d = threads.deferToThread(self.network.blockchain.read_header, height)
         d.addCallback(lambda header: self.network.blockchain.hash_header(header))
         return d
