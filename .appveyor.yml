@@ -12,12 +12,6 @@ notifications:
     incoming_webhook:
       secure: SyfpZAVQA8PEPdjqqc6Yav3i5wNOCFxNcoHx3oJPYSLs13PdDLpSPKPiYJgxTYogspCIFcskc8nMUkXC0s7P8AWCzTKtusjKchd8D+pJR2I=
 
-branches:
-  only:
-    - master
-    - appveyor
-    - windows-setup
-
 clone_folder: c:\projects\lbry
 
 init:
