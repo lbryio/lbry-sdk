@@ -2255,10 +2255,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         if 'blockhash' in p.keys():
             blockhash = p['blockhash']
+            d = self.session.wallet.get_block(blockhash)
+        elif 'height' in p.keys():
+            height = p['height']
+            d = self.session.wallet.get_block_info(height)
+            d.addCallback(lambda blockhash: self.session.wallet.get_block(blockhash))
         else:
             return server.failure
-
-        d = self.session.wallet.get_block(blockhash)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
