@@ -11,6 +11,7 @@ import win32gui_struct
 from jsonrpc.proxy import JSONRPCProxy
 from twisted.internet import reactor, error
 from twisted.web import server
+import twisted
 
 try:
     import winxpgui as win32gui
@@ -19,14 +20,20 @@ except ImportError:
 
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
-from lbrynet.conf import UI_ADDRESS, API_CONNECTION_STRING
+from lbrynet.conf import UI_ADDRESS, API_CONNECTION_STRING, LOG_FILE_NAME
 from packaging.uri_handler.LBRYURIHandler import LBRYURIHandler
 
 
+# TODO: omg, this code is essentially duplicated in LBRYDaemon
+data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+if not os.path.isdir(data_dir):
+    os.mkdir(data_dir)
+
+lbrynet_log = os.path.join(data_dir, LOG_FILE_NAME)
+log = logging.getLogger(__name__)
+
 if getattr(sys, 'frozen', False) and os.name == "nt":
     os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
-
-log = logging.getLogger(__name__)
 
 REMOTE_SERVER = "www.google.com"
 
@@ -282,7 +289,11 @@ def main(lbry_name=None):
     d.addCallback(lambda _: LBRYURIHandler.open_address(lbry_name))
     lbrynet_server = server.Site(lbry.root)
     lbrynet_server.requestFactory = LBRYDaemonRequest
-    reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
+    try:
+        reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
+    except error.CannotListenError:
+        log.info('Daemon already running, exiting app')
+        sys.exit(1)
     reactor.run()
 
 if __name__ == '__main__':
@@ -298,7 +309,7 @@ if __name__ == '__main__':
         lbry_name = LBRYURIHandler.parse_name(sys.argv[1])
     except IndexError:
         lbry_name = None
-
+    start_daemon = True
     if start_daemon:
         main(lbry_name)
     else:

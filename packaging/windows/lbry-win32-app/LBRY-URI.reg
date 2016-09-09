@@ -5,7 +5,7 @@ Windows Registry Editor Version 5.00
 "URL Protocol"=""
 
 [HKEY_CLASSES_ROOT\lbry\DefaultIcon]
-@="LBRY.exe,1"
+@="\"LBRY.exe,1\""
 
 [HKEY_CLASSES_ROOT\lbry\shell]
 
