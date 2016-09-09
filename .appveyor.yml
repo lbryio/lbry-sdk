@@ -10,7 +10,7 @@ environment:
 notifications:
   - provider: Slack
     incoming_webhook:
-      secure: SyfpZAVQA8PEPdjqqc6Yav3i5wNOCFxNcoHx3oJPYSLs13PdDLpSPKPiYJgxTYogspCIFcskc8nMUkXC0s7P8AWCzTKtusjKchd8D+pJR2I=
+      secure: LuxwG5OZnnA//gmSXzCKu8/FRqYjCgGfVFqajSsGHeS+hcO1qfPLL7ERSheNPZ/Z4KnkIhwTFIDiXUrrc/rFhnu/4ZEdq6hX6N+4toek5hw=
 
 clone_folder: c:\projects\lbry
 
