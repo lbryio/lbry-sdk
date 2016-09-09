@@ -12,6 +12,7 @@ notifications:
     incoming_webhook:
       secure: LuxwG5OZnnA//gmSXzCKu8/FRqYjCgGfVFqajSsGHeQ1HQNp7rYNhQpsO8/3PK63xKJj3wzt86DJekf9q9Q5OcHa9AHXUQbEveX0psd7elw=
 
+
 clone_folder: c:\projects\lbry
 
 init:
