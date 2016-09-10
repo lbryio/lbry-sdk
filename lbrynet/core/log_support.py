@@ -73,10 +73,9 @@ def _log_decorator(fn):
 
 def disable_third_party_loggers():
     logging.getLogger('requests').setLevel(logging.WARNING)
-
+    logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
 
 def disable_noisy_loggers():
-    logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
     logging.getLogger('lbrynet.analytics.api').setLevel(logging.INFO)
     logging.getLogger('lbrynet.core.client').setLevel(logging.INFO)
     logging.getLogger('lbrynet.core.server').setLevel(logging.INFO)

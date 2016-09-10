@@ -73,6 +73,8 @@ def start():
     parser.add_argument('--no-launch', dest='launchui', action="store_false")
     parser.add_argument('--log-to-console', dest='logtoconsole', action="store_true")
     parser.add_argument('--quiet', dest='quiet', action="store_true")
+    parser.add_argument('--verbose', action='store_true',
+                        help='enable more debug output for the console')
     parser.set_defaults(branch=False, launchui=True, logtoconsole=False, quiet=False)
     args = parser.parse_args()
 
@@ -81,7 +83,8 @@ def start():
     if args.logtoconsole:
         log_support.configure_console(level='DEBUG')
     log_support.disable_third_party_loggers()
-    log_support.disable_noisy_loggers()
+    if not args.verbose:
+        log_support.disable_noisy_loggers()
 
     try:
         JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()
