@@ -137,3 +137,17 @@ artifacts:
   name: lbry-portable
 - path: packaging/windows/lbry-win32-app/LBRY-URI.reg
   name: LBRY-URI
+
+
+deploy:
+  release: myproduct-v$(appveyor_build_version)
+  description: 'Release description'
+  provider: GitHub
+  auth_token:
+    secure: 28gMVxQkXr2iXP4F+5kVwefUtKCfS1ePZ97PVfaSR8UDupjAvKhSJx862TnEjukb
+  artifact: /.*\.nupkg/            # upload all NuGet packages to release assets
+  draft: false
+  prerelease: true
+  on:
+    branch: master                 # release from master branch only
+    appveyor_repo_tag: true        # deploy on tag push only
