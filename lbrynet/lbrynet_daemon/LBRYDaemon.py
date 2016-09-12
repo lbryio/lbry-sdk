@@ -389,8 +389,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _responseFailed(self, err, call):
         log.debug(err.getTraceback())
-        if call.active():
-            call.cancel()
 
     def render(self, request):
         request.content.seek(0, 0)
