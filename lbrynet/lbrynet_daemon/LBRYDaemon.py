@@ -2018,7 +2018,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
-    def jsonrpc_abandon_name(self, p):
+    def jsonrpc_abandon_claim(self, p):
         """
         Abandon a name and reclaim credits from the claim
 
