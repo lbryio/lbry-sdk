@@ -95,8 +95,7 @@ class GetStream(object):
 
     def start(self, stream_info, name):
         def _cause_timeout(err):
-            log.error(err)
-            log.debug('Forcing a timeout')
+            log.info('Cancelling download')
             self.timeout_counter = self.timeout * 2
 
         def _set_status(x, status):
