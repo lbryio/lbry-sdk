@@ -1235,8 +1235,7 @@ class LBRYumWallet(LBRYWallet):
         accounts = None
         exclude_claimtrietx = True
         d = threads.deferToThread(func, accounts, exclude_claimtrietx)
-        d.addCallback(lambda result: result['confirmed'])
-        d.addCallback(Decimal)
+        d.addCallback(lambda result: Decimal(result['confirmed']) + Decimal(result.get('unconfirmed', 0.0)))
         return d
 
     def get_new_address(self):

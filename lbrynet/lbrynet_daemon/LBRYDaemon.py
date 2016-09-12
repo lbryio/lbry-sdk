@@ -389,8 +389,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _responseFailed(self, err, call):
         log.debug(err.getTraceback())
-        if call.active():
-            call.cancel()
 
     def render(self, request):
         request.content.seek(0, 0)
@@ -2018,7 +2016,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
-    def jsonrpc_abandon_name(self, p):
+    def jsonrpc_abandon_claim(self, p):
         """
         Abandon a name and reclaim credits from the claim
 
