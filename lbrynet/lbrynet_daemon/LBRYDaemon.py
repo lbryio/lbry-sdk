@@ -264,7 +264,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             log.info("First run after update")
             log.info("lbrynet %s --> %s" % (self.session_settings['last_version']['lbrynet'], self.default_settings['last_version']['lbrynet']))
             log.info("lbryum %s --> %s" % (self.session_settings['last_version']['lbryum'], self.default_settings['last_version']['lbryum']))
-            if utils.version_is_greater_than("0.4.5", self.session_settings['last_version']['lbrynet']):
+            if "0.4.5" == self.default_settings['last_version']['lbrynet']:
                 log.info("Lowering name cache time")
                 self.session_settings['cache_time'] = DEFAULT_CACHE_TIME
 
