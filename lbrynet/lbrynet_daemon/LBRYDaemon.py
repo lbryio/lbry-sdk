@@ -264,6 +264,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             log.info("First run after update")
             log.info("lbrynet %s --> %s" % (self.session_settings['last_version']['lbrynet'], self.default_settings['last_version']['lbrynet']))
             log.info("lbryum %s --> %s" % (self.session_settings['last_version']['lbryum'], self.default_settings['last_version']['lbryum']))
+            if "0.4.5" == self.default_settings['last_version']['lbrynet']:
+                log.info("Lowering name cache time")
+                self.session_settings['cache_time'] = DEFAULT_CACHE_TIME
 
         f = open(self.daemon_conf, "w")
         f.write(json.dumps(self.session_settings))
@@ -920,6 +923,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     self.session_settings['cache_time'] = int(settings['cache_time'])
                 else:
                     return defer.fail()
+
         self.run_on_startup = self.session_settings['run_on_startup']
         self.data_rate = self.session_settings['data_rate']
         self.max_key_fee = self.session_settings['max_key_fee']
@@ -1801,7 +1805,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                                 file_name=params.file_name,
                                 wait_for_write=params.wait_for_write)
         # TODO: downloading can timeout.  Not sure what to do when that happens
-        d.addCallback(get_output_callback(params))
+        d.addCallbacks(get_output_callback(params), lambda err: str(err))
         d.addCallback(lambda message: self._render_response(message, OK_CODE))
         return d
 
@@ -2588,7 +2592,6 @@ def get_darwin_lbrycrdd_path():
             return default
 
 
-
 class _DownloadNameHelper(object):
     def __init__(self, daemon, name, timeout=DEFAULT_TIMEOUT, download_directory=None,
                  file_name=None, wait_for_write=True):
@@ -2629,15 +2632,26 @@ class _DownloadNameHelper(object):
         d = self.daemon.add_stream(
             self.name, self.timeout, self.download_directory, self.file_name, stream_info)
 
-        def _raiseErrorOnTimeout(args):
+        def _handle_timeout(args):
             was_successful, _, _ = args
             if not was_successful:
-                raise Exception('What am I supposed to do with a timed-out downloader?')
-        d.addCallback(_raiseErrorOnTimeout)
+                log.warning("lbry://%s timed out, removing from streams", self.name)
+                del self.daemon.streams[self.name]
+
+        d.addCallback(_handle_timeout)
 
         if self.wait_for_write:
             d.addCallback(lambda _: self._wait_for_write())
-        d.addCallback(lambda _: self.daemon.streams[self.name].downloader)
+
+        def _get_stream_for_return():
+            stream = self.daemon.streams.get(self.name, None)
+            if stream:
+                return stream.downloader
+            else:
+                self._remove_from_wait("Timed out")
+                return defer.fail(Exception("Timed out"))
+
+        d.addCallback(lambda _: _get_stream_for_return())
         return d
 
     def _wait_for_write(self):
@@ -2647,7 +2661,11 @@ class _DownloadNameHelper(object):
         return d
 
     def has_downloader_wrote(self):
-        downloader = self.daemon.streams[self.name].downloader
+        stream = self.daemon.streams.get(self.name, False)
+        if stream:
+            downloader = stream.downloader
+        else:
+            downloader = False
         if not downloader:
             return False
         return self.get_written_bytes(downloader.file_name)
@@ -2682,7 +2700,8 @@ class _DownloadNameHelper(object):
         return f
 
     def _remove_from_wait(self, r):
-        del self.daemon.waiting_on[self.name]
+        if self.name in self.daemon.waiting_on:
+            del self.daemon.waiting_on[self.name]
         return r
 
 
