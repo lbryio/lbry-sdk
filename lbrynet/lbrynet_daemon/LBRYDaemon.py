@@ -394,6 +394,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.debug(err.getTraceback())
 
     def render(self, request):
+        origin = request.getHeader("Origin")
+        if origin not in [None, 'http://localhost:5279']:
+            log.warning("Attempted api call from %s", origin)
+            return server.failure
+
         request.content.seek(0, 0)
         # Unmarshal the JSON-RPC data.
         content = request.content.read()
