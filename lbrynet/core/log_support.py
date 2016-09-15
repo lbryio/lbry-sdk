@@ -78,20 +78,13 @@ def disable_third_party_loggers():
 def disable_noisy_loggers():
     logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
     logging.getLogger('lbrynet.analytics.api').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.client.ConnectionManager').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.client.BlobRequester').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.client.ClientProtocol').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.server.ServerRequestHandler').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.server.ServerProtocol').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.server.BlobAvailabilityHandler').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.core.client').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.core.server').setLevel(logging.INFO)
     logging.getLogger('lbrynet.dht').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.lbrynet_daemon.LBRYExchangeRateManager').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.lbrynet_daemon.LBRYDaemon').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.lbrynet_daemon').setLevel(logging.INFO)
     logging.getLogger('lbrynet.core.LBRYWallet').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.lbryfile.LBRYFileMetadataManager').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.client.DownloadManager').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.lbryfilemanager.LBRYFileManager').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.server.BlobRequestHandler').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.lbryfile').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.lbryfilemanager').setLevel(logging.INFO)
 
 
 @_log_decorator
