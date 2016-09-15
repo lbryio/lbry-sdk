@@ -82,9 +82,9 @@ class LBRYFileManager(object):
 
         def log_error(err, rowid, stream_hash, options):
             log.error("An error occurred while starting a lbry file: %s", err.getErrorMessage())
-            log.error(rowid)
-            log.error(stream_hash)
-            log.error(options)
+            log.debug(rowid)
+            log.debug(stream_hash)
+            log.debug(options)
 
         def start_lbry_files(lbry_files_and_options):
             for rowid, stream_hash, options in lbry_files_and_options:

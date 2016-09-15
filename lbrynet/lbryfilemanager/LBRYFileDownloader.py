@@ -10,6 +10,9 @@ from lbrynet.lbryfilemanager.LBRYFileStatusReport import LBRYFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
 from twisted.internet import defer
+import logging
+
+log = logging.getLogger(__name__)
 
 
 class ManagedLBRYFileDownloader(LBRYFileSaver):
@@ -48,11 +51,16 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
             self.claim_id = claim_id
             return defer.succeed(None)
 
+        def _notify_bad_claim(name, txid):
+            log.error("Error loading name claim for lbry file: lbry://%s, tx %s does not contain a valid claim", name, txid)
+            log.warning("lbry file for lbry://%s, tx %s has no claim, deleting it", name, txid)
+            return self.lbry_file_manager.delete_lbry_file(self)
+
         def _save_claim(name, txid):
             self.uri = name
             self.txid = txid
             d = self.wallet.get_claimid(name, txid)
-            d.addCallback(_save_claim_id)
+            d.addCallbacks(_save_claim_id, lambda err: _notify_bad_claim(name, txid))
             return d
 
         d.addCallback(_save_sd_hash)

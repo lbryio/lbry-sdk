@@ -236,7 +236,7 @@ class DBLBRYFileMetadataManager(object):
 
     @rerun_if_locked
     def _get_sd_blob_hashes_for_stream(self, stream_hash):
-        log.info("Looking up sd blob hashes for stream hash %s", str(stream_hash))
+        log.debug("Looking up sd blob hashes for stream hash %s", str(stream_hash))
         d = self.db_conn.runQuery("select sd_blob_hash from lbry_file_descriptors where stream_hash = ?",
                                   (stream_hash,))
         d.addCallback(lambda results: [r[0] for r in results])

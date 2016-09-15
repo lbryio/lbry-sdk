@@ -86,6 +86,12 @@ def disable_noisy_loggers():
     logging.getLogger('lbrynet.core.server.BlobAvailabilityHandler').setLevel(logging.INFO)
     logging.getLogger('lbrynet.dht').setLevel(logging.INFO)
     logging.getLogger('lbrynet.lbrynet_daemon.LBRYExchangeRateManager').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.lbrynet_daemon.LBRYDaemon').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.core.LBRYWallet').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.lbryfile.LBRYFileMetadataManager').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.core.client.DownloadManager').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.lbryfilemanager.LBRYFileManager').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.core.server.BlobRequestHandler').setLevel(logging.INFO)
 
 
 @_log_decorator
