@@ -78,11 +78,11 @@ class BlobRequestHandler(object):
                         if read_handle is not None:
                             self.currently_uploading = blob
                             self.read_handle = read_handle
-                            log.debug("Sending %s to client", str(blob))
+                            log.info("Sending %s to client", str(blob))
                             response_fields['blob_hash'] = blob.blob_hash
                             response_fields['length'] = blob.length
                             return response
-                    log.debug("We can not send %s", str(blob))
+                    log.warning("We can not send %s", str(blob))
                     response_fields['error'] = "BLOB_UNAVAILABLE"
                     return response
 
@@ -132,13 +132,13 @@ class BlobRequestHandler(object):
 
         def start_transfer():
             self.file_sender = FileSender()
-            log.info("Starting the file upload")
+            log.debug("Starting the file upload")
             assert self.read_handle is not None, "self.read_handle was None when trying to start the transfer"
             d = self.file_sender.beginFileTransfer(self.read_handle, consumer, count_bytes)
             return d
 
         def set_expected_payment():
-            log.info("Setting expected payment")
+            log.debug("Setting expected payment")
             if self.blob_bytes_uploaded != 0 and self.blob_data_payment_rate is not None:
                 # TODO: explain why 2**20
                 self.wallet.add_expected_payment(self.peer,

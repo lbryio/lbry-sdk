@@ -70,7 +70,7 @@ class DownloadManager(object):
 
         def add_blob_to_list(blob, blob_num):
             self.blobs[blob_num] = blob
-            log.info("Added blob (hash: %s, number %s) to the list", str(blob.blob_hash), str(blob_num))
+            log.debug("Added blob (hash: %s, number %s) to the list", str(blob.blob_hash), str(blob_num))
 
         def error_during_add(err):
             log.warning("An error occurred adding the blob to blobs. Error:%s", err.getErrorMessage())
