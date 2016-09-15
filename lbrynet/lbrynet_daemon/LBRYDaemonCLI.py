@@ -36,18 +36,18 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('method', nargs=1, type=str)
-    parser.add_argument('params', nargs="+")
+    parser.add_argument('params', nargs=argparse.REMAINDER, default=None)
     args = parser.parse_args()
     meth = args.method[0]
     params = {}
     if args.params:
-        if len(args.params) != 1:
+        if len(args.params) > 1:
             for i in args.params:
                 k, v = i.split('=')[0], i.split('=')[1:]
                 if isinstance(v, list):
                     v = ''.join(v)
                 params[k] = guess_type(v)
-        else:
+        elif len(args.params) == 1:
             try:
                 params = json.loads(args.params[0])
             except ValueError:
