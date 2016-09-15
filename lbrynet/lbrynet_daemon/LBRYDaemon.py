@@ -2032,7 +2032,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Args:
             'txid': txid of claim, string
         Return:
-            Confirmation message
+            txid
         """
 
         if 'txid' in p.keys():
@@ -2050,6 +2050,19 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.callback(None)
 
         return d
+
+    def jsonrpc_abandon_name(self, p):
+        """
+        DEPRECIATED, use abandon_claim
+
+        Args:
+            'txid': txid of claim, string
+        Return:
+            txid
+        """
+
+        return self.jsonrpc_abandon_claim(p)
+
 
     def jsonrpc_support_claim(self, p):
         """
