@@ -25,6 +25,16 @@ def guess_type(x):
     except ValueError:
         return x
 
+
+def get_params_from_kwargs(params):
+    params_for_return = {}
+    for i in params:
+        eq_pos = i.index('=')
+        k, v = i[:eq_pos], i[eq_pos+1:]
+        params_for_return[k] = guess_type(v)
+    return params_for_return
+
+
 def main():
     api = JSONRPCProxy.from_url(API_CONNECTION_STRING)
 
@@ -35,27 +45,21 @@ def main():
         sys.exit(1)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('method', nargs=1, type=str)
+    parser.add_argument('method', nargs=1)
     parser.add_argument('params', nargs=argparse.REMAINDER, default=None)
     args = parser.parse_args()
+
     meth = args.method[0]
     params = {}
+
     if args.params:
         if len(args.params) > 1:
-            for i in args.params:
-                k, v = i.split('=')[0], i.split('=')[1:]
-                if isinstance(v, list):
-                    v = ''.join(v)
-                params[k] = guess_type(v)
+            params = get_params_from_kwargs(args.params)
         elif len(args.params) == 1:
             try:
                 params = json.loads(args.params[0])
             except ValueError:
-                for i in args.params:
-                    k, v = i.split('=')[0], i.split('=')[1:]
-                    if isinstance(v, list):
-                        v = ''.join(v)
-                    params[k] = guess_type(v)
+                params = get_params_from_kwargs(args.params)
 
     msg = help_msg
     for f in api.help():
