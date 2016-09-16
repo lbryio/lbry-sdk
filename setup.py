@@ -44,7 +44,8 @@ requires = [
     'six==1.9.0',
     'base58',
     'googlefinance',
-    'requests_futures'
+    'requests_futures',
+    'PyYAML'
 ]
 
 console_scripts = [
@@ -273,7 +274,8 @@ elif platform == WINDOWS:
                      'wsgiref',
                      'zope.interface',
                      'os',
-                     'pkg_resources'
+                     'pkg_resources',
+                     'PyYAML'
                      ],
         'excludes': ['distutils', 'collections.sys', 'collections._weakref', 'collections.abc',
                      'Tkinter', 'tk', 'tcl', 'PyQt4', 'nose', 'mock'
