@@ -408,7 +408,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             log.warning("Attempted api call from %s", origin)
             return server.failure
 
-        if referer not in [None, 'http://localhost:5279/']:
+        if referer is not None and not referer.startswith('http://localhost:5279/'):
             log.warning("Attempted api call from %s", referer)
             return server.failure
 
