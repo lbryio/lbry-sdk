@@ -275,7 +275,7 @@ elif platform == WINDOWS:
                      'zope.interface',
                      'os',
                      'pkg_resources',
-                     'PyYAML'
+                     'yaml'
                      ],
         'excludes': ['distutils', 'collections.sys', 'collections._weakref', 'collections.abc',
                      'Tkinter', 'tk', 'tcl', 'PyQt4', 'nose', 'mock'
