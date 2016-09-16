@@ -1739,6 +1739,21 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallbacks(lambda info: self._render_response(info, OK_CODE), lambda _: server.failure)
         return d
 
+    def jsonrpc_get_my_claim(self, p):
+        """
+        Return existing claim for a given name
+
+        Args:
+            'name': name to look up
+        Returns:
+            claim info, False if no such claim exists
+        """
+
+        name = p['name']
+        d = self.session.wallet.get_my_claim(name)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
     def jsonrpc_get_claim_info(self, p):
         """
             Resolve claim info from a LBRY uri

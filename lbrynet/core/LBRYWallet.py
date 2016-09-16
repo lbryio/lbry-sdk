@@ -368,6 +368,19 @@ class LBRYWallet(object):
         d.addCallback(_get_id_for_return)
         return d
 
+    def get_my_claim(self, name):
+        def _get_claim_for_return(claim):
+            if not claim:
+                return False
+            d = self.get_claim(name, claim['claim_id'])
+            d.addCallback(lambda c: self._format_claim_for_return(name, c, claim['txid']))
+            return d
+
+        d = self.get_name_claims()
+        d.addCallback(lambda claims: next((c for c in claims if c['name'] == name and not c['is spent']), False))
+        d.addCallback(_get_claim_for_return)
+        return d
+
     def get_claim_info(self, name, txid=None):
         if not txid:
             d = self._get_value_for_name(name)
@@ -377,9 +390,20 @@ class LBRYWallet(object):
         d.addErrback(lambda _: False)
         return d
 
+    def _format_claim_for_return(self, name, claim, txid, metadata=None, meta_version=None):
+        result = {}
+        result['claim_id'] = claim['claimId']
+        result['amount'] = claim['nEffectiveAmount']
+        result['height'] = claim['nHeight']
+        result['name'] = name
+        result['txid'] = txid
+        result['value'] = metadata if metadata else json.loads(claim['value'])
+        result['supports'] = [{'txid': support['txid'], 'n': support['n']} for support in claim['supports']]
+        result['meta_version'] = meta_version if meta_version else result['value'].get('ver', '0.0.1')
+        return result
+
     def _get_claim_info(self, name, txid):
         def _build_response(claim):
-            result = {}
             try:
                 metadata = Metadata(json.loads(claim['value']))
                 meta_ver = metadata.version
@@ -390,26 +414,11 @@ class LBRYWallet(object):
                 meta_ver = "Non-compliant"
                 d = defer.succeed(None)
 
-            claim_id = claim['claimId']
-            result['claim_id'] = claim_id
-            result['amount'] = claim['nEffectiveAmount']
-            result['height'] = claim['nHeight']
-            result['name'] = name
-            result['txid'] = txid
-            result['value'] = metadata
-            result['supports'] = [{'txid': support['txid'], 'n': support['n']} for support in claim['supports']]
-            result['meta_version'] = meta_ver
+            d.addCallback(lambda _: self._format_claim_for_return(name, claim, txid,
+                                                                  metadata=metadata, meta_version=meta_ver))
+            log.info("get claim info lbry://%s metadata: %s, claimid: %s", name, meta_ver, claim['claimId'])
 
-            log.info("get claim info lbry://%s metadata: %s, claimid: %s", name, meta_ver, claim_id)
-
-            d.addCallback(lambda _: self.get_name_claims())
-            d.addCallback(lambda r: [c['txid'] for c in r])
-            d.addCallback(lambda my_claims: _add_is_mine(result, my_claims))
             return d
-
-        def _add_is_mine(response, my_txs):
-            response['is_mine'] = response['txid'] in my_txs
-            return response
 
         d = self.get_claimid(name, txid)
         d.addCallback(lambda claim_id: self.get_claim(name, claim_id))
