@@ -157,32 +157,32 @@ elif platform == WINDOWS:
          None,  # ShowCmd
          'TARGETDIR',  # WkDir
          ),
-        ('DaemonShortcut',  # Shortcut
-         'DesktopFolder',  # Directory
-         'lbrynet-daemon',  # Name
-         'TARGETDIR',  # Component
-         '[TARGETDIR]\lbrynet-daemon.exe',  # Target
-         '--log-to-console',  # Arguments
-         description,  # Description
-         None,  # Hotkey
-         None,  # Icon
-         None,  # IconIndex
-         None,  # ShowCmd
-         'TARGETDIR',  # WkDir
-         ),
-        ('DaemonCLIShortcut',  # Shortcut
-         'DesktopFolder',  # Directory
-         'lbrynet-cli',  # Name
-         'TARGETDIR',  # Component
-         '[TARGETDIR]\lbrynet-cli.exe',  # Target
-         None,  # Arguments
-         description,  # Description
-         None,  # Hotkey
-         None,  # Icon
-         None,  # IconIndex
-         None,  # ShowCmd
-         'TARGETDIR',  # WkDir
-         ),
+        # ('DaemonShortcut',  # Shortcut
+        #  'DesktopFolder',  # Directory
+        #  'lbrynet-daemon',  # Name
+        #  'TARGETDIR',  # Component
+        #  '[TARGETDIR]\lbrynet-daemon.exe',  # Target
+        #  '--log-to-console',  # Arguments
+        #  description,  # Description
+        #  None,  # Hotkey
+        #  None,  # Icon
+        #  None,  # IconIndex
+        #  None,  # ShowCmd
+        #  'TARGETDIR',  # WkDir
+        #  ),
+        # ('DaemonCLIShortcut',  # Shortcut
+        #  'DesktopFolder',  # Directory
+        #  'lbrynet-cli',  # Name
+        #  'TARGETDIR',  # Component
+        #  '[TARGETDIR]\lbrynet-cli.exe',  # Target
+        #  None,  # Arguments
+        #  description,  # Description
+        #  None,  # Hotkey
+        #  None,  # Icon
+        #  None,  # IconIndex
+        #  None,  # ShowCmd
+        #  'TARGETDIR',  # WkDir
+        #  ),
         ('ProgramMenuLBRYShortcut',  # Shortcut
          'ProgramMenuFolder',  # Directory
          # r'[ProgramMenuFolder]\lbrynet',  # Directory
