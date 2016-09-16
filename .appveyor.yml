@@ -112,6 +112,8 @@ init:
 
     C:\Python27\Scripts\pip.exe install googlefinance==0.7
 
+    C:\Python27\Scripts\pip.exe install pyyaml==3.12
+
     C:\Python27\Scripts\pip.exe install git+https://github.com/lbryio/lbryum.git
 
     cd C:\projects\lbry

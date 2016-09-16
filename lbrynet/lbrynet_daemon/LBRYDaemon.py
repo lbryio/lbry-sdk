@@ -198,7 +198,18 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 log.info("Couldn't make download directory, using home")
                 default_download_directory = os.path.expanduser("~")
 
-        self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.json')
+        old_conf_path = os.path.join(self.db_dir, 'daemon_settings.json')
+        self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.yml')
+
+        if os.path.isfile(old_conf_path):
+            log.info("Migrating .json config file to .yml")
+            tmp_settings = utils.load_settings(old_conf_path)
+            utils.save_settings(self.daemon_conf, tmp_settings)
+            try:
+                os.remove(old_conf_path)
+                log.info("Cleaned up old config file")
+            except:
+                log.warning("Failed to remove old config file")
 
         self.default_settings = {
             'run_on_startup': False,
@@ -226,9 +237,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         }
 
         if os.path.isfile(self.daemon_conf):
-            f = open(self.daemon_conf, "r")
-            loaded_settings = json.loads(f.read())
-            f.close()
+            loaded_settings = utils.load_settings(self.daemon_conf)
             missing_settings = {}
             removed_settings = {}
             for k in self.default_settings.keys():
@@ -268,9 +277,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 log.info("Lowering name cache time")
                 self.session_settings['cache_time'] = DEFAULT_CACHE_TIME
 
-        f = open(self.daemon_conf, "w")
-        f.write(json.dumps(self.session_settings))
-        f.close()
+        utils.save_settings(self.daemon_conf, self.session_settings)
 
         self.run_on_startup = self.session_settings['run_on_startup']
         self.data_rate = self.session_settings['data_rate']
@@ -940,9 +947,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.search_timeout = self.session_settings['search_timeout']
         self.cache_time = self.session_settings['cache_time']
 
-        f = open(self.daemon_conf, "w")
-        f.write(json.dumps(self.session_settings))
-        f.close()
+        utils.save_settings(self.daemon_conf, self.session_settings)
 
         return defer.succeed(True)
 
@@ -1406,9 +1411,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             startup_scripts = self.startup_scripts
             self.startup_scripts = self.session_settings['startup_scripts'] = remaining_scripts
 
-            f = open(self.daemon_conf, "w")
-            f.write(json.dumps(self.session_settings))
-            f.close()
+            utils.save_settings(self.daemon_conf, self.session_settings)
 
         for script in startup_scripts:
             if script['script_name'] == 'migrateto025':

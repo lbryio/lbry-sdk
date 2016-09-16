@@ -1,10 +1,11 @@
 import base64
 import distutils.version
 import random
+import os
+import json
+import yaml
 
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
-
-
 
 blobhash_length = get_lbry_hash_obj().digest_size * 2  # digest_size is in bytes, and blob hashes are hex encoded
 
@@ -46,3 +47,33 @@ def deobfuscate(obfustacated):
 
 def obfuscate(plain):
     return base64.b64encode(plain).encode('rot13')
+
+
+settings_decoders = {
+    '.json': json.loads,
+    '.yml': yaml.load
+}
+
+settings_encoders = {
+    '.json': json.dumps,
+    '.yml': yaml.safe_dump
+}
+
+
+def load_settings(path):
+    ext = os.path.splitext(path)[1]
+    f = open(path, 'r')
+    data = f.read()
+    f.close()
+    decoder = settings_decoders.get(ext, False)
+    assert decoder is not False, "Unknown settings format .%s" % ext
+    return decoder(data)
+
+
+def save_settings(path, settings):
+    ext = os.path.splitext(path)[1]
+    encoder = settings_encoders.get(ext, False)
+    assert encoder is not False, "Unknown settings format .%s" % ext
+    f = open(path, 'w')
+    f.write(encoder(settings))
+    f.close()
