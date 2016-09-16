@@ -1,5 +1,6 @@
 import sys
 import json
+import argparse
 
 from lbrynet.conf import API_CONNECTION_STRING
 from jsonrpc.proxy import JSONRPCProxy
@@ -12,6 +13,28 @@ help_msg = "Usage: lbrynet-cli method json-args\n" \
              + "\n******lbrynet-cli functions******\n"
 
 
+def guess_type(x):
+    if '.' in x:
+        try:
+            return float(x)
+        except ValueError:
+            # not a float
+            pass
+    try:
+        return int(x)
+    except ValueError:
+        return x
+
+
+def get_params_from_kwargs(params):
+    params_for_return = {}
+    for i in params:
+        eq_pos = i.index('=')
+        k, v = i[:eq_pos], i[eq_pos+1:]
+        params_for_return[k] = guess_type(v)
+    return params_for_return
+
+
 def main():
     api = JSONRPCProxy.from_url(API_CONNECTION_STRING)
 
@@ -21,8 +44,22 @@ def main():
         print "lbrynet-daemon isn't running"
         sys.exit(1)
 
-    args = sys.argv[1:]
-    meth = args[0]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('method', nargs=1)
+    parser.add_argument('params', nargs=argparse.REMAINDER, default=None)
+    args = parser.parse_args()
+
+    meth = args.method[0]
+    params = {}
+
+    if args.params:
+        if len(args.params) > 1:
+            params = get_params_from_kwargs(args.params)
+        elif len(args.params) == 1:
+            try:
+                params = json.loads(args.params[0])
+            except ValueError:
+                params = get_params_from_kwargs(args.params)
 
     msg = help_msg
     for f in api.help():
@@ -31,14 +68,6 @@ def main():
     if meth in ['--help', '-h', 'help']:
         print msg
         sys.exit(1)
-
-    if len(args) > 1:
-        if isinstance(args[1], dict):
-            params = args[1]
-        elif isinstance(args[1], basestring):
-            params = json.loads(args[1])
-    else:
-        params = None
 
     if meth in api.help():
         try:
