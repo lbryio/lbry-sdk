@@ -402,8 +402,14 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def render(self, request):
         origin = request.getHeader("Origin")
+        referer = request.getHeader("Referer")
+
         if origin not in [None, 'http://localhost:5279']:
             log.warning("Attempted api call from %s", origin)
+            return server.failure
+
+        if referer not in [None, 'http://localhost:5279/']:
+            log.warning("Attempted api call from %s", referer)
             return server.failure
 
         request.content.seek(0, 0)
