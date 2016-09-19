@@ -16,7 +16,7 @@ notifications:
 clone_folder: c:\projects\lbry
 
 init:
-- ps: '& "c:\projects\lbry\packaging\windows\init.ps1"'
+- ps: '& "C:\projects\lbry\packaging\windows\init.ps1"'
 
 
 install:
