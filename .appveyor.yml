@@ -49,7 +49,7 @@ deploy:
   provider: GitHub
   auth_token:
     secure: 28gMVxQkXr2iXP4F+5kVwefUtKCfS1ePZ97PVfaSR8UDupjAvKhSJx862TnEjukb
-  artifact: dist/*.msi
+  artifact: /.*\.nupkg/
   draft: false
   prerelease: true
   on:
