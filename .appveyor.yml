@@ -16,7 +16,7 @@ notifications:
 clone_folder: c:\projects\lbry
 
 init:
-- ps: '& "C:\projects\lbry\packaging\windows\init.ps1"'
+- ps: .\packaging\windows\init.ps1
 
 install:
 - nuget install secure-file -ExcludeVersion
