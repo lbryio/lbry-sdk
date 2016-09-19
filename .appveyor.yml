@@ -16,7 +16,8 @@ notifications:
 clone_folder: c:\projects\lbry
 
 init:
-- ps: .\packaging\windows\init.ps1
+- cmd: powershell -noexit '& C:\projects\lbry\packaging\windows\init.ps1'
+  
 
 install:
 - nuget install secure-file -ExcludeVersion
