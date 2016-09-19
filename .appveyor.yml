@@ -19,7 +19,7 @@ clone_folder: c:\projects\lbry
 
 install:
 - cmd: dir C:\projects\lbry\packaging\windows\
-- cmd: powershell '& C:\projects\lbry\packaging\windows\init.ps1'
+- ps: .\packaging\windows\init.ps1
 - nuget install secure-file -ExcludeVersion
 - secure-file\tools\secure-file -decrypt packaging\windows\certs\lbry2.pfx.enc -secret %pfx_key%
 - ps: '& "c:\projects\lbry\packaging\windows\install.ps1"'
