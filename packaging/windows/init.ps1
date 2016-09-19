@@ -68,6 +68,8 @@ C:\Python27\Scripts\pip.exe install pycrypto==2.6.1
 
 C:\Python27\Scripts\pip.exe install python-bitcoinrpc==0.1
 
+C:\Python27\Scripts\pip.exe install pyyaml==3.12
+
 C:\Python27\Scripts\pip.exe install qrcode==5.2.2
 
 C:\Python27\Scripts\pip.exe install requests_futures==0.9.7
