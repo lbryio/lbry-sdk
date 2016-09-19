@@ -21,7 +21,7 @@ install:
 - ps: .\packaging\windows\init.ps1
 - nuget install secure-file -ExcludeVersion
 - secure-file\tools\secure-file -decrypt packaging\windows\certs\lbry2.pfx.enc -secret %pfx_key%
-- ps: '& "c:\projects\lbry\packaging\windows\install.ps1"'
+- ps: .\packaging\windows\install.ps1
 
 
 build_script:
@@ -30,7 +30,7 @@ build_script:
 
 
 test_script:
-- ps: '& "c:\projects\lbry\packaging\windows\test.ps1"'
+- ps: .\packaging\windows\test.ps1
 
 
 artifacts:
