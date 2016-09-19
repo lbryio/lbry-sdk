@@ -16,6 +16,7 @@ notifications:
 clone_folder: c:\projects\lbry
 
 init:
+- cmd: dir C:\projects\lbry\packaging\windows\
 - cmd: powershell '& C:\projects\lbry\packaging\windows\init.ps1'
   
 
