@@ -2,8 +2,7 @@ import sys
 import json
 import argparse
 
-from lbrynet.conf import API_CONNECTION_STRING
-from jsonrpc.proxy import JSONRPCProxy
+from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 
 help_msg = "Usage: lbrynet-cli method json-args\n" \
              + "Examples: " \
@@ -36,7 +35,7 @@ def get_params_from_kwargs(params):
 
 
 def main():
-    api = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+    api = LBRYAPIClient()
 
     try:
         s = api.is_running()
@@ -72,9 +71,9 @@ def main():
     if meth in api.help():
         try:
             if params:
-                r = api.call(meth, params)
+                r = LBRYAPIClient(service=meth)(params)
             else:
-                r = api.call(meth)
+                r = LBRYAPIClient(service=meth)()
             print json.dumps(r, sort_keys=True)
         except:
             print "Something went wrong, here's the usage for %s:" % meth

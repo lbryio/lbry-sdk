@@ -88,3 +88,9 @@ class NoSuchStreamHashError(Exception):
 
 class InvalidBlobHashError(Exception):
     pass
+
+class InvalidHeaderError(Exception):
+    pass
+
+class InvalidAuthenticationToken(Exception):
+    pass

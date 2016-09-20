@@ -40,6 +40,7 @@ from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
 from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
+from lbrynet.lbrynet_daemon.auth.server import LBRYJSONRPCServer, auth_required, authorizer
 from lbrynet.metadata.LBRYMetadata import Metadata, verify_name_characters
 from lbrynet.core import log_support
 from lbrynet.core import utils
@@ -48,7 +49,7 @@ from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, \
                          KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, DEFAULT_WALLET, \
                          DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, \
-                         LOG_POST_URL, LOG_FILE_NAME, REFLECTOR_SERVERS, SEARCH_SERVERS
+                         LOG_POST_URL, LOG_FILE_NAME, REFLECTOR_SERVERS, SEARCH_SERVERS, ALLOWED_DURING_STARTUP
 from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
 from lbrynet.conf import DEFAULT_TIMEOUT
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
@@ -117,11 +118,6 @@ CONNECTION_PROBLEM_CODES = [
         (CONNECT_CODE_WALLET, "Synchronization with the blockchain is lagging... if this continues try restarting LBRY")
         ]
 
-ALLOWED_DURING_STARTUP = ['is_running', 'is_first_run',
-                          'get_time_behind_blockchain', 'stop',
-                          'daemon_status', 'get_start_notice',
-                          'version', 'get_search_servers']
-
 BAD_REQUEST = 400
 NOT_FOUND = 404
 OK_CODE = 200
@@ -138,15 +134,14 @@ class Parameters(object):
         self.__dict__.update(kwargs)
 
 
-class LBRYDaemon(jsonrpc.JSONRPC):
+@authorizer
+class LBRYDaemon(LBRYJSONRPCServer):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
-    isLeaf = True
-
     def __init__(self, root, wallet_type=None):
-        jsonrpc.JSONRPC.__init__(self)
+        LBRYJSONRPCServer.__init__(self)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
         self.startup_status = STARTUP_STAGES[0]
@@ -396,99 +391,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                     f.write("rpcuser=rpcuser\n")
                     f.write("rpcpassword=" + password)
                 log.info("Done writing lbrycrd.conf")
-
-    def _responseFailed(self, err, call):
-        log.debug(err.getTraceback())
-
-    def render(self, request):
-        origin = request.getHeader("Origin")
-        referer = request.getHeader("Referer")
-
-        if origin not in [None, 'http://localhost:5279']:
-            log.warning("Attempted api call from %s", origin)
-            return server.failure
-
-        if referer is not None and not referer.startswith('http://localhost:5279/'):
-            log.warning("Attempted api call from %s", referer)
-            return server.failure
-
-        request.content.seek(0, 0)
-        # Unmarshal the JSON-RPC data.
-        content = request.content.read()
-        parsed = jsonrpclib.loads(content)
-        functionPath = parsed.get("method")
-        args = parsed.get('params')
-
-        #TODO convert args to correct types if possible
-
-        id = parsed.get('id')
-        version = parsed.get('jsonrpc')
-        if version:
-            version = int(float(version))
-        elif id and not version:
-            version = jsonrpclib.VERSION_1
-        else:
-            version = jsonrpclib.VERSION_PRE1
-        # XXX this all needs to be re-worked to support logic for multiple
-        # versions...
-
-        if not self.announced_startup:
-            if functionPath not in ALLOWED_DURING_STARTUP:
-                return server.failure
-
-        if self.wallet_type == "lbryum" and functionPath in ['set_miner', 'get_miner_status']:
-            return server.failure
-
-        try:
-            function = self._getFunction(functionPath)
-        except jsonrpclib.Fault, f:
-            self._cbRender(f, request, id, version)
-        else:
-            request.setHeader("Access-Control-Allow-Origin", "localhost")
-            request.setHeader("content-type", "text/json")
-            if args == [{}]:
-                d = defer.maybeDeferred(function)
-            else:
-                d = defer.maybeDeferred(function, *args)
-
-            # cancel the response if the connection is broken
-            notify_finish = request.notifyFinish()
-            notify_finish.addErrback(self._responseFailed, d)
-            d.addErrback(self._ebRender, id)
-            d.addCallback(self._cbRender, request, id, version)
-            d.addErrback(notify_finish.errback)
-        return server.NOT_DONE_YET
-
-    def _cbRender(self, result, request, id, version):
-        def default_decimal(obj):
-            if isinstance(obj, Decimal):
-                return float(obj)
-
-        if isinstance(result, Handler):
-            result = result.result
-
-        if isinstance(result, dict):
-            result = result['result']
-
-        if version == jsonrpclib.VERSION_PRE1:
-            if not isinstance(result, jsonrpclib.Fault):
-                result = (result,)
-            # Convert the result (python) to JSON-RPC
-        try:
-            s = jsonrpclib.dumps(result, version=version, default=default_decimal)
-        except:
-            f = jsonrpclib.Fault(self.FAILURE, "can't serialize output")
-            s = jsonrpclib.dumps(f, version=version)
-
-        request.setHeader("content-length", str(len(s)))
-        request.write(s)
-        request.finish()
-
-    def _ebRender(self, failure, id):
-        if isinstance(failure.value, jsonrpclib.Fault):
-            return failure.value
-        log.error(failure)
-        return jsonrpclib.Fault(self.FAILURE, "error")
 
     def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False, host_ui=True):
         def _log_starting_vals():
@@ -1435,9 +1337,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
     def _search(self, search):
         return self.lighthouse_client.search(search)
 
-    def _render_response(self, result, code):
-        return defer.succeed({'result': result, 'code': code})
-
+    @auth_required
     def jsonrpc_is_running(self):
         """
         Check if lbrynet daemon is running
@@ -1454,6 +1354,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             return self._render_response(False, OK_CODE)
 
+    @auth_required
     def jsonrpc_daemon_status(self):
         """
         Get lbrynet daemon status information
@@ -1488,6 +1389,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.info("daemon status: " + str(r))
         return self._render_response(r, OK_CODE)
 
+    @auth_required
     def jsonrpc_is_first_run(self):
         """
         Check if this is the first time lbrynet daemon has been run
@@ -1508,6 +1410,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    @auth_required
     def jsonrpc_get_start_notice(self):
         """
         Get special message to be displayed at startup
@@ -1527,6 +1430,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             self._render_response(self.startup_message, OK_CODE)
 
+    @auth_required
     def jsonrpc_version(self):
         """
         Get lbry version information
@@ -1561,6 +1465,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.info("Get version info: " + json.dumps(msg))
         return self._render_response(msg, OK_CODE)
 
+    @auth_required
     def jsonrpc_get_settings(self):
         """
         Get lbrynet daemon settings
@@ -1589,6 +1494,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.info("Get daemon settings")
         return self._render_response(self.session_settings, OK_CODE)
 
+    @auth_required
     def jsonrpc_set_settings(self, p):
         """
         Set lbrynet daemon settings
@@ -1616,6 +1522,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    @auth_required
     def jsonrpc_help(self, p=None):
         """
         Function to retrieve docstring for API function
@@ -1640,6 +1547,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         else:
             return self._render_response(self.jsonrpc_help.__doc__, OK_CODE)
 
+    @auth_required
     def jsonrpc_get_balance(self):
         """
         Get balance
@@ -1653,6 +1561,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.info("Get balance")
         return self._render_response(float(self.session.wallet.wallet_balance), OK_CODE)
 
+    @auth_required
     def jsonrpc_stop(self):
         """
         Stop lbrynet-daemon
@@ -1672,6 +1581,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return self._render_response("Shutting down", OK_CODE)
 
+    @auth_required
     def jsonrpc_get_lbry_files(self):
         """
         Get LBRY files
@@ -1698,6 +1608,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    @auth_required
     def jsonrpc_get_lbry_file(self, p):
         """
         Get lbry file
@@ -1727,6 +1638,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_resolve_name(self, p):
         """
         Resolve stream info from a LBRY uri
@@ -1748,6 +1660,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallbacks(lambda info: self._render_response(info, OK_CODE), lambda _: server.failure)
         return d
 
+    @auth_required
     def jsonrpc_get_claim_info(self, p):
         """
             Resolve claim info from a LBRY uri
@@ -1772,6 +1685,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def _process_get_parameters(self, p):
         """Extract info from input parameters and fill in default values for `get` call."""
         # TODO: this process can be abstracted s.t. each method
@@ -1793,6 +1707,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             name=name
         )
 
+    @auth_required
     def jsonrpc_get(self, p):
         """Download stream from a LBRY uri.
 
@@ -1823,6 +1738,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda message: self._render_response(message, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_stop_lbry_file(self, p):
         """
         Stop lbry file
@@ -1848,6 +1764,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_start_lbry_file(self, p):
         """
         Stop lbry file
@@ -1872,6 +1789,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_est_cost(self, p):
         """
         Get estimated cost for a lbry uri
@@ -1893,6 +1811,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_search_nametrie(self, p):
         """
         Search the nametrie for claims
@@ -1929,6 +1848,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    @auth_required
     def jsonrpc_delete_lbry_file(self, p):
         """
         Delete a lbry file
@@ -1958,6 +1878,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_publish(self, p):
         """
         Make a new name claim and publish associated data to lbrynet
@@ -2034,6 +1955,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    @auth_required
     def jsonrpc_abandon_claim(self, p):
         """
         Abandon a name and reclaim credits from the claim
@@ -2060,6 +1982,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    @auth_required
     def jsonrpc_abandon_name(self, p):
         """
         DEPRECIATED, use abandon_claim
@@ -2072,7 +1995,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return self.jsonrpc_abandon_claim(p)
 
-
+    @auth_required
     def jsonrpc_support_claim(self, p):
         """
         Support a name claim
@@ -2092,6 +2015,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_name_claims(self):
         """
         Get my name claims
@@ -2115,6 +2039,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    @auth_required
     def jsonrpc_get_claims_for_name(self, p):
         """
         Get claims for a name
@@ -2130,6 +2055,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_transaction_history(self):
         """
         Get transaction history
@@ -2144,6 +2070,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_transaction(self, p):
         """
         Get a decoded transaction from a txid
@@ -2160,6 +2087,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_address_is_mine(self, p):
         """
         Checks if an address is associated with the current wallet.
@@ -2177,7 +2105,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
-
+    @auth_required
     def jsonrpc_get_public_key_from_wallet(self, p):
         """
         Get public key from wallet address
@@ -2192,6 +2120,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d = self.session.wallet.get_pub_keys(wallet)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
 
+    @auth_required
     def jsonrpc_get_time_behind_blockchain(self):
         """
         Get number of blocks behind the blockchain
@@ -2215,6 +2144,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    @auth_required
     def jsonrpc_get_new_address(self):
         """
         Generate a new wallet address
@@ -2234,6 +2164,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda address: self._render_response(address, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_send_amount_to_address(self, p):
         """
             Send credits to an address
@@ -2258,6 +2189,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_best_blockhash(self):
         """
             Get hash of most recent block
@@ -2272,6 +2204,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_block(self, p):
         """
             Get contents of a block
@@ -2294,6 +2227,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_claims_for_tx(self, p):
         """
             Get claims for tx
@@ -2313,6 +2247,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_download_descriptor(self, p):
         """
         Download and return a sd blob
@@ -2329,6 +2264,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: self._render_response(False, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_nametrie(self):
         """
             Get the nametrie
@@ -2344,6 +2280,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_set_miner(self, p):
         """
             Start of stop the miner, function only available when lbrycrd is set as the wallet
@@ -2363,6 +2300,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_miner_status(self):
         """
             Get status of miner
@@ -2377,6 +2315,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_log(self, p):
         """
         Log message
@@ -2391,6 +2330,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         log.info("API client log request: %s" % message)
         return self._render_response(True, OK_CODE)
 
+    @auth_required
     def jsonrpc_upload_log(self, p=None):
         """
         Upload log
@@ -2432,6 +2372,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_configure_ui(self, p):
         """
         Configure the UI being hosted
@@ -2456,6 +2397,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         return d
 
+    @auth_required
     def jsonrpc_reveal(self, p):
         """
         Reveal a file or directory in file browser
@@ -2475,6 +2417,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_peers_for_hash(self, p):
         """
         Get peers for blob hash
@@ -2492,6 +2435,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_announce_all_blobs_to_dht(self):
         """
         Announce all blobs to the dht
@@ -2506,6 +2450,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._render_response("Announced", OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_reflect(self, p):
         """
         Reflect a stream
@@ -2522,6 +2467,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallbacks(lambda _: self._render_response(True, OK_CODE), lambda err: self._render_response(err.getTraceback(), OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_blob_hashes(self):
         """
         Returns all blob hashes
@@ -2536,6 +2482,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_reflect_all_blobs(self):
         """
         Reflects all saved blobs
@@ -2551,6 +2498,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @auth_required
     def jsonrpc_get_search_servers(self):
         """
         Get list of lighthouse servers

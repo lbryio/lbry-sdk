@@ -7,12 +7,15 @@ import sys
 import socket
 from appdirs import user_data_dir
 
-from twisted.web import server
-from twisted.internet import reactor, defer
+from twisted.web import server, guard
+from twisted.internet import defer, reactor
+from twisted.cred import portal
+
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.core import log_support
 from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
+from lbrynet.lbrynet_daemon.auth.auth import PasswordChecker, HttpPasswordRealm
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_PORT, \
                          UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
@@ -113,8 +116,14 @@ def start():
         if args.launchui:
             d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
 
-        lbrynet_server = server.Site(lbry.root)
+        checker = PasswordChecker()
+        realm = HttpPasswordRealm(lbry.root)
+        p = portal.Portal(realm, [checker, ])
+        factory = guard.BasicCredentialFactory('Login to lbrynet api')
+        protected_resource = guard.HTTPAuthSessionWrapper(p, [factory, ])
+        lbrynet_server = server.Site(protected_resource)
         lbrynet_server.requestFactory = LBRYDaemonRequest
+
         reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
         reactor.run()
 

@@ -71,6 +71,11 @@ CURRENCIES = {
                 'USD': {'type': 'fiat'},
              }
 
+ALLOWED_DURING_STARTUP = ['is_running', 'is_first_run',
+                          'get_time_behind_blockchain', 'stop',
+                          'daemon_status', 'get_start_notice',
+                          'version', 'get_search_servers']
+
 LOGGLY_TOKEN = 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv'
 
 ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
