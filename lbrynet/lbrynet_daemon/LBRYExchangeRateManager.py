@@ -50,11 +50,15 @@ class MarketFeed(object):
         log.debug("Saving price update %f for %s" % (price, self.market))
         self.rate = ExchangeRate(self.market, price, int(time.time()))
 
+    def _log_error(self):
+        log.warning("%s failed to update exchange rate information", self.name)
+
     def _update_price(self):
         d = defer.succeed(self._make_request())
         d.addCallback(self._handle_response)
         d.addCallback(self._subtract_fee)
         d.addCallback(self._save_price)
+        d.addErrback(lambda _: self._log_error())
 
     def start(self):
         if not self._updater.running:

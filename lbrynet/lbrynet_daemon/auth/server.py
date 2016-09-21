@@ -9,6 +9,7 @@ from txjsonrpc.web.jsonrpc import Handler
 
 from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError
 from lbrynet.lbrynet_daemon.auth.util import APIKey
+from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
 from lbrynet.conf import ALLOWED_DURING_STARTUP
 
 log = logging.getLogger(__name__)
@@ -84,21 +85,21 @@ class LBRYJSONRPCServer(jsonrpc.JSONRPC):
             return function
 
         def _verify_token(session_id, message, token):
-            request.setHeader("Next-Secret", "")
+            request.setHeader(LBRY_SECRET, "")
             api_key = self.sessions.get(session_id, None)
             assert api_key is not None, InvalidAuthenticationToken
             r = api_key.compare_hmac(message, token)
             assert r, InvalidAuthenticationToken
             # log.info("Generating new token for next request")
-            self.sessions.update({session_id: APIKey.new()})
-            request.setHeader("Next-Secret", self.sessions.get(session_id).token())
+            self.sessions.update({session_id: APIKey.new(name=session_id)})
+            request.setHeader(LBRY_SECRET, self.sessions.get(session_id).secret)
 
         session = request.getSession()
         session_id = session.uid
         session_store = self.sessions.get(session_id, False)
 
         if not session_store:
-            token = APIKey.new(seed=session_id)
+            token = APIKey.new(seed=session_id, name=session_id)
             log.info("Initializing new api session")
             self.sessions.update({session_id: token})
             # log.info("Generated token %s", str(self.sessions[session_id]))
@@ -191,3 +192,5 @@ class LBRYJSONRPCServer(jsonrpc.JSONRPC):
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
+
+

@@ -35,10 +35,11 @@ def get_params_from_kwargs(params):
 
 
 def main():
-    api = LBRYAPIClient()
+    api = LBRYAPIClient.config()
 
     try:
-        s = api.is_running()
+        status = api.daemon_status()
+        assert status.get('code', False) == "started"
     except:
         print "lbrynet-daemon isn't running"
         sys.exit(1)
@@ -71,10 +72,10 @@ def main():
     if meth in api.help():
         try:
             if params:
-                r = LBRYAPIClient(service=meth)(params)
+                result = LBRYAPIClient.config(service=meth)(params)
             else:
-                r = LBRYAPIClient(service=meth)()
-            print json.dumps(r, sort_keys=True)
+                result = LBRYAPIClient.config(service=meth)()
+            print json.dumps(result, sort_keys=True)
         except:
             print "Something went wrong, here's the usage for %s:" % meth
             print api.help({'function': meth})

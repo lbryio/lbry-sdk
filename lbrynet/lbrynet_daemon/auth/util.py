@@ -22,24 +22,20 @@ def generate_key(x=None):
         return sha(x)
 
 
-class APIKey(dict):
-    def __init__(self, key, name=None):
-        self.key = key if isinstance(key, str) else key['token']
-        self.name = name if name else hashlib.sha256(self.key).hexdigest()
-        self.expiration = None if isinstance(key, str) else key.get('expiration', None)
-        self.update({self.name: {'token': self.key, 'expiration': self.expiration}})
+class APIKey(object):
+    def __init__(self, secret, name, expiration=None):
+        self.secret = secret
+        self.name = name
+        self.expiration = expiration
 
     @classmethod
-    def new(cls, expiration=None, seed=None, name=None):
-        key_val = generate_key(seed)
-        key = {'token': key_val, 'expiration': expiration}
-        return APIKey(key, name)
-
-    def token(self):
-        return self[self.name]['token']
+    def new(cls, seed=None, name=None, expiration=None):
+        secret = generate_key(seed)
+        key_name = name if name else sha(secret)
+        return APIKey(secret, key_name, expiration)
 
     def _raw_key(self):
-        return base58.b58decode(self.token())
+        return base58.b58decode(self.secret)
 
     def get_hmac(self, message):
         decoded_key = self._raw_key()
@@ -56,27 +52,36 @@ class APIKey(dict):
             return False
         return r
 
-    def rename(self, name):
-        old = self.keys()[0]
-        t = self.pop(old)
-        self.update({name: t})
-
 
 def load_api_keys(path):
     if not os.path.isfile(path):
         raise Exception("Invalid api key path")
 
-    f = open(path, "r")
-    data = yaml.load(f.read())
-    f.close()
+    with open(path, "r") as f:
+        data = yaml.load(f.read())
 
-    keys = {key: APIKey(data[key], name=key)[key] for key in data}
+    keys_for_return = {}
+    for key_name in data:
+        key = data[key_name]
+        secret = key['secret']
+        expiration = key['expiration']
+        keys_for_return.update({key_name: APIKey(secret, key_name, expiration)})
 
-    return keys
+    return keys_for_return
 
 
 def save_api_keys(keys, path):
-    data = yaml.safe_dump(dict(keys))
-    f = open(path, "w")
-    f.write(data)
-    f.close()
+    with open(path, "w") as f:
+        key_dict = {keys[key_name].name: {'secret': keys[key_name].secret,
+                                          'expiration': keys[key_name].expiration}
+                    for key_name in keys}
+        data = yaml.safe_dump(key_dict)
+        f.write(data)
+
+
+def initialize_api_key_file(key_path):
+    if not os.path.isfile(key_path):
+        keys = {}
+        new_api_key = APIKey.new(name=API_KEY_NAME)
+        keys.update({new_api_key.name: new_api_key})
+        save_api_keys(keys, key_path)

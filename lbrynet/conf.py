@@ -2,7 +2,24 @@
 Some network wide and also application specific parameters
 """
 import os
+import sys
+from appdirs import user_data_dir
 
+LINUX = 1
+DARWIN = 2
+WINDOWS = 3
+
+if sys.platform.startswith("linux"):
+    platform = LINUX
+elif sys.platform.startswith("darwin"):
+    platform = DARWIN
+elif sys.platform.startswith("win"):
+    platform = WINDOWS
+
+if platform is LINUX:
+    DATA_DIR = os.path.join(os.path.expanduser("~"), ".lbrynet")
+else:
+    DATA_DIR = user_data_dir("LBRY")
 
 IS_DEVELOPMENT_VERSION = False
 
