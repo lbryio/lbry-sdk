@@ -376,8 +376,14 @@ class LBRYWallet(object):
             d.addCallback(lambda c: self._format_claim_for_return(name, c, claim['txid']))
             return d
 
+        def _get_my_unspent_claim(claims):
+            for claim in claims:
+                if claim['name'] == name and not claim['is spent']:
+                    return claim
+            return False
+
         d = self.get_name_claims()
-        d.addCallback(lambda claims: next((c for c in claims if c['name'] == name and not c['is spent']), False))
+        d.addCallback(_get_my_unspent_claim)
         d.addCallback(_get_claim_for_return)
         return d
 
