@@ -4,7 +4,7 @@
 Installing LBRY is simple. You can get a dmg installer for OS X or a .deb for linux [here](https://github.com/lbryio/lbry/releases/latest). 
 
 ##### OS X
-Just drag and drop LBRY.app into your applications folder (replacing any older versions). When it's running you'll have a LBRY icon in your status bar and the browser will open to the UI.
+Drag and drop LBRY.app into your applications folder (replacing any older versions). When it's running you'll have a LBRY icon in your status bar and the browser will open to the UI.
 
 ##### Linux
 Double click the .deb file and follow the prompts. The app can be started by searching "LBRY", and it can be turned off by clicking the red 'x' in the browser interface.
@@ -12,26 +12,52 @@ Double click the .deb file and follow the prompts. The app can be started by sea
 On both systems you can also open the UI while the app is running by going to lbry://lbry in Firefox or Safari, or localhost:5279 in Chrome.
 
 
-
-#### Installing LBRY command line
+#### Installing LBRY from source
 --------------------------
 
-##### OS X
-You can install LBRY command line by running `curl -sL https://raw.githubusercontent.com/lbryio/lbry/master/packaging/osx/install_lbry_source.sh | sudo bash` in a terminal. This script will install lbrynet and its dependencies. You can start LBRY by running `lbrynet-daemon` from a terminal. 
+Installing LBRY from source is not the recommended way to install
+LBRY. Only do so if you're interested in doing development work.
 
-##### Linux
-On Ubuntu or Mint you can install the prerequisites and lbrynet by running
+##### OS X Prerequisites
+
+In order to install LBRY from source you'll need to first install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/). The dependencies can then be installed by running
+
+```
+brew install mpfr libmpc
+sudo easy_install pip
+sudo pip install virtualenv
+```
+
+##### Linux Prerequisites
+On Ubuntu or Mint you can install the prerequisites by running
+
+ ```
+ sudo apt-get install libgmp3-dev build-essential python2.7 python2.7-dev \
+     python-pip git python-virtualenv
+ ```
+
+##### OSX and Linux Installation
+
+It is strongly recommended to create a new virtualenv for LBRY
+
+ ```
+ sudo apt-get install
+ virtualenv lbry-venv
+ source lbry-venv/bin/activate
+ ```
+
+and install the package in the new virtualenv:
  
  ```
- sudo apt-get install libgmp3-dev build-essential python2.7 python2.7-dev python-pip git
  git clone https://github.com/lbryio/lbry.git
  cd lbry
- sudo python setup.py install
+ python setup.py install
  ```
 
 To start LBRY, run `lbrynet-daemon` in a terminal.
 
-#### On windows:
+
+##### On windows
 
 Install [mingw32](http://www.mingw.org/) base and c++ compiler.
 
