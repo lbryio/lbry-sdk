@@ -1350,7 +1350,6 @@ class LBRYDaemon(AuthJSONRPCServer):
     def _search(self, search):
         return self.lighthouse_client.search(search)
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_is_running(self):
         """
         Check if lbrynet daemon is running
