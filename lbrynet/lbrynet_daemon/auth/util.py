@@ -85,3 +85,9 @@ def initialize_api_key_file(key_path):
         new_api_key = APIKey.new(name=API_KEY_NAME)
         keys.update({new_api_key.name: new_api_key})
         save_api_keys(keys, key_path)
+
+
+def get_auth_message(message_dict):
+    to_auth = message_dict.get('method').encode('hex')
+    to_auth += str(message_dict.get('id')).encode('hex')
+    return to_auth.decode('hex')

@@ -94,3 +94,6 @@ class InvalidHeaderError(Exception):
 
 class InvalidAuthenticationToken(Exception):
     pass
+
+class SubhandlerError(Exception):
+    pass

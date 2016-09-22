@@ -1,16 +1,15 @@
 import logging
 
 from decimal import Decimal
-from twisted.web import server
+from zope.interface import implements
+from twisted.web import server, resource
 from twisted.internet import defer
 from txjsonrpc import jsonrpclib
-from txjsonrpc.web import jsonrpc
-from txjsonrpc.web.jsonrpc import Handler
 
-from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError
-from lbrynet.lbrynet_daemon.auth.util import APIKey
+from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError, SubhandlerError
+from lbrynet.conf import API_INTERFACE, REFERER, ORIGIN
+from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
-from lbrynet.conf import ALLOWED_DURING_STARTUP
 
 log = logging.getLogger(__name__)
 
@@ -20,42 +19,166 @@ def default_decimal(obj):
         return float(obj)
 
 
-def authorizer(cls):
-    cls.authorized_functions = []
-    for methodname in dir(cls):
-        if methodname.startswith("jsonrpc_"):
-            method = getattr(cls, methodname)
-            if hasattr(method, '_auth_required'):
-                cls.authorized_functions.append(methodname.split("jsonrpc_")[1])
-    return cls
+class AuthorizedBase(object):
+    def __init__(self):
+        self.authorized_functions = []
+        self.subhandlers = []
+        self.callable_methods = {}
+
+        for methodname in dir(self):
+            if methodname.startswith("jsonrpc_"):
+                method = getattr(self, methodname)
+                self.callable_methods.update({methodname.split("jsonrpc_")[1]: method})
+                if hasattr(method, '_auth_required'):
+                    self.authorized_functions.append(methodname.split("jsonrpc_")[1])
+            elif not methodname.startswith("__"):
+                method = getattr(self, methodname)
+                if hasattr(method, '_subhandler'):
+                    self.subhandlers.append(method)
+
+    @staticmethod
+    def auth_required(f):
+        f._auth_required = True
+        return f
+
+    @staticmethod
+    def subhandler(f):
+        f._subhandler = True
+        return f
 
 
-def auth_required(f):
-    f._auth_required = True
-    return f
+class AuthJSONRPCServer(AuthorizedBase):
+    """
+    Authorized JSONRPC server used as the base class for the LBRY API
 
+    API methods are named with a leading "jsonrpc_"
 
-@authorizer
-class LBRYJSONRPCServer(jsonrpc.JSONRPC):
+    Decorators:
+        @AuthJSONRPCServer.auth_required: this requires the client include a valid hmac authentication token in their
+                                          request
+
+        @AuthJSONRPCServer.subhandler: include the tagged method in the processing of requests, to allow inheriting
+                                       classes to modify request handling. Tagged methods will be passed the request
+                                       object, and return True when finished to indicate success
+
+    Attributes:
+        allowed_during_startup (list): list of api methods that are callable before the server has finished
+                                       startup
+
+        sessions (dict): dictionary of active session_id: lbrynet.lbrynet_daemon.auth.util.APIKey values
+
+        authorized_functions (list): list of api methods that require authentication
+
+        subhandlers (list): list of subhandlers
+
+        callable_methods (dict): dictionary of api_callable_name: method values
+    """
+    implements(resource.IResource)
 
     isLeaf = True
+    OK = 200
+    UNAUTHORIZED = 401
+    NOT_FOUND = 8001
+    FAILURE = 8002
 
     def __init__(self):
-        jsonrpc.JSONRPC.__init__(self)
+        AuthorizedBase.__init__(self)
+        self.allowed_during_startup = []
         self.sessions = {}
 
+    def setup(self):
+        return NotImplementedError()
+
+    def render(self, request):
+        assert self._check_headers(request), InvalidHeaderError
+
+        session = request.getSession()
+        session_id = session.uid
+
+        # if this is a new session, send a new secret and set the expiration, otherwise, session.touch()
+        if self._initialize_session(session_id):
+            def expire_session():
+                self._unregister_user_session(session_id)
+            session.startCheckingExpiration()
+            session.notifyOnExpire(expire_session)
+            message = "OK"
+            request.setResponseCode(self.OK)
+            self._set_headers(request, message, True)
+            self._render_message(request, message)
+            return server.NOT_DONE_YET
+        session.touch()
+
+        request.content.seek(0, 0)
+        content = request.content.read()
+        try:
+            parsed = jsonrpclib.loads(content)
+        except ValueError:
+            return server.failure
+
+        function_name = parsed.get('method')
+        args = parsed.get('params')
+        id = parsed.get('id')
+        token = parsed.pop('hmac', None)
+        version = self._get_jsonrpc_version(parsed.get('jsonrpc'), id)
+
+        try:
+            self._run_subhandlers(request)
+        except SubhandlerError:
+            return server.failure
+
+        reply_with_next_secret = False
+        if function_name in self.authorized_functions:
+            try:
+                self._verify_token(session_id, parsed, token)
+            except InvalidAuthenticationToken:
+                log.warning("API validation failed")
+                request.setResponseCode(self.UNAUTHORIZED)
+                request.finish()
+                return server.NOT_DONE_YET
+            self._update_session_secret(session_id)
+            reply_with_next_secret = True
+
+        try:
+            function = self._get_jsonrpc_method(function_name)
+        except Exception:
+            log.warning("Unknown method: %s", function_name)
+            return server.failure
+
+        d = defer.maybeDeferred(function) if args == [{}] else defer.maybeDeferred(function, *args)
+        # cancel the response if the connection is broken
+        notify_finish = request.notifyFinish()
+        notify_finish.addErrback(self._response_failed, d)
+        d.addErrback(self._errback_render, id)
+        d.addCallback(self._callback_render, request, id, version, reply_with_next_secret)
+        d.addErrback(notify_finish.errback)
+
+        return server.NOT_DONE_YET
+
     def _register_user_session(self, session_id):
+        """
+        Add or update a HMAC secret for a session
+
+        @param session_id:
+        @return: secret
+        """
         token = APIKey.new()
         self.sessions.update({session_id: token})
         return token
 
-    def _responseFailed(self, err, call):
+    def _unregister_user_session(self, session_id):
+        log.info("Unregister API session")
+        del self.sessions[session_id]
+
+    def _response_failed(self, err, call):
         log.debug(err.getTraceback())
 
-    def _set_headers(self, request, data):
-        request.setHeader("Access-Control-Allow-Origin", "localhost")
+    def _set_headers(self, request, data, update_secret=False):
+        request.setHeader("Access-Control-Allow-Origin", API_INTERFACE)
         request.setHeader("Content-Type", "text/json")
         request.setHeader("Content-Length", str(len(data)))
+        if update_secret:
+            session_id = request.getSession().uid
+            request.setHeader(LBRY_SECRET, self.sessions.get(session_id).secret)
 
     def _render_message(self, request, message):
         request.write(message)
@@ -64,131 +187,87 @@ class LBRYJSONRPCServer(jsonrpc.JSONRPC):
     def _check_headers(self, request):
         origin = request.getHeader("Origin")
         referer = request.getHeader("Referer")
-
-        if origin not in [None, 'http://localhost:5279']:
+        if origin not in [None, ORIGIN]:
             log.warning("Attempted api call from %s", origin)
-            raise InvalidHeaderError
-
-        if referer is not None and not referer.startswith('http://localhost:5279/'):
+            return False
+        if referer is not None and not referer.startswith(REFERER):
             log.warning("Attempted api call from %s", referer)
-            raise InvalidHeaderError
+            return False
+        return True
 
-    def _handle(self, request):
-        def _check_function_path(function_path):
-            if not self.announced_startup:
-                if function_path not in ALLOWED_DURING_STARTUP:
-                    log.warning("Cannot call %s during startup", function_path)
-                    raise Exception("Function not allowed")
+    def _check_function_path(self, function_path):
+        if function_path not in self.callable_methods:
+            log.warning("Unknown method: %s", function_path)
+            return False
+        if not self.announced_startup:
+            if function_path not in self.allowed_during_startup:
+                log.warning("Cannot call %s during startup", function_path)
+                return False
+        return True
 
-        def _get_function(function_path):
-            function = self._getFunction(function_path)
-            return function
+    def _get_jsonrpc_method(self, function_path):
+        assert self._check_function_path(function_path)
+        return self.callable_methods.get(function_path)
 
-        def _verify_token(session_id, message, token):
-            request.setHeader(LBRY_SECRET, "")
-            api_key = self.sessions.get(session_id, None)
-            assert api_key is not None, InvalidAuthenticationToken
-            r = api_key.compare_hmac(message, token)
-            assert r, InvalidAuthenticationToken
-            # log.info("Generating new token for next request")
-            self.sessions.update({session_id: APIKey.new(name=session_id)})
-            request.setHeader(LBRY_SECRET, self.sessions.get(session_id).secret)
-
-        session = request.getSession()
-        session_id = session.uid
-        session_store = self.sessions.get(session_id, False)
-
-        if not session_store:
-            token = APIKey.new(seed=session_id, name=session_id)
+    def _initialize_session(self, session_id):
+        if not self.sessions.get(session_id, False):
             log.info("Initializing new api session")
-            self.sessions.update({session_id: token})
-            # log.info("Generated token %s", str(self.sessions[session_id]))
+            self.sessions.update({session_id: APIKey.new(seed=session_id, name=session_id)})
+            return True
+        return False
 
-        request.content.seek(0, 0)
-        content = request.content.read()
+    def _verify_token(self, session_id, message, token):
+        to_auth = get_auth_message(message)
+        api_key = self.sessions.get(session_id)
+        assert api_key.compare_hmac(to_auth, token), InvalidAuthenticationToken
 
-        parsed = jsonrpclib.loads(content)
+    def _update_session_secret(self, session_id):
+        # log.info("Generating new token for next request")
+        self.sessions.update({session_id: APIKey.new(name=session_id)})
 
-        functionPath = parsed.get("method")
-
-        _check_function_path(functionPath)
-        require_auth = functionPath in self.authorized_functions
-        if require_auth:
-            token = parsed.pop('hmac')
-            to_auth = functionPath.encode('hex') + str(parsed.get('id')).encode('hex')
-            _verify_token(session_id, to_auth.decode('hex'), token)
-
-        args = parsed.get('params')
-        id = parsed.get('id')
-        version = parsed.get('jsonrpc')
-
+    def _get_jsonrpc_version(self, version=None, id=None):
         if version:
-            version = int(float(version))
+            version_for_return = int(float(version))
         elif id and not version:
-            version = jsonrpclib.VERSION_1
+            version_for_return = jsonrpclib.VERSION_1
         else:
-            version = jsonrpclib.VERSION_PRE1
+            version_for_return = jsonrpclib.VERSION_PRE1
+        return version_for_return
 
-        if self.wallet_type == "lbryum" and functionPath in ['set_miner', 'get_miner_status']:
-            log.warning("Mining commands are not available in lbryum")
-            raise Exception("Command not available in lbryum")
+    def _run_subhandlers(self, request):
+        for handler in self.subhandlers:
+            try:
+                assert handler(request)
+            except Exception as err:
+                log.error(err.message)
+                raise SubhandlerError
 
-        try:
-            function = _get_function(functionPath)
-            if args == [{}]:
-                d = defer.maybeDeferred(function)
-            else:
-                d = defer.maybeDeferred(function, *args)
-        except jsonrpclib.Fault as f:
-            d = self._cbRender(f, request, id, version)
-        finally:
-            # cancel the response if the connection is broken
-            notify_finish = request.notifyFinish()
-            notify_finish.addErrback(self._responseFailed, d)
-            d.addErrback(self._ebRender, id)
-            d.addCallback(self._cbRender, request, id, version)
-            d.addErrback(notify_finish.errback)
 
-    def _cbRender(self, result, request, id, version):
-        if isinstance(result, Handler):
-            result = result.result
-
-        if isinstance(result, dict):
-            result = result['result']
+    def _callback_render(self, result, request, id, version, auth_required=False):
+        result_for_return = result if not isinstance(result, dict) else result['result']
 
         if version == jsonrpclib.VERSION_PRE1:
             if not isinstance(result, jsonrpclib.Fault):
-                result = (result,)
+                result_for_return = (result_for_return,)
             # Convert the result (python) to JSON-RPC
         try:
-            s = jsonrpclib.dumps(result, version=version, default=default_decimal)
-            self._render_message(request, s)
+            encoded_message = jsonrpclib.dumps(result_for_return, version=version, default=default_decimal)
+            self._set_headers(request, encoded_message, auth_required)
+            self._render_message(request, encoded_message)
         except:
-            f = jsonrpclib.Fault(self.FAILURE, "can't serialize output")
-            s = jsonrpclib.dumps(f, version=version)
-            self._set_headers(request, s)
-            self._render_message(request, s)
+            fault = jsonrpclib.Fault(self.FAILURE, "can't serialize output")
+            encoded_message = jsonrpclib.dumps(fault, version=version)
+            self._set_headers(request, encoded_message)
+            self._render_message(request, encoded_message)
 
-    def _ebRender(self, failure, id):
+    def _errback_render(self, failure, id):
+        log.error("Request failed:")
         log.error(failure)
         log.error(failure.value)
         log.error(id)
         if isinstance(failure.value, jsonrpclib.Fault):
             return failure.value
         return server.failure
-
-    def render(self, request):
-        try:
-            self._check_headers(request)
-        except InvalidHeaderError:
-            return server.failure
-
-        try:
-            self._handle(request)
-        except:
-            return server.failure
-
-        return server.NOT_DONE_YET
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})

@@ -45,12 +45,9 @@ KNOWN_DHT_NODES = [('104.236.42.182', 4000),
 POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2424'
 #POINTTRADER_SERVER = 'http://127.0.0.1:2424'
 
-if IS_DEVELOPMENT_VERSION:
-    SEARCH_SERVERS = ["http://107.170.207.64:50005"]
-else:
-    SEARCH_SERVERS = ["http://lighthouse1.lbry.io:50005",
-                      "http://lighthouse2.lbry.io:50005",
-                      "http://lighthouse3.lbry.io:50005"]
+SEARCH_SERVERS = ["http://lighthouse1.lbry.io:50005",
+                    "http://lighthouse2.lbry.io:50005",
+                    "http://lighthouse3.lbry.io:50005"]
 
 REFLECTOR_SERVERS = [("reflector.lbry.io", 5566)]
 
@@ -67,6 +64,9 @@ if os.name == "nt":
 else:
     ICON_PATH = "app.icns"
 APP_NAME = "LBRY"
+
+ORIGIN = "http://%s:%i" % (API_INTERFACE, API_PORT)
+REFERER = "http://%s:%i/" % (API_INTERFACE, API_PORT)
 API_CONNECTION_STRING = "http://%s:%i/%s" % (API_INTERFACE, API_PORT, API_ADDRESS)
 UI_ADDRESS = "http://%s:%i" % (API_INTERFACE, API_PORT)
 PROTOCOL_PREFIX = "lbry"
@@ -87,11 +87,6 @@ CURRENCIES = {
                 'LBC': {'type': 'crypto'},
                 'USD': {'type': 'fiat'},
              }
-
-ALLOWED_DURING_STARTUP = ['is_running', 'is_first_run',
-                          'get_time_behind_blockchain', 'stop',
-                          'daemon_status', 'get_start_notice',
-                          'version', 'get_search_servers']
 
 LOGGLY_TOKEN = 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv'
 

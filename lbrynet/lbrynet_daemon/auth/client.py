@@ -5,7 +5,7 @@ import os
 import base64
 import json
 
-from lbrynet.lbrynet_daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME
+from lbrynet.lbrynet_daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
 from lbrynet.conf import API_INTERFACE, API_ADDRESS, API_PORT
 from lbrynet.conf import DATA_DIR
 
@@ -55,8 +55,8 @@ class LBRYAPIClient(object):
                              'method': self.__service_name,
                              'params': args,
                              'id': self.__id_count}
-        to_auth = str(pre_auth_postdata['method']).encode('hex') + str(pre_auth_postdata['id']).encode('hex')
-        token = self.__api_key.get_hmac(to_auth.decode('hex'))
+        to_auth = get_auth_message(pre_auth_postdata)
+        token = self.__api_key.get_hmac(to_auth)
         pre_auth_postdata.update({'hmac': token})
         postdata = json.dumps(pre_auth_postdata)
         service_url = self.__service_url
@@ -79,16 +79,13 @@ class LBRYAPIClient(object):
         next_secret = headers.get(LBRY_SECRET, False)
 
         if next_secret:
-            # print "Next secret: %s" % next_secret
             self.__api_key.secret = next_secret
             self.__cookies = cookies
 
-        # print "Postdata: %s" % postdata
         if http_response is None:
             raise JSONRPCException({
                 'code': -342, 'message': 'missing HTTP response from server'})
 
-        # print "-----\n%s\n------" % http_response.text
         http_response.raise_for_status()
 
         response = http_response.json()
@@ -104,20 +101,18 @@ class LBRYAPIClient(object):
     @classmethod
     def config(cls, key_name=None, key=None, pw_path=None, timeout=HTTP_TIMEOUT, connection=None, count=0,
                                             service=None, cookies=None, auth=None, url=None, login_url=None):
+
         api_key_name = API_KEY_NAME if not key_name else key_name
         pw_path = os.path.join(DATA_DIR, ".api_keys") if not pw_path else pw_path
-
         if not key:
             keys = load_api_keys(pw_path)
             api_key = keys.get(api_key_name, False)
         else:
             api_key = APIKey(name=api_key_name, secret=key)
-
         if login_url is None:
             service_url = "http://%s:%s@%s:%i/%s" % (api_key_name, api_key.secret, API_INTERFACE, API_PORT, API_ADDRESS)
         else:
             service_url = login_url
-
         id_count = count
 
         if auth is None and connection is None and cookies is None and url is None:
@@ -134,10 +129,8 @@ class LBRYAPIClient(object):
                 pass
             authpair = user + b':' + passwd
             auth_header = b'Basic ' + base64.b64encode(authpair)
-
             conn = requests.Session()
             conn.auth = (user, passwd)
-
             req = requests.Request(method='POST',
                                    url=service_url,
                                    auth=conn.auth,
@@ -148,11 +141,9 @@ class LBRYAPIClient(object):
             r = req.prepare()
             http_response = conn.send(r)
             cookies = http_response.cookies
-            # print "Logged in"
-
             uid = cookies.get(TWISTED_SESSION)
             api_key = APIKey.new(seed=uid)
-            # print "Created temporary api key"
+
         else:
             # This is a client that already has a session, use it
             auth_header = auth

@@ -14,7 +14,7 @@ class HttpPasswordRealm(object):
         self.resource = resource
 
     def requestAvatar(self, avatarId, mind, *interfaces):
-        log.info("Processing request for %s", avatarId)
+        log.debug("Processing request for %s", avatarId)
         if resource.IResource in interfaces:
             return (resource.IResource, self.resource, lambda: None)
         raise NotImplementedError()
