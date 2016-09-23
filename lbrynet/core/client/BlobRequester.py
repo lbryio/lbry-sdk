@@ -101,11 +101,16 @@ class BlobRequester(object):
             self._update_local_score(peer, -10.0)
         return reason
 
+    def _record_blob_aquired(self, blob, host, rate):
+        self.blob_manager.blob_history_manager.add_transaction(blob, host, rate, upload=False)
+
     def _pay_or_cancel_payment(self, arg, protocol, reserved_points, blob):
         if blob.length != 0 and (not isinstance(arg, Failure) or arg.check(DownloadCanceledError)):
             self._pay_peer(protocol, blob.length, reserved_points)
+            self._record_blob_aquired(str(blob), protocol.peer.host, reserved_points.amount)
         else:
             self._cancel_points(reserved_points)
+
         return arg
 
     def _handle_download_error(self, err, peer, blob_to_download):

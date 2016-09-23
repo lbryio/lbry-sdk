@@ -55,10 +55,12 @@ class BlobRequestHandler(object):
     def handle_queries(self, queries):
         response = {}
         if self.query_identifiers[0] in queries:
-            if not self.handle_blob_data_payment_rate(queries[self.query_identifiers[0]]):
+            requested_rate = queries[self.query_identifiers[0]]
+            if not self.handle_blob_data_payment_rate(requested_rate):
                     response['blob_data_payment_rate'] = "RATE_TOO_LOW"
             else:
                 response['blob_data_payment_rate'] = 'RATE_ACCEPTED'
+            log.debug(response['blob_data_payment_rate'])
 
         if self.query_identifiers[1] in queries:
             log.debug("Received the client's request to send a blob")
@@ -84,9 +86,15 @@ class BlobRequestHandler(object):
                             return response
                     log.warning("We can not send %s", str(blob))
                     response_fields['error'] = "BLOB_UNAVAILABLE"
-                    return response
+                    return response, blob
+
+                def record_transaction(response, blob, rate):
+                    d = self.blob_manager.blob_history_manager.add_transaction(str(blob), self.peer.host, rate, upload=True)
+                    d.addCallback(lambda _: response)
+                    return d
 
                 d.addCallback(open_blob_for_reading)
+                d.addCallback(lambda (response, blob): record_transaction(response, blob, queries[self.query_identifiers[0]]))
 
                 return d
         else:
@@ -155,6 +163,6 @@ class BlobRequestHandler(object):
                 self.currently_uploading = None
             self.file_sender = None
             if reason is not None and isinstance(reason, Failure):
-                log.info("Upload has failed. Reason: %s", reason.getErrorMessage())
+                log.warning("Upload has failed. Reason: %s", reason.getErrorMessage())
 
         return _send_file()

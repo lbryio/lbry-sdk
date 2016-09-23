@@ -11,6 +11,7 @@ from lbrynet.core.utils import is_valid_blobhash
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from lbrynet.core.Error import NoSuchBlobError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
+from lbrynet.core.BlobHistory import BlobHistoryManager
 
 
 log = logging.getLogger(__name__)
@@ -83,11 +84,13 @@ class DiskBlobManager(BlobManager):
         self.blobs = {}
         self.blob_hashes_to_delete = {} # {blob_hash: being_deleted (True/False)}
         self._next_manage_call = None
+        self.blob_history_manager = BlobHistoryManager(db_dir)
 
     def setup(self):
         log.info("Setting up the DiskBlobManager. blob_dir: %s, db_file: %s", str(self.blob_dir),
                  str(self.db_file))
         d = self._open_db()
+        d.addCallback(lambda _: self.blob_history_manager.start())
         d.addCallback(lambda _: self._manage())
         return d
 

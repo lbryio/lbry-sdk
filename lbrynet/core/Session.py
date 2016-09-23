@@ -10,6 +10,7 @@ from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
 from lbrynet.core.utils import generate_id
 from lbrynet.core.PaymentRateManager import BasePaymentRateManager
+from lbrynet.core.BlobPrice import BlobPriceAndAvailabilityTracker
 from twisted.internet import threads, defer
 
 
@@ -103,6 +104,7 @@ class LBRYSession(object):
         self.dht_node = None
 
         self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
+        self.blob_tracker = None
 
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
@@ -136,6 +138,8 @@ class LBRYSession(object):
     def shut_down(self):
         """Stop all services"""
         ds = []
+        if self.blob_manager is not None:
+            ds.append(defer.maybeDeferred(self.blob_tracker.stop))
         if self.dht_node is not None:
             ds.append(defer.maybeDeferred(self.dht_node.stop))
         if self.rate_limiter is not None:
@@ -255,13 +259,17 @@ class LBRYSession(object):
             else:
                 self.blob_manager = DiskBlobManager(self.hash_announcer, self.blob_dir, self.db_dir)
 
+        if self.blob_tracker is None:
+            self.blob_tracker = BlobPriceAndAvailabilityTracker(self.blob_manager, self.peer_finder, self.dht_node)
+
         self.rate_limiter.start()
         d1 = self.blob_manager.setup()
         d2 = self.wallet.start()
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True, consumeErrors=True)
+        dl.addCallback(lambda _: self.blob_tracker.start())
 
-        dl.addErrback(lambda err: err.value.subFailure)
+        dl.addErrback(self._subfailure)
         return dl
 
     def _unset_upnp(self):
@@ -282,3 +290,9 @@ class LBRYSession(object):
         d = threads.deferToThread(threaded_unset_upnp)
         d.addErrback(lambda err: str(err))
         return d
+
+    def _subfailure(self, err):
+        log.warning(err.getTraceback())
+        return err.value.subFailure
+
+
