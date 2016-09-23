@@ -25,7 +25,7 @@ def frontload(index):
 
 def calculate_price(mean_availability, availability, index_position=0):
     """
-    Calculate mean availability weighted price for a blob
+    Calculate mean-blob-availability and stream-position weighted price for a blob
 
     @param mean_availability: sum of blob availabilities over the number of known blobs
     @param availability: number of known peers for blob
@@ -42,7 +42,7 @@ class BlobPriceAndAvailabilityTracker(object):
     Class to track peer counts for known blobs and update price targets
 
     Attributes:
-        prices (dist): dictionary of blob prices
+        prices (dict): dictionary of blob prices
         availability (dict): dictionary of peers for known blobs
     """
 
