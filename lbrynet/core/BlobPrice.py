@@ -1,6 +1,5 @@
 import logging
 
-from zope.interface import Interface, Attribute
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE as min_price
