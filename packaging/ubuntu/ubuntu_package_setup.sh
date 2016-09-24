@@ -152,6 +152,15 @@ function addfile() {
   echo "$(md5sum "data/$TARGET" | cut -d' ' -f1)  $TARGET" >> control/md5sums
 }
 
+function addlink() {
+  SRC="$1"
+  TARGET="$2"
+  TMP="$PACKAGING_DIR/lbry-temp-symlink"
+  ln -s "$SRC" "$TMP"
+  addfile "$TMP" "$TARGET"
+  rm "$TMP"
+}
+
 # add icons
 addfile "$PACKAGING_DIR/icons/lbry32.png" usr/share/icons/hicolor/32x32/apps/lbry.png
 addfile "$PACKAGING_DIR/icons/lbry48.png" usr/share/icons/hicolor/48x48/apps/lbry.png
@@ -164,9 +173,10 @@ addfile "$PACKAGING_DIR/lbry.desktop" usr/share/applications/lbry.desktop
 BINPATH=usr/share/python/lbrynet/bin
 addfile "$PACKAGING_DIR/lbry" "$BINPATH/lbry"
 
-# symlink script into /usr/bin
-ln -s "/$BINPATH/lbry" "$PACKAGING_DIR/lbry-temp-symlink"
-addfile "$PACKAGING_DIR/lbry-temp-symlink" usr/bin/lbry
+# symlink scripts into /usr/bin
+for script in "lbry" "lbrynet-daemon" "lbrynet-cli" "stop-lbrynet-daemon"; do
+  addlink "/$BINPATH/$script" "usr/bin/$script"
+done
 
 # add lbrycrdd and lbrycrd-cli
 mkdir -p "$PACKAGING_DIR/bins"
