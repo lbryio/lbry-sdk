@@ -369,11 +369,17 @@ class LBRYWallet(object):
         return d
 
     def get_my_claim(self, name):
+        def _convert_units(claim):
+            amount = Decimal(claim['nEffectiveAmount'] / COIN)
+            claim['nEffectiveAmount'] = amount
+            return claim
+
         def _get_claim_for_return(claim):
             if not claim:
                 return False
             d = self.get_claim(name, claim['claim_id'])
-            d.addCallback(lambda c: self._format_claim_for_return(name, c, claim['txid']))
+            d.addCallback(_convert_units)
+            d.addCallback(lambda clm: self._format_claim_for_return(name, clm, claim['txid']))
             return d
 
         def _get_my_unspent_claim(claims):
@@ -399,7 +405,7 @@ class LBRYWallet(object):
     def _format_claim_for_return(self, name, claim, txid, metadata=None, meta_version=None):
         result = {}
         result['claim_id'] = claim['claimId']
-        result['amount'] = Decimal(claim['nEffectiveAmount'] / COIN)
+        result['amount'] = claim['nEffectiveAmount']
         result['height'] = claim['nHeight']
         result['name'] = name
         result['txid'] = txid
