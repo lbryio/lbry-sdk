@@ -399,7 +399,7 @@ class LBRYWallet(object):
     def _format_claim_for_return(self, name, claim, txid, metadata=None, meta_version=None):
         result = {}
         result['claim_id'] = claim['claimId']
-        result['amount'] = claim['nEffectiveAmount']
+        result['amount'] = Decimal(claim['nEffectiveAmount'] / COIN)
         result['height'] = claim['nHeight']
         result['name'] = name
         result['txid'] = txid
