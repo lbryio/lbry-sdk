@@ -1175,7 +1175,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             force_refresh: if True, always go out to the blockchain to resolve.
         """
         if name.startswith('lbry://'):
-            raise ValueError('name %s should not start with lbry://')
+            raise ValueError('name {} should not start with lbry://'.format(name))
         helper = _ResolveNameHelper(self, name, force_refresh)
         return helper.get_deferred()
 
