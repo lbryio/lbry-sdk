@@ -1,14 +1,14 @@
 from twisted.trial import unittest
-from lbrynet.lbrynet_daemon import LBRYDaemonCLI
+from lbrynet.lbrynet_daemon import DaemonCLI
 
 
-class LBRYDaemonCLITests(unittest.TestCase):
+class DaemonCLITests(unittest.TestCase):
     def test_guess_type(self):
-        self.assertEqual('0.3.8', LBRYDaemonCLI.guess_type('0.3.8'))
-        self.assertEqual(0.3, LBRYDaemonCLI.guess_type('0.3'))
-        self.assertEqual(3, LBRYDaemonCLI.guess_type('3'))
-        self.assertEqual('VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA==', LBRYDaemonCLI.guess_type('VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA=='))
-        self.assertEqual(0.3, LBRYDaemonCLI.guess_type('0.3'))
+        self.assertEqual('0.3.8', DaemonCLI.guess_type('0.3.8'))
+        self.assertEqual(0.3, DaemonCLI.guess_type('0.3'))
+        self.assertEqual(3, DaemonCLI.guess_type('3'))
+        self.assertEqual('VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA==', DaemonCLI.guess_type('VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA=='))
+        self.assertEqual(0.3, DaemonCLI.guess_type('0.3'))
 
     def test_get_params(self):
         test_params = [
@@ -25,4 +25,4 @@ class LBRYDaemonCLITests(unittest.TestCase):
             'n': 5,
             'address': 'bY13xeAjLrsjP4KGETwStK2a9UgKgXVTXu'
         }
-        self.assertDictEqual(test_r, LBRYDaemonCLI.get_params_from_kwargs(test_params))
+        self.assertDictEqual(test_r, DaemonCLI.get_params_from_kwargs(test_params))

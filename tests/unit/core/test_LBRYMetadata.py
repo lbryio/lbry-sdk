@@ -1,4 +1,4 @@
-from lbrynet.metadata import LBRYMetadata
+from lbrynet.metadata import Metadata
 from twisted.trial import unittest
 
 
@@ -6,7 +6,7 @@ class MetadataTest(unittest.TestCase):
     def test_assertion_if_no_metadata(self):
         metadata = {}
         with self.assertRaises(AssertionError):
-            LBRYMetadata.Metadata(metadata)
+            Metadata.Metadata(metadata)
 
     def test_assertion_if_source_is_missing(self):
         metadata = {
@@ -19,7 +19,7 @@ class MetadataTest(unittest.TestCase):
             'thumbnail': 'http://ia.media-imdb.com/images/M/MV5BMTQwNjYzMTQ0Ml5BMl5BanBnXkFtZTcwNDUzODM5Nw@@._V1_SY1000_CR0,0,673,1000_AL_.jpg',
         }
         with self.assertRaises(AssertionError):
-            LBRYMetadata.Metadata(metadata)
+            Metadata.Metadata(metadata)
 
     def test_metadata_works_without_fee(self):
         metadata = {
@@ -33,7 +33,7 @@ class MetadataTest(unittest.TestCase):
             'content-type': 'audio/mpeg',
             'thumbnail': 'http://ia.media-imdb.com/images/M/MV5BMTQwNjYzMTQ0Ml5BMl5BanBnXkFtZTcwNDUzODM5Nw@@._V1_SY1000_CR0,0,673,1000_AL_.jpg',
         }
-        m = LBRYMetadata.Metadata(metadata)
+        m = Metadata.Metadata(metadata)
         self.assertFalse('fee' in m)
 
     def test_assertion_if_invalid_source(self):
@@ -49,7 +49,7 @@ class MetadataTest(unittest.TestCase):
             'thumbnail': 'http://ia.media-imdb.com/images/M/MV5BMTQwNjYzMTQ0Ml5BMl5BanBnXkFtZTcwNDUzODM5Nw@@._V1_SY1000_CR0,0,673,1000_AL_.jpg',
         }
         with self.assertRaises(AssertionError):
-            LBRYMetadata.Metadata(metadata)
+            Metadata.Metadata(metadata)
 
     def test_assertion_if_missing_v001_field(self):
         metadata = {
@@ -64,7 +64,7 @@ class MetadataTest(unittest.TestCase):
             'thumbnail': 'http://ia.media-imdb.com/images/M/MV5BMTQwNjYzMTQ0Ml5BMl5BanBnXkFtZTcwNDUzODM5Nw@@._V1_SY1000_CR0,0,673,1000_AL_.jpg'
         }
         with self.assertRaises(AssertionError):
-            LBRYMetadata.Metadata(metadata)
+            Metadata.Metadata(metadata)
 
     def test_version_is_001_if_all_fields_are_present(self):
         metadata = {
@@ -78,7 +78,7 @@ class MetadataTest(unittest.TestCase):
             'content-type': 'audio/mpeg',
             'thumbnail': 'http://ia.media-imdb.com/images/M/MV5BMTQwNjYzMTQ0Ml5BMl5BanBnXkFtZTcwNDUzODM5Nw@@._V1_SY1000_CR0,0,673,1000_AL_.jpg',
         }
-        m = LBRYMetadata.Metadata(metadata, process_now=False)
+        m = Metadata.Metadata(metadata, process_now=False)
         self.assertEquals('0.0.1', m.version)
 
     def test_assertion_if_there_is_an_extra_field(self):
@@ -95,7 +95,7 @@ class MetadataTest(unittest.TestCase):
             'MYSTERYFIELD': '?'
         }
         with self.assertRaises(AssertionError):
-            LBRYMetadata.Metadata(metadata, process_now=False)
+            Metadata.Metadata(metadata, process_now=False)
 
     def test_version_is_002_if_all_fields_are_present(self):
         metadata = {
@@ -112,7 +112,7 @@ class MetadataTest(unittest.TestCase):
             'content-type': 'video/mp4',
             'thumbnail': 'https://svs.gsfc.nasa.gov/vis/a010000/a012000/a012034/Combined.00_08_16_17.Still004.jpg'
         }
-        m = LBRYMetadata.Metadata(metadata, process_now=False)
+        m = Metadata.Metadata(metadata, process_now=False)
         self.assertEquals('0.0.2', m.version)
 
     def test_version_is_003_if_all_fields_are_present(self):
@@ -130,7 +130,7 @@ class MetadataTest(unittest.TestCase):
             'content_type': 'video/mp4',
             'thumbnail': 'https://svs.gsfc.nasa.gov/vis/a010000/a012000/a012034/Combined.00_08_16_17.Still004.jpg'
         }
-        m = LBRYMetadata.Metadata(metadata, process_now=False)
+        m = Metadata.Metadata(metadata, process_now=False)
         self.assertEquals('0.0.3', m.version)
 
     def test_version_claimed_is_001_but_version_is_002(self):
@@ -149,7 +149,7 @@ class MetadataTest(unittest.TestCase):
             'thumbnail': 'https://svs.gsfc.nasa.gov/vis/a010000/a012000/a012034/Combined.00_08_16_17.Still004.jpg'
         }
         with self.assertRaises(AssertionError):
-            LBRYMetadata.Metadata(metadata, process_now=False)
+            Metadata.Metadata(metadata, process_now=False)
 
     def test_version_claimed_is_002_but_version_is_003(self):
         metadata = {
@@ -167,7 +167,7 @@ class MetadataTest(unittest.TestCase):
             'thumbnail': 'https://svs.gsfc.nasa.gov/vis/a010000/a012000/a012034/Combined.00_08_16_17.Still004.jpg'
         }
         with self.assertRaises(AssertionError):
-            LBRYMetadata.Metadata(metadata, process_now=False)
+            Metadata.Metadata(metadata, process_now=False)
 
     def test_version_001_ports_to_003(self):
         metadata = {
@@ -181,7 +181,7 @@ class MetadataTest(unittest.TestCase):
             'content-type': 'audio/mpeg',
             'thumbnail': 'http://ia.media-imdb.com/images/M/MV5BMTQwNjYzMTQ0Ml5BMl5BanBnXkFtZTcwNDUzODM5Nw@@._V1_SY1000_CR0,0,673,1000_AL_.jpg',
         }
-        m = LBRYMetadata.Metadata(metadata, process_now=True)
+        m = Metadata.Metadata(metadata, process_now=True)
         self.assertEquals('0.0.3', m.version)
 
     def test_version_002_ports_to_003(self):
@@ -199,5 +199,5 @@ class MetadataTest(unittest.TestCase):
             'content-type': 'video/mp4',
             'thumbnail': 'https://svs.gsfc.nasa.gov/vis/a010000/a012000/a012034/Combined.00_08_16_17.Still004.jpg'
         }
-        m = LBRYMetadata.Metadata(metadata, process_now=True)
+        m = Metadata.Metadata(metadata, process_now=True)
         self.assertEquals('0.0.3', m.version)
