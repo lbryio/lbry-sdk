@@ -25,7 +25,7 @@ from txjsonrpc.web import jsonrpc
 from txjsonrpc.web.jsonrpc import Handler
 
 from lbrynet import __version__ as lbrynet_version
-from lbryum.version import UM_VERSION as lbryum_version
+from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import analytics
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
@@ -621,7 +621,7 @@ class Daemon(jsonrpc.JSONRPC):
             try:
                 r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
                 version = next(line.split("=")[1].split("#")[0].replace(" ", "")
-                               for line in r if "UM_VERSION" in line)
+                               for line in r if "LBRYUM_VERSION" in line)
                 version = version.replace("'", "")
                 log.info(
                     "remote lbryum %s > local lbryum %s = %s",
@@ -812,11 +812,11 @@ class Daemon(jsonrpc.JSONRPC):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            for lm, lp in [('lbrynet', lbrynet_log)]: #, ('lbryum', lbryum_log)]:
+            for lm, lp in [('lbrynet', lbrynet_log)]:
                 if os.path.isfile(lp):
                     if exclude_previous:
                         f = open(lp, "r")
-                        f.seek(PREVIOUS_NET_LOG) # if lm == 'lbrynet' else PREVIOUS_UM_LOG)
+                        f.seek(PREVIOUS_NET_LOG)
                         log_contents = f.read()
                         f.close()
                     else:
