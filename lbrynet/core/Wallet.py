@@ -17,7 +17,7 @@ from decimal import Decimal
 
 from lbryum import SimpleConfig, Network
 from lbryum.lbrycrd import COIN
-from lbryum.wallet import WalletStorage, Wallet
+import lbryum.wallet
 from lbryum.commands import known_commands, Commands
 from lbryum.transaction import Transaction
 
@@ -1189,8 +1189,8 @@ class LBRYumWallet(Wallet):
 
         def get_wallet():
             path = self.config.get_wallet_path()
-            storage = WalletStorage(path)
-            wallet = Wallet(storage)
+            storage = lbryum.wallet.WalletStorage(path)
+            wallet = lbryum.wallet.Wallet(storage)
             if not storage.file_exists:
                 self.first_run = True
                 seed = wallet.make_seed()
