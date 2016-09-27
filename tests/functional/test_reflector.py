@@ -12,10 +12,10 @@ from lbrynet.core import PeerManager
 from lbrynet.core import RateLimiter
 from lbrynet.core import Session
 from lbrynet.core import StreamDescriptor
-from lbrynet.lbryfile import FileMetadataManager
-from lbrynet.lbryfile.client import FileOptions
-from lbrynet.lbryfilemanager import FileCreator
-from lbrynet.lbryfilemanager import FileManager
+from lbrynet.lbryfile import EncryptedFileMetadataManager
+from lbrynet.lbryfile.client import EncryptedFileOptions
+from lbrynet.lbryfilemanager import EncryptedFileCreator
+from lbrynet.lbryfilemanager import EncryptedFileManager
 
 from tests import mocks
 
@@ -94,16 +94,16 @@ class TestReflector(unittest.TestCase):
             wallet=wallet
         )
 
-        self.stream_info_manager = FileMetadataManager.TempFileMetadataManager()
+        self.stream_info_manager = EncryptedFileMetadataManager.TempEncryptedFileMetadataManager()
 
-        self.lbry_file_manager = FileManager.FileManager(
+        self.lbry_file_manager = EncryptedFileManager.EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
 
         self.server_blob_manager = BlobManager.TempBlobManager(hash_announcer)
 
         d = self.session.setup()
         d.addCallback(lambda _: self.stream_info_manager.setup())
-        d.addCallback(lambda _: FileOptions.add_lbry_file_to_sd_identifier(sd_identifier))
+        d.addCallback(lambda _: EncryptedFileOptions.add_lbry_file_to_sd_identifier(sd_identifier))
         d.addCallback(lambda _: self.lbry_file_manager.setup())
         d.addCallback(lambda _: self.server_blob_manager.setup())
 
@@ -128,7 +128,7 @@ class TestReflector(unittest.TestCase):
 
         def create_stream():
             test_file = mocks.GenFile(5209343, b''.join([chr(i + 3) for i in xrange(0, 64, 6)]))
-            d = FileCreator.create_lbry_file(
+            d = EncryptedFileCreator.create_lbry_file(
                 self.session,
                 self.lbry_file_manager,
                 "test_file",

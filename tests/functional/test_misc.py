@@ -16,8 +16,8 @@ from lbrynet.lbrylive.PaymentRateManager import BaseLiveStreamPaymentRateManager
 from lbrynet.lbrylive.PaymentRateManager import LiveStreamPaymentRateManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
-from lbrynet.lbryfile.FileMetadataManager import TempFileMetadataManager, DBFileMetadataManager
-from lbrynet.lbryfilemanager.FileManager import FileManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager, DBEncryptedFileMetadataManager
+from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.PTCWallet import PointTraderKeyQueryHandlerFactory, PointTraderKeyExchanger
 from lbrynet.core.Session import Session
@@ -25,8 +25,8 @@ from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloade
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.lbryfilemanager.FileCreator import create_lbry_file
-from lbrynet.lbryfile.client.FileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
+from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from twisted.internet import defer, threads, task, error
 from twisted.trial.unittest import TestCase
@@ -41,7 +41,7 @@ from lbrynet.lbrylive.server.LiveBlobInfoQueryHandler import CryptBlobInfoQueryH
 from lbrynet.lbrylive.client.LiveStreamOptions import add_live_stream_to_sd_identifier
 from lbrynet.lbrylive.client.LiveStreamDownloader import add_full_live_stream_downloader_to_sd_identifier
 from lbrynet.core.BlobManager import TempBlobManager
-from lbrynet.reflector.client.client import FileReflectorClientFactory
+from lbrynet.reflector.client.client import EncryptedFileReflectorClientFactory
 from lbrynet.reflector.server.server import ReflectorServerFactory
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 
@@ -236,9 +236,9 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rat
                           peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
                           use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-    stream_info_manager = TempFileMetadataManager()
+    stream_info_manager = TempEncryptedFileMetadataManager()
 
-    lbry_file_manager = FileManager(session, stream_info_manager, sd_identifier)
+    lbry_file_manager = EncryptedFileManager(session, stream_info_manager, sd_identifier)
 
     if ul_rate_limit is not None:
         session.rate_limiter.set_ul_limit(ul_rate_limit)
@@ -354,9 +354,9 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_ra
                           blob_dir=None, peer_port=peer_port,
                           use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-    stream_info_manager = TempFileMetadataManager()
+    stream_info_manager = TempEncryptedFileMetadataManager()
 
-    lbry_file_manager = FileManager(session, stream_info_manager, sd_identifier)
+    lbry_file_manager = EncryptedFileManager(session, stream_info_manager, sd_identifier)
 
     if ul_rate_limit is not None:
         session.rate_limiter.set_ul_limit(ul_rate_limit)
@@ -786,9 +786,9 @@ class TestTransfer(TestCase):
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-        self.stream_info_manager = TempFileMetadataManager()
+        self.stream_info_manager = TempEncryptedFileMetadataManager()
 
-        self.lbry_file_manager = FileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         def make_downloader(metadata, prm):
             info_validator = metadata.validator
@@ -1054,9 +1054,9 @@ class TestTransfer(TestCase):
                                    blob_dir=blob_dir, peer_port=5553, use_upnp=False,
                                    rate_limiter=rate_limiter, wallet=wallet)
 
-        self.stream_info_manager = DBFileMetadataManager(self.session.db_dir)
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
 
-        self.lbry_file_manager = FileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         def make_downloader(metadata, prm):
             info_validator = metadata.validator
@@ -1170,9 +1170,9 @@ class TestTransfer(TestCase):
                                    blob_dir=None, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-        self.stream_info_manager = TempFileMetadataManager()
+        self.stream_info_manager = TempEncryptedFileMetadataManager()
 
-        self.lbry_file_manager = FileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         def start_additional_uploaders(sd_hash):
             for i in range(1, num_uploaders):
@@ -1288,9 +1288,9 @@ class TestStreamify(TestCase):
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-        self.stream_info_manager = TempFileMetadataManager()
+        self.stream_info_manager = TempEncryptedFileMetadataManager()
 
-        self.lbry_file_manager = FileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         d = self.session.setup()
         d.addCallback(lambda _: self.stream_info_manager.setup())
@@ -1340,9 +1340,9 @@ class TestStreamify(TestCase):
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-        self.stream_info_manager = DBFileMetadataManager(self.session.db_dir)
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
 
-        self.lbry_file_manager = FileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         def start_lbry_file(lbry_file):
             logging.debug("Calling lbry_file.start()")
