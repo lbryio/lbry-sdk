@@ -10,7 +10,7 @@ from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.core.PaymentRateManager import PaymentRateManager
-from lbrynet.metadata.LBRYMetadata import Metadata
+from lbrynet.metadata.Metadata import Metadata
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet import reflector
 from lbrynet.conf import LOG_FILE_NAME, REFLECTOR_SERVERS

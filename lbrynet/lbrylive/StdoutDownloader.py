@@ -4,9 +4,9 @@
 import logging
 import sys
 
-from lbrynet.lbrylive.client.LiveStreamDownloader import LBRYLiveStreamDownloader
+from lbrynet.lbrylive.client.LiveStreamDownloader import LiveStreamDownloader
 from lbrynet.core.BlobManager import TempBlobManager
-from lbrynet.core.Session import LBRYSession
+from lbrynet.core.Session import Session
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.lbrylive.PaymentRateManager import BaseLiveStreamPaymentRateManager
@@ -16,7 +16,7 @@ from lbrynet.dht.node import Node
 from twisted.internet import task
 
 
-class LBRYStdoutDownloader():
+class StdoutDownloader():
     """This class downloads a live stream from the network and outputs it to standard out."""
     def __init__(self, dht_node_port, known_dht_nodes,
                  stream_info_manager_class=DBLiveStreamMetadataManager, blob_manager_class=TempBlobManager):
@@ -27,7 +27,7 @@ class LBRYStdoutDownloader():
 
         """
 
-        self.session = LBRYSession(blob_manager_class=blob_manager_class,
+        self.session = Session(blob_manager_class=blob_manager_class,
                                    stream_info_manager_class=stream_info_manager_class,
                                    dht_node_class=Node, dht_node_port=dht_node_port, known_dht_nodes=known_dht_nodes,
                                    use_upnp=False)
@@ -55,7 +55,7 @@ class LBRYStdoutDownloader():
         d.addCallbacks(self.read_sd_file)
 
         def start_stream(stream_hash):
-            consumer = LBRYLiveStreamDownloader(stream_hash, self.session.peer_finder,
+            consumer = LiveStreamDownloader(stream_hash, self.session.peer_finder,
                                                 self.session.rate_limiter, self.session.blob_manager,
                                                 self.stream_info_manager, self.payment_rate_manager,
                                                 self.session.wallet)
@@ -76,9 +76,9 @@ def launch_stdout_downloader():
 
     logging.basicConfig(level=logging.WARNING, filename="dl.log")
     if len(sys.argv) == 3:
-        downloader = LBRYStdoutDownloader(int(sys.argv[2]), [])
+        downloader = StdoutDownloader(int(sys.argv[2]), [])
     elif len(sys.argv) == 5:
-        downloader = LBRYStdoutDownloader(int(sys.argv[2]), [(sys.argv[3], int(sys.argv[4]))])
+        downloader = StdoutDownloader(int(sys.argv[2]), [(sys.argv[3], int(sys.argv[4]))])
     else:
         print "Usage: lbrynet-stdout-downloader <sd_hash> <peer_port> <dht_node_port>" \
               " [<dht_bootstrap_host> <dht_bootstrap port>]"

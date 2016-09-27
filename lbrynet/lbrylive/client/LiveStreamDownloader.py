@@ -39,7 +39,7 @@ class LiveStreamDownloader(CryptStreamDownloader):
             return defer.succeed(True)
 
 
-class LBRYLiveStreamDownloader(LiveStreamDownloader):
+class LiveStreamDownloader(LiveStreamDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  payment_rate_manager, wallet, upload_allowed):
         LiveStreamDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,

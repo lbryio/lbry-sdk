@@ -21,11 +21,11 @@ from lbryum.wallet import WalletStorage, Wallet
 from lbryum.commands import known_commands, Commands
 from lbryum.transaction import Transaction
 
-from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, ILBRYWallet
+from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.metadata.LBRYMetadata import Metadata
+from lbrynet.metadata.Metadata import Metadata
 
 log = logging.getLogger(__name__)
 alert = logging.getLogger("lbryalert." + __name__)
@@ -47,9 +47,9 @@ def _catch_connection_error(f):
     return w
 
 
-class LBRYWallet(object):
-    """This class implements the LBRYWallet interface for the LBRYcrd payment system"""
-    implements(ILBRYWallet)
+class Wallet(object):
+    """This class implements the Wallet interface for the LBRYcrd payment system"""
+    implements(IWallet)
 
     _FIRST_RUN_UNKNOWN = 0
     _FIRST_RUN_YES = 1
@@ -762,9 +762,9 @@ class LBRYWallet(object):
         pass
 
 
-class LBRYcrdWallet(LBRYWallet):
+class LBRYcrdWallet(Wallet):
     def __init__(self, db_dir, wallet_dir=None, wallet_conf=None, lbrycrdd_path=None):
-        LBRYWallet.__init__(self, db_dir)
+        Wallet.__init__(self, db_dir)
         self.started_lbrycrdd = False
         self.wallet_dir = wallet_dir
         self.wallet_conf = wallet_conf
@@ -1108,10 +1108,10 @@ class LBRYcrdWallet(LBRYWallet):
             self.lbrycrdd.wait()
 
 
-class LBRYumWallet(LBRYWallet):
+class LBRYumWallet(Wallet):
 
     def __init__(self, db_dir):
-        LBRYWallet.__init__(self, db_dir)
+        Wallet.__init__(self, db_dir)
         self.config = None
         self.network = None
         self.wallet = None

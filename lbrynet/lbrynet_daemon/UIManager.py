@@ -11,7 +11,7 @@ from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 from lbrynet.conf import DEFAULT_UI_BRANCH, LOG_FILE_NAME
 from lbrynet import __version__ as lbrynet_version
-from lbryum.version import LBRYUM_VERSION as lbryum_version
+from lbryum.version import UM_VERSION as lbryum_version
 from zipfile import ZipFile
 from appdirs import user_data_dir
 
@@ -27,7 +27,7 @@ lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 
-class LBRYUIManager(object):
+class UIManager(object):
     def __init__(self, root):
         if sys.platform != "darwin":
             self.data_dir = os.path.join(os.path.expanduser("~"), '.lbrynet')

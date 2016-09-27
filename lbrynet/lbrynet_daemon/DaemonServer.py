@@ -15,11 +15,11 @@ from twisted.internet import defer, interfaces, error, reactor, threads
 
 from zope.interface import implements
 
-from lbrynet.lbrynet_daemon.LBRYDaemon import LBRYDaemon
+from lbrynet.lbrynet_daemon.Daemon import Daemon
 from lbrynet.conf import API_ADDRESS, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
 
-# TODO: omg, this code is essentially duplicated in LBRYDaemon
+# TODO: omg, this code is essentially duplicated in Daemon
 if sys.platform != "darwin":
     data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
 else:
@@ -31,7 +31,7 @@ lbrynet_log = os.path.join(data_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 
-class LBRYDaemonRequest(server.Request):
+class DaemonRequest(server.Request):
     """
     For LBRY specific request functionality. Currently just provides
     handling for large multipart POST requests, taken from here:
@@ -401,10 +401,10 @@ class EncryptedFileUpload(resource.Resource):
         return json.dumps(newpath)
 
 
-class LBRYDaemonServer(object):
+class DaemonServer(object):
     def _setup_server(self, wallet):
         self.root = LBRYindex(os.path.join(os.path.join(data_dir, "lbry-ui"), "active"))
-        self._api = LBRYDaemon(self.root, wallet_type=wallet)
+        self._api = Daemon(self.root, wallet_type=wallet)
         self.root.putChild("view", HostedEncryptedFile(self._api))
         self.root.putChild("upload", EncryptedFileUpload(self._api))
         self.root.putChild(API_ADDRESS, self._api)

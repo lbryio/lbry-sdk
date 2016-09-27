@@ -1,7 +1,7 @@
 import logging
 
 from lbrynet.metadata.Validator import Validator, skip_validate
-from lbrynet.metadata.LBRYFee import LBRYFeeValidator, verify_supported_currency
+from lbrynet.metadata.Fee import FeeValidator, verify_supported_currency
 from lbrynet.conf import SOURCE_TYPES
 
 log = logging.getLogger(__name__)
@@ -83,4 +83,4 @@ class Metadata(Validator):
 
     def _load_fee(self):
         if 'fee' in self:
-            self.update({'fee': LBRYFeeValidator(self['fee'])})
+            self.update({'fee': FeeValidator(self['fee'])})

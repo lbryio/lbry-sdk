@@ -12,9 +12,9 @@ from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task, error
 from jsonrpc.proxy import JSONRPCProxy
 
-from lbrynet.core.Session import LBRYSession
+from lbrynet.core.Session import Session
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
-from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
+from lbrynet.lbrynet_console.Settings import Settings
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, API_CONNECTION_STRING  # , MIN_BLOB_INFO_PAYMENT_RATE
 from lbrynet.core.utils import generate_id
@@ -43,14 +43,14 @@ from lbrynet.lbrynet_console.ControlHandlers import ShowServerStatusFactory, Mod
 from lbrynet.lbrynet_console.ControlHandlers import ModifyEncryptedFileOptionsChooserFactory, StatusFactory
 from lbrynet.lbrynet_console.ControlHandlers import PeerStatsAndSettingsChooserFactory, PublishFactory
 from lbrynet.lbrynet_console.ControlHandlers import BlockchainStatusFactory
-from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
 
 
 log = logging.getLogger(__name__)
 alert = logging.getLogger("lbryalert." + __name__)
 
 
-class LBRYConsole():
+class Console():
     """A class which can upload and download file streams to and from the network"""
     def __init__(self, peer_port, dht_node_port, known_dht_nodes, fake_wallet,
                  lbrycrd_conf, lbrycrd_dir, use_upnp, data_dir, created_data_dir,
@@ -93,7 +93,7 @@ class LBRYConsole():
         self.command_handlers = []
         self.query_handlers = {}
 
-        self.settings = LBRYSettings(self.db_dir)
+        self.settings = Settings(self.db_dir)
         self.blob_request_payment_rate_manager = None
         self.lbryid = None
         self.sd_identifier = StreamDescriptorIdentifier()
@@ -239,7 +239,7 @@ class LBRYConsole():
 
             alert.info("Databases loaded.")
 
-            self.session = LBRYSession(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
+            self.session = Session(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
                                        use_upnp=self.use_upnp, wallet=results['wallet'])
@@ -565,7 +565,7 @@ def launch_lbry_console():
         logger.addHandler(file_handler)
 
 
-        console = LBRYConsole(peer_port, dht_node_port, bootstrap_nodes, fake_wallet=args.fake_wallet,
+        console = Console(peer_port, dht_node_port, bootstrap_nodes, fake_wallet=args.fake_wallet,
                                 lbrycrd_conf=args.lbrycrd_wallet_conf, lbrycrd_dir=args.lbrycrd_wallet_dir,
                                 use_upnp=not args.disable_upnp, data_dir=data_dir,
                                 created_data_dir=created_data_dir, lbrycrdd_path=args.lbrycrdd_path)

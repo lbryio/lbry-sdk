@@ -25,7 +25,7 @@ from txjsonrpc.web import jsonrpc
 from txjsonrpc.web.jsonrpc import Handler
 
 from lbrynet import __version__ as lbrynet_version
-from lbryum.version import LBRYUM_VERSION as lbryum_version
+from lbryum.version import UM_VERSION as lbryum_version
 from lbrynet import analytics
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
@@ -35,16 +35,16 @@ from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, Invalid
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory, EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbrynet_daemon.LBRYUIManager import LBRYUIManager
-from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
-from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
-from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
+from lbrynet.lbrynet_daemon.UIManager import UIManager
+from lbrynet.lbrynet_daemon.Downloader import GetStream
+from lbrynet.lbrynet_daemon.Publisher import Publisher
+from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
-from lbrynet.metadata.LBRYMetadata import Metadata, verify_name_characters
+from lbrynet.metadata.Metadata import Metadata, verify_name_characters
 from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.core.utils import generate_id
-from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
+from lbrynet.lbrynet_console.Settings import Settings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, \
                          KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, DEFAULT_WALLET, \
                          DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, \
@@ -52,9 +52,9 @@ from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS,
 from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
 from lbrynet.conf import DEFAULT_TIMEOUT
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
-from lbrynet.core.Session import LBRYSession
+from lbrynet.core.Session import Session
 from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager, TempEncryptedFileMetadataManager
 from lbrynet import reflector
@@ -75,9 +75,9 @@ log = logging.getLogger(__name__)
 
 if os.path.isfile(lbrynet_log):
     with open(lbrynet_log, 'r') as f:
-        PREVIOUS_LBRYNET_LOG = len(f.read())
+        PREVIOUS_NET_LOG = len(f.read())
 else:
-    PREVIOUS_LBRYNET_LOG = 0
+    PREVIOUS_NET_LOG = 0
 
 INITIALIZING_CODE = 'initializing'
 LOADING_DB_CODE = 'loading_db'
@@ -138,7 +138,7 @@ class Parameters(object):
         self.__dict__.update(kwargs)
 
 
-class LBRYDaemon(jsonrpc.JSONRPC):
+class Daemon(jsonrpc.JSONRPC):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
@@ -380,8 +380,8 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         self.sd_identifier = StreamDescriptorIdentifier()
         self.stream_info_manager = TempEncryptedFileMetadataManager()
-        self.settings = LBRYSettings(self.db_dir)
-        self.lbry_ui_manager = LBRYUIManager(root)
+        self.settings = Settings(self.db_dir)
+        self.lbry_ui_manager = UIManager(root)
         self.blob_request_payment_rate_manager = None
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
@@ -621,7 +621,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             try:
                 r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
                 version = next(line.split("=")[1].split("#")[0].replace(" ", "")
-                               for line in r if "LBRYUM_VERSION" in line)
+                               for line in r if "UM_VERSION" in line)
                 version = version.replace("'", "")
                 log.info(
                     "remote lbryum %s > local lbryum %s = %s",
@@ -816,7 +816,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
                 if os.path.isfile(lp):
                     if exclude_previous:
                         f = open(lp, "r")
-                        f.seek(PREVIOUS_LBRYNET_LOG) # if lm == 'lbrynet' else PREVIOUS_LBRYUM_LOG)
+                        f.seek(PREVIOUS_NET_LOG) # if lm == 'lbrynet' else PREVIOUS_UM_LOG)
                         log_contents = f.read()
                         f.close()
                     else:
@@ -1073,7 +1073,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return r
 
         def create_session(results):
-            self.session = LBRYSession(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
+            self.session = Session(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
                                        use_upnp=self.use_upnp, wallet=results['wallet'])

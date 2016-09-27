@@ -82,7 +82,7 @@ def disable_noisy_loggers():
     logging.getLogger('lbrynet.core.server').setLevel(logging.INFO)
     logging.getLogger('lbrynet.dht').setLevel(logging.INFO)
     logging.getLogger('lbrynet.lbrynet_daemon').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.LBRYWallet').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.core.Wallet').setLevel(logging.INFO)
     logging.getLogger('lbrynet.lbryfile').setLevel(logging.INFO)
     logging.getLogger('lbrynet.lbryfilemanager').setLevel(logging.INFO)
 

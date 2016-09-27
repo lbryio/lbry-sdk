@@ -269,7 +269,7 @@ class EncryptedFileReflectorClientFactory(ClientFactory):
         log.debug("connection failed: %s", reason)
 
 
-class LBRYBlobReflectorClient(Protocol):
+class BlobReflectorClient(Protocol):
     #  Protocol stuff
 
     def connectionMade(self):
@@ -424,8 +424,8 @@ class LBRYBlobReflectorClient(Protocol):
             self.transport.loseConnection()
 
 
-class LBRYBlobReflectorClientFactory(ClientFactory):
-    protocol = LBRYBlobReflectorClient
+class BlobReflectorClientFactory(ClientFactory):
+    protocol = BlobReflectorClient
 
     def __init__(self, blob_manager, blobs):
         self.blob_manager = blob_manager

@@ -93,8 +93,8 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
     into chunks and encrypted, and then a stream descriptor file with the stream parameters
     and other metadata is written to disk.
 
-    @param session: An LBRYSession object.
-    @type session: LBRYSession
+    @param session: An Session object.
+    @type session: Session
 
     @param lbry_file_manager: The EncryptedFileManager object this LBRY File will be added to.
     @type lbry_file_manager: EncryptedFileManager

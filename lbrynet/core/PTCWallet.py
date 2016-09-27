@@ -7,12 +7,12 @@ from Crypto.Hash import SHA512
 from Crypto.PublicKey import RSA
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import RequestCanceledError
-from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, ILBRYWallet
+from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.pointtraderclient import pointtraderclient
 from twisted.internet import defer, threads
 from zope.interface import implements
 from twisted.python.failure import Failure
-from lbrynet.core.LBRYWallet import ReservedPoints
+from lbrynet.core.Wallet import ReservedPoints
 
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 class PTCWallet(object):
     """This class sends payments to peers and also ensures that expected payments are received.
        This class is only intended to be used for testing."""
-    implements(ILBRYWallet)
+    implements(IWallet)
 
     def __init__(self, db_dir):
         self.db_dir = db_dir
