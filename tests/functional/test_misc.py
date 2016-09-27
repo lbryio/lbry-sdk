@@ -1,6 +1,7 @@
 import shutil
 from multiprocessing import Process, Event, Queue
 import logging
+import platform
 import sys
 import random
 import io
@@ -48,6 +49,15 @@ from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 
 log_format = "%(funcName)s(): %(message)s"
 logging.basicConfig(level=logging.WARNING, format=log_format)
+
+
+def require_system(system):
+    def wrapper(fn):
+        return fn
+    if platform.system() == system:
+        return wrapper
+    else:
+        return unittest.skip("Skipping. Test can only be run on " + system)
 
 
 class FakeNode(object):
@@ -845,6 +855,7 @@ class TestTransfer(TestCase):
 
         return d
 
+    @require_system('Linux')
     def test_live_transfer(self):
 
         sd_hash_queue = Queue()
@@ -940,6 +951,7 @@ class TestTransfer(TestCase):
         d.addBoth(stop)
         return d
 
+    @require_system('Linux')
     def test_last_blob_retrieval(self):
 
         kill_event = Event()
