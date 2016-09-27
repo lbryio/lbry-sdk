@@ -15,7 +15,7 @@ from jsonrpc.proxy import JSONRPCProxy
 from lbrynet.core.Session import LBRYSession
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
-from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
+from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, API_CONNECTION_STRING  # , MIN_BLOB_INFO_PAYMENT_RATE
 from lbrynet.core.utils import generate_id
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
@@ -24,23 +24,23 @@ from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerF
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileOpenerFactory
-from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
-from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
+from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
+from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
+from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager, TempEncryptedFileMetadataManager
 from lbrynet.lbrynet_console.ControlHandlers import ApplicationStatusFactory, GetWalletBalancesFactory, ShutDownFactory
 from lbrynet.lbrynet_console.ControlHandlers import ImmediateAnnounceAllBlobsFactory
-from lbrynet.lbrynet_console.ControlHandlers import LBRYFileStatusFactory, DeleteLBRYFileChooserFactory
-from lbrynet.lbrynet_console.ControlHandlers import ToggleLBRYFileRunningChooserFactory
+from lbrynet.lbrynet_console.ControlHandlers import EncryptedFileStatusFactory, DeleteEncryptedFileChooserFactory
+from lbrynet.lbrynet_console.ControlHandlers import ToggleEncryptedFileRunningChooserFactory
 from lbrynet.lbrynet_console.ControlHandlers import ModifyApplicationDefaultsFactory
-from lbrynet.lbrynet_console.ControlHandlers import CreateLBRYFileFactory, PublishStreamDescriptorChooserFactory
+from lbrynet.lbrynet_console.ControlHandlers import CreateEncryptedFileFactory, PublishStreamDescriptorChooserFactory
 from lbrynet.lbrynet_console.ControlHandlers import ShowPublishedSDHashesChooserFactory
 from lbrynet.lbrynet_console.ControlHandlers import CreatePlainStreamDescriptorChooserFactory
-from lbrynet.lbrynet_console.ControlHandlers import ShowLBRYFileStreamHashChooserFactory, AddStreamFromHashFactory
+from lbrynet.lbrynet_console.ControlHandlers import ShowEncryptedFileStreamHashChooserFactory, AddStreamFromHashFactory
 from lbrynet.lbrynet_console.ControlHandlers import AddStreamFromSDFactory, AddStreamFromLBRYcrdNameFactory
 from lbrynet.lbrynet_console.ControlHandlers import ClaimNameFactory, GetNewWalletAddressFactory
 from lbrynet.lbrynet_console.ControlHandlers import ShowServerStatusFactory, ModifyServerSettingsFactory
-from lbrynet.lbrynet_console.ControlHandlers import ModifyLBRYFileOptionsChooserFactory, StatusFactory
+from lbrynet.lbrynet_console.ControlHandlers import ModifyEncryptedFileOptionsChooserFactory, StatusFactory
 from lbrynet.lbrynet_console.ControlHandlers import PeerStatsAndSettingsChooserFactory, PublishFactory
 from lbrynet.lbrynet_console.ControlHandlers import BlockchainStatusFactory
 from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
@@ -297,11 +297,11 @@ class LBRYConsole():
                        "catch up with our blockchain.\n", points_string)
 
     def _setup_lbry_file_manager(self):
-        self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.db_dir)
+        self.lbry_file_metadata_manager = DBEncryptedFileMetadataManager(self.db_dir)
         d = self.lbry_file_metadata_manager.setup()
 
         def set_lbry_file_manager():
-            self.lbry_file_manager = LBRYFileManager(self.session, self.lbry_file_metadata_manager, self.sd_identifier)
+            self.lbry_file_manager = EncryptedFileManager(self.session, self.lbry_file_metadata_manager, self.sd_identifier)
             return self.lbry_file_manager.setup()
 
         d.addCallback(lambda _: set_lbry_file_manager())
@@ -309,11 +309,11 @@ class LBRYConsole():
         return d
 
     def _setup_lbry_file_opener(self):
-        stream_info_manager = TempLBRYFileMetadataManager()
-        downloader_factory = LBRYFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
+        stream_info_manager = TempEncryptedFileMetadataManager()
+        downloader_factory = EncryptedFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
                                                    self.session.blob_manager, stream_info_manager,
                                                    self.session.wallet)
-        self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
+        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, downloader_factory)
         return defer.succeed(True)
 
     def _setup_control_handlers(self):
@@ -323,20 +323,20 @@ class LBRYConsole():
             ModifyApplicationDefaultsFactory(self),
             ShutDownFactory(self),
             PeerStatsAndSettingsChooserFactory(self.session.peer_manager),
-            LBRYFileStatusFactory(self.lbry_file_manager),
+            EncryptedFileStatusFactory(self.lbry_file_manager),
             AddStreamFromSDFactory(self.sd_identifier, self.session.base_payment_rate_manager,
                                    self.session.wallet),
-            DeleteLBRYFileChooserFactory(self.lbry_file_metadata_manager, self.session.blob_manager,
+            DeleteEncryptedFileChooserFactory(self.lbry_file_metadata_manager, self.session.blob_manager,
                                          self.lbry_file_manager),
-            ToggleLBRYFileRunningChooserFactory(self.lbry_file_manager),
-            CreateLBRYFileFactory(self.session, self.lbry_file_manager),
+            ToggleEncryptedFileRunningChooserFactory(self.lbry_file_manager),
+            CreateEncryptedFileFactory(self.session, self.lbry_file_manager),
             PublishStreamDescriptorChooserFactory(self.lbry_file_metadata_manager,
                                                   self.session.blob_manager),
             ShowPublishedSDHashesChooserFactory(self.lbry_file_metadata_manager,
                                                 self.lbry_file_manager),
             CreatePlainStreamDescriptorChooserFactory(self.lbry_file_manager),
-            ShowLBRYFileStreamHashChooserFactory(self.lbry_file_manager),
-            ModifyLBRYFileOptionsChooserFactory(self.lbry_file_manager),
+            ShowEncryptedFileStreamHashChooserFactory(self.lbry_file_manager),
+            ModifyEncryptedFileOptionsChooserFactory(self.lbry_file_manager),
             AddStreamFromHashFactory(self.sd_identifier, self.session, self.session.wallet),
             StatusFactory(self, self.session.rate_limiter, self.lbry_file_manager,
                           self.session.blob_manager, self.session.wallet if not self.fake_wallet else None),

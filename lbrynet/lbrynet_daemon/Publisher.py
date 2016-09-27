@@ -7,11 +7,11 @@ import random
 from appdirs import user_data_dir
 
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
+from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.metadata.LBRYMetadata import Metadata
-from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
+from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet import reflector
 from lbrynet.conf import LOG_FILE_NAME, REFLECTOR_SERVERS
 from twisted.internet import threads, defer, reactor
@@ -124,7 +124,7 @@ class Publisher(object):
 
     def set_status(self):
         log.debug('Setting status')
-        d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file, ManagedLBRYFileDownloader.STATUS_FINISHED)
+        d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file, ManagedEncryptedFileDownloader.STATUS_FINISHED)
         d.addCallback(lambda _: self.lbry_file.restore())
         return d
 

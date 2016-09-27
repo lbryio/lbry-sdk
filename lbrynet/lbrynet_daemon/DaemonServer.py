@@ -231,7 +231,7 @@ class LBRYindex(resource.Resource):
         return static.File(os.path.join(self.ui_dir, "index.html")).render_GET(request)
 
 
-class LBRYFileStreamer(object):
+class EncryptedFileStreamer(object):
     """
     Writes downloaded LBRY file to request as the download comes in, pausing and resuming as requested
     used for Chrome
@@ -315,13 +315,13 @@ class LBRYFileStreamer(object):
         return defer.succeed(None)
 
 
-class HostedLBRYFile(resource.Resource):
+class HostedEncryptedFile(resource.Resource):
     def __init__(self, api):
         self._api = api
         self._producer = None
         resource.Resource.__init__(self)
 
-    # todo: fix LBRYFileStreamer and use it instead of static.File
+    # todo: fix EncryptedFileStreamer and use it instead of static.File
     # def makeProducer(self, request, stream):
     #     def _save_producer(producer):
     #         self._producer = producer
@@ -333,7 +333,7 @@ class HostedLBRYFile(resource.Resource):
     #     path = os.path.join(self._api.download_directory, stream.file_name)
     #
     #     d = stream.get_total_bytes()
-    #     d.addCallback(lambda size: _save_producer(LBRYFileStreamer(request, path, start, stop, size)))
+    #     d.addCallback(lambda size: _save_producer(EncryptedFileStreamer(request, path, start, stop, size)))
     #     d.addCallback(lambda _: request.registerProducer(self._producer, streaming=True))
     #     # request.notifyFinish().addCallback(lambda _: self._producer.stopProducing())
     #     request.notifyFinish().addErrback(self._responseFailed, d)
@@ -362,7 +362,7 @@ class HostedLBRYFile(resource.Resource):
     #     call.addErrback(lambda err: log.info("Error: " + str(err)))
     #     call.cancel()
 
-class LBRYFileUpload(resource.Resource):
+class EncryptedFileUpload(resource.Resource):
     """
     Accepts a file sent via the file upload widget in the web UI, saves
     it into a temporary dir, and responds with a JSON string containing
@@ -405,8 +405,8 @@ class LBRYDaemonServer(object):
     def _setup_server(self, wallet):
         self.root = LBRYindex(os.path.join(os.path.join(data_dir, "lbry-ui"), "active"))
         self._api = LBRYDaemon(self.root, wallet_type=wallet)
-        self.root.putChild("view", HostedLBRYFile(self._api))
-        self.root.putChild("upload", LBRYFileUpload(self._api))
+        self.root.putChild("view", HostedEncryptedFile(self._api))
+        self.root.putChild("upload", EncryptedFileUpload(self._api))
         self.root.putChild(API_ADDRESS, self._api)
         return defer.succeed(True)
 

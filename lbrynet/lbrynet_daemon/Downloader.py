@@ -12,7 +12,7 @@ from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.metadata.LBRYFee import LBRYFeeValidator
-from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
+from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.conf import DEFAULT_TIMEOUT, LOG_FILE_NAME
 
 INITIALIZING_CODE = 'initializing'
@@ -105,7 +105,7 @@ class GetStream(object):
 
         def get_downloader_factory(metadata):
             for factory in metadata.factories:
-                if isinstance(factory, ManagedLBRYFileDownloaderFactory):
+                if isinstance(factory, ManagedEncryptedFileDownloaderFactory):
                     return factory, metadata
             raise Exception('No suitable factory was found in {}'.format(metadata.factories))
 

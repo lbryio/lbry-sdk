@@ -32,9 +32,9 @@ from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerF
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError
-from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
-from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
-from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
+from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory, EncryptedFileOpenerFactory
+from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbrynet_daemon.LBRYUIManager import LBRYUIManager
 from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
 from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
@@ -55,8 +55,8 @@ from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_s
 from lbrynet.core.Session import LBRYSession
 from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
-from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
-from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
+from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager, TempEncryptedFileMetadataManager
 from lbrynet import reflector
 
 
@@ -379,7 +379,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         # self.lbrynet_connection_checker = LoopingCall(self._check_lbrynet_connection)
 
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.stream_info_manager = TempLBRYFileMetadataManager()
+        self.stream_info_manager = TempEncryptedFileMetadataManager()
         self.settings = LBRYSettings(self.db_dir)
         self.lbry_ui_manager = LBRYUIManager(root)
         self.blob_request_payment_rate_manager = None
@@ -688,7 +688,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self._add_to_pending_claims(name, txid)
 
         def _process_lbry_file(name, lbry_file):
-            # lbry_file is an instance of ManagedLBRYFileDownloader or None
+            # lbry_file is an instance of ManagedEncryptedFileDownloader or None
             # TODO: check for sd_hash in addition to txid
             ready_to_start = (
                 lbry_file and
@@ -1022,11 +1022,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _setup_lbry_file_manager(self):
         self.startup_status = STARTUP_STAGES[3]
-        self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.db_dir)
+        self.lbry_file_metadata_manager = DBEncryptedFileMetadataManager(self.db_dir)
         d = self.lbry_file_metadata_manager.setup()
 
         def set_lbry_file_manager():
-            self.lbry_file_manager = LBRYFileManager(self.session,
+            self.lbry_file_manager = EncryptedFileManager(self.session,
                                                      self.lbry_file_metadata_manager,
                                                      self.sd_identifier,
                                                      download_directory=self.download_directory)
@@ -1087,22 +1087,22 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return dl
 
     def _setup_stream_identifier(self):
-        file_saver_factory = LBRYFileSaverFactory(self.session.peer_finder, self.session.rate_limiter,
+        file_saver_factory = EncryptedFileSaverFactory(self.session.peer_finder, self.session.rate_limiter,
                                                   self.session.blob_manager, self.stream_info_manager,
                                                   self.session.wallet, self.download_directory)
-        self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, file_saver_factory)
-        file_opener_factory = LBRYFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
+        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
+        file_opener_factory = EncryptedFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
                                                     self.session.blob_manager, self.stream_info_manager,
                                                     self.session.wallet)
-        self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, file_opener_factory)
+        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_opener_factory)
         return defer.succeed(None)
 
     def _setup_lbry_file_opener(self):
 
-        downloader_factory = LBRYFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
+        downloader_factory = EncryptedFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
                                                    self.session.blob_manager, self.stream_info_manager,
                                                    self.session.wallet)
-        self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
+        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, downloader_factory)
         return defer.succeed(True)
 
     def _download_sd_blob(self, sd_hash, timeout=DEFAULT_SD_DOWNLOAD_TIMEOUT):

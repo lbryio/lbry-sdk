@@ -7,7 +7,7 @@ from lbrynet.interfaces import IMetadataHandler
 log = logging.getLogger(__name__)
 
 
-class LBRYFileMetadataHandler(object):
+class EncryptedFileMetadataHandler(object):
     implements(IMetadataHandler)
 
     def __init__(self, stream_hash, stream_info_manager, download_manager):

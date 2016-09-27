@@ -61,7 +61,7 @@ class IncompleteResponseError(Exception):
     pass
 
 
-class LBRYFileReflectorClient(Protocol):
+class EncryptedFileReflectorClient(Protocol):
 
     #  Protocol stuff
 
@@ -238,8 +238,8 @@ class LBRYFileReflectorClient(Protocol):
             self.transport.loseConnection()
 
 
-class LBRYFileReflectorClientFactory(ClientFactory):
-    protocol = LBRYFileReflectorClient
+class EncryptedFileReflectorClientFactory(ClientFactory):
+    protocol = EncryptedFileReflectorClient
 
     def __init__(self, blob_manager, stream_info_manager, stream_hash):
         self.blob_manager = blob_manager

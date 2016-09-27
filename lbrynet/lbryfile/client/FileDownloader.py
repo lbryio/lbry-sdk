@@ -8,7 +8,7 @@ from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownload
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.interfaces import IStreamDownloaderFactory
-from lbrynet.lbryfile.client.LBRYFileMetadataHandler import LBRYFileMetadataHandler
+from lbrynet.lbryfile.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
 import os
 from twisted.internet import defer, threads, reactor
 from twisted.python.procutils import which
@@ -19,7 +19,7 @@ import traceback
 log = logging.getLogger(__name__)
 
 
-class LBRYFileDownloader(CryptStreamDownloader):
+class EncryptedFileDownloader(CryptStreamDownloader):
     """Classes which inherit from this class download LBRY files"""
 
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
@@ -120,10 +120,10 @@ class LBRYFileDownloader(CryptStreamDownloader):
             return 0
 
     def _get_metadata_handler(self, download_manager):
-        return LBRYFileMetadataHandler(self.stream_hash, self.stream_info_manager, download_manager)
+        return EncryptedFileMetadataHandler(self.stream_hash, self.stream_info_manager, download_manager)
 
 
-class LBRYFileDownloaderFactory(object):
+class EncryptedFileDownloaderFactory(object):
     implements(IStreamDownloaderFactory)
 
     def __init__(self, peer_finder, rate_limiter, blob_manager, stream_info_manager,
@@ -165,10 +165,10 @@ class LBRYFileDownloaderFactory(object):
         pass
 
 
-class LBRYFileSaver(LBRYFileDownloader):
+class EncryptedFileSaver(EncryptedFileDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  payment_rate_manager, wallet, download_directory, upload_allowed, file_name=None):
-        LBRYFileDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
+        EncryptedFileDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
                                     stream_info_manager, payment_rate_manager, wallet, upload_allowed)
         self.download_directory = download_directory
         self.file_name = file_name
@@ -182,7 +182,7 @@ class LBRYFileSaver(LBRYFileDownloader):
             return str(self.file_name)
 
     def set_stream_info(self):
-        d = LBRYFileDownloader.set_stream_info(self)
+        d = EncryptedFileDownloader.set_stream_info(self)
 
         def set_file_name():
             if self.file_name is None:
@@ -195,7 +195,7 @@ class LBRYFileSaver(LBRYFileDownloader):
         return d
 
     def stop(self, err=None):
-        d = LBRYFileDownloader.stop(self, err=err)
+        d = EncryptedFileDownloader.stop(self, err=err)
         d.addCallback(lambda _: self._delete_from_info_manager())
         return d
 
@@ -257,15 +257,15 @@ class LBRYFileSaver(LBRYFileDownloader):
         return self.stream_info_manager.delete_stream(self.stream_hash)
 
 
-class LBRYFileSaverFactory(LBRYFileDownloaderFactory):
+class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
     def __init__(self, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  wallet, download_directory):
-        LBRYFileDownloaderFactory.__init__(self, peer_finder, rate_limiter, blob_manager,
+        EncryptedFileDownloaderFactory.__init__(self, peer_finder, rate_limiter, blob_manager,
                                            stream_info_manager, wallet)
         self.download_directory = download_directory
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info, upload_allowed):
-        return LBRYFileSaver(stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager,
+        return EncryptedFileSaver(stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager,
                              self.stream_info_manager, payment_rate_manager, self.wallet,
                              self.download_directory, upload_allowed)
 
@@ -274,16 +274,16 @@ class LBRYFileSaverFactory(LBRYFileDownloaderFactory):
         return "Save"
 
 
-class LBRYFileOpener(LBRYFileDownloader):
+class EncryptedFileOpener(EncryptedFileDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  payment_rate_manager, wallet, upload_allowed):
-        LBRYFileDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
+        EncryptedFileDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
                                     stream_info_manager, payment_rate_manager, wallet, upload_allowed)
         self.process = None
         self.process_log = None
 
     def stop(self, err=None):
-        d = LBRYFileDownloader.stop(self, err=err)
+        d = EncryptedFileDownloader.stop(self, err=err)
         d.addCallback(lambda _: self._delete_from_info_manager())
         return d
 
@@ -333,7 +333,7 @@ class LBRYFileOpener(LBRYFileDownloader):
         return self.stream_info_manager.delete_stream(self.stream_hash)
 
 
-class LBRYFileOpenerFactory(LBRYFileDownloaderFactory):
+class EncryptedFileOpenerFactory(EncryptedFileDownloaderFactory):
     def can_download(self, sd_validator):
         if which('vlc'):
             return True
@@ -346,7 +346,7 @@ class LBRYFileOpenerFactory(LBRYFileDownloaderFactory):
         return False
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info, upload_allowed):
-        return LBRYFileOpener(stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager,
+        return EncryptedFileOpener(stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager,
                               self.stream_info_manager, payment_rate_manager, self.wallet, upload_allowed)
 
     @staticmethod
