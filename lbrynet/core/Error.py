@@ -88,3 +88,7 @@ class NoSuchStreamHashError(Exception):
 
 class InvalidBlobHashError(Exception):
     pass
+
+
+class NegotiationError(Exception):
+    pass

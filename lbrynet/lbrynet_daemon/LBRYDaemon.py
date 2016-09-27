@@ -27,8 +27,7 @@ from txjsonrpc.web.jsonrpc import Handler
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import analytics
-from lbrynet.core.PaymentRateManager import PaymentRateManager
-from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
+from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError
@@ -545,7 +544,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_stream_identifier())
         d.addCallback(lambda _: self._setup_lbry_file_manager())
-        d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: _log_starting_vals())
@@ -776,17 +774,15 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         handlers = [
             # CryptBlobInfoQueryHandlerFactory(self.lbry_file_metadata_manager, self.session.wallet,
             #                                 self._server_payment_rate_manager),
-            BlobAvailabilityHandlerFactory(self.session.blob_manager),
-            # BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
-            #                          self._server_payment_rate_manager),
+            # BlobAvailabilityHandlerFactory(self.session.blob_manager),
+            BlobRequestHandlerFactory(self.session.blob_manager, self.session.blob_tracker, self.session.wallet,
+                                     self.session.payment_rate_manager),
             self.session.wallet.get_wallet_info_query_handler_factory(),
         ]
 
         def get_blob_request_handler_factory(rate):
-            self.blob_request_payment_rate_manager = PaymentRateManager(
-                self.session.base_payment_rate_manager, rate
-            )
-            handlers.append(BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
+            self.blob_request_payment_rate_manager = self.session.payment_rate_manager
+            handlers.append(BlobRequestHandlerFactory(self.session.blob_manager, self.session.blob_tracker, self.session.wallet,
                                                       self.blob_request_payment_rate_manager))
 
         d1 = self.settings.get_server_data_payment_rate()
@@ -1097,14 +1093,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, file_opener_factory)
         return defer.succeed(None)
 
-    def _setup_lbry_file_opener(self):
-
-        downloader_factory = LBRYFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
-                                                   self.session.blob_manager, self.stream_info_manager,
-                                                   self.session.wallet)
-        self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
-        return defer.succeed(True)
-
     def _download_sd_blob(self, sd_hash, timeout=DEFAULT_SD_DOWNLOAD_TIMEOUT):
         def cb(result):
             if not r.called:
@@ -1116,7 +1104,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         r = defer.Deferred(None)
         reactor.callLater(timeout, eb)
-        d = download_sd_blob(self.session, sd_hash, PaymentRateManager(self.session.base_payment_rate_manager))
+        d = download_sd_blob(self.session, sd_hash, self.session.payment_rate_manager)
         d.addCallback(BlobStreamDescriptorReader)
         d.addCallback(lambda blob: blob.get_info())
         d.addCallback(cb)
@@ -2562,6 +2550,20 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         """
 
         d = self._render_response(SEARCH_SERVERS, OK_CODE)
+        return d
+
+
+    def jsonrpc_get_mean_availability(self):
+        """
+        Get mean blob availability
+
+        Args:
+            None
+        Returns:
+            Mean peers for a blob
+        """
+
+        d = self._render_response(self.session.blob_tracker.last_mean_availability, OK_CODE)
         return d
 
 

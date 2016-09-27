@@ -48,7 +48,7 @@ class CryptStreamDownloader(object):
 
         @param blob_manager: A BlobManager object
 
-        @param payment_rate_manager: A PaymentRateManager object
+        @param payment_rate_manager: A NegotiatedPaymentRateManager object
 
         @param wallet: An object which implements the ILBRYWallet interface
 

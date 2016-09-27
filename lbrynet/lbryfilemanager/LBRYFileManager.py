@@ -12,7 +12,7 @@ from twisted.python.failure import Failure
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
 from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
-from lbrynet.core.PaymentRateManager import PaymentRateManager
+from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError, CurrentlyStoppingError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
@@ -74,7 +74,8 @@ class LBRYFileManager(object):
     def _start_lbry_files(self):
 
         def set_options_and_restore(rowid, stream_hash, options):
-            payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager)
+            payment_rate_manager = NegotiatedPaymentRateManager(self.session.base_payment_rate_manager,
+                                                                self.session.blob_tracker)
             d = self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
                                      blob_data_rate=options)
             d.addCallback(lambda downloader: downloader.restore())

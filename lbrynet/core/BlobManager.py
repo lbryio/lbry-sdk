@@ -2,6 +2,7 @@ import logging
 import os
 import time
 import sqlite3
+
 from twisted.internet import threads, defer
 from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
@@ -11,8 +12,6 @@ from lbrynet.core.utils import is_valid_blobhash
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from lbrynet.core.Error import NoSuchBlobError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
-from lbrynet.core.BlobHistory import BlobHistoryManager
-
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +70,12 @@ class BlobManager(DHTHashSupplier):
     def get_all_verified_blobs(self):
         pass
 
+    def add_blob_to_download_history(self, blob_hash, host, rate):
+        pass
+
+    def add_blob_to_upload_history(self, blob_hash, host, rate):
+        pass
+
 
 class DiskBlobManager(BlobManager):
     """This class stores blobs on the hard disk"""
@@ -84,13 +89,11 @@ class DiskBlobManager(BlobManager):
         self.blobs = {}
         self.blob_hashes_to_delete = {} # {blob_hash: being_deleted (True/False)}
         self._next_manage_call = None
-        self.blob_history_manager = BlobHistoryManager(db_dir)
 
     def setup(self):
         log.info("Setting up the DiskBlobManager. blob_dir: %s, db_file: %s", str(self.blob_dir),
                  str(self.db_file))
         d = self._open_db()
-        d.addCallback(lambda _: self.blob_history_manager.start())
         d.addCallback(lambda _: self._manage())
         return d
 
@@ -188,6 +191,14 @@ class DiskBlobManager(BlobManager):
         d.addCallback(self.completed_blobs)
         return d
 
+    def add_blob_to_download_history(self, blob_hash, host, rate):
+        d = self._add_blob_to_download_history(blob_hash, host, rate)
+        return d
+
+    def add_blob_to_upload_history(self, blob_hash, host, rate):
+        d = self._add_blob_to_upload_history(blob_hash, host, rate)
+        return d
+
     def _manage(self):
         from twisted.internet import reactor
 
@@ -246,12 +257,29 @@ class DiskBlobManager(BlobManager):
         # one that opened it. The individual connections in the pool are not used in multiple
         # threads.
         self.db_conn = adbapi.ConnectionPool('sqlite3', self.db_file, check_same_thread=False)
-        return self.db_conn.runQuery("create table if not exists blobs (" +
-                                     "    blob_hash text primary key, " +
-                                     "    blob_length integer, " +
-                                     "    last_verified_time real, " +
-                                     "    next_announce_time real"
-                                     ")")
+
+        def create_tables(transaction):
+            transaction.execute("create table if not exists blobs (" +
+                                "    blob_hash text primary key, " +
+                                "    blob_length integer, " +
+                                "    last_verified_time real, " +
+                                "    next_announce_time real)")
+
+            transaction.execute("create table if not exists download (" +
+                                "    id integer primary key autoincrement, " +
+                                "    blob text, " +
+                                "    host text, " +
+                                "    rate float, " +
+                                "    ts integer)")
+
+            transaction.execute("create table if not exists upload (" +
+                                "    id integer primary key autoincrement, " +
+                                "    blob text, " +
+                                "    host text, " +
+                                "    rate float, " +
+                                "    ts integer)")
+
+        return self.db_conn.runInteraction(create_tables)
 
     @rerun_if_locked
     def _add_completed_blob(self, blob_hash, length, timestamp, next_announce_time=None):
@@ -429,6 +457,18 @@ class DiskBlobManager(BlobManager):
         d.addCallback(lambda blobs: threads.deferToThread(get_verified_blobs, blobs))
         return d
 
+    @rerun_if_locked
+    def _add_blob_to_download_history(self, blob_hash, host, rate):
+        ts = int(time.time())
+        d = self.db_conn.runQuery("insert into download values (null, ?, ?, ?, ?) ", (blob_hash, str(host), float(rate), ts))
+        return d
+
+    @rerun_if_locked
+    def _add_blob_to_upload_history(self, blob_hash, host, rate):
+        ts = int(time.time())
+        d = self.db_conn.runQuery("insert into upload values (null, ?, ?, ?, ?) ", (blob_hash, str(host), float(rate), ts))
+        return d
+
 
 class TempBlobManager(BlobManager):
     """This class stores blobs in memory"""
@@ -529,7 +569,6 @@ class TempBlobManager(BlobManager):
         d.addCallback(lambda _: set_next_manage_call())
 
     def _delete_blobs_marked_for_deletion(self):
-
         def remove_from_list(b_h):
             del self.blob_hashes_to_delete[b_h]
             log.info("Deleted blob %s", blob_hash)

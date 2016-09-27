@@ -12,8 +12,7 @@ class Peer(object):
         self.stats = defaultdict(float)  # {string stat_type, float count}
 
     def is_available(self):
-        if (self.attempt_connection_at is None or
-            datetime.datetime.today() > self.attempt_connection_at):
+        if self.attempt_connection_at is None or datetime.datetime.today() > self.attempt_connection_at:
             return True
         return False
 

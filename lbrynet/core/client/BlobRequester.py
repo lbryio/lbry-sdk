@@ -1,14 +1,16 @@
-from collections import defaultdict
 import logging
+from collections import defaultdict
+
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from zope.interface import implements
-from lbrynet.core.Error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
-from lbrynet.core.Error import InvalidResponseError, RequestCanceledError, NoResponseError
+
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError
+from lbrynet.core.Error import InvalidResponseError, RequestCanceledError, NoResponseError
+from lbrynet.core.Error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
 from lbrynet.core.client.ClientRequest import ClientRequest, ClientBlobRequest
 from lbrynet.interfaces import IRequestCreator
-
+from lbrynet.core.Offer import Negotiate, Offer
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +29,7 @@ class BlobRequester(object):
         self._unavailable_blobs = defaultdict(list)  # {Peer: [blob_hash]}}
         self._protocol_prices = {}  # {ClientProtocol: price}
         self._price_disagreements = []  # [Peer]
+        self._protocol_tries = {}
         self._incompatible_peers = []
 
     ######## IRequestCreator #########
@@ -46,7 +49,8 @@ class BlobRequester(object):
                 d1.addCallback(self._handle_availability, peer, a_r)
                 d1.addErrback(self._request_failed, "availability request", peer)
                 sent_request = True
-            if d_r is not None:
+
+            if d_r is not None and protocol in self._protocol_prices:
                 reserved_points = self._reserve_points(peer, protocol, d_r.max_pay_units)
                 if reserved_points is not None:
                     # Note: The following three callbacks will be called when the blob has been
@@ -68,17 +72,18 @@ class BlobRequester(object):
                     # downloaded.
                     d2.addCallback(self._handle_incoming_blob, peer, d_r)
                     d2.addErrback(self._request_failed, "download request", peer)
-
                     sent_request = True
                 else:
                     d_r.cancel(InsufficientFundsError())
                     d_r.finished_deferred.addErrback(lambda _: True)
                     return defer.fail(InsufficientFundsError())
+
             if sent_request is True:
                 if p_r is not None:
                     d3 = protocol.add_request(p_r)
                     d3.addCallback(self._handle_price_response, peer, p_r, protocol)
                     d3.addErrback(self._request_failed, "price request", peer)
+
         return defer.succeed(sent_request)
 
     def get_new_peers(self):
@@ -87,6 +92,56 @@ class BlobRequester(object):
         return d
 
     ######### internal calls #########
+
+    def _blobs_to_download(self):
+        needed_blobs = self.download_manager.needed_blobs()
+        return sorted(needed_blobs, key=lambda b: b.is_downloading())
+
+    def _get_blobs_to_request_from_peer(self, peer):
+        all_needed = [b.blob_hash for b in self._blobs_to_download() if not b.blob_hash in self._available_blobs[peer]]
+        # sort them so that the peer will be asked first for blobs it hasn't said it doesn't have
+        to_request = sorted(all_needed, key=lambda b: b in self._unavailable_blobs[peer])[:20]
+        return to_request
+
+    def _price_settled(self, protocol):
+        if protocol in self._protocol_prices:
+            return True
+        return False
+
+    def _get_price_request(self, peer, protocol):
+        request = None
+        response_identifier = Negotiate.PAYMENT_RATE
+        if protocol not in self._protocol_prices:
+            blobs_to_request = self._available_blobs[peer]
+            if blobs_to_request:
+                rate = self.payment_rate_manager.get_rate_blob_data(peer, blobs_to_request)
+                self._protocol_prices[protocol] = rate
+                offer = Offer(rate)
+                request = ClientRequest(Negotiate.make_dict_from_offer(offer), response_identifier)
+                log.debug("Offer rate %s to %s for %i blobs",  str(rate), str(peer), len(blobs_to_request))
+            else:
+                log.debug("No blobs to request from %s", str(peer))
+        return request
+
+    def _handle_price_response(self, response_dict, peer, request, protocol):
+        if not request.response_identifier in response_dict:
+            return InvalidResponseError("response identifier not in response")
+        assert protocol in self._protocol_prices
+        offer = Negotiate.get_offer_from_request(response_dict)
+        rate = self._protocol_prices[protocol]
+        if offer.accepted:
+            log.info("Offered rate %f/mb accepted by %s", rate, str(peer.host))
+            return True
+        elif offer.too_low:
+            log.info("Offered rate %f/mb rejected by %s", rate, str(peer.host))
+            del self._protocol_prices[protocol]
+            return True
+        else:
+            log.warning("Price disagreement")
+            log.warning(offer.rate)
+            del self._protocol_prices[protocol]
+            self._price_disagreements.append(peer)
+            return False
 
     def _download_succeeded(self, arg, peer, blob):
         log.info("Blob %s has been successfully downloaded from %s", str(blob), str(peer))
@@ -101,13 +156,13 @@ class BlobRequester(object):
             self._update_local_score(peer, -10.0)
         return reason
 
-    def _record_blob_aquired(self, blob, host, rate):
-        self.blob_manager.blob_history_manager.add_transaction(blob, host, rate, upload=False)
+    def _record_blob_acquired(self, blob, host, rate):
+        d = self.blob_manager.add_blob_to_download_history(blob, host, rate)
 
     def _pay_or_cancel_payment(self, arg, protocol, reserved_points, blob):
         if blob.length != 0 and (not isinstance(arg, Failure) or arg.check(DownloadCanceledError)):
             self._pay_peer(protocol, blob.length, reserved_points)
-            self._record_blob_aquired(str(blob), protocol.peer.host, reserved_points.amount)
+            self._record_blob_acquired(str(blob), protocol.peer.host, reserved_points.amount)
         else:
             self._cancel_points(reserved_points)
 
@@ -178,17 +233,11 @@ class BlobRequester(object):
             return True
         return False
 
-    def _blobs_to_download(self):
-        needed_blobs = self.download_manager.needed_blobs()
-        return sorted(needed_blobs, key=lambda b: b.is_downloading())
-
     def _blobs_without_sources(self):
         return [b for b in self.download_manager.needed_blobs() if not self._hash_available(b.blob_hash)]
 
     def _get_availability_request(self, peer):
-        all_needed = [b.blob_hash for b in self._blobs_to_download() if not b.blob_hash in self._available_blobs[peer]]
-        # sort them so that the peer will be asked first for blobs it hasn't said it doesn't have
-        to_request = sorted(all_needed, key=lambda b: b in self._unavailable_blobs[peer])[:20]
+        to_request = self._get_blobs_to_request_from_peer(peer)
         if to_request:
             r_dict = {'requested_blobs': to_request}
             response_identifier = 'available_blobs'
@@ -217,36 +266,24 @@ class BlobRequester(object):
                     request = ClientBlobRequest(request_dict, response_identifier, counting_write_func, d,
                                                 cancel_func, blob_to_download)
 
-                    log.info("Requesting blob %s from %s", str(blob_to_download), str(peer))
-        return request
-
-    def _price_settled(self, protocol):
-        if protocol in self._protocol_prices:
-            return True
-        return False
-
-    def _get_price_request(self, peer, protocol):
-        request = None
-        if not protocol in self._protocol_prices:
-            self._protocol_prices[protocol] = self.payment_rate_manager.get_rate_blob_data(peer)
-            request_dict = {'blob_data_payment_rate': self._protocol_prices[protocol]}
-            request = ClientRequest(request_dict, 'blob_data_payment_rate')
+                    # log.info("Requesting blob %s from %s", str(blob_to_download), str(peer))
         return request
 
     def _update_local_score(self, peer, amount):
             self._peers[peer] += amount
 
     def _reserve_points(self, peer, protocol, max_bytes):
-        assert protocol in self._protocol_prices
-        points_to_reserve = 1.0 * max_bytes * self._protocol_prices[protocol] / 2**20
-        return self.wallet.reserve_points(peer, points_to_reserve)
+        if protocol in self._protocol_prices:
+            points_to_reserve = 1.0 * max_bytes * self._protocol_prices[protocol] / 2 ** 20
+            return self.wallet.reserve_points(peer, points_to_reserve)
+        return None
 
     def _pay_peer(self, protocol, num_bytes, reserved_points):
-        assert num_bytes != 0
-        assert protocol in self._protocol_prices
-        point_amount = 1.0 * num_bytes * self._protocol_prices[protocol] / 2**20
-        self.wallet.send_points(reserved_points, point_amount)
-        self.payment_rate_manager.record_points_paid(point_amount)
+        if num_bytes != 0 and protocol in self._protocol_prices:
+            point_amount = 1.0 * num_bytes * self._protocol_prices[protocol] / 2**20
+            self.wallet.send_points(reserved_points, point_amount)
+            self.payment_rate_manager.record_points_paid(point_amount)
+            log.debug("Pay peer %s", str(point_amount))
 
     def _cancel_points(self, reserved_points):
         self.wallet.cancel_point_reservation(reserved_points)
@@ -268,6 +305,7 @@ class BlobRequester(object):
         return True
 
     def _handle_incoming_blob(self, response_dict, peer, request):
+        log.debug("Handling incoming blob: %s", str(response_dict))
         if not request.response_identifier in response_dict:
             return InvalidResponseError("response identifier not in response")
         if not type(response_dict[request.response_identifier]) == dict:
@@ -293,18 +331,6 @@ class BlobRequester(object):
                 return InvalidResponseError("Missing the required field 'length'")
             if not request.blob.set_length(response['length']):
                 return InvalidResponseError("Could not set the length of the blob")
-        return True
-
-    def _handle_price_response(self, response_dict, peer, request, protocol):
-        if not request.response_identifier in response_dict:
-            return InvalidResponseError("response identifier not in response")
-        assert protocol in self._protocol_prices
-        response = response_dict[request.response_identifier]
-        if response == "RATE_ACCEPTED":
-            return True
-        else:
-            del self._protocol_prices[protocol]
-            self._price_disagreements.append(peer)
         return True
 
     def _request_failed(self, reason, request_type, peer):

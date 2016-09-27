@@ -9,8 +9,8 @@ from lbrynet.core.client.DHTPeerFinder import DHTPeerFinder
 from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
 from lbrynet.core.utils import generate_id
-from lbrynet.core.PaymentRateManager import BasePaymentRateManager
-from lbrynet.core.BlobPrice import BlobPriceAndAvailabilityTracker
+from lbrynet.core.PaymentRateManager import BasePaymentRateManager, NegotiatedPaymentRateManager
+from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
 from twisted.internet import threads, defer
 
 
@@ -29,7 +29,7 @@ class LBRYSession(object):
     def __init__(self, blob_data_payment_rate, db_dir=None, lbryid=None, peer_manager=None, dht_node_port=None,
                  known_dht_nodes=None, peer_finder=None, hash_announcer=None,
                  blob_dir=None, blob_manager=None, peer_port=None, use_upnp=True,
-                 rate_limiter=None, wallet=None, dht_node_class=node.Node):
+                 rate_limiter=None, wallet=None, dht_node_class=node.Node, blob_tracker=None):
         """
         @param blob_data_payment_rate: The default payment rate for blob data
 
@@ -88,6 +88,7 @@ class LBRYSession(object):
 
         self.blob_dir = blob_dir
         self.blob_manager = blob_manager
+        self.blob_tracker = blob_tracker
 
         self.peer_port = peer_port
 
@@ -104,7 +105,7 @@ class LBRYSession(object):
         self.dht_node = None
 
         self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
-        self.blob_tracker = None
+        self.payment_rate_manager = None
 
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
@@ -260,7 +261,9 @@ class LBRYSession(object):
                 self.blob_manager = DiskBlobManager(self.hash_announcer, self.blob_dir, self.db_dir)
 
         if self.blob_tracker is None:
-            self.blob_tracker = BlobPriceAndAvailabilityTracker(self.blob_manager, self.peer_finder, self.dht_node)
+            self.blob_tracker = BlobAvailabilityTracker(self.blob_manager, self.peer_finder, self.dht_node)
+        if self.payment_rate_manager is None:
+            self.payment_rate_manager = NegotiatedPaymentRateManager(self.base_payment_rate_manager, self.blob_tracker)
 
         self.rate_limiter.start()
         d1 = self.blob_manager.setup()
