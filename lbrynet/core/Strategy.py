@@ -18,9 +18,10 @@ class BasicAvailabilityWeightedStrategy(object):
     until the rate is accepted or a threshold is reached
     """
 
-    def __init__(self, blob_tracker, acceleration=1.25, deceleration=0.9, max_rate=0.005):
+    def __init__(self, blob_tracker, acceleration=1.25, deceleration=0.9, max_rate=0.005, min_rate=0.0):
         self._acceleration = acceleration # rate of how quickly to ramp offer
         self._deceleration = deceleration
+        self._min_rate = min_rate
         self._max_rate = max_rate
         self._count_up = {}
         self._count_down = {}
@@ -31,13 +32,17 @@ class BasicAvailabilityWeightedStrategy(object):
     def respond_to_offer(self, offer, peer, blobs):
         request_count = self._count_up.get(peer, 0)
         rates = [self._calculate_price(blob) for blob in blobs]
-        rate = self._discount(sum(rates) / max(len(blobs), 1), request_count)
-        log.info("Target rate: %s", rate)
+        rate = sum(rates) / max(len(rates), 1)
+        discounted = self._discount(rate, request_count)
+        price = self._bounded_price(discounted)
+        log.info("Price target: %f, final: %f", discounted, price)
 
         self._inc_up_count(peer)
-        if offer.accepted:
+        if offer.rate == 0.0 and request_count == 0:
+            # give blobs away for free by default on the first request
+            offer.accept()
             return offer
-        elif offer.rate >= rate:
+        elif offer.rate >= price:
             log.info("Accept: %f", offer.rate)
             offer.accept()
             return offer
@@ -57,8 +62,13 @@ class BasicAvailabilityWeightedStrategy(object):
             rates = [self._calculate_price(blob) for blob in blobs]
             mean_rate = sum(rates) / max(len(blobs), 1)
             with_premium = self._premium(mean_rate, request_count)
-            offer = Offer(with_premium)
+            price = self._bounded_price(with_premium)
+            offer = Offer(price)
         return offer
+
+    def _bounded_price(self, price):
+        price_for_return = min(self._max_rate, max(price, self._min_rate))
+        return price_for_return
 
     def _inc_up_count(self, peer):
         turn = self._count_up.get(peer, 0) + 1
@@ -72,7 +82,7 @@ class BasicAvailabilityWeightedStrategy(object):
         return self.model.calculate_price(blob)
 
     def _premium(self, rate, turn):
-        return min(rate * (self._acceleration ** turn), self._max_rate)
+        return rate * (self._acceleration ** turn)
 
     def _discount(self, rate, turn):
-        return min(rate * (self._deceleration ** turn), self._max_rate)
+        return rate * (self._deceleration ** turn)

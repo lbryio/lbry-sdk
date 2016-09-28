@@ -673,7 +673,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         # TODO: this was blatantly copied from jsonrpc_start_lbry_file. Be DRY.
         def _start_file(f):
             d = self.lbry_file_manager.toggle_lbry_file_running(f)
-            d.addCallback(lambda _: self.lighthouse_client.announce_sd(f.sd_hash))
             return defer.succeed("Started LBRY file")
 
         def _get_and_start_file(name):
@@ -775,15 +774,13 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             # CryptBlobInfoQueryHandlerFactory(self.lbry_file_metadata_manager, self.session.wallet,
             #                                 self._server_payment_rate_manager),
             # BlobAvailabilityHandlerFactory(self.session.blob_manager),
-            BlobRequestHandlerFactory(self.session.blob_manager, self.session.blob_tracker, self.session.wallet,
-                                     self.session.payment_rate_manager),
+            BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
+                                      self.session.payment_rate_manager),
             self.session.wallet.get_wallet_info_query_handler_factory(),
         ]
 
         def get_blob_request_handler_factory(rate):
             self.blob_request_payment_rate_manager = self.session.payment_rate_manager
-            handlers.append(BlobRequestHandlerFactory(self.session.blob_manager, self.session.blob_tracker, self.session.wallet,
-                                                      self.blob_request_payment_rate_manager))
 
         d1 = self.settings.get_server_data_payment_rate()
         d1.addCallback(get_blob_request_handler_factory)
@@ -2551,7 +2548,6 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
         d = self._render_response(SEARCH_SERVERS, OK_CODE)
         return d
-
 
     def jsonrpc_get_mean_availability(self):
         """

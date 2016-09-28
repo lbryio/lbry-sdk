@@ -16,8 +16,7 @@ log = logging.getLogger(__name__)
 class BlobRequestHandlerFactory(object):
     implements(IQueryHandlerFactory)
 
-    def __init__(self, blob_manager, blob_tracker, wallet, payment_rate_manager):
-        self.blob_tracker = blob_tracker
+    def __init__(self, blob_manager, wallet, payment_rate_manager):
         self.blob_manager = blob_manager
         self.wallet = wallet
         self.payment_rate_manager = payment_rate_manager
@@ -25,7 +24,7 @@ class BlobRequestHandlerFactory(object):
     ######### IQueryHandlerFactory #########
 
     def build_query_handler(self):
-        q_h = BlobRequestHandler(self.blob_manager, self.blob_tracker, self.wallet, self.payment_rate_manager)
+        q_h = BlobRequestHandler(self.blob_manager, self.wallet, self.payment_rate_manager)
         return q_h
 
     def get_primary_query_identifier(self):
@@ -38,9 +37,8 @@ class BlobRequestHandlerFactory(object):
 class BlobRequestHandler(object):
     implements(IQueryHandler, IBlobSender)
 
-    def __init__(self, blob_manager, blob_tracker, wallet, payment_rate_manager):
+    def __init__(self, blob_manager, wallet, payment_rate_manager):
         self.blob_manager = blob_manager
-        self.blob_tracker = blob_tracker
         self.payment_rate_manager = payment_rate_manager
         self.wallet = wallet
         self.query_identifiers = ['blob_data_payment_rate', 'requested_blob', 'requested_blobs']
@@ -50,7 +48,6 @@ class BlobRequestHandler(object):
         self.currently_uploading = None
         self.file_sender = None
         self.blob_bytes_uploaded = 0
-        self.strategy = get_default_strategy(self.blob_tracker)
         self._blobs_requested = []
 
     ######### IQueryHandler #########
@@ -73,8 +70,7 @@ class BlobRequestHandler(object):
 
         if self.query_identifiers[1] in queries:
             incoming = queries[self.query_identifiers[1]]
-            log.info("Request download: %s", str(incoming))
-            response.addCallback(lambda r: self._reply_to_send_request({}, incoming))
+            response.addCallback(lambda r: self._reply_to_send_request(r, incoming))
 
         return response
 
@@ -94,10 +90,6 @@ class BlobRequestHandler(object):
 
     ######### internal #########
 
-    def _add_to_response(self, response, to_add):
-
-        return response
-
     def _reply_to_availability(self, request, blobs):
         d = self._get_available_blobs(blobs)
 
@@ -111,25 +103,26 @@ class BlobRequestHandler(object):
 
     def open_blob_for_reading(self, blob, response):
         response_fields = {}
+        d = defer.succeed(None)
         if blob.is_validated():
             read_handle = blob.open_for_reading()
             if read_handle is not None:
                 self.currently_uploading = blob
                 self.read_handle = read_handle
-                log.info("Sending %s to client", str(blob))
+                log.debug("Sending %s to client", str(blob))
                 response_fields['blob_hash'] = blob.blob_hash
                 response_fields['length'] = blob.length
                 response['incoming_blob'] = response_fields
-                log.info(response)
-                return response, blob
+                d.addCallback(lambda _: self.record_transaction(blob))
+                d.addCallback(lambda _: response)
+                return d
         log.warning("We can not send %s", str(blob))
         response['error'] = "BLOB_UNAVAILABLE"
-        return response, blob
-
-    def record_transaction(self, response, blob, rate):
-        d = self.blob_manager.add_blob_to_upload_history(str(blob), self.peer.host, rate)
         d.addCallback(lambda _: response)
-        log.info(response)
+        return d
+
+    def record_transaction(self, blob):
+        d = self.blob_manager.add_blob_to_upload_history(str(blob), self.peer.host, self.blob_data_payment_rate)
         return d
 
     def _reply_to_send_request(self, response, incoming):
@@ -142,18 +135,18 @@ class BlobRequestHandler(object):
             response['error'] = "RATE_UNSET"
             return defer.succeed(response)
         else:
+            log.debug("Requested blob: %s", str(incoming))
             d = self.blob_manager.get_blob(incoming, True)
             d.addCallback(lambda blob: self.open_blob_for_reading(blob, response))
-            d.addCallback(lambda (r, blob): self.record_transaction(r, blob, rate))
             return d
 
     def reply_to_offer(self, offer, request):
         blobs = request.get("available_blobs", [])
         log.info("Offered rate %f/mb for %i blobs", offer.rate, len(blobs))
-        reply = self.strategy.respond_to_offer(offer, self.peer, blobs)
-        if reply.accepted:
-            self.blob_data_payment_rate = reply.rate
-        r = Negotiate.make_dict_from_offer(reply)
+        accepted = self.payment_rate_manager.accept_rate_blob_data(self.peer, blobs, offer)
+        if accepted:
+            self.blob_data_payment_rate = offer.rate
+        r = Negotiate.make_dict_from_offer(offer)
         request.update(r)
         return request
 
@@ -178,7 +171,7 @@ class BlobRequestHandler(object):
 
         def start_transfer():
             self.file_sender = FileSender()
-            log.info("Starting the file upload")
+            log.debug("Starting the file upload")
             assert self.read_handle is not None, "self.read_handle was None when trying to start the transfer"
             d = self.file_sender.beginFileTransfer(self.read_handle, consumer, count_bytes)
             return d
