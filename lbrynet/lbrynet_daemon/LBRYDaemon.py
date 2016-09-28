@@ -2650,16 +2650,14 @@ class _DownloadNameHelper(object):
     def _setup_stream(self, stream_info):
         stream_hash = get_sd_hash(stream_info)
         d = self.daemon._get_lbry_file_by_sd_hash(stream_hash)
-        d.addCallback(self._add_results_callback(stream_info))
+        d.addCallback(self._prepend_stream_info, stream_info)
         return d
 
-    def _add_results_callback(self, stream_info):
-        def add_results(l):
-            if l:
-                if os.path.isfile(os.path.join(self.download_directory, l.file_name)):
-                    return defer.succeed((stream_info, l))
-            return defer.succeed((stream_info, None))
-        return add_results
+    def _prepend_stream_info(self, lbry_file, stream_info):
+        if lbry_file:
+            if os.path.isfile(os.path.join(self.download_directory, lbry_file.file_name)):
+                return defer.succeed((stream_info, lbry_file))
+        return defer.succeed((stream_info, None))
 
     def wait_or_get_stream(self, args):
         stream_info, lbry_file = args
