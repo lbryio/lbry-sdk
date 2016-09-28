@@ -561,9 +561,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.send_heartbeat.start(60)
 
     def _send_heartbeat(self):
-        log.debug('Sending heartbeat')
         heartbeat = self._events.heartbeat()
         self.analytics_api.track(heartbeat)
+
+    def _send_download_started(self, name, stream_info=None):
+        event = self._events.download_started(name, stream_info)
+        self.analytics_api.track(event)
 
     def _get_platform(self):
         r =  {
@@ -1129,6 +1132,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
+        self._send_download_started(name)
         helper = _DownloadNameHelper(
             self, name, timeout, download_directory, file_name, wait_for_write)
 
@@ -2650,16 +2654,14 @@ class _DownloadNameHelper(object):
     def _setup_stream(self, stream_info):
         stream_hash = get_sd_hash(stream_info)
         d = self.daemon._get_lbry_file_by_sd_hash(stream_hash)
-        d.addCallback(self._add_results_callback(stream_info))
+        d.addCallback(self._prepend_stream_info, stream_info)
         return d
 
-    def _add_results_callback(self, stream_info):
-        def add_results(l):
-            if l:
-                if os.path.isfile(os.path.join(self.download_directory, l.file_name)):
-                    return defer.succeed((stream_info, l))
-            return defer.succeed((stream_info, None))
-        return add_results
+    def _prepend_stream_info(self, lbry_file, stream_info):
+        if lbry_file:
+            if os.path.isfile(os.path.join(self.download_directory, lbry_file.file_name)):
+                return defer.succeed((stream_info, lbry_file))
+        return defer.succeed((stream_info, None))
 
     def wait_or_get_stream(self, args):
         stream_info, lbry_file = args
