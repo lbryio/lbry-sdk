@@ -135,7 +135,7 @@ test_script:
 
     C:\Python27\Scripts\pip.exe install pylint
 
-    C:\Python27\python.exe C:\Python27\Scripts\trial.py C:\projects\lbry\tests
+    C:\Python27\python.exe C:\Python27\Scripts\trial.py C:\projects\lbry\tests\unit
 
 artifacts:
 - path: dist/*.msi
