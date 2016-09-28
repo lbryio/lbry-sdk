@@ -561,9 +561,12 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         self.send_heartbeat.start(60)
 
     def _send_heartbeat(self):
-        log.debug('Sending heartbeat')
         heartbeat = self._events.heartbeat()
         self.analytics_api.track(heartbeat)
+
+    def _send_download_started(self, name, stream_info=None):
+        event = self._events.download_started(name, stream_info)
+        self.analytics_api.track(event)
 
     def _get_platform(self):
         r =  {
@@ -1129,6 +1132,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
+        self._send_download_started(name)
         helper = _DownloadNameHelper(
             self, name, timeout, download_directory, file_name, wait_for_write)
 
