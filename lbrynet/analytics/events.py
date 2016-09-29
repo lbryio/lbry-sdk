@@ -1,4 +1,19 @@
+import logging
+
 from lbrynet.analytics import utils
+
+
+log = logging.getLogger(__name__)
+
+
+def get_sd_hash(stream_info):
+    if not stream_info:
+        return None
+    try:
+        return stream_info['sources']['lbry_sd_hash']
+    except (KeyError, TypeError, ValueError):
+        log.debug('Failed to get sd_hash from %s', stream_info, exc_info=True)
+        return None
 
 
 class Events(object):
@@ -14,6 +29,20 @@ class Events(object):
             'properties': {
                 'lbry_id': self.lbry_id,
                 'session_id': self.session_id
+            },
+            'context': self.context,
+            'timestamp': utils.now()
+        }
+
+    def download_started(self, name, stream_info=None):
+        return {
+            'userId': 'lbry',
+            'event': 'Download Started',
+            'properties': {
+                'lbry_id': self.lbry_id,
+                'session_id': self.session_id,
+                'name': name,
+                'stream_info': get_sd_hash(stream_info)
             },
             'context': self.context,
             'timestamp': utils.now()
