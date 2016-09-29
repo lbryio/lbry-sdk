@@ -80,7 +80,7 @@ class USDFeeValidator(Validator):
         Validator.__init__(self, fee)
 
 
-class LBRYFeeValidator(Validator):
+class FeeValidator(Validator):
     CV001 = "0.0.1"
     CURRENT_CURRENCY_VERSION = CV001
 

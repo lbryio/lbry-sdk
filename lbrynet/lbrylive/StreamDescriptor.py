@@ -84,7 +84,7 @@ def get_sd_info(stream_info_manager, stream_hash, include_blobs):
     return d
 
 
-class LBRYLiveStreamDescriptorValidator(object):
+class LiveStreamDescriptorValidator(object):
     implements(IStreamDescriptorValidator)
 
     def __init__(self, raw_info):

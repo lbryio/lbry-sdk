@@ -1,7 +1,7 @@
 from yapsy.IPlugin import IPlugin
 
 
-class LBRYPlugin(IPlugin):
+class Plugin(IPlugin):
 
     def __init__(self):
         IPlugin.__init__(self)

@@ -1,9 +1,9 @@
-from lbrynet.lbrylive.StreamDescriptor import LiveStreamType, LBRYLiveStreamDescriptorValidator
+from lbrynet.lbrylive.StreamDescriptor import LiveStreamType, LiveStreamDescriptorValidator
 from lbrynet.core.DownloadOption import DownloadOption, DownloadOptionChoice
 
 
 def add_live_stream_to_sd_identifier(sd_identifier, base_live_stream_payment_rate_manager):
-    sd_identifier.add_stream_type(LiveStreamType, LBRYLiveStreamDescriptorValidator,
+    sd_identifier.add_stream_type(LiveStreamType, LiveStreamDescriptorValidator,
                                   LiveStreamOptions(base_live_stream_payment_rate_manager))
 
 

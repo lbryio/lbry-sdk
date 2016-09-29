@@ -16,9 +16,9 @@ from twisted.protocols.basic import FileSender
 log = logging.getLogger(__name__)
 
 
-class LBRYFileStreamCreator(CryptStreamCreator):
+class EncryptedFileStreamCreator(CryptStreamCreator):
     """
-    A CryptStreamCreator which adds itself and its additional metadata to an LBRYFileManager
+    A CryptStreamCreator which adds itself and its additional metadata to an EncryptedFileManager
     """
     def __init__(self, blob_manager, lbry_file_manager, name=None,
                  key=None, iv_generator=None, suggested_file_name=None):
@@ -93,11 +93,11 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
     into chunks and encrypted, and then a stream descriptor file with the stream parameters
     and other metadata is written to disk.
 
-    @param session: An LBRYSession object.
-    @type session: LBRYSession
+    @param session: An Session object.
+    @type session: Session
 
-    @param lbry_file_manager: The LBRYFileManager object this LBRY File will be added to.
-    @type lbry_file_manager: LBRYFileManager
+    @param lbry_file_manager: The EncryptedFileManager object this LBRY File will be added to.
+    @type lbry_file_manager: EncryptedFileManager
 
     @param file_name: The path to the plain file.
     @type file_name: string
@@ -141,7 +141,7 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
 
     base_file_name = os.path.basename(file_name)
 
-    lbry_file_creator = LBRYFileStreamCreator(session.blob_manager, lbry_file_manager, base_file_name,
+    lbry_file_creator = EncryptedFileStreamCreator(session.blob_manager, lbry_file_manager, base_file_name,
                                               key, iv_generator, suggested_file_name)
 
     def start_stream():

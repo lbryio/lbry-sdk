@@ -32,19 +32,19 @@ from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerF
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError
-from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
-from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaverFactory, LBRYFileOpenerFactory
-from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbrynet_daemon.LBRYUIManager import LBRYUIManager
-from lbrynet.lbrynet_daemon.LBRYDownloader import GetStream
-from lbrynet.lbrynet_daemon.LBRYPublisher import Publisher
-from lbrynet.lbrynet_daemon.LBRYExchangeRateManager import ExchangeRateManager
+from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
+from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory, EncryptedFileOpenerFactory
+from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.lbrynet_daemon.UIManager import UIManager
+from lbrynet.lbrynet_daemon.Downloader import GetStream
+from lbrynet.lbrynet_daemon.Publisher import Publisher
+from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
-from lbrynet.metadata.LBRYMetadata import Metadata, verify_name_characters
+from lbrynet.metadata.Metadata import Metadata, verify_name_characters
 from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.core.utils import generate_id
-from lbrynet.lbrynet_console.LBRYSettings import LBRYSettings
+from lbrynet.lbrynet_console.Settings import Settings
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, \
                          KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, DEFAULT_WALLET, \
                          DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, \
@@ -52,11 +52,11 @@ from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS,
 from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
 from lbrynet.conf import DEFAULT_TIMEOUT
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
-from lbrynet.core.Session import LBRYSession
+from lbrynet.core.Session import Session
 from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.core.LBRYWallet import LBRYcrdWallet, LBRYumWallet
-from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
-from lbrynet.lbryfile.LBRYFileMetadataManager import DBLBRYFileMetadataManager, TempLBRYFileMetadataManager
+from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager, TempEncryptedFileMetadataManager
 from lbrynet import reflector
 
 
@@ -75,9 +75,9 @@ log = logging.getLogger(__name__)
 
 if os.path.isfile(lbrynet_log):
     with open(lbrynet_log, 'r') as f:
-        PREVIOUS_LBRYNET_LOG = len(f.read())
+        PREVIOUS_NET_LOG = len(f.read())
 else:
-    PREVIOUS_LBRYNET_LOG = 0
+    PREVIOUS_NET_LOG = 0
 
 INITIALIZING_CODE = 'initializing'
 LOADING_DB_CODE = 'loading_db'
@@ -138,7 +138,7 @@ class Parameters(object):
         self.__dict__.update(kwargs)
 
 
-class LBRYDaemon(jsonrpc.JSONRPC):
+class Daemon(jsonrpc.JSONRPC):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
@@ -379,9 +379,9 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         # self.lbrynet_connection_checker = LoopingCall(self._check_lbrynet_connection)
 
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.stream_info_manager = TempLBRYFileMetadataManager()
-        self.settings = LBRYSettings(self.db_dir)
-        self.lbry_ui_manager = LBRYUIManager(root)
+        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.settings = Settings(self.db_dir)
+        self.lbry_ui_manager = UIManager(root)
         self.blob_request_payment_rate_manager = None
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
@@ -691,7 +691,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             self._add_to_pending_claims(name, txid)
 
         def _process_lbry_file(name, lbry_file):
-            # lbry_file is an instance of ManagedLBRYFileDownloader or None
+            # lbry_file is an instance of ManagedEncryptedFileDownloader or None
             # TODO: check for sd_hash in addition to txid
             ready_to_start = (
                 lbry_file and
@@ -815,11 +815,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            for lm, lp in [('lbrynet', lbrynet_log)]: #, ('lbryum', lbryum_log)]:
+            for lm, lp in [('lbrynet', lbrynet_log)]:
                 if os.path.isfile(lp):
                     if exclude_previous:
                         f = open(lp, "r")
-                        f.seek(PREVIOUS_LBRYNET_LOG) # if lm == 'lbrynet' else PREVIOUS_LBRYUM_LOG)
+                        f.seek(PREVIOUS_NET_LOG)
                         log_contents = f.read()
                         f.close()
                     else:
@@ -1025,11 +1025,11 @@ class LBRYDaemon(jsonrpc.JSONRPC):
 
     def _setup_lbry_file_manager(self):
         self.startup_status = STARTUP_STAGES[3]
-        self.lbry_file_metadata_manager = DBLBRYFileMetadataManager(self.db_dir)
+        self.lbry_file_metadata_manager = DBEncryptedFileMetadataManager(self.db_dir)
         d = self.lbry_file_metadata_manager.setup()
 
         def set_lbry_file_manager():
-            self.lbry_file_manager = LBRYFileManager(self.session,
+            self.lbry_file_manager = EncryptedFileManager(self.session,
                                                      self.lbry_file_metadata_manager,
                                                      self.sd_identifier,
                                                      download_directory=self.download_directory)
@@ -1076,7 +1076,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             return r
 
         def create_session(results):
-            self.session = LBRYSession(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
+            self.session = Session(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
                                        use_upnp=self.use_upnp, wallet=results['wallet'])
@@ -1090,22 +1090,22 @@ class LBRYDaemon(jsonrpc.JSONRPC):
         return dl
 
     def _setup_stream_identifier(self):
-        file_saver_factory = LBRYFileSaverFactory(self.session.peer_finder, self.session.rate_limiter,
+        file_saver_factory = EncryptedFileSaverFactory(self.session.peer_finder, self.session.rate_limiter,
                                                   self.session.blob_manager, self.stream_info_manager,
                                                   self.session.wallet, self.download_directory)
-        self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, file_saver_factory)
-        file_opener_factory = LBRYFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
+        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
+        file_opener_factory = EncryptedFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
                                                     self.session.blob_manager, self.stream_info_manager,
                                                     self.session.wallet)
-        self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, file_opener_factory)
+        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_opener_factory)
         return defer.succeed(None)
 
     def _setup_lbry_file_opener(self):
 
-        downloader_factory = LBRYFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
+        downloader_factory = EncryptedFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
                                                    self.session.blob_manager, self.stream_info_manager,
                                                    self.session.wallet)
-        self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
+        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, downloader_factory)
         return defer.succeed(True)
 
     def _download_sd_blob(self, sd_hash, timeout=DEFAULT_SD_DOWNLOAD_TIMEOUT):
@@ -1179,7 +1179,7 @@ class LBRYDaemon(jsonrpc.JSONRPC):
             force_refresh: if True, always go out to the blockchain to resolve.
         """
         if name.startswith('lbry://'):
-            raise ValueError('name %s should not start with lbry://')
+            raise ValueError('name {} should not start with lbry://'.format(name))
         helper = _ResolveNameHelper(self, name, force_refresh)
         return helper.get_deferred()
 

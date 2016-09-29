@@ -548,13 +548,13 @@ class IStreamDescriptorValidator(Interface):
         """
 
 
-class ILBRYWallet(Interface):
+class IWallet(Interface):
     """
     Send and receive payments.
 
     To send a payment, a payment reservation must be obtained first. This guarantees that a payment
     isn't promised if it can't be paid. When the service in question is rendered, the payment
-    reservation must be given to the ILBRYWallet along with the final price. The reservation can also
+    reservation must be given to the IWallet along with the final price. The reservation can also
     be canceled.
     """
     def stop(self):
