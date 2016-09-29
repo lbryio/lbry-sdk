@@ -25,6 +25,7 @@ from txjsonrpc.web.jsonrpc import Handler
 from jsonschema import ValidationError
 
 from lbrynet import __version__ as lbrynet_version
+# TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import analytics
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -129,10 +130,75 @@ OK_CODE = 200
 # TODO alert if your copy of a lbry file is out of date with the name record
 
 
-
 class Parameters(object):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
+
+
+class LoopingCallManager(object):
+    def __init__(self):
+        self.calls = {}
+
+    def register_looping_call(self, name, *args):
+        self.calls[name] = LoopingCall(*args)
+
+    def start(self, name, *args):
+        self.calls[name].start(*args)
+
+    def stop(self, name):
+        self.calls[name].stop()
+
+    def shutdown(self):
+        for lcall in self.calls.itervalues():
+            if lcall.running:
+                lcall.stop()
+
+
+class CheckInternetConnection(object):
+    def __init__(self, daemon):
+        self.daemon = daemon
+
+    def __call__(self):
+        self.daemon.connected_to_internet = utils.check_connection()
+
+
+class CheckRemoteVersions(object):
+    def __init__(self, daemon):
+        self.daemon = daemon
+
+    def __call__(self):
+        d = self._get_lbrynet_version()
+        d.addCallback(lambda _: self._get_lbryum_version())
+
+    def _get_lbryum_version(self):
+        try:
+            version = get_lbryum_version_from_github()
+            log.info(
+                "remote lbryum %s > local lbryum %s = %s",
+                version, lbryum_version,
+                utils.version_is_greater_than(version, lbryum_version)
+            )
+            self.daemon.git_lbryum_version = version
+            return defer.succeed(None)
+        except Exception:
+            log.info("Failed to get lbryum version from git")
+            self.daemon.git_lbryum_version = None
+            return defer.fail(None)
+
+    def _get_lbrynet_version(self):
+        try:
+            version = get_lbrynet_version_from_github()
+            log.info(
+                "remote lbrynet %s > local lbrynet %s = %s",
+                version, lbrynet_version,
+                utils.version_is_greater_than(version, lbrynet_version)
+            )
+            self.daemon.git_lbrynet_version = version
+            return defer.succeed(None)
+        except Exception:
+            log.info("Failed to get lbrynet version from git")
+            self.daemon.git_lbrynet_version = None
+            return defer.fail(None)
 
 
 class Daemon(jsonrpc.JSONRPC):
@@ -342,12 +408,17 @@ class Daemon(jsonrpc.JSONRPC):
         self.wallet_user = None
         self.wallet_password = None
 
-        self.internet_connection_checker = LoopingCall(self._check_network_connection)
-        self.version_checker = LoopingCall(self._check_remote_versions)
-        self.connection_problem_checker = LoopingCall(self._check_connection_problems)
-        self.pending_claim_checker = LoopingCall(self._check_pending_claims)
-        self.send_heartbeat = LoopingCall(self._send_heartbeat)
-        # self.lbrynet_connection_checker = LoopingCall(self._check_lbrynet_connection)
+        self.looping_call_manager = LoopingCallManager()
+        looping_calls = [
+            ('internet_connection_checker', CheckInternetConnection(self)),
+            ('version_checker', CheckRemoteVersions(self)),
+            ('connection_problem_checker', self._check_connection_problems),
+            ('pending_claim_checker', self._check_pending_claims),
+            ('send_heartbeat', self._send_heartbeat),
+            ('send_tracked_metrics', self._send_tracked_metrics),
+        ]
+        for name, fn in looping_calls:
+            self.looping_call_manager.register_looping_call(name, fn)
 
         self.sd_identifier = StreamDescriptorIdentifier()
         self.stream_info_manager = TempEncryptedFileMetadataManager()
@@ -519,9 +590,9 @@ class Daemon(jsonrpc.JSONRPC):
 
         log.info("Starting lbrynet-daemon")
 
-        self.internet_connection_checker.start(3600)
-        self.version_checker.start(3600 * 12)
-        self.connection_problem_checker.start(1)
+        self.looping_call_manager.start('internet_connection_checker', 3600)
+        self.looping_call_manager.start('version_checker', 3600 * 12)
+        self.looping_call_manager.start('connection_problem_checker', 1)
         self.exchange_rate_manager.start()
 
         if host_ui:
@@ -595,9 +666,6 @@ class Daemon(jsonrpc.JSONRPC):
         context = analytics.make_context(self._get_platform(), self.wallet_type)
         self._events = analytics.Events(context, base58.b58encode(self.lbryid), self._session_id)
 
-    def _check_network_connection(self):
-        self.connected_to_internet = utils.check_connection()
-
     def _check_lbrynet_connection(self):
         def _log_success():
             log.info("lbrynet connectivity test passed")
@@ -607,43 +675,6 @@ class Daemon(jsonrpc.JSONRPC):
         wonderfullife_sh = "6f3af0fa3924be98a54766aa2715d22c6c1509c3f7fa32566df4899a41f3530a9f97b2ecb817fa1dcbf1b30553aefaa7"
         d = download_sd_blob(self.session, wonderfullife_sh, self.session.base_payment_rate_manager)
         d.addCallbacks(lambda _: _log_success, lambda _: _log_failure)
-
-    def _check_remote_versions(self):
-        def _get_lbryum_version():
-            try:
-                r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
-                version = next(line.split("=")[1].split("#")[0].replace(" ", "")
-                               for line in r if "LBRYUM_VERSION" in line)
-                version = version.replace("'", "")
-                log.info(
-                    "remote lbryum %s > local lbryum %s = %s",
-                    version, lbryum_version,
-                    utils.version_is_greater_than(version, lbryum_version)
-                )
-                self.git_lbryum_version = version
-                return defer.succeed(None)
-            except Exception:
-                log.info("Failed to get lbryum version from git")
-                self.git_lbryum_version = None
-                return defer.fail(None)
-
-        def _get_lbrynet_version():
-            try:
-                version = get_lbrynet_version_from_github()
-                log.info(
-                    "remote lbrynet %s > local lbrynet %s = %s",
-                    version, lbrynet_version,
-                    utils.version_is_greater_than(version, lbrynet_version)
-                )
-                self.git_lbrynet_version = version
-                return defer.succeed(None)
-            except Exception:
-                log.info("Failed to get lbrynet version from git")
-                self.git_lbrynet_version = None
-                return defer.fail(None)
-
-        d = _get_lbrynet_version()
-        d.addCallback(lambda _: _get_lbryum_version())
 
     def _check_connection_problems(self):
         if not self.git_lbrynet_version or not self.git_lbryum_version:
@@ -830,18 +861,11 @@ class Daemon(jsonrpc.JSONRPC):
     def _shutdown(self):
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
-        if self.internet_connection_checker.running:
-            self.internet_connection_checker.stop()
-        if self.version_checker.running:
-            self.version_checker.stop()
-        if self.connection_problem_checker.running:
-            self.connection_problem_checker.stop()
+        self.looping_call_manager.shutdown()
         if self.lbry_ui_manager.update_checker.running:
             self.lbry_ui_manager.update_checker.stop()
         if self.pending_claim_checker.running:
             self.pending_claim_checker.stop()
-        if self.send_heartbeat.running:
-            self.send_heartbeat.stop()
 
         self._clean_up_temp_files()
 
@@ -2618,6 +2642,14 @@ class Daemon(jsonrpc.JSONRPC):
         return d
 
 
+def get_lbryum_version_from_github():
+    r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
+    version = next(line.split("=")[1].split("#")[0].replace(" ", "")
+                   for line in r if "LBRYUM_VERSION" in line)
+    version = version.replace("'", "")
+    return version
+
+    
 def get_lbrynet_version_from_github():
     """Return the latest released version from github."""
     response = requests.get('https://api.github.com/repos/lbryio/lbry/releases/latest')
