@@ -61,7 +61,7 @@ class AnalyticsApi(object):
 
     @classmethod
     def load(cls, session=None):
-        """Initialize an instance using values from lbry.io."""
+        """Initialize an instance using values from the configuration"""
         if not session:
             session = sessions.FuturesSession()
         return cls(

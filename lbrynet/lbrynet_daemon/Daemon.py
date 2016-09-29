@@ -201,6 +201,31 @@ class CheckRemoteVersions(object):
             return defer.fail(None)
 
 
+class AnalyticsManager(object):
+    def __init__(self):
+        self.analytics_api = None
+        self.events_generator = None
+        self.send_heartbeat = LoopingCall(self._send_heartbeat)
+
+    def start(self, platform, wallet_type, lbry_id, session_id):
+        context = analytics.make_context(platform, wallet_type)
+        self.events_generator = analytics.Events(context, base58.b58encode(lbry_id), session_id)
+        self.analytics_api = analytics.Api.load()
+        self.send_heartbeat.start(60)
+
+    def shutdown(self):
+        if self.send_heartbeat.running:
+            self.send_heartbeat.stop()
+
+    def send_download_started(self, name, stream_info=None):
+        event = self.events_generator.download_started(name, stream_info)
+        self.analytics_api.track(event)
+
+    def _send_heartbeat(self):
+        heartbeat = self.events_generator.heartbeat()
+        self.analytics_api.track(heartbeat)
+
+
 class Daemon(jsonrpc.JSONRPC):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
@@ -238,6 +263,7 @@ class Daemon(jsonrpc.JSONRPC):
         self.first_run_after_update = False
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(generate_id())
+        self.analytics_manager = AnalyticsManager()
 
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -414,7 +440,6 @@ class Daemon(jsonrpc.JSONRPC):
             ('version_checker', CheckRemoteVersions(self)),
             ('connection_problem_checker', self._check_connection_problems),
             ('pending_claim_checker', self._check_pending_claims),
-            ('send_heartbeat', self._send_heartbeat),
             ('send_tracked_metrics', self._send_tracked_metrics),
         ]
         for name, fn in looping_calls:
@@ -616,23 +641,14 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: _log_starting_vals())
         d.addCallback(lambda _: _announce_startup())
-        d.addCallback(lambda _: self._load_analytics_api())
+        d.addCallback(
+            lambda _: self.analytics_manager.start(
+                self._get_platform(), self.wallet_type, self.lbryid, self._session_id))
         # TODO: handle errors here
         d.callback(None)
 
         return defer.succeed(None)
 
-    def _load_analytics_api(self):
-        self.analytics_api = analytics.Api.load()
-        self.send_heartbeat.start(60)
-
-    def _send_heartbeat(self):
-        heartbeat = self._events.heartbeat()
-        self.analytics_api.track(heartbeat)
-
-    def _send_download_started(self, name, stream_info=None):
-        event = self._events.download_started(name, stream_info)
-        self.analytics_api.track(event)
 
     def _get_platform(self):
         r =  {
@@ -661,10 +677,6 @@ class Daemon(jsonrpc.JSONRPC):
 
         d = _log_platform()
         return d
-
-    def _set_events(self):
-        context = analytics.make_context(self._get_platform(), self.wallet_type)
-        self._events = analytics.Events(context, base58.b58encode(self.lbryid), self._session_id)
 
     def _check_lbrynet_connection(self):
         def _log_success():
@@ -862,6 +874,7 @@ class Daemon(jsonrpc.JSONRPC):
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
         self.looping_call_manager.shutdown()
+        self.analytics_manager.shutdown()
         if self.lbry_ui_manager.update_checker.running:
             self.lbry_ui_manager.update_checker.stop()
         if self.pending_claim_checker.running:
@@ -1133,7 +1146,7 @@ class Daemon(jsonrpc.JSONRPC):
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
-        self._send_download_started(name)
+        self.analytics_manager.send_download_started(name, stream_info)
         helper = _DownloadNameHelper(
             self, name, timeout, download_directory, file_name, wait_for_write)
 
