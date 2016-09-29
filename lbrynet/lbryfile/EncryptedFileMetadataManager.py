@@ -11,7 +11,7 @@ from lbrynet.core.sqlite_helpers import rerun_if_locked
 log = logging.getLogger(__name__)
 
 
-class DBLBRYFileMetadataManager(object):
+class DBEncryptedFileMetadataManager(object):
     """Store and provide access to LBRY file metadata using sqlite"""
 
     def __init__(self, db_dir):
@@ -243,7 +243,7 @@ class DBLBRYFileMetadataManager(object):
         return d
 
 
-class TempLBRYFileMetadataManager(object):
+class TempEncryptedFileMetadataManager(object):
     def __init__(self):
         self.streams = {}
         self.stream_blobs = {}

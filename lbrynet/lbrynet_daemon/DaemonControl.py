@@ -12,7 +12,7 @@ from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.core import log_support
-from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
+from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer, DaemonRequest
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_PORT, \
                          UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
@@ -107,7 +107,7 @@ def start():
         print "To quit press ctrl-c or call 'stop' via the API"
 
     if test_internet_connection():
-        lbry = LBRYDaemonServer()
+        lbry = DaemonServer()
 
         d = lbry.start(branch=args.branch if args.branch else DEFAULT_UI_BRANCH,
                        user_specified=args.ui,
@@ -117,7 +117,7 @@ def start():
             d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
 
         lbrynet_server = server.Site(lbry.root)
-        lbrynet_server.requestFactory = LBRYDaemonRequest
+        lbrynet_server.requestFactory = DaemonRequest
         reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
         reactor.run()
 

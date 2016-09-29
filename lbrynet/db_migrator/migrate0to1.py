@@ -233,14 +233,14 @@
 #               "    foreign key(stream_hash) references lbry_files(stream_hash)" +
 #               ")")
 #     new_db.commit()
-#     LBRYFILE_STATUS = "t"
-#     LBRYFILE_OPTIONS = "o"
+#     FILE_STATUS = "t"
+#     FILE_OPTIONS = "o"
 #     c = new_db.cursor()
 #     for k, v in old_db.RangeIter():
 #         key_type, stream_hash = json.loads(k)
-#         if key_type == LBRYFILE_STATUS:
+#         if key_type == FILE_STATUS:
 #             try:
-#                 rate = json.loads(old_db.Get(json.dumps((LBRYFILE_OPTIONS, stream_hash))))[0]
+#                 rate = json.loads(old_db.Get(json.dumps((FILE_OPTIONS, stream_hash))))[0]
 #             except KeyError:
 #                 rate = None
 #             c.execute("insert into lbry_file_options values (?, ?, ?)",

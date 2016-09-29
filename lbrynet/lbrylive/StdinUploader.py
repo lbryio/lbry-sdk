@@ -5,7 +5,7 @@ import logging
 import sys
 from lbrynet.lbrylive.LiveStreamCreator import StdOutLiveStreamCreator
 from lbrynet.core.BlobManager import TempBlobManager
-from lbrynet.core.Session import LBRYSession
+from lbrynet.core.Session import Session
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
@@ -16,7 +16,7 @@ from lbrynet.dht.node import Node
 from twisted.internet import defer, task
 
 
-class LBRYStdinUploader():
+class StdinUploader():
     """This class reads from standard in, creates a stream, and makes it available on the network."""
     def __init__(self, peer_port, dht_node_port, known_dht_nodes,
                  stream_info_manager_class=DBLiveStreamMetadataManager, blob_manager_class=TempBlobManager):
@@ -29,7 +29,7 @@ class LBRYStdinUploader():
         """
         self.peer_port = peer_port
         self.lbry_server_port = None
-        self.session = LBRYSession(blob_manager_class=blob_manager_class,
+        self.session = Session(blob_manager_class=blob_manager_class,
                                    stream_info_manager_class=stream_info_manager_class,
                                    dht_node_class=Node, dht_node_port=dht_node_port,
                                    known_dht_nodes=known_dht_nodes, peer_port=self.peer_port,
@@ -99,9 +99,9 @@ def launch_stdin_uploader():
 
     logging.basicConfig(level=logging.WARNING, filename="ul.log")
     if len(sys.argv) == 4:
-        uploader = LBRYStdinUploader(int(sys.argv[2]), int(sys.argv[3]), [])
+        uploader = StdinUploader(int(sys.argv[2]), int(sys.argv[3]), [])
     elif len(sys.argv) == 6:
-        uploader = LBRYStdinUploader(int(sys.argv[2]), int(sys.argv[3]), [(sys.argv[4], int(sys.argv[5]))])
+        uploader = StdinUploader(int(sys.argv[2]), int(sys.argv[3]), [(sys.argv[4], int(sys.argv[5]))])
     else:
         print "Usage: lbrynet-stdin-uploader <stream_name> <peer_port> <dht_node_port>" \
               " [<dht_bootstrap_host> <dht_bootstrap port>]"

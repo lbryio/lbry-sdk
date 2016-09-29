@@ -1,4 +1,4 @@
-from lbrynet.lbrynet_console import LBRYPlugin
+from lbrynet.lbrynet_console import Plugin
 from twisted.internet import defer
 from lbrynet.conf import MIN_VALUABLE_BLOB_HASH_PAYMENT_RATE, MIN_VALUABLE_BLOB_INFO_PAYMENT_RATE
 from BlindRepeater import BlindRepeater
@@ -13,10 +13,10 @@ from ValuableBlobQueryHandler import ValuableBlobHashQueryHandlerFactory
 from PaymentRateManager import BlindRepeaterPaymentRateManager
 
 
-class BlindRepeaterPlugin(LBRYPlugin.LBRYPlugin):
+class BlindRepeaterPlugin(Plugin.Plugin):
 
     def __init__(self):
-        LBRYPlugin.LBRYPlugin.__init__(self)
+        Plugin.Plugin.__init__(self)
         self.enabled = False
         self.blind_info_manager = None
         self.valuable_blob_length_query_handler = None
