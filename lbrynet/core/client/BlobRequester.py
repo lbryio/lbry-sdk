@@ -10,7 +10,7 @@ from lbrynet.core.Error import InvalidResponseError, RequestCanceledError, NoRes
 from lbrynet.core.Error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
 from lbrynet.core.client.ClientRequest import ClientRequest, ClientBlobRequest
 from lbrynet.interfaces import IRequestCreator
-from lbrynet.core.Offer import Negotiate, Offer
+from lbrynet.core.Offer import Offer
 
 
 log = logging.getLogger(__name__)
