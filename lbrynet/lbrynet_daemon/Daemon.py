@@ -2801,7 +2801,7 @@ class _GetFileHelper(object):
         self.return_json = return_json
 
     def retrieve_file(self):
-        d = self._search_for_file()
+        d = self.search_for_file()
         if self.return_json:
             d.addCallback(self._get_json)
         return d
@@ -2830,7 +2830,7 @@ class _GetFileHelper(object):
 
         if code == DOWNLOAD_RUNNING_CODE:
             d = lbry_file.status()
-            d.addCallback(self._get_file_status)
+            d.addCallback(self._get_msg_for_file_status)
             d.addCallback(
                 lambda msg: self._get_properties_dict(lbry_file, code, msg, written_bytes, size))
         else:
@@ -2838,7 +2838,7 @@ class _GetFileHelper(object):
                 self._get_properties_dict(lbry_file, code, message, written_bytes, size))
         return d
     
-    def _get_file_status(self, file_status):
+    def _get_msg_for_file_status(self, file_status):
         message = STREAM_STAGES[2][1] % (
             file_status.name, file_status.num_completed, file_status.num_known,
             file_status.running_status)
@@ -2906,7 +2906,7 @@ class _GetFileHelper(object):
             return defer.succeed(message)
 
         if lbry_file.txid:
-            d = self._resolve_name(lbry_file.uri)
+            d = self.daemon._resolve_name(lbry_file.uri)
             d.addCallbacks(_add_to_dict, lambda _: _add_to_dict("Pending confirmation"))
         else:
             d = defer.succeed(message)
