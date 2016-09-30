@@ -27,7 +27,7 @@ if not os.path.isfile(lbrycrdd_path_conf):
     f.write(lbrycrdd_path)
     f.close()
 
-from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
+from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer, DaemonRequest
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
 from lbrynet.conf import UI_ADDRESS
 
@@ -75,11 +75,11 @@ class LBRYDaemonApp(AppKit.NSApplication):
             sys.exit(0)
 
 
-        lbry = LBRYDaemonServer()
+        lbry = DaemonServer()
         d = lbry.start()
         d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
         lbrynet_server = server.Site(lbry.root)
-        lbrynet_server.requestFactory = LBRYDaemonRequest
+        lbrynet_server.requestFactory = DaemonRequest
         reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
 
     def openui_(self, sender):
