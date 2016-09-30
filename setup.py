@@ -57,9 +57,9 @@ console_scripts = [
     # 'lbrynet-rpc-node-cli = lbrynet.node_rpc_cli:main',
     # 'lbrynet-lookup-hosts-for-hash = lbrynet.dht_scripts:get_hosts_for_hash_in_dht',
     # 'lbrynet-announce_hash_to_dht = lbrynet.dht_scripts:announce_hash_to_dht',
-    'lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonControl:start',
-    'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.LBRYDaemonControl:stop',
-    'lbrynet-cli = lbrynet.lbrynet_daemon.LBRYDaemonCLI:main'
+    'lbrynet-daemon = lbrynet.lbrynet_daemon.DaemonControl:start',
+    'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.DaemonControl:stop',
+    'lbrynet-cli = lbrynet.lbrynet_daemon.DaemonCLI:main'
 ]
 
 if platform == LINUX:
@@ -303,7 +303,7 @@ elif platform == WINDOWS:
     )
 
     daemon_exe = Executable(
-        script=os.path.join(daemon_dir, 'LBRYDaemonControl.py'),
+        script=os.path.join(daemon_dir, 'DaemonControl.py'),
         icon=win_icon,
         # shortcutName="lbrynet-daemon",
         # shortcutDir='DesktopFolder',
@@ -311,7 +311,7 @@ elif platform == WINDOWS:
     )
 
     cli_exe = Executable(
-        script=os.path.join(daemon_dir, 'LBRYDaemonCLI.py'),
+        script=os.path.join(daemon_dir, 'DaemonCLI.py'),
         icon=win_icon,
         # shortcutName="lbrynet-cli",
         # shortcutDir='DesktopFolder',

@@ -11,7 +11,7 @@ import os
 log = logging.getLogger(__name__)
 
 
-LBRYFileStreamType = "lbryfile"
+EncryptedFileStreamType = "lbryfile"
 
 
 def save_sd_info(stream_info_manager, sd_info, ignore_duplicate=False):
@@ -50,7 +50,7 @@ def get_sd_info(stream_info_manager, stream_hash, include_blobs):
 
     def format_info(stream_info):
         fields = {}
-        fields['stream_type'] = LBRYFileStreamType
+        fields['stream_type'] = EncryptedFileStreamType
         fields['stream_name'] = stream_info[1]
         fields['key'] = stream_info[0]
         fields['suggested_file_name'] = stream_info[2]
@@ -121,7 +121,7 @@ def create_plain_sd(stream_info_manager, stream_hash, file_name, overwrite_exist
     return d
 
 
-class LBRYFileStreamDescriptorValidator(object):
+class EncryptedFileStreamDescriptorValidator(object):
     def __init__(self, raw_info):
         self.raw_info = raw_info
 

@@ -50,7 +50,7 @@ class CryptStreamDownloader(object):
 
         @param payment_rate_manager: A NegotiatedPaymentRateManager object
 
-        @param wallet: An object which implements the ILBRYWallet interface
+        @param wallet: An object which implements the IWallet interface
 
         @return:
         """

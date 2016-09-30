@@ -27,7 +27,7 @@ lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 
-class LBRYUIManager(object):
+class UIManager(object):
     def __init__(self, root):
         if sys.platform != "darwin":
             self.data_dir = os.path.join(os.path.expanduser("~"), '.lbrynet')

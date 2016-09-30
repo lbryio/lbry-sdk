@@ -10,8 +10,8 @@ from twisted.internet.task import LoopingCall
 
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.metadata.LBRYFee import LBRYFeeValidator
-from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
+from lbrynet.metadata.Fee import FeeValidator
+from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.conf import DEFAULT_TIMEOUT, LOG_FILE_NAME
 
 INITIALIZING_CODE = 'initializing'
@@ -85,7 +85,7 @@ class GetStream(object):
 
     def _convert_max_fee(self):
         if isinstance(self.max_key_fee, dict):
-            max_fee = LBRYFeeValidator(self.max_key_fee)
+            max_fee = FeeValidator(self.max_key_fee)
             if max_fee.currency_symbol == "LBC":
                 return max_fee.amount
             return self.exchange_rate_manager.to_lbc(self.fee).amount
@@ -104,7 +104,7 @@ class GetStream(object):
 
         def get_downloader_factory(metadata):
             for factory in metadata.factories:
-                if isinstance(factory, ManagedLBRYFileDownloaderFactory):
+                if isinstance(factory, ManagedEncryptedFileDownloaderFactory):
                     return factory, metadata
             raise Exception('No suitable factory was found in {}'.format(metadata.factories))
 
@@ -122,7 +122,7 @@ class GetStream(object):
         self.stream_hash = self.stream_info['sources']['lbry_sd_hash']
 
         if 'fee' in self.stream_info:
-            self.fee = LBRYFeeValidator(self.stream_info['fee'])
+            self.fee = FeeValidator(self.stream_info['fee'])
             max_key_fee = self._convert_max_fee()
             if self.exchange_rate_manager.to_lbc(self.fee).amount > max_key_fee:
                 log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.amount,

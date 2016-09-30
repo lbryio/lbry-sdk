@@ -1,6 +1,7 @@
 import shutil
 from multiprocessing import Process, Event, Queue
 import logging
+import platform
 import sys
 import random
 import io
@@ -16,17 +17,17 @@ from lbrynet.lbrylive.PaymentRateManager import BaseLiveStreamPaymentRateManager
 from lbrynet.lbrylive.PaymentRateManager import LiveStreamPaymentRateManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
-from lbrynet.lbryfile.LBRYFileMetadataManager import TempLBRYFileMetadataManager, DBLBRYFileMetadataManager
-from lbrynet.lbryfilemanager.LBRYFileManager import LBRYFileManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager, DBEncryptedFileMetadataManager
+from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.PTCWallet import PointTraderKeyQueryHandlerFactory, PointTraderKeyExchanger
-from lbrynet.core.Session import LBRYSession
+from lbrynet.core.Session import Session
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
-from lbrynet.lbryfile.client.LBRYFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
+from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from twisted.internet import defer, threads, task, error
 from twisted.trial.unittest import TestCase
@@ -41,13 +42,22 @@ from lbrynet.lbrylive.server.LiveBlobInfoQueryHandler import CryptBlobInfoQueryH
 from lbrynet.lbrylive.client.LiveStreamOptions import add_live_stream_to_sd_identifier
 from lbrynet.lbrylive.client.LiveStreamDownloader import add_full_live_stream_downloader_to_sd_identifier
 from lbrynet.core.BlobManager import TempBlobManager
-from lbrynet.reflector.client.client import LBRYFileReflectorClientFactory
+from lbrynet.reflector.client.client import EncryptedFileReflectorClientFactory
 from lbrynet.reflector.server.server import ReflectorServerFactory
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 
 
 log_format = "%(funcName)s(): %(message)s"
 logging.basicConfig(level=logging.WARNING, format=log_format)
+
+
+def require_system(system):
+    def wrapper(fn):
+        return fn
+    if platform.system() == system:
+        return wrapper
+    else:
+        return unittest.skip("Skipping. Test can only be run on " + system)
 
 
 class FakeNode(object):
@@ -232,13 +242,13 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rat
     db_dir = "server"
     os.mkdir(db_dir)
 
-    session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+    session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                           peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
                           use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-    stream_info_manager = TempLBRYFileMetadataManager()
+    stream_info_manager = TempEncryptedFileMetadataManager()
 
-    lbry_file_manager = LBRYFileManager(session, stream_info_manager, sd_identifier)
+    lbry_file_manager = EncryptedFileManager(session, stream_info_manager, sd_identifier)
 
     if ul_rate_limit is not None:
         session.rate_limiter.set_ul_limit(ul_rate_limit)
@@ -349,14 +359,14 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_ra
     os.mkdir(db_dir)
     os.mkdir(blob_dir)
 
-    session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd" + str(n),
+    session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd" + str(n),
                           peer_finder=peer_finder, hash_announcer=hash_announcer,
                           blob_dir=None, peer_port=peer_port,
                           use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-    stream_info_manager = TempLBRYFileMetadataManager()
+    stream_info_manager = TempEncryptedFileMetadataManager()
 
-    lbry_file_manager = LBRYFileManager(session, stream_info_manager, sd_identifier)
+    lbry_file_manager = EncryptedFileManager(session, stream_info_manager, sd_identifier)
 
     if ul_rate_limit is not None:
         session.rate_limiter.set_ul_limit(ul_rate_limit)
@@ -463,7 +473,7 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
     db_dir = "server"
     os.mkdir(db_dir)
 
-    session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+    session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                           peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
                           use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
@@ -608,7 +618,7 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow):
     os.mkdir(db_dir)
     os.mkdir(blob_dir)
 
-    session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="efgh",
+    session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="efgh",
                           peer_finder=peer_finder, hash_announcer=hash_announcer,
                           blob_dir=blob_dir, peer_port=peer_port,
                           use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
@@ -781,14 +791,14 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-        self.stream_info_manager = TempLBRYFileMetadataManager()
+        self.stream_info_manager = TempEncryptedFileMetadataManager()
 
-        self.lbry_file_manager = LBRYFileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         def make_downloader(metadata, prm):
             info_validator = metadata.validator
@@ -845,6 +855,7 @@ class TestTransfer(TestCase):
 
         return d
 
+    @require_system('Linux')
     def test_live_transfer(self):
 
         sd_hash_queue = Queue()
@@ -865,7 +876,7 @@ class TestTransfer(TestCase):
         db_dir = "client"
         os.mkdir(db_dir)
 
-        self.session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer, blob_dir=None,
                                    peer_port=5553, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
@@ -940,6 +951,7 @@ class TestTransfer(TestCase):
         d.addBoth(stop)
         return d
 
+    @require_system('Linux')
     def test_last_blob_retrieval(self):
 
         kill_event = Event()
@@ -969,7 +981,7 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
@@ -1049,14 +1061,14 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553, use_upnp=False,
                                    rate_limiter=rate_limiter, wallet=wallet)
 
-        self.stream_info_manager = DBLBRYFileMetadataManager(self.session.db_dir)
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
 
-        self.lbry_file_manager = LBRYFileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         def make_downloader(metadata, prm):
             info_validator = metadata.validator
@@ -1165,14 +1177,14 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=None, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-        self.stream_info_manager = TempLBRYFileMetadataManager()
+        self.stream_info_manager = TempEncryptedFileMetadataManager()
 
-        self.lbry_file_manager = LBRYFileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         def start_additional_uploaders(sd_hash):
             for i in range(1, num_uploaders):
@@ -1283,14 +1295,14 @@ class TestStreamify(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-        self.stream_info_manager = TempLBRYFileMetadataManager()
+        self.stream_info_manager = TempEncryptedFileMetadataManager()
 
-        self.lbry_file_manager = LBRYFileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         d = self.session.setup()
         d.addCallback(lambda _: self.stream_info_manager.setup())
@@ -1335,14 +1347,14 @@ class TestStreamify(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = LBRYSession(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
-        self.stream_info_manager = DBLBRYFileMetadataManager(self.session.db_dir)
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
 
-        self.lbry_file_manager = LBRYFileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         def start_lbry_file(lbry_file):
             logging.debug("Calling lbry_file.start()")

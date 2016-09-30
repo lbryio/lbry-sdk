@@ -6,7 +6,7 @@ import googlefinance
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 
-from lbrynet.metadata.LBRYFee import LBRYFeeValidator
+from lbrynet.metadata.Fee import FeeValidator
 
 log = logging.getLogger(__name__)
 
@@ -161,12 +161,12 @@ class ExchangeRateManager(object):
     def to_lbc(self, fee):
         if fee is None:
             return None
-        if not isinstance(fee, LBRYFeeValidator):
-            fee_in = LBRYFeeValidator(fee)
+        if not isinstance(fee, FeeValidator):
+            fee_in = FeeValidator(fee)
         else:
             fee_in = fee
 
-        return LBRYFeeValidator({fee_in.currency_symbol:
+        return FeeValidator({fee_in.currency_symbol:
                                     {
                                         'amount': self.convert_currency(fee_in.currency_symbol, "LBC", fee_in.amount),
                                         'address': fee_in.address
@@ -216,12 +216,12 @@ class DummyExchangeRateManager(object):
     def to_lbc(self, fee):
         if fee is None:
             return None
-        if not isinstance(fee, LBRYFeeValidator):
-            fee_in = LBRYFeeValidator(fee)
+        if not isinstance(fee, FeeValidator):
+            fee_in = FeeValidator(fee)
         else:
             fee_in = fee
 
-        return LBRYFeeValidator({fee_in.currency_symbol:
+        return FeeValidator({fee_in.currency_symbol:
                                     {
                                         'amount': self.convert_currency(fee_in.currency_symbol, "LBC", fee_in.amount),
                                         'address': fee_in.address

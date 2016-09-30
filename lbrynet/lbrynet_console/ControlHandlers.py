@@ -2,8 +2,8 @@ import logging
 
 from zope.interface import implements
 from lbrynet.core.PaymentRateManager import PaymentRateManager
-from lbrynet.lbryfilemanager.LBRYFileCreator import create_lbry_file
-from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
+from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
+from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob, create_plain_sd
 from lbrynet.lbrynet_console.interfaces import ICommandHandler, ICommandHandlerFactory
 from lbrynet.core.StreamDescriptor import download_sd_blob
@@ -418,7 +418,7 @@ class ShutDownFactory(CommandHandlerFactory):
     full_help = "Shut down"
 
 
-class LBRYFileStatus(CommandHandler):
+class EncryptedFileStatus(CommandHandler):
     #prompt_description = "Print status information for all LBRY Files"
 
     def __init__(self, console, lbry_file_manager):
@@ -446,8 +446,8 @@ class LBRYFileStatus(CommandHandler):
         self.console.sendLine(''.join(status_strings))
 
 
-class LBRYFileStatusFactory(CommandHandlerFactory):
-    control_handler_class = LBRYFileStatus
+class EncryptedFileStatusFactory(CommandHandlerFactory):
+    control_handler_class = EncryptedFileStatus
     command = "lbryfile-status"
     short_help = "Print status information for LBRY files"
     full_help = "Print the status information for all streams that are being saved to disk." \
@@ -988,7 +988,7 @@ class AddStreamFromLBRYcrdNameFactory(CommandHandlerFactory):
                 "Usage: get <name>"
 
 
-class LBRYFileChooser(RecursiveCommandHandler):
+class EncryptedFileChooser(RecursiveCommandHandler):
 
     def __init__(self, console, lbry_file_manager, factory_class, *args, **kwargs):
         """
@@ -1014,23 +1014,23 @@ class LBRYFileChooser(RecursiveCommandHandler):
         return control_handler_factories
 
 
-class LBRYFileChooserFactory(CommandHandlerFactory):
+class EncryptedFileChooserFactory(CommandHandlerFactory):
     def get_prompt_description(self):
         lbry_file = self.args[0]
         return lbry_file.file_name
 
 
-class DeleteLBRYFileChooser(LBRYFileChooser):
+class DeleteEncryptedFileChooser(EncryptedFileChooser):
     #prompt_description = "Delete LBRY File"
 
     def __init__(self, console, stream_info_manager, blob_manager, lbry_file_manager):
-        LBRYFileChooser.__init__(self, console, lbry_file_manager, DeleteLBRYFileFactory,
+        EncryptedFileChooser.__init__(self, console, lbry_file_manager, DeleteEncryptedFileFactory,
                                  stream_info_manager, blob_manager, lbry_file_manager,
                                  exit_after_one_done=True)
 
 
-class DeleteLBRYFileChooserFactory(CommandHandlerFactory):
-    control_handler_class = DeleteLBRYFileChooser
+class DeleteEncryptedFileChooserFactory(CommandHandlerFactory):
+    control_handler_class = DeleteEncryptedFileChooser
     command = "delete-lbryfile"
     short_help = "Delete an LBRY file"
     full_help = "Delete an LBRY file which has been downloaded or created by this application.\n" \
@@ -1040,7 +1040,7 @@ class DeleteLBRYFileChooserFactory(CommandHandlerFactory):
                 "not be able to upload those chunks of data to other peers on LBRYnet."
 
 
-class DeleteLBRYFile(CommandHandler):
+class DeleteEncryptedFile(CommandHandler):
     #prompt_description = "Delete LBRY File"
     delete_data_prompt = "Also delete data? (y/n): "
     confirm_prompt = "Are you sure? (y/n): "
@@ -1106,27 +1106,27 @@ class DeleteLBRYFile(CommandHandler):
         return d
 
 
-class DeleteLBRYFileFactory(LBRYFileChooserFactory):
-    control_handler_class = DeleteLBRYFile
+class DeleteEncryptedFileFactory(EncryptedFileChooserFactory):
+    control_handler_class = DeleteEncryptedFile
 
 
-class ToggleLBRYFileRunningChooser(LBRYFileChooser):
+class ToggleEncryptedFileRunningChooser(EncryptedFileChooser):
     #prompt_description = "Toggle whether an LBRY File is running"
 
     def __init__(self, console, lbry_file_manager):
-        LBRYFileChooser.__init__(self, console, lbry_file_manager, ToggleLBRYFileRunningFactory,
+        EncryptedFileChooser.__init__(self, console, lbry_file_manager, ToggleEncryptedFileRunningFactory,
                                  lbry_file_manager, exit_after_one_done=True)
 
 
-class ToggleLBRYFileRunningChooserFactory(CommandHandlerFactory):
-    control_handler_class = ToggleLBRYFileRunningChooser
+class ToggleEncryptedFileRunningChooserFactory(CommandHandlerFactory):
+    control_handler_class = ToggleEncryptedFileRunningChooser
     command = "toggle-running"
     short_help = "Toggle whether an LBRY file is running"
     full_help = "Toggle whether an LBRY file, which is being saved by this application," \
                 "is currently being downloaded."
 
 
-class ToggleLBRYFileRunning(CommandHandler):
+class ToggleEncryptedFileRunning(CommandHandler):
     #prompt_description = "Toggle whether an LBRY File is running"
 
     def __init__(self, console, lbry_file, lbry_file_manager):
@@ -1151,11 +1151,11 @@ class ToggleLBRYFileRunning(CommandHandler):
             return "An unexpected error occurred. See %s for details." % log_file
 
 
-class ToggleLBRYFileRunningFactory(LBRYFileChooserFactory):
-    control_handler_class = ToggleLBRYFileRunning
+class ToggleEncryptedFileRunningFactory(EncryptedFileChooserFactory):
+    control_handler_class = ToggleEncryptedFileRunning
 
 
-class CreateLBRYFile(CommandHandler):
+class CreateEncryptedFile(CommandHandler):
     #prompt_description = "Create an LBRY File from file"
     line_prompt = "File name: "
 
@@ -1179,13 +1179,13 @@ class CreateLBRYFile(CommandHandler):
 
     def set_status(self, lbry_file_downloader):
         d = self.lbry_file_manager.change_lbry_file_status(lbry_file_downloader,
-                                                           ManagedLBRYFileDownloader.STATUS_FINISHED)
+                                                           ManagedEncryptedFileDownloader.STATUS_FINISHED)
         d.addCallback(lambda _: lbry_file_downloader.restore())
         return d
 
 
-class CreateLBRYFileFactory(CommandHandlerFactory):
-    control_handler_class = CreateLBRYFile
+class CreateEncryptedFileFactory(CommandHandlerFactory):
+    control_handler_class = CreateEncryptedFile
     command = "create-lbryfile"
     short_help = "LBRYize a file"
     full_help = "Encrypt a file, split it into chunks, and make those chunks available on LBRYnet. Also " \
@@ -1196,11 +1196,11 @@ class CreateLBRYFileFactory(CommandHandlerFactory):
                 "downloaded via the hash of the stream descriptor."
 
 
-class PublishStreamDescriptorChooser(LBRYFileChooser):
+class PublishStreamDescriptorChooser(EncryptedFileChooser):
     #prompt_description = "Publish a stream descriptor file to the DHT for an LBRY File"
 
     def __init__(self, console, stream_info_manager, blob_manager, lbry_file_manager):
-        LBRYFileChooser.__init__(self, console, lbry_file_manager, PublishStreamDescriptorFactory,
+        EncryptedFileChooser.__init__(self, console, lbry_file_manager, PublishStreamDescriptorFactory,
                                  stream_info_manager, blob_manager, lbry_file_manager,
                                  exit_after_one_done=True)
 
@@ -1243,15 +1243,15 @@ class PublishStreamDescriptor(CommandHandler):
     #    return d
 
 
-class PublishStreamDescriptorFactory(LBRYFileChooserFactory):
+class PublishStreamDescriptorFactory(EncryptedFileChooserFactory):
     control_handler_class = PublishStreamDescriptor
 
 
-class ShowPublishedSDHashesChooser(LBRYFileChooser):
+class ShowPublishedSDHashesChooser(EncryptedFileChooser):
     #prompt_description = "Show published stream descriptors for an LBRY File"
 
     def __init__(self, console, stream_info_manager, lbry_file_manager):
-        LBRYFileChooser.__init__(self, console, lbry_file_manager, ShowPublishedSDHashesFactory,
+        EncryptedFileChooser.__init__(self, console, lbry_file_manager, ShowPublishedSDHashesFactory,
                                  stream_info_manager, lbry_file_manager)
 
 
@@ -1288,15 +1288,15 @@ class ShowPublishedSDHashes(CommandHandler):
         return d
 
 
-class ShowPublishedSDHashesFactory(LBRYFileChooserFactory):
+class ShowPublishedSDHashesFactory(EncryptedFileChooserFactory):
     control_handler_class = ShowPublishedSDHashes
 
 
-class CreatePlainStreamDescriptorChooser(LBRYFileChooser):
+class CreatePlainStreamDescriptorChooser(EncryptedFileChooser):
     #prompt_description = "Create a plain stream descriptor file for an LBRY File"
 
     def __init__(self, console, lbry_file_manager):
-        LBRYFileChooser.__init__(self, console, lbry_file_manager,
+        EncryptedFileChooser.__init__(self, console, lbry_file_manager,
                                  CreatePlainStreamDescriptorFactory, lbry_file_manager,
                                  exit_after_one_done=True)
 
@@ -1352,26 +1352,26 @@ class CreatePlainStreamDescriptor(CommandHandler):
         return defer.succeed(file_name)
 
 
-class CreatePlainStreamDescriptorFactory(LBRYFileChooserFactory):
+class CreatePlainStreamDescriptorFactory(EncryptedFileChooserFactory):
     control_handler_class = CreatePlainStreamDescriptor
 
 
-class ShowLBRYFileStreamHashChooser(LBRYFileChooser):
+class ShowEncryptedFileStreamHashChooser(EncryptedFileChooser):
     #prompt_description = "Show an LBRY File's stream hash (not usually what you want)"
 
     def __init__(self, console, lbry_file_manager):
-        LBRYFileChooser.__init__(self, console, lbry_file_manager, ShowLBRYFileStreamHashFactory)
+        EncryptedFileChooser.__init__(self, console, lbry_file_manager, ShowEncryptedFileStreamHashFactory)
 
 
-class ShowLBRYFileStreamHashChooserFactory(CommandHandlerFactory):
-    control_handler_class = ShowLBRYFileStreamHashChooser
+class ShowEncryptedFileStreamHashChooserFactory(CommandHandlerFactory):
+    control_handler_class = ShowEncryptedFileStreamHashChooser
     command = "lbryfile-streamhash"
     short_help = "Show an LBRY file's stream hash"
     full_help = "Show the stream hash of an LBRY file, which is how the LBRY file is referenced internally" \
                 " by this application and therefore not usually what you want to see."
 
 
-class ShowLBRYFileStreamHash(CommandHandler):
+class ShowEncryptedFileStreamHash(CommandHandler):
     #prompt_description = "Show an LBRY File's stream hash (not usually what you want)"
 
     def __init__(self, console, lbry_file):
@@ -1383,11 +1383,11 @@ class ShowLBRYFileStreamHash(CommandHandler):
         self.finished_deferred.callback(None)
 
 
-class ShowLBRYFileStreamHashFactory(LBRYFileChooserFactory):
-    control_handler_class = ShowLBRYFileStreamHash
+class ShowEncryptedFileStreamHashFactory(EncryptedFileChooserFactory):
+    control_handler_class = ShowEncryptedFileStreamHash
 
 
-class ModifyLBRYFileDataPaymentRate(ModifyPaymentRate):
+class ModifyEncryptedFileDataPaymentRate(ModifyPaymentRate):
     prompt_description = "Modify LBRY File data payment rate"
 
     def __init__(self, console, lbry_file, lbry_file_manager):
@@ -1415,19 +1415,19 @@ class ModifyLBRYFileDataPaymentRate(ModifyPaymentRate):
         return status
 
 
-class ModifyLBRYFileDataPaymentRateFactory(CommandHandlerFactory):
-    control_handler_class = ModifyLBRYFileDataPaymentRate
+class ModifyEncryptedFileDataPaymentRateFactory(CommandHandlerFactory):
+    control_handler_class = ModifyEncryptedFileDataPaymentRate
 
 
-class ModifyLBRYFileOptionsChooser(LBRYFileChooser):
+class ModifyEncryptedFileOptionsChooser(EncryptedFileChooser):
     #prompt_description = "Modify an LBRY File's options"
 
     def __init__(self, console, lbry_file_manager):
-        LBRYFileChooser.__init__(self, console, lbry_file_manager, ModifyLBRYFileOptionsFactory, lbry_file_manager)
+        EncryptedFileChooser.__init__(self, console, lbry_file_manager, ModifyEncryptedFileOptionsFactory, lbry_file_manager)
 
 
-class ModifyLBRYFileOptionsChooserFactory(CommandHandlerFactory):
-    control_handler_class = ModifyLBRYFileOptionsChooser
+class ModifyEncryptedFileOptionsChooserFactory(CommandHandlerFactory):
+    control_handler_class = ModifyEncryptedFileOptionsChooser
     command = "modify-lbryfile-options"
     short_help = "Modify an LBRY file's options"
     full_help = "Modify an LBRY file's options. Options include, and are limited to, " \
@@ -1435,7 +1435,7 @@ class ModifyLBRYFileOptionsChooserFactory(CommandHandlerFactory):
                 "this LBRY file."
 
 
-class ModifyLBRYFileOptions(RecursiveCommandHandler):
+class ModifyEncryptedFileOptions(RecursiveCommandHandler):
     #prompt_description = "Modify an LBRY File's options"
 
     def __init__(self, console, lbry_file, lbry_file_manager):
@@ -1445,12 +1445,12 @@ class ModifyLBRYFileOptions(RecursiveCommandHandler):
 
     def _get_control_handler_factories(self):
         factories = []
-        factories.append(ModifyLBRYFileDataPaymentRateFactory(self.lbry_file, self.lbry_file_manager))
+        factories.append(ModifyEncryptedFileDataPaymentRateFactory(self.lbry_file, self.lbry_file_manager))
         return factories
 
 
-class ModifyLBRYFileOptionsFactory(LBRYFileChooserFactory):
-    control_handler_class = ModifyLBRYFileOptions
+class ModifyEncryptedFileOptionsFactory(EncryptedFileChooserFactory):
+    control_handler_class = ModifyEncryptedFileOptions
 
 
 class ClaimName(CommandHandler):
@@ -1821,7 +1821,7 @@ class Publish(CommandHandler):
     def set_status(self, lbry_file_downloader):
         self.lbry_file = lbry_file_downloader
         d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file,
-                                                           ManagedLBRYFileDownloader.STATUS_FINISHED)
+                                                           ManagedEncryptedFileDownloader.STATUS_FINISHED)
         d.addCallback(lambda _: lbry_file_downloader.restore())
         return d
 
@@ -2354,7 +2354,7 @@ class PeerStatsAndSettingsChooserFactory(CommandHandlerFactory):
                 "which peers to connect to."
 
 
-class LBRYFileStatusModifier(CommandHandler):
+class EncryptedFileStatusModifier(CommandHandler):
     def __init__(self, console, lbry_file, stream_info_manager, blob_manager, lbry_file_manager):
         CommandHandler.__init__(self, console)
         self.lbry_file = lbry_file
@@ -2371,11 +2371,11 @@ class LBRYFileStatusModifier(CommandHandler):
         if self.current_handler is None:
             if line:
                 if line.lower() == 'd':
-                    self.current_handler = DeleteLBRYFile(self.console, self.lbry_file,
+                    self.current_handler = DeleteEncryptedFile(self.console, self.lbry_file,
                                                           self.stream_info_manager, self.blob_manager,
                                                           self.lbry_file_manager)
                 elif line.lower() == 't':
-                    self.current_handler = ToggleLBRYFileRunning(self.console, self.lbry_file,
+                    self.current_handler = ToggleEncryptedFileRunning(self.console, self.lbry_file,
                                                                  self.lbry_file_manager)
                 else:
                     self.console.sendLine("Invalid selection\n")
@@ -2444,7 +2444,7 @@ class Status(CommandHandler):
                     self.console.sendLine("Invalid choice.\n")
                     self.finished_deferred.callback(None)
                     return
-                self.current_handler = LBRYFileStatusModifier(self.console, self.lbry_files[index],
+                self.current_handler = EncryptedFileStatusModifier(self.console, self.lbry_files[index],
                                                               self.lbry_file_manager.stream_info_manager,
                                                               self.blob_manager, self.lbry_file_manager)
                 try:

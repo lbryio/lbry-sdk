@@ -17,7 +17,7 @@ from twisted.internet import threads, defer
 log = logging.getLogger(__name__)
 
 
-class LBRYSession(object):
+class Session(object):
     """This class manages all important services common to any application that uses the network:
     the hash announcer, which informs other peers that this peer is associated with some hash. Usually,
     this means this peer has a blob identified by the hash in question, but it can be used for other
