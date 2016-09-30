@@ -1276,105 +1276,7 @@ class Daemon(jsonrpc.JSONRPC):
         return defer.succeed(None)
 
     def _get_lbry_file(self, search_by, val, return_json=True):
-        def _log_get_lbry_file(f):
-            if f and val:
-                log.info("Found LBRY file for " + search_by + ": " + val)
-            elif val:
-                log.info("Did not find LBRY file for " + search_by + ": " + val)
-            return f
-
-        def _get_json_for_return(f):
-            def _get_file_status(file_status):
-                message = STREAM_STAGES[2][1] % (file_status.name, file_status.num_completed, file_status.num_known, file_status.running_status)
-                return defer.succeed(message)
-
-            def _generate_reply(size):
-                if f.key:
-                    key = binascii.b2a_hex(f.key)
-                else:
-                    key = None
-
-                if os.path.isfile(os.path.join(self.download_directory, f.file_name)):
-                    written_file = file(os.path.join(self.download_directory, f.file_name))
-                    written_file.seek(0, os.SEEK_END)
-                    written_bytes = written_file.tell()
-                    written_file.close()
-                else:
-                    written_bytes = False
-
-                if search_by == "name":
-                    if val in self.streams.keys():
-                        status = self.streams[val].code
-                    elif f in self.lbry_file_manager.lbry_files:
-                        # if f.stopped:
-                        #     status = STREAM_STAGES[3]
-                        # else:
-                        status = STREAM_STAGES[2]
-                    else:
-                        status = [False, False]
-                else:
-                    status = [False, False]
-
-                if status[0] == DOWNLOAD_RUNNING_CODE:
-                    d = f.status()
-                    d.addCallback(_get_file_status)
-                    d.addCallback(lambda message: {'completed': f.completed, 'file_name': f.file_name,
-                                                   'download_directory': f.download_directory,
-                                                   'download_path': os.path.join(f.download_directory, f.file_name),
-                                                   'mime_type': mimetypes.guess_type(os.path.join(f.download_directory, f.file_name))[0],
-                                                   'key': key,
-                                                   'points_paid': f.points_paid, 'stopped': f.stopped,
-                                                   'stream_hash': f.stream_hash,
-                                                   'stream_name': f.stream_name,
-                                                   'suggested_file_name': f.suggested_file_name,
-                                                   'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash,
-                                                   'lbry_uri': f.uri, 'txid': f.txid, 'claim_id': f.claim_id,
-                                                   'total_bytes': size,
-                                                   'written_bytes': written_bytes, 'code': status[0],
-                                                   'message': message})
-                else:
-                    d = defer.succeed({'completed': f.completed, 'file_name': f.file_name, 'key': key,
-                                       'download_directory': f.download_directory,
-                                       'download_path': os.path.join(f.download_directory, f.file_name),
-                                       'mime_type': mimetypes.guess_type(os.path.join(f.download_directory, f.file_name))[0],
-                                       'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
-                                       'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
-                                       'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash, 'total_bytes': size,
-                                       'written_bytes': written_bytes, 'lbry_uri': f.uri, 'txid': f.txid, 'claim_id': f.claim_id,
-                                       'code': status[0], 'message': status[1]})
-
-                return d
-
-            def _add_metadata(message):
-                def _add_to_dict(metadata):
-                    message['metadata'] = metadata
-                    return defer.succeed(message)
-
-                if f.txid:
-                    d = self._resolve_name(f.uri)
-                    d.addCallbacks(_add_to_dict, lambda _: _add_to_dict("Pending confirmation"))
-                else:
-                    d = defer.succeed(message)
-                return d
-
-            if f:
-                d = f.get_total_bytes()
-                d.addCallback(_generate_reply)
-                d.addCallback(_add_metadata)
-                return d
-            else:
-                return False
-
-        if search_by == "name":
-            d = self._get_lbry_file_by_uri(val)
-        elif search_by == "sd_hash":
-            d = self._get_lbry_file_by_sd_hash(val)
-        elif search_by == "file_name":
-            d = self._get_lbry_file_by_file_name(val)
-        # d.addCallback(_log_get_lbry_file)
-        if return_json:
-            d.addCallback(_get_json_for_return)
-        return d
+        return _GetFileHelper(self, search_by, val, return_json).retrieve_file()
 
     def _get_lbry_files(self):
         d = defer.DeferredList([self._get_lbry_file('sd_hash', l.sd_hash) for l in self.lbry_file_manager.lbry_files])
@@ -2879,3 +2781,124 @@ class _ResolveNameHelper(object):
     def is_cached_name_expired(self):
         time_in_cache = self.now() - self.name_data['timestamp']
         return time_in_cache >= self.daemon.cache_time
+
+
+class _GetFileHelper(object):
+    def __init__(self, daemon, search_by, val, return_json=True):
+        self.daemon = daemon
+        self.search_by = search_by
+        self.val = val
+        self.return_json = return_json
+
+    def retrieve_file(self):
+        d = self._search_for_file()
+        if self.return_json:
+            d.addCallback(self._get_json)
+        return d
+
+    def search_for_file(self):
+        if self.search_by == "name":
+            return self.daemon._get_lbry_file_by_uri(self.val)
+        elif self.search_by == "sd_hash":
+            return self.daemon._get_lbry_file_by_sd_hash(self.val)
+        elif self.search_by == "file_name":
+            return self.daemon._get_lbry_file_by_file_name(self.val)
+        raise Exception('{} is not a valid search operation'.format(self.search_by))
+
+    def _get_json(self, lbry_file):
+        if lbry_file:
+            d = lbry_file.get_total_bytes()
+            d.addCallback(self._generate_reply, lbry_file)
+            d.addCallback(self._add_metadata, lbry_file)
+            return d
+        else:
+            return False
+
+    def _generate_reply(self, size, lbry_file):
+        written_bytes = self._get_written_bytes(lbry_file)
+        code, message = self._get_status(lbry_file)
+
+        if code == DOWNLOAD_RUNNING_CODE:
+            d = lbry_file.status()
+            d.addCallback(self._get_file_status)
+            d.addCallback(
+                lambda msg: self._get_properties_dict(lbry_file, code, msg, written_bytes, size))
+        else:
+            d = defer.succeed(
+                self._get_properties_dict(lbry_file, code, message, written_bytes, size))
+        return d
+    
+    def _get_file_status(self, file_status):
+        message = STREAM_STAGES[2][1] % (
+            file_status.name, file_status.num_completed, file_status.num_known,
+            file_status.running_status)
+        return defer.succeed(message)
+
+    def _get_key(self, lbry_file):
+        return binascii.b2a_hex(lbry_file.key) if lbry_file.key else None
+
+    def _full_path(self, lbry_file):
+        return os.path.join(lbry_file.download_directory, lbry_file.file_name)
+
+    def _get_status(self, lbry_file):
+        if self.search_by == "name":
+            if self.val in self.daemon.streams.keys():
+                status = self.daemon.streams[self.val].code
+            elif lbry_file in self.daemon.lbry_file_manager.lbry_files:
+                status = STREAM_STAGES[2]
+            else:
+                status = [False, False]
+        else:
+            status = [False, False]
+        return status
+
+    def _get_written_bytes(self, lbry_file):
+        full_path = self._full_path(lbry_file)
+        if os.path.isfile(full_path):
+            with open(full_path) as written_file:
+                written_file.seek(0, os.SEEK_END)
+                written_bytes = written_file.tell()
+        else:
+            written_bytes = False
+        return written_bytes
+    
+    def _get_properties_dict(self, lbry_file, code, message, written_bytes, size):
+        key = self._get_key(lbry_file)
+        full_path = self._full_path(lbry_file)
+        mime_type = mimetypes.guess_type(full_path)[0]
+
+        return {
+            'completed': lbry_file.completed,
+            'file_name': lbry_file.file_name,
+            'download_directory': lbry_file.download_directory,
+            'points_paid': lbry_file.points_paid,
+            'stopped': lbry_file.stopped,
+            'stream_hash': lbry_file.stream_hash,
+            'stream_name': lbry_file.stream_name,
+            'suggested_file_name': lbry_file.suggested_file_name,
+            'upload_allowed': lbry_file.upload_allowed,
+            'sd_hash': lbry_file.sd_hash,
+            'lbry_uri': lbry_file.uri,
+            'txid': lbry_file.txid,
+            'claim_id': lbry_file.claim_id,
+            'download_path': full_path,
+            'mime_type': mime_type,
+            'key': key,
+            'total_bytes': size,
+            'written_bytes': written_bytes,
+            'code': code,
+            'message': message
+        }
+    
+    def _add_metadata(self, message, lbry_file):
+        def _add_to_dict(metadata):
+            message['metadata'] = metadata
+            return defer.succeed(message)
+
+        if lbry_file.txid:
+            d = self._resolve_name(lbry_file.uri)
+            d.addCallbacks(_add_to_dict, lambda _: _add_to_dict("Pending confirmation"))
+        else:
+            d = defer.succeed(message)
+        return d
+
