@@ -1,8 +1,9 @@
-import mock
 from lbrynet.metadata import Fee
 from lbrynet.lbrynet_daemon import ExchangeRateManager
 
 from twisted.trial import unittest
+
+from tests import util
 
 
 class FeeFormatTest(unittest.TestCase):
@@ -19,10 +20,7 @@ class FeeFormatTest(unittest.TestCase):
 
 class FeeTest(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch('time.time')
-        self.time = patcher.start()
-        self.time.return_value = 0
-        self.addCleanup(patcher.stop)
+        util.resetTime(self)
 
     def test_fee_converts_to_lbc(self):
         fee_dict = {
@@ -31,6 +29,10 @@ class FeeTest(unittest.TestCase):
                 'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
             }
         }
-        rates = {'BTCLBC': {'spot': 3.0, 'ts': 2}, 'USDBTC': {'spot': 2.0, 'ts': 3}}
+        rates = {
+            'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
+            'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
+        }
         manager = ExchangeRateManager.DummyExchangeRateManager(rates)
-        self.assertEqual(60.0, manager.to_lbc(fee_dict).amount)
+        result = manager.to_lbc(fee_dict).amount
+        self.assertEqual(60.0, result)

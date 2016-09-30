@@ -11,10 +11,26 @@ import yaml
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 
-blobhash_length = get_lbry_hash_obj().digest_size * 2  # digest_size is in bytes, and blob hashes are hex encoded
+# digest_size is in bytes, and blob hashes are hex encoded
+blobhash_length = get_lbry_hash_obj().digest_size * 2
 
 
 log = logging.getLogger(__name__)
+
+
+# defining this here allows for easier overriding in testing
+def now():
+    return datetime.datetime.now()
+
+def utcnow():
+    return datetime.datetime.utcnow()
+
+def isonow():
+    """Return utc now in isoformat with timezone"""
+    return utcnow().isoformat() + 'Z'
+
+def today():
+    return datetime.datetime.today()
 
 
 def generate_id(num=None):
@@ -84,10 +100,6 @@ def save_settings(path, settings):
     f = open(path, 'w')
     f.write(encoder(settings))
     f.close()
-
-
-def today():
-    return datetime.datetime.today()
 
 
 def check_connection(server="www.lbry.io", port=80):
