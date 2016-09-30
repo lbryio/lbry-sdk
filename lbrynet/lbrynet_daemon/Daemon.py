@@ -205,17 +205,22 @@ class AnalyticsManager(object):
     def __init__(self):
         self.analytics_api = None
         self.events_generator = None
+        self.track = analytics.Track()
         self.send_heartbeat = LoopingCall(self._send_heartbeat)
+        self.update_tracked_metrics = LoopingCall(self._update_tracked_metrics)
 
     def start(self, platform, wallet_type, lbry_id, session_id):
         context = analytics.make_context(platform, wallet_type)
         self.events_generator = analytics.Events(context, base58.b58encode(lbry_id), session_id)
         self.analytics_api = analytics.Api.load()
         self.send_heartbeat.start(60)
+        self.update_tracked_metrics.start(300)
 
     def shutdown(self):
         if self.send_heartbeat.running:
             self.send_heartbeat.stop()
+        if self.update_tracked_metrics.running:
+            self.update_tracked_metrics.stop()
 
     def send_download_started(self, name, stream_info=None):
         event = self.events_generator.download_started(name, stream_info)
@@ -224,6 +229,12 @@ class AnalyticsManager(object):
     def _send_heartbeat(self):
         heartbeat = self.events_generator.heartbeat()
         self.analytics_api.track(heartbeat)
+
+    def _update_tracked_metrics(self):
+        value = self.track.summarize(analytics.BLOB_BYTES_UPLOADED)
+        if value > 0:
+            event = self.events_generator.metric_observered(analytics.BLOB_BYTES_UPLOADED, value)
+            self.analytics_api.track(event)
 
 
 class Daemon(jsonrpc.JSONRPC):
