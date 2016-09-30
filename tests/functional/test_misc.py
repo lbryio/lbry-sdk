@@ -10,6 +10,7 @@ import unittest
 from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.Hash import MD5
+from lbrynet import analytics
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
 from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
@@ -18,6 +19,7 @@ from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetad
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.PTCWallet import PointTraderKeyQueryHandlerFactory, PointTraderKeyExchanger
 from lbrynet.core.Session import Session
+from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
@@ -268,8 +270,11 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rat
         server_port = None
 
         query_handler_factories = {
-            BlobRequestHandlerFactory(session.blob_manager, session.wallet,
-                                      session.payment_rate_manager): True,
+            BlobAvailabilityHandlerFactory(session.blob_manager): True,
+            BlobRequestHandlerFactory(
+                session.blob_manager, session.wallet,
+                session.payment_rate_manager,
+                analytics.Track()): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
         }
 
@@ -394,8 +399,11 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_ra
         server_port = None
 
         query_handler_factories = {
-            BlobRequestHandlerFactory(session.blob_manager, session.wallet,
-                                      session.payment_rate_manager): True,
+            BlobAvailabilityHandlerFactory(session.blob_manager): True,
+            BlobRequestHandlerFactory(
+                session.blob_manager, session.wallet,
+                session.payment_rate_manager,
+                analytics.Track()): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
         }
 
@@ -478,7 +486,8 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
             CryptBlobInfoQueryHandlerFactory(stream_info_manager, session.wallet,
                                              session.payment_rate_manager): True,
             BlobRequestHandlerFactory(session.blob_manager, session.wallet,
-                                      session.payment_rate_manager): True,
+                                      session.payment_rate_manager,
+                                      analytics.Track()): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
         }
 
@@ -622,7 +631,10 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
         server_port = None
 
         query_handler_factories = {
-            BlobRequestHandlerFactory(session.blob_manager, session.wallet, session.payment_rate_manager): True,
+            BlobAvailabilityHandlerFactory(session.blob_manager): True,
+            BlobRequestHandlerFactory(session.blob_manager, session.wallet,
+                                      session.payment_rate_manager,
+                                      analytics.Track()): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
         }
 

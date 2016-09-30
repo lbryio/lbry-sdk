@@ -12,6 +12,7 @@ from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task, error
 from jsonrpc.proxy import JSONRPCProxy
 
+from lbrynet import analytics
 from lbrynet.core.Session import Session
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.Settings import Settings
@@ -366,11 +367,13 @@ class Console():
         ]
 
         def get_blob_request_handler_factory(rate):
-            self.blob_request_payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager,
-                                                                        rate)
-            handlers.append(BlobRequestHandlerFactory(self.session.blob_manager,
-                                                      self.session.wallet,
-                                                      self.blob_request_payment_rate_manager))
+            self.blob_request_payment_rate_manager = PaymentRateManager(
+                self.session.base_payment_rate_manager, rate
+            )
+            handlers.append(BlobRequestHandlerFactory(
+                self.session.blob_manager, self.session.wallet,
+                self.blob_request_payment_rate_manager, analytics.Track()
+            ))
 
         d1 = self.settings.get_server_data_payment_rate()
         d1.addCallback(get_blob_request_handler_factory)

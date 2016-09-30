@@ -32,6 +32,13 @@ class Events(object):
         }
         return self._event('Download Started', properties)
 
+    def metric_observed(self, metric_name, value):
+        properties = {
+            'metric_name': metric_name,
+            'metric_value': value,
+        }
+        return self._event('Metric Observed', properties)
+
     def _event(self, event, event_properties=None):
         return {
             'userId': 'lbry',
