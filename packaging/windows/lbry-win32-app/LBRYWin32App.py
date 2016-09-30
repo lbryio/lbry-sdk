@@ -18,7 +18,7 @@ try:
 except ImportError:
     import win32gui
 
-from lbrynet.lbrynet_daemon.LBRYDaemonServer import DaemonServer, DaemonRequest
+from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer, DaemonRequest
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
 from lbrynet.conf import UI_ADDRESS, API_CONNECTION_STRING, LOG_FILE_NAME
 from packaging.uri_handler.LBRYURIHandler import LBRYURIHandler
