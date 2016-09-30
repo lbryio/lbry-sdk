@@ -143,7 +143,9 @@ class LoopingCallManager(object):
         self.calls[name] = LoopingCall(*args)
 
     def start(self, name, *args):
-        self.calls[name].start(*args)
+        lcall = self.calls[name]
+        if not lcall.running:
+            lcall.start(*args)
 
     def stop(self, name):
         self.calls[name].stop()
@@ -888,8 +890,6 @@ class Daemon(jsonrpc.JSONRPC):
         self.analytics_manager.shutdown()
         if self.lbry_ui_manager.update_checker.running:
             self.lbry_ui_manager.update_checker.stop()
-        if self.pending_claim_checker.running:
-            self.pending_claim_checker.stop()
 
         self._clean_up_temp_files()
 
@@ -1962,8 +1962,7 @@ class Daemon(jsonrpc.JSONRPC):
             if not os.path.isfile(file_path):
                 return defer.fail(Exception("Specified file for publish doesnt exist: %s" % file_path))
 
-        if not self.pending_claim_checker.running:
-            self.pending_claim_checker.start(30)
+        self.looping_call_manager.start('pending_claim_checker', 30)
 
         d = self._resolve_name(name, force_refresh=True)
         d.addErrback(lambda _: None)
