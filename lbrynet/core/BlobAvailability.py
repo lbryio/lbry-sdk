@@ -34,6 +34,27 @@ class BlobAvailabilityTracker(object):
         if self._check_mine.running:
             self._check_mine.stop()
 
+    def get_blob_availability(self, blob):
+        def _get_peer_count(peers):
+            have_blob = 0
+            for peer in peers:
+                if peer.is_available():
+                    have_blob += 1
+            return {blob: have_blob}
+
+        d = self._peer_finder.find_peers_for_blob(blob)
+        d.addCallback(_get_peer_count)
+        return d
+
+    def get_availability_for_blobs(self, blobs):
+        dl = []
+        for blob in blobs:
+            if blob:
+                dl.append(self.get_blob_availability(blob))
+        d = defer.DeferredList(dl)
+        d.addCallback(lambda results: [r[1] for r in results])
+        return d
+
     def _update_peers_for_blob(self, blob):
         def _save_peer_info(blob_hash, peers):
             v = {blob_hash: peers}

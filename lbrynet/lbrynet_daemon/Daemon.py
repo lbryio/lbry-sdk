@@ -2581,6 +2581,36 @@ class Daemon(jsonrpc.JSONRPC):
         d = self._render_response(self.session.blob_tracker.last_mean_availability, OK_CODE)
         return d
 
+    def jsonrpc_get_availability(self, p):
+        """
+        Get stream availability for a winning claim
+
+        Arg:
+            name (str): lbry uri
+
+        Returns:
+             peers per blob / total blobs
+        """
+
+        def _get_mean(blob_availabilities):
+            peer_counts = []
+            for blob_availability in blob_availabilities:
+                for blob, peers in blob_availability.iteritems():
+                    peer_counts.append(peers)
+            return round(1.0 * sum(peer_counts) / len(peer_counts), 2)
+
+        name = p['name']
+
+        d = self._resolve_name(name, force_refresh=True)
+        d.addCallback(get_sd_hash)
+        d.addCallback(self._download_sd_blob)
+        d.addCallback(lambda descriptor: [blob.get('blob_hash') for blob in descriptor['blobs']])
+        d.addCallback(self.session.blob_tracker.get_availability_for_blobs)
+        d.addCallback(_get_mean)
+        d.addCallback(lambda result: self._render_response(result, OK_CODE))
+
+        return d
+
 
 def get_lbrynet_version_from_github():
     """Return the latest released version from github."""
