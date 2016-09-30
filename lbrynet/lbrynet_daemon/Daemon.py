@@ -2597,14 +2597,18 @@ class Daemon(jsonrpc.JSONRPC):
             for blob_availability in blob_availabilities:
                 for blob, peers in blob_availability.iteritems():
                     peer_counts.append(peers)
-            return round(1.0 * sum(peer_counts) / len(peer_counts), 2)
+            if peer_counts:
+                return round(1.0 * sum(peer_counts) / len(peer_counts), 2)
+            else:
+                return 0.0
 
         name = p['name']
 
         d = self._resolve_name(name, force_refresh=True)
         d.addCallback(get_sd_hash)
         d.addCallback(self._download_sd_blob)
-        d.addCallback(lambda descriptor: [blob.get('blob_hash') for blob in descriptor['blobs']])
+        d.addCallbacks(lambda descriptor: [blob.get('blob_hash') for blob in descriptor['blobs']],
+                       lambda _: [])
         d.addCallback(self.session.blob_tracker.get_availability_for_blobs)
         d.addCallback(_get_mean)
         d.addCallback(lambda result: self._render_response(result, OK_CODE))
