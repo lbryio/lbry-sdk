@@ -203,40 +203,8 @@ class CheckRemoteVersions(object):
             return defer.fail(None)
 
 
-class AnalyticsManager(object):
-    def __init__(self):
-        self.analytics_api = None
-        self.events_generator = None
-        self.track = analytics.Track()
-        self.send_heartbeat = LoopingCall(self._send_heartbeat)
-        self.update_tracked_metrics = LoopingCall(self._update_tracked_metrics)
-
-    def start(self, platform, wallet_type, lbry_id, session_id):
-        context = analytics.make_context(platform, wallet_type)
-        self.events_generator = analytics.Events(context, base58.b58encode(lbry_id), session_id)
-        self.analytics_api = analytics.Api.load()
-        self.send_heartbeat.start(60)
-        self.update_tracked_metrics.start(300)
-
-    def shutdown(self):
-        if self.send_heartbeat.running:
-            self.send_heartbeat.stop()
-        if self.update_tracked_metrics.running:
-            self.update_tracked_metrics.stop()
-
-    def send_download_started(self, name, stream_info=None):
-        event = self.events_generator.download_started(name, stream_info)
-        self.analytics_api.track(event)
-
-    def _send_heartbeat(self):
-        heartbeat = self.events_generator.heartbeat()
-        self.analytics_api.track(heartbeat)
-
-    def _update_tracked_metrics(self):
-        value = self.track.summarize(analytics.BLOB_BYTES_UPLOADED)
-        if value > 0:
-            event = self.events_generator.metric_observered(analytics.BLOB_BYTES_UPLOADED, value)
-            self.analytics_api.track(event)
+def calculate_available_blob_sizes(blob_manager):
+    return sum(blob.length for blob in blob_manager.get_all_verified_blobs())
 
 
 class Daemon(jsonrpc.JSONRPC):
@@ -276,7 +244,7 @@ class Daemon(jsonrpc.JSONRPC):
         self.first_run_after_update = False
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(generate_id())
-        self.analytics_manager = AnalyticsManager()
+        self.analytics_manager = analytics.Manager()
 
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -453,7 +421,6 @@ class Daemon(jsonrpc.JSONRPC):
             ('version_checker', CheckRemoteVersions(self)),
             ('connection_problem_checker', self._check_connection_problems),
             ('pending_claim_checker', self._check_pending_claims),
-            ('send_tracked_metrics', self._send_tracked_metrics),
         ]
         for name, fn in looping_calls:
             self.looping_call_manager.register_looping_call(name, fn)
@@ -645,7 +612,6 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
-        d.addCallback(lambda _: self._set_events())
         d.addCallback(lambda _: self._get_session())
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_stream_identifier())
@@ -2876,7 +2842,6 @@ class _GetFileHelper(object):
         key = self._get_key(lbry_file)
         full_path = self._full_path(lbry_file)
         mime_type = mimetypes.guess_type(full_path)[0]
-
         return {
             'completed': lbry_file.completed,
             'file_name': lbry_file.file_name,
@@ -2899,7 +2864,7 @@ class _GetFileHelper(object):
             'code': code,
             'message': message
         }
-    
+
     def _add_metadata(self, message, lbry_file):
         def _add_to_dict(metadata):
             message['metadata'] = metadata

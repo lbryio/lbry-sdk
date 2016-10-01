@@ -28,7 +28,7 @@ def log_response(fn):
     return wrapper
 
 
-class AnalyticsApi(object):
+class Api(object):
     def __init__(self, session, url, write_key):
         self.session = session
         self.url = url
