@@ -40,5 +40,5 @@ class Manager(object):
     def _update_tracked_metrics(self):
         value = self.track.summarize(constants.BLOB_BYTES_UPLOADED)
         if value > 0:
-            event = self.events_generator.metric_observered(analytics.BLOB_BYTES_UPLOADED, value)
+            event = self.events_generator.metric_observered(constants.BLOB_BYTES_UPLOADED, value)
             self.analytics_api.track(event)
