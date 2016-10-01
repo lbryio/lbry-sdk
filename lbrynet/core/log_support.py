@@ -73,6 +73,7 @@ def _log_decorator(fn):
 
 def disable_third_party_loggers():
     logging.getLogger('requests').setLevel(logging.WARNING)
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
     logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
 
 def disable_noisy_loggers():
