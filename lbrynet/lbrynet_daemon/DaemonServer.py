@@ -246,7 +246,7 @@ class EncryptedFileStreamer(object):
 
     # How long to wait between sending blocks (needed because some
     # video players freeze up if you try to send data too fast)
-    stream_interval = 0.01
+    stream_interval = 0.005
 
     # How long to wait before checking if new data has been appended to the file
     new_data_check_interval = 0.25
