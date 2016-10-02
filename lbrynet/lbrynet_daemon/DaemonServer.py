@@ -246,9 +246,9 @@ class EncryptedFileStreamer(object):
 
     # How long to wait between sending blocks (needed because some
     # video players freeze up if you try to send data too fast)
-    stream_interval = 0.02
+    stream_interval = 0.01
 
-    # How long to wait before checking again
+    # How long to wait before checking if new data has been appended to the file
     new_data_check_interval = 0.25
 
 
@@ -287,13 +287,15 @@ class EncryptedFileStreamer(object):
         if not self._running:
             return
 
+        # Clear the file's EOF indicator by seeking to current position
+        self._file.seek(self._file.tell())
+
         data = self._file.read(self.bufferSize)
         if data:
             self._request.write(data)
-            self._deferred.addCallback(lambda _: task.deferLater(reactor, self.stream_interval, self._check_for_new_data))
+            if self._running:  # .write() can trigger a pause
+                self._deferred.addCallback(lambda _: task.deferLater(reactor, self.stream_interval, self._check_for_new_data))
         else:
-            # We've written all the bytes currently in the file, but we may
-            # still be downloading, so check file status to see if we're done.
             self._deferred.addCallback(lambda _: self._file_manager.get_lbry_file_status(self._stream))
             self._deferred.addCallback(_recurse_or_stop)
 
@@ -310,8 +312,8 @@ class EncryptedFileStreamer(object):
         self._deferred.addErrback(lambda err: err.trap(defer.CancelledError))
         self._deferred.addErrback(lambda err: err.trap(error.ConnectionDone))
         self._deferred.cancel()
-        self._request.finish()
         self._request.unregisterProducer()
+        self._request.finish()
 
 
 class HostedEncryptedFile(resource.Resource):
@@ -325,8 +327,8 @@ class HostedEncryptedFile(resource.Resource):
         producer = EncryptedFileStreamer(request, path, stream, self._api.lbry_file_manager)
         request.registerProducer(producer, streaming=True)
 
-        request.notifyFinish().addCallback(lambda _: producer.stopProducing())
-        request.notifyFinish().addErrback(self._responseFailed, d)
+        d = request.notifyFinish()
+        d.addErrback(self._responseFailed, d)
         return d
 
     def render_GET(self, request):
