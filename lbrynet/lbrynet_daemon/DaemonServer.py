@@ -11,11 +11,12 @@ import cgi
 
 from appdirs import user_data_dir
 from twisted.web import server, static, resource
-from twisted.internet import abstract, defer, interfaces, error, reactor, task, threads
+from twisted.internet import abstract, defer, interfaces, error, reactor, task
 
 from zope.interface import implementer
 
 from lbrynet.lbrynet_daemon.Daemon import Daemon
+from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.conf import API_ADDRESS, UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
 
@@ -279,7 +280,7 @@ class EncryptedFileStreamer(object):
             if not self._running:
                 return
 
-            if stream_status != ManagedLBRYFileDownloader.STATUS_FINISHED:
+            if stream_status != ManagedEncryptedFileDownloader.STATUS_FINISHED:
                 self._deferred.addCallback(lambda _: task.deferLater(reactor, self.new_data_check_interval, self._check_for_new_data))
             else:
                 self.stopProducing()
