@@ -41,7 +41,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         def _save_sd_hash(sd_hash):
             if len(sd_hash):
                 self.sd_hash = sd_hash[0]
-                d = self.wallet._get_claim_metadata_for_sd_hash(self.sd_hash)
+                d = self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
             else:
                 d = defer.succeed(None)
 
@@ -122,13 +122,12 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     def _start(self):
 
         d = EncryptedFileSaver._start(self)
-
-        d.addCallback(lambda _: self.stream_info_manager._get_sd_blob_hashes_for_stream(self.stream_hash))
+        d.addCallback(lambda _: self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash))
 
         def _save_sd_hash(sd_hash):
             if len(sd_hash):
                 self.sd_hash = sd_hash[0]
-                d = self.wallet._get_claim_metadata_for_sd_hash(self.sd_hash)
+                d = self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
             else:
                 d = defer.succeed(None)
 

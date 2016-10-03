@@ -28,10 +28,11 @@ from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
-from twisted.internet import defer, threads, task, error
+from twisted.internet import defer, threads, task
 from twisted.trial.unittest import TestCase
 from twisted.python.failure import Failure
 import os
+from lbrynet.dht.node import Node
 from lbrynet.core.BlobAvailability import DummyBlobAvailabilityTracker
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter, RateLimiter
@@ -41,10 +42,6 @@ from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.lbrylive.server.LiveBlobInfoQueryHandler import CryptBlobInfoQueryHandlerFactory
 from lbrynet.lbrylive.client.LiveStreamOptions import add_live_stream_to_sd_identifier
 from lbrynet.lbrylive.client.LiveStreamDownloader import add_full_live_stream_downloader_to_sd_identifier
-from lbrynet.core.BlobManager import TempBlobManager
-from lbrynet.reflector.client.client import EncryptedFileReflectorClientFactory
-from lbrynet.reflector.server.server import ReflectorServerFactory
-from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 
 
 log_format = "%(funcName)s(): %(message)s"
@@ -105,6 +102,9 @@ class FakeWallet(object):
 
     def set_public_key_for_peer(self, peer, public_key):
         pass
+
+    def get_claim_metadata_for_sd_hash(self, sd_hash):
+        return "fakeuri", "faketxid"
 
 
 class FakePeerFinder(object):
@@ -212,16 +212,12 @@ test_create_stream_sd_file = {
 
 
 def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rate_limit=None):
-
-    sys.modules = sys.modules.copy()
-
-    del sys.modules['twisted.internet.reactor']
-
-    import twisted.internet
-
-    twisted.internet.reactor = twisted.internet.epollreactor.EPollReactor()
-
-    sys.modules['twisted.internet.reactor'] = twisted.internet.reactor
+    if sys.platform.startswith("linux"):
+        sys.modules = sys.modules.copy()
+        del sys.modules['twisted.internet.reactor']
+        import twisted.internet
+        twisted.internet.reactor = twisted.internet.epollreactor.EPollReactor()
+        sys.modules['twisted.internet.reactor'] = twisted.internet.reactor
 
     from twisted.internet import reactor
 
@@ -245,7 +241,8 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rat
 
     session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                           peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
-                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker)
+                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker,
+                          dht_node_class=Node)
 
     stream_info_manager = TempEncryptedFileMetadataManager()
 
@@ -323,20 +320,18 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rat
         sd_hash_queue.put(sd_hash)
 
     reactor.callLater(1, start_all)
-    reactor.run()
+    if not reactor.running:
+        reactor.run()
 
 
 def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_rate_limit=None):
 
-    sys.modules = sys.modules.copy()
-
-    del sys.modules['twisted.internet.reactor']
-
-    import twisted.internet
-
-    twisted.internet.reactor = twisted.internet.epollreactor.EPollReactor()
-
-    sys.modules['twisted.internet.reactor'] = twisted.internet.reactor
+    if sys.platform.startswith("linux"):
+        sys.modules = sys.modules.copy()
+        del sys.modules['twisted.internet.reactor']
+        import twisted.internet
+        twisted.internet.reactor = twisted.internet.epollreactor.EPollReactor()
+        sys.modules['twisted.internet.reactor'] = twisted.internet.reactor
 
     from twisted.internet import reactor
 
@@ -440,21 +435,18 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_ra
 
     d = task.deferLater(reactor, 1.0, start_transfer)
     d.addCallback(lambda _: start_server())
-
-    reactor.run()
+    if not reactor.running:
+        reactor.run()
 
 
 def start_live_server(sd_hash_queue, kill_event, dead_event):
 
-    sys.modules = sys.modules.copy()
-
-    del sys.modules['twisted.internet.reactor']
-
-    import twisted.internet
-
-    twisted.internet.reactor = twisted.internet.epollreactor.EPollReactor()
-
-    sys.modules['twisted.internet.reactor'] = twisted.internet.reactor
+    if sys.platform.startswith("linux"):
+        sys.modules = sys.modules.copy()
+        del sys.modules['twisted.internet.reactor']
+        import twisted.internet
+        twisted.internet.reactor = twisted.internet.epollreactor.EPollReactor()
+        sys.modules['twisted.internet.reactor'] = twisted.internet.reactor
 
     from twisted.internet import reactor
 
@@ -584,20 +576,18 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
         return d
 
     reactor.callLater(1, run_server)
-    reactor.run()
+    if not reactor.running:
+        reactor.run()
 
 
 def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow):
 
-    sys.modules = sys.modules.copy()
-
-    del sys.modules['twisted.internet.reactor']
-
-    import twisted.internet
-
-    twisted.internet.reactor = twisted.internet.epollreactor.EPollReactor()
-
-    sys.modules['twisted.internet.reactor'] = twisted.internet.reactor
+    if sys.platform.startswith("linux"):
+        sys.modules = sys.modules.copy()
+        del sys.modules['twisted.internet.reactor']
+        import twisted.internet
+        twisted.internet.reactor = twisted.internet.epollreactor.EPollReactor()
+        sys.modules['twisted.internet.reactor'] = twisted.internet.reactor
 
     from twisted.internet import reactor
 
@@ -689,7 +679,8 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow):
         logging.debug("blob hash has been added to the queue")
 
     reactor.callLater(1, start_all)
-    reactor.run()
+    if not reactor.running:
+        reactor.run()
 
 
 class TestTransfer(TestCase):
@@ -771,7 +762,7 @@ class TestTransfer(TestCase):
 
         return d
 
-    @unittest.skip("Sadly skipping failing test instead of fixing it")
+    # @unittest.skip("Sadly skipping failing test instead of fixing it")
     def test_lbry_transfer(self):
         sd_hash_queue = Queue()
         kill_event = Event()
@@ -798,7 +789,8 @@ class TestTransfer(TestCase):
         self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
-                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker)
+                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker,
+                                   dht_node_class=Node)
 
         self.stream_info_manager = TempEncryptedFileMetadataManager()
 
@@ -884,7 +876,7 @@ class TestTransfer(TestCase):
         self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer, blob_dir=None,
                                    peer_port=5553, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-                                   blob_tracker=blob_tracker)
+                                   blob_tracker=blob_tracker, dht_node_class=Node)
 
         self.stream_info_manager = TempLiveStreamMetadataManager(hash_announcer)
 
@@ -957,7 +949,7 @@ class TestTransfer(TestCase):
         d.addBoth(stop)
         return d
 
-    @require_system('Linux')
+    # @require_system('Linux')
     def test_last_blob_retrieval(self):
 
         kill_event = Event()
@@ -1043,7 +1035,7 @@ class TestTransfer(TestCase):
 
         return d
 
-    @unittest.skip("Sadly skipping failing test instead of fixing it")
+    # @unittest.skip("Sadly skipping failing test instead of fixing it")
     def test_double_download(self):
         sd_hash_queue = Queue()
         kill_event = Event()
