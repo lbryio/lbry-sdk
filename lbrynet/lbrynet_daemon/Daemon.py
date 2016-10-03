@@ -353,6 +353,7 @@ class Daemon(jsonrpc.JSONRPC):
                 self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
 
         if os.name != 'nt':
+            # TODO: are we still using this?
             lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
             if not os.path.isfile(lbrycrdd_path_conf):
                 f = open(lbrycrdd_path_conf, "w")
