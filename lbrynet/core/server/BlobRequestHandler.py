@@ -110,7 +110,7 @@ class BlobRequestHandler(object):
 
     def open_blob_for_reading(self, blob, response):
         def failure(msg):
-            log.warning("We can not send %s: %s", blob, msg)
+            log.debug("We can not send %s: %s", blob, msg)
             response['incoming_blob'] = {'error': 'BLOB_UNAVAILABLE'}
             return response
         if not blob.is_validated():
@@ -168,7 +168,7 @@ class BlobRequestHandler(object):
                 d.addCallback(lambda _: self.record_transaction(blob))
                 d.addCallback(lambda _: response)
                 return d
-        log.warning("We can not send %s", str(blob))
+        log.debug("We can not send %s", str(blob))
         response['incoming_blob'] = {'error': 'BLOB_UNAVAILABLE'}
         d.addCallback(lambda _: response)
         return d
@@ -183,7 +183,7 @@ class BlobRequestHandler(object):
         rate = self.blob_data_payment_rate
 
         if self.blob_data_payment_rate is None:
-            log.warning("Rate not set yet")
+            log.debug("Rate not set yet")
             response['incoming_blob'] = {'error': 'RATE_UNSET'}
             return defer.succeed(response)
         else:

@@ -12,6 +12,8 @@ from lbrynet.core import PeerManager
 from lbrynet.core import RateLimiter
 from lbrynet.core import Session
 from lbrynet.core import StreamDescriptor
+from lbrynet.core import BlobAvailability
+from lbrynet.dht.node import Node
 from lbrynet.lbryfile import EncryptedFileMetadataManager
 from lbrynet.lbryfile.client import EncryptedFileOptions
 from lbrynet.lbryfilemanager import EncryptedFileCreator
@@ -59,6 +61,7 @@ class TestReflector(unittest.TestCase):
         hash_announcer = mocks.Announcer()
         rate_limiter = RateLimiter.DummyRateLimiter()
         sd_identifier = StreamDescriptor.StreamDescriptorIdentifier()
+        blob_tracker = BlobAvailability.DummyBlobAvailabilityTracker()
 
         self.expected_blobs = [
             (
@@ -91,7 +94,9 @@ class TestReflector(unittest.TestCase):
             peer_port=5553,
             use_upnp=False,
             rate_limiter=rate_limiter,
-            wallet=wallet
+            wallet=wallet,
+            blob_tracker=blob_tracker,
+            dht_node_class=Node
         )
 
         self.stream_info_manager = EncryptedFileMetadataManager.TempEncryptedFileMetadataManager()

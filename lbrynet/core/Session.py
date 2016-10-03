@@ -295,7 +295,7 @@ class Session(object):
         return d
 
     def _subfailure(self, err):
-        log.warning(err.getTraceback())
-        return err.value.subFailure
+        log.error(err.getTraceback())
+        return err.value
 
 

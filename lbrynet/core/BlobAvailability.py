@@ -2,6 +2,7 @@ import logging
 
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
+from lbrynet.core.PeerFinder import DummyPeerFinder
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ class BlobAvailabilityTracker(object):
         self.last_mean_availability = mean
 
 
-class DummyBlobAvailabilityTracker(object):
+class DummyBlobAvailabilityTracker(BlobAvailabilityTracker):
     """
     Class to track peer counts for known blobs, and to discover new popular blobs
 
@@ -109,9 +110,16 @@ class DummyBlobAvailabilityTracker(object):
             'f99d24cd50d4bfd77c2598bfbeeb8415bf0feef21200bdf0b8fbbde7751a77b7a2c68e09c25465a2f40fba8eecb0b4e0': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
             'c84aa1fd8f5009f7c4e71e444e40d95610abc1480834f835eefb267287aeb10025880a3ce22580db8c6d92efb5bc0c9c': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
         }
+        self.last_mean_availability = 0.0
+        self._blob_manager = None
+        self._peer_finder = DummyPeerFinder()
+        self._dht_node = None
+        self._check_popular = None
+        self._check_mine = None
         self._get_mean_peers()
 
-    def _get_mean_peers(self):
-        num_peers = [len(self.availability[blob]) for blob in self.availability]
-        mean = float(sum(num_peers)) / float(max(1, len(num_peers)))
-        self.last_mean_availability = mean
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
