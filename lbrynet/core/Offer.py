@@ -19,6 +19,8 @@ class Offer(object):
             self.accept()
         elif offer == Offer.RATE_TOO_LOW:
             self.reject()
+        else:
+            self.unset()
 
     @property
     def accepted(self):
@@ -29,18 +31,26 @@ class Offer(object):
         return self._state is Offer.RATE_TOO_LOW
 
     @property
+    def is_unset(self):
+        return self._state is Offer.RATE_UNSET
+
+    @property
     def message(self):
         if self.accepted:
             return Offer.RATE_ACCEPTED
         elif self.too_low:
             return Offer.RATE_TOO_LOW
-        elif self.rate is None:
+        elif self.is_unset:
             return Offer.RATE_UNSET
+        return None
 
     def accept(self):
-        if self._state is None:
+        if self._state is None or self.is_unset:
             self._state = Offer.RATE_ACCEPTED
 
     def reject(self):
-        if self._state is None:
+        if self._state is None or self.is_unset:
             self._state = Offer.RATE_TOO_LOW
+
+    def unset(self):
+        self._state = Offer.RATE_UNSET

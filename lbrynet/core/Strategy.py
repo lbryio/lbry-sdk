@@ -1,7 +1,7 @@
 import logging
 
 from lbrynet.core.Offer import Offer
-from lbrynet.core.PriceModel import MeanAvailabilityWeightedPrice
+from lbrynet.core.PriceModel import get_default_price_model
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class BasicAvailabilityWeightedStrategy(object):
     until the rate is accepted or a threshold is reached
     """
 
-    def __init__(self, blob_tracker, acceleration=1.25, deceleration=0.9, max_rate=0.005, min_rate=0.0):
+    def __init__(self, blob_tracker, acceleration=1.25, deceleration=0.9, max_rate=0.005, min_rate=0.0, **kwargs):
         self._acceleration = acceleration # rate of how quickly to ramp offer
         self._deceleration = deceleration
         self._min_rate = min_rate
@@ -27,7 +27,7 @@ class BasicAvailabilityWeightedStrategy(object):
         self._count_down = {}
         self._requested = {}
         self._offers_to_peers = {}
-        self.model = MeanAvailabilityWeightedPrice(blob_tracker)
+        self.model = get_default_price_model(blob_tracker, **kwargs)
 
     def respond_to_offer(self, offer, peer, blobs):
         request_count = self._count_up.get(peer, 0)
@@ -53,18 +53,24 @@ class BasicAvailabilityWeightedStrategy(object):
 
     def make_offer(self, peer, blobs):
         # use mean turn-discounted price for all the blobs requested
+        # if there was a previous offer replied to, use the same rate if it was accepted
+        last_offer = self._offers_to_peers.get(peer, False)
+        if last_offer:
+            if last_offer.rate is not None and last_offer.accepted:
+                return last_offer
+
         request_count = self._count_down.get(peer, 0)
         self._inc_down_count(peer)
         if request_count == 0:
             # Try asking for it for free
-            offer = Offer(0.0)
+            self._offers_to_peers.update({peer: Offer(0.0)})
         else:
             rates = [self._calculate_price(blob) for blob in blobs]
             mean_rate = sum(rates) / max(len(blobs), 1)
             with_premium = self._premium(mean_rate, request_count)
             price = self._bounded_price(with_premium)
-            offer = Offer(price)
-        return offer
+            self._offers_to_peers.update({peer: Offer(price)})
+        return self._offers_to_peers[peer]
 
     def _bounded_price(self, price):
         price_for_return = min(self._max_rate, max(price, self._min_rate))

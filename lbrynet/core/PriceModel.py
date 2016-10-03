@@ -1,6 +1,10 @@
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
 
 
+def get_default_price_model(blob_tracker, **kwargs):
+    return MeanAvailabilityWeightedPrice(blob_tracker, **kwargs)
+
+
 class MeanAvailabilityWeightedPrice(object):
     """
     Calculate mean-blob-availability and stream-position weighted price for a blob
@@ -13,18 +17,17 @@ class MeanAvailabilityWeightedPrice(object):
         blob_tracker (BlobAvailabilityTracker): blob availability tracker
     """
 
-    def __init__(self, tracker, min_price=MIN_BLOB_DATA_PAYMENT_RATE, base_price=None, alpha=1.0):
+    def __init__(self, tracker, base_price=MIN_BLOB_DATA_PAYMENT_RATE, alpha=1.0):
         self.blob_tracker = tracker
-        self.min_price = min_price
-        self.base_price = base_price if base_price is not None else min_price * 10
+        self.base_price = base_price
         self.alpha = alpha
 
     def calculate_price(self, blob):
         mean_availability = self.blob_tracker.last_mean_availability
         availability = self.blob_tracker.availability.get(blob, [])
-        index = 0 # blob.index
+        index = 0  # blob.index
         price = self.base_price * (mean_availability / max(1, len(availability))) / self._frontload(index)
-        return round(max(self.min_price, price), 5)
+        return round(price, 5)
 
     def _frontload(self, index):
         """

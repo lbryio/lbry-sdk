@@ -71,8 +71,11 @@ class BlobRequestHandler(object):
             response.addCallback(lambda r: self._handle_payment_rate_query(offer, r))
 
         if self.BLOB_QUERY in queries:
-            incoming = queries[self.BLOB_QUERY]
-            response.addCallback(lambda r: self._reply_to_send_request(r, incoming))
+            if self.PAYMENT_RATE_QUERY in queries:
+                incoming = queries[self.BLOB_QUERY]
+                response.addCallback(lambda r: self._reply_to_send_request(r, incoming))
+            else:
+                response.addCallback(lambda _:  {'incoming_blob': {'error': 'RATE_UNSET'}})
 
         return response
 
@@ -80,11 +83,14 @@ class BlobRequestHandler(object):
         blobs = request.get("available_blobs", [])
         log.info("Offered rate %f/mb for %i blobs", offer.rate, len(blobs))
         accepted = self.payment_rate_manager.accept_rate_blob_data(self.peer, blobs, offer)
-        if accepted:
+        if offer.accepted:
             self.blob_data_payment_rate = offer.rate
             request[self.PAYMENT_RATE_QUERY] = "RATE_ACCEPTED"
-        else:
+        elif offer.too_low:
             request[self.PAYMENT_RATE_QUERY] = "RATE_TOO_LOW"
+            offer.unset()
+        elif offer.is_unset:
+            request['incoming_blob'] = {'error': 'RATE_UNSET'}
         return request
 
     def _handle_blob_query(self, response, query):
@@ -92,8 +98,8 @@ class BlobRequestHandler(object):
         response['incoming_blob'] = {}
 
         if self.blob_data_payment_rate is None:
-            response['incoming_blob']['error'] = "RATE_UNSET"
-            return defer.succeed(response)
+            response['incoming_blob'] = {'error': "RATE_UNSET"}
+            return response
         else:
             return self._send_blob(response, query)
 
@@ -105,7 +111,7 @@ class BlobRequestHandler(object):
     def open_blob_for_reading(self, blob, response):
         def failure(msg):
             log.warning("We can not send %s: %s", blob, msg)
-            response['incoming_blob']['error'] = "BLOB_UNAVAILABLE"
+            response['incoming_blob'] = {'error': 'BLOB_UNAVAILABLE'}
             return response
         if not blob.is_validated():
             return failure("blob can't be validated")
@@ -163,7 +169,7 @@ class BlobRequestHandler(object):
                 d.addCallback(lambda _: response)
                 return d
         log.warning("We can not send %s", str(blob))
-        response['error'] = "BLOB_UNAVAILABLE"
+        response['incoming_blob'] = {'error': 'BLOB_UNAVAILABLE'}
         d.addCallback(lambda _: response)
         return d
 
@@ -178,7 +184,7 @@ class BlobRequestHandler(object):
 
         if self.blob_data_payment_rate is None:
             log.warning("Rate not set yet")
-            response['error'] = "RATE_UNSET"
+            response['incoming_blob'] = {'error': 'RATE_UNSET'}
             return defer.succeed(response)
         else:
             log.debug("Requested blob: %s", str(incoming))
