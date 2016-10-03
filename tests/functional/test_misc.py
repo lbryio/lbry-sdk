@@ -19,7 +19,6 @@ from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManag
 from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
 from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager, DBEncryptedFileMetadataManager
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.PTCWallet import PointTraderKeyQueryHandlerFactory, PointTraderKeyExchanger
 from lbrynet.core.Session import Session
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
@@ -276,7 +275,7 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rat
         query_handler_factories = {
             BlobAvailabilityHandlerFactory(session.blob_manager): True,
             BlobRequestHandlerFactory(session.blob_manager, session.wallet,
-                                      PaymentRateManager(session.base_payment_rate_manager)): True,
+                                      session.payment_rate_manager): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
         }
 
@@ -379,7 +378,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_ra
         return factories[0].make_downloader(metadata, chosen_options, prm)
 
     def download_file():
-        prm = PaymentRateManager(session.base_payment_rate_manager)
+        prm = session.payment_rate_manager
         d = download_sd_blob(session, sd_hash, prm)
         d.addCallback(sd_identifier.get_metadata_for_sd_blob)
         d.addCallback(make_downloader, prm)
@@ -404,7 +403,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_ra
         query_handler_factories = {
             BlobAvailabilityHandlerFactory(session.blob_manager): True,
             BlobRequestHandlerFactory(session.blob_manager, session.wallet,
-                                      PaymentRateManager(session.base_payment_rate_manager)): True,
+                                      session.payment_rate_manager): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
         }
 
@@ -478,7 +477,7 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
                           use_upnp=False, rate_limiter=rate_limiter, wallet=wallet)
 
     base_payment_rate_manager = BaseLiveStreamPaymentRateManager(MIN_BLOB_INFO_PAYMENT_RATE)
-    data_payment_rate_manager = PaymentRateManager(session.base_payment_rate_manager)
+    data_payment_rate_manager = session.payment_rate_manager
     payment_rate_manager = LiveStreamPaymentRateManager(base_payment_rate_manager,
                                                         data_payment_rate_manager)
 
@@ -644,8 +643,7 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow):
 
         query_handler_factories = {
             BlobAvailabilityHandlerFactory(session.blob_manager): True,
-            BlobRequestHandlerFactory(session.blob_manager, session.wallet,
-                                      PaymentRateManager(session.base_payment_rate_manager)): True,
+            BlobRequestHandlerFactory(session.blob_manager, session.wallet, session.payment_rate_manager): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
         }
 
@@ -808,7 +806,7 @@ class TestTransfer(TestCase):
             return factories[0].make_downloader(metadata, chosen_options, prm)
 
         def download_file(sd_hash):
-            prm = PaymentRateManager(self.session.base_payment_rate_manager)
+            prm = self.session.payment_rate_manager
             d = download_sd_blob(self.session, sd_hash, prm)
             d.addCallback(sd_identifier.get_metadata_for_sd_blob)
             d.addCallback(make_downloader, prm)
@@ -898,7 +896,7 @@ class TestTransfer(TestCase):
 
         def download_stream(sd_blob_hash):
             logging.debug("Downloaded the sd blob. Reading it now")
-            prm = PaymentRateManager(self.session.base_payment_rate_manager)
+            prm = self.session.payment_rate_manager
             d = download_sd_blob(self.session, sd_blob_hash, prm)
             d.addCallback(sd_identifier.get_metadata_for_sd_blob)
             d.addCallback(create_downloader, prm)
@@ -997,7 +995,7 @@ class TestTransfer(TestCase):
         d.addCallback(get_blob_hash)
 
         def download_blob(blob_hash):
-            prm = PaymentRateManager(self.session.base_payment_rate_manager)
+            prm = self.session.payment_rate_manager
             downloader = StandaloneBlobDownloader(blob_hash, self.session.blob_manager, peer_finder,
                                                   rate_limiter, prm, wallet)
             d = downloader.download()
@@ -1082,7 +1080,7 @@ class TestTransfer(TestCase):
             return downloader
 
         def download_file(sd_hash):
-            prm = PaymentRateManager(self.session.base_payment_rate_manager)
+            prm = self.session.payment_rate_manager
             d = download_sd_blob(self.session, sd_hash, prm)
             d.addCallback(sd_identifier.get_metadata_for_sd_blob)
             d.addCallback(make_downloader, prm)
@@ -1205,7 +1203,7 @@ class TestTransfer(TestCase):
             return factories[0].make_downloader(metadata, chosen_options, prm)
 
         def download_file(sd_hash):
-            prm = PaymentRateManager(self.session.base_payment_rate_manager)
+            prm = self.session.payment_rate_manager
             d = download_sd_blob(self.session, sd_hash, prm)
             d.addCallback(sd_identifier.get_metadata_for_sd_blob)
             d.addCallback(make_downloader, prm)
@@ -1363,7 +1361,7 @@ class TestStreamify(TestCase):
 
         def combine_stream(stream_hash):
 
-            prm = PaymentRateManager(self.session.base_payment_rate_manager)
+            prm = self.session.payment_rate_manager
             d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
             d.addCallback(start_lbry_file)
 
