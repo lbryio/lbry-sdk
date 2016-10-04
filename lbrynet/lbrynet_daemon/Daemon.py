@@ -313,6 +313,8 @@ class Daemon(jsonrpc.JSONRPC):
         else:
             log.info("Using the default wallet type %s", DEFAULT_WALLET)
             self.wallet_type = DEFAULT_WALLET
+        if self.wallet_type not in conf.WALLET_TYPES:
+            raise ValueError('Wallet Type {} is not valid'.format(wallet_type))
         #
         ####
         self.delete_blobs_on_remove = self.session_settings['delete_blobs_on_remove']
@@ -1063,10 +1065,7 @@ class Daemon(jsonrpc.JSONRPC):
                 log.info("Using PTC wallet")
                 d = defer.succeed(PTCWallet(self.db_dir))
             else:
-                # TODO: should fail here.  Can't switch to lbrycrd because the wallet_dir, conf and path won't be set
-                log.info("Requested unknown wallet '%s', using default lbryum", self.wallet_type)
-                d = defer.succeed(LBRYumWallet(self.db_dir))
-
+                raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
             d.addCallback(lambda wallet: {"wallet": wallet})
             return d
 
