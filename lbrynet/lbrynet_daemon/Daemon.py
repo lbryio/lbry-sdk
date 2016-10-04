@@ -51,6 +51,7 @@ from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS,
                          LOG_POST_URL, LOG_FILE_NAME, REFLECTOR_SERVERS, SEARCH_SERVERS
 from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
 from lbrynet.conf import DEFAULT_TIMEOUT
+from lbrynet import conf
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
 from lbrynet.core.Session import Session
 from lbrynet.core.PTCWallet import PTCWallet
@@ -332,25 +333,7 @@ class Daemon(jsonrpc.JSONRPC):
         else:
             self.name_cache = {}
 
-        if os.name == "nt":
-            from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
-            self.lbrycrdd_path = "lbrycrdd.exe"
-            if self.wallet_type == "lbrycrd":
-                self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrycrd")
-            else:
-                self.wallet_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbryum")
-        elif sys.platform == "darwin":
-            self.lbrycrdd_path = get_darwin_lbrycrdd_path()
-            if self.wallet_type == "lbrycrd":
-                self.wallet_dir = user_data_dir("lbrycrd")
-            else:
-                self.wallet_dir = user_data_dir("LBRY")
-        else:
-            self.lbrycrdd_path = "lbrycrdd"
-            if self.wallet_type == "lbrycrd":
-                self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
-            else:
-                self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
+        self.set_wallet_attributes()
 
         if os.name != 'nt':
             # TODO: are we still using this?
@@ -366,9 +349,6 @@ class Daemon(jsonrpc.JSONRPC):
             self.created_data_dir = True
 
         self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
-        self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
-        self.autofetcher_conf = os.path.join(self.wallet_dir, "autofetcher.conf")
-        self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.wallet_user = None
         self.wallet_password = None
 
@@ -397,6 +377,24 @@ class Daemon(jsonrpc.JSONRPC):
                     f.write("rpcuser=rpcuser\n")
                     f.write("rpcpassword=" + password)
                 log.info("Done writing lbrycrd.conf")
+
+    def set_wallet_attributes(self):
+        self.wallet_dir = None
+        if self.wallet_type != "lbrycrd":
+            return
+        if os.name == "nt":
+            from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
+            self.lbrycrdd_path = "lbrycrdd.exe"
+            user_app_dir = get_path(FOLDERID.RoamingAppData, UserHandle.current)
+            self.wallet_dir = os.path.join(user_app_dir, "lbrycrd")
+        elif sys.platform == "darwin":
+            self.lbrycrdd_path = get_darwin_lbrycrdd_path()
+            self.wallet_dir = user_data_dir("lbrycrd")
+        else:
+            self.lbrycrdd_path = "lbrycrdd"
+            self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
+        self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
+        self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
 
     def _responseFailed(self, err, call):
         log.debug(err.getTraceback())
@@ -1050,11 +1048,17 @@ class Daemon(jsonrpc.JSONRPC):
         def get_wallet():
             if self.wallet_type == "lbrycrd":
                 log.info("Using lbrycrd wallet")
-                d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.wallet_dir, wallet_conf=self.lbrycrd_conf,
-                                                lbrycrdd_path=self.lbrycrdd_path))
+                wallet = LBRYcrdWallet(self.db_dir,
+                                       wallet_dir=self.wallet_dir,
+                                       wallet_conf=self.lbrycrd_conf,
+                                       lbrycrdd_path=self.lbrycrdd_path)
+                d = defer.succeed(wallet)
             elif self.wallet_type == "lbryum":
                 log.info("Using lbryum wallet")
-                d = defer.succeed(LBRYumWallet(self.db_dir))
+                config = {'auto-connect': True}
+                if conf.LBRYUM_WALLET_DIR:
+                    config['lbryum_path'] = conf.LBRYUM_WALLET_DIR
+                d = defer.succeed(LBRYumWallet(self.db_dir, config))
             elif self.wallet_type == "ptc":
                 log.info("Using PTC wallet")
                 d = defer.succeed(PTCWallet(self.db_dir))
