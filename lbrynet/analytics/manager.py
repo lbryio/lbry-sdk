@@ -1,3 +1,5 @@
+from lbrynet.core import looping_call_manager
+
 from twisted.internet import task
 
 import constants
@@ -8,18 +10,24 @@ class Manager(object):
         self.analytics_api = analytics_api
         self.events_generator = events_generator
         self.track = track
-        self.send_heartbeat = task.LoopingCall(self._send_heartbeat)
-        self.update_tracked_metrics = task.LoopingCall(self._update_tracked_metrics)
+        self.looping_call_manager = self.setup_looping_calls()
+
+    def setup_looping_calls(self):
+        call_manager = looping_call_manager.LoopingCallManager()
+        looping_calls = [
+            ('send_heartbeat', self._send_heartbeat),
+            ('update_tracked_metrics', self._update_tracked_metrics),
+        ]
+        for name, fn in looping_calls:
+            call_manager.register_looping_call(name, task.LoopingCall(fn))
+        return call_manager
 
     def start(self):
-        self.send_heartbeat.start(60)
-        self.update_tracked_metrics.start(300)
+        self.looping_call_manager.start('send_heartbeat', 60)
+        self.looping_call_manager.start('update_tracked_metrics', 300)
 
     def shutdown(self):
-        if self.send_heartbeat.running:
-            self.send_heartbeat.stop()
-        if self.update_tracked_metrics.running:
-            self.update_tracked_metrics.stop()
+        self.looping_call_manager.shutdown()
 
     def send_download_started(self, name, stream_info=None):
         event = self.events_generator.download_started(name, stream_info)
