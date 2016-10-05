@@ -28,6 +28,9 @@ from lbrynet import __version__ as lbrynet_version
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import analytics
+from lbrynet.core.looping_call_manager import LoopingCallManager
+from lbrynet.core.PaymentRateManager import PaymentRateManager
+from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError
@@ -133,27 +136,6 @@ OK_CODE = 200
 class Parameters(object):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
-
-
-class LoopingCallManager(object):
-    def __init__(self):
-        self.calls = {}
-
-    def register_looping_call(self, name, *args):
-        self.calls[name] = LoopingCall(*args)
-
-    def start(self, name, *args):
-        lcall = self.calls[name]
-        if not lcall.running:
-            lcall.start(*args)
-
-    def stop(self, name):
-        self.calls[name].stop()
-
-    def shutdown(self):
-        for lcall in self.calls.itervalues():
-            if lcall.running:
-                lcall.stop()
 
 
 class CheckInternetConnection(object):
@@ -422,7 +404,7 @@ class Daemon(jsonrpc.JSONRPC):
             ('pending_claim_checker', self._check_pending_claims),
         ]
         for name, fn in looping_calls:
-            self.looping_call_manager.register_looping_call(name, fn)
+            self.looping_call_manager.register_looping_call(name, LoopingCall(fn))
 
         self.sd_identifier = StreamDescriptorIdentifier()
         self.stream_info_manager = TempEncryptedFileMetadataManager()
