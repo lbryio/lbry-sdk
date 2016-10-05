@@ -244,7 +244,6 @@ class Daemon(jsonrpc.JSONRPC):
         self.first_run_after_update = False
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(generate_id())
-        self.analytics_manager = analytics.Manager()
 
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -613,6 +612,7 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
         d.addCallback(lambda _: self._get_session())
+        d.addCallback(lambda _: self._get_analytics())
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_stream_identifier())
         d.addCallback(lambda _: self._setup_lbry_file_manager())
@@ -620,9 +620,6 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: _log_starting_vals())
         d.addCallback(lambda _: _announce_startup())
-        d.addCallback(
-            lambda _: self.analytics_manager.start(
-                self._get_platform(), self.wallet_type, self.lbryid, self._session_id))
         # TODO: handle errors here
         d.callback(None)
 
@@ -1033,6 +1030,15 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: set_lbry_file_manager())
 
         return d
+
+    def _get_analytics(self):
+        analytics_api = analytics.Api.load()
+        context = analytics.make_context(self._get_platform(), self.wallet_type)
+        events_generator = analytics.Events(
+            context, base58.b58encode(self.lbryid), self._session_id)
+        self.analytics_manager = analytics.Manager(
+            analytics_api, events_generator, analytics.Track())
+        self.analytics_manager.start()
 
     def _get_session(self):
         def get_default_data_rate():

@@ -1,25 +1,17 @@
-import base58
-
 from twisted.internet import task
 
-import api
 import constants
-import events
-import track
 
 
 class Manager(object):
-    def __init__(self):
-        self.analytics_api = None
-        self.events_generator = None
-        self.track = track.Track()
+    def __init__(self, analytics_api, events_generator, track):
+        self.analytics_api = analytics_api
+        self.events_generator = events_generator
+        self.track = track
         self.send_heartbeat = task.LoopingCall(self._send_heartbeat)
         self.update_tracked_metrics = task.LoopingCall(self._update_tracked_metrics)
 
-    def start(self, platform, wallet_type, lbry_id, session_id):
-        context = events.make_context(platform, wallet_type)
-        self.events_generator = events.Events(context, base58.b58encode(lbry_id), session_id)
-        self.analytics_api = api.Api.load()
+    def start(self):
         self.send_heartbeat.start(60)
         self.update_tracked_metrics.start(300)
 
