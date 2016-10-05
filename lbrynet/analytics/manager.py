@@ -33,6 +33,11 @@ class Manager(object):
         event = self.events_generator.download_started(name, stream_info)
         self.analytics_api.track(event)
 
+    def register_repeating_metric(self, event_name, value_generator, frequency=300):
+        lcall = task.LoopingCall(self._send_repeating_metric, event_name, value_generator)
+        self.looping_call_manager.register_looping_call(event_name, lcall)
+        lcall.start(frequency)
+
     def _send_heartbeat(self):
         heartbeat = self.events_generator.heartbeat()
         self.analytics_api.track(heartbeat)
@@ -41,4 +46,10 @@ class Manager(object):
         value = self.track.summarize(constants.BLOB_BYTES_UPLOADED)
         if value > 0:
             event = self.events_generator.metric_observered(constants.BLOB_BYTES_UPLOADED, value)
+            self.analytics_api.track(event)
+
+    def _send_repeating_metric(self, event_name, value_generator):
+        should_send, value = value_generator()
+        if should_send:
+            event = self.events_generator.metric_observered(event_name, value)
             self.analytics_api.track(event)

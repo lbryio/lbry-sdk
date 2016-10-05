@@ -185,7 +185,7 @@ class CheckRemoteVersions(object):
             return defer.fail(None)
 
 
-def calculate_available_blob_sizes(blob_manager):
+def calculate_available_blob_size(blob_manager):
     return sum(blob.length for blob in blob_manager.get_all_verified_blobs())
 
 
@@ -1021,6 +1021,11 @@ class Daemon(jsonrpc.JSONRPC):
         self.analytics_manager = analytics.Manager(
             analytics_api, events_generator, analytics.Track())
         self.analytics_manager.start()
+        self.register_repeating_metric(
+            analytics.BLOB_BYTES_AVAILABLE,
+            lambda: calculate_available_blob_size(self.session.blob_manager),
+            frequency=300
+        )
 
     def _get_session(self):
         def get_default_data_rate():
