@@ -27,7 +27,6 @@ from txjsonrpc.web.jsonrpc import Handler
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import analytics
-from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError

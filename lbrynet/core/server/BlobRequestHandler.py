@@ -75,24 +75,6 @@ class BlobRequestHandler(object):
             response.addCallback(lambda r: self._reply_to_send_request(r, incoming))
         return response
 
-    def open_blob_for_reading(self, blob, response):
-        def failure(msg):
-            log.debug("We can not send %s: %s", blob, msg)
-            response['incoming_blob'] = {'error': 'BLOB_UNAVAILABLE'}
-            return response
-        if not blob.is_validated():
-            return failure("blob can't be validated")
-        read_handle = blob.open_for_reading()
-        if read_handle is None:
-            return failure("blob can't be opened")
-
-        self.currently_uploading = blob
-        self.read_handle = read_handle
-        log.info("Sending %s to client", blob)
-        response['incoming_blob']['blob_hash'] = blob.blob_hash
-        response['incoming_blob']['length'] = blob.length
-        return response
-
     ######### IBlobSender #########
 
     def send_blob_if_requested(self, consumer):
