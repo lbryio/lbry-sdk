@@ -61,52 +61,19 @@ class BlobRequestHandler(object):
 
     def handle_queries(self, queries):
         response = defer.succeed({})
+        log.debug("Handle query: %s", str(queries))
 
         if self.AVAILABILITY_QUERY in queries:
             self._blobs_requested = queries[self.AVAILABILITY_QUERY]
             response.addCallback(lambda r: self._reply_to_availability(r, self._blobs_requested))
-
         if self.PAYMENT_RATE_QUERY in queries:
-            offer = Offer(queries[self.PAYMENT_RATE_QUERY])
+            offered_rate = queries[self.PAYMENT_RATE_QUERY]
+            offer = Offer(offered_rate)
             response.addCallback(lambda r: self._handle_payment_rate_query(offer, r))
-
         if self.BLOB_QUERY in queries:
-            if self.PAYMENT_RATE_QUERY in queries:
-                incoming = queries[self.BLOB_QUERY]
-                response.addCallback(lambda r: self._reply_to_send_request(r, incoming))
-            else:
-                response.addCallback(lambda _:  {'incoming_blob': {'error': 'RATE_UNSET'}})
-
+            incoming = queries[self.BLOB_QUERY]
+            response.addCallback(lambda r: self._reply_to_send_request(r, incoming))
         return response
-
-    def _handle_payment_rate_query(self, offer, request):
-        blobs = request.get("available_blobs", [])
-        log.info("Offered rate %f/mb for %i blobs", offer.rate, len(blobs))
-        accepted = self.payment_rate_manager.accept_rate_blob_data(self.peer, blobs, offer)
-        if offer.accepted:
-            self.blob_data_payment_rate = offer.rate
-            request[self.PAYMENT_RATE_QUERY] = "RATE_ACCEPTED"
-        elif offer.too_low:
-            request[self.PAYMENT_RATE_QUERY] = "RATE_TOO_LOW"
-            offer.unset()
-        elif offer.is_unset:
-            request['incoming_blob'] = {'error': 'RATE_UNSET'}
-        return request
-
-    def _handle_blob_query(self, response, query):
-        log.debug("Received the client's request to send a blob")
-        response['incoming_blob'] = {}
-
-        if self.blob_data_payment_rate is None:
-            response['incoming_blob'] = {'error': "RATE_UNSET"}
-            return response
-        else:
-            return self._send_blob(response, query)
-
-    def _send_blob(self, response, query):
-        d = self.blob_manager.get_blob(query, True)
-        d.addCallback(self.open_blob_for_reading, response)
-        return d
 
     def open_blob_for_reading(self, blob, response):
         def failure(msg):
@@ -153,6 +120,39 @@ class BlobRequestHandler(object):
         d.addCallback(set_available)
         return d
 
+    def _handle_payment_rate_query(self, offer, request):
+        blobs = self._blobs_requested
+        log.info("Offered rate %f LBC/mb for %i blobs", offer.rate, len(blobs))
+        reply = self.payment_rate_manager.reply_to_offer(self.peer, blobs, offer)
+        if reply.accepted:
+            self.blob_data_payment_rate = offer.rate
+            request[self.PAYMENT_RATE_QUERY] = "RATE_ACCEPTED"
+            log.info("Accepted rate: %f", offer.rate)
+        elif reply.too_low:
+            request[self.PAYMENT_RATE_QUERY] = "RATE_TOO_LOW"
+            log.info("Reject rate: %f", offer.rate)
+        elif reply.is_unset:
+            log.warning("Rate unset")
+            request['incoming_blob'] = {'error': 'RATE_UNSET'}
+        log.debug("Returning rate query result: %s", str(request))
+
+        return request
+
+    def _handle_blob_query(self, response, query):
+        log.debug("Received the client's request to send a blob")
+        response['incoming_blob'] = {}
+
+        if self.blob_data_payment_rate is None:
+            response['incoming_blob'] = {'error': "RATE_UNSET"}
+            return response
+        else:
+            return self._send_blob(response, query)
+
+    def _send_blob(self, response, query):
+        d = self.blob_manager.get_blob(query, True)
+        d.addCallback(self.open_blob_for_reading, response)
+        return d
+
     def open_blob_for_reading(self, blob, response):
         response_fields = {}
         d = defer.succeed(None)
@@ -161,7 +161,7 @@ class BlobRequestHandler(object):
             if read_handle is not None:
                 self.currently_uploading = blob
                 self.read_handle = read_handle
-                log.debug("Sending %s to client", str(blob))
+                log.info("Sending %s to client", str(blob))
                 response_fields['blob_hash'] = blob.blob_hash
                 response_fields['length'] = blob.length
                 response['incoming_blob'] = response_fields
@@ -180,7 +180,6 @@ class BlobRequestHandler(object):
     def _reply_to_send_request(self, response, incoming):
         response_fields = {}
         response['incoming_blob'] = response_fields
-        rate = self.blob_data_payment_rate
 
         if self.blob_data_payment_rate is None:
             log.debug("Rate not set yet")

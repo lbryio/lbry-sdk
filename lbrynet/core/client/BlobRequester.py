@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+from decimal import Decimal
 
 from twisted.internet import defer
 from twisted.python.failure import Failure
@@ -17,7 +18,12 @@ log = logging.getLogger(__name__)
 
 
 def get_points(num_bytes, rate):
-    return 1.0 * num_bytes * rate / 2**20
+    if isinstance(rate, float):
+        return 1.0 * num_bytes * rate / 2**20
+    elif isinstance(rate, Decimal):
+        return 1.0 * num_bytes * float(rate) / 2**20
+    else:
+        raise Exception("Unknown rate type")
 
 
 def cache(fn):
@@ -356,18 +362,20 @@ class PriceRequest(RequestHelper):
         if 'blob_data_payment_rate' not in response_dict:
             return InvalidResponseError("response identifier not in response")
         assert self.protocol in self.protocol_prices
-        response = Offer(response_dict['blob_data_payment_rate'])
         rate = self.protocol_prices[self.protocol]
-        if response.accepted:
+        offer = Offer(rate)
+        offer.handle(response_dict['blob_data_payment_rate'])
+        self.payment_rate_manager.record_offer_reply(self.peer.host, offer)
+
+        if offer.accepted:
             log.info("Offered rate %f/mb accepted by %s", rate, str(self.peer.host))
             return True
-        elif response.too_low:
+        elif offer.too_low:
             log.info("Offered rate %f/mb rejected by %s", rate, str(self.peer.host))
             del self.protocol_prices[self.protocol]
             return True
         else:
             log.warning("Price disagreement")
-            log.warning(rate)
             del self.protocol_prices[self.protocol]
             self.requestor._price_disagreements.append(self.peer)
             return False

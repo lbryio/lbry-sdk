@@ -1,4 +1,5 @@
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
+from decimal import Decimal
 
 
 def get_default_price_model(blob_tracker, **kwargs):
@@ -19,14 +20,14 @@ class MeanAvailabilityWeightedPrice(object):
 
     def __init__(self, tracker, base_price=MIN_BLOB_DATA_PAYMENT_RATE, alpha=1.0):
         self.blob_tracker = tracker
-        self.base_price = base_price
-        self.alpha = alpha
+        self.base_price = Decimal(base_price)
+        self.alpha = Decimal(alpha)
 
     def calculate_price(self, blob):
         mean_availability = self.blob_tracker.last_mean_availability
         availability = self.blob_tracker.availability.get(blob, [])
         index = 0  # blob.index
-        price = self.base_price * (mean_availability / max(1, len(availability))) / self._frontload(index)
+        price = self.base_price * (mean_availability / Decimal(max(1, len(availability)))) / self._frontload(index)
         return round(price, 5)
 
     def _frontload(self, index):
@@ -37,4 +38,4 @@ class MeanAvailabilityWeightedPrice(object):
         @return: frontload multipler
         """
 
-        return 2.0 - (self.alpha ** index)
+        return Decimal(2.0) - (self.alpha ** index)

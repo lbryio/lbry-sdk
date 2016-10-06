@@ -1,5 +1,6 @@
 import json
 import logging
+from decimal import Decimal
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.python import failure
@@ -12,6 +13,12 @@ from zope.interface import implements
 
 
 log = logging.getLogger(__name__)
+
+
+def encode_decimal(obj):
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError(repr(obj) + " is not JSON serializable")
 
 
 class ClientProtocol(Protocol):
@@ -132,7 +139,7 @@ class ClientProtocol(Protocol):
     def _send_request_message(self, request_msg):
         # TODO: compare this message to the last one. If they're the same,
         # TODO: incrementally delay this message.
-        m = json.dumps(request_msg)
+        m = json.dumps(request_msg, default=encode_decimal)
         self.transport.write(m)
 
     def _get_valid_response(self, response_msg):

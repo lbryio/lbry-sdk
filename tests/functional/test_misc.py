@@ -234,14 +234,14 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rat
     hash_announcer = FakeAnnouncer()
     rate_limiter = RateLimiter()
     sd_identifier = StreamDescriptorIdentifier()
-    blob_tracker = DummyBlobAvailabilityTracker()
+
 
     db_dir = "server"
     os.mkdir(db_dir)
 
     session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                           peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
-                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker,
+                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker,
                           dht_node_class=Node)
 
     stream_info_manager = TempEncryptedFileMetadataManager()
@@ -349,7 +349,6 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_ra
     hash_announcer = FakeAnnouncer()
     rate_limiter = RateLimiter()
     sd_identifier = StreamDescriptorIdentifier()
-    blob_tracker = DummyBlobAvailabilityTracker()
 
     db_dir = "server_" + str(n)
     blob_dir = os.path.join(db_dir, "blobfiles")
@@ -359,7 +358,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_ra
     session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd" + str(n),
                           peer_finder=peer_finder, hash_announcer=hash_announcer,
                           blob_dir=None, peer_port=peer_port,
-                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker)
+                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
 
     stream_info_manager = TempEncryptedFileMetadataManager()
 
@@ -463,14 +462,14 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
     hash_announcer = FakeAnnouncer()
     rate_limiter = DummyRateLimiter()
     sd_identifier = StreamDescriptorIdentifier()
-    blob_tracker = DummyBlobAvailabilityTracker()
+
 
     db_dir = "server"
     os.mkdir(db_dir)
 
     session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                           peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
-                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker)
+                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
 
     base_payment_rate_manager = BaseLiveStreamPaymentRateManager(MIN_BLOB_INFO_PAYMENT_RATE)
     data_payment_rate_manager = session.payment_rate_manager
@@ -600,7 +599,6 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow):
     peer_finder = FakePeerFinder(5553, peer_manager, 1)
     hash_announcer = FakeAnnouncer()
     rate_limiter = RateLimiter()
-    blob_tracker = DummyBlobAvailabilityTracker()
 
     if slow is True:
         peer_port = 5553
@@ -615,7 +613,7 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow):
     session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="efgh",
                           peer_finder=peer_finder, hash_announcer=hash_announcer,
                           blob_dir=blob_dir, peer_port=peer_port,
-                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker)
+                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
 
     if slow is True:
         session.rate_limiter.set_ul_limit(2**11)
@@ -779,7 +777,7 @@ class TestTransfer(TestCase):
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
-        blob_tracker = DummyBlobAvailabilityTracker()
+
 
         db_dir = "client"
         blob_dir = os.path.join(db_dir, "blobfiles")
@@ -789,7 +787,7 @@ class TestTransfer(TestCase):
         self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
-                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker,
+                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker,
                                    dht_node_class=Node)
 
         self.stream_info_manager = TempEncryptedFileMetadataManager()
@@ -868,7 +866,7 @@ class TestTransfer(TestCase):
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
-        blob_tracker = DummyBlobAvailabilityTracker()
+
 
         db_dir = "client"
         os.mkdir(db_dir)
@@ -876,7 +874,7 @@ class TestTransfer(TestCase):
         self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer, blob_dir=None,
                                    peer_port=5553, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-                                   blob_tracker=blob_tracker, dht_node_class=Node)
+                                   blob_tracker_class=DummyBlobAvailabilityTracker, dht_node_class=Node)
 
         self.stream_info_manager = TempLiveStreamMetadataManager(hash_announcer)
 
@@ -973,7 +971,7 @@ class TestTransfer(TestCase):
         peer_finder = FakePeerFinder(5553, peer_manager, 2)
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
-        blob_tracker = DummyBlobAvailabilityTracker()
+
 
         db_dir = "client"
         blob_dir = os.path.join(db_dir, "blobfiles")
@@ -983,7 +981,7 @@ class TestTransfer(TestCase):
         self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
-                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker)
+                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
 
         d1 = self.wait_for_hash_from_queue(blob_hash_queue_1)
         d2 = self.wait_for_hash_from_queue(blob_hash_queue_2)
@@ -1052,7 +1050,7 @@ class TestTransfer(TestCase):
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
-        blob_tracker = DummyBlobAvailabilityTracker()
+
 
         downloaders = []
 
@@ -1064,7 +1062,7 @@ class TestTransfer(TestCase):
         self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553, use_upnp=False,
-                                   rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker)
+                                   rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
 
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
 
@@ -1171,7 +1169,7 @@ class TestTransfer(TestCase):
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
-        blob_tracker = DummyBlobAvailabilityTracker()
+
 
         db_dir = "client"
         blob_dir = os.path.join(db_dir, "blobfiles")
@@ -1181,7 +1179,7 @@ class TestTransfer(TestCase):
         self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=None, peer_port=5553,
-                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker)
+                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
 
         self.stream_info_manager = TempEncryptedFileMetadataManager()
 
@@ -1290,7 +1288,7 @@ class TestStreamify(TestCase):
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
-        blob_tracker = DummyBlobAvailabilityTracker()
+
 
         db_dir = "client"
         blob_dir = os.path.join(db_dir, "blobfiles")
@@ -1300,7 +1298,7 @@ class TestStreamify(TestCase):
         self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
-                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker)
+                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
 
         self.stream_info_manager = TempEncryptedFileMetadataManager()
 
@@ -1343,7 +1341,7 @@ class TestStreamify(TestCase):
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
-        blob_tracker = DummyBlobAvailabilityTracker()
+
 
         db_dir = "client"
         blob_dir = os.path.join(db_dir, "blobfiles")
@@ -1353,7 +1351,7 @@ class TestStreamify(TestCase):
         self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
-                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker=blob_tracker)
+                                   use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
 
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
 

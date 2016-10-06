@@ -1,4 +1,4 @@
-from lbrynet.core.Error import NegotiationError
+from decimal import Decimal
 
 
 class Offer(object):
@@ -13,13 +13,11 @@ class Offer(object):
     def __init__(self, offer):
         self._state = None
         self.rate = None
-        if isinstance(offer, float):
+        if isinstance(offer, Decimal):
             self.rate = round(offer, 5)
-        elif offer == Offer.RATE_ACCEPTED:
-            self.accept()
-        elif offer == Offer.RATE_TOO_LOW:
-            self.reject()
-        else:
+        elif isinstance(offer, float):
+            self.rate = round(Decimal(offer), 5)
+        if self.rate is None or self.rate < Decimal(0.0):
             self.unset()
 
     @property
@@ -45,12 +43,22 @@ class Offer(object):
         return None
 
     def accept(self):
-        if self._state is None or self.is_unset:
+        if self.is_unset or self._state is None:
             self._state = Offer.RATE_ACCEPTED
 
     def reject(self):
-        if self._state is None or self.is_unset:
+        if self.is_unset or self._state is None:
             self._state = Offer.RATE_TOO_LOW
 
     def unset(self):
         self._state = Offer.RATE_UNSET
+
+    def handle(self, reply_message):
+        if reply_message == Offer.RATE_TOO_LOW:
+            self.reject()
+        elif reply_message == Offer.RATE_ACCEPTED:
+            self.accept()
+        elif reply_message == Offer.RATE_UNSET:
+            self.unset()
+        else:
+            raise Exception("Unknown offer reply %s" % str(reply_message))

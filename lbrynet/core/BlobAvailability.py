@@ -3,6 +3,7 @@ import logging
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 from lbrynet.core.PeerFinder import DummyPeerFinder
+from decimal import Decimal
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class BlobAvailabilityTracker(object):
 
     def __init__(self, blob_manager, peer_finder, dht_node):
         self.availability = {}
-        self.last_mean_availability = 0.0
+        self.last_mean_availability = Decimal(0.0)
         self._blob_manager = blob_manager
         self._peer_finder = peer_finder
         self._dht_node = dht_node
@@ -85,7 +86,7 @@ class BlobAvailabilityTracker(object):
 
     def _get_mean_peers(self):
         num_peers = [len(self.availability[blob]) for blob in self.availability]
-        mean = float(sum(num_peers)) / float(max(1, len(num_peers)))
+        mean = Decimal(sum(num_peers)) / Decimal(max(1, len(num_peers)))
         self.last_mean_availability = mean
 
 
@@ -97,7 +98,7 @@ class DummyBlobAvailabilityTracker(BlobAvailabilityTracker):
         availability (dict): dictionary of peers for known blobs
     """
 
-    def __init__(self):
+    def __init__(self, blob_manager=None, peer_finder=None, dht_node=None):
         self.availability = {
             '91dc64cf1ff42e20d627b033ad5e4c3a4a96856ed8a6e3fb4cd5fa1cfba4bf72eefd325f579db92f45f4355550ace8e7': ['1.2.3.4'],
             'b2e48bb4c88cf46b76adf0d47a72389fae0cd1f19ed27dc509138c99509a25423a4cef788d571dca7988e1dca69e6fa0': ['1.2.3.4', '1.2.3.4'],
@@ -110,10 +111,10 @@ class DummyBlobAvailabilityTracker(BlobAvailabilityTracker):
             'f99d24cd50d4bfd77c2598bfbeeb8415bf0feef21200bdf0b8fbbde7751a77b7a2c68e09c25465a2f40fba8eecb0b4e0': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
             'c84aa1fd8f5009f7c4e71e444e40d95610abc1480834f835eefb267287aeb10025880a3ce22580db8c6d92efb5bc0c9c': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
         }
-        self.last_mean_availability = 0.0
-        self._blob_manager = None
+        self.last_mean_availability = Decimal(0.0)
+        self._blob_manager = blob_manager
         self._peer_finder = DummyPeerFinder()
-        self._dht_node = None
+        self._dht_node = dht_node
         self._check_popular = None
         self._check_mine = None
         self._get_mean_peers()

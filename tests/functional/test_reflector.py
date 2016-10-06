@@ -61,7 +61,6 @@ class TestReflector(unittest.TestCase):
         hash_announcer = mocks.Announcer()
         rate_limiter = RateLimiter.DummyRateLimiter()
         sd_identifier = StreamDescriptor.StreamDescriptorIdentifier()
-        blob_tracker = BlobAvailability.DummyBlobAvailabilityTracker()
 
         self.expected_blobs = [
             (
@@ -95,7 +94,7 @@ class TestReflector(unittest.TestCase):
             use_upnp=False,
             rate_limiter=rate_limiter,
             wallet=wallet,
-            blob_tracker=blob_tracker,
+            blob_tracker_class=BlobAvailability.DummyBlobAvailabilityTracker,
             dht_node_class=Node
         )
 
