@@ -27,6 +27,11 @@ class LiveStreamPaymentRateManager(object):
         response = self._payment_rate_manager.strategy.respond_to_offer(offer, peer, blobs)
         return response.accepted
 
+    def reply_to_offer(self, peer, blobs, offer):
+        reply = self._payment_rate_manager.strategy.respond_to_offer(offer, peer, blobs)
+        self._payment_rate_manager.strategy.offer_accepted(peer, reply)
+        return reply
+
     def get_effective_min_blob_data_payment_rate(self):
         rate = self.min_blob_data_payment_rate
         if rate is None:
