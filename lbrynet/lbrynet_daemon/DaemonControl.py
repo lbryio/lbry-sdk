@@ -12,7 +12,8 @@ from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.core import log_support
-from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer, DaemonRequest
+from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
+from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_PORT, \
                          UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 
