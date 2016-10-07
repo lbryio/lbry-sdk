@@ -1,4 +1,3 @@
-import errno
 import logging
 import os
 import shutil
@@ -8,10 +7,8 @@ import tempfile
 
 
 from appdirs import user_data_dir
-from twisted.web import http
 from twisted.web import server, static, resource
 from twisted.internet import defer, error
-from twisted.web.static import getTypeAndEncoding
 
 from lbrynet.conf import UI_ADDRESS
 from lbrynet.lbrynet_daemon.FileStreamer import EncryptedFileStreamer
