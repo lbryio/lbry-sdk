@@ -12,7 +12,7 @@ from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbrylive.StreamDescriptor import LiveStreamType
 
 
-class LiveStreamDownloader(CryptStreamDownloader):
+class _LiveStreamDownloader(CryptStreamDownloader):
 
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  payment_rate_manager, wallet, upload_allowed):
@@ -39,10 +39,10 @@ class LiveStreamDownloader(CryptStreamDownloader):
             return defer.succeed(True)
 
 
-class LBRYLiveStreamDownloader(LiveStreamDownloader):
+class LiveStreamDownloader(_LiveStreamDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  payment_rate_manager, wallet, upload_allowed):
-        LiveStreamDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
+        _LiveStreamDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
                                       stream_info_manager, payment_rate_manager, wallet, upload_allowed)
 
         #self.writer = process.ProcessWriter(reactor, self, 'write', 1)
@@ -65,17 +65,17 @@ class LBRYLiveStreamDownloader(LiveStreamDownloader):
         return write_func
 
 
-class FullLiveStreamDownloader(LiveStreamDownloader):
+class FullLiveStreamDownloader(_LiveStreamDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  payment_rate_manager, wallet, upload_allowed):
-        LiveStreamDownloader.__init__(self, stream_hash, peer_finder, rate_limiter,
+        _LiveStreamDownloader.__init__(self, stream_hash, peer_finder, rate_limiter,
                                       blob_manager, stream_info_manager, payment_rate_manager,
                                       wallet, upload_allowed)
         self.file_handle = None
         self.file_name = None
 
     def set_stream_info(self):
-        d = LiveStreamDownloader.set_stream_info(self)
+        d = _LiveStreamDownloader.set_stream_info(self)
 
         def set_file_name_if_unset():
             if not self.file_name:
@@ -88,7 +88,7 @@ class FullLiveStreamDownloader(LiveStreamDownloader):
 
     def stop(self, err=None):
         d = self._close_file()
-        d.addBoth(lambda _: LiveStreamDownloader.stop(self, err))
+        d.addBoth(lambda _: _LiveStreamDownloader.stop(self, err))
         return d
 
     def _start(self):
@@ -96,7 +96,7 @@ class FullLiveStreamDownloader(LiveStreamDownloader):
             d = self._open_file()
         else:
             d = defer.succeed(True)
-        d.addCallback(lambda _: LiveStreamDownloader._start(self))
+        d.addCallback(lambda _: _LiveStreamDownloader._start(self))
         return d
 
     def _open_file(self):

@@ -5,8 +5,8 @@ Download LBRY Files from LBRYnet and save them to disk.
 from zope.interface import implements
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.core.StreamDescriptor import StreamMetadata
-from lbrynet.lbryfile.client.LBRYFileDownloader import LBRYFileSaver, LBRYFileDownloader
-from lbrynet.lbryfilemanager.LBRYFileStatusReport import LBRYFileStatusReport
+from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaver, EncryptedFileDownloader
+from lbrynet.lbryfilemanager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
 from twisted.internet import defer
@@ -15,7 +15,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-class ManagedLBRYFileDownloader(LBRYFileSaver):
+class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
     STATUS_RUNNING = "running"
     STATUS_STOPPED = "stopped"
@@ -24,7 +24,7 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
     def __init__(self, rowid, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  lbry_file_manager, payment_rate_manager, wallet, download_directory, upload_allowed,
                  file_name=None):
-        LBRYFileSaver.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
+        EncryptedFileSaver.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
                                stream_info_manager, payment_rate_manager, wallet, download_directory,
                                upload_allowed, file_name)
         self.sd_hash = None
@@ -68,11 +68,11 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
         d.addCallback(lambda _: self.lbry_file_manager.get_lbry_file_status(self))
 
         def restore_status(status):
-            if status == ManagedLBRYFileDownloader.STATUS_RUNNING:
+            if status == ManagedEncryptedFileDownloader.STATUS_RUNNING:
                 return self.start()
-            elif status == ManagedLBRYFileDownloader.STATUS_STOPPED:
+            elif status == ManagedEncryptedFileDownloader.STATUS_STOPPED:
                 return defer.succeed(False)
-            elif status == ManagedLBRYFileDownloader.STATUS_FINISHED:
+            elif status == ManagedEncryptedFileDownloader.STATUS_FINISHED:
                 self.completed = True
                 return defer.succeed(True)
 
@@ -84,7 +84,7 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
         def set_saving_status_done():
             self.saving_status = False
 
-        d = LBRYFileDownloader.stop(self, err=err)  # LBRYFileSaver deletes metadata when it's stopped. We don't want that here.
+        d = EncryptedFileDownloader.stop(self, err=err)  # EncryptedFileSaver deletes metadata when it's stopped. We don't want that here.
         if change_status is True:
             self.saving_status = True
             d.addCallback(lambda _: self._save_status())
@@ -111,7 +111,7 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
                 s = "stopped"
             else:
                 s = "running"
-            status = LBRYFileStatusReport(self.file_name, num_completed, num_known, s)
+            status = EncryptedFileStatusReport(self.file_name, num_completed, num_known, s)
             return status
 
         d = self.stream_info_manager.get_blobs_for_stream(self.stream_hash)
@@ -121,7 +121,7 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
 
     def _start(self):
 
-        d = LBRYFileSaver._start(self)
+        d = EncryptedFileSaver._start(self)
 
         d.addCallback(lambda _: self.stream_info_manager._get_sd_blob_hashes_for_stream(self.stream_hash))
 
@@ -153,18 +153,18 @@ class ManagedLBRYFileDownloader(LBRYFileSaver):
 
     def _save_status(self):
         if self.completed is True:
-            s = ManagedLBRYFileDownloader.STATUS_FINISHED
+            s = ManagedEncryptedFileDownloader.STATUS_FINISHED
         elif self.stopped is True:
-            s = ManagedLBRYFileDownloader.STATUS_STOPPED
+            s = ManagedEncryptedFileDownloader.STATUS_STOPPED
         else:
-            s = ManagedLBRYFileDownloader.STATUS_RUNNING
+            s = ManagedEncryptedFileDownloader.STATUS_RUNNING
         return self.lbry_file_manager.change_lbry_file_status(self, s)
 
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading, self.blob_manager, download_manager)
 
 
-class ManagedLBRYFileDownloaderFactory(object):
+class ManagedEncryptedFileDownloaderFactory(object):
     implements(IStreamDownloaderFactory)
 
     def __init__(self, lbry_file_manager):

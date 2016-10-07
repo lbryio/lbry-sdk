@@ -1,11 +1,9 @@
 import argparse
-import logging
 import logging.handlers
 import os
 import webbrowser
 import sys
 import socket
-from appdirs import user_data_dir
 
 from twisted.web import server, guard
 from twisted.internet import defer, reactor
@@ -14,9 +12,9 @@ from twisted.cred import portal
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.core import log_support
-from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
 from lbrynet.lbrynet_daemon.auth.auth import PasswordChecker, HttpPasswordRealm
 from lbrynet.lbrynet_daemon.auth.util import initialize_api_key_file
+from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer, DaemonRequest
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_PORT, \
                          UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 from lbrynet.conf import DATA_DIR as log_dir
@@ -72,6 +70,8 @@ def start():
     parser.add_argument('--no-launch', dest='launchui', action="store_false")
     parser.add_argument('--log-to-console', dest='logtoconsole', action="store_true")
     parser.add_argument('--quiet', dest='quiet', action="store_true")
+    parser.add_argument('--verbose', action='store_true',
+                        help='enable more debug output for the console')
     parser.set_defaults(branch=False, launchui=True, logtoconsole=False, quiet=False)
     args = parser.parse_args()
 
@@ -80,7 +80,8 @@ def start():
     if args.logtoconsole:
         log_support.configure_console(level='DEBUG')
     log_support.disable_third_party_loggers()
-    log_support.disable_noisy_loggers()
+    if not args.verbose:
+        log_support.disable_noisy_loggers()
 
     try:
         JSONRPCProxy.from_url(API_CONNECTION_STRING).is_running()
@@ -103,7 +104,7 @@ def start():
         print "To quit press ctrl-c or call 'stop' via the API"
 
     if test_internet_connection():
-        lbry = LBRYDaemonServer()
+        lbry = DaemonServer()
 
         d = lbry.start(branch=args.branch if args.branch else DEFAULT_UI_BRANCH,
                        user_specified=args.ui,
@@ -120,8 +121,7 @@ def start():
         factory = guard.BasicCredentialFactory('Login to lbrynet api')
         protected_resource = guard.HTTPAuthSessionWrapper(portal_to_realm, [factory, ])
         lbrynet_server = server.Site(protected_resource)
-        lbrynet_server.requestFactory = LBRYDaemonRequest
-
+        lbrynet_server.requestFactory = DaemonRequest
         reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
         reactor.run()
 

@@ -9,9 +9,9 @@ from twisted.enterprise import adbapi
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
 
-from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloader
-from lbrynet.lbryfilemanager.LBRYFileDownloader import ManagedLBRYFileDownloaderFactory
-from lbrynet.lbryfile.StreamDescriptor import LBRYFileStreamType
+from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
+from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError, CurrentlyStoppingError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
@@ -20,7 +20,7 @@ from lbrynet.core.sqlite_helpers import rerun_if_locked
 log = logging.getLogger(__name__)
 
 
-class LBRYFileManager(object):
+class EncryptedFileManager(object):
     """
     Keeps track of currently opened LBRY Files, their options, and their LBRY File specific metadata.
     """
@@ -35,7 +35,7 @@ class LBRYFileManager(object):
             self.download_directory = download_directory
         else:
             self.download_directory = os.getcwd()
-        log.debug("Download directory for LBRYFileManager: %s", str(self.download_directory))
+        log.debug("Download directory for EncryptedFileManager: %s", str(self.download_directory))
 
     def setup(self):
         d = self._open_db()
@@ -68,8 +68,8 @@ class LBRYFileManager(object):
         return dl
 
     def _add_to_sd_identifier(self):
-        downloader_factory = ManagedLBRYFileDownloaderFactory(self)
-        self.sd_identifier.add_stream_downloader_factory(LBRYFileStreamType, downloader_factory)
+        downloader_factory = ManagedEncryptedFileDownloaderFactory(self)
+        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, downloader_factory)
 
     def _start_lbry_files(self):
 
@@ -101,7 +101,7 @@ class LBRYFileManager(object):
         if not download_directory:
             download_directory = self.download_directory
         payment_rate_manager.min_blob_data_payment_rate = blob_data_rate
-        lbry_file_downloader = ManagedLBRYFileDownloader(rowid, stream_hash,
+        lbry_file_downloader = ManagedEncryptedFileDownloader(rowid, stream_hash,
                                                          self.session.peer_finder,
                                                          self.session.rate_limiter,
                                                          self.session.blob_manager,
@@ -207,7 +207,7 @@ class LBRYFileManager(object):
     def _save_lbry_file(self, stream_hash, data_payment_rate):
         def do_save(db_transaction):
             db_transaction.execute("insert into lbry_file_options values (?, ?, ?)",
-                                  (data_payment_rate, ManagedLBRYFileDownloader.STATUS_STOPPED,
+                                  (data_payment_rate, ManagedEncryptedFileDownloader.STATUS_STOPPED,
                                    stream_hash))
             return db_transaction.lastrowid
         return self.sql_db.runInteraction(do_save)
@@ -236,7 +236,7 @@ class LBRYFileManager(object):
     def _get_lbry_file_status(self, rowid):
         d = self.sql_db.runQuery("select status from lbry_file_options where rowid = ?",
                                  (rowid,))
-        d.addCallback(lambda r: r[0][0] if len(r) else ManagedLBRYFileDownloader.STATUS_STOPPED)
+        d.addCallback(lambda r: r[0][0] if len(r) else ManagedEncryptedFileDownloader.STATUS_STOPPED)
         return d
 
     @rerun_if_locked

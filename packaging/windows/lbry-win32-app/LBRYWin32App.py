@@ -18,7 +18,7 @@ try:
 except ImportError:
     import win32gui
 
-from lbrynet.lbrynet_daemon.LBRYDaemonServer import LBRYDaemonServer, LBRYDaemonRequest
+from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer, DaemonRequest
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
 from lbrynet.conf import UI_ADDRESS, API_CONNECTION_STRING, LOG_FILE_NAME
 from packaging.uri_handler.LBRYURIHandler import LBRYURIHandler
@@ -284,11 +284,11 @@ def main(lbry_name=None):
     systray_thread.daemon = True
     systray_thread.start()
 
-    lbry = LBRYDaemonServer()
+    lbry = DaemonServer()
     d = lbry.start()
     d.addCallback(lambda _: LBRYURIHandler.open_address(lbry_name))
     lbrynet_server = server.Site(lbry.root)
-    lbrynet_server.requestFactory = LBRYDaemonRequest
+    lbrynet_server.requestFactory = DaemonRequest
     try:
         reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
     except error.CannotListenError:

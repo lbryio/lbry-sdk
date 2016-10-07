@@ -18,7 +18,7 @@ def run_in_thread(fn):
     return wrapped
 
 
-class LBRYSettings(object):
+class Settings(object):
     NAME = "settings.db"
     def __init__(self, db_dir):
         self.db_dir = db_dir
