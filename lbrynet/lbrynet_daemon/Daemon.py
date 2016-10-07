@@ -21,7 +21,6 @@ from twisted.web import server
 from twisted.internet import defer, threads, error, reactor, task
 from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
-from txjsonrpc.web import jsonrpc
 
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
@@ -40,7 +39,6 @@ from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
-from lbrynet.lbrynet_daemon.auth.util import get_auth_message
 from lbrynet.metadata.Metadata import Metadata, verify_name_characters
 from lbrynet.core import log_support
 from lbrynet.core import utils

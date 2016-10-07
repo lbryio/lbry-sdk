@@ -3,7 +3,7 @@ from zope.interface import implementer
 from twisted.cred import portal, checkers, credentials, error as cred_error
 from twisted.internet import defer
 from twisted.web import resource
-from lbrynet.lbrynet_daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, save_api_keys
+from lbrynet.lbrynet_daemon.auth.util import load_api_keys
 
 log = logging.getLogger(__name__)
 
