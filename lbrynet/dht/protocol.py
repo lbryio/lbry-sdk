@@ -7,6 +7,7 @@
 # The docstrings in this module contain epytext markup; API documentation
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
+import logging
 import binascii
 import time
 
@@ -21,6 +22,8 @@ import msgformat
 from contact import Contact
 
 reactor = twisted.internet.reactor
+log = logging.getLogger(__name__)
+
 
 class TimeoutError(Exception):
     """ Raised when a RPC times out """
@@ -117,6 +120,9 @@ class KademliaProtocol(protocol.DatagramProtocol):
             msgPrimitive = self._encoder.decode(datagram)
         except encoding.DecodeError:
             # We received some rubbish here
+            return
+        except IndexError:
+            log.warning("Couldn't decode dht datagram from %s", address)
             return
         
         message = self._translator.fromPrimitive(msgPrimitive)
