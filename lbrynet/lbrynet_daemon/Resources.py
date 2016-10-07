@@ -29,58 +29,13 @@ log = logging.getLogger(__name__)
 
 
 class NoCacheStaticFile(static.File):
-    def render_GET(self, request):
-        """
-        Begin sending the contents of this L{File} (or a subset of the
-        contents, based on the 'range' header) to the given request.
-        """
-        self.restat(False)
+    def _set_no_cache(self, request):
         request.setHeader('cache-control', 'no-cache, no-store, must-revalidate')
         request.setHeader('expires', '0')
 
-        if self.type is None:
-            self.type, self.encoding = getTypeAndEncoding(self.basename(),
-                                                          self.contentTypes,
-                                                          self.contentEncodings,
-                                                          self.defaultType)
-
-        if not self.exists():
-            return self.childNotFound.render(request)
-
-        if self.isdir():
-            return self.redirect(request)
-
-        request.setHeader(b'accept-ranges', b'bytes')
-
-        try:
-            fileForReading = self.openForReading()
-        except IOError as e:
-            if e.errno == errno.EACCES:
-                return self.forbidden.render(request)
-            else:
-                raise
-
-        if request.setLastModified(self.getModificationTime()) is http.CACHED:
-            # `setLastModified` also sets the response code for us, so if the
-            # request is cached, we close the file now that we've made sure that
-            # the request would otherwise succeed and return an empty body.
-            fileForReading.close()
-            return b''
-
-        if request.method == b'HEAD':
-            # Set the content headers here, rather than making a producer.
-            self._setContentHeaders(request)
-            # We've opened the file to make sure it's accessible, so close it
-            # now that we don't need it.
-            fileForReading.close()
-            return b''
-
-        producer = self.makeProducer(request, fileForReading)
-        producer.start()
-
-        # and make sure the connection doesn't get closed
-        return server.NOT_DONE_YET
-    render_HEAD = render_GET
+    def render_GET(self, request):
+        self._set_no_cache(request)
+        return static.File.render_GET(self, request)
 
 
 class LBRYindex(resource.Resource):
