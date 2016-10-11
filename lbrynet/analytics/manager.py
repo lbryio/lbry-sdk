@@ -64,4 +64,4 @@ def if_deferred(maybe_deferred, callback, *args, **kwargs):
     if isinstance(maybe_deferred, defer.Deferred):
         maybe_deferred.addCallback(callback, *args, **kwargs)
     else:
-        callback(mabye_deferred, *args, **kwargs)
+        callback(maybe_deferred, *args, **kwargs)
