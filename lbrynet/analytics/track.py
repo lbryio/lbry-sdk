@@ -13,5 +13,12 @@ class Track(object):
         """Apply `op` on the current values for `metric`.
 
         This operation also resets the metric.
+
+        Returns:
+            a tuple (should_send, value)
         """
-        return op(self.data.pop(metric, []))
+        try:
+            values = self.data.pop(metric)
+            return True, op(values)
+        except KeyError:
+            return False, None

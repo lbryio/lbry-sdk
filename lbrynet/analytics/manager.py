@@ -1,5 +1,6 @@
 from lbrynet.core import looping_call_manager
 
+from twisted.internet import defer
 from twisted.internet import task
 
 import constants
@@ -43,13 +44,24 @@ class Manager(object):
         self.analytics_api.track(heartbeat)
 
     def _update_tracked_metrics(self):
-        value = self.track.summarize(constants.BLOB_BYTES_UPLOADED)
-        if value > 0:
-            event = self.events_generator.metric_observered(constants.BLOB_BYTES_UPLOADED, value)
+        should_send, value = self.track.summarize(constants.BLOB_BYTES_UPLOADED)
+        if should_send:
+            event = self.events_generator.metric_observed(constants.BLOB_BYTES_UPLOADED, value)
             self.analytics_api.track(event)
 
     def _send_repeating_metric(self, event_name, value_generator):
-        should_send, value = value_generator()
+        result = value_generator()
+        if_deferred(result, self._send_repeating_metric_value, event_name)
+
+    def _send_repeating_metric_value(self, result, event_name):
+        should_send, value = result
         if should_send:
-            event = self.events_generator.metric_observered(event_name, value)
+            event = self.events_generator.metric_observed(event_name, value)
             self.analytics_api.track(event)
+
+
+def if_deferred(maybe_deferred, callback, *args, **kwargs):
+    if isinstance(maybe_deferred, defer.Deferred):
+        maybe_deferred.addCallback(callback, *args, **kwargs)
+    else:
+        callback(mabye_deferred, *args, **kwargs)

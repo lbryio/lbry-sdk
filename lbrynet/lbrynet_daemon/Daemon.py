@@ -185,8 +185,24 @@ class CheckRemoteVersions(object):
             return defer.fail(None)
 
 
+class AlwaysSend(object):
+    def __init__(self, value_generator, *args, **kwargs):
+        self.value_generator = value_generator
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self):
+        d = defer.maybeDeferred(self.value_generator, *self.args, **self.kwargs)
+        d.addCallback(lambda v: (True, v))
+        return d
+
+
 def calculate_available_blob_size(blob_manager):
-    return sum(blob.length for blob in blob_manager.get_all_verified_blobs())
+    d = blob_manager.get_all_verified_blobs()
+    d.addCallback(
+        lambda blobs: defer.DeferredList([blob_manager.get_blob_length(b) for b in blobs]))
+    d.addCallback(lambda blob_lengths: sum(val for success, val in blob_lengths if success))
+    return d
 
 
 class Daemon(jsonrpc.JSONRPC):
@@ -1021,9 +1037,9 @@ class Daemon(jsonrpc.JSONRPC):
         self.analytics_manager = analytics.Manager(
             analytics_api, events_generator, analytics.Track())
         self.analytics_manager.start()
-        self.register_repeating_metric(
+        self.analytics_manager.register_repeating_metric(
             analytics.BLOB_BYTES_AVAILABLE,
-            lambda: calculate_available_blob_size(self.session.blob_manager),
+            AlwaysSend(calculate_available_blob_size, self.session.blob_manager),
             frequency=300
         )
 
