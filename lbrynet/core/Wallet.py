@@ -1110,9 +1110,9 @@ class LBRYcrdWallet(Wallet):
 
 class LBRYumWallet(Wallet):
 
-    def __init__(self, db_dir):
+    def __init__(self, db_dir, config=None):
         Wallet.__init__(self, db_dir)
-        self.config = None
+        self._config = config
         self.network = None
         self.wallet = None
         self.cmd_runner = None
@@ -1131,7 +1131,7 @@ class LBRYumWallet(Wallet):
         network_start_d = defer.Deferred()
 
         def setup_network():
-            self.config = SimpleConfig({'auto_connect': True})
+            self.config = make_config(self._config)
             self.network = Network(self.config)
             alert.info("Loading the wallet...")
             return defer.succeed(self.network.start())
@@ -1499,3 +1499,9 @@ class LBRYcrdAddressQueryHandler(object):
             return defer.fail(Failure(ValueError("Expected but did not receive an address request")))
         else:
             return defer.succeed({})
+
+
+def make_config(config=None):
+    if config is None:
+        config = {}
+    return SimpleConfig(config) if type(config) == type({}) else config
