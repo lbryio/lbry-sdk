@@ -34,10 +34,9 @@ class Events(object):
 
     def metric_observed(self, metric_name, value):
         properties = {
-            'metric_name': metric_name,
-            'metric_value': value,
+            'value': value,
         }
-        return self._event('Metric Observed', properties)
+        return self._event(metric_name, properties)
 
     def _event(self, event, event_properties=None):
         return {
