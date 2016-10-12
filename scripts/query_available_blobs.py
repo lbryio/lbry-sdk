@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import argparse
 import itertools
 import logging
@@ -13,6 +15,7 @@ from twisted.python import log
 
 from lbrynet import conf
 from lbrynet.core import Wallet
+from lbrynet.core import BlobAvailability
 from lbrynet.core import BlobManager
 from lbrynet.core import HashAnnouncer
 from lbrynet.core import PeerManager
@@ -28,8 +31,10 @@ logger = logging.getLogger()
 
 
 def main(args=None):
-    logging.basicConfig()
+    logging.basicConfig(level='DEBUG')
     parser = argparse.ArgumentParser()
+    parser.add_argument('--limit', type=int)
+    parser.add_argument('--download', action='store_true')
     args = parser.parse_args(args)
 
     db_dir = appdirs.user_data_dir('LBRY')
@@ -50,23 +55,38 @@ def main(args=None):
     
     d = session.setup()
     d.addCallback(lambda _: Tracker.load(session))
-    d.addCallback(lambda t: t.processNameClaims())
+    d.addCallback(lambda t: t.processNameClaims(args.limit, args.download))
+    d.addCallback(lambda t: print(t.stats))
     d.addCallback(lambda _: reactor.stop())
 
     reactor.run()
+
+
+def timeout(n):
+    def wrapper(fn):
+        def wrapped(*args, **kwargs):
+            d = fn(*args, **kwargs)
+            reactor.callLater(n, d.cancel)
+            return d
+        return wrapped
+    return wrapper
     
 
 class Tracker(object):
-    def __init__(self, session, wallet):
+    def __init__(self, session, blob_tracker, wallet):
         self.session = session
+        self.blob_tracker = blob_tracker
         self.wallet = wallet
         self.names = None
+        self.stats = {}
 
     @classmethod
     def load(cls, session):
-        return cls(session, session.wallet)
+        blob_tracker = BlobAvailability.BlobAvailabilityTracker(
+            session.blob_manager, session.peer_finder, session.dht_node)
+        return cls(session, blob_tracker, session.wallet)
 
-    def processNameClaims(self, limit=None):
+    def processNameClaims(self, limit=None, download=False):
         d = self.wallet.get_nametrie()
         d.addCallback(getNameClaims)
         if limit:
@@ -74,8 +94,12 @@ class Tracker(object):
         d.addCallback(self._setNames)
         d.addCallback(lambda _: self._getSdHashes())
         d.addCallback(lambda _: self._filterNames('sd_hash'))
-        d.addCallback(lambda _: self._downloadAllBlobs())
-        d.addCallback(lambda _: self._filterNames('sd_blob'))
+        d.addCallback(lambda _: self._checkAvailability())
+        d.addCallback(lambda _: self._filterNames('is_available'))
+        if download:
+            d.addCallback(lambda _: self._downloadAllBlobs())
+            d.addCallback(lambda _: self._filterNames('sd_blob'))
+        d.addCallback(lambda _: self)
         return d
 
     def _setNames(self, names):
@@ -86,8 +110,14 @@ class Tracker(object):
 
     def _filterNames(self, attr):
         self.names = [n for n in self.names if getattr(n, attr)]
-        print "We have {} names with attribute {}".format(len(self.names), attr)
+        self.stats[attr] = len(self.names)
+        print("We have {} names with attribute {}".format(len(self.names), attr))
 
+    def _checkAvailability(self):
+        return defer.DeferredList([
+            n.check_availability(self.blob_tracker) for n in self.names
+        ])
+        
     def _downloadAllBlobs(self):
         return defer.DeferredList([
             n.download_sd_blob(self.session) for n in self.names
@@ -98,6 +128,7 @@ class Name(object):
     def __init__(self, name):
         self.name = name
         self.sd_hash = None
+        self.is_available = None
         self.sd_blob = None
 
     def setSdHash(self, wallet):
@@ -112,8 +143,19 @@ class Name(object):
     def _setSdHash(self, sd_hash):
         self.sd_hash = sd_hash
 
+    @timeout(10)
+    def check_availability(self, blob_tracker):
+        d = blob_tracker.get_blob_availability(self.sd_hash)
+        d.addCallback(lambda b: self._setAvailable(b[self.sd_hash]))
+        # swallow errors
+        d.addErrback(lambda _: None)
+        return d
+
+    def _setAvailable(self, peer_count):
+        self.is_available = peer_count > 0
+        
     def download_sd_blob(self, session):
-        print 'Trying to get sd_blob for {} using {}'.format(self.name, self.sd_hash)
+        print('Trying to get sd_blob for {} using {}'.format(self.name, self.sd_hash))
         d = download_sd_blob_with_timeout(session, self.sd_hash, session.payment_rate_manager)
         d.addCallback(sd.BlobStreamDescriptorReader)
         d.addCallback(self._setSdBlob)
@@ -122,14 +164,13 @@ class Name(object):
         return d
         
     def _setSdBlob(self, blob):
-        print '{} has a blob'.format(self.name)
+        print('{} has a blob'.format(self.name))
         self.sd_blob = blob
 
 
+@timeout(10)
 def download_sd_blob_with_timeout(session, sd_hash, payment_rate_manager):
-    d = sd.download_sd_blob(session, sd_hash, payment_rate_manager)
-    reactor.callLater(10, d.cancel)
-    return d
+    return sd.download_sd_blob(session, sd_hash, payment_rate_manager)
 
 
 def getNameClaims(trie):
