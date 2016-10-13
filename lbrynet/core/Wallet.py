@@ -550,6 +550,9 @@ class Wallet(object):
         d.addCallback(_decode)
         return d
 
+    def get_claim_metadata_for_sd_hash(self, sd_hash):
+        return self._get_claim_metadata_for_sd_hash(sd_hash)
+
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
         d.addCallback(lambda name_txid: self._get_status_of_claim(name_txid[1], name_txid[0], sd_hash) if name_txid is not None else None)

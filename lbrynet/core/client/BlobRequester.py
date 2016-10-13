@@ -1,25 +1,35 @@
-from collections import defaultdict
 import logging
+from collections import defaultdict
+from decimal import Decimal
+
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from zope.interface import implements
-from lbrynet.core.Error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
-from lbrynet.core.Error import InvalidResponseError, RequestCanceledError, NoResponseError
+
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError
+from lbrynet.core.Error import InvalidResponseError, RequestCanceledError, NoResponseError
+from lbrynet.core.Error import PriceDisagreementError, DownloadCanceledError, InsufficientFundsError
 from lbrynet.core.client.ClientRequest import ClientRequest, ClientBlobRequest
 from lbrynet.interfaces import IRequestCreator
+from lbrynet.core.Offer import Offer
 
 
 log = logging.getLogger(__name__)
 
 
 def get_points(num_bytes, rate):
-    return 1.0 * num_bytes * rate / 2**20
+    if isinstance(rate, float):
+        return 1.0 * num_bytes * rate / 2**20
+    elif isinstance(rate, Decimal):
+        return 1.0 * num_bytes * float(rate) / 2**20
+    else:
+        raise Exception("Unknown rate type")
 
 
 def cache(fn):
     """Caches the function call for each instance"""
     attr = '__{}_value'.format(fn.__name__)
+
     def helper(self):
         if not hasattr(self, attr):
             value = fn(self)
@@ -42,6 +52,7 @@ class BlobRequester(object):
         self._unavailable_blobs = defaultdict(list)  # {Peer: [blob_hash]}}
         self._protocol_prices = {}  # {ClientProtocol: price}
         self._price_disagreements = []  # [Peer]
+        self._protocol_tries = {}
         self._incompatible_peers = []
 
     ######## IRequestCreator #########
@@ -65,9 +76,9 @@ class BlobRequester(object):
 
     def _send_next_request(self, peer, protocol):
         log.debug('Sending a blob request for %s and %s', peer, protocol)
-        availability = AvailabilityRequest(self, peer, protocol)
-        download = DownloadRequest(self, peer, protocol, self.wallet, self.payment_rate_manager)
-        price = PriceRequest(self, peer, protocol)
+        availability = AvailabilityRequest(self, peer, protocol, self.payment_rate_manager)
+        download = DownloadRequest(self, peer, protocol, self.payment_rate_manager, self.wallet)
+        price = PriceRequest(self, peer, protocol, self.payment_rate_manager)
 
         sent_request = False
         if availability.can_make_request():
@@ -161,10 +172,11 @@ class BlobRequester(object):
 
 
 class RequestHelper(object):
-    def __init__(self, requestor, peer, protocol):
+    def __init__(self, requestor, peer, protocol, payment_rate_manager):
         self.requestor = requestor
         self.peer = peer
         self.protocol = protocol
+        self.payment_rate_manager = payment_rate_manager
 
     @property
     def protocol_prices(self):
@@ -197,10 +209,10 @@ class RequestHelper(object):
             return
         return reason
 
-    def get_and_save_rate_for_protocol(self):
+    def get_and_save_rate(self):
         rate = self.protocol_prices.get(self.protocol)
         if rate is None:
-            rate = self.requestor.payment_rate_manager.get_rate_blob_data(self.peer)
+            rate = self.payment_rate_manager.get_rate_blob_data(self.peer, self.available_blobs)
             self.protocol_prices[self.protocol] = rate
         return rate
 
@@ -322,12 +334,59 @@ class AvailabilityRequest(RequestHelper):
             self.unavailable_blobs.remove(blob_hash)
 
 
+class PriceRequest(RequestHelper):
+    """Ask a peer if a certain price is acceptable"""
+    def can_make_request(self):
+        return self.get_and_save_rate() is not None
+
+    def make_request_and_handle_response(self):
+        request = self._get_price_request()
+        self._handle_price_request(request)
+
+    def _get_price_request(self):
+        rate = self.get_and_save_rate()
+        if rate is None:
+            log.debug("No blobs to request from %s", self.peer)
+            raise Exception('Cannot make a price request without a payment rate')
+        log.debug("Offer rate %s to %s for %i blobs", rate, self.peer, len(self.available_blobs))
+
+        request_dict = {'blob_data_payment_rate': rate}
+        return ClientRequest(request_dict, 'blob_data_payment_rate')
+
+    def _handle_price_request(self, price_request):
+        d = self.protocol.add_request(price_request)
+        d.addCallback(self._handle_price_response, price_request)
+        d.addErrback(self._request_failed, "price request")
+
+    def _handle_price_response(self, response_dict, request):
+        assert request.response_identifier == 'blob_data_payment_rate'
+        if 'blob_data_payment_rate' not in response_dict:
+            return InvalidResponseError("response identifier not in response")
+        assert self.protocol in self.protocol_prices
+        rate = self.protocol_prices[self.protocol]
+        offer = Offer(rate)
+        offer.handle(response_dict['blob_data_payment_rate'])
+        self.payment_rate_manager.record_offer_reply(self.peer.host, offer)
+
+        if offer.is_accepted:
+            log.debug("Offered rate %f/mb accepted by %s", rate, str(self.peer.host))
+            return True
+        elif offer.is_too_low:
+            log.debug("Offered rate %f/mb rejected by %s", rate, str(self.peer.host))
+            del self.protocol_prices[self.protocol]
+            return True
+        else:
+            log.warning("Price disagreement")
+            del self.protocol_prices[self.protocol]
+            self.requestor._price_disagreements.append(self.peer)
+            return False
+
+
 class DownloadRequest(RequestHelper):
     """Choose a blob and download it from a peer and also pay the peer for the data."""
-    def __init__(self, requestor, peer, protocol, wallet, payment_rate_manager):
-        RequestHelper.__init__(self, requestor, peer, protocol)
+    def __init__(self, requester, peer, protocol, payment_rate_manager, wallet):
+        RequestHelper.__init__(self, requester, peer, protocol, payment_rate_manager)
         self.wallet = wallet
-        self.payment_rate_manager = payment_rate_manager
 
     def can_make_request(self):
         return self.get_blob_details()
@@ -413,6 +472,9 @@ class DownloadRequest(RequestHelper):
     def _pay_or_cancel_payment(self, arg, reserved_points, blob):
         if self._can_pay_peer(blob, arg):
             self._pay_peer(blob.length, reserved_points)
+            d = self.requestor.blob_manager.add_blob_to_download_history(str(blob),
+                                                                         str(self.peer.host),
+                                                                         float(self.protocol_prices[self.protocol]))
         else:
             self._cancel_points(reserved_points)
         return arg
@@ -425,7 +487,7 @@ class DownloadRequest(RequestHelper):
 
     def _pay_peer(self, num_bytes, reserved_points):
         assert num_bytes != 0
-        rate = self.get_and_save_rate_for_protocol()
+        rate = self.get_and_save_rate()
         point_amount = get_points(num_bytes, rate)
         self.wallet.send_points(reserved_points, point_amount)
         self.payment_rate_manager.record_points_paid(point_amount)
@@ -452,7 +514,7 @@ class DownloadRequest(RequestHelper):
         # not yet been set for this protocol or for it to have been
         # removed so instead I switched it to check if a rate has been set
         # and calculate it if it has not
-        rate = self.get_and_save_rate_for_protocol()
+        rate = self.get_and_save_rate()
         points_to_reserve = get_points(num_bytes, rate)
         return self.wallet.reserve_points(self.peer, points_to_reserve)
 
@@ -482,38 +544,3 @@ class BlobDownloadDetails(object):
     def counting_write_func(self, data):
         self.peer.update_stats('blob_bytes_downloaded', len(data))
         return self.write_func(data)
-
-
-class PriceRequest(RequestHelper):
-    """Ask a peer if a certain price is acceptable"""
-    def can_make_request(self):
-        return self.get_and_save_rate_for_protocol() is not None
-
-    def make_request_and_handle_response(self):
-        request = self._get_price_request()
-        self._handle_price_request(request)
-
-    def _get_price_request(self):
-        rate = self.get_and_save_rate_for_protocol()
-        if rate is None:
-            raise Exception('Cannot make a price request without a payment rate')
-        request_dict = {'blob_data_payment_rate': rate}
-        return ClientRequest(request_dict, 'blob_data_payment_rate')
-
-    def _handle_price_request(self, price_request):
-        d = self.protocol.add_request(price_request)
-        d.addCallback(self._handle_price_response, price_request)
-        d.addErrback(self._request_failed, "price request")
-
-    def _handle_price_response(self, response_dict, request):
-        assert request.response_identifier == 'blob_data_payment_rate'
-        if 'blob_data_payment_rate' not in response_dict:
-            return InvalidResponseError("response identifier not in response")
-        assert self.protocol in self.protocol_prices
-        response = response_dict['blob_data_payment_rate']
-        if response == "RATE_ACCEPTED":
-            return True
-        else:
-            del self.protocol_prices[self.protocol]
-            self.requestor._price_disagreements.append(self.peer)
-        return True

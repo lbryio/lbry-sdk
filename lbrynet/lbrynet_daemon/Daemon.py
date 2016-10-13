@@ -27,8 +27,6 @@ from txjsonrpc.web.jsonrpc import Handler
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import analytics
-from lbrynet.core.PaymentRateManager import PaymentRateManager
-from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError
@@ -546,7 +544,6 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_stream_identifier())
         d.addCallback(lambda _: self._setup_lbry_file_manager())
-        d.addCallback(lambda _: self._setup_lbry_file_opener())
         d.addCallback(lambda _: self._setup_query_handlers())
         d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: _log_starting_vals())
@@ -679,7 +676,6 @@ class Daemon(jsonrpc.JSONRPC):
         # TODO: this was blatantly copied from jsonrpc_start_lbry_file. Be DRY.
         def _start_file(f):
             d = self.lbry_file_manager.toggle_lbry_file_running(f)
-            d.addCallback(lambda _: self.lighthouse_client.announce_sd(f.sd_hash))
             return defer.succeed("Started LBRY file")
 
         def _get_and_start_file(name):
@@ -778,20 +774,13 @@ class Daemon(jsonrpc.JSONRPC):
 
     def _setup_query_handlers(self):
         handlers = [
-            # CryptBlobInfoQueryHandlerFactory(self.lbry_file_metadata_manager, self.session.wallet,
-            #                                 self._server_payment_rate_manager),
-            BlobAvailabilityHandlerFactory(self.session.blob_manager),
-            # BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
-            #                          self._server_payment_rate_manager),
+            BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
+                                      self.session.payment_rate_manager),
             self.session.wallet.get_wallet_info_query_handler_factory(),
         ]
 
         def get_blob_request_handler_factory(rate):
-            self.blob_request_payment_rate_manager = PaymentRateManager(
-                self.session.base_payment_rate_manager, rate
-            )
-            handlers.append(BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
-                                                      self.blob_request_payment_rate_manager))
+            self.blob_request_payment_rate_manager = self.session.payment_rate_manager
 
         d1 = self.settings.get_server_data_payment_rate()
         d1.addCallback(get_blob_request_handler_factory)
@@ -1104,14 +1093,6 @@ class Daemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_opener_factory)
         return defer.succeed(None)
 
-    def _setup_lbry_file_opener(self):
-
-        downloader_factory = EncryptedFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
-                                                   self.session.blob_manager, self.stream_info_manager,
-                                                   self.session.wallet)
-        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, downloader_factory)
-        return defer.succeed(True)
-
     def _download_sd_blob(self, sd_hash, timeout=DEFAULT_SD_DOWNLOAD_TIMEOUT):
         def cb(result):
             if not r.called:
@@ -1123,7 +1104,7 @@ class Daemon(jsonrpc.JSONRPC):
 
         r = defer.Deferred(None)
         reactor.callLater(timeout, eb)
-        d = download_sd_blob(self.session, sd_hash, PaymentRateManager(self.session.base_payment_rate_manager))
+        d = download_sd_blob(self.session, sd_hash, self.session.payment_rate_manager)
         d.addCallback(BlobStreamDescriptorReader)
         d.addCallback(lambda blob: blob.get_info())
         d.addCallback(cb)
@@ -1906,13 +1887,8 @@ class Daemon(jsonrpc.JSONRPC):
         """
 
         name = p['name']
-        force = p.get('force', False)
 
-        if force:
-            d = self._get_est_cost(name)
-        else:
-            d = self._search(name)
-            d.addCallback(lambda r: [i['cost'] for i in r][0])
+        d = self._get_est_cost(name)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
@@ -2585,6 +2561,53 @@ class Daemon(jsonrpc.JSONRPC):
         """
 
         d = self._render_response(SEARCH_SERVERS, OK_CODE)
+        return d
+
+    def jsonrpc_get_mean_availability(self):
+        """
+        Get mean blob availability
+
+        Args:
+            None
+        Returns:
+            Mean peers for a blob
+        """
+
+        d = self._render_response(self.session.blob_tracker.last_mean_availability, OK_CODE)
+        return d
+
+    def jsonrpc_get_availability(self, p):
+        """
+        Get stream availability for a winning claim
+
+        Arg:
+            name (str): lbry uri
+
+        Returns:
+             peers per blob / total blobs
+        """
+
+        def _get_mean(blob_availabilities):
+            peer_counts = []
+            for blob_availability in blob_availabilities:
+                for blob, peers in blob_availability.iteritems():
+                    peer_counts.append(peers)
+            if peer_counts:
+                return round(1.0 * sum(peer_counts) / len(peer_counts), 2)
+            else:
+                return 0.0
+
+        name = p['name']
+
+        d = self._resolve_name(name, force_refresh=True)
+        d.addCallback(get_sd_hash)
+        d.addCallback(self._download_sd_blob)
+        d.addCallbacks(lambda descriptor: [blob.get('blob_hash') for blob in descriptor['blobs']],
+                       lambda _: [])
+        d.addCallback(self.session.blob_tracker.get_availability_for_blobs)
+        d.addCallback(_get_mean)
+        d.addCallback(lambda result: self._render_response(result, OK_CODE))
+
         return d
 
 

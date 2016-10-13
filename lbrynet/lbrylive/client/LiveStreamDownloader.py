@@ -144,7 +144,7 @@ class FullLiveStreamDownloaderFactory(object):
 
     def make_downloader(self, metadata, options, payment_rate_manager):
         # TODO: check options for payment rate manager parameters
-        payment_rate_manager = LiveStreamPaymentRateManager(self.default_payment_rate_manager,
+        prm = LiveStreamPaymentRateManager(self.default_payment_rate_manager,
                                                             payment_rate_manager)
 
         def save_source_if_blob(stream_hash):
@@ -161,7 +161,7 @@ class FullLiveStreamDownloaderFactory(object):
         def create_downloader(stream_hash):
             stream_downloader = FullLiveStreamDownloader(stream_hash, self.peer_finder, self.rate_limiter,
                                                          self.blob_manager, self.stream_info_manager,
-                                                         payment_rate_manager, self.wallet, True)
+                                                         prm, self.wallet, True)
             # TODO: change upload_allowed=True above to something better
             d = stream_downloader.set_stream_info()
             d.addCallback(lambda _: stream_downloader)

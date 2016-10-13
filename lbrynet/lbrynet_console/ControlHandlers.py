@@ -644,7 +644,7 @@ class AddStream(CommandHandler):
         for option, option_value in zip(self.download_options, self.options_chosen):
             if option.short_description == "data payment rate":
                 if option_value == None:
-                    rate = self.payment_rate_manager.get_effective_min_blob_data_payment_rate()
+                    rate = 0.0
                 else:
                     rate = option_value
                 stream_size = None
