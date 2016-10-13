@@ -13,8 +13,6 @@ from Crypto.Hash import MD5
 from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
 from lbrynet.conf import MIN_BLOB_INFO_PAYMENT_RATE
 from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
-from lbrynet.lbrylive.PaymentRateManager import BaseLiveStreamPaymentRateManager
-from lbrynet.lbrylive.PaymentRateManager import LiveStreamPaymentRateManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
 from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager, DBEncryptedFileMetadataManager
@@ -465,13 +463,9 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
     os.mkdir(db_dir)
 
     session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
-                          peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
-                          use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
-
-    base_payment_rate_manager = BaseLiveStreamPaymentRateManager(MIN_BLOB_INFO_PAYMENT_RATE)
-    data_payment_rate_manager = session.payment_rate_manager
-    payment_rate_manager = LiveStreamPaymentRateManager(base_payment_rate_manager,
-                                                        data_payment_rate_manager)
+                      peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
+                      use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
+                      blob_tracker_class=DummyBlobAvailabilityTracker)
     stream_info_manager = DBLiveStreamMetadataManager(session.db_dir, hash_announcer)
 
     logging.debug("Created the session")
@@ -482,10 +476,9 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
         logging.debug("Starting the server protocol")
         query_handler_factories = {
             CryptBlobInfoQueryHandlerFactory(stream_info_manager, session.wallet,
-                                             payment_rate_manager): True,
-            BlobAvailabilityHandlerFactory(session.blob_manager): True,
+                                             session.payment_rate_manager): True,
             BlobRequestHandlerFactory(session.blob_manager, session.wallet,
-                                      payment_rate_manager): True,
+                                      session.payment_rate_manager): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
         }
 
@@ -553,12 +546,9 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
         return d
 
     def enable_live_stream():
-        base_live_stream_payment_rate_manager = BaseLiveStreamPaymentRateManager(
-            MIN_BLOB_INFO_PAYMENT_RATE
-        )
-        add_live_stream_to_sd_identifier(sd_identifier, base_live_stream_payment_rate_manager)
+        add_live_stream_to_sd_identifier(sd_identifier, session.base_payment_rate_manager)
         add_full_live_stream_downloader_to_sd_identifier(session, stream_info_manager, sd_identifier,
-                                                         base_live_stream_payment_rate_manager)
+                                                         session.base_payment_rate_manager)
 
     def run_server():
         d = session.setup()
@@ -631,7 +621,6 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow):
         server_port = None
 
         query_handler_factories = {
-            BlobAvailabilityHandlerFactory(session.blob_manager): True,
             BlobRequestHandlerFactory(session.blob_manager, session.wallet, session.payment_rate_manager): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
         }
@@ -756,7 +745,6 @@ class TestTransfer(TestCase):
 
         return d
 
-    # @unittest.skip("Sadly skipping failing test instead of fixing it")
     def test_lbry_transfer(self):
         sd_hash_queue = Queue()
         kill_event = Event()
@@ -863,7 +851,6 @@ class TestTransfer(TestCase):
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
 
-
         db_dir = "client"
         os.mkdir(db_dir)
 
@@ -885,11 +872,9 @@ class TestTransfer(TestCase):
 
         def start_lbry_file(lbry_file):
             lbry_file = lbry_file
-            logging.debug("Calling lbry_file.start()")
             return lbry_file.start()
 
         def download_stream(sd_blob_hash):
-            logging.debug("Downloaded the sd blob. Reading it now")
             prm = self.session.payment_rate_manager
             d = download_sd_blob(self.session, sd_blob_hash, prm)
             d.addCallback(sd_identifier.get_metadata_for_sd_blob)
@@ -899,20 +884,17 @@ class TestTransfer(TestCase):
 
         def do_download(sd_blob_hash):
             logging.debug("Starting the download")
+
             d = self.session.setup()
             d.addCallback(lambda _: enable_live_stream())
             d.addCallback(lambda _: download_stream(sd_blob_hash))
             return d
 
         def enable_live_stream():
-            base_live_stream_payment_rate_manager = BaseLiveStreamPaymentRateManager(
-                MIN_BLOB_INFO_PAYMENT_RATE
-            )
-            add_live_stream_to_sd_identifier(sd_identifier,
-                                             base_live_stream_payment_rate_manager)
+            add_live_stream_to_sd_identifier(sd_identifier, self.session.payment_rate_manager)
             add_full_live_stream_downloader_to_sd_identifier(self.session, self.stream_info_manager,
                                                              sd_identifier,
-                                                             base_live_stream_payment_rate_manager)
+                                                             self.session.payment_rate_manager)
 
         d.addCallback(do_download)
 
@@ -943,7 +925,6 @@ class TestTransfer(TestCase):
         d.addBoth(stop)
         return d
 
-    # @require_system('Linux')
     def test_last_blob_retrieval(self):
 
         kill_event = Event()
@@ -1029,7 +1010,6 @@ class TestTransfer(TestCase):
 
         return d
 
-    # @unittest.skip("Sadly skipping failing test instead of fixing it")
     def test_double_download(self):
         sd_hash_queue = Queue()
         kill_event = Event()
@@ -1061,7 +1041,6 @@ class TestTransfer(TestCase):
                                    rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
 
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
-
         self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         def make_downloader(metadata, prm):
@@ -1109,7 +1088,6 @@ class TestTransfer(TestCase):
             return d
 
         def start_transfer(sd_hash):
-
             logging.debug("Starting the transfer")
 
             d = self.session.setup()
