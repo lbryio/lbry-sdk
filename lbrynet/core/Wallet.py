@@ -25,6 +25,7 @@ from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHand
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
+from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.metadata.Metadata import Metadata
 
 log = logging.getLogger(__name__)
@@ -672,27 +673,40 @@ class Wallet(object):
         d = self.db.runQuery("delete from name_metadata where length(txid) > 64 or txid is null")
         return d
 
+    @rerun_if_locked
     def _save_name_metadata(self, name, txid, sd_hash):
         assert len(txid) == 64, "That's not a txid: %s" % str(txid)
-        d = self.db.runQuery("delete from name_metadata where name=? and txid=? and sd_hash=?", (name, txid, sd_hash))
-        d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash)))
+        d = self.db.runQuery(
+            "delete from name_metadata where name=? and txid=? and sd_hash=?",
+            (name, txid, sd_hash))
+        d.addCallback(lambda _: self.db.runQuery(
+            "insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash)))
         return d
 
+    @rerun_if_locked
     def _get_claim_metadata_for_sd_hash(self, sd_hash):
         d = self.db.runQuery("select name, txid from name_metadata where sd_hash=?", (sd_hash,))
         d.addCallback(lambda r: r[0] if r else None)
         return d
 
+    @rerun_if_locked
     def _update_claimid(self, claim_id, name, txid):
         assert len(txid) == 64, "That's not a txid: %s" % str(txid)
-        d = self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=?", (claim_id, name, txid))
-        d.addCallback(lambda r: self.db.runQuery("insert into claim_ids values (?, ?, ?)", (claim_id, name, txid)))
+        d = self.db.runQuery(
+            "delete from claim_ids where claimId=? and name=? and txid=?",
+            (claim_id, name, txid)
+        )
+        d.addCallback(lambda r: self.db.runQuery(
+            "insert into claim_ids values (?, ?, ?)", (claim_id, name, txid))
+        )
         d.addCallback(lambda _: claim_id)
         return d
 
+    @rerun_if_locked
     def _get_claimid_for_tx(self, name, txid):
         assert len(txid) == 64, "That's not a txid: %s" % str(txid)
-        d = self.db.runQuery("select claimId from claim_ids where name=? and txid=?", (name, txid))
+        d = self.db.runQuery(
+            "select claimId from claim_ids where name=? and txid=?", (name, txid))
         d.addCallback(lambda r: r[0][0] if r else None)
         return d
 
