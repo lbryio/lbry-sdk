@@ -773,9 +773,6 @@ class Daemon(jsonrpc.JSONRPC):
 
     def _setup_query_handlers(self):
         handlers = [
-            # CryptBlobInfoQueryHandlerFactory(self.lbry_file_metadata_manager, self.session.wallet,
-            #                                 self._server_payment_rate_manager),
-            # BlobAvailabilityHandlerFactory(self.session.blob_manager),
             BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
                                       self.session.payment_rate_manager),
             self.session.wallet.get_wallet_info_query_handler_factory(),

@@ -4,6 +4,7 @@ import random
 import os
 import json
 import yaml
+import datetime
 
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
@@ -77,3 +78,7 @@ def save_settings(path, settings):
     f = open(path, 'w')
     f.write(encoder(settings))
     f.close()
+
+
+def today():
+    return datetime.datetime.today()

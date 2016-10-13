@@ -1,9 +1,10 @@
 from lbrynet.core.Strategy import get_default_strategy
-
+from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, MIN_BLOB_INFO_PAYMENT_RATE
 
 class BasePaymentRateManager(object):
-    def __init__(self, rate):
+    def __init__(self, rate=MIN_BLOB_DATA_PAYMENT_RATE, info_rate=MIN_BLOB_INFO_PAYMENT_RATE):
         self.min_blob_data_payment_rate = rate
+        self.min_blob_info_payment_rate = info_rate
 
 
 class PaymentRateManager(object):
@@ -41,11 +42,12 @@ class NegotiatedPaymentRateManager(object):
         """
 
         self.base = base
-        self.min_blob_data_payment_rate = self.base.min_blob_data_payment_rate
         self.points_paid = 0.0
         self.blob_tracker = availability_tracker
         self.generous = generous
-        self.strategy = get_default_strategy(self.blob_tracker, base_price=self.min_blob_data_payment_rate, is_generous=generous)
+        self.strategy = get_default_strategy(self.blob_tracker,
+                                             base_price=self.base.min_blob_data_payment_rate,
+                                             is_generous=generous)
 
     def get_rate_blob_data(self, peer, blobs):
         response = self.strategy.make_offer(peer, blobs)
@@ -53,12 +55,12 @@ class NegotiatedPaymentRateManager(object):
 
     def accept_rate_blob_data(self, peer, blobs, offer):
         offer = self.strategy.respond_to_offer(offer, peer, blobs)
-        self.strategy.offer_accepted(peer, offer)
-        return offer.accepted
+        self.strategy.update_accepted_offers(peer, offer)
+        return offer.is_accepted
 
     def reply_to_offer(self, peer, blobs, offer):
         reply = self.strategy.respond_to_offer(offer, peer, blobs)
-        self.strategy.offer_accepted(peer, reply)
+        self.strategy.update_accepted_offers(peer, reply)
         return reply
 
     def get_rate_for_peer(self, peer):
@@ -68,4 +70,4 @@ class NegotiatedPaymentRateManager(object):
         self.points_paid += amount
 
     def record_offer_reply(self, peer, offer):
-        self.strategy.offer_accepted(peer, offer)
+        self.strategy.update_accepted_offers(peer, offer)

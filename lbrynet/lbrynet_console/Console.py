@@ -20,7 +20,6 @@ from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, API_CONNECTION_STRING  # , 
 from lbrynet.core.utils import generate_id
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.PaymentRateManager import PaymentRateManager
-from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.PTCWallet import PTCWallet
@@ -363,19 +362,14 @@ class Console():
 
     def _setup_query_handlers(self):
         handlers = [
-            #CryptBlobInfoQueryHandlerFactory(self.lbry_file_metadata_manager, self.session.wallet,
-            #                                 self._server_payment_rate_manager),
-            BlobAvailabilityHandlerFactory(self.session.blob_manager),
-            #BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
-            #                          self._server_payment_rate_manager),
             self.session.wallet.get_wallet_info_query_handler_factory(),
         ]
 
         def get_blob_request_handler_factory(rate):
-            self.blob_request_payment_rate_manager = PaymentRateManager(
-                self.session.base_payment_rate_manager, rate
-            )
-            handlers.append(BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
+            self.blob_request_payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager,
+                                                                        rate)
+            handlers.append(BlobRequestHandlerFactory(self.session.blob_manager,
+                                                      self.session.wallet,
                                                       self.blob_request_payment_rate_manager))
 
         d1 = self.settings.get_server_data_payment_rate()

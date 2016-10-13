@@ -2,9 +2,7 @@ from decimal import Decimal
 
 
 class Offer(object):
-    """
-    A rate offer to download blobs from a host
-    """
+    """A rate offer to download blobs from a host."""
 
     RATE_ACCEPTED = "RATE_ACCEPTED"
     RATE_TOO_LOW = "RATE_TOO_LOW"
@@ -21,11 +19,11 @@ class Offer(object):
             self.unset()
 
     @property
-    def accepted(self):
+    def is_accepted(self):
         return self._state is Offer.RATE_ACCEPTED
 
     @property
-    def too_low(self):
+    def is_too_low(self):
         return self._state is Offer.RATE_TOO_LOW
 
     @property
@@ -34,9 +32,9 @@ class Offer(object):
 
     @property
     def message(self):
-        if self.accepted:
+        if self.is_accepted:
             return Offer.RATE_ACCEPTED
-        elif self.too_low:
+        elif self.is_too_low:
             return Offer.RATE_TOO_LOW
         elif self.is_unset:
             return Offer.RATE_UNSET

@@ -4,8 +4,7 @@ import mock
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
 from lbrynet.core.Strategy import BasicAvailabilityWeightedStrategy
 from lbrynet.core.Offer import Offer
-from lbrynet.core.BlobAvailability import DummyBlobAvailabilityTracker
-
+from tests.mocks import DummyBlobAvailabilityTracker
 
 MAX_NEGOTIATION_TURNS = 10
 
@@ -40,18 +39,18 @@ class AvailabilityWeightedStrategyTests(unittest.TestCase):
 
         offer = client_strategy.make_offer(host, blobs)
         response1 = host_strategy.respond_to_offer(offer, client, blobs)
-        client_strategy.offer_accepted(host, response1)
+        client_strategy.update_accepted_offers(host, response1)
 
         offer = client_strategy.make_offer(host, blobs)
         response2 = host_strategy.respond_to_offer(offer, client, blobs)
-        client_strategy.offer_accepted(host, response2)
+        client_strategy.update_accepted_offers(host, response2)
 
-        self.assertEquals(response1.too_low, False)
-        self.assertEquals(response1.accepted, True)
+        self.assertEquals(response1.is_too_low, False)
+        self.assertEquals(response1.is_accepted, True)
         self.assertEquals(response1.rate, 0.0)
 
-        self.assertEquals(response2.too_low, False)
-        self.assertEquals(response2.accepted, True)
+        self.assertEquals(response2.is_too_low, False)
+        self.assertEquals(response2.is_accepted, True)
         self.assertEquals(response2.rate, 0.0)
 
     def test_how_many_turns_before_accept_with_similar_rate_settings(self):
@@ -168,7 +167,6 @@ class AvailabilityWeightedStrategyTests(unittest.TestCase):
                     accepted = host_prm.accept_rate_blob_data(client, blobs_to_query, offer)
                     turns += 1
                 self.assertGreater(MAX_NEGOTIATION_TURNS, turns)
-
 
     def test_how_many_turns_with_generous_host(self):
         blobs = [

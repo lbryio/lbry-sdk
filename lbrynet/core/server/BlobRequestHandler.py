@@ -104,15 +104,15 @@ class BlobRequestHandler(object):
 
     def _handle_payment_rate_query(self, offer, request):
         blobs = self._blobs_requested
-        log.info("Offered rate %f LBC/mb for %i blobs", offer.rate, len(blobs))
+        log.debug("Offered rate %f LBC/mb for %i blobs", offer.rate, len(blobs))
         reply = self.payment_rate_manager.reply_to_offer(self.peer, blobs, offer)
-        if reply.accepted:
+        if reply.is_accepted:
             self.blob_data_payment_rate = offer.rate
             request[self.PAYMENT_RATE_QUERY] = "RATE_ACCEPTED"
-            log.info("Accepted rate: %f", offer.rate)
-        elif reply.too_low:
+            log.debug("Accepted rate: %f", offer.rate)
+        elif reply.is_too_low:
             request[self.PAYMENT_RATE_QUERY] = "RATE_TOO_LOW"
-            log.info("Reject rate: %f", offer.rate)
+            log.debug("Reject rate: %f", offer.rate)
         elif reply.is_unset:
             log.warning("Rate unset")
             request['incoming_blob'] = {'error': 'RATE_UNSET'}

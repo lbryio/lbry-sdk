@@ -29,6 +29,7 @@ def get_points(num_bytes, rate):
 def cache(fn):
     """Caches the function call for each instance"""
     attr = '__{}_value'.format(fn.__name__)
+
     def helper(self):
         if not hasattr(self, attr):
             value = fn(self)
@@ -345,9 +346,9 @@ class PriceRequest(RequestHelper):
     def _get_price_request(self):
         rate = self.get_and_save_rate()
         if rate is None:
-            log.debug("No blobs to request from %s", str(self.peer))
+            log.debug("No blobs to request from %s", self.peer)
             raise Exception('Cannot make a price request without a payment rate')
-        log.debug("Offer rate %s to %s for %i blobs", str(rate), str(self.peer), len(self.available_blobs))
+        log.debug("Offer rate %s to %s for %i blobs", rate, self.peer, len(self.available_blobs))
 
         request_dict = {'blob_data_payment_rate': rate}
         return ClientRequest(request_dict, 'blob_data_payment_rate')
@@ -367,11 +368,11 @@ class PriceRequest(RequestHelper):
         offer.handle(response_dict['blob_data_payment_rate'])
         self.payment_rate_manager.record_offer_reply(self.peer.host, offer)
 
-        if offer.accepted:
-            log.info("Offered rate %f/mb accepted by %s", rate, str(self.peer.host))
+        if offer.is_accepted:
+            log.debug("Offered rate %f/mb accepted by %s", rate, str(self.peer.host))
             return True
-        elif offer.too_low:
-            log.info("Offered rate %f/mb rejected by %s", rate, str(self.peer.host))
+        elif offer.is_too_low:
+            log.debug("Offered rate %f/mb rejected by %s", rate, str(self.peer.host))
             del self.protocol_prices[self.protocol]
             return True
         else:

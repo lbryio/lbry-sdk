@@ -1,5 +1,6 @@
-from collections import defaultdict
 import datetime
+from collections import defaultdict
+from lbrynet.core import utils
 
 
 class Peer(object):
@@ -12,7 +13,7 @@ class Peer(object):
         self.stats = defaultdict(float)  # {string stat_type, float count}
 
     def is_available(self):
-        if self.attempt_connection_at is None or datetime.datetime.today() > self.attempt_connection_at:
+        if self.attempt_connection_at is None or utils.today() > self.attempt_connection_at:
             return True
         return False
 
@@ -23,7 +24,7 @@ class Peer(object):
     def report_down(self):
         self.down_count += 1
         timeout_time = datetime.timedelta(seconds=60 * self.down_count)
-        self.attempt_connection_at = datetime.datetime.today() + timeout_time
+        self.attempt_connection_at = utils.today() + timeout_time
 
     def update_score(self, score_change):
         self.score += score_change

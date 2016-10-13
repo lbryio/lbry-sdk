@@ -1,14 +1,14 @@
 import StringIO
 
 import mock
-from twisted.internet import defer, protocol
+from twisted.internet import defer
 from twisted.test import proto_helpers
 from twisted.trial import unittest
 
 from lbrynet.core import Peer
 from lbrynet.core.server import BlobRequestHandler
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
-from lbrynet.core.BlobAvailability import DummyBlobAvailabilityTracker
+from tests.mocks import DummyBlobAvailabilityTracker
 
 
 class TestBlobRequestHandlerQueries(unittest.TestCase):

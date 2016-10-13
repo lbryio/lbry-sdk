@@ -33,10 +33,9 @@ from twisted.trial.unittest import TestCase
 from twisted.python.failure import Failure
 import os
 from lbrynet.dht.node import Node
-from lbrynet.core.BlobAvailability import DummyBlobAvailabilityTracker
+from tests.mocks import DummyBlobAvailabilityTracker
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter, RateLimiter
-from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.lbrylive.server.LiveBlobInfoQueryHandler import CryptBlobInfoQueryHandlerFactory
@@ -272,7 +271,6 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rat
         server_port = None
 
         query_handler_factories = {
-            BlobAvailabilityHandlerFactory(session.blob_manager): True,
             BlobRequestHandlerFactory(session.blob_manager, session.wallet,
                                       session.payment_rate_manager): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
@@ -398,7 +396,6 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_ra
         server_port = None
 
         query_handler_factories = {
-            BlobAvailabilityHandlerFactory(session.blob_manager): True,
             BlobRequestHandlerFactory(session.blob_manager, session.wallet,
                                       session.payment_rate_manager): True,
             session.wallet.get_wallet_info_query_handler_factory(): True,
