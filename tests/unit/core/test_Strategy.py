@@ -7,6 +7,7 @@ from lbrynet.core.Offer import Offer
 from tests.mocks import DummyBlobAvailabilityTracker
 
 MAX_NEGOTIATION_TURNS = 10
+random.seed(12345)
 
 
 def get_random_sample(list_to_sample):
