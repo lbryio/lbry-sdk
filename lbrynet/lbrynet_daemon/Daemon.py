@@ -631,7 +631,7 @@ class Daemon(jsonrpc.JSONRPC):
                 )
                 self.git_lbryum_version = version
                 return defer.succeed(None)
-            except:
+            except Exception:
                 log.info("Failed to get lbryum version from git")
                 self.git_lbryum_version = None
                 return defer.fail(None)
@@ -646,7 +646,7 @@ class Daemon(jsonrpc.JSONRPC):
                 )
                 self.git_lbrynet_version = version
                 return defer.succeed(None)
-            except:
+            except Exception:
                 log.info("Failed to get lbrynet version from git")
                 self.git_lbrynet_version = None
                 return defer.fail(None)
@@ -1534,6 +1534,16 @@ class Daemon(jsonrpc.JSONRPC):
         """
 
         platform_info = self._get_platform()
+        try:
+            lbrynet_update_available = utils.version_is_greater_than(
+                self.git_lbrynet_version, lbrynet_version)
+        except AttributeError:
+            lbrynet_update_available = False
+        try:
+            lbryum_update_available = utils.version_is_greater_than(
+                self.git_lbryum_version, lbryum_version)
+        except AttributeError:
+            lbryum_update_available = False
         msg = {
             'platform': platform_info['platform'],
             'os_release': platform_info['os_release'],
@@ -1543,8 +1553,8 @@ class Daemon(jsonrpc.JSONRPC):
             'ui_version': self.ui_version,
             'remote_lbrynet': self.git_lbrynet_version,
             'remote_lbryum': self.git_lbryum_version,
-            'lbrynet_update_available': utils.version_is_greater_than(self.git_lbrynet_version, lbrynet_version),
-            'lbryum_update_available': utils.version_is_greater_than(self.git_lbryum_version, lbryum_version),
+            'lbrynet_update_available': lbrynet_update_available,
+            'lbryum_update_available': lbryum_update_available
         }
 
         log.info("Get version info: " + json.dumps(msg))
