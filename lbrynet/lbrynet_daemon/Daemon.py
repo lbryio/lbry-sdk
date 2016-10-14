@@ -23,6 +23,7 @@ from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
 from txjsonrpc.web import jsonrpc
 from txjsonrpc.web.jsonrpc import Handler
+from jsonschema import ValidationError
 
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
@@ -2009,7 +2010,7 @@ class Daemon(jsonrpc.JSONRPC):
             metadata = Metadata(p['metadata'])
             make_lbry_file = False
             sd_hash = metadata['sources']['lbry_sd_hash']
-        except AssertionError:
+        except ValidationError:
             make_lbry_file = True
             sd_hash = None
             metadata = p['metadata']

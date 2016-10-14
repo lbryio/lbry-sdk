@@ -13,6 +13,7 @@ from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
 from collections import defaultdict, deque
 from zope.interface import implements
+from jsonschema import ValidationError
 from decimal import Decimal
 
 from lbryum import SimpleConfig, Network
@@ -338,7 +339,7 @@ class Wallet(object):
 
         try:
             metadata = Metadata(json.loads(result['value']))
-        except (ValueError, TypeError):
+        except ValidationError:
             return Failure(InvalidStreamInfoError(name))
 
         txid = result['txid']
@@ -421,7 +422,7 @@ class Wallet(object):
                 meta_ver = metadata.version
                 sd_hash = metadata['sources']['lbry_sd_hash']
                 d = self._save_name_metadata(name, txid, sd_hash)
-            except AssertionError:
+            except ValidationError:
                 metadata = claim['value']
                 meta_ver = "Non-compliant"
                 d = defer.succeed(None)
