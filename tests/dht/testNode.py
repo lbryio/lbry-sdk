@@ -132,13 +132,14 @@ class NodeContactTest(unittest.TestCase):
 """ Some scaffolding for the NodeLookupTest class. Allows isolated node testing by simulating remote node responses"""
 from twisted.internet import protocol, defer, selectreactor
 from lbrynet.dht.msgtypes import ResponseMessage
+
+
 class FakeRPCProtocol(protocol.DatagramProtocol):
     def __init__(self):
         self.reactor = selectreactor.SelectReactor() 
         self.testResponse = None
         self.network = None
-        
-   
+
     def createNetwork(self, contactNetwork):
          """ set up a list of contacts together with their closest contacts
          @param contactNetwork: a sequence of tuples, each containing a contact together with its closest 
@@ -198,12 +199,7 @@ class FakeRPCProtocol(protocol.DatagramProtocol):
             df = defer.Deferred()
             df.callback((message,(contact.address, contact.port)))
             return df
-                    
-                    
-                    
-            
-            print "findValue"
-    
+
     def _send(self, data, rpcID, address):
         """ fake sending data """
         
@@ -242,8 +238,7 @@ class NodeLookupTest(unittest.TestCase):
         for i in range(self.contactsAmount):
             # create the testNodeIDs in ascending order, away from the actual node ID, with regards to the distance metric 
             self.testNodeIDs.append(idNum + i + 1)
-            
-        
+
         # generate contacts
         self.contacts = []
         for i in range(self.contactsAmount):

@@ -349,8 +349,8 @@ class Wallet(object):
   
         txid = result['txid']
         sd_hash = metadata['sources']['lbry_sd_hash']
-        d = self._save_name_metadata(name, txid, sd_hash)
-        d.addCallback(lambda _: self.get_claimid(name, txid))
+        d = self._save_name_metadata(name, txid, result['n'], sd_hash)
+        d.addCallback(lambda _: self.get_claimid(name, txid, result['n']))
         d.addCallback(lambda cid: _log_success(cid))
         d.addCallback(lambda _: metadata)
         return d
@@ -360,17 +360,17 @@ class Wallet(object):
         d.addCallback(lambda claims: next(claim for claim in claims['claims'] if claim['claimId'] == claim_id))
         return d
 
-    def get_claimid(self, name, txid):
+    def get_claimid(self, name, txid, nout):
         def _get_id_for_return(claim_id):
             if claim_id:
                 return defer.succeed(claim_id)
             else:
                 d = self.get_claims_from_tx(txid)
-                d.addCallback(lambda claims: next(c['claimId'] for c in claims if c['name'] == name))
-                d.addCallback(lambda cid: self._update_claimid(cid, name, txid))
+                d.addCallback(lambda claims: next(c for c in claims if c['name'] == name))
+                d.addCallback(lambda claim: self._update_claimid(claim['claimId'], name, txid, claim['nOut']))
                 return d
 
-        d = self._get_claimid_for_tx(name, txid)
+        d = self._get_claimid_for_tx(name, txid, nout)
         d.addCallback(_get_id_for_return)
         return d
 
@@ -383,14 +383,15 @@ class Wallet(object):
         def _get_claim_for_return(claim):
             if not claim:
                 return False
-            d = self.get_claim(name, claim['claim_id'])
+
+            d = self.get_claim(name, claim['claimId'])
             d.addCallback(_convert_units)
-            d.addCallback(lambda clm: self._format_claim_for_return(name, clm, claim['txid']))
+            d.addCallback(lambda claim_info: self._format_claim_for_return(name, claim_info))
             return d
 
         def _get_my_unspent_claim(claims):
             for claim in claims:
-                if claim['name'] == name and not claim['is spent'] and not claim.get('supported_claimid'):
+                if claim['name'] == name and not claim['is spent'] and not claim.get('supported_claimid', False):
                     return claim
             return False
 
@@ -399,46 +400,49 @@ class Wallet(object):
         d.addCallback(_get_claim_for_return)
         return d
 
-    def get_claim_info(self, name, txid=None):
-        if not txid:
+    def get_claim_info(self, name, txid=None, nout=None):
+        if txid is None and nout is None:
             d = self._get_value_for_name(name)
-            d.addCallback(lambda r: self._get_claim_info(name, r['txid']))
+            d.addCallback(lambda r: self._get_claim_info(name, r['txid'], r['nOut']))
         else:
-            d = self._get_claim_info(name, txid)
+            d = self._get_claim_info(name, txid, nout)
         d.addErrback(lambda _: False)
         return d
 
-    def _format_claim_for_return(self, name, claim, txid, metadata=None, meta_version=None):
+    def _format_claim_for_return(self, name, claim, metadata=None, meta_version=None):
         result = {}
         result['claim_id'] = claim['claimId']
         result['amount'] = claim['nEffectiveAmount']
         result['height'] = claim['nHeight']
         result['name'] = name
-        result['txid'] = txid
+        result['txid'] = claim['txid']
+        result['nout'] = claim['n']
         result['value'] = metadata if metadata else json.loads(claim['value'])
         result['supports'] = [{'txid': support['txid'], 'n': support['n']} for support in claim['supports']]
         result['meta_version'] = meta_version if meta_version else result['value'].get('ver', '0.0.1')
         return result
 
-    def _get_claim_info(self, name, txid):
+    def _get_claim_info(self, name, txid, nout):
         def _build_response(claim):
             try:
                 metadata = Metadata(json.loads(claim['value']))
                 meta_ver = metadata.version
                 sd_hash = metadata['sources']['lbry_sd_hash']
-                d = self._save_name_metadata(name, txid, sd_hash)
+                d = self._save_name_metadata(name, txid, nout, sd_hash)
             except (TypeError, ValueError, ValidationError):
                 metadata = claim['value']
                 meta_ver = "Non-compliant"
                 d = defer.succeed(None)
 
-            d.addCallback(lambda _: self._format_claim_for_return(name, claim, txid,
-                                                                  metadata=metadata, meta_version=meta_ver))
+            d.addCallback(lambda _: self._format_claim_for_return(name,
+                                                                  claim,
+                                                                  metadata=metadata,
+                                                                  meta_version=meta_ver))
             log.info("get claim info lbry://%s metadata: %s, claimid: %s", name, meta_ver, claim['claimId'])
 
             return d
 
-        d = self.get_claimid(name, txid)
+        d = self.get_claimid(name, txid, nout)
         d.addCallback(lambda claim_id: self.get_claim(name, claim_id))
         d.addCallback(_build_response)
         return d
@@ -454,9 +458,9 @@ class Wallet(object):
         return defer.succeed(Metadata(meta_for_return))
 
     def claim_name(self, name, bid, m):
-        def _save_metadata(txid, metadata):
+        def _save_metadata(txid, nout, metadata):
             log.info("Saving metadata for claim %s" % txid)
-            d = self._save_name_metadata(name, txid, metadata['sources']['lbry_sd_hash'])
+            d = self._save_name_metadata(name, txid, nout, metadata['sources']['lbry_sd_hash'])
             d.addCallback(lambda _: txid)
             return d
 
@@ -467,13 +471,15 @@ class Wallet(object):
             else:
                 log.info("Updating over own claim")
                 d = self.update_metadata(metadata, claim['value'])
-                d.addCallback(lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'], claim['txid'], new_metadata, _bid))
+                d.addCallback(lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'],
+                                                                                claim['txid'], claim['nout'],
+                                                                                new_metadata, _bid))
                 return d
 
         meta = Metadata(m)
         d = self.get_my_claim(name)
         d.addCallback(lambda claim: _claim_or_update(claim, meta, bid))
-        d.addCallback(lambda txid: _save_metadata(txid, meta))
+        d.addCallback(lambda txid, nout: _save_metadata(txid, nout, meta))
         return d
 
     def abandon_name(self, txid):
@@ -529,27 +535,8 @@ class Wallet(object):
         d = self._address_is_mine(address)
         return d
 
-    def get_tx_json(self, txid):
-        def _decode(raw_tx):
-            tx = Transaction(raw_tx).deserialize()
-            decoded_tx = {}
-            for txkey in tx.keys():
-                if isinstance(tx[txkey], list):
-                    decoded_tx[txkey] = []
-                    for i in tx[txkey]:
-                        tmp = {}
-                        for k in i.keys():
-                            if isinstance(i[k], Decimal):
-                                tmp[k] = float(i[k] / 1e8)
-                            else:
-                                tmp[k] = i[k]
-                        decoded_tx[txkey].append(tmp)
-                else:
-                    decoded_tx[txkey] = tx[txkey]
-            return decoded_tx
-
-        d = self._get_raw_tx(txid)
-        d.addCallback(_decode)
+    def get_transaction(self, txid):
+        d = self._get_transaction(txid)
         return d
 
     def get_claim_metadata_for_sd_hash(self, sd_hash):
@@ -662,11 +649,13 @@ class Wallet(object):
             transaction.execute("create table if not exists name_metadata (" +
                                 "    name text, " +
                                 "    txid text, " +
+                                "    n integer, " +
                                 "    sd_hash text)")
             transaction.execute("create table if not exists claim_ids (" +
                                 "    claimId text, " +
                                 "    name text, " +
-                                "    txid text)")
+                                "    txid text, " +
+                                "    n integer)")
 
         return self.db.runInteraction(create_tables)
 
@@ -674,27 +663,31 @@ class Wallet(object):
         d = self.db.runQuery("delete from name_metadata where length(txid) > 64 or txid is null")
         return d
 
-    def _save_name_metadata(self, name, txid, sd_hash):
+    def _save_name_metadata(self, name, txid, nout, sd_hash):
         assert len(txid) == 64, "That's not a txid: %s" % str(txid)
-        d = self.db.runQuery("delete from name_metadata where name=? and txid=? and sd_hash=?", (name, txid, sd_hash))
-        d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?)", (name, txid, sd_hash)))
+        d = self.db.runQuery("delete from name_metadata where name=? and txid=? and sd_hash=?",
+                             (name, txid, sd_hash))
+        d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?, ?)",
+                                                 (name, txid, nout, sd_hash)))
         return d
 
     def _get_claim_metadata_for_sd_hash(self, sd_hash):
-        d = self.db.runQuery("select name, txid from name_metadata where sd_hash=?", (sd_hash,))
+        d = self.db.runQuery("select name, txid, n from name_metadata where sd_hash=?", (sd_hash,))
         d.addCallback(lambda r: r[0] if r else None)
         return d
 
-    def _update_claimid(self, claim_id, name, txid):
+    def _update_claimid(self, claim_id, name, txid, nout):
         assert len(txid) == 64, "That's not a txid: %s" % str(txid)
-        d = self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=?", (claim_id, name, txid))
-        d.addCallback(lambda r: self.db.runQuery("insert into claim_ids values (?, ?, ?)", (claim_id, name, txid)))
+        d = self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=?",
+                             (claim_id, name, txid))
+        d.addCallback(lambda r: self.db.runQuery("insert into claim_ids values (?, ?, ?, ?)",
+                                                 (claim_id, name, txid, nout)))
         d.addCallback(lambda _: claim_id)
         return d
 
-    def _get_claimid_for_tx(self, name, txid):
+    def _get_claimid_for_tx(self, name, txid, nout):
         assert len(txid) == 64, "That's not a txid: %s" % str(txid)
-        d = self.db.runQuery("select claimId from claim_ids where name=? and txid=?", (name, txid))
+        d = self.db.runQuery("select claimId from claim_ids where name=? and txid=? and n=?", (name, txid, nout))
         d.addCallback(lambda r: r[0][0] if r else None)
         return d
 
@@ -736,7 +729,7 @@ class Wallet(object):
     def _send_abandon(self, txid, address, amount):
         return defer.fail(NotImplementedError())
 
-    def _send_name_claim_update(self, name, claim_id, txid, value, amount):
+    def _send_name_claim_update(self, name, claim_id, txid, nout, value, amount):
         return defer.fail(NotImplementedError())
 
     def _support_claim(self, name, claim_id, amount):
@@ -758,6 +751,9 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def _address_is_mine(self, address):
+        return defer.fail(NotImplementedError())
+
+    def _get_transaction(self, txid):
         return defer.fail(NotImplementedError())
 
     def _start(self):
@@ -877,11 +873,14 @@ class LBRYcrdWallet(Wallet):
     def _get_decoded_tx(self, raw_tx):
         return threads.deferToThread(self._get_decoded_tx_rpc, raw_tx)
 
+    def _get_transaction(self, txid):
+        return threads.deferToThread(self._get_raw_tx_rpc, txid, 1)
+
     def _send_abandon(self, txid, address, amount):
         return threads.deferToThread(self._send_abandon_rpc, txid, address, amount)
 
-    def _send_name_claim_update(self, name, claim_id, txid, value, amount):
-        return threads.deferToThread(self._update_name_rpc, txid, value, amount)
+    def _send_name_claim_update(self, name, claim_id, txid, nout, value, amount):
+        return threads.deferToThread(self._update_name_rpc, txid, nout, value, amount)
 
     def _support_claim(self, name, claim_id, amount):
         return threads.deferToThread(self._support_claim_rpc, name, claim_id, amount)
@@ -1003,9 +1002,9 @@ class LBRYcrdWallet(Wallet):
         return rpc_conn.setgenerate(b)
 
     @_catch_connection_error
-    def _get_raw_tx_rpc(self, txid):
+    def _get_raw_tx_rpc(self, txid, raw=0):
         rpc_conn = self._get_rpc_conn()
-        return rpc_conn.getrawtransaction(txid)
+        return rpc_conn.getrawtransaction(txid, raw)
 
     @_catch_connection_error
     def _get_decoded_tx_rpc(self, raw):
@@ -1063,7 +1062,8 @@ class LBRYcrdWallet(Wallet):
         return rpc_conn.getvalueforname(name)
 
     @_catch_connection_error
-    def _update_name_rpc(self, txid, value, amount):
+    def _update_name_rpc(self, txid, nout, value, amount):
+        # TODO use nout in updateclaim once lbrycrdd uses it
         rpc_conn = self._get_rpc_conn()
         return rpc_conn.updateclaim(txid, json.dumps(value), amount)
 
@@ -1307,6 +1307,16 @@ class LBRYumWallet(Wallet):
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func, txid)
 
+    def _get_transaction(self, txid):
+        def _add_confirms(tx):
+            tx['confirmations'] = self.wallet.get_confirmations(txid)
+            return tx
+
+        d = self._get_raw_tx(txid)
+        d.addCallback(self._get_decoded_tx)
+        d.addCallback(_add_confirms)
+        return d
+
     def _send_name_claim(self, name, val, amount):
         def send_claim(address):
             cmd = known_commands['claimname']
@@ -1322,7 +1332,7 @@ class LBRYumWallet(Wallet):
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func, name)
 
-    def _send_name_claim_update(self, name, claim_id, txid, value, amount):
+    def _send_name_claim_update(self, name, claim_id, txid, nout, value, amount):
         def send_claim_update(address):
             decoded_claim_id = claim_id.decode('hex')[::-1]
             metadata = json.dumps(value)

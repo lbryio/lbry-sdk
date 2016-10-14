@@ -56,7 +56,6 @@ class Api(object):
     def track(self, event):
         """Send a single tracking event"""
         log.debug('Sending track event: %s', event)
-        import base64
         return self.session.post(self.url + '/track', json=event, auth=self.auth)
 
     @classmethod
