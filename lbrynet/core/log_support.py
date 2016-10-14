@@ -73,12 +73,12 @@ def _log_decorator(fn):
 
 def disable_third_party_loggers():
     logging.getLogger('requests').setLevel(logging.WARNING)
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
     logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
 
 def disable_noisy_loggers():
     logging.getLogger('lbrynet.analytics.api').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.client').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.server').setLevel(logging.INFO)
+    logging.getLogger('lbrynet.core').setLevel(logging.INFO)
     logging.getLogger('lbrynet.dht').setLevel(logging.INFO)
     logging.getLogger('lbrynet.lbrynet_daemon').setLevel(logging.INFO)
     logging.getLogger('lbrynet.core.Wallet').setLevel(logging.INFO)

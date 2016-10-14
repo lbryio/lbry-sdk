@@ -9,7 +9,6 @@ from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
-from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.metadata.Fee import FeeValidator
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
@@ -48,11 +47,10 @@ class GetStream(object):
         self.description = None
         self.fee = None
         self.data_rate = data_rate
-        self.name = None
         self.file_name = file_name
         self.session = session
         self.exchange_rate_manager = exchange_rate_manager
-        self.payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager)
+        self.payment_rate_manager = self.session.payment_rate_manager
         self.lbry_file_manager = lbry_file_manager
         self.sd_identifier = sd_identifier
         self.stream_hash = None
@@ -148,7 +146,7 @@ class GetStream(object):
         return self.finished
 
     def _start_download(self, downloader):
-        log.info('Starting download for %s', self.name)
+        log.info('Starting download for %s', self.resolved_name)
         self.downloader = downloader
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
 

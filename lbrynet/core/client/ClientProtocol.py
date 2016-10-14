@@ -1,5 +1,6 @@
 import json
 import logging
+from decimal import Decimal
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.python import failure
@@ -12,6 +13,12 @@ from zope.interface import implements
 
 
 log = logging.getLogger(__name__)
+
+
+def encode_decimal(obj):
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError(repr(obj) + " is not JSON serializable")
 
 
 class ClientProtocol(Protocol):
@@ -132,7 +139,7 @@ class ClientProtocol(Protocol):
     def _send_request_message(self, request_msg):
         # TODO: compare this message to the last one. If they're the same,
         # TODO: incrementally delay this message.
-        m = json.dumps(request_msg)
+        m = json.dumps(request_msg, default=encode_decimal)
         self.transport.write(m)
 
     def _get_valid_response(self, response_msg):
@@ -191,7 +198,9 @@ class ClientProtocol(Protocol):
             for success, result in results:
                 if success is False:
                     failed = True
-                    log.info("The connection is closing due to an error: %s", str(result.getTraceback()))
+                    if not isinstance(result.value, DownloadCanceledError):
+                        log.info(result.value)
+                        log.info("The connection is closing due to an error: %s", str(result.getTraceback()))
             if failed is False:
                 log.debug("Asking for another request.")
                 from twisted.internet import reactor
@@ -215,7 +224,7 @@ class ClientProtocol(Protocol):
             # TODO: always be this way. it's done this way now because the client has no other way
             # TODO: of telling the server it wants the download to stop. It would be great if the
             # TODO: protocol had such a mechanism.
-            log.info("Closing the connection to %s because the download of blob %s was canceled",
+            log.debug("Closing the connection to %s because the download of blob %s was canceled",
                      str(self.peer), str(self._blob_download_request.blob))
             #self.transport.loseConnection()
             #return True

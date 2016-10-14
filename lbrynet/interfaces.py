@@ -648,3 +648,59 @@ class IWallet(Interface):
 
         @return: None
         """
+
+
+class IBlobPriceModel(Interface):
+    """
+    A blob price model
+
+    Used by INegotiationStrategy classes
+    """
+
+    def calculate_price(self, blob):
+        """
+        Calculate the price for a blob
+
+        @param blob: a blob hash
+        @type blob: str
+
+        @return: blob price target
+        @type: Decimal
+        """
+
+
+class INegotiationStrategy(Interface):
+    """
+    Strategy to negotiate download payment rates
+    """
+
+    def make_offer(self, peer, blobs):
+        """
+        Make a rate offer for the given peer and blobs
+
+        @param peer: peer to make an offer to
+        @type: str
+
+        @param blobs: blob hashes to make an offer for
+        @type: list
+
+        @return: rate offer
+        @rtype: Offer
+        """
+
+    def respond_to_offer(self, offer, peer, blobs):
+        """
+        Respond to a rate offer given by a peer
+
+        @param offer: offer to reply to
+        @type: Offer
+
+        @param peer: peer to make an offer to
+        @type: str
+
+        @param blobs: blob hashes to make an offer for
+        @type: list
+
+        @return: accepted, rejected, or unset offer
+        @rtype: Offer
+        """

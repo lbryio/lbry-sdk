@@ -14,16 +14,16 @@ class EncryptedFileOptions(object):
         prm = payment_rate_manager
 
         def get_default_data_rate_description():
-            if prm.min_blob_data_payment_rate is None:
+            if prm.base.min_blob_data_payment_rate is None:
                 return "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate)
             else:
-                return "%f LBC/MB" % prm.min_blob_data_payment_rate
+                return "%f LBC/MB" % prm.base.min_blob_data_payment_rate
 
         rate_choices = []
-        rate_choices.append(DownloadOptionChoice(prm.min_blob_data_payment_rate,
+        rate_choices.append(DownloadOptionChoice(prm.base.min_blob_data_payment_rate,
                                                  "No change - %s" % get_default_data_rate_description(),
                                                  "No change - %s" % get_default_data_rate_description()))
-        if prm.min_blob_data_payment_rate is not None:
+        if prm.base.min_blob_data_payment_rate is not None:
             rate_choices.append(DownloadOptionChoice(None,
                                                      "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate),
                                                      "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate)))
@@ -36,7 +36,7 @@ class EncryptedFileOptions(object):
                 rate_choices,
                 "Rate which will be paid for data",
                 "data payment rate",
-                prm.min_blob_data_payment_rate,
+                prm.base.min_blob_data_payment_rate,
                 get_default_data_rate_description()
             ),
             DownloadOption(

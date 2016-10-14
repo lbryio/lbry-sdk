@@ -9,7 +9,6 @@ from appdirs import user_data_dir
 from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
-from lbrynet.core.PaymentRateManager import PaymentRateManager
 from lbrynet.metadata.Metadata import Metadata
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet import reflector
@@ -102,7 +101,7 @@ class Publisher(object):
 
     def add_to_lbry_files(self, stream_hash):
         self.stream_hash = stream_hash
-        prm = PaymentRateManager(self.session.base_payment_rate_manager)
+        prm = self.session.payment_rate_manager
         d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
         d.addCallback(self.set_lbry_file)
         return d
@@ -161,4 +160,4 @@ class Publisher(object):
 
 
 def get_content_type(filename):
-    return mimetypes.guess_type(filename)[0]
+    return mimetypes.guess_type(filename)[0] or 'application/octet-stream'

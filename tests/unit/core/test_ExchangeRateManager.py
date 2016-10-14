@@ -1,5 +1,5 @@
 import mock
-from lbrynet.metadata import Metadata
+from lbrynet.metadata import Fee
 from lbrynet.lbrynet_daemon import ExchangeRateManager
 
 from twisted.trial import unittest
@@ -13,7 +13,7 @@ class FeeFormatTest(unittest.TestCase):
                 'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
             }
         }
-        fee = Metadata.FeeValidator(fee_dict)
+        fee = Fee.FeeValidator(fee_dict)
         self.assertEqual(10.0, fee['USD']['amount'])
 
 

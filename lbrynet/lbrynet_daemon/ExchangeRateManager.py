@@ -37,28 +37,34 @@ class MarketFeed(object):
         self._updater = LoopingCall(self._update_price)
 
     def _make_request(self):
-        r = requests.get(self.url, self.params)
-        return r.text
+        try:
+            r = requests.get(self.url, self.params)
+            return defer.succeed(r.text)
+        except Exception as err:
+            log.error(err)
+            return defer.fail(err)
 
     def _handle_response(self, response):
         return NotImplementedError
 
     def _subtract_fee(self, from_amount):
+        # increase amount to account for market fees
         return defer.succeed(from_amount / (1.0 - self.fee))
 
     def _save_price(self, price):
         log.debug("Saving price update %f for %s" % (price, self.market))
         self.rate = ExchangeRate(self.market, price, int(time.time()))
 
-    def _log_error(self):
-        log.warning("%s failed to update exchange rate information", self.name)
+    def _log_error(self, err):
+        log.error(err)
+        log.warning("There was a problem updating %s exchange rate information from %s", self.market, self.name)
 
     def _update_price(self):
-        d = defer.succeed(self._make_request())
+        d = self._make_request()
         d.addCallback(self._handle_response)
         d.addCallback(self._subtract_fee)
         d.addCallback(self._save_price)
-        d.addErrback(lambda _: self._log_error())
+        d.addErrback(self._log_error)
 
     def start(self):
         if not self._updater.running:
@@ -98,7 +104,11 @@ class GoogleBTCFeed(MarketFeed):
         )
 
     def _make_request(self):
-        return googlefinance.getQuotes('CURRENCY:USDBTC')[0]
+        try:
+            r = googlefinance.getQuotes('CURRENCY:USDBTC')[0]
+            return defer.succeed(r)
+        except Exception as err:
+            return defer.fail(err)
 
     def _handle_response(self, response):
         return float(response['LastTradePrice'])

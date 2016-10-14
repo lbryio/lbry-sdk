@@ -9,7 +9,8 @@ from lbrynet.core.client.DHTPeerFinder import DHTPeerFinder
 from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
 from lbrynet.core.utils import generate_id
-from lbrynet.core.PaymentRateManager import BasePaymentRateManager
+from lbrynet.core.PaymentRateManager import BasePaymentRateManager, NegotiatedPaymentRateManager
+from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
 from twisted.internet import threads, defer
 
 
@@ -26,9 +27,9 @@ class Session(object):
     the rate limiter, which attempts to ensure download and upload rates stay below a set maximum,
     and upnp, which opens holes in compatible firewalls so that remote peers can connect to this peer."""
     def __init__(self, blob_data_payment_rate, db_dir=None, lbryid=None, peer_manager=None, dht_node_port=None,
-                 known_dht_nodes=None, peer_finder=None, hash_announcer=None,
-                 blob_dir=None, blob_manager=None, peer_port=None, use_upnp=True,
-                 rate_limiter=None, wallet=None, dht_node_class=node.Node):
+                 known_dht_nodes=None, peer_finder=None, hash_announcer=None, blob_dir=None, blob_manager=None,
+                 peer_port=None, use_upnp=True, rate_limiter=None, wallet=None, dht_node_class=node.Node,
+                 blob_tracker_class=None, payment_rate_manager_class=None):
         """
         @param blob_data_payment_rate: The default payment rate for blob data
 
@@ -88,6 +89,9 @@ class Session(object):
         self.blob_dir = blob_dir
         self.blob_manager = blob_manager
 
+        self.blob_tracker = None
+        self.blob_tracker_class = blob_tracker_class or BlobAvailabilityTracker
+
         self.peer_port = peer_port
 
         self.use_upnp = use_upnp
@@ -103,6 +107,8 @@ class Session(object):
         self.dht_node = None
 
         self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
+        self.payment_rate_manager = None
+        self.payment_rate_manager_class = payment_rate_manager_class or NegotiatedPaymentRateManager
 
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
@@ -136,6 +142,8 @@ class Session(object):
     def shut_down(self):
         """Stop all services"""
         ds = []
+        if self.blob_manager is not None:
+            ds.append(defer.maybeDeferred(self.blob_tracker.stop))
         if self.dht_node is not None:
             ds.append(defer.maybeDeferred(self.dht_node.stop))
         if self.rate_limiter is not None:
@@ -253,15 +261,26 @@ class Session(object):
             if self.blob_dir is None:
                 self.blob_manager = TempBlobManager(self.hash_announcer)
             else:
-                self.blob_manager = DiskBlobManager(self.hash_announcer, self.blob_dir, self.db_dir)
+                self.blob_manager = DiskBlobManager(self.hash_announcer,
+                                                    self.blob_dir,
+                                                    self.db_dir)
+
+        if self.blob_tracker is None:
+            self.blob_tracker = self.blob_tracker_class(self.blob_manager,
+                                                        self.peer_finder,
+                                                        self.dht_node)
+        if self.payment_rate_manager is None:
+            self.payment_rate_manager = self.payment_rate_manager_class(self.base_payment_rate_manager,
+                                                                        self.blob_tracker)
 
         self.rate_limiter.start()
         d1 = self.blob_manager.setup()
         d2 = self.wallet.start()
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True, consumeErrors=True)
+        dl.addCallback(lambda _: self.blob_tracker.start())
 
-        dl.addErrback(lambda err: err.value.subFailure)
+        dl.addErrback(self._subfailure)
         return dl
 
     def _unset_upnp(self):
@@ -282,3 +301,9 @@ class Session(object):
         d = threads.deferToThread(threaded_unset_upnp)
         d.addErrback(lambda err: str(err))
         return d
+
+    def _subfailure(self, err):
+        log.error(err.getTraceback())
+        return err.value
+
+

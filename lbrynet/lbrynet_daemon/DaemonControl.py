@@ -14,9 +14,10 @@ from jsonrpc.proxy import JSONRPCProxy
 from lbrynet.core import log_support
 from lbrynet.lbrynet_daemon.auth.auth import PasswordChecker, HttpPasswordRealm
 from lbrynet.lbrynet_daemon.auth.util import initialize_api_key_file
-from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer, DaemonRequest
-from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_PORT, \
-                         UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
+from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
+from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
+from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_PORT
+from lbrynet.conf import UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
 from lbrynet.conf import DATA_DIR as log_dir
 
 if not os.path.isdir(log_dir):

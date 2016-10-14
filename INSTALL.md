@@ -41,7 +41,6 @@ On Ubuntu or Mint you can install the prerequisites by running
 It is strongly recommended to create a new virtualenv for LBRY
 
  ```
- sudo apt-get install
  virtualenv lbry-venv
  source lbry-venv/bin/activate
  ```

@@ -13,6 +13,7 @@ from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
 from collections import defaultdict, deque
 from zope.interface import implements
+from jsonschema import ValidationError
 from decimal import Decimal
 
 from lbryum import SimpleConfig, Network
@@ -338,7 +339,7 @@ class Wallet(object):
 
         try:
             metadata = Metadata(json.loads(result['value']))
-        except (ValueError, TypeError):
+        except ValidationError:
             return Failure(InvalidStreamInfoError(name))
 
         txid = result['txid']
@@ -421,7 +422,7 @@ class Wallet(object):
                 meta_ver = metadata.version
                 sd_hash = metadata['sources']['lbry_sd_hash']
                 d = self._save_name_metadata(name, txid, sd_hash)
-            except AssertionError:
+            except ValidationError:
                 metadata = claim['value']
                 meta_ver = "Non-compliant"
                 d = defer.succeed(None)
@@ -549,6 +550,9 @@ class Wallet(object):
         d = self._get_raw_tx(txid)
         d.addCallback(_decode)
         return d
+
+    def get_claim_metadata_for_sd_hash(self, sd_hash):
+        return self._get_claim_metadata_for_sd_hash(sd_hash)
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
@@ -1110,9 +1114,9 @@ class LBRYcrdWallet(Wallet):
 
 class LBRYumWallet(Wallet):
 
-    def __init__(self, db_dir):
+    def __init__(self, db_dir, config=None):
         Wallet.__init__(self, db_dir)
-        self.config = None
+        self._config = config
         self.network = None
         self.wallet = None
         self.cmd_runner = None
@@ -1131,7 +1135,7 @@ class LBRYumWallet(Wallet):
         network_start_d = defer.Deferred()
 
         def setup_network():
-            self.config = SimpleConfig({'auto_connect': True})
+            self.config = make_config(self._config)
             self.network = Network(self.config)
             alert.info("Loading the wallet...")
             return defer.succeed(self.network.start())
@@ -1499,3 +1503,9 @@ class LBRYcrdAddressQueryHandler(object):
             return defer.fail(Failure(ValueError("Expected but did not receive an address request")))
         else:
             return defer.succeed({})
+
+
+def make_config(config=None):
+    if config is None:
+        config = {}
+    return SimpleConfig(config) if type(config) == type({}) else config
