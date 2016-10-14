@@ -47,7 +47,7 @@ from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.core.Error import InsufficientFundsError, InvalidNameError
+from lbrynet.core.Error import InsufficientFundsError, InvalidNameError, UnknownNameError
 
 
 log = logging.getLogger(__name__)
@@ -253,7 +253,8 @@ class Daemon(AuthJSONRPCServer):
         self.platform = None
         self.first_run = None
         self.log_file = conf.settings.get_log_filename()
-        self.current_db_revision = 1
+        self.current_db_revision = 2
+        self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(utils.generate_id())
@@ -436,10 +437,13 @@ class Daemon(AuthJSONRPCServer):
         if not self.connected_to_internet:
             self.connection_problem = CONNECTION_PROBLEM_CODES[1]
 
-    def _add_to_pending_claims(self, name, txid):
-        log.info("Adding lbry://%s to pending claims, txid %s" % (name, txid))
-        self.pending_claims[name] = txid
-        return txid
+    # claim_out is dictionary containing 'txid' and 'nout' 
+    def _add_to_pending_claims(self, name, claim_out):
+        txid = claim_out['txid']
+        nout = claim_out['nout'] 
+        log.info("Adding lbry://%s to pending claims, txid %s nout %d" % (name, txid, nout))
+        self.pending_claims[name] = (txid,nout)
+        return claim_out
 
     def _check_pending_claims(self):
         # TODO: this was blatantly copied from jsonrpc_start_lbry_file. Be DRY.
@@ -453,15 +457,17 @@ class Daemon(AuthJSONRPCServer):
             d.addCallback(lambda l: _start_file(l) if l.stopped else "LBRY file was already running")
 
         def re_add_to_pending_claims(name):
-            txid = self.pending_claims.pop(name)
-            self._add_to_pending_claims(name, txid)
+            log.warning("Re-add %s to pending claims", name)
+            txid, nout = self.pending_claims.pop(name)
+            claim_out = {'txid':txid,'nout':nout} 
+            self._add_to_pending_claims(name, claim_out)
 
         def _process_lbry_file(name, lbry_file):
             # lbry_file is an instance of ManagedEncryptedFileDownloader or None
             # TODO: check for sd_hash in addition to txid
             ready_to_start = (
                 lbry_file and
-                self.pending_claims[name] == lbry_file.txid
+                self.pending_claims[name] == (lbry_file.txid,lbry_file.nout)
             )
             if ready_to_start:
                 _get_and_start_file(name)
@@ -673,41 +679,41 @@ class Daemon(AuthJSONRPCServer):
 
         return defer.succeed(True)
 
+    def _write_db_revision_file(self,version_num): 
+        with open(self.db_revision_file, mode='w') as db_revision:
+            db_revision.write(str(version_num))
+
     def _setup_data_directory(self):
+        old_revision = 1
         self.startup_status = STARTUP_STAGES[1]
         log.info("Loading databases...")
         if self.created_data_dir:
-            db_revision_path = os.path.join(self.db_dir, "db_revision")
-            with open(db_revision_path, mode='w') as db_revision:
-                db_revision.write(str(self.current_db_revision))
-            log.debug("Created the db revision file: %s", db_revision_path)
+            self._write_db_revision_file(self.current_db_revision)
+            log.debug("Created the db revision file: %s", self.db_revision_file)
         if not os.path.exists(self.blobfile_dir):
             os.mkdir(self.blobfile_dir)
             log.debug("Created the blobfile directory: %s", str(self.blobfile_dir))
+        if not os.path.exists(self.db_revision_file):             
+            log.warning("db_revision file not found. Creating it")
+            self._write_db_revision_file(old_revision)
 
     def _check_db_migration(self):
         old_revision = 1
-        db_revision_file = os.path.join(self.db_dir, "db_revision")
-        if os.path.exists(db_revision_file):
-            old_revision = int(open(db_revision_file).read().strip())
+        if os.path.exists(self.db_revision_file):
+            old_revision = int(open(self.db_revision_file).read().strip())
+
         if old_revision > self.current_db_revision:
             return defer.fail(Exception('This version of lbrynet is not compatible with the database'))
+
+        def update_version_file_and_print_success():
+            self._write_db_revision_file(self.current_db_revision)
+            log.info("Finished upgrading the databases.")
+
         if old_revision < self.current_db_revision:
             from lbrynet.db_migrator import dbmigrator
             log.info("Upgrading your databases...")
             d = threads.deferToThread(dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision)
-
-            def print_success(old_dirs):
-                success_string = "Finished upgrading the databases. It is now safe to delete the"
-                success_string += " following directories, if you feel like it. It won't make any"
-                success_string += " difference.\nAnyway here they are: "
-                for i, old_dir in enumerate(old_dirs):
-                    success_string += old_dir
-                    if i + 1 < len(old_dir):
-                        success_string += ", "
-                log.info(success_string)
-
-            d.addCallback(print_success)
+            d.addCallback(lambda _: update_version_file_and_print_success())
             return d
         return defer.succeed(True)
 
@@ -970,7 +976,6 @@ class Daemon(AuthJSONRPCServer):
                 if l.sd_hash == sd:
                     return defer.succeed(l)
             return defer.succeed(None)
-
         d = self._resolve_name(name)
         d.addCallback(_get_file)
 
@@ -1082,7 +1087,7 @@ class Daemon(AuthJSONRPCServer):
         elif self.startup_status[0] == LOADING_wallet_CODE:
             if self.wallet_type == LBRYUM_WALLET:
                 if self.session.wallet.blocks_behind_alert != 0:
-                    r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
+                    r['message'] %= str(self.session.wallet.blocks_behind_alert) + " blocks behind"
                     r['progress'] = self.session.wallet.catchup_progress
                 else:
                     r['message'] = "Catching up with the blockchain"
@@ -1390,6 +1395,9 @@ class Daemon(AuthJSONRPCServer):
 
             Args:
                 'name': name to look up, string, do not include lbry:// prefix
+                'txid': optional, if specified, look for claim with this txid
+                'nout': optional, if specified, look for claim with this nout
+ 
             Returns:
                 txid, amount, value, n, height
         """
@@ -1403,7 +1411,8 @@ class Daemon(AuthJSONRPCServer):
 
         name = p[FileID.NAME]
         txid = p.get('txid', None)
-        d = self.session.wallet.get_claim_info(name, txid)
+        nout = p.get('nout', None)
+        d = self.session.wallet.get_claim_info(name, txid, nout)
         d.addCallback(_convert_amount_to_float)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -1585,7 +1594,12 @@ class Daemon(AuthJSONRPCServer):
             'metadata': metadata dictionary
             optional 'fee'
         Returns:
-            Claim txid
+            'success' : True if claim was succesful , False otherwise                            
+            'reason' : if not succesful, give reason
+            'txid' : txid of resulting transaction if succesful
+            'nout' : nout of the resulting support claim if succesful
+            'fee' : fee paid for the claim transaction if succesful
+            'claimid' : claimid of the resulting transaction
         """
 
         def _set_address(address, currency, m):
@@ -1593,10 +1607,10 @@ class Daemon(AuthJSONRPCServer):
             m['fee'][currency]['address'] = address
             return m
 
-        def _reflect_if_possible(sd_hash, txid):
+        def _reflect_if_possible(sd_hash, claim_out):
             d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
             d.addCallback(self._reflect)
-            d.addCallback(lambda _: txid)
+            d.addCallback(lambda _: claim_out)
             return d
 
         name = p[FileID.NAME]
@@ -1647,9 +1661,9 @@ class Daemon(AuthJSONRPCServer):
         else:
             d.addCallback(lambda meta: self.session.wallet.claim_name(name, bid, meta))
             if sd_hash:
-                d.addCallback(lambda txid: _reflect_if_possible(sd_hash, txid))
+                d.addCallback(lambda claim_out: _reflect_if_possible(sd_hash, claim_out))
 
-        d.addCallback(lambda txid: self._add_to_pending_claims(name, txid))
+        d.addCallback(lambda claim_out: self._add_to_pending_claims(name, claim_out))
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
 
         return d
@@ -1658,15 +1672,18 @@ class Daemon(AuthJSONRPCServer):
     def jsonrpc_abandon_claim(self, p):
         """
         Abandon a name and reclaim credits from the claim
-
         Args:
             'txid': txid of claim, string
+            'nout': nout of claim, integer
         Return:
-            txid
+            success : True if succesful , False otherwise
+            reason : if not succesful, give reason
+            txid : txid of resulting transaction if succesful
+            fee : fee paid for the transaction if succesful 
         """
-
-        if 'txid' in p.keys():
+        if 'txid' in p.keys() and 'nout' in p.keys():
             txid = p['txid']
+            nout = p['nout']
         else:
             return server.failure
 
@@ -1675,7 +1692,7 @@ class Daemon(AuthJSONRPCServer):
             return self._render_response(x, OK_CODE)
 
         d = defer.Deferred()
-        d.addCallback(lambda _: self.session.wallet.abandon_name(txid))
+        d.addCallback(lambda _: self.session.wallet.abandon_claim(txid,nout))
         d.addCallback(_disp)
         d.callback(None)
 
@@ -1704,7 +1721,12 @@ class Daemon(AuthJSONRPCServer):
             'claim_id': claim id of claim to support
             'amount': amount to support by
         Return:
-            txid
+            success : True if succesful , False otherwise
+            reason : if not succesful, give reason
+            txid : txid of resulting transaction if succesful
+            nout : nout of the resulting support claim if succesful
+            fee : fee paid for the transaction if succesful 
+
         """
 
         name = p[FileID.NAME]
@@ -1780,7 +1802,7 @@ class Daemon(AuthJSONRPCServer):
 
 
         txid = p['txid']
-        d = self.session.wallet.get_tx_json(txid)
+        d = self.session.wallet.get_transaction(txid)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
@@ -2289,6 +2311,7 @@ def get_darwin_lbrycrdd_path():
     default = "./lbrycrdd"
     try:
         import Foundation
+        # TODO: require pyobjc and pyobjc-core on os x
     except ImportError:
         log.warning('Foundation module not installed, falling back to default lbrycrdd path')
         return default

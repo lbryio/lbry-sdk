@@ -1348,7 +1348,7 @@ class CreatePlainStreamDescriptor(CommandHandler):
             self.overwrite_old = True
         else:
             file_name = self.lbry_file.file_name
-        file_name = file_name + ".cryptsd"
+        file_name += ".cryptsd"
         return defer.succeed(file_name)
 
 
