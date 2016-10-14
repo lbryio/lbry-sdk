@@ -15,6 +15,8 @@ def verify_name_characters(name):
 
 
 class Metadata(StructuredDict):
+    current_version = '0.0.3'
+
     def __init__(self, metadata, migrate=True, target_version=None):
         self._versions = [
             ('0.0.1', metadata_schemas.VER_001, None),
