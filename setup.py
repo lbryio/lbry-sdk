@@ -40,6 +40,7 @@ requires = [
     'lbryum',
     'jsonrpc',
     'simplejson',
+    'jsonschema',
     'appdirs',
     'six==1.9.0',
     'base58',
