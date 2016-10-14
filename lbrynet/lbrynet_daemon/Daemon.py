@@ -667,10 +667,10 @@ class Daemon(jsonrpc.JSONRPC):
         if not self.connected_to_internet:
             self.connection_problem = CONNECTION_PROBLEM_CODES[1]
 
-    def _add_to_pending_claims(self, name, txid):
-        log.info("Adding lbry://%s to pending claims, txid %s" % (name, txid))
-        self.pending_claims[name] = txid
-        return txid
+    def _add_to_pending_claims(self, name, txid, nout):
+        log.info("Adding lbry://%s to pending claims, txid %s nOut %d" % (name, txid, nout))
+        self.pending_claims[name] = (txid,nout)
+        return txid, nout
 
     def _check_pending_claims(self):
         # TODO: this was blatantly copied from jsonrpc_start_lbry_file. Be DRY.
@@ -685,15 +685,15 @@ class Daemon(jsonrpc.JSONRPC):
 
         def re_add_to_pending_claims(name):
             log.warning("Re-add %s to pending claims", name)
-            txid = self.pending_claims.pop(name)
-            self._add_to_pending_claims(name, txid)
+            txid, nout = self.pending_claims.pop(name)
+            self._add_to_pending_claims(name, txid, nout)
 
         def _process_lbry_file(name, lbry_file):
             # lbry_file is an instance of ManagedEncryptedFileDownloader or None
             # TODO: check for sd_hash in addition to txid
             ready_to_start = (
                 lbry_file and
-                self.pending_claims[name] == lbry_file.txid
+                self.pending_claims[name] == (lbry_file.txid,lbry_file.nout)
             )
             if ready_to_start:
                 _get_and_start_file(name)
