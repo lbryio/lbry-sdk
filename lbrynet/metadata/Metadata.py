@@ -13,28 +13,27 @@ def verify_name_characters(name):
         assert c in NAME_ALLOWED_CHARSET, "Invalid character"
     return True
 
+def migrate_001_to_002(metadata):
+    metadata['ver'] = '0.0.2'
+    metadata['nsfw'] = False
+
+def migrate_002_to_003(metadata):
+    metadata['ver'] = '0.0.3'
+    if 'content-type' in metadata:
+        metadata['content_type'] = metadata['content-type']
+        del metadata['content-type']
+
 
 class Metadata(StructuredDict):
     current_version = '0.0.3'
 
-    def __init__(self, metadata, migrate=True, target_version=None):
-        self._versions = [
-            ('0.0.1', metadata_schemas.VER_001, None),
-            ('0.0.2', metadata_schemas.VER_002, self._migrate_001_to_002),
-            ('0.0.3', metadata_schemas.VER_003, self._migrate_002_to_003)
-        ]
+    _versions = [
+        ('0.0.1', metadata_schemas.VER_001, None),
+        ('0.0.2', metadata_schemas.VER_002, migrate_001_to_002),
+        ('0.0.3', metadata_schemas.VER_003, migrate_002_to_003)
+    ]
 
+    def __init__(self, metadata, migrate=True, target_version=None):
         starting_version = metadata.get('ver', '0.0.1')
 
         StructuredDict.__init__(self, metadata, starting_version, migrate, target_version)
-
-
-    def _migrate_001_to_002(self):
-        self['ver'] = '0.0.2'
-
-    def _migrate_002_to_003(self):
-        self['ver'] = '0.0.3'
-
-        if 'content-type' in self:
-            self['content_type'] = self['content-type']
-            del self['content-type']
