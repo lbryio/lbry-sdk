@@ -162,7 +162,7 @@ class Daemon(jsonrpc.JSONRPC):
         self.wallet_type = wallet_type
         self.first_run = None
         self.log_file = lbrynet_log
-        self.current_db_revision = 1
+        self.current_db_revision = 2
         self.run_server = True
         self.session = None
         self.exchange_rate_manager = ExchangeRateManager()
@@ -684,6 +684,7 @@ class Daemon(jsonrpc.JSONRPC):
             d.addCallback(lambda l: _start_file(l) if l.stopped else "LBRY file was already running")
 
         def re_add_to_pending_claims(name):
+            log.warning("Re-add %s to pending claims", name)
             txid = self.pending_claims.pop(name)
             self._add_to_pending_claims(name, txid)
 
@@ -951,6 +952,7 @@ class Daemon(jsonrpc.JSONRPC):
         return defer.succeed(True)
 
     def _setup_data_directory(self):
+        old_revision = 1
         self.startup_status = STARTUP_STAGES[1]
         log.info("Loading databases...")
         if self.created_data_dir:
@@ -962,27 +964,28 @@ class Daemon(jsonrpc.JSONRPC):
             os.mkdir(self.blobfile_dir)
             log.debug("Created the blobfile directory: %s", str(self.blobfile_dir))
 
+        if not os.path.exists(os.path.join(self.db_dir, "db_revision")):
+            log.warning("db_revision file not found")
+            db_revision = open(os.path.join(self.db_dir, "db_revision"), mode='w')
+            db_revision.write(str(old_revision))
+            db_revision.close()
+
     def _check_db_migration(self):
         old_revision = 1
         db_revision_file = os.path.join(self.db_dir, "db_revision")
         if os.path.exists(db_revision_file):
             old_revision = int(open(db_revision_file).read().strip())
+
+        def update_version_file_and_print_success():
+            with open(os.path.join(self.db_dir, "db_revision"), mode='w') as db_revision:
+                db_revision.write(str(self.current_db_revision))
+            log.info("Finished upgrading the databases.")
+
         if old_revision < self.current_db_revision:
             from lbrynet.db_migrator import dbmigrator
             log.info("Upgrading your databases...")
             d = threads.deferToThread(dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision)
-
-            def print_success(old_dirs):
-                success_string = "Finished upgrading the databases. It is now safe to delete the"
-                success_string += " following directories, if you feel like it. It won't make any"
-                success_string += " difference.\nAnyway here they are: "
-                for i, old_dir in enumerate(old_dirs):
-                    success_string += old_dir
-                    if i + 1 < len(old_dir):
-                        success_string += ", "
-                log.info(success_string)
-
-            d.addCallback(print_success)
+            d.addCallback(lambda _: update_version_file_and_print_success())
             return d
         return defer.succeed(True)
 
@@ -1228,7 +1231,6 @@ class Daemon(jsonrpc.JSONRPC):
                 if l.sd_hash == sd:
                     return defer.succeed(l)
             return defer.succeed(None)
-
         d = self._resolve_name(name)
         d.addCallback(_get_file)
 
@@ -1466,7 +1468,7 @@ class Daemon(jsonrpc.JSONRPC):
         elif self.startup_status[0] == LOADING_WALLET_CODE:
             if self.wallet_type == 'lbryum':
                 if self.session.wallet.blocks_behind_alert != 0:
-                    r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
+                    r['message'] %= str(self.session.wallet.blocks_behind_alert) + " blocks behind"
                     r['progress'] = self.session.wallet.catchup_progress
                 else:
                     r['message'] = "Catching up with the blockchain"
@@ -1781,7 +1783,8 @@ class Daemon(jsonrpc.JSONRPC):
 
         name = p['name']
         txid = p.get('txid', None)
-        d = self.session.wallet.get_claim_info(name, txid)
+        nout = p.get('nout', None)
+        d = self.session.wallet.get_claim_info(name, txid, nout)
         d.addCallback(_convert_amount_to_float)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -2165,7 +2168,7 @@ class Daemon(jsonrpc.JSONRPC):
 
 
         txid = p['txid']
-        d = self.session.wallet.get_tx_json(txid)
+        d = self.session.wallet.get_transaction(txid)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
@@ -2608,6 +2611,7 @@ class Daemon(jsonrpc.JSONRPC):
                 return 0.0
 
         name = p['name']
+        log.info("Get availability %s", name)
 
         d = self._resolve_name(name, force_refresh=True)
         d.addCallback(get_sd_hash)
@@ -2663,6 +2667,7 @@ def get_darwin_lbrycrdd_path():
     default = "./lbrycrdd"
     try:
         import Foundation
+        # TODO: require pyobjc and pyobjc-core on os x
     except ImportError:
         log.warning('Foundation module not installed, falling back to default lbrycrdd path')
         return default
@@ -2795,8 +2800,9 @@ class _ResolveNameHelper(object):
     def get_deferred(self):
         if self.need_fresh_stream():
             log.info("Resolving stream info for lbry://%s", self.name)
-            d = self.wallet.get_stream_info_for_name(self.name)
-            d.addCallbacks(self._cache_stream_info, lambda _: defer.fail(UnknownNameError))
+            d = self._get_stream_info()
+            d.addErrback(lambda _: self._confirm_should_remove())
+            return d
         else:
             log.debug("Returning cached stream info for lbry://%s", self.name)
             d = defer.succeed(self.name_data['claim_metadata'])
@@ -2804,7 +2810,7 @@ class _ResolveNameHelper(object):
 
     @property
     def name_data(self):
-        return self.daemon.name_cache[self.name]
+        return self.daemon.name_cache.get(self.name, False)
 
     @property
     def wallet(self):
@@ -2813,26 +2819,72 @@ class _ResolveNameHelper(object):
     def now(self):
         return self.daemon._get_long_count_timestamp()
 
-    def _add_txid(self, txid):
-        self.name_data['txid'] = txid
-        return defer.succeed(None)
+    def _add_txid(self):
+        def _save(txid):
+            assert txid is not None
+            self.name_data['txid'] = txid
+            return txid
+
+        d = self.wallet.get_txid_for_name(self.name)
+        d.addCallback(_save)
+        return d
+
+    def _confirm_should_remove(self):
+        def _remove_if_should(lbry_file):
+            if lbry_file:
+                d = _get_and_check_tx(lbry_file.txid)
+                d.addCallback(lambda r: None if not r else self._remove_abandoned(lbry_file))
+                return d
+            return defer.succeed(None)
+
+        def _get_and_check_tx(txid):
+            d = self.wallet.get_transaction(txid)
+            d.addCallbacks(_check_tx, lambda _: False)
+            return d
+
+        def _check_tx(tx):
+            confirms = tx['confirmations']
+            if confirms > 6:
+                return True
+            return False
+        lbry_file = next(lf for lf in self.daemon.lbry_file_manager.lbry_files if lf.uri == self.name)
+        d = _remove_if_should(lbry_file)
+        return d
+
+    def _remove_abandoned(self, lbry_file):
+        log.warning("Claim for lbry://%s was abandoned, deleting lbry file", self.name)
+        d = self.daemon._delete_lbry_file(lbry_file, False)
+        return d
 
     def _cache_stream_info(self, stream_info):
+        assert stream_info
         self.daemon.name_cache[self.name] = {
-            'claim_metadata': stream_info,
-            'timestamp': self.now()
+                'claim_metadata': stream_info,
+                'timestamp': self.now()
         }
-        d = self.wallet.get_txid_for_name(self.name)
-        d.addCallback(self._add_txid)
-        d.addCallback(lambda _: self.daemon._update_claim_cache())
+        d = self.daemon._update_claim_cache()
         d.addCallback(lambda _: self.name_data['claim_metadata'])
         return d
+
+    def get_my_valid_claim(self, claims, name):
+        for claim in claims:
+            if claim['name'] == name and not claim['is spent'] and not claim.get('supported_claimid', False):
+                return claim['txid']
+        return False
 
     def need_fresh_stream(self):
         return self.force_refresh or not self.is_in_cache() or self.is_cached_name_expired()
 
     def is_in_cache(self):
         return self.name in self.daemon.name_cache
+
+    def _get_stream_info(self):
+        d = self.wallet.get_name_claims()
+        d.addCallback(lambda claims: self.get_my_valid_claim(claims, self.name))
+        d.addCallback(lambda r: self._add_txid() if not r else r)
+        d.addCallbacks(lambda r: self.wallet.get_stream_info_for_name(self.name) if r else UnknownNameError)
+        d.addCallback(self._cache_stream_info)
+        return d
 
     def is_cached_name_expired(self):
         time_in_cache = self.now() - self.name_data['timestamp']
