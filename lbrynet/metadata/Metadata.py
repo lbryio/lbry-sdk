@@ -1,7 +1,6 @@
 import logging
 
 from lbrynet.metadata.StructuredDict import StructuredDict
-from lbrynet.conf import SOURCE_TYPES
 import metadata_schemas
 
 log = logging.getLogger(__name__)
