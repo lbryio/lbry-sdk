@@ -32,6 +32,19 @@ class StructuredDict(dict):
         if migrate:
             self.migrate(target_version)
 
+    def _upgrade_version_range(self, start_version, end_version):
+        after_starting_version = False
+        for version, schema, migration in self._versions:
+            if not after_starting_version:
+                if version == self.version:
+                    after_starting_version = True
+                continue
+
+            yield version, schema, migration
+
+            if end_version and version == end_version:
+                break
+
     def validate(self, version):
         jsonschema.validate(self, self._schemas[version])
 
@@ -39,19 +52,11 @@ class StructuredDict(dict):
         if target_version:
             assert self._versions.index(target_version) > self.versions.index(self.version), "Current version is above target version"
 
-        above_starting_version = False
-        for version, schema, migration in self._versions:
-            if not above_starting_version:
-                if version == self.version:
-                    above_starting_version = True
-                continue
-
-            migration()
+        for version, schema, migration in self._upgrade_version_range(self.version, target_version):
+            migration(self)
             try:
                 self.validate(version)
             except ValidationError as e:
                 raise ValidationError, "Could not migrate to version %s due to validation error: %s" % (version, e.message)
 
             self.version = version
-            if target_version and version == target_version:
-                break
