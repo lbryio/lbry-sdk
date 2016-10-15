@@ -27,7 +27,8 @@ if not os.path.isfile(lbrycrdd_path_conf):
     f.write(lbrycrdd_path)
     f.close()
 
-from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer, DaemonRequest
+from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
+from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
 from lbrynet.conf import UI_ADDRESS
 
