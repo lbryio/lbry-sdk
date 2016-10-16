@@ -268,6 +268,7 @@ elif platform == WINDOWS:
                      'requests_futures',
                      'seccure',
                      'simplejson',
+                     'jsonschema',
                      'six',
                      'aes',
                      'txjsonrpc',
