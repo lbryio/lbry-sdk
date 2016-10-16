@@ -2,6 +2,7 @@
 
 import sys
 import os
+import site
 from lbrynet import __version__
 
 LINUX = 1
@@ -133,6 +134,10 @@ elif platform == WINDOWS:
 
     # Allow virtualenv to find distutils of base python installation
     distutils_path = os.path.join(os.path.dirname(opcode.__file__), 'distutils')
+
+    schemas = os.path.join(site.getsitepackages()[1], "jsonschema", "schemas")
+    onlyfiles = [f for f in os.listdir(schemas) if os.path.isfile(os.path.join(schemas, f))]
+    zipincludes = [(os.path.join(schemas, f), os.path.join("jsonschema", "schemas", f)) for f in onlyfiles]
 
     def find_data_file(filename):
         if getattr(sys, 'frozen', False):
@@ -268,6 +273,7 @@ elif platform == WINDOWS:
                      'requests_futures',
                      'seccure',
                      'simplejson',
+                     'jsonschema',
                      'six',
                      'aes',
                      'txjsonrpc',
@@ -291,7 +297,8 @@ elif platform == WINDOWS:
                           (os.path.join(wordlist_path, 'portuguese.txt'), os.path.join('wordlist', 'portuguese.txt')),
                           (os.path.join(wordlist_path, 'spanish.txt'), os.path.join('wordlist', 'spanish.txt'))
                           ],
-        'namespace_packages': ['zope', 'google']}
+        'namespace_packages': ['zope', 'google'],
+        "zip_includes": zipincludes}
 
     tray_app = Executable(
         script=os.path.join(app_dir, 'LBRYWin32App.py'),

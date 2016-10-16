@@ -90,6 +90,8 @@ C:\Python27\Scripts\pip.exe install base58==0.2.2
 
 C:\Python27\Scripts\pip.exe install googlefinance==0.7
 
+C:\Python27\Scripts\pip.exe install jsonschema==2.5.1
+
 C:\Python27\Scripts\pip.exe install git+https://github.com/lbryio/lbryum.git
 
 cd C:\projects\lbry
