@@ -18,6 +18,7 @@ from decimal import Decimal
 
 from lbryum import SimpleConfig, Network
 from lbryum.lbrycrd import COIN
+from lbryum.util import InvalidPassword
 import lbryum.wallet
 from lbryum.commands import known_commands, Commands
 from lbryum.transaction import Transaction
@@ -448,7 +449,7 @@ class Wallet(object):
             meta_for_return[k] = new_metadata[k]
         return defer.succeed(Metadata(meta_for_return))
 
-    def claim_name(self, name, bid, m):
+    def claim_name(self, name, bid, m, password = None):
         def _save_metadata(txid, metadata):
             log.info("Saving metadata for claim %s" % txid)
             d = self._save_name_metadata(name, txid, metadata['sources']['lbry_sd_hash'])
@@ -458,14 +459,14 @@ class Wallet(object):
         def _claim_or_update(claim, metadata, _bid):
             if not claim:
                 log.info("No claim yet, making a new one")
-                return self._send_name_claim(name, metadata, _bid)
+                return self._send_name_claim(name, metadata, _bid, password)
             if not claim['is_mine']:
                 log.info("Making a contesting claim")
-                return self._send_name_claim(name, metadata, _bid)
+                return self._send_name_claim(name, metadata, _bid, password)
             else:
                 log.info("Updating over own claim")
                 d = self.update_metadata(metadata, claim['value'])
-                d.addCallback(lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'], claim['txid'], new_metadata, _bid))
+                d.addCallback(lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'], claim['txid'], new_metadata, _bid, password))
                 return d
 
         meta = Metadata(m)
@@ -475,7 +476,7 @@ class Wallet(object):
         d.addCallback(lambda txid: _save_metadata(txid, meta))
         return d
 
-    def abandon_name(self, txid):
+    def abandon_name(self, txid, password = None):
         d1 = self.get_new_address()
         d2 = self.get_claims_from_tx(txid)
 
@@ -499,7 +500,7 @@ class Wallet(object):
             if results[0][0] and results[1][0]:
                 address = results[0][1]
                 amount = float(results[1][1])
-                return self._send_abandon(txid, address, amount)
+                return self._send_abandon(txid, address, amount, password)
             elif results[0][0] is False:
                 return defer.fail(Failure(ValueError("Couldn't get a new address")))
             else:
@@ -508,8 +509,8 @@ class Wallet(object):
         dl.addCallback(abandon)
         return dl
 
-    def support_claim(self, name, claim_id, amount):
-        return self._support_claim(name, claim_id, amount)
+    def support_claim(self, name, claim_id, amount, password = None):
+        return self._support_claim(name, claim_id, amount, password)
 
     def get_tx(self, txid):
         d = self._get_raw_tx(txid)
@@ -717,6 +718,12 @@ class Wallet(object):
     def get_name_claims(self):
         return defer.fail(NotImplementedError())
 
+    def is_encrypted(self): 
+        return defer.fail(NotImplementedError())
+
+    def encrypt(self, new_password, old_password=None):
+        return defer.fail(NotImplementedError())
+ 
     def _get_claims_for_name(self, name):
         return defer.fail(NotImplementedError())
 
@@ -732,16 +739,16 @@ class Wallet(object):
     def _get_decoded_tx(self, raw_tx):
         return defer.fail(NotImplementedError())
 
-    def _send_abandon(self, txid, address, amount):
+    def _send_abandon(self, txid, address, amount, password = None):
         return defer.fail(NotImplementedError())
 
     def _send_name_claim_update(self, name, claim_id, txid, value, amount):
         return defer.fail(NotImplementedError())
 
-    def _support_claim(self, name, claim_id, amount):
+    def _support_claim(self, name, claim_id, amount, password = None):
         return defer.fail(NotImplementedError())
 
-    def _do_send_many(self, payments_to_send):
+    def _do_send_many(self, payments_to_send, password = None):
         return defer.fail(NotImplementedError())
 
     def _get_value_for_name(self, name):
@@ -1300,10 +1307,10 @@ class LBRYumWallet(Wallet):
         func = getattr(self._get_cmd_runner(), cmd.name)
         return threads.deferToThread(func, txid)
 
-    def _send_name_claim(self, name, val, amount):
+    def _send_name_claim(self, name, val, amount, password = None):
         def send_claim(address):
             cmd = known_commands['claimname']
-            func = getattr(self._get_cmd_runner(), cmd.name)
+            func = getattr(self._get_cmd_runner(password), cmd.name)
             return threads.deferToThread(func, address, amount, name, json.dumps(val))
         d = self.get_new_address()
         d.addCallback(send_claim)
@@ -1315,13 +1322,13 @@ class LBRYumWallet(Wallet):
         func = getattr(self._get_cmd_runner(), cmd.name)
         return threads.deferToThread(func, name)
 
-    def _send_name_claim_update(self, name, claim_id, txid, value, amount):
+    def _send_name_claim_update(self, name, claim_id, txid, value, amount, password = None):
         def send_claim_update(address):
             decoded_claim_id = claim_id.decode('hex')[::-1]
             metadata = json.dumps(value)
             log.info("updateclaim %s %s %f %s %s '%s'", txid, address, amount, name, decoded_claim_id.encode('hex'), metadata)
             cmd = known_commands['updateclaim']
-            func = getattr(self._get_cmd_runner(), cmd.name)
+            func = getattr(self._get_cmd_runner(password), cmd.name)
             return threads.deferToThread(func, txid, address, amount, name, decoded_claim_id, metadata)
 
         d = self.get_new_address()
@@ -1339,18 +1346,18 @@ class LBRYumWallet(Wallet):
             decoded_tx['vout'].append(out)
         return decoded_tx
 
-    def _send_abandon(self, txid, address, amount):
+    def _send_abandon(self, txid, address, amount, password = None):
         log.info("Abandon %s %s %f" % (txid, address, amount))
         cmd = known_commands['abandonclaim']
-        func = getattr(self._get_cmd_runner(), cmd.name)
+        func = getattr(self._get_cmd_runner(password), cmd.name)
         d = threads.deferToThread(func, txid, address, amount)
         d.addCallback(self._broadcast_transaction)
         return d
 
-    def _support_claim(self, name, claim_id, amount):
+    def _support_claim(self, name, claim_id, amount, password = None):
         def _send_support(d, a, n, c):
             cmd = known_commands['supportclaim']
-            func = getattr(self._get_cmd_runner(), cmd.name)
+            func = getattr(self._get_cmd_runner(password), cmd.name)
             d = threads.deferToThread(func, d, a, n, c)
             return d
         d = self.get_new_address()
@@ -1370,7 +1377,7 @@ class LBRYumWallet(Wallet):
         d.addCallback(self._save_wallet)
         return d
 
-    def _do_send_many(self, payments_to_send):
+    def _do_send_many(self, payments_to_send, password = None):
         log.warning("Doing send many. payments to send: %s", str(payments_to_send))
         cmd = known_commands['paytomanyandsend']
         func = getattr(self._get_cmd_runner(), cmd.name)
@@ -1409,10 +1416,29 @@ class LBRYumWallet(Wallet):
         func = getattr(self._get_cmd_runner(), cmd.name)
         return threads.deferToThread(func, wallet)
 
+    def is_encrypted(self): 
+        return defer.succeed(self.wallet.use_encryption) 
+
+    def encrypt_wallet(self, new_password, old_password=None):
+        if old_password is not None: 
+            try:
+                self.wallet.check_password(old_password) 
+            except InvalidPassword:
+                defer.fail(Exception("Old password is incorrect"))
+                 
+        self.wallet.update_password(old_password,new_password)
+        
+        d = threads.deferToThread(self._save_wallet)
+        return defer.succeed(True)
+
+
     def _save_wallet(self, val):
         d = threads.deferToThread(self.wallet.storage.write)
         d.addCallback(lambda _: val)
         return d
+ 
+
+
 
 
 class LBRYcrdAddressRequester(object):
