@@ -2,8 +2,7 @@ import sys
 import json
 import argparse
 
-from lbrynet.conf import API_CONNECTION_STRING
-from jsonrpc.proxy import JSONRPCProxy
+from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 
 help_msg = "Usage: lbrynet-cli method json-args\n" \
              + "Examples: " \
@@ -36,10 +35,11 @@ def get_params_from_kwargs(params):
 
 
 def main():
-    api = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+    api = LBRYAPIClient.config()
 
     try:
-        s = api.is_running()
+        status = api.daemon_status()
+        assert status.get('code', False) == "started"
     except:
         print "lbrynet-daemon isn't running"
         sys.exit(1)
@@ -72,10 +72,10 @@ def main():
     if meth in api.help():
         try:
             if params:
-                r = api.call(meth, params)
+                result = LBRYAPIClient.config(service=meth)(params)
             else:
-                r = api.call(meth)
-            print json.dumps(r, sort_keys=True)
+                result = LBRYAPIClient.config(service=meth)()
+            print json.dumps(result, sort_keys=True)
         except:
             print "Something went wrong, here's the usage for %s:" % meth
             print api.help({'function': meth})

@@ -1,27 +1,24 @@
 import argparse
-import logging
 import logging.handlers
 import os
 import webbrowser
 import sys
 import socket
-from appdirs import user_data_dir
 
-from twisted.web import server
-from twisted.internet import reactor, defer
+from twisted.web import server, guard
+from twisted.internet import defer, reactor
+from twisted.cred import portal
+
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.core import log_support
+from lbrynet.lbrynet_daemon.auth.auth import PasswordChecker, HttpPasswordRealm
+from lbrynet.lbrynet_daemon.auth.util import initialize_api_key_file
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
-from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_PORT, \
-                         UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
-
-# TODO: stop it!
-if sys.platform != "darwin":
-    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-else:
-    log_dir = user_data_dir("LBRY")
+from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_PORT
+from lbrynet.conf import UI_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
+from lbrynet.conf import DATA_DIR as log_dir
 
 if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
@@ -117,7 +114,14 @@ def start():
         if args.launchui:
             d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
 
-        lbrynet_server = server.Site(lbry.root)
+        pw_path = os.path.join(log_dir, ".api_keys")
+        initialize_api_key_file(pw_path)
+        checker = PasswordChecker.load_file(pw_path)
+        realm = HttpPasswordRealm(lbry.root)
+        portal_to_realm = portal.Portal(realm, [checker, ])
+        factory = guard.BasicCredentialFactory('Login to lbrynet api')
+        protected_resource = guard.HTTPAuthSessionWrapper(portal_to_realm, [factory, ])
+        lbrynet_server = server.Site(protected_resource)
         lbrynet_server.requestFactory = DaemonRequest
         reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
         reactor.run()

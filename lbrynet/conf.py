@@ -2,7 +2,24 @@
 Some network wide and also application specific parameters
 """
 import os
+import sys
+from appdirs import user_data_dir
 
+LINUX = 1
+DARWIN = 2
+WINDOWS = 3
+
+if sys.platform.startswith("linux"):
+    platform = LINUX
+elif sys.platform.startswith("darwin"):
+    platform = DARWIN
+elif sys.platform.startswith("win"):
+    platform = WINDOWS
+
+if platform is LINUX:
+    DATA_DIR = os.path.join(os.path.expanduser("~"), ".lbrynet")
+else:
+    DATA_DIR = user_data_dir("LBRY")
 
 IS_DEVELOPMENT_VERSION = False
 
@@ -28,7 +45,6 @@ KNOWN_DHT_NODES = [('104.236.42.182', 4000),
 POINTTRADER_SERVER = 'http://ec2-54-187-192-68.us-west-2.compute.amazonaws.com:2424'
 #POINTTRADER_SERVER = 'http://127.0.0.1:2424'
 
-
 SEARCH_SERVERS = ["http://lighthouse1.lbry.io:50005",
                     "http://lighthouse2.lbry.io:50005",
                     "http://lighthouse3.lbry.io:50005"]
@@ -48,6 +64,9 @@ if os.name == "nt":
 else:
     ICON_PATH = "app.icns"
 APP_NAME = "LBRY"
+
+ORIGIN = "http://%s:%i" % (API_INTERFACE, API_PORT)
+REFERER = "http://%s:%i/" % (API_INTERFACE, API_PORT)
 API_CONNECTION_STRING = "http://%s:%i/%s" % (API_INTERFACE, API_PORT, API_ADDRESS)
 UI_ADDRESS = "http://%s:%i" % (API_INTERFACE, API_PORT)
 PROTOCOL_PREFIX = "lbry"
