@@ -44,7 +44,7 @@ class Manager(object):
         self.analytics_api.track(heartbeat)
 
     def _update_tracked_metrics(self):
-        should_send, value = self.track.summarize(constants.BLOB_BYTES_UPLOADED)
+        should_send, value = self.track.summarize_and_reset(constants.BLOB_BYTES_UPLOADED)
         if should_send:
             event = self.events_generator.metric_observed(constants.BLOB_BYTES_UPLOADED, value)
             self.analytics_api.track(event)

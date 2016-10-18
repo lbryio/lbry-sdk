@@ -9,7 +9,7 @@ class Track(object):
     def add_observation(self, metric, value):
         self.data[metric].append(value)
 
-    def summarize(self, metric, op=sum):
+    def summarize_and_reset(self, metric, op=sum):
         """Apply `op` on the current values for `metric`.
 
         This operation also resets the metric.
