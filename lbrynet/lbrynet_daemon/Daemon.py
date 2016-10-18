@@ -336,14 +336,6 @@ class Daemon(jsonrpc.JSONRPC):
 
         self.set_wallet_attributes()
 
-        if os.name != 'nt':
-            # TODO: are we still using this?
-            lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
-            if not os.path.isfile(lbrycrdd_path_conf):
-                f = open(lbrycrdd_path_conf, "w")
-                f.write(str(self.lbrycrdd_path))
-                f.close()
-
         self.created_data_dir = False
         if not os.path.exists(self.db_dir):
             os.mkdir(self.db_dir)
@@ -396,6 +388,13 @@ class Daemon(jsonrpc.JSONRPC):
             self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
+        if os.name != 'nt':
+            # TODO: are we still using this?
+            lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
+            if not os.path.isfile(lbrycrdd_path_conf):
+                f = open(lbrycrdd_path_conf, "w")
+                f.write(str(self.lbrycrdd_path))
+                f.close()
 
     def _responseFailed(self, err, call):
         log.debug(err.getTraceback())
