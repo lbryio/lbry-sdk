@@ -1,8 +1,6 @@
-
-
 class LoopingCallManager(object):
-    def __init__(self):
-        self.calls = {}
+    def __init__(self, calls=None):
+        self.calls = calls or {}
 
     def register_looping_call(self, name, call):
         assert name not in self.calls, '{} is already registered'.format(name)
