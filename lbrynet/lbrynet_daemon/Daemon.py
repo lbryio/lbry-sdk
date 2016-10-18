@@ -29,8 +29,6 @@ from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import analytics
 from lbrynet.core.looping_call_manager import LoopingCallManager
-from lbrynet.core.PaymentRateManager import PaymentRateManager
-from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError
@@ -782,8 +780,12 @@ class Daemon(jsonrpc.JSONRPC):
 
     def _setup_query_handlers(self):
         handlers = [
-            BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
-                                      self.session.payment_rate_manager),
+            BlobRequestHandlerFactory(
+                self.session.blob_manager,
+                self.session.wallet,
+                self.session.payment_rate_manager,
+                self.analytics_manager.track
+            ),
             self.session.wallet.get_wallet_info_query_handler_factory(),
         ]
 
