@@ -49,14 +49,14 @@ def is_valid_hashcharacter(char):
 
 
 def is_valid_blobhash(blobhash):
-    """
+    """Checks whether the blobhash is the correct length and contains only
+    valid characters (0-9, a-f)
+
     @param blobhash: string, the blobhash to check
 
-    @return: Whether the blobhash is the correct length and contains only valid characters (0-9, a-f)
+    @return: True/False
     """
-    if len(blobhash) != blobhash_length:
-        return False
-    return all(is_valid_hashcharacter(l) for l in blobhash)
+    return len(blobhash) == blobhash_length and all(is_valid_hashcharacter(l) for l in blobhash)
 
 
 def version_is_greater_than(a, b):
