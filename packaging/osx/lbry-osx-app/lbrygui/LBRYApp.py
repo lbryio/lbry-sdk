@@ -31,22 +31,17 @@ from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
 from lbrynet.conf import UI_ADDRESS
+from lbrynet.core import utils
+
 
 if platform.mac_ver()[0] >= "10.10":
     from LBRYNotify import LBRYNotify
 
 log = logging.getLogger(__name__)
 
-REMOTE_SERVER = "www.google.com"
-
 
 def test_internet_connection():
-    try:
-        host = socket.gethostbyname(REMOTE_SERVER)
-        s = socket.create_connection((host, 80), 2)
-        return True
-    except:
-        return False
+    return utils.check_connection()
 
 
 class LBRYDaemonApp(AppKit.NSApplication):

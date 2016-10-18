@@ -5,7 +5,6 @@ import os
 import platform
 import random
 import re
-import socket
 import string
 import subprocess
 import sys
@@ -129,8 +128,6 @@ OK_CODE = 200
 # TODO add login credentials in a conf file
 # TODO alert if your copy of a lbry file is out of date with the name record
 
-
-REMOTE_SERVER = "www.google.com"
 
 
 class Parameters(object):
@@ -599,13 +596,7 @@ class Daemon(jsonrpc.JSONRPC):
         self._events = analytics.Events(context, base58.b58encode(self.lbryid), self._session_id)
 
     def _check_network_connection(self):
-        try:
-            host = socket.gethostbyname(REMOTE_SERVER)
-            s = socket.create_connection((host, 80), 2)
-            self.connected_to_internet = True
-        except:
-            log.info("Internet connection not working")
-            self.connected_to_internet = False
+        self.connected_to_internet = utils.check_connection()
 
     def _check_lbrynet_connection(self):
         def _log_success():
