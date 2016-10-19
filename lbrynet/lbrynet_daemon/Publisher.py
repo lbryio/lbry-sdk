@@ -30,6 +30,7 @@ class Publisher(object):
         self.verified = False
         self.lbry_file = None
         self.txid = None
+        self.nout = None
         self.stream_hash = None
         reflector_server = random.choice(settings.reflector_servers)
         self.reflector_server, self.reflector_port = reflector_server[0], reflector_server[1]
@@ -38,8 +39,11 @@ class Publisher(object):
     def start(self, name, file_path, bid, metadata):
         log.info('Starting publish for %s', name)
         def _show_result():
-            log.info("Success! Published %s --> lbry://%s txid: %s", self.file_name, self.publish_name, self.txid)
-            return defer.succeed(self.txid)
+            log.info("Success! Published %s --> lbry://%s txid: %s nout: %d", self.file_name, self.publish_name, self.txid, self.nout)
+            out = {}
+            out['nout'] = self.nout
+            out['txid'] = self.txid 
+            return defer.succeed(out)
 
         self.publish_name = name
         self.file_path = file_path
@@ -122,12 +126,18 @@ class Publisher(object):
         self._update_metadata()
         m = Metadata(self.metadata)
 
-        def set_tx_hash(txid):
-            log.debug('Name claimed using txid: %s', txid)
+        def set_txid_nout(claim_out):
+            if not claim_out['success']:
+                msg = 'Failed to claim name:{}'.format(claim_out['reason'])
+                defer.fail(Exception(msg))
+            txid = claim_out['txid']
+            nout = claim_out['nout'] 
+            log.debug('Name claimed using txid: %s, nout: %d', txid, nout)
             self.txid = txid
+            self.nout = nout 
 
         d = self.wallet.claim_name(self.publish_name, self.bid_amount, m)
-        d.addCallback(set_tx_hash)
+        d.addCallback(set_txid_nout)
         return d
 
     def _update_metadata(self):

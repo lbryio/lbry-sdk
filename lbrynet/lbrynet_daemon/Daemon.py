@@ -474,10 +474,13 @@ class Daemon(AuthJSONRPCServer):
         if not self.connected_to_internet:
             self.connection_problem = CONNECTION_PROBLEM_CODES[1]
 
-    def _add_to_pending_claims(self, name, txid, nout):
-        log.info("Adding lbry://%s to pending claims, txid %s nOut %d" % (name, txid, nout))
+    # claim_out is dictionary containing 'txid' and 'nout' 
+    def _add_to_pending_claims(self, name, claim_out):
+        txid = claim_out['txid']
+        nout = claim_out['nout'] 
+        log.info("Adding lbry://%s to pending claims, txid %s nout %d" % (name, txid, nout))
         self.pending_claims[name] = (txid,nout)
-        return txid, nout
+        return claim_out
 
     def _check_pending_claims(self):
         # TODO: this was blatantly copied from jsonrpc_start_lbry_file. Be DRY.
@@ -493,7 +496,8 @@ class Daemon(AuthJSONRPCServer):
         def re_add_to_pending_claims(name):
             log.warning("Re-add %s to pending claims", name)
             txid, nout = self.pending_claims.pop(name)
-            self._add_to_pending_claims(name, txid, nout)
+            claim_out = {'txid':txid,'nout':nout} 
+            self._add_to_pending_claims(name, claim_out)
 
         def _process_lbry_file(name, lbry_file):
             # lbry_file is an instance of ManagedEncryptedFileDownloader or None
@@ -1441,6 +1445,9 @@ class Daemon(AuthJSONRPCServer):
 
             Args:
                 'name': name to look up, string, do not include lbry:// prefix
+                'txid': optional, if specified, look for claim with this txid
+                'nout': optional, if specified, look for claim with this nout
+ 
             Returns:
                 txid, amount, value, n, height
         """
@@ -1673,7 +1680,12 @@ class Daemon(AuthJSONRPCServer):
             'metadata': metadata dictionary
             optional 'fee'
         Returns:
-            Claim txid
+            'success' : True if claim was succesful , False otherwise                            
+            'reason' : if not succesful, give reason
+            'txid' : txid of resulting transaction if succesful
+            'nout' : nout of the resulting support claim if succesful
+            'fee' : fee paid for the claim transaction if succesful
+            'claimid' : claimid of the resulting transaction
         """
 
         def _set_address(address, currency, m):
@@ -1684,7 +1696,7 @@ class Daemon(AuthJSONRPCServer):
         def _reflect_if_possible(sd_hash, txid):
             d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
             d.addCallback(self._reflect)
-            d.addCallback(lambda _: txid)
+            d.addCallback(lambda _: claim_out)
             return d
 
         name = p[FileID.NAME]
@@ -1735,9 +1747,9 @@ class Daemon(AuthJSONRPCServer):
         else:
             d.addCallback(lambda meta: self.session.wallet.claim_name(name, bid, meta))
             if sd_hash:
-                d.addCallback(lambda txid: _reflect_if_possible(sd_hash, txid))
+                d.addCallback(lambda claim_out: _reflect_if_possible(sd_hash, claim_out))
 
-        d.addCallback(lambda txid: self._add_to_pending_claims(name, txid))
+        d.addCallback(lambda claim_out: self._add_to_pending_claims(name, claim_out))
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
 
         return d
@@ -1746,15 +1758,18 @@ class Daemon(AuthJSONRPCServer):
     def jsonrpc_abandon_claim(self, p):
         """
         Abandon a name and reclaim credits from the claim
-
         Args:
             'txid': txid of claim, string
+            'nout': nout of claim, integer
         Return:
-            txid
+            success : True if succesful , False otherwise
+            reason : if not succesful, give reason
+            txid : txid of resulting transaction if succesful
+            fee : fee paid for the transaction if succesful 
         """
-
-        if 'txid' in p.keys():
+        if 'txid' in p.keys() and 'nout' in p.keys():
             txid = p['txid']
+            nout = p['nout']
         else:
             return server.failure
 
@@ -1763,7 +1778,7 @@ class Daemon(AuthJSONRPCServer):
             return self._render_response(x, OK_CODE)
 
         d = defer.Deferred()
-        d.addCallback(lambda _: self.session.wallet.abandon_name(txid))
+        d.addCallback(lambda _: self.session.wallet.abandon_claim(txid,nout))
         d.addCallback(_disp)
         d.callback(None)
 
@@ -1792,7 +1807,12 @@ class Daemon(AuthJSONRPCServer):
             'claim_id': claim id of claim to support
             'amount': amount to support by
         Return:
-            txid
+            success : True if succesful , False otherwise
+            reason : if not succesful, give reason
+            txid : txid of resulting transaction if succesful
+            nout : nout of the resulting support claim if succesful
+            fee : fee paid for the transaction if succesful 
+
         """
 
         name = p[FileID.NAME]
