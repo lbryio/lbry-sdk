@@ -22,7 +22,7 @@ elif sys.platform.startswith("win"):
 else:
     platform = LINUX
     default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
-    default_lbryum_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+    default_data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
     default_lbryum_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
 
 ADJUSTABLE_SETTINGS = {
