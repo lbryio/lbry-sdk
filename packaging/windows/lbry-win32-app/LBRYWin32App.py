@@ -18,6 +18,7 @@ try:
 except ImportError:
     import win32gui
 
+from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
@@ -36,16 +37,9 @@ log = logging.getLogger(__name__)
 if getattr(sys, 'frozen', False) and os.name == "nt":
     os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
 
-REMOTE_SERVER = "www.google.com"
-
 
 def test_internet_connection():
-    try:
-        host = socket.gethostbyname(REMOTE_SERVER)
-        s = socket.create_connection((host, 80), 2)
-        return True
-    except:
-        return False
+    return utils.check_connection()
 
 
 def non_string_iterable(obj):

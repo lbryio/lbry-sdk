@@ -5,7 +5,6 @@ import os
 import platform
 import random
 import re
-import socket
 import string
 import subprocess
 import sys
@@ -129,8 +128,6 @@ OK_CODE = 200
 # TODO add login credentials in a conf file
 # TODO alert if your copy of a lbry file is out of date with the name record
 
-
-REMOTE_SERVER = "www.google.com"
 
 
 class Parameters(object):
@@ -336,14 +333,6 @@ class Daemon(jsonrpc.JSONRPC):
 
         self.set_wallet_attributes()
 
-        if os.name != 'nt':
-            # TODO: are we still using this?
-            lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
-            if not os.path.isfile(lbrycrdd_path_conf):
-                f = open(lbrycrdd_path_conf, "w")
-                f.write(str(self.lbrycrdd_path))
-                f.close()
-
         self.created_data_dir = False
         if not os.path.exists(self.db_dir):
             os.mkdir(self.db_dir)
@@ -396,6 +385,13 @@ class Daemon(jsonrpc.JSONRPC):
             self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
+        if os.name != 'nt':
+            # TODO: are we still using this?
+            lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
+            if not os.path.isfile(lbrycrdd_path_conf):
+                f = open(lbrycrdd_path_conf, "w")
+                f.write(str(self.lbrycrdd_path))
+                f.close()
 
     def _responseFailed(self, err, call):
         log.debug(err.getTraceback())
@@ -600,13 +596,7 @@ class Daemon(jsonrpc.JSONRPC):
         self._events = analytics.Events(context, base58.b58encode(self.lbryid), self._session_id)
 
     def _check_network_connection(self):
-        try:
-            host = socket.gethostbyname(REMOTE_SERVER)
-            s = socket.create_connection((host, 80), 2)
-            self.connected_to_internet = True
-        except:
-            log.info("Internet connection not working")
-            self.connected_to_internet = False
+        self.connected_to_internet = utils.check_connection()
 
     def _check_lbrynet_connection(self):
         def _log_success():

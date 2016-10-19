@@ -4,7 +4,6 @@ import logging.handlers
 import os
 import webbrowser
 import sys
-import socket
 from appdirs import user_data_dir
 
 from twisted.web import server
@@ -12,6 +11,7 @@ from twisted.internet import reactor, defer
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.core import log_support
+from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import API_CONNECTION_STRING, API_INTERFACE, API_PORT, \
@@ -30,19 +30,12 @@ lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 
-REMOTE_SERVER = "www.google.com"
-
 if getattr(sys, 'frozen', False) and os.name == "nt":
     os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
 
 
 def test_internet_connection():
-    try:
-        host = socket.gethostbyname(REMOTE_SERVER)
-        s = socket.create_connection((host, 80), 2)
-        return True
-    except:
-        return False
+    return utils.check_connection()
 
 
 def stop():
