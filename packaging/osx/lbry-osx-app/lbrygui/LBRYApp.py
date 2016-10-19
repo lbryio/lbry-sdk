@@ -74,9 +74,8 @@ class LBRYDaemonApp(AppKit.NSApplication):
                 LBRYNotify("LBRY needs an internet connection to start, try again when one is available")
             sys.exit(0)
 
-
         lbry = DaemonServer()
-        d = lbry.start()
+        d = lbry.start(use_authentication=False)
         d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
         lbrynet_server = server.Site(lbry.root)
         lbrynet_server.requestFactory = DaemonRequest

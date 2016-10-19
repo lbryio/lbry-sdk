@@ -2,8 +2,7 @@
 
 import os
 from setuptools import setup
-from lbrynet.conf import PROTOCOL_PREFIX, APP_NAME, ICON_PATH
-import sys
+from lbrynet.conf import APP_NAME, ICON_PATH
 
 APP = [os.path.join('lbrygui', 'main.py')]
 DATA_FILES = []

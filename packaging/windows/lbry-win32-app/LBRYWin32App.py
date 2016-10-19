@@ -285,7 +285,7 @@ def main(lbry_name=None):
     systray_thread.start()
 
     lbry = DaemonServer()
-    d = lbry.start()
+    d = lbry.start(use_authentication=False)
     d.addCallback(lambda _: LBRYURIHandler.open_address(lbry_name))
     lbrynet_server = server.Site(lbry.root)
     lbrynet_server.requestFactory = DaemonRequest
