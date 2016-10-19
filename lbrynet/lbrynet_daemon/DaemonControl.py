@@ -92,7 +92,7 @@ def start():
                         action='store_true',
                         help='enable more debug output for the console')
 
-    parser.set_defaults(branch=False, launchui=True, logtoconsole=False, quiet=False, useauth=False)
+    parser.set_defaults(branch=False, launchui=True, logtoconsole=False, quiet=False, useauth=settings.USE_AUTH_HTTP)
     args = parser.parse_args()
 
     log_support.configure_file_handler(lbrynet_log)
@@ -143,7 +143,7 @@ def start():
         if args.launchui:
             d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
 
-        if args.useauth:
+        if settings.USE_AUTH_HTTP:
             log.info("Using authenticated API")
             pw_path = os.path.join(settings.DATA_DIR, ".api_keys")
             initialize_api_key_file(pw_path)

@@ -65,13 +65,13 @@ ADJUSTABLE_SETTINGS = {
     'DEFAULT_UI_BRANCH': 'master',
     'DATA_DIR': default_data_dir,
     'LBRYUM_WALLET_DIR': default_lbryum_dir,
+    'USE_AUTH_HTTP': False,
     'sd_download_timeout': 3,
     'max_key_fee': {'USD': {'amount': 25.0, 'address': ''}}
 }
 
 
 class ApplicationSettings(object):
-    USE_AUTH_HTTP = True
     MAX_HANDSHAKE_SIZE = 2**16
     MAX_REQUEST_SIZE = 2**16
     MAX_BLOB_REQUEST_SIZE = 2**16
