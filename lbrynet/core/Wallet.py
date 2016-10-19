@@ -366,7 +366,7 @@ class Wallet(object):
                 return defer.succeed(claim_id)
             else:
                 d = self.get_claims_from_tx(txid)
-                d.addCallback(lambda claims: next(c for c in claims if c['name'] == name))
+                d.addCallback(lambda claims: next(c for c in claims if c['name'] == name and c['nOut'] == nout))
                 d.addCallback(lambda claim: self._update_claimid(claim['claimId'], name, txid, claim['nOut']))
                 return d
 
