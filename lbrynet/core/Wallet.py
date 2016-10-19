@@ -307,12 +307,12 @@ class Wallet(object):
         d.addCallback(lambda r: None if 'txid' not in r else r['txid'])
         return d
 
-    def get_stream_info_from_txid(self, name, txid):
+    def get_stream_info_from_txid(self, name, txid, nout):
         d = self.get_claims_from_tx(txid)
 
         def get_claim_for_name(claims):
             for claim in claims:
-                if claim['name'] == name:
+                if claim['name'] == name and claim['nOut'] == nout:
                     claim['txid'] = txid
                     return claim
             return Failure(UnknownNameError(name))
