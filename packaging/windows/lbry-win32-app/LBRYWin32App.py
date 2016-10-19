@@ -18,9 +18,9 @@ try:
 except ImportError:
     import win32gui
 
-from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer, DaemonRequest
-from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
-from lbrynet.conf import UI_ADDRESS, API_CONNECTION_STRING, LOG_FILE_NAME
+from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
+from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
+from lbrynet import settings
 from packaging.uri_handler.LBRYURIHandler import LBRYURIHandler
 
 
@@ -29,7 +29,7 @@ data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
 if not os.path.isdir(data_dir):
     os.mkdir(data_dir)
 
-lbrynet_log = os.path.join(data_dir, LOG_FILE_NAME)
+lbrynet_log = os.path.join(data_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 if getattr(sys, 'frozen', False) and os.name == "nt":
@@ -257,7 +257,7 @@ def main(lbry_name=None):
         return SysTrayIcon(icon, hover_text, menu_options, on_quit=stop)
 
     def openui_(sender):
-        webbrowser.open(UI_ADDRESS)
+        webbrowser.open(settings.UI_ADDRESS)
 
     def replyToApplicationShouldTerminate_():
         try:
@@ -269,11 +269,11 @@ def main(lbry_name=None):
         replyToApplicationShouldTerminate_()
 
     if getattr(sys, 'frozen', False) and os.name == "nt":
-        icon = os.path.join(os.path.dirname(sys.executable), ICON_PATH, 'lbry16.ico')
+        icon = os.path.join(os.path.dirname(sys.executable), settings.ICON_PATH, 'lbry16.ico')
     else:
-        icon = os.path.join(ICON_PATH, 'lbry16.ico')
+        icon = os.path.join(settings.ICON_PATH, 'lbry16.ico')
 
-    hover_text = APP_NAME
+    hover_text = settings.APP_NAME
     menu_options = (('Open', icon, openui_),)
 
     if not test_internet_connection():
@@ -290,14 +290,14 @@ def main(lbry_name=None):
     lbrynet_server = server.Site(lbry.root)
     lbrynet_server.requestFactory = DaemonRequest
     try:
-        reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
+        reactor.listenTCP(settings.API_PORT, lbrynet_server, interface=settings.API_INTERFACE)
     except error.CannotListenError:
         log.info('Daemon already running, exiting app')
         sys.exit(1)
     reactor.run()
 
 if __name__ == '__main__':
-    lbry_daemon = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+    lbry_daemon = JSONRPCProxy.from_url(settings.API_CONNECTION_STRING)
 
     try:
         daemon_running = lbry_daemon.is_running()

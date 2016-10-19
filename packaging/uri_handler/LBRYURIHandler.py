@@ -5,7 +5,7 @@ import sys
 from time import sleep
 
 from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
-from lbrynet.conf import UI_ADDRESS
+from lbrynet import settings
 
 
 class LBRYURIHandler(object):
@@ -69,9 +69,9 @@ class LBRYURIHandler(object):
     @staticmethod
     def open_address(lbry_name):
         if lbry_name == "lbry" or lbry_name == "" or lbry_name is None:
-            webbrowser.open(UI_ADDRESS)
+            webbrowser.open(settings.UI_ADDRESS)
         else:
-            webbrowser.open(UI_ADDRESS + "/?show=" + lbry_name)
+            webbrowser.open(settings.UI_ADDRESS + "/?show=" + lbry_name)
 
 
 def main(args):

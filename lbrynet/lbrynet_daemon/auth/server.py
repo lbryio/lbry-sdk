@@ -7,7 +7,7 @@ from twisted.internet import defer
 from txjsonrpc import jsonrpclib
 
 from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError, SubhandlerError
-from lbrynet.conf import API_INTERFACE, REFERER, ORIGIN
+from lbrynet import settings
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
 
@@ -81,8 +81,9 @@ class AuthJSONRPCServer(AuthorizedBase):
     NOT_FOUND = 8001
     FAILURE = 8002
 
-    def __init__(self):
+    def __init__(self, use_authentication=True):
         AuthorizedBase.__init__(self)
+        self._use_authentication = use_authentication
         self.allowed_during_startup = []
         self.sessions = {}
 
@@ -95,18 +96,19 @@ class AuthJSONRPCServer(AuthorizedBase):
         session = request.getSession()
         session_id = session.uid
 
-        # if this is a new session, send a new secret and set the expiration, otherwise, session.touch()
-        if self._initialize_session(session_id):
-            def expire_session():
-                self._unregister_user_session(session_id)
-            session.startCheckingExpiration()
-            session.notifyOnExpire(expire_session)
-            message = "OK"
-            request.setResponseCode(self.OK)
-            self._set_headers(request, message, True)
-            self._render_message(request, message)
-            return server.NOT_DONE_YET
-        session.touch()
+        if self._use_authentication:
+            # if this is a new session, send a new secret and set the expiration, otherwise, session.touch()
+            if self._initialize_session(session_id):
+                def expire_session():
+                    self._unregister_user_session(session_id)
+                session.startCheckingExpiration()
+                session.notifyOnExpire(expire_session)
+                message = "OK"
+                request.setResponseCode(self.OK)
+                self._set_headers(request, message, True)
+                self._render_message(request, message)
+                return server.NOT_DONE_YET
+            session.touch()
 
         request.content.seek(0, 0)
         content = request.content.read()
@@ -127,16 +129,17 @@ class AuthJSONRPCServer(AuthorizedBase):
             return server.failure
 
         reply_with_next_secret = False
-        if function_name in self.authorized_functions:
-            try:
-                self._verify_token(session_id, parsed, token)
-            except InvalidAuthenticationToken:
-                log.warning("API validation failed")
-                request.setResponseCode(self.UNAUTHORIZED)
-                request.finish()
-                return server.NOT_DONE_YET
-            self._update_session_secret(session_id)
-            reply_with_next_secret = True
+        if self._use_authentication:
+            if function_name in self.authorized_functions:
+                try:
+                    self._verify_token(session_id, parsed, token)
+                except InvalidAuthenticationToken:
+                    log.warning("API validation failed")
+                    request.setResponseCode(self.UNAUTHORIZED)
+                    request.finish()
+                    return server.NOT_DONE_YET
+                self._update_session_secret(session_id)
+                reply_with_next_secret = True
 
         try:
             function = self._get_jsonrpc_method(function_name)
@@ -161,9 +164,9 @@ class AuthJSONRPCServer(AuthorizedBase):
         @param session_id:
         @return: secret
         """
-        token = APIKey.new()
+        log.info("Register api session")
+        token = APIKey.new(seed=session_id)
         self.sessions.update({session_id: token})
-        return token
 
     def _unregister_user_session(self, session_id):
         log.info("Unregister API session")
@@ -173,7 +176,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         log.debug(err.getTraceback())
 
     def _set_headers(self, request, data, update_secret=False):
-        request.setHeader("Access-Control-Allow-Origin", API_INTERFACE)
+        request.setHeader("Access-Control-Allow-Origin", settings.API_INTERFACE)
         request.setHeader("Content-Type", "text/json")
         request.setHeader("Content-Length", str(len(data)))
         if update_secret:
@@ -187,10 +190,10 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _check_headers(self, request):
         origin = request.getHeader("Origin")
         referer = request.getHeader("Referer")
-        if origin not in [None, ORIGIN]:
+        if origin not in [None, settings.ORIGIN]:
             log.warning("Attempted api call from %s", origin)
             return False
-        if referer is not None and not referer.startswith(REFERER):
+        if referer is not None and not referer.startswith(settings.REFERER):
             log.warning("Attempted api call from %s", referer)
             return False
         return True
@@ -211,8 +214,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _initialize_session(self, session_id):
         if not self.sessions.get(session_id, False):
-            log.info("Initializing new api session")
-            self.sessions.update({session_id: APIKey.new(seed=session_id, name=session_id)})
+            self._register_user_session(session_id)
             return True
         return False
 
@@ -242,7 +244,6 @@ class AuthJSONRPCServer(AuthorizedBase):
                 log.error(err.message)
                 raise SubhandlerError
 
-
     def _callback_render(self, result, request, id, version, auth_required=False):
         result_for_return = result if not isinstance(result, dict) else result['result']
 
@@ -271,5 +272,3 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
-
-

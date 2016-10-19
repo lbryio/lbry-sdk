@@ -6,6 +6,8 @@ import json
 import yaml
 import datetime
 
+from lbrynet import settings
+from lbrynet.conf import ADJUSTABLE_SETTINGS
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 blobhash_length = get_lbry_hash_obj().digest_size * 2  # digest_size is in bytes, and blob hashes are hex encoded
@@ -63,21 +65,20 @@ settings_encoders = {
 
 def load_settings(path):
     ext = os.path.splitext(path)[1]
-    f = open(path, 'r')
-    data = f.read()
-    f.close()
+    with open(path, 'r') as settings_file:
+        data = settings_file.read()
     decoder = settings_decoders.get(ext, False)
     assert decoder is not False, "Unknown settings format .%s" % ext
     return decoder(data)
 
 
-def save_settings(path, settings):
+def save_settings(path):
+    to_save = {k: v for k, v in settings.__dict__.iteritems() if k in ADJUSTABLE_SETTINGS}
     ext = os.path.splitext(path)[1]
     encoder = settings_encoders.get(ext, False)
     assert encoder is not False, "Unknown settings format .%s" % ext
-    f = open(path, 'w')
-    f.write(encoder(settings))
-    f.close()
+    with open(path, 'w') as settings_file:
+        settings_file.write(encoder(to_save))
 
 
 def today():

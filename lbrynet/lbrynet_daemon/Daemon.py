@@ -23,40 +23,37 @@ from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
 from jsonschema import ValidationError
 
-from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
+
+from lbrynet import __version__ as lbrynet_version
+from lbrynet import settings as lbrynet_settings
 from lbrynet import analytics
+from lbrynet import reflector
+from lbrynet.metadata.Metadata import Metadata, verify_name_characters
+from lbrynet.metadata.Fee import FeeValidator
+from lbrynet.core import log_support
+from lbrynet.core import utils
+from lbrynet.core.utils import generate_id
+from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
+from lbrynet.core.Session import Session
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError
+from lbrynet.core.PTCWallet import PTCWallet
+from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.lbrynet_console.Settings import Settings
+from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory, EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbrynet_daemon.UIManager import UIManager
 from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
-from lbrynet.metadata.Metadata import Metadata, verify_name_characters
-from lbrynet.core import log_support
-from lbrynet.core import utils
-from lbrynet.core.utils import generate_id
-from lbrynet.lbrynet_console.Settings import Settings
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS
-from lbrynet.conf import KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, DEFAULT_WALLET
-from lbrynet.conf import DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME
-from lbrynet.conf import LOG_POST_URL, LOG_FILE_NAME, REFLECTOR_SERVERS, SEARCH_SERVERS
-from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT, DEFAULT_UI_BRANCH
-from lbrynet.conf import DEFAULT_TIMEOUT
-from lbrynet import conf
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
-from lbrynet.core.Session import Session
-from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
-from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager, TempEncryptedFileMetadataManager
-from lbrynet import reflector
 
 
 # TODO: this code snippet is everywhere. Make it go away
@@ -68,7 +65,7 @@ else:
 if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
-lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
+lbrynet_log = os.path.join(log_dir, lbrynet_settings.LOG_FILE_NAME)
 
 log = logging.getLogger(__name__)
 
@@ -135,225 +132,81 @@ class Daemon(AuthJSONRPCServer):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
-    def __init__(self, root, wallet_type=None):
-        AuthJSONRPCServer.__init__(self)
+    def __init__(self, root, use_authentication=lbrynet_settings.USE_AUTH_HTTP):
+        AuthJSONRPCServer.__init__(self, use_authentication)
+        reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
+
         self.allowed_during_startup = ['is_running', 'is_first_run',
                                        'get_time_behind_blockchain', 'stop',
                                        'daemon_status', 'get_start_notice',
                                        'version', 'get_search_servers']
-        reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
+        last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
+        lbrynet_settings.update(last_version)
+        self.db_dir = lbrynet_settings.DATA_DIR
+        self.download_directory = lbrynet_settings.download_directory
+        self.created_data_dir = False
+        if not os.path.exists(self.db_dir):
+            os.mkdir(self.db_dir)
+            self.created_data_dir = True
+        if lbrynet_settings.BLOBFILES_DIR == "blobfiles":
+            self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
+        else:
+            log.info("Using non-default blobfiles directory: %s", lbrynet_settings.BLOBFILES_DIR)
+            self.blobfile_dir = lbrynet_settings.BLOBFILES_DIR
+
+        self.run_on_startup = lbrynet_settings.run_on_startup
+        self.data_rate = lbrynet_settings.data_rate
+        self.max_key_fee = lbrynet_settings.max_key_fee
+        self.max_upload = lbrynet_settings.max_upload
+        self.max_download = lbrynet_settings.max_download
+        self.upload_log = lbrynet_settings.upload_log
+        self.search_timeout = lbrynet_settings.search_timeout
+        self.download_timeout = lbrynet_settings.download_timeout
+        self.max_search_results = lbrynet_settings.max_search_results
+        self.run_reflector_server = lbrynet_settings.run_reflector_server
+        self.wallet_type = lbrynet_settings.WALLET
+        self.delete_blobs_on_remove = lbrynet_settings.delete_blobs_on_remove
+        self.peer_port = lbrynet_settings.peer_port
+        self.reflector_port = lbrynet_settings.reflector_port
+        self.dht_node_port = lbrynet_settings.dht_node_port
+        self.use_upnp = lbrynet_settings.use_upnp
+        self.start_lbrycrdd = lbrynet_settings.start_lbrycrdd
+        self.cache_time = lbrynet_settings.cache_time
+        self.startup_scripts = lbrynet_settings.startup_scripts
 
         self.startup_status = STARTUP_STAGES[0]
         self.startup_message = None
         self.announced_startup = False
         self.connected_to_internet = True
         self.connection_problem = None
-        self.query_handlers = {}
         self.git_lbrynet_version = None
         self.git_lbryum_version = None
         self.ui_version = None
         self.ip = None
-        # TODO: this is confusing to set here, and then to be reset below.
-        self.wallet_type = wallet_type
         self.first_run = None
         self.log_file = lbrynet_log
         self.current_db_revision = 1
-        self.run_server = True
         self.session = None
-        self.exchange_rate_manager = ExchangeRateManager()
-        self.lighthouse_client = LighthouseClient()
-        self.waiting_on = {}
-        self.streams = {}
-        self.pending_claims = {}
-        self.known_dht_nodes = KNOWN_DHT_NODES
         self.first_run_after_update = False
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(generate_id())
+        self.lbryid = None
 
-        if os.name == "nt":
-            from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
-            default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
-            self.db_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrynet")
-            try:
-                os.makedirs(self.db_dir)
-            except OSError:
-                if not os.path.isdir(self.db_dir):
-                    raise
-        elif sys.platform == "darwin":
-            default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
-            self.db_dir = user_data_dir("LBRY")
-        else:
-            default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
-            self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-            try:
-                if not os.path.isdir(default_download_directory):
-                    os.mkdir(default_download_directory)
-            except:
-                log.info("Couldn't make download directory, using home")
-                default_download_directory = os.path.expanduser("~")
-
-        old_conf_path = os.path.join(self.db_dir, 'daemon_settings.json')
-        self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.yml')
-
-        if os.path.isfile(old_conf_path):
-            log.info("Migrating .json config file to .yml")
-            tmp_settings = utils.load_settings(old_conf_path)
-            utils.save_settings(self.daemon_conf, tmp_settings)
-            try:
-                os.remove(old_conf_path)
-                log.info("Cleaned up old config file")
-            except:
-                log.warning("Failed to remove old config file")
-
-        self.default_settings = {
-            'run_on_startup': False,
-            'data_rate': MIN_BLOB_DATA_PAYMENT_RATE,
-            'max_key_fee': DEFAULT_MAX_KEY_FEE,
-            'download_directory': default_download_directory,
-            'max_upload': 0.0,
-            'max_download': 0.0,
-            'upload_log': True,
-            'search_timeout': DEFAULT_SEARCH_TIMEOUT,
-            'download_timeout': DEFAULT_TIMEOUT,
-            'max_search_results': DEFAULT_MAX_SEARCH_RESULTS,
-            'wallet_type': DEFAULT_WALLET,
-            'delete_blobs_on_remove': True,
-            'peer_port': 3333,
-            'dht_node_port': 4444,
-            'reflector_port': 5566,
-            'use_upnp': True,
-            'start_lbrycrdd': True,
-            'requested_first_run_credits': False,
-            'run_reflector_server': False,
-            'cache_time': DEFAULT_CACHE_TIME,
-            'startup_scripts': [],
-            'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}
-        }
-
-        if os.path.isfile(self.daemon_conf):
-            loaded_settings = utils.load_settings(self.daemon_conf)
-            missing_settings = {}
-            removed_settings = {}
-            for k in self.default_settings.keys():
-                if k not in loaded_settings.keys():
-                    missing_settings[k] = self.default_settings[k]
-            for k in loaded_settings.keys():
-                if not k in self.default_settings.keys():
-                    log.info("Removing unused setting: " + k + " with value: " + str(loaded_settings[k]))
-                    removed_settings[k] = loaded_settings[k]
-                    del loaded_settings[k]
-            for k in missing_settings.keys():
-                log.info("Adding missing setting: " + k + " with default value: " + str(missing_settings[k]))
-                loaded_settings[k] = missing_settings[k]
-            if loaded_settings['wallet_type'] != self.wallet_type and self.wallet_type:
-                loaded_settings['wallet_type'] = self.wallet_type
-
-            if missing_settings or removed_settings:
-                log.info("Updated and loaded lbrynet-daemon configuration")
-            else:
-                log.info("Loaded lbrynet-daemon configuration")
-            self.session_settings = loaded_settings
-        else:
-            missing_settings = self.default_settings
-            log.info("Writing default settings : " + json.dumps(self.default_settings) + " --> " + str(self.daemon_conf))
-            self.session_settings = self.default_settings
-
-        if 'last_version' in missing_settings.keys():
-            self.session_settings['last_version'] = None
-
-        if self.session_settings['last_version'] != self.default_settings['last_version']:
-            self.session_settings['last_version'] = self.default_settings['last_version']
-            self.first_run_after_update = True
-            log.info("First run after update")
-            log.info("lbrynet %s --> %s" % (self.session_settings['last_version']['lbrynet'], self.default_settings['last_version']['lbrynet']))
-            log.info("lbryum %s --> %s" % (self.session_settings['last_version']['lbryum'], self.default_settings['last_version']['lbryum']))
-            if "0.4.5" == self.default_settings['last_version']['lbrynet']:
-                log.info("Lowering name cache time")
-                self.session_settings['cache_time'] = DEFAULT_CACHE_TIME
-
-        utils.save_settings(self.daemon_conf, self.session_settings)
-
-        self.run_on_startup = self.session_settings['run_on_startup']
-        self.data_rate = self.session_settings['data_rate']
-        self.max_key_fee = self.session_settings['max_key_fee']
-        self.download_directory = self.session_settings['download_directory']
-        self.max_upload = self.session_settings['max_upload']
-        self.max_download = self.session_settings['max_download']
-        self.upload_log = self.session_settings['upload_log']
-        self.search_timeout = self.session_settings['search_timeout']
-        self.download_timeout = self.session_settings['download_timeout']
-        self.max_search_results = self.session_settings['max_search_results']
-        self.run_reflector_server = self.session_settings['run_reflector_server']
-        ####
-        #
-        # Ignore the saved wallet type. Some users will have their wallet type
-        # saved as lbrycrd and we want wallets to be lbryum unless explicitly
-        # set on the command line to be lbrycrd.
-        #
-        # if self.session_settings['wallet_type'] in WALLET_TYPES and not wallet_type:
-        #     self.wallet_type = self.session_settings['wallet_type']
-        #     log.info("Using wallet type %s from config" % self.wallet_type)
-        # else:
-        #     self.wallet_type = wallet_type
-        #     self.session_settings['wallet_type'] = wallet_type
-        #     log.info("Using wallet type %s specified from command line" % self.wallet_type)
-        #
-        # Instead, if wallet is not set on the command line, default to the default wallet
-        #
-        if wallet_type:
-            log.info("Using wallet type %s specified from command line", wallet_type)
-            self.wallet_type = wallet_type
-        else:
-            log.info("Using the default wallet type %s", DEFAULT_WALLET)
-            self.wallet_type = DEFAULT_WALLET
-        if self.wallet_type not in conf.WALLET_TYPES:
-            raise ValueError('Wallet Type {} is not valid'.format(wallet_type))
-        #
-        ####
-        self.delete_blobs_on_remove = self.session_settings['delete_blobs_on_remove']
-        self.peer_port = self.session_settings['peer_port']
-        self.reflector_port = self.session_settings['reflector_port']
-        self.dht_node_port = self.session_settings['dht_node_port']
-        self.use_upnp = self.session_settings['use_upnp']
-        self.start_lbrycrdd = self.session_settings['start_lbrycrdd']
-        self.requested_first_run_credits = self.session_settings['requested_first_run_credits']
-        self.cache_time = self.session_settings['cache_time']
-        self.startup_scripts = self.session_settings['startup_scripts']
-
-        if os.path.isfile(os.path.join(self.db_dir, "stream_info_cache.json")):
-            f = open(os.path.join(self.db_dir, "stream_info_cache.json"), "r")
-            self.name_cache = json.loads(f.read())
-            f.close()
-            log.info("Loaded claim info cache")
-        else:
-            self.name_cache = {}
-
-        self.set_wallet_attributes()
-
-        if os.name != 'nt':
-            # TODO: are we still using this?
-            lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
-            if not os.path.isfile(lbrycrdd_path_conf):
-                f = open(lbrycrdd_path_conf, "w")
-                f.write(str(self.lbrycrdd_path))
-                f.close()
-
-        self.created_data_dir = False
-        if not os.path.exists(self.db_dir):
-            os.mkdir(self.db_dir)
-            self.created_data_dir = True
-
-        self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
         self.wallet_user = None
         self.wallet_password = None
-
+        self.query_handlers = {}
+        self.waiting_on = {}
+        self.streams = {}
+        self.pending_claims = {}
+        self.name_cache = {}
+        self.set_wallet_attributes()
         self.internet_connection_checker = LoopingCall(self._check_network_connection)
         self.version_checker = LoopingCall(self._check_remote_versions)
         self.connection_problem_checker = LoopingCall(self._check_connection_problems)
         self.pending_claim_checker = LoopingCall(self._check_pending_claims)
         self.send_heartbeat = LoopingCall(self._send_heartbeat)
-        # self.lbrynet_connection_checker = LoopingCall(self._check_lbrynet_connection)
-
+        self.exchange_rate_manager = ExchangeRateManager()
+        self.lighthouse_client = LighthouseClient()
         self.sd_identifier = StreamDescriptorIdentifier()
         self.stream_info_manager = TempEncryptedFileMetadataManager()
         self.settings = Settings(self.db_dir)
@@ -362,16 +215,6 @@ class Daemon(AuthJSONRPCServer):
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
 
-        if self.wallet_type == "lbrycrd":
-            if os.path.isfile(self.lbrycrd_conf):
-                log.info("Using lbrycrd.conf found at " + self.lbrycrd_conf)
-            else:
-                log.info("No lbrycrd.conf found at " + self.lbrycrd_conf + ". Generating now...")
-                password = "".join(random.SystemRandom().choice(string.ascii_letters + string.digits + "_") for i in range(20))
-                with open(self.lbrycrd_conf, 'w') as f:
-                    f.write("rpcuser=rpcuser\n")
-                    f.write("rpcpassword=" + password)
-                log.info("Done writing lbrycrd.conf")
 
     @AuthJSONRPCServer.subhandler
     def _exclude_lbrycrd_only_commands_from_lbryum_session(self, request):
@@ -402,7 +245,7 @@ class Daemon(AuthJSONRPCServer):
         self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
 
-    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False, host_ui=True):
+    def setup(self):
         def _log_starting_vals():
             log.info("Starting balance: " + str(self.session.wallet.wallet_balance))
             return defer.succeed(None)
@@ -440,18 +283,16 @@ class Daemon(AuthJSONRPCServer):
         self.connection_problem_checker.start(1)
         self.exchange_rate_manager.start()
 
-        if host_ui:
-            self.lbry_ui_manager.update_checker.start(1800, now=False)
-
         d = defer.Deferred()
-        if host_ui:
-            d.addCallback(lambda _: self.lbry_ui_manager.setup(branch=branch,
-                                                                user_specified=user_specified,
-                                                                branch_specified=branch_specified))
+
+        if lbrynet_settings.host_ui:
+            self.lbry_ui_manager.update_checker.start(1800, now=False)
+            d.addCallback(lambda _: self.lbry_ui_manager.setup())
         d.addCallback(lambda _: self._initial_setup())
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
+        d.addCallback(lambda _: self._load_caches())
         d.addCallback(lambda _: self._set_events())
         d.addCallback(lambda _: self._get_session())
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
@@ -506,6 +347,12 @@ class Daemon(AuthJSONRPCServer):
 
         d = _log_platform()
         return d
+
+    def _load_caches(self):
+        if os.path.isfile(os.path.join(self.db_dir, "stream_info_cache.json")):
+            with open(os.path.join(self.db_dir, "stream_info_cache.json"), "r") as stream_info_cache:
+                self.name_cache = json.loads(stream_info_cache.read())
+            log.info("Loaded claim info cache")
 
     def _set_events(self):
         context = analytics.make_context(self._get_platform(), self.wallet_type)
@@ -736,7 +583,7 @@ class Daemon(AuthJSONRPCServer):
                             'type': "%s-%s" % (lm, log_type) if log_type else lm,
                             'log': log_contents
                             }
-                    requests.post(LOG_POST_URL, params)
+                    requests.post(lbrynet_settings.LOG_POST_URL, params)
 
             return defer.succeed(None)
         else:
@@ -779,87 +626,43 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _update_settings(self, settings):
-        for k in settings.keys():
-            if k == 'run_on_startup':
-                if type(settings['run_on_startup']) is bool:
-                    self.session_settings['run_on_startup'] = settings['run_on_startup']
-                else:
-                    return defer.fail()
-            elif k == 'data_rate':
-                if type(settings['data_rate']) is float:
-                    self.session_settings['data_rate'] = settings['data_rate']
-                elif type(settings['data_rate']) is int:
-                    self.session_settings['data_rate'] = float(settings['data_rate'])
-                else:
-                    return defer.fail()
-            elif k == 'max_key_fee':
-                if type(settings['max_key_fee']) is float:
-                    self.session_settings['max_key_fee'] = settings['max_key_fee']
-                elif type(settings['max_key_fee']) is int:
-                    self.session_settings['max_key_fee'] = float(settings['max_key_fee'])
-                else:
-                    return defer.fail()
-            elif k == 'download_directory':
-                if type(settings['download_directory']) is unicode:
-                    if os.path.isdir(settings['download_directory']):
-                        self.session_settings['download_directory'] = settings['download_directory']
-                    else:
-                        pass
-                else:
-                    return defer.fail()
-            elif k == 'max_upload':
-                if type(settings['max_upload']) is float:
-                    self.session_settings['max_upload'] = settings['max_upload']
-                elif type(settings['max_upload']) is int:
-                    self.session_settings['max_upload'] = float(settings['max_upload'])
-                else:
-                    return defer.fail()
-            elif k == 'max_download':
-                if type(settings['max_download']) is float:
-                    self.session_settings['max_download'] = settings['max_download']
-                if type(settings['max_download']) is int:
-                    self.session_settings['max_download'] = float(settings['max_download'])
-                else:
-                    return defer.fail()
-            elif k == 'upload_log':
-                if type(settings['upload_log']) is bool:
-                    self.session_settings['upload_log'] = settings['upload_log']
-                else:
-                    return defer.fail()
-            elif k == 'download_timeout':
-                if type(settings['download_timeout']) is int:
-                    self.session_settings['download_timeout'] = settings['download_timeout']
-                elif type(settings['download_timeout']) is float:
-                    self.session_settings['download_timeout'] = int(settings['download_timeout'])
-                else:
-                    return defer.fail()
-            elif k == 'search_timeout':
-                if type(settings['search_timeout']) is float:
-                    self.session_settings['search_timeout'] = settings['search_timeout']
-                elif type(settings['search_timeout']) is int:
-                    self.session_settings['search_timeout'] = float(settings['search_timeout'])
-                else:
-                    return defer.fail()
-            elif k == 'cache_time':
-                if type(settings['cache_time']) is int:
-                    self.session_settings['cache_time'] = settings['cache_time']
-                elif type(settings['cache_time']) is float:
-                    self.session_settings['cache_time'] = int(settings['cache_time'])
-                else:
-                    return defer.fail()
+        setting_types = {
+            'run_on_startup': bool,
+            'data_rate': float,
+            'max_key_fee': float,
+            'download_directory': str,
+            'max_upload': float,
+            'max_download': float,
+            'upload_log': bool,
+            'download_timeout': int,
+            'search_timeout': float,
+            'cache_time': int
+        }
 
-        self.run_on_startup = self.session_settings['run_on_startup']
-        self.data_rate = self.session_settings['data_rate']
-        self.max_key_fee = self.session_settings['max_key_fee']
-        self.download_directory = self.session_settings['download_directory']
-        self.max_upload = self.session_settings['max_upload']
-        self.max_download = self.session_settings['max_download']
-        self.upload_log = self.session_settings['upload_log']
-        self.download_timeout = self.session_settings['download_timeout']
-        self.search_timeout = self.session_settings['search_timeout']
-        self.cache_time = self.session_settings['cache_time']
+        for key, setting_type in setting_types.iteritems():
+            if key in settings:
+                if isinstance(settings[key], setting_type):
+                    lbrynet_settings.update({key: settings[key]})
+                elif key == "max_key_fee" and isinstance(FeeValidator(settings[key]).amount, setting_type):
+                    lbrynet_settings.update({key: settings[key]})
+                else:
+                    try:
+                        converted = setting_type(settings[key])
+                        lbrynet_settings.update({key: converted})
+                    except Exception as err:
+                        log.warning(err.message)
+                        log.warning("error converting setting '%s' to type %s", key, setting_type)
 
-        utils.save_settings(self.daemon_conf, self.session_settings)
+        self.run_on_startup = lbrynet_settings.run_on_startup
+        self.data_rate = lbrynet_settings.data_rate
+        self.max_key_fee = lbrynet_settings.max_key_fee
+        self.download_directory = lbrynet_settings.download_directory
+        self.max_upload = lbrynet_settings.max_upload
+        self.max_download = lbrynet_settings.max_download
+        self.upload_log = lbrynet_settings.upload_log
+        self.download_timeout = lbrynet_settings.download_timeout
+        self.search_timeout = lbrynet_settings.search_timeout
+        self.cache_time = lbrynet_settings.cache_time
 
         return defer.succeed(True)
 
@@ -946,7 +749,7 @@ class Daemon(AuthJSONRPCServer):
         def get_default_data_rate():
             d = self.settings.get_default_data_payment_rate()
             d.addCallback(lambda rate: {"default_data_payment_rate": rate if rate is not None else
-                                                                    MIN_BLOB_DATA_PAYMENT_RATE})
+                                                                    lbrynet_settings.data_rate})
             return d
 
         def get_wallet():
@@ -960,8 +763,8 @@ class Daemon(AuthJSONRPCServer):
             elif self.wallet_type == "lbryum":
                 log.info("Using lbryum wallet")
                 config = {'auto-connect': True}
-                if conf.LBRYUM_WALLET_DIR:
-                    config['lbryum_path'] = conf.LBRYUM_WALLET_DIR
+                if lbrynet_settings.LBRYUM_WALLET_DIR:
+                    config['lbryum_path'] = lbrynet_settings.LBRYUM_WALLET_DIR
                 d = defer.succeed(LBRYumWallet(self.db_dir, config))
             elif self.wallet_type == "ptc":
                 log.info("Using PTC wallet")
@@ -984,7 +787,7 @@ class Daemon(AuthJSONRPCServer):
         def create_session(results):
             self.session = Session(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
-                                       known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
+                                       known_dht_nodes=lbrynet_settings.known_dht_nodes, peer_port=self.peer_port,
                                        use_upnp=self.use_upnp, wallet=results['wallet'])
             self.startup_status = STARTUP_STAGES[2]
 
@@ -1006,7 +809,7 @@ class Daemon(AuthJSONRPCServer):
         self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_opener_factory)
         return defer.succeed(None)
 
-    def _download_sd_blob(self, sd_hash, timeout=DEFAULT_SD_DOWNLOAD_TIMEOUT):
+    def _download_sd_blob(self, sd_hash, timeout=lbrynet_settings.sd_download_timeout):
         def cb(result):
             if not r.called:
                 r.callback(result)
@@ -1024,7 +827,7 @@ class Daemon(AuthJSONRPCServer):
 
         return r
 
-    def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None,
+    def _download_name(self, name, timeout=lbrynet_settings.download_timeout, download_directory=None,
                        file_name=None, stream_info=None, wait_for_write=True):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
@@ -1275,7 +1078,7 @@ class Daemon(AuthJSONRPCServer):
 
         log.info("Reflecting stream: %s" % stream_hash)
 
-        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_server = random.choice(lbrynet_settings.REFLECTOR_SERVERS)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Start reflector client")
         factory = reflector.ClientFactory(
@@ -1294,7 +1097,7 @@ class Daemon(AuthJSONRPCServer):
 
         log.info("Reflecting %i blobs" % len(blob_hashes))
 
-        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_server = random.choice(lbrynet_settings.REFLECTOR_SERVERS)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Start reflector client")
         factory = reflector.BlobClientFactory(
@@ -1317,9 +1120,9 @@ class Daemon(AuthJSONRPCServer):
             log.info("Removing one time startup scripts")
             remaining_scripts = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
             startup_scripts = self.startup_scripts
-            self.startup_scripts = self.session_settings['startup_scripts'] = remaining_scripts
+            self.startup_scripts = lbrynet_settings['startup_scripts'] = remaining_scripts
 
-            utils.save_settings(self.daemon_conf, self.session_settings)
+            utils.save_settings(self.daemon_conf, lbrynet_settings)
 
         for script in startup_scripts:
             if script['script_name'] == 'migrateto025':
@@ -1469,7 +1272,6 @@ class Daemon(AuthJSONRPCServer):
         log.info("Get version info: " + json.dumps(msg))
         return self._render_response(msg, OK_CODE)
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_get_settings(self):
         """
         Get lbrynet daemon settings
@@ -1496,9 +1298,9 @@ class Daemon(AuthJSONRPCServer):
         """
 
         log.info("Get daemon settings")
-        return self._render_response(self.session_settings, OK_CODE)
+        return self._render_response(lbrynet_settings.configurable_settings, OK_CODE)
 
-    @AuthJSONRPCServer.auth_required    
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_set_settings(self, p):
         """
         Set lbrynet daemon settings
@@ -1517,12 +1319,12 @@ class Daemon(AuthJSONRPCServer):
         """
 
         def _log_settings_change():
-            log.info("Set daemon settings to " + json.dumps(self.session_settings))
+            log.info("Set daemon settings to " + json.dumps(lbrynet_settings.configurable_settings))
 
         d = self._update_settings(p)
         d.addErrback(lambda err: log.info(err.getTraceback()))
         d.addCallback(lambda _: _log_settings_change())
-        d.addCallback(lambda _: self._render_response(self.session_settings, OK_CODE))
+        d.addCallback(lambda _: self._render_response(lbrynet_settings.configurable_settings, OK_CODE))
 
         return d
 
@@ -1550,7 +1352,6 @@ class Daemon(AuthJSONRPCServer):
         else:
             return self._render_response(self.jsonrpc_help.__doc__, OK_CODE)
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_get_balance(self):
         """
         Get balance
@@ -1583,7 +1384,6 @@ class Daemon(AuthJSONRPCServer):
 
         return self._render_response("Shutting down", OK_CODE)
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_get_lbry_files(self):
         """
         Get LBRY files
@@ -1610,7 +1410,6 @@ class Daemon(AuthJSONRPCServer):
 
         return d
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_get_lbry_file(self, p):
         """
         Get lbry file
@@ -1661,6 +1460,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallbacks(lambda info: self._render_response(info, OK_CODE), lambda _: server.failure)
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_my_claim(self, p):
         """
         Return existing claim for a given name
@@ -1700,7 +1500,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
     def _process_get_parameters(self, p):
         """Extract info from input parameters and fill in default values for `get` call."""
         # TODO: this process can be abstracted s.t. each method
@@ -1722,7 +1521,7 @@ class Daemon(AuthJSONRPCServer):
             name=name
         )
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get(self, p):
         """Download stream from a LBRY uri.
 
@@ -1753,7 +1552,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda message: self._render_response(message, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_stop_lbry_file(self, p):
         """
         Stop lbry file
@@ -1779,7 +1578,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_start_lbry_file(self, p):
         """
         Stop lbry file
@@ -1820,7 +1619,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required
     def jsonrpc_search_nametrie(self, p):
         """
         Search the nametrie for claims
@@ -1857,7 +1655,7 @@ class Daemon(AuthJSONRPCServer):
 
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_delete_lbry_file(self, p):
         """
         Delete a lbry file
@@ -1887,7 +1685,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_publish(self, p):
         """
         Make a new name claim and publish associated data to lbrynet
@@ -1964,7 +1762,7 @@ class Daemon(AuthJSONRPCServer):
 
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_abandon_claim(self, p):
         """
         Abandon a name and reclaim credits from the claim
@@ -1991,7 +1789,7 @@ class Daemon(AuthJSONRPCServer):
 
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_abandon_name(self, p):
         """
         DEPRECIATED, use abandon_claim
@@ -2004,7 +1802,7 @@ class Daemon(AuthJSONRPCServer):
 
         return self.jsonrpc_abandon_claim(p)
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_support_claim(self, p):
         """
         Support a name claim
@@ -2024,7 +1822,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_name_claims(self):
         """
         Get my name claims
@@ -2063,7 +1861,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_transaction_history(self):
         """
         Get transaction history
@@ -2094,7 +1892,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_address_is_mine(self, p):
         """
         Checks if an address is associated with the current wallet.
@@ -2112,7 +1910,7 @@ class Daemon(AuthJSONRPCServer):
 
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_public_key_from_wallet(self, p):
         """
         Get public key from wallet address
@@ -2150,7 +1948,7 @@ class Daemon(AuthJSONRPCServer):
 
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_new_address(self):
         """
         Generate a new wallet address
@@ -2170,7 +1968,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda address: self._render_response(address, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_send_amount_to_address(self, p):
         """
             Send credits to an address
@@ -2250,7 +2048,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_download_descriptor(self, p):
         """
         Download and return a sd blob
@@ -2261,7 +2059,7 @@ class Daemon(AuthJSONRPCServer):
             sd blob, dict
         """
         sd_hash = p['sd_hash']
-        timeout = p.get('timeout', DEFAULT_SD_DOWNLOAD_TIMEOUT)
+        timeout = p.get('timeout', lbrynet_settings.sd_download_timeout)
 
         d = self._download_sd_blob(sd_hash, timeout)
         d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: self._render_response(False, OK_CODE))
@@ -2282,7 +2080,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_set_miner(self, p):
         """
             Start of stop the miner, function only available when lbrycrd is set as the wallet
@@ -2302,7 +2100,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_get_miner_status(self):
         """
             Get status of miner
@@ -2372,7 +2169,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_configure_ui(self, p):
         """
         Configure the UI being hosted
@@ -2397,7 +2194,7 @@ class Daemon(AuthJSONRPCServer):
 
         return d
 
-    @AuthJSONRPCServer.auth_required 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_reveal(self, p):
         """
         Reveal a file or directory in file browser
@@ -2417,7 +2214,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_get_peers_for_hash(self, p):
         """
         Get peers for blob hash
@@ -2435,7 +2231,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_announce_all_blobs_to_dht(self):
         """
         Announce all blobs to the dht
@@ -2450,7 +2245,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: self._render_response("Announced", OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_reflect(self, p):
         """
         Reflect a stream
@@ -2467,7 +2261,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallbacks(lambda _: self._render_response(True, OK_CODE), lambda err: self._render_response(err.getTraceback(), OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_get_blob_hashes(self):
         """
         Returns all blob hashes
@@ -2482,7 +2275,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required 
     def jsonrpc_reflect_all_blobs(self):
         """
         Reflects all saved blobs
@@ -2507,7 +2299,7 @@ class Daemon(AuthJSONRPCServer):
             List of address:port
         """
 
-        d = self._render_response(SEARCH_SERVERS, OK_CODE)
+        d = self._render_response(lbrynet_settings.search_servers, OK_CODE)
         return d
 
     def jsonrpc_get_mean_availability(self):
@@ -2556,6 +2348,12 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda result: self._render_response(result, OK_CODE))
 
         return d
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_test_api_authentication(self):
+        if self._use_authentication:
+            return self._render_response(True, OK_CODE)
+        return self._render_response("Not using authentication", OK_CODE)
 
 
 def get_lbrynet_version_from_github():
@@ -2613,7 +2411,7 @@ def get_darwin_lbrycrdd_path():
 
 
 class _DownloadNameHelper(object):
-    def __init__(self, daemon, name, timeout=DEFAULT_TIMEOUT, download_directory=None,
+    def __init__(self, daemon, name, timeout=lbrynet_settings.download_timeout, download_directory=None,
                  file_name=None, wait_for_write=True):
         self.daemon = daemon
         self.name = name

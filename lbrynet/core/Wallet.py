@@ -153,7 +153,12 @@ class Wallet(object):
                     log.info("Got a new balance: %s", str(balance))
                 self.wallet_balance = balance
 
-            d.addCallback(set_wallet_balance)
+            def log_error(err):
+                if isinstance(err, AttributeError):
+                    log.warning("Failed to get an updated balance")
+                    log.warning("Last balance update: %s", str(self.wallet_balance))
+
+            d.addCallbacks(set_wallet_balance, log_error)
             return d
 
         d.addCallback(lambda should_run: do_manage() if should_run else None)
@@ -1169,7 +1174,8 @@ class LBRYumWallet(Wallet):
             self._start_check = None
 
         if self._catch_up_check is not None:
-            self._catch_up_check.stop()
+            if self._catch_up_check.running:
+                self._catch_up_check.stop()
             self._catch_up_check = None
 
         d = defer.Deferred()
@@ -1241,6 +1247,9 @@ class LBRYumWallet(Wallet):
 
                 self._caught_up_counter += 1
 
+        def log_error(err):
+            log.warning(err.getErrorMessage())
+            return defer.fail(err)
 
         self._catch_up_check = task.LoopingCall(check_caught_up)
 
@@ -1248,6 +1257,7 @@ class LBRYumWallet(Wallet):
         d.addCallback(self._save_wallet)
         d.addCallback(lambda _: self.wallet.start_threads(self.network))
         d.addCallback(lambda _: self._catch_up_check.start(.1))
+        d.addErrback(log_error)
         d.addCallback(lambda _: blockchain_caught_d)
         return d
 

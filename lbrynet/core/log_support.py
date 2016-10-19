@@ -7,7 +7,7 @@ import traceback
 from requests_futures.sessions import FuturesSession
 
 import lbrynet
-from lbrynet import conf
+from lbrynet import settings
 from lbrynet.core import utils
 
 session = FuturesSession()
@@ -104,7 +104,7 @@ def configure_file_handler(file_name, **kwargs):
 
 
 def get_loggly_url(token=None, version=None):
-    token = token or utils.deobfuscate(conf.LOGGLY_TOKEN)
+    token = token or utils.deobfuscate(settings.LOGGLY_TOKEN)
     version = version or lbrynet.__version__
     return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
 

@@ -10,8 +10,7 @@ import unittest
 from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.Hash import MD5
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE
-from lbrynet.conf import MIN_BLOB_INFO_PAYMENT_RATE
+from lbrynet import settings
 from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
@@ -236,7 +235,7 @@ def start_lbry_uploader(sd_hash_queue, kill_event, dead_event, file_size, ul_rat
     db_dir = "server"
     os.mkdir(db_dir)
 
-    session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+    session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
                           peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
                           use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker,
                           dht_node_class=Node)
@@ -351,7 +350,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event, ready_event, n, ul_ra
     os.mkdir(db_dir)
     os.mkdir(blob_dir)
 
-    session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd" + str(n),
+    session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd" + str(n),
                           peer_finder=peer_finder, hash_announcer=hash_announcer,
                           blob_dir=None, peer_port=peer_port,
                           use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
@@ -462,7 +461,7 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
     db_dir = "server"
     os.mkdir(db_dir)
 
-    session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+    session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
                       peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                       blob_tracker_class=DummyBlobAvailabilityTracker)
@@ -596,7 +595,7 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow):
     os.mkdir(db_dir)
     os.mkdir(blob_dir)
 
-    session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="efgh",
+    session = Session(settings.data_rate, db_dir=db_dir, lbryid="efgh",
                           peer_finder=peer_finder, hash_announcer=hash_announcer,
                           blob_dir=blob_dir, peer_port=peer_port,
                           use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
@@ -768,7 +767,7 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker,
@@ -854,7 +853,7 @@ class TestTransfer(TestCase):
         db_dir = "client"
         os.mkdir(db_dir)
 
-        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer, blob_dir=None,
                                    peer_port=5553, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                                    blob_tracker_class=DummyBlobAvailabilityTracker, dht_node_class=Node)
@@ -955,7 +954,7 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
@@ -1035,7 +1034,7 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553, use_upnp=False,
                                    rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
@@ -1150,7 +1149,7 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=None, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
@@ -1269,7 +1268,7 @@ class TestStreamify(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)
@@ -1322,7 +1321,7 @@ class TestStreamify(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = Session(MIN_BLOB_DATA_PAYMENT_RATE, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
                                    peer_finder=peer_finder, hash_announcer=hash_announcer,
                                    blob_dir=blob_dir, peer_port=5553,
                                    use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker)

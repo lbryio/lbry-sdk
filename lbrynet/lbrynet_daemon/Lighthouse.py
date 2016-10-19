@@ -1,14 +1,14 @@
 import logging
 import random
 from txjsonrpc.web.jsonrpc import Proxy
-from lbrynet.conf import SEARCH_SERVERS
+from lbrynet import settings
 
 log = logging.getLogger(__name__)
 
 
 class LighthouseClient(object):
     def __init__(self, servers=None):
-        self.servers = servers or SEARCH_SERVERS
+        self.servers = servers or settings.search_servers
 
     def _get_random_server(self):
         return Proxy(random.choice(self.servers))

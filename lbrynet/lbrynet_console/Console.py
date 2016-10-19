@@ -10,13 +10,13 @@ if sys.platform == "darwin":
     from appdirs import user_data_dir
 from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task, error
-from jsonrpc.proxy import JSONRPCProxy
+from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 
 from lbrynet.core.Session import Session
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.Settings import Settings
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, API_CONNECTION_STRING  # , MIN_BLOB_INFO_PAYMENT_RATE
+from lbrynet import settings
 from lbrynet.core.utils import generate_id
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.PaymentRateManager import PaymentRateManager
@@ -209,7 +209,7 @@ class Console():
     def _get_session(self):
         def get_default_data_rate():
             d = self.settings.get_default_data_payment_rate()
-            d.addCallback(lambda rate: {"default_data_payment_rate": rate if rate is not None else MIN_BLOB_DATA_PAYMENT_RATE})
+            d.addCallback(lambda rate: {"default_data_payment_rate": rate if rate is not None else settings.data_rate})
             return d
 
         def get_wallet():
@@ -537,7 +537,7 @@ def launch_lbry_console():
         os.mkdir(data_dir)
         created_data_dir = True
 
-    daemon = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+    daemon = LBRYAPIClient.config()
     try:
         daemon.is_running()
         log.info("Attempt to start lbrynet-console while lbrynet-daemon is running")

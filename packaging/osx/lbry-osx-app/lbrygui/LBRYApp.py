@@ -27,9 +27,9 @@ if not os.path.isfile(lbrycrdd_path_conf):
     f.write(lbrycrdd_path)
     f.close()
 
-from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer, DaemonRequest
-from lbrynet.conf import API_PORT, API_INTERFACE, ICON_PATH, APP_NAME
-from lbrynet.conf import UI_ADDRESS
+from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
+from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
+from lbrynet import settings
 
 if platform.mac_ver()[0] >= "10.10":
     from LBRYNotify import LBRYNotify
@@ -53,7 +53,7 @@ class LBRYDaemonApp(AppKit.NSApplication):
         self.connection = False
         statusbar = AppKit.NSStatusBar.systemStatusBar()
         self.statusitem = statusbar.statusItemWithLength_(AppKit.NSVariableStatusItemLength)
-        self.icon = AppKit.NSImage.alloc().initByReferencingFile_(ICON_PATH)
+        self.icon = AppKit.NSImage.alloc().initByReferencingFile_(settings.ICON_PATH)
         self.icon.setScalesWhenResized_(True)
         self.icon.setSize_((20, 20))
         self.statusitem.setImage_(self.icon)
@@ -63,7 +63,7 @@ class LBRYDaemonApp(AppKit.NSApplication):
         self.quit = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Quit", "replyToApplicationShouldTerminate:", "")
         self.menubarMenu.addItem_(self.quit)
         self.statusitem.setMenu_(self.menubarMenu)
-        self.statusitem.setToolTip_(APP_NAME)
+        self.statusitem.setToolTip_(settings.APP_NAME)
 
 
         if test_internet_connection():
@@ -77,13 +77,13 @@ class LBRYDaemonApp(AppKit.NSApplication):
 
         lbry = DaemonServer()
         d = lbry.start()
-        d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
+        d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
         lbrynet_server = server.Site(lbry.root)
         lbrynet_server.requestFactory = DaemonRequest
-        reactor.listenTCP(API_PORT, lbrynet_server, interface=API_INTERFACE)
+        reactor.listenTCP(settings.API_PORT, lbrynet_server, interface=settings.API_INTERFACE)
 
     def openui_(self, sender):
-        webbrowser.open(UI_ADDRESS)
+        webbrowser.open(settings.UI_ADDRESS)
 
     def replyToApplicationShouldTerminate_(self, shouldTerminate):
         if platform.mac_ver()[0] >= "10.10":

@@ -1,8 +1,9 @@
 from lbrynet.core.Strategy import get_default_strategy
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, MIN_BLOB_INFO_PAYMENT_RATE
+from lbrynet import settings
+
 
 class BasePaymentRateManager(object):
-    def __init__(self, rate=MIN_BLOB_DATA_PAYMENT_RATE, info_rate=MIN_BLOB_INFO_PAYMENT_RATE):
+    def __init__(self, rate=settings.data_rate, info_rate=settings.MIN_BLOB_INFO_PAYMENT_RATE):
         self.min_blob_data_payment_rate = rate
         self.min_blob_info_payment_rate = info_rate
 

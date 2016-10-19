@@ -5,7 +5,7 @@ import logging
 from requests import auth
 from requests_futures import sessions
 
-from lbrynet import conf
+from lbrynet import settings
 from lbrynet.analytics import utils
 
 
@@ -66,6 +66,6 @@ class AnalyticsApi(object):
             session = sessions.FuturesSession()
         return cls(
             session,
-            conf.ANALYTICS_ENDPOINT,
-            utils.deobfuscate(conf.ANALYTICS_TOKEN)
+            settings.ANALYTICS_ENDPOINT,
+            utils.deobfuscate(settings.ANALYTICS_TOKEN)
         )

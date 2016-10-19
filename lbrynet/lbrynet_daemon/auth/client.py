@@ -6,8 +6,7 @@ import base64
 import json
 
 from lbrynet.lbrynet_daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
-from lbrynet.conf import API_INTERFACE, API_ADDRESS, API_PORT
-from lbrynet.conf import DATA_DIR
+from lbrynet import settings
 
 log = logging.getLogger(__name__)
 USER_AGENT = "AuthServiceProxy/0.1"
@@ -77,7 +76,6 @@ class LBRYAPIClient(object):
         cookies = http_response.cookies
         headers = http_response.headers
         next_secret = headers.get(LBRY_SECRET, False)
-
         if next_secret:
             self.__api_key.secret = next_secret
             self.__cookies = cookies
@@ -103,14 +101,18 @@ class LBRYAPIClient(object):
                                             service=None, cookies=None, auth=None, url=None, login_url=None):
 
         api_key_name = API_KEY_NAME if not key_name else key_name
-        pw_path = os.path.join(DATA_DIR, ".api_keys") if not pw_path else pw_path
+        pw_path = os.path.join(settings.DATA_DIR, ".api_keys") if not pw_path else pw_path
         if not key:
             keys = load_api_keys(pw_path)
             api_key = keys.get(api_key_name, False)
         else:
             api_key = APIKey(name=api_key_name, secret=key)
         if login_url is None:
-            service_url = "http://%s:%s@%s:%i/%s" % (api_key_name, api_key.secret, API_INTERFACE, API_PORT, API_ADDRESS)
+            service_url = "http://%s:%s@%s:%i/%s" % (api_key_name,
+                                                     api_key.secret,
+                                                     settings.API_INTERFACE,
+                                                     settings.API_PORT,
+                                                     settings.API_ADDRESS)
         else:
             service_url = login_url
         id_count = count
@@ -143,7 +145,6 @@ class LBRYAPIClient(object):
             cookies = http_response.cookies
             uid = cookies.get(TWISTED_SESSION)
             api_key = APIKey.new(seed=uid)
-
         else:
             # This is a client that already has a session, use it
             auth_header = auth

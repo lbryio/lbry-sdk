@@ -1,7 +1,7 @@
 import binascii
 import logging
 from Crypto.Cipher import AES
-from lbrynet.conf import BLOB_SIZE
+from lbrynet import settings
 from lbrynet.core.BlobInfo import BlobInfo
 
 
@@ -67,7 +67,7 @@ class CryptStreamBlobMaker(object):
         self.length = 0
 
     def write(self, data):
-        max_bytes_to_write = BLOB_SIZE - self.length - 1
+        max_bytes_to_write = settings.BLOB_SIZE - self.length - 1
         done = False
         if max_bytes_to_write <= len(data):
             num_bytes_to_write = max_bytes_to_write
