@@ -2010,11 +2010,16 @@ class Daemon(jsonrpc.JSONRPC):
             metadata = Metadata(p['metadata'])
             make_lbry_file = False
             sd_hash = metadata['sources']['lbry_sd_hash']
+            log.info("Update publish for %s using existing stream", name)
         except ValidationError:
             make_lbry_file = True
             sd_hash = None
             metadata = p['metadata']
             file_path = p['file_path']
+            if not file_path:
+                return defer.fail(Exception("No file given to publish"))
+            if not os.path.isfile(file_path):
+                return defer.fail(Exception("Specified file for publish doesnt exist: %s" % file_path))
 
         if not self.pending_claim_checker.running:
             self.pending_claim_checker.start(30)
