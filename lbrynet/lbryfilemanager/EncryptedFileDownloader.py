@@ -143,13 +143,14 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
             return d
 
-        def _save_claim(name, txid):
+        def _save_claim(name, txid, nout):
             self.uri = name
             self.txid = txid
+            self.nout = nout 
             return defer.succeed(None)
 
         d.addCallback(_save_sd_hash)
-        d.addCallback(lambda r: _save_claim(r[0], r[1]) if r else None)
+        d.addCallback(lambda r: _save_claim(r[0], r[1], r[2]) if r else None)
         d.addCallback(lambda _: self._save_status())
 
         return d
