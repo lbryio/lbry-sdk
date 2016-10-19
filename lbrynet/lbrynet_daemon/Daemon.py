@@ -6,7 +6,6 @@ import platform
 import random
 import re
 import socket
-import string
 import subprocess
 import sys
 import base58
@@ -1120,9 +1119,9 @@ class Daemon(AuthJSONRPCServer):
             log.info("Removing one time startup scripts")
             remaining_scripts = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
             startup_scripts = self.startup_scripts
-            self.startup_scripts = lbrynet_settings['startup_scripts'] = remaining_scripts
-
-            utils.save_settings(self.daemon_conf, lbrynet_settings)
+            self.startup_scripts = lbrynet_settings.startup_scripts = remaining_scripts
+            conf = os.path.join(lbrynet_settings.DATA_DIR, "daemon_settings.yml")
+            utils.save_settings(conf)
 
         for script in startup_scripts:
             if script['script_name'] == 'migrateto025':
