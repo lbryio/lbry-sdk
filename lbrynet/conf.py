@@ -1,39 +1,29 @@
 import copy
 import os
 import sys
-import logging
 from appdirs import user_data_dir
 
-log = logging.getLogger(__name__)
-
 PRIORITIZE_ENV = True
-
 LINUX = 1
 DARWIN = 2
 WINDOWS = 3
 
-if sys.platform.startswith("linux"):
-    platform = LINUX
-elif sys.platform.startswith("darwin"):
+if sys.platform.startswith("darwin"):
     platform = DARWIN
-elif sys.platform.startswith("win"):
-    platform = WINDOWS
-else:
-    platform = LINUX
-
-if platform is LINUX:
-    default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
-    default_lbryum_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-    default_lbryum_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
-elif platform is DARWIN:
     default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
     default_data_dir = user_data_dir("LBRY")
     default_lbryum_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
-else:
+elif sys.platform.startswith("win"):
+    platform = WINDOWS
     from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
     default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
     default_data_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrynet")
     default_lbryum_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbryum")
+else:
+    platform = LINUX
+    default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
+    default_lbryum_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+    default_lbryum_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
 
 ADJUSTABLE_SETTINGS = {
     'run_on_startup': False,
@@ -76,8 +66,7 @@ ADJUSTABLE_SETTINGS = {
     'DATA_DIR': default_data_dir,
     'LBRYUM_WALLET_DIR': default_lbryum_dir,
     'sd_download_timeout': 3,
-    'max_key_fee': {'USD': {'amount': 25.0, 'address': ''}},
-
+    'max_key_fee': {'USD': {'amount': 25.0, 'address': ''}}
 }
 
 
@@ -113,7 +102,6 @@ class ApplicationSettings(object):
     def get_dict():
         r = {k: v for k, v in ApplicationSettings.__dict__.iteritems() if not k.startswith('__')}
         if PRIORITIZE_ENV:
-            log.info("Checking env settings")
             r = add_env_settings(r)
         return r
 
@@ -123,7 +111,6 @@ def add_env_settings(settings_dict):
     for setting, setting_val in settings_dict.iteritems():
         env_val = os.environ.get(setting, None)
         if env_val != setting_val and env_val is not None:
-            log.info("Using env value for %s", setting)
             with_env_settings.update({setting: env_val})
     return with_env_settings
 
