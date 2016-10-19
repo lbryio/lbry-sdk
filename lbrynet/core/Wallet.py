@@ -665,8 +665,8 @@ class Wallet(object):
 
     def _save_name_metadata(self, name, txid, nout, sd_hash):
         assert len(txid) == 64, "That's not a txid: %s" % str(txid)
-        d = self.db.runQuery("delete from name_metadata where name=? and txid=? and sd_hash=?",
-                             (name, txid, sd_hash))
+        d = self.db.runQuery("delete from name_metadata where name=? and txid=? and n=? and sd_hash=?",
+                             (name, txid, nout, sd_hash))
         d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?, ?)",
                                                  (name, txid, nout, sd_hash)))
         return d
@@ -678,8 +678,8 @@ class Wallet(object):
 
     def _update_claimid(self, claim_id, name, txid, nout):
         assert len(txid) == 64, "That's not a txid: %s" % str(txid)
-        d = self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=?",
-                             (claim_id, name, txid))
+        d = self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=? and n=?",
+                             (claim_id, name, txid, nout))
         d.addCallback(lambda r: self.db.runQuery("insert into claim_ids values (?, ?, ?, ?)",
                                                  (claim_id, name, txid, nout)))
         d.addCallback(lambda _: claim_id)
