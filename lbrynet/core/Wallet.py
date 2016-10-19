@@ -542,7 +542,7 @@ class Wallet(object):
 
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
-        d.addCallback(lambda name_txid: self._get_status_of_claim(name_txid[1], name_txid[0], sd_hash) if name_txid is not None else None)
+        d.addCallback(lambda name_txid: self._get_status_of_claim(name_txid[1], name_txid[2], name_txid[0], sd_hash) if name_txid is not None else None)
         return d
 
     def get_available_balance(self):
@@ -562,7 +562,7 @@ class Wallet(object):
         d.addCallback(lambda _: self._first_run == self._FIRST_RUN_YES)
         return d
 
-    def _get_status_of_claim(self, txid, name, sd_hash):
+    def _get_status_of_claim(self, txid, nout, name, sd_hash):
         d = self.get_claims_from_tx(txid)
 
         def get_status(claims):
@@ -570,7 +570,9 @@ class Wallet(object):
                 claims = []
             for claim in claims:
                 if 'in claim trie' in claim:
-                    if 'name' in claim and str(claim['name']) == name and 'value' in claim:
+                    name_is_equal = 'name' in claim and str(claim['name']) == name
+                    nout_is_equal = 'nOut' in claim and claim['nOut'] == nout 
+                    if name_is_equal and nout_is_equal and 'value' in claim:
                         try:
                             value_dict = json.loads(claim['value'])
                         except (ValueError, TypeError):
