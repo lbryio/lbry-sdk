@@ -378,7 +378,7 @@ class Wallet(object):
             if not claim:
                 return False
 
-            d = self.get_claim(name, claim['claimId'])
+            d = self.get_claim(name, claim['claim_id'])
             d.addCallback(_convert_units)
             d.addCallback(lambda claim_info: self._format_claim_for_return(name, claim_info))
             return d
@@ -452,10 +452,15 @@ class Wallet(object):
         return defer.succeed(Metadata(meta_for_return))
 
     def claim_name(self, name, bid, m):
-        def _save_metadata(txid, nout, metadata):
-            log.info("Saving metadata for claim %s" % txid)
+        def _save_metadata(claim_out, metadata):
+            if not claim_out['success']:
+                msg = 'Claim to name {} failed: {}'.format(name,claim_out['reason'])
+                defer.fail(Exception(msg))
+            txid = claim_out['txid'] 
+            nout = claim_out['nout']
+            log.info("Saving metadata for claim %s %d" % (txid, nout))
             d = self._save_name_metadata(name, txid, nout, metadata['sources']['lbry_sd_hash'])
-            d.addCallback(lambda _: txid)
+            d.addCallback(lambda _: claim_out)
             return d
 
         def _claim_or_update(claim, metadata, _bid):
@@ -477,41 +482,11 @@ class Wallet(object):
 
         d = self.get_claim_info(name)
         d.addCallback(lambda claim: _claim_or_update(claim, meta, bid))
-        d.addCallback(lambda txid, nout: _save_metadata(txid, nout, meta))
+        d.addCallback(lambda claim_out: _save_metadata(claim_out, meta))
         return d
 
-    def abandon_name(self, txid):
-        d1 = self.get_new_address()
-        d2 = self.get_claims_from_tx(txid)
-
-        def get_txout_of_claim(claims):
-            for claim in claims:
-                if 'name' in claim and 'nOut' in claim:
-                    return claim['nOut']
-            return defer.fail(ValueError("No claims in tx"))
-
-        def get_value_of_txout(nOut):
-            d = self._get_raw_tx(txid)
-            d.addCallback(self._get_decoded_tx)
-            d.addCallback(lambda tx: tx['vout'][nOut]['value'])
-            return d
-
-        d2.addCallback(get_txout_of_claim)
-        d2.addCallback(get_value_of_txout)
-        dl = defer.DeferredList([d1, d2], consumeErrors=True)
-
-        def abandon(results):
-            if results[0][0] and results[1][0]:
-                address = results[0][1]
-                amount = float(results[1][1])
-                return self._send_abandon(txid, address, amount)
-            elif results[0][0] is False:
-                return defer.fail(Failure(ValueError("Couldn't get a new address")))
-            else:
-                return results[1][1]
-
-        dl.addCallback(abandon)
-        return dl
+    def abandon_claim(self, txid, nout):
+        return self._abandon_claim(txid,nout)
 
     def support_claim(self, name, claim_id, amount):
         return self._support_claim(name, claim_id, amount)
@@ -726,7 +701,7 @@ class Wallet(object):
     def _get_decoded_tx(self, raw_tx):
         return defer.fail(NotImplementedError())
 
-    def _send_abandon(self, txid, address, amount):
+    def _abandon_claim(self, txid, nout):
         return defer.fail(NotImplementedError())
 
     def _send_name_claim_update(self, name, claim_id, txid, nout, value, amount):
@@ -1313,14 +1288,9 @@ class LBRYumWallet(Wallet):
         return d
 
     def _send_name_claim(self, name, val, amount):
-        def send_claim(address):
-            cmd = known_commands['claimname']
-            func = getattr(self.cmd_runner, cmd.name)
-            return threads.deferToThread(func, address, amount, name, json.dumps(val))
-        d = self.get_new_address()
-        d.addCallback(send_claim)
-        d.addCallback(self._broadcast_transaction)
-        return d
+        cmd = known_commands['claim']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, name, json.dumps(val), amount)
 
     def _get_claims_for_name(self, name):
         cmd = known_commands['getclaimsforname']
@@ -1328,18 +1298,12 @@ class LBRYumWallet(Wallet):
         return threads.deferToThread(func, name)
 
     def _send_name_claim_update(self, name, claim_id, txid, nout, value, amount):
-        def send_claim_update(address):
-            decoded_claim_id = claim_id.decode('hex')[::-1]
-            metadata = json.dumps(value)
-            log.info("updateclaim %s %s %f %s %s '%s'", txid, address, amount, name, decoded_claim_id.encode('hex'), metadata)
-            cmd = known_commands['updateclaim']
-            func = getattr(self.cmd_runner, cmd.name)
-            return threads.deferToThread(func, txid, address, amount, name, decoded_claim_id, metadata)
+        metadata = json.dumps(value)
+        log.info("updateclaim %s %d %s %f %s %s '%s'", txid, nout, address, amount, name, claim_id, metadata)
+        cmd = known_commands['update']
+        func = getattr(self.cmd_runner, cmd.name)
+        return threads.deferToThread(func, txid, nout, name, claim_id, metadata, amount)
 
-        d = self.get_new_address()
-        d.addCallback(send_claim_update)
-        d.addCallback(self._broadcast_transaction)
-        return d
 
     def _get_decoded_tx(self, raw_tx):
         tx = Transaction(raw_tx)
@@ -1351,23 +1315,18 @@ class LBRYumWallet(Wallet):
             decoded_tx['vout'].append(out)
         return decoded_tx
 
-    def _send_abandon(self, txid, address, amount):
-        log.info("Abandon %s %s %f" % (txid, address, amount))
-        cmd = known_commands['abandonclaim']
+    def _abandon_claim(self, txid, nout):
+        log.info("Abandon %s %s" % (txid, nout))
+        cmd = known_commands['abandon']
         func = getattr(self.cmd_runner, cmd.name)
-        d = threads.deferToThread(func, txid, address, amount)
-        d.addCallback(self._broadcast_transaction)
+        d = threads.deferToThread(func, txid, nout)
         return d
 
     def _support_claim(self, name, claim_id, amount):
-        def _send_support(d, a, n, c):
-            cmd = known_commands['supportclaim']
-            func = getattr(self.cmd_runner, cmd.name)
-            d = threads.deferToThread(func, d, a, n, c)
-            return d
-        d = self.get_new_address()
-        d.addCallback(lambda address: _send_support(address, amount, name, claim_id))
-        d.addCallback(self._broadcast_transaction)
+        log.info("Support %s %s %f" % (name, claim_id, amount))
+        cmd = known_commands['support']
+        func = getattr(self.cmd_runner, cmd.name)
+        d = threads.deferToThread(func, name, claim_id, amount)
         return d
 
     def _broadcast_transaction(self, raw_tx):
