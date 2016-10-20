@@ -19,6 +19,7 @@ class Strategy(object):
         self.price_model = price_model
         self.is_generous = is_generous
         self.accepted_offers = {}
+        self.pending_sent_offers = {}
         self.offers_sent = {}
         self.offers_received = {}
         self.max_rate = max_rate or Decimal(self.price_model.base_price * 100)
@@ -36,13 +37,17 @@ class Strategy(object):
         if peer in self.accepted_offers:
             # if there was a previous accepted offer, use that
             offer = self.accepted_offers[peer]
+            if peer in self.pending_sent_offers:
+                del self.pending_sent_offers[peer]
         elif offer_count == 0 and self.is_generous:
             # Try asking for it for free
             offer = Offer(Decimal(0.0))
+            self.pending_sent_offers.update({peer: offer})
         else:
             rates = [self.price_model.calculate_price(blob) for blob in blobs]
             price = self._make_rate_offer(rates, offer_count)
             offer = Offer(price)
+            self.pending_sent_offers.update({peer: offer})
         return offer
 
     def respond_to_offer(self, offer, peer, blobs):
@@ -50,7 +55,6 @@ class Strategy(object):
         self._add_offer_received(peer)
         rates = [self.price_model.calculate_price(blob) for blob in blobs]
         price = self._get_response_rate(rates, offer_count)
-
         if peer in self.accepted_offers:
             offer = self.accepted_offers[peer]
         elif offer.rate == 0.0 and offer_count == 0 and self.is_generous:

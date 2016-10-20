@@ -69,6 +69,8 @@ class BlobRequestHandler(object):
         if self.PAYMENT_RATE_QUERY in queries:
             offered_rate = queries[self.PAYMENT_RATE_QUERY]
             offer = Offer(offered_rate)
+            if offer.rate is None:
+                log.warning("Empty rate offer")
             response.addCallback(lambda r: self._handle_payment_rate_query(offer, r))
         if self.BLOB_QUERY in queries:
             incoming = queries[self.BLOB_QUERY]

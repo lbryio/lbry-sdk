@@ -17,7 +17,7 @@ class BlobAvailabilityTracker(object):
 
     def __init__(self, blob_manager, peer_finder, dht_node):
         self.availability = {}
-        self.last_mean_availability = Decimal(0.0)
+        self._last_mean_availability = Decimal(0.0)
         self._blob_manager = blob_manager
         self._peer_finder = peer_finder
         self._dht_node = dht_node
@@ -49,6 +49,11 @@ class BlobAvailabilityTracker(object):
         d = defer.DeferredList(dl)
         d.addCallback(lambda results: [val for success, val in results if success])
         return d
+
+    @property
+    def last_mean_availability(self):
+        return max(Decimal(0.01), self._last_mean_availability)
+
 
     def _update_peers_for_blob(self, blob):
         def _save_peer_info(blob_hash, peers):
@@ -86,4 +91,4 @@ class BlobAvailabilityTracker(object):
     def _get_mean_peers(self):
         num_peers = [len(self.availability[blob]) for blob in self.availability]
         mean = Decimal(sum(num_peers)) / Decimal(max(1, len(num_peers)))
-        self.last_mean_availability = mean
+        self._last_mean_availability = mean

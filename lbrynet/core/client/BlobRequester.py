@@ -51,6 +51,7 @@ class BlobRequester(object):
         self._available_blobs = defaultdict(list)  # {Peer: [blob_hash]}
         self._unavailable_blobs = defaultdict(list)  # {Peer: [blob_hash]}}
         self._protocol_prices = {}  # {ClientProtocol: price}
+        self._protocol_offers = {}
         self._price_disagreements = []  # [Peer]
         self._protocol_tries = {}
         self._incompatible_peers = []
@@ -84,17 +85,18 @@ class BlobRequester(object):
         if availability.can_make_request():
             availability.make_request_and_handle_response()
             sent_request = True
-
+        if price.can_make_request():
+            # TODO: document why a PriceRequest is only made if an
+            # Availability or Download request was made
+            price.make_request_and_handle_response()
+            sent_request = True
         if download.can_make_request():
             try:
                 download.make_request_and_handle_response()
                 sent_request = True
             except InsufficientFundsError as err:
                 return defer.fail(err)
-        if sent_request and price.can_make_request():
-            # TODO: document why a PriceRequest is only made if an
-            # Availability or Download request was made
-            price.make_request_and_handle_response()
+
         return defer.succeed(sent_request)
 
     def _get_hash_for_peer_search(self):
@@ -183,6 +185,10 @@ class RequestHelper(object):
         return self.requestor._protocol_prices
 
     @property
+    def protocol_offers(self):
+        return self.requestor._protocol_offers
+
+    @property
     def available_blobs(self):
         return self.requestor._available_blobs[self.peer]
 
@@ -213,7 +219,7 @@ class RequestHelper(object):
         rate = self.protocol_prices.get(self.protocol)
         if rate is None:
             rate = self.payment_rate_manager.get_rate_blob_data(self.peer, self.available_blobs)
-            self.protocol_prices[self.protocol] = rate
+            self.protocol_offers[self.protocol] = rate
         return rate
 
 
@@ -337,7 +343,9 @@ class AvailabilityRequest(RequestHelper):
 class PriceRequest(RequestHelper):
     """Ask a peer if a certain price is acceptable"""
     def can_make_request(self):
-        return self.get_and_save_rate() is not None
+        if self.requestor._available_blobs:
+            return self.get_and_save_rate() is not None
+        return False
 
     def make_request_and_handle_response(self):
         request = self._get_price_request()
@@ -362,22 +370,19 @@ class PriceRequest(RequestHelper):
         assert request.response_identifier == 'blob_data_payment_rate'
         if 'blob_data_payment_rate' not in response_dict:
             return InvalidResponseError("response identifier not in response")
-        assert self.protocol in self.protocol_prices
-        rate = self.protocol_prices[self.protocol]
-        offer = Offer(rate)
+        assert self.protocol in self.protocol_offers
+        offer = Offer(self.protocol_offers[self.protocol])
         offer.handle(response_dict['blob_data_payment_rate'])
         self.payment_rate_manager.record_offer_reply(self.peer.host, offer)
-
         if offer.is_accepted:
-            log.debug("Offered rate %f/mb accepted by %s", rate, str(self.peer.host))
+            log.info("Offered rate %f/mb accepted by %s", offer.rate, self.peer.host)
+            self.protocol_prices[self.protocol] = offer.rate
             return True
         elif offer.is_too_low:
-            log.debug("Offered rate %f/mb rejected by %s", rate, str(self.peer.host))
-            del self.protocol_prices[self.protocol]
+            log.debug("Offered rate %f/mb rejected by %s", offer.rate, self.peer.host)
             return True
         else:
             log.warning("Price disagreement")
-            del self.protocol_prices[self.protocol]
             self.requestor._price_disagreements.append(self.peer)
             return False
 
@@ -389,7 +394,9 @@ class DownloadRequest(RequestHelper):
         self.wallet = wallet
 
     def can_make_request(self):
-        return self.get_blob_details()
+        if self.protocol in self.protocol_prices:
+            return self.get_blob_details()
+        return False
 
     def make_request_and_handle_response(self):
         request = self._get_request()
