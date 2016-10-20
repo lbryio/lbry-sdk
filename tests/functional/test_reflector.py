@@ -93,7 +93,7 @@ class TestReflector(unittest.TestCase):
             use_upnp=False,
             rate_limiter=rate_limiter,
             wallet=wallet,
-            blob_tracker_class=mocks.DummyBlobAvailabilityTracker,
+            blob_tracker_class=mocks.BlobAvailabilityTracker,
             dht_node_class=Node
         )
 

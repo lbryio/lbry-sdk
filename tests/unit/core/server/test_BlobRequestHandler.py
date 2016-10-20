@@ -8,7 +8,7 @@ from twisted.trial import unittest
 from lbrynet.core import Peer
 from lbrynet.core.server import BlobRequestHandler
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
-from tests.mocks import DummyBlobAvailabilityTracker
+from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 
 
 class TestBlobRequestHandlerQueries(unittest.TestCase):
