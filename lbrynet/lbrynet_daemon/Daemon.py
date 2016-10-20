@@ -48,7 +48,7 @@ from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS,
                          DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, \
                          LOG_POST_URL, LOG_FILE_NAME, REFLECTOR_SERVERS, SEARCH_SERVERS
 from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
-from lbrynet.conf import DEFAULT_TIMEOUT
+from lbrynet.conf import DEFAULT_TIMEOUT, is_generous_host
 from lbrynet import conf
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
 from lbrynet.core.Session import Session
@@ -1063,7 +1063,8 @@ class Daemon(jsonrpc.JSONRPC):
             self.session = Session(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
-                                       use_upnp=self.use_upnp, wallet=results['wallet'])
+                                       use_upnp=self.use_upnp, wallet=results['wallet'],
+                                       is_generous=is_generous_host)
             self.startup_status = STARTUP_STAGES[2]
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)

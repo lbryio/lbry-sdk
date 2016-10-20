@@ -3,7 +3,7 @@ Some network wide and also application specific parameters
 """
 import os
 
-
+is_generous_host = True
 IS_DEVELOPMENT_VERSION = False
 
 MAX_HANDSHAKE_SIZE = 2**16
