@@ -72,12 +72,16 @@ def main():
     if meth in api.help():
         try:
             if params:
-                r = api.call(meth, params)
+                resp = api.call(meth, params)
             else:
-                r = api.call(meth)
-            print json.dumps(r, sort_keys=True)
-        except:
-            print "Something went wrong, here's the usage for %s:" % meth
+                resp = api.call(meth)
+            print json.dumps(resp, sort_keys=True)
+        except Exception:
+            # TODO: The api should return proper error codes
+            # and messages so that they can be passed along to the user
+            # instead of this generic message.
+            # https://app.asana.com/0/158602294500137/200173944358192
+            print "Something went wrong. Here's the usage for {}:".format(meth)
             print api.help({'function': meth})
     else:
         print "Unknown function"

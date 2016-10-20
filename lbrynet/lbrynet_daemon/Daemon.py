@@ -147,6 +147,10 @@ class FileID:
 # TODO alert if your copy of a lbry file is out of date with the name record
 
 
+class NoValidSearch(Exception):
+    pass
+
+
 class Parameters(object):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
@@ -1283,7 +1287,10 @@ class Daemon(jsonrpc.JSONRPC):
         return _GetFileHelper(self, search_by, val, return_json).retrieve_file()
 
     def _get_lbry_files(self):
-        d = defer.DeferredList([self._get_lbry_file('sd_hash', l.sd_hash) for l in self.lbry_file_manager.lbry_files])
+        d = defer.DeferredList([
+            self._get_lbry_file(FileID.SD_HASH, l.sd_hash)
+            for l in self.lbry_file_manager.lbry_files
+        ])
         return d
 
     def _reflect(self, lbry_file):
@@ -1633,8 +1640,7 @@ class Daemon(jsonrpc.JSONRPC):
         return d
 
     def jsonrpc_get_lbry_file(self, p):
-        """
-        Get lbry file
+        """Get lbry file
 
         Args:
             'name': get file by lbry uri,
@@ -1652,14 +1658,17 @@ class Daemon(jsonrpc.JSONRPC):
             'upload_allowed': bool
             'sd_hash': string
         """
-
-        if p.keys()[0] in ['name', 'sd_hash', 'file_name']:
-            search_type = p.keys()[0]
-            d = self._get_lbry_file(search_type, p[search_type])
-        else:
-            d = defer.fail()
+        d = self._get_deferred_for_lbry_file(p)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
+
+    def _get_deferred_for_lbry_file(self, p):
+        try:
+            searchtype, value = get_lbry_file_search_value(p)
+        except NoValidSearch:
+            return defer.fail()
+        else:
+            return self._get_lbry_file(searchtype, value)
 
     def jsonrpc_resolve_name(self, p):
         """
@@ -1673,9 +1682,8 @@ class Daemon(jsonrpc.JSONRPC):
 
         force = p.get('force', False)
 
-        if 'name' in p:
-            name = p['name']
-        else:
+        name = p.get(FileID.NAME)
+        if not name:
             return self._render_response(None, BAD_REQUEST)
 
         d = self._resolve_name(name, force_refresh=force)
@@ -1692,7 +1700,7 @@ class Daemon(jsonrpc.JSONRPC):
             claim info, False if no such claim exists
         """
 
-        name = p['name']
+        name = p[FileID.NAME]
         d = self.session.wallet.get_my_claim(name)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -1714,7 +1722,7 @@ class Daemon(jsonrpc.JSONRPC):
                 r['amount'] = float(r['amount']) / 10**8
                 return r
 
-        name = p['name']
+        name = p[FileID.NAME]
         txid = p.get('txid', None)
         d = self.session.wallet.get_claim_info(name, txid)
         d.addCallback(_convert_amount_to_float)
@@ -1727,11 +1735,11 @@ class Daemon(jsonrpc.JSONRPC):
         #       can spec what parameters it expects and how to set default values
         timeout = p.get('timeout', self.download_timeout)
         download_directory = p.get('download_directory', self.download_directory)
-        file_name = p.get('file_name')
+        file_name = p.get(FileID.FILE_NAME)
         stream_info = p.get('stream_info')
         sd_hash = get_sd_hash(stream_info)
         wait_for_write = p.get('wait_for_write', True)
-        name = p.get('name')
+        name = p.get(FileID.NAME)
         return Parameters(
             timeout=timeout,
             download_directory=download_directory,
@@ -1785,14 +1793,20 @@ class Daemon(jsonrpc.JSONRPC):
         """
 
         def _stop_file(f):
-            d =  self.lbry_file_manager.toggle_lbry_file_running(f)
-            d.addCallback(lambda _: "Stopped LBRY file")
-            return d
+            if f.stopped:
+                return "LBRY file wasn't running"
+            else:
+                d = self.lbry_file_manager.toggle_lbry_file_running(f)
+                d.addCallback(lambda _: "Stopped LBRY file")
+                return d
 
-        if p.keys()[0] in ['name', 'sd_hash', 'file_name']:
-            search_type = p.keys()[0]
-            d = self._get_lbry_file(search_type, p[search_type], return_json=False)
-            d.addCallback(lambda l: _stop_file(l) if not l.stopped else "LBRY file wasn't running")
+        try:
+            searchtype, value = get_lbry_file_search_value(p)
+        except NoValidSearch:
+            d = defer.fail()
+        else:
+            d = self._get_lbry_file(searchtype, value, return_json=False)
+            d.addCallback(_stop_file)
 
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -1810,13 +1824,19 @@ class Daemon(jsonrpc.JSONRPC):
         """
 
         def _start_file(f):
-            d = self.lbry_file_manager.toggle_lbry_file_running(f)
-            return defer.succeed("Started LBRY file")
+            if f.stopped:
+                d = self.lbry_file_manager.toggle_lbry_file_running(f)
+                return defer.succeed("Started LBRY file")
+            else:
+                return "LBRY file was already running"
 
-        if p.keys()[0] in ['name', 'sd_hash', 'file_name']:
-            search_type = p.keys()[0]
-            d = self._get_lbry_file(search_type, p[search_type], return_json=False)
-            d.addCallback(lambda l: _start_file(l) if l.stopped else "LBRY file was already running")
+        try:
+            searchtype, value = get_lbry_file_search_value(p)
+        except NoValidSearch:
+            d = defer.fail()
+        else:
+            d = self._get_lbry_file(searchtype, value, return_json=False)
+            d.addCallback(_start_file)
 
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -1831,7 +1851,7 @@ class Daemon(jsonrpc.JSONRPC):
             estimated cost
         """
 
-        name = p['name']
+        name = p[FileID.NAME]
 
         d = self._get_est_cost(name)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
@@ -1883,21 +1903,23 @@ class Daemon(jsonrpc.JSONRPC):
             confirmation message
         """
 
-        if 'delete_target_file' in p.keys():
-            delete_file = p['delete_target_file']
-        else:
-            delete_file = True
+        delete_file = p.get('delete_target_file', True)
 
         def _delete_file(f):
+            if not f:
+                return False
             file_name = f.file_name
             d = self._delete_lbry_file(f, delete_file=delete_file)
             d.addCallback(lambda _: "Deleted LBRY file" + file_name)
             return d
 
-        if 'name' in p.keys() or 'sd_hash' in p.keys() or 'file_name' in p.keys():
-            search_type = [k for k in p.keys() if k != 'delete_target_file'][0]
-            d = self._get_lbry_file(search_type, p[search_type], return_json=False)
-            d.addCallback(lambda l: _delete_file(l) if l else False)
+        try:
+            searchtype, value = get_lbry_file_search_value(p)
+        except NoValidSearch:
+            d = defer.fail()
+        else:
+            d = self._get_lbry_file(searchtype, value, return_json=False)
+            d.addCallback(_delete_file)
 
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -1922,12 +1944,12 @@ class Daemon(jsonrpc.JSONRPC):
             return m
 
         def _reflect_if_possible(sd_hash, txid):
-            d = self._get_lbry_file('sd_hash', sd_hash, return_json=False)
+            d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
             d.addCallback(self._reflect)
             d.addCallback(lambda _: txid)
             return d
 
-        name = p['name']
+        name = p[FileID.NAME]
 
         log.info("Publish: ")
         log.info(p)
@@ -2033,7 +2055,7 @@ class Daemon(jsonrpc.JSONRPC):
             txid
         """
 
-        name = p['name']
+        name = p[FileID.NAME]
         claim_id = p['claim_id']
         amount = p['amount']
         d = self.session.wallet.support_claim(name, claim_id, amount)
@@ -2073,7 +2095,7 @@ class Daemon(jsonrpc.JSONRPC):
             list of name claims
         """
 
-        name = p['name']
+        name = p[FileID.NAME]
         d = self.session.wallet.get_claims_for_name(name)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -2270,7 +2292,7 @@ class Daemon(jsonrpc.JSONRPC):
         Returns
             sd blob, dict
         """
-        sd_hash = p['sd_hash']
+        sd_hash = p[FileID.SD_HASH]
         timeout = p.get('timeout', DEFAULT_SD_DOWNLOAD_TIMEOUT)
 
         d = self._download_sd_blob(sd_hash, timeout)
@@ -2464,8 +2486,8 @@ class Daemon(jsonrpc.JSONRPC):
             True or traceback
         """
 
-        sd_hash = p['sd_hash']
-        d = self._get_lbry_file('sd_hash', sd_hash, return_json=False)
+        sd_hash = p[FileID.SD_HASH]
+        d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
         d.addCallback(self._reflect)
         d.addCallbacks(lambda _: self._render_response(True, OK_CODE), lambda err: self._render_response(err.getTraceback(), OK_CODE))
         return d
@@ -2546,7 +2568,7 @@ class Daemon(jsonrpc.JSONRPC):
             else:
                 return 0.0
 
-        name = p['name']
+        name = p[FileID.NAME]
 
         d = self._resolve_name(name, force_refresh=True)
         d.addCallback(get_sd_hash)
@@ -2567,7 +2589,7 @@ def get_lbryum_version_from_github():
     version = version.replace("'", "")
     return version
 
-    
+
 def get_lbrynet_version_from_github():
     """Return the latest released version from github."""
     response = requests.get('https://api.github.com/repos/lbryio/lbry/releases/latest')
@@ -2904,3 +2926,10 @@ class _GetFileHelper(object):
             d = defer.succeed(message)
         return d
 
+
+def get_lbry_file_search_value(p):
+    for searchtype in (FileID.SD_HASH, FileID.NAME, FileID.FILE_NAME):
+        value = p.get(searchtype)
+        if value:
+            return searchtype, value
+    raise NoValidSearch()
