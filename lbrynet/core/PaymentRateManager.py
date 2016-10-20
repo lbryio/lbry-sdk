@@ -1,5 +1,7 @@
 from lbrynet.core.Strategy import get_default_strategy
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, MIN_BLOB_INFO_PAYMENT_RATE
+from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, MIN_BLOB_INFO_PAYMENT_RATE, is_generous_host
+from decimal import Decimal
+
 
 class BasePaymentRateManager(object):
     def __init__(self, rate=MIN_BLOB_DATA_PAYMENT_RATE, info_rate=MIN_BLOB_INFO_PAYMENT_RATE):
@@ -34,7 +36,7 @@ class PaymentRateManager(object):
 
 
 class NegotiatedPaymentRateManager(object):
-    def __init__(self, base, availability_tracker, generous=True):
+    def __init__(self, base, availability_tracker, generous=is_generous_host):
         """
         @param base: a BasePaymentRateManager
         @param availability_tracker: a BlobAvailabilityTracker
@@ -71,3 +73,9 @@ class NegotiatedPaymentRateManager(object):
 
     def record_offer_reply(self, peer, offer):
         self.strategy.update_accepted_offers(peer, offer)
+
+    def price_limit_reached(self, peer):
+        if peer in self.strategy.pending_sent_offers:
+            offer = self.strategy.pending_sent_offers[peer]
+            return offer.is_too_low and round(Decimal.from_float(offer.rate), 5) >= round(self.strategy.max_rate, 5)
+        return False

@@ -54,6 +54,7 @@ class BlobRequester(object):
         self._protocol_offers = {}
         self._price_disagreements = []  # [Peer]
         self._protocol_tries = {}
+        self._maxed_out_peers = []
         self._incompatible_peers = []
 
     ######## IRequestCreator #########
@@ -120,7 +121,9 @@ class BlobRequester(object):
 
             def choose_best_peers(peers):
                 bad_peers = self._get_bad_peers()
-                return [p for p in peers if not p in bad_peers]
+                without_bad_peers = [p for p in peers if not p in bad_peers]
+                without_maxed_out_peers = [p for p in without_bad_peers if p not in self._maxed_out_peers]
+                return without_maxed_out_peers
 
             d.addCallback(choose_best_peers)
 
@@ -196,6 +199,10 @@ class RequestHelper(object):
     def unavailable_blobs(self):
         return self.requestor._unavailable_blobs[self.peer]
 
+    @property
+    def maxed_out_peers(self):
+        return self.requestor._maxed_out_peers
+
     def update_local_score(self, score):
         self.requestor._update_local_score(self.peer, score)
 
@@ -216,8 +223,16 @@ class RequestHelper(object):
         return reason
 
     def get_and_save_rate(self):
+        if self.payment_rate_manager.price_limit_reached(self.peer):
+            if self.peer not in self.maxed_out_peers:
+                self.maxed_out_peers.append(self.peer)
+            return None
         rate = self.protocol_prices.get(self.protocol)
         if rate is None:
+            if self.peer in self.payment_rate_manager.strategy.pending_sent_offers:
+                pending = self.payment_rate_manager.strategy.pending_sent_offers[self.peer]
+                if not pending.is_too_low and not pending.is_accepted:
+                    return pending.rate
             rate = self.payment_rate_manager.get_rate_blob_data(self.peer, self.available_blobs)
             self.protocol_offers[self.protocol] = rate
         return rate
@@ -343,7 +358,7 @@ class AvailabilityRequest(RequestHelper):
 class PriceRequest(RequestHelper):
     """Ask a peer if a certain price is acceptable"""
     def can_make_request(self):
-        if self.requestor._available_blobs:
+        if len(self.available_blobs) and not self.protocol in self.protocol_prices:
             return self.get_and_save_rate() is not None
         return False
 
@@ -373,14 +388,14 @@ class PriceRequest(RequestHelper):
         assert self.protocol in self.protocol_offers
         offer = Offer(self.protocol_offers[self.protocol])
         offer.handle(response_dict['blob_data_payment_rate'])
-        self.payment_rate_manager.record_offer_reply(self.peer.host, offer)
+        self.payment_rate_manager.record_offer_reply(self.peer, offer)
         if offer.is_accepted:
             log.info("Offered rate %f/mb accepted by %s", offer.rate, self.peer.host)
             self.protocol_prices[self.protocol] = offer.rate
             return True
         elif offer.is_too_low:
             log.debug("Offered rate %f/mb rejected by %s", offer.rate, self.peer.host)
-            return True
+            return not self.payment_rate_manager.price_limit_reached(self.peer)
         else:
             log.warning("Price disagreement")
             self.requestor._price_disagreements.append(self.peer)
