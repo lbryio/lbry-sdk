@@ -1,14 +1,17 @@
 import json
 import logging
 import logging.handlers
+import os
 import sys
 import traceback
 
+import appdirs
 from requests_futures.sessions import FuturesSession
 
 import lbrynet
 from lbrynet.conf import settings
 from lbrynet.core import utils
+
 
 session = FuturesSession()
 
@@ -54,6 +57,12 @@ def remove_handlers(log, handler_name):
 
 
 def _log_decorator(fn):
+    """Configure a logging handler.
+
+    `fn` is a function that returns a logging handler. The returned
+    handler has its log-level set and is attached to the specified
+    logger or the root logger.
+    """
     def helper(*args, **kwargs):
         log = kwargs.pop('log', logging.getLogger())
         level = kwargs.pop('level', logging.INFO)
@@ -66,8 +75,12 @@ def _log_decorator(fn):
             remove_handlers(log, handler.name)
         handler.setLevel(level)
         log.addHandler(handler)
+        # need to reduce the logger's level down to the
+        # handler's level or else the handler won't
+        # get those messages
         if log.level > level:
             log.setLevel(level)
+        return handler
     return helper
 
 
@@ -76,19 +89,10 @@ def disable_third_party_loggers():
     logging.getLogger('urllib3').setLevel(logging.WARNING)
     logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
 
-def disable_noisy_loggers():
-    logging.getLogger('lbrynet.analytics.api').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.dht').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.lbrynet_daemon').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.core.Wallet').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.lbryfile').setLevel(logging.INFO)
-    logging.getLogger('lbrynet.lbryfilemanager').setLevel(logging.INFO)
-
 
 @_log_decorator
 def configure_console(**kwargs):
-    """Convenience function to configure a logger that outputs to stdout"""
+    """Convenience function to configure a log-handler that outputs to stdout"""
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(DEFAULT_FORMATTER)
     handler.name = 'console'
@@ -97,6 +101,7 @@ def configure_console(**kwargs):
 
 @_log_decorator
 def configure_file_handler(file_name, **kwargs):
+    """Convenience function to configure a log-handler that writes to `file_name`"""
     handler = logging.handlers.RotatingFileHandler(file_name, maxBytes=2097152, backupCount=5)
     handler.setFormatter(DEFAULT_FORMATTER)
     handler.name = 'file'
@@ -153,3 +158,95 @@ def failure(failure, log, msg, *args):
     """
     args += (failure.getErrorMessage(),)
     log.error(msg, *args, exc_info=failure.getTracebackObject())
+
+
+def convert_verbose(verbose):
+    """Convert the results of the --verbose flag into a list of logger names
+
+    if --verbose is not provided, args.verbose will be None and logging
+    should be at the info level.
+    if --verbose is provided, but not followed by any arguments, then
+    args.verbose = [] and debug logging should be enabled for all of lbrynet
+    if --verbose is provided and followed by arguments, those arguments
+    will be in a list
+    """
+    if verbose is None:
+        return []
+    if verbose == []:
+        return ['lbrynet']
+    return verbose
+
+
+def configure_logging(file_name, console, verbose=None):
+    """Apply the default logging configuration.
+
+    Enables two log-handlers at the INFO level: a file logger and a loggly logger.
+    Optionally turns on a console logger that defaults to the INFO level, with
+    specified loggers being set to the DEBUG level.
+
+    Args:
+        file_name: the file to which logs should be saved
+        console: If true, enable a console logger
+        verbose: a list of loggers to set to debug level.
+            See `convert_verbose` for more details.
+    """
+    verbose = convert_verbose(verbose)
+    configure_file_handler(file_name)
+    configure_loggly_handler()
+    disable_third_party_loggers()
+    if console:
+        # if there are some loggers at the debug level, we need
+        # to enable the console to allow debug. Otherwise, only
+        # allow info.
+        level = 'DEBUG' if verbose else 'INFO'
+        handler = configure_console(level=level)
+        if verbose:
+            handler.addFilter(LoggerNameFilter(verbose))
+
+
+def get_log_file():
+    """Return the log file for this platform.
+
+    Also ensure the containing directory exists
+    """
+    if sys.platform != "darwin":
+        log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+    else:
+        log_dir = appdirs.user_data_dir("LBRY")
+
+    try:
+        os.mkdir(log_dir)
+    except OSError:
+        pass
+
+    lbrynet_log = os.path.join(log_dir, conf.LOG_FILE_NAME)
+    return lbrynet_log
+
+
+class LoggerNameFilter(object):
+    """Filter a log record based on its name.
+
+    Allows all info level and higher records to pass thru.
+    Debug records pass if the log record name (or a parent) match
+    the input list of logger names.
+    """
+    def __init__(self, logger_names):
+        self.logger_names = logger_names
+
+    def filter(self, record):
+        if record.levelno >= logging.INFO:
+            return True
+        name = record.name
+        while name:
+            if name in self.logger_names:
+                return True
+            name = get_parent(name)
+        return False
+
+
+def get_parent(logger_name):
+    names = logger_name.split('.')
+    if len(names) == 1:
+        return ''
+    names = names[:-1]
+    return '.'.join(names)

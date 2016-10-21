@@ -1,8 +1,6 @@
 import argparse
 import logging.handlers
-import os
 import webbrowser
-import sys
 
 from twisted.web import server, guard
 from twisted.internet import defer, reactor
@@ -18,17 +16,8 @@ from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import settings
 
-log_dir = settings.data_dir
 
-if not os.path.isdir(log_dir):
-    os.mkdir(log_dir)
-
-lbrynet_log = os.path.join(log_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-
-
-if getattr(sys, 'frozen', False) and os.name == "nt":
-    os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
 
 
 def test_internet_connection():
@@ -56,45 +45,30 @@ def start():
                         help="lbrycrd or lbryum, default lbryum",
                         type=str,
                         default='lbryum')
-
-    parser.add_argument("--ui",
-                        help="path to custom UI folder",
-                        default=None)
-
-    parser.add_argument("--branch",
-                        help="Branch of lbry-web-ui repo to use, defaults on master",
-                        default=settings.ui_branch)
-
-    parser.add_argument("--http-auth",
-                        dest="useauth",
-                        action="store_true")
-
-    parser.add_argument('--no-launch',
-                        dest='launchui',
-                        action="store_false")
-
-    parser.add_argument('--log-to-console',
-                        dest='logtoconsole',
-                        action="store_true")
-
-    parser.add_argument('--quiet',
-                        dest='quiet',
-                        action="store_true")
-
-    parser.add_argument('--verbose',
-                        action='store_true',
-                        help='enable more debug output for the console')
-
-    parser.set_defaults(branch=False, launchui=True, logtoconsole=False, quiet=False, useauth=settings.use_auth_http)
+    parser.add_argument("--ui", help="path to custom UI folder", default=None)
+    parser.add_argument(
+        "--branch",
+        help='Branch of lbry-web-ui repo to use, defaults to {}'.format(settings.ui_branch),
+        default=settings.ui_branch)
+    parser.add_argument('--no-launch', dest='launchui', action="store_false")
+    parser.add_argument("--http-auth", dest="useauth", action="store_true")
+    parser.add_argument(
+        '--log-to-console', dest='logtoconsole', action='store_true',
+        help=('Set to enable console logging. Set the --verbose flag '
+              ' to enable more detailed console logging'))
+    parser.add_argument(
+        '--quiet', dest='quiet', action="store_true",
+        help=('If log-to-console is not set, setting this disables all console output. '
+              'If log-to-console is set, this argument is ignored'))
+    parser.add_argument(
+        '--verbose', nargs="*",
+        help=('Enable debug output. Optionally specify loggers for which debug output '
+              'should selectively be applied.'))
     args = parser.parse_args()
 
-    log_support.configure_file_handler(lbrynet_log)
-    log_support.configure_loggly_handler()
-    if args.logtoconsole:
-        log_support.configure_console(level='DEBUG')
-    log_support.disable_third_party_loggers()
-    if not args.verbose:
-        log_support.disable_noisy_loggers()
+    utils.setup_certs_for_windows()
+    lbrynet_log = log_support.get_log_file()
+    log_support.configure_logging(lbrynet_log, args.logtoconsole, args.verbose)
 
     to_pass = {}
     settings_path = os.path.join(settings.data_dir, "daemon_settings.yml")
