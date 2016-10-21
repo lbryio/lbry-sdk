@@ -1,11 +1,15 @@
+import datetime
 import json
 import logging
 import logging.handlers
 import os
+import platform
 import sys
 import traceback
 
 import appdirs
+import base58
+import requests
 from requests_futures.sessions import FuturesSession
 
 import lbrynet
@@ -219,7 +223,7 @@ def get_log_file():
     except OSError:
         pass
 
-    lbrynet_log = os.path.join(log_dir, conf.LOG_FILE_NAME)
+    lbrynet_log = os.path.join(log_dir, settings.LOG_FILE_NAME)
     return lbrynet_log
 
 
@@ -250,3 +254,37 @@ def get_parent(logger_name):
         return ''
     names = names[:-1]
     return '.'.join(names)
+
+
+class LogUploader(object):
+    def __init__(self, log_name, log_file, log_size):
+        self.log_name = log_name
+        self.log_file = log_file
+        self.log_size = log_size
+
+    def upload(self, exclude_previous, lbryid, log_type):
+        if not os.path.isfile(self.log_file):
+            return
+        with open(self.log_file) as f:
+            if exclude_previous:
+                f.seek(self.log_size)
+                log_contents = f.read()
+            else:
+                log_contents = f.read()
+        params = {
+            'date': datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
+            'hash': base58.b58encode(lbryid)[:20],
+            'sys': platform.system(),
+            'type': "%s-%s" % (self.log_name, log_type) if log_type else self.log_name,
+            'log': log_contents
+        }
+        requests.post(settings.LOG_POST_URL, params)
+
+    @classmethod
+    def load(cls, log_name, log_file):
+        if os.path.isfile(log_file):
+            with open(log_file, 'r') as f:
+                log_size = len(f.read())
+        else:
+            log_size = 0
+        return cls(log_name, log_file, log_size)
