@@ -1,6 +1,5 @@
 import logging
 import os
-import socket
 import sys
 import threading
 import webbrowser
@@ -11,13 +10,14 @@ import win32gui_struct
 from jsonrpc.proxy import JSONRPCProxy
 from twisted.internet import reactor, error
 from twisted.web import server
-import twisted
 
 try:
     import winxpgui as win32gui
 except ImportError:
     import win32gui
 
+from lbrynet import conf
+from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
@@ -284,6 +284,8 @@ def main(lbry_name=None):
 
 if __name__ == '__main__':
     utils.setup_certs_for_windows()
+    log_file = conf.get_log_filename()
+    log_support.configure_logging(log_file, console=False)
     lbry_daemon = JSONRPCProxy.from_url(settings.API_CONNECTION_STRING)
 
     try:
