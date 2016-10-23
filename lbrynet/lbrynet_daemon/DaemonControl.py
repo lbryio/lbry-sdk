@@ -11,6 +11,7 @@ from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.lbrynet_daemon.auth.auth import PasswordChecker, HttpPasswordRealm
 from lbrynet.lbrynet_daemon.auth.util import initialize_api_key_file
+from lbrynet import conf
 from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
@@ -68,7 +69,7 @@ def start():
     args = parser.parse_args()
 
     utils.setup_certs_for_windows()
-    lbrynet_log = log_support.get_log_file()
+    lbrynet_log = conf.get_log_file()
     log_support.configure_logging(lbrynet_log, args.logtoconsole, args.verbose)
 
     to_pass = {}

@@ -1,10 +1,9 @@
 import logging
 import mimetypes
 import os
-import sys
 import random
 
-from appdirs import user_data_dir
+from twisted.internet import threads, defer, reactor
 
 from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
@@ -13,17 +12,8 @@ from lbrynet.metadata.Metadata import Metadata
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet import reflector
 from lbrynet.conf import settings
-from twisted.internet import threads, defer, reactor
 
-if sys.platform != "darwin":
-    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-else:
-    log_dir = user_data_dir("LBRY")
 
-if not os.path.isdir(log_dir):
-    os.mkdir(log_dir)
-
-lbrynet_log = os.path.join(log_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 

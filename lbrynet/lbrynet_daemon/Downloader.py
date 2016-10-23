@@ -1,10 +1,8 @@
 import json
 import logging
 import os
-import sys
 
 from copy import deepcopy
-from appdirs import user_data_dir
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
@@ -20,28 +18,24 @@ DOWNLOAD_TIMEOUT_CODE = 'timeout'
 DOWNLOAD_RUNNING_CODE = 'running'
 DOWNLOAD_STOPPED_CODE = 'stopped'
 STREAM_STAGES = [
-                    (INITIALIZING_CODE, 'Initializing...'),
-                    (DOWNLOAD_METADATA_CODE, 'Downloading metadata'),
-                    (DOWNLOAD_RUNNING_CODE, 'Started stream'),
-                    (DOWNLOAD_STOPPED_CODE, 'Paused stream'),
-                    (DOWNLOAD_TIMEOUT_CODE, 'Stream timed out')
-                ]
+    (INITIALIZING_CODE, 'Initializing...'),
+    (DOWNLOAD_METADATA_CODE, 'Downloading metadata'),
+    (DOWNLOAD_RUNNING_CODE, 'Started stream'),
+    (DOWNLOAD_STOPPED_CODE, 'Paused stream'),
+    (DOWNLOAD_TIMEOUT_CODE, 'Stream timed out')
+]
 
-if sys.platform != "darwin":
-    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-else:
-    log_dir = user_data_dir("LBRY")
 
-if not os.path.isdir(log_dir):
-    os.mkdir(log_dir)
-
-lbrynet_log = os.path.join(log_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 
 class GetStream(object):
-    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, exchange_rate_manager,
-                 max_key_fee, data_rate=0.5, timeout=settings.download_timeout, download_directory=None, file_name=None):
+    def __init__(self, sd_identifier, session, wallet,
+                 lbry_file_manager, exchange_rate_manager,
+                 max_key_fee, data_rate=0.5, timeout=None,
+                 download_directory=None, file_name=None):
+        if timeout is None:
+            timeout = settings.download_timeout
         self.wallet = wallet
         self.resolved_name = None
         self.description = None

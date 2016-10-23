@@ -25,16 +25,7 @@ from lbrynet.conf import settings
 from packaging.uri_handler.LBRYURIHandler import LBRYURIHandler
 
 
-# TODO: omg, this code is essentially duplicated in LBRYDaemon
-data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-if not os.path.isdir(data_dir):
-    os.mkdir(data_dir)
-
-lbrynet_log = os.path.join(data_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-
-if getattr(sys, 'frozen', False) and os.name == "nt":
-    os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
 
 
 def test_internet_connection():
@@ -290,7 +281,9 @@ def main(lbry_name=None):
         sys.exit(1)
     reactor.run()
 
+
 if __name__ == '__main__':
+    utils.setup_certs_for_windows()
     lbry_daemon = JSONRPCProxy.from_url(settings.API_CONNECTION_STRING)
 
     try:

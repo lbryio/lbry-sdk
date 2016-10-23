@@ -7,7 +7,6 @@ import platform
 import sys
 import traceback
 
-import appdirs
 import base58
 import requests
 from requests_futures.sessions import FuturesSession
@@ -206,25 +205,6 @@ def configure_logging(file_name, console, verbose=None):
         handler = configure_console(level=level)
         if verbose:
             handler.addFilter(LoggerNameFilter(verbose))
-
-
-def get_log_file():
-    """Return the log file for this platform.
-
-    Also ensure the containing directory exists
-    """
-    if sys.platform != "darwin":
-        log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-    else:
-        log_dir = appdirs.user_data_dir("LBRY")
-
-    try:
-        os.mkdir(log_dir)
-    except OSError:
-        pass
-
-    lbrynet_log = os.path.join(log_dir, settings.LOG_FILE_NAME)
-    return lbrynet_log
 
 
 class LoggerNameFilter(object):
