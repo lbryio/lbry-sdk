@@ -32,11 +32,12 @@ def migrate_blockchainname_db(db_dir):
     name_metadata = file_cursor.execute("select * from name_metadata").fetchall()
     claim_metadata = file_cursor.execute("select * from claim_ids").fetchall()
 
+    # fill n as -1, Wallet.py will be responsible for filling in correct n 
     for name, txid, sd_hash in name_metadata:
-        mem_cursor.execute("insert into name_metadata values (?, ?, ?, ?) ", (name, txid, 0, sd_hash))
+        mem_cursor.execute("insert into name_metadata values (?, ?, ?, ?) ", (name, txid, -1, sd_hash))
 
     for claim_id, name, txid in claim_metadata:
-        mem_cursor.execute("insert into claim_ids values (?, ?, ?, ?)", (claim_id, name, txid, 0))
+        mem_cursor.execute("insert into claim_ids values (?, ?, ?, ?)", (claim_id, name, txid, -1))
     temp_db.commit()
 
     new_name_metadata = mem_cursor.execute("select * from name_metadata").fetchall()
