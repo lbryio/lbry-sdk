@@ -12,8 +12,12 @@ def do_migration(db_dir):
 
 
 def migrate_blockchainname_db(db_dir):
+    blockchainname_db = os.path.join(db_dir,"blockchainname.db")
+    # skip migration on fresh installs 
+    if not os.path.isfile(blockchainname_db):
+        return 
     temp_db = sqlite3.connect(":memory:")
-    db_file = sqlite3.connect(os.path.join(db_dir, "blockchainname.db"))
+    db_file = sqlite3.connect(blockchainname_db)
     file_cursor = db_file.cursor()
     mem_cursor = temp_db.cursor()
 
