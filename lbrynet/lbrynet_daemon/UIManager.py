@@ -74,7 +74,8 @@ class UIManager(object):
                 self.loaded_branch = None
                 self.loaded_requirements = None
 
-    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=None, branch_specified=False, check_requirements=None):
+    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=None,
+              branch_specified=False, check_requirements=None):
         if check_requirements is not None:
             self.check_requirements = check_requirements
         if self.branch is not None:
@@ -104,9 +105,12 @@ class UIManager(object):
 
     def _up_to_date(self):
         def _get_git_info():
-            response = urlopen(self._git_url)
-            data = json.loads(response.read())
-            return defer.succeed(data['sha'])
+            try:
+                response = urlopen(self._git_url)
+                data = json.loads(response.read())
+                return defer.succeed(data['sha'])
+            except Exception:
+                return defer.fail()
 
         def _set_git(version):
             self.git_version = version.replace('\n', '')
