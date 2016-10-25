@@ -5,9 +5,8 @@ import webbrowser
 import sys
 
 from twisted.web import server, guard
-from twisted.internet import defer, reactor
+from twisted.internet import defer, reactor, error
 from twisted.cred import portal
-
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.lbrynet_daemon.auth.auth import PasswordChecker, HttpPasswordRealm
@@ -131,29 +130,7 @@ def start():
         print "To quit press ctrl-c or call 'stop' via the API"
 
     if test_internet_connection():
-        lbry = DaemonServer()
-
-        d = lbry.start()
-        if args.launchui:
-            d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
-        d.addErrback(log_and_kill)
-
-        if settings.use_auth_http:
-            log.info("Using authenticated API")
-            pw_path = os.path.join(settings.data_dir, ".api_keys")
-            initialize_api_key_file(pw_path)
-            checker = PasswordChecker.load_file(pw_path)
-            realm = HttpPasswordRealm(lbry.root)
-            portal_to_realm = portal.Portal(realm, [checker, ])
-            factory = guard.BasicCredentialFactory('Login to lbrynet api')
-            _lbrynet_server = guard.HTTPAuthSessionWrapper(portal_to_realm, [factory, ])
-        else:
-            log.info("Using non-authenticated API")
-            _lbrynet_server = server.Site(lbry.root)
-
-        lbrynet_server = server.Site(_lbrynet_server)
-        lbrynet_server.requestFactory = DaemonRequest
-        reactor.listenTCP(settings.api_port, lbrynet_server, interface=settings.API_INTERFACE)
+        start_server_and_listen(args.launchui, args.useauth)
         reactor.run()
 
         if not args.logtoconsole and not args.quiet:
@@ -168,6 +145,51 @@ def start():
 def log_and_kill(failure):
     log_support.failure(failure, log, 'Failed to startup: %s')
     reactor.stop()
+
+
+def start_server_and_listen(launchui, use_auth, **kwargs):
+    """The primary entry point for launching the daemon.
+
+    Args:
+        launchui: set to true to open a browser window
+        use_auth: set to true to enable http authentication
+        kwargs: passed along to `DaemonServer().start()`
+    """
+    lbry = DaemonServer()
+
+    d = lbry.start(**kwargs)
+    if launchui:
+        d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
+    d.addErrback(log_and_kill)
+
+    site_base = get_site_base(use_auth, lbry.root)
+    lbrynet_server = server.Site(site_base)
+    lbrynet_server.requestFactory = DaemonRequest
+    try:
+        reactor.listenTCP(settings.API_PORT, lbrynet_server, interface=settings.API_INTERFACE)
+    except error.CannotListenError:
+        log.info('Daemon already running, exiting app')
+        sys.exit(1)
+
+
+def get_site_base(use_auth, root):
+    if use_auth:
+        log.info("Using authenticated API")
+        return create_auth_session(root)
+    else:
+        log.info("Using non-authenticated API")
+        return server.Site(root)
+
+
+def create_auth_session(root):
+    pw_path = os.path.join(settings.data_dir, ".api_keys")
+    initialize_api_key_file(pw_path)
+    checker = PasswordChecker.load_file(pw_path)
+    realm = HttpPasswordRealm(root)
+    portal_to_realm = portal.Portal(realm, [checker, ])
+    factory = guard.BasicCredentialFactory('Login to lbrynet api')
+    _lbrynet_server = guard.HTTPAuthSessionWrapper(portal_to_realm, [factory, ])
+    return _lbrynet_server
 
 
 if __name__ == "__main__":
