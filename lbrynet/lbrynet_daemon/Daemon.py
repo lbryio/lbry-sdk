@@ -1034,7 +1034,6 @@ class Daemon(jsonrpc.JSONRPC):
             session_id=self._session_id
         )
 
-
     def _setup_lbry_file_manager(self):
         self.startup_status = STARTUP_STAGES[3]
         self.lbry_file_metadata_manager = DBEncryptedFileMetadataManager(self.db_dir)

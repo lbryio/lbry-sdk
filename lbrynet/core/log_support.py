@@ -112,19 +112,30 @@ def get_loggly_url(token=None, version=None):
 @_log_decorator
 def configure_loggly_handler(url=None, **kwargs):
     url = url or get_loggly_url()
-    json_format = {
-        "loggerName": "%(name)s",
-        "asciTime": "%(asctime)s",
-        "fileName": "%(filename)s",
-        "functionName": "%(funcName)s",
-        "levelNo": "%(levelno)s",
-        "lineNo": "%(lineno)d",
-        "levelName": "%(levelname)s",
-        "message": "%(message)s",
-    }
-    json_format.update(kwargs)
-    formatter = logging.Formatter(json.dumps(json_format))
+    formatter = JsonFormatter(**kwargs)
     handler = HTTPSHandler(url)
     handler.setFormatter(formatter)
     handler.name = 'loggly'
     return handler
+
+
+class JsonFormatter(logging.Formatter):
+    """Format log records using json serialization"""
+    def __init__(self, **kwargs):
+        self.attributes = kwargs
+
+    def format(self, record):
+        data = {
+            'loggerName': record.name,
+            'asciTime': self.formatTime(record),
+            'fileName': record.filename,
+            'functionName': record.funcName,
+            'levelNo': record.levelno,
+            'lineNo': record.lineno,
+            'levelName': record.levelname,
+            'message': record.getMessage(),
+        }
+        data.update(self.attributes)
+        if record.exc_info:
+            data['exc_info'] = self.formatException(record.exc_info)
+        return json.dumps(data)
