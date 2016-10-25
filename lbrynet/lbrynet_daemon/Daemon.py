@@ -981,10 +981,10 @@ class Daemon(jsonrpc.JSONRPC):
         self.startup_status = STARTUP_STAGES[1]
         log.info("Loading databases...")
         if self.created_data_dir:
-            db_revision = open(os.path.join(self.db_dir, "db_revision"), mode='w')
-            db_revision.write(str(self.current_db_revision))
-            db_revision.close()
-            log.debug("Created the db revision file: %s", str(os.path.join(self.db_dir, "db_revision")))
+            db_revision_path = os.path.join(self.db_dir, "db_revision")
+            with open(db_revision_path, mode='w') as db_revision:
+                db_revision.write(str(self.current_db_revision))
+            log.debug("Created the db revision file: %s", db_revision_path)
         if not os.path.exists(self.blobfile_dir):
             os.mkdir(self.blobfile_dir)
             log.debug("Created the blobfile directory: %s", str(self.blobfile_dir))
@@ -994,6 +994,8 @@ class Daemon(jsonrpc.JSONRPC):
         db_revision_file = os.path.join(self.db_dir, "db_revision")
         if os.path.exists(db_revision_file):
             old_revision = int(open(db_revision_file).read().strip())
+        if old_revision > self.current_db_revision:
+            raise Exception('This version of lbrynet is not compatible with the database')
         if old_revision < self.current_db_revision:
             from lbrynet.db_migrator import dbmigrator
             log.info("Upgrading your databases...")
