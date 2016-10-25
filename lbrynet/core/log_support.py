@@ -139,3 +139,17 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             data['exc_info'] = self.formatException(record.exc_info)
         return json.dumps(data)
+
+
+def failure(failure, log, msg, *args):
+    """Log a failure message from a deferred.
+
+    Args:
+        failure: twisted.python.failure.Failure
+        log: a python logger instance
+        msg: the message to log. Can use normal logging string interpolation.
+             the last argument will be set to the error message from the failure.
+        args: values to substitute into `msg`
+    """
+    args += (failure.getErrorMessage(),)
+    log.error(msg, *args, exc_info=failure.getTracebackObject())

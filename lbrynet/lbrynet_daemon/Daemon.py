@@ -262,6 +262,8 @@ class Daemon(jsonrpc.JSONRPC):
         self.first_run_after_update = False
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(generate_id())
+        self.analytics_manager = None
+        self.lbryid = None
 
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -636,11 +638,8 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: _log_starting_vals())
         d.addCallback(lambda _: _announce_startup())
-        # TODO: handle errors here
         d.callback(None)
-
-        return defer.succeed(None)
-
+        return d
 
     def _get_platform(self):
         r =  {
@@ -870,13 +869,19 @@ class Daemon(jsonrpc.JSONRPC):
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
         self.looping_call_manager.shutdown()
-        self.analytics_manager.shutdown()
+        if self.analytics_manager:
+            self.analytics_manager.shutdown()
         if self.lbry_ui_manager.update_checker.running:
             self.lbry_ui_manager.update_checker.stop()
 
         self._clean_up_temp_files()
 
-        d = self._upload_log(log_type="close", exclude_previous=False if self.first_run else True)
+        try:
+            d = self._upload_log(
+                log_type="close", exclude_previous=False if self.first_run else True)
+        except Exception:
+            log.warn('Failed to upload log', exc_info=True)
+            d = defer.succeed(None)
         d.addCallback(lambda _: self._stop_server())
         d.addCallback(lambda _: self._stop_reflector())
         d.addErrback(lambda err: True)
