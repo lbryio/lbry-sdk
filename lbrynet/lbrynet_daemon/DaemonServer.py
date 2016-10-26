@@ -22,15 +22,15 @@ log = logging.getLogger(__name__)
 
 
 class DaemonServer(object):
-    def _setup_server(self, use_authentication):
+    def _setup_server(self):
         self.root = LBRYindex(os.path.join(os.path.join(data_dir, "lbry-ui"), "active"))
-        self._api = Daemon(self.root, use_authentication=use_authentication)
+        self._api = Daemon(self.root)
         self.root.putChild("view", HostedEncryptedFile(self._api))
         self.root.putChild("upload", EncryptedFileUpload(self._api))
         self.root.putChild(settings.API_ADDRESS, self._api)
         return defer.succeed(True)
 
-    def start(self, use_authentication):
-        d = self._setup_server(use_authentication)
+    def start(self):
+        d = self._setup_server()
         d.addCallback(lambda _: self._api.setup())
         return d

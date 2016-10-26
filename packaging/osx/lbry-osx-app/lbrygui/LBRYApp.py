@@ -3,16 +3,11 @@ import webbrowser
 import sys
 import os
 import logging
-import socket
 import platform
 import shutil
 from appdirs import user_data_dir
-
-from PyObjCTools import AppHelper
-
 from twisted.internet import reactor
 from twisted.web import server
-
 import Foundation
 bundle = Foundation.NSBundle.mainBundle()
 lbrycrdd_path = bundle.pathForResource_ofType_('lbrycrdd', None)
@@ -30,22 +25,17 @@ if not os.path.isfile(lbrycrdd_path_conf):
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet import settings
+from lbrynet.core import utils
+
 
 if platform.mac_ver()[0] >= "10.10":
     from LBRYNotify import LBRYNotify
 
 log = logging.getLogger(__name__)
 
-REMOTE_SERVER = "www.google.com"
-
 
 def test_internet_connection():
-    try:
-        host = socket.gethostbyname(REMOTE_SERVER)
-        s = socket.create_connection((host, 80), 2)
-        return True
-    except:
-        return False
+    return utils.check_connection()
 
 
 class LBRYDaemonApp(AppKit.NSApplication):
@@ -79,7 +69,7 @@ class LBRYDaemonApp(AppKit.NSApplication):
         d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
         lbrynet_server = server.Site(lbry.root)
         lbrynet_server.requestFactory = DaemonRequest
-        reactor.listenTCP(settings.API_PORT, lbrynet_server, interface=settings.API_INTERFACE)
+        reactor.listenTCP(settings.api_port, lbrynet_server, interface=settings.API_INTERFACE)
 
     def openui_(self, sender):
         webbrowser.open(settings.UI_ADDRESS)

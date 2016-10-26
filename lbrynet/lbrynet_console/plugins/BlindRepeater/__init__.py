@@ -59,9 +59,9 @@ class BlindRepeaterPlugin(Plugin.Plugin):
         def get_payment_rate_manager(rates):
             data_rate = rates[0][1] if rates[0][0] is True else None
             info_rate = rates[1][1] if rates[1][0] is True else None
-            info_rate = info_rate if info_rate is not None else settings.MIN_VALUABLE_BLOB_INFO_PAYMENT_RATE
+            info_rate = info_rate if info_rate is not None else settings.min_valuable_info_rate
             hash_rate = rates[2][1] if rates[2][0] is True else None
-            hash_rate = hash_rate if hash_rate is not None else settings.MIN_VALUABLE_BLOB_HASH_PAYMENT_RATE
+            hash_rate = hash_rate if hash_rate is not None else settings.min_valuable_hash_rate
             self.payment_rate_manager = BlindRepeaterPaymentRateManager(default_payment_rate_manager,
                                                                         info_rate, hash_rate,
                                                                         blob_data_rate=data_rate)

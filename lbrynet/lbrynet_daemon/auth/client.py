@@ -7,6 +7,7 @@ import json
 
 from lbrynet.lbrynet_daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
 from lbrynet import settings
+from jsonrpc.proxy import JSONRPCProxy
 
 log = logging.getLogger(__name__)
 USER_AGENT = "AuthServiceProxy/0.1"
@@ -21,7 +22,7 @@ class JSONRPCException(Exception):
         self.error = rpc_error
 
 
-class LBRYAPIClient(object):
+class AuthAPIClient(object):
     def __init__(self, key, timeout, connection, count, service, cookies, auth, url, login_url):
         self.__service_name = service
         self.__api_key = key
@@ -38,7 +39,7 @@ class LBRYAPIClient(object):
             raise AttributeError
         if self.__service_name is not None:
             name = "%s.%s" % (self.__service_name, name)
-        return LBRYAPIClient(key=self.__api_key,
+        return AuthAPIClient(key=self.__api_key,
                              timeout=HTTP_TIMEOUT,
                              connection=self.__conn,
                              count=self.__id_count,
@@ -101,7 +102,7 @@ class LBRYAPIClient(object):
                                             service=None, cookies=None, auth=None, url=None, login_url=None):
 
         api_key_name = API_KEY_NAME if not key_name else key_name
-        pw_path = os.path.join(settings.DATA_DIR, ".api_keys") if not pw_path else pw_path
+        pw_path = os.path.join(settings.data_dir, ".api_keys") if not pw_path else pw_path
         if not key:
             keys = load_api_keys(pw_path)
             api_key = keys.get(api_key_name, False)
@@ -111,7 +112,7 @@ class LBRYAPIClient(object):
             service_url = "http://%s:%s@%s:%i/%s" % (api_key_name,
                                                      api_key.secret,
                                                      settings.API_INTERFACE,
-                                                     settings.API_PORT,
+                                                     settings.api_port,
                                                      settings.API_ADDRESS)
         else:
             service_url = login_url
@@ -153,3 +154,19 @@ class LBRYAPIClient(object):
             secret = cookies.get(LBRY_SECRET)
             api_key = APIKey(secret, api_key_name)
         return cls(api_key, timeout, conn, id_count, service, cookies, auth_header, url, service_url)
+
+
+class LBRYAPIClient(object):
+    @staticmethod
+    def config(service=None, params=None):
+        if settings.use_auth_http:
+            if service is None:
+                return AuthAPIClient.config()
+            log.error("Try auth")
+            if params is not None:
+                return AuthAPIClient.config(service=service)(params)
+            return AuthAPIClient.config(service=service)()
+        url = settings.API_CONNECTION_STRING
+        if service is None:
+            return JSONRPCProxy.from_url(url)
+        return JSONRPCProxy.from_url(url).call(service, params)

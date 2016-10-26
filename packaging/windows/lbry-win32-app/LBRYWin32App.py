@@ -18,6 +18,7 @@ try:
 except ImportError:
     import win32gui
 
+from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet import settings
@@ -35,16 +36,9 @@ log = logging.getLogger(__name__)
 if getattr(sys, 'frozen', False) and os.name == "nt":
     os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
 
-REMOTE_SERVER = "www.google.com"
-
 
 def test_internet_connection():
-    try:
-        host = socket.gethostbyname(REMOTE_SERVER)
-        s = socket.create_connection((host, 80), 2)
-        return True
-    except:
-        return False
+    return utils.check_connection()
 
 
 def non_string_iterable(obj):
@@ -290,7 +284,7 @@ def main(lbry_name=None):
     lbrynet_server = server.Site(lbry.root)
     lbrynet_server.requestFactory = DaemonRequest
     try:
-        reactor.listenTCP(settings.API_PORT, lbrynet_server, interface=settings.API_INTERFACE)
+        reactor.listenTCP(settings.api_port, lbrynet_server, interface=settings.API_INTERFACE)
     except error.CannotListenError:
         log.info('Daemon already running, exiting app')
         sys.exit(1)

@@ -5,7 +5,6 @@ import os
 import platform
 import random
 import re
-import socket
 import subprocess
 import sys
 import base58
@@ -55,6 +54,7 @@ from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
 
 
+
 # TODO: this code snippet is everywhere. Make it go away
 if sys.platform != "darwin":
     log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
@@ -76,7 +76,7 @@ else:
 
 INITIALIZING_CODE = 'initializing'
 LOADING_DB_CODE = 'loading_db'
-LOADING_WALLET_CODE = 'loading_wallet'
+LOADING_wallet_CODE = 'loading_wallet'
 LOADING_FILE_MANAGER_CODE = 'loading_file_manager'
 LOADING_SERVER_CODE = 'loading_server'
 STARTED_CODE = 'started'
@@ -84,7 +84,7 @@ WAITING_FOR_FIRST_RUN_CREDITS = 'waiting_for_credits'
 STARTUP_STAGES = [
                     (INITIALIZING_CODE, 'Initializing...'),
                     (LOADING_DB_CODE, 'Loading databases...'),
-                    (LOADING_WALLET_CODE, 'Catching up with the blockchain... %s'),
+                    (LOADING_wallet_CODE, 'Catching up with the blockchain... %s'),
                     (LOADING_FILE_MANAGER_CODE, 'Setting up file manager'),
                     (LOADING_SERVER_CODE, 'Starting lbrynet'),
                     (STARTED_CODE, 'Started lbrynet'),
@@ -105,11 +105,11 @@ STREAM_STAGES = [
 
 CONNECT_CODE_VERSION_CHECK = 'version_check'
 CONNECT_CODE_NETWORK = 'network_connection'
-CONNECT_CODE_WALLET = 'wallet_catchup_lag'
+CONNECT_CODE_wallet = 'wallet_catchup_lag'
 CONNECTION_PROBLEM_CODES = [
         (CONNECT_CODE_VERSION_CHECK, "There was a problem checking for updates on github"),
         (CONNECT_CODE_NETWORK, "Your internet connection appears to have been interrupted"),
-        (CONNECT_CODE_WALLET, "Synchronization with the blockchain is lagging... if this continues try restarting LBRY")
+        (CONNECT_CODE_wallet, "Synchronization with the blockchain is lagging... if this continues try restarting LBRY")
         ]
 
 BAD_REQUEST = 400
@@ -118,7 +118,7 @@ OK_CODE = 200
 
 # TODO alert if your copy of a lbry file is out of date with the name record
 
-REMOTE_SERVER = "www.google.com"
+REMOTE_SERVER = "www.lbry.io"
 
 
 class Parameters(object):
@@ -131,8 +131,8 @@ class Daemon(AuthJSONRPCServer):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
-    def __init__(self, root, use_authentication=lbrynet_settings.USE_AUTH_HTTP):
-        AuthJSONRPCServer.__init__(self, use_authentication)
+    def __init__(self, root):
+        AuthJSONRPCServer.__init__(self, lbrynet_settings.use_auth_http)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
         self.allowed_during_startup = ['is_running', 'is_first_run',
@@ -141,7 +141,7 @@ class Daemon(AuthJSONRPCServer):
                                        'version', 'get_search_servers']
         last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
         lbrynet_settings.update(last_version)
-        self.db_dir = lbrynet_settings.DATA_DIR
+        self.db_dir = lbrynet_settings.data_dir
         self.download_directory = lbrynet_settings.download_directory
         self.created_data_dir = False
         if not os.path.exists(self.db_dir):
@@ -163,7 +163,7 @@ class Daemon(AuthJSONRPCServer):
         self.download_timeout = lbrynet_settings.download_timeout
         self.max_search_results = lbrynet_settings.max_search_results
         self.run_reflector_server = lbrynet_settings.run_reflector_server
-        self.wallet_type = lbrynet_settings.WALLET
+        self.wallet_type = lbrynet_settings.wallet
         self.delete_blobs_on_remove = lbrynet_settings.delete_blobs_on_remove
         self.peer_port = lbrynet_settings.peer_port
         self.reflector_port = lbrynet_settings.reflector_port
@@ -190,6 +190,19 @@ class Daemon(AuthJSONRPCServer):
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(generate_id())
         self.lbryid = None
+        self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.yml')
+
+
+        if os.path.isfile(self.daemon_conf):
+            conf_settings = utils.load_settings(self.daemon_conf)
+            if 'last_version' in conf_settings:
+                if utils.version_is_greater_than(lbrynet_version, conf_settings['last_version']['lbrynet']):
+                    self.first_run_after_update = True
+                    log.info("First run after update")
+                    log.info("lbrynet %s --> %s", conf_settings['last_version']['lbrynet'], lbrynet_version)
+                    log.info("lbryum %s --> %s", conf_settings['last_version']['lbryum'], lbryum_version)
+
+        # utils.save_settings(self.daemon_conf)
 
         self.wallet_user = None
         self.wallet_password = None
@@ -243,6 +256,13 @@ class Daemon(AuthJSONRPCServer):
             self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
         self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
+        if os.name != 'nt':
+            # TODO: are we still using this?
+            lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
+            if not os.path.isfile(lbrycrdd_path_conf):
+                f = open(lbrycrdd_path_conf, "w")
+                f.write(str(self.lbrycrdd_path))
+                f.close()
 
     def setup(self):
         def _log_starting_vals():
@@ -358,13 +378,7 @@ class Daemon(AuthJSONRPCServer):
         self._events = analytics.Events(context, base58.b58encode(self.lbryid), self._session_id)
 
     def _check_network_connection(self):
-        try:
-            host = socket.gethostbyname(REMOTE_SERVER)
-            s = socket.create_connection((host, 80), 2)
-            self.connected_to_internet = True
-        except:
-            log.info("Internet connection not working")
-            self.connected_to_internet = False
+        self.connected_to_internet = utils.check_connection()
 
     def _check_lbrynet_connection(self):
         def _log_success():
@@ -709,7 +723,7 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _set_lbryid(self, lbryid):
-        if lbryid is None:
+        if lbryid is None or True:
             return self._make_lbryid()
         else:
             log.info("LBRY ID: " + base58.b58encode(lbryid))
@@ -762,8 +776,8 @@ class Daemon(AuthJSONRPCServer):
             elif self.wallet_type == "lbryum":
                 log.info("Using lbryum wallet")
                 config = {'auto-connect': True}
-                if lbrynet_settings.LBRYUM_WALLET_DIR:
-                    config['lbryum_path'] = lbrynet_settings.LBRYUM_WALLET_DIR
+                if lbrynet_settings.lbryum_wallet_dir:
+                    config['lbryum_path'] = lbrynet_settings.lbryum_wallet_dir
                 d = defer.succeed(LBRYumWallet(self.db_dir, config))
             elif self.wallet_type == "ptc":
                 log.info("Using PTC wallet")
@@ -1077,7 +1091,7 @@ class Daemon(AuthJSONRPCServer):
 
         log.info("Reflecting stream: %s" % stream_hash)
 
-        reflector_server = random.choice(lbrynet_settings.REFLECTOR_SERVERS)
+        reflector_server = random.choice(lbrynet_settings.reflector_servers)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Start reflector client")
         factory = reflector.ClientFactory(
@@ -1096,7 +1110,7 @@ class Daemon(AuthJSONRPCServer):
 
         log.info("Reflecting %i blobs" % len(blob_hashes))
 
-        reflector_server = random.choice(lbrynet_settings.REFLECTOR_SERVERS)
+        reflector_server = random.choice(lbrynet_settings.reflector_servers)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Start reflector client")
         factory = reflector.BlobClientFactory(
@@ -1120,7 +1134,7 @@ class Daemon(AuthJSONRPCServer):
             remaining_scripts = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
             startup_scripts = self.startup_scripts
             self.startup_scripts = lbrynet_settings.startup_scripts = remaining_scripts
-            conf = os.path.join(lbrynet_settings.DATA_DIR, "daemon_settings.yml")
+            conf = os.path.join(lbrynet_settings.data_dir, "daemon_settings.yml")
             utils.save_settings(conf)
 
         for script in startup_scripts:
@@ -1175,7 +1189,7 @@ class Daemon(AuthJSONRPCServer):
             r['problem_code'] = self.connection_problem[0]
             r['message'] = self.connection_problem[1]
             r['is_lagging'] = True
-        elif self.startup_status[0] == LOADING_WALLET_CODE:
+        elif self.startup_status[0] == LOADING_wallet_CODE:
             if self.wallet_type == 'lbryum':
                 if self.session.wallet.blocks_behind_alert != 0:
                     r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
@@ -1727,11 +1741,16 @@ class Daemon(AuthJSONRPCServer):
             metadata = Metadata(p['metadata'])
             make_lbry_file = False
             sd_hash = metadata['sources']['lbry_sd_hash']
+            log.info("Update publish for %s using existing stream", name)
         except ValidationError:
             make_lbry_file = True
             sd_hash = None
             metadata = p['metadata']
             file_path = p['file_path']
+            if not file_path:
+                return defer.fail(Exception("No file given to publish"))
+            if not os.path.isfile(file_path):
+                return defer.fail(Exception("Specified file for publish doesnt exist: %s" % file_path))
 
         if not self.pending_claim_checker.running:
             self.pending_claim_checker.start(30)

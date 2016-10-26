@@ -1,5 +1,6 @@
 from zope.interface import implementer
 from decimal import Decimal
+from lbrynet import settings
 from lbrynet.interfaces import INegotiationStrategy
 from lbrynet.core.Offer import Offer
 from lbrynet.core.PriceModel import MeanAvailabilityWeightedPrice
@@ -15,13 +16,14 @@ class Strategy(object):
     """
     implementer(INegotiationStrategy)
 
-    def __init__(self, price_model, max_rate, min_rate, is_generous=True):
+    def __init__(self, price_model, max_rate, min_rate, is_generous=settings.is_generous_host):
         self.price_model = price_model
         self.is_generous = is_generous
         self.accepted_offers = {}
+        self.pending_sent_offers = {}
         self.offers_sent = {}
         self.offers_received = {}
-        self.max_rate = max_rate or Decimal(self.price_model.base_price * 100)
+        self.max_rate = max_rate or Decimal(self.price_model.base_price * 50)
         self.min_rate = Decimal(min_rate)
 
     def _make_rate_offer(self, rates, offer_count):
@@ -36,13 +38,17 @@ class Strategy(object):
         if peer in self.accepted_offers:
             # if there was a previous accepted offer, use that
             offer = self.accepted_offers[peer]
+            if peer in self.pending_sent_offers:
+                del self.pending_sent_offers[peer]
         elif offer_count == 0 and self.is_generous:
             # Try asking for it for free
             offer = Offer(Decimal(0.0))
+            self.pending_sent_offers.update({peer: offer})
         else:
             rates = [self.price_model.calculate_price(blob) for blob in blobs]
             price = self._make_rate_offer(rates, offer_count)
             offer = Offer(price)
+            self.pending_sent_offers.update({peer: offer})
         return offer
 
     def respond_to_offer(self, offer, peer, blobs):
@@ -50,7 +56,6 @@ class Strategy(object):
         self._add_offer_received(peer)
         rates = [self.price_model.calculate_price(blob) for blob in blobs]
         price = self._get_response_rate(rates, offer_count)
-
         if peer in self.accepted_offers:
             offer = self.accepted_offers[peer]
         elif offer.rate == 0.0 and offer_count == 0 and self.is_generous:
@@ -71,6 +76,7 @@ class Strategy(object):
             del self.accepted_offers[peer]
         if offer.is_accepted:
             self.accepted_offers.update({peer: offer})
+        self.pending_sent_offers.update({peer: offer})
 
     def _add_offer_sent(self, peer):
         turn = self.offers_sent.get(peer, 0) + 1
@@ -95,7 +101,7 @@ class BasicAvailabilityWeightedStrategy(Strategy):
     implementer(INegotiationStrategy)
 
     def __init__(self, blob_tracker, acceleration=1.25, deceleration=0.9, max_rate=None, min_rate=0.0,
-                                    is_generous=True, base_price=0.0001, alpha=1.0):
+                                    is_generous=settings.is_generous_host, base_price=0.0001, alpha=1.0):
         price_model = MeanAvailabilityWeightedPrice(blob_tracker, base_price=base_price, alpha=alpha)
         Strategy.__init__(self, price_model, max_rate, min_rate, is_generous)
         self._acceleration = Decimal(acceleration)  # rate of how quickly to ramp offer

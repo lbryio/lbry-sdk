@@ -30,8 +30,11 @@ class MeanAvailabilityWeightedPrice(object):
         mean_availability = self.blob_tracker.last_mean_availability
         availability = self.blob_tracker.availability.get(blob, [])
         index = 0  # blob.index
-        price = self.base_price * (mean_availability / Decimal(max(1, len(availability)))) / self._frontload(index)
+        price = self.base_price *  self._get_availability_multiplier(mean_availability, availability) / self._frontload(index)
         return round(price, 5)
+
+    def _get_availability_multiplier(self, mean_availability, availability):
+        return Decimal(max(1, mean_availability) / Decimal(max(1, len(availability))))
 
     def _frontload(self, index):
         """

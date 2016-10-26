@@ -81,7 +81,7 @@ class AuthJSONRPCServer(AuthorizedBase):
     NOT_FOUND = 8001
     FAILURE = 8002
 
-    def __init__(self, use_authentication=settings.USE_AUTH_HTTP):
+    def __init__(self, use_authentication=settings.use_auth_http):
         AuthorizedBase.__init__(self)
         self._use_authentication = use_authentication
         self.allowed_during_startup = []

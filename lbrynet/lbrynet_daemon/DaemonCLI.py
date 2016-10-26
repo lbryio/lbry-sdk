@@ -2,6 +2,7 @@ import sys
 import json
 import argparse
 
+from lbrynet import settings
 from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 
 help_msg = "Usage: lbrynet-cli method json-args\n" \
@@ -40,9 +41,15 @@ def main():
     try:
         status = api.daemon_status()
         assert status.get('code', False) == "started"
-    except:
-        print "lbrynet-daemon isn't running"
-        sys.exit(1)
+    except Exception:
+        try:
+            settings.update({'use_auth_http': not settings.use_auth_http})
+            api = LBRYAPIClient.config()
+            status = api.daemon_status()
+            assert status.get('code', False) == "started"
+        except Exception:
+            print "lbrynet-daemon isn't running"
+            sys.exit(1)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('method', nargs=1)
@@ -72,9 +79,9 @@ def main():
     if meth in api.help():
         try:
             if params:
-                result = LBRYAPIClient.config(service=meth)(params)
+                result = LBRYAPIClient.config(service=meth, params=params)
             else:
-                result = LBRYAPIClient.config(service=meth)()
+                result = LBRYAPIClient.config(service=meth, params=params)
             print json.dumps(result, sort_keys=True)
         except:
             print "Something went wrong, here's the usage for %s:" % meth

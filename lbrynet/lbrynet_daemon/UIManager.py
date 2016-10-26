@@ -76,7 +76,7 @@ class UIManager(object):
 
     def setup(self, branch=None, check_requirements=None, user_specified=None):
         local_ui_path = settings.local_ui_path or user_specified
-        self.branch = settings.UI_BRANCH or branch
+        self.branch = settings.ui_branch or branch
         self.check_requirements = settings.check_ui_requirements or check_requirements
 
         if local_ui_path:

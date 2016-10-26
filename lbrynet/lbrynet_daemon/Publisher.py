@@ -41,7 +41,7 @@ class Publisher(object):
         self.lbry_file = None
         self.txid = None
         self.stream_hash = None
-        reflector_server = random.choice(settings.REFLECTOR_SERVERS)
+        reflector_server = random.choice(settings.reflector_servers)
         self.reflector_server, self.reflector_port = reflector_server[0], reflector_server[1]
         self.metadata = {}
 
@@ -74,7 +74,7 @@ class Publisher(object):
         return d
 
     def start_reflector(self):
-        reflector_server = random.choice(settings.REFLECTOR_SERVERS)
+        reflector_server = random.choice(settings.reflector_servers)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Reflecting new publication")
         factory = reflector.ClientFactory(

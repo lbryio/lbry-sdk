@@ -1,16 +1,22 @@
 import base64
+import datetime
 import distutils.version
+import logging
+import json
 import random
 import os
-import json
+import socket
 import yaml
-import datetime
 
 from lbrynet import settings
-from lbrynet.conf import ADJUSTABLE_SETTINGS
+from lbrynet.conf import AdjustableSettings
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
+
 blobhash_length = get_lbry_hash_obj().digest_size * 2  # digest_size is in bytes, and blob hashes are hex encoded
+
+
+log = logging.getLogger(__name__)
 
 
 def generate_id(num=None):
@@ -62,6 +68,8 @@ settings_encoders = {
     '.yml': yaml.safe_dump
 }
 
+ADJUSTABLE_SETTINGS = AdjustableSettings().get_dict()
+
 
 def load_settings(path):
     ext = os.path.splitext(path)[1]
@@ -83,3 +91,16 @@ def save_settings(path):
 
 def today():
     return datetime.datetime.today()
+
+
+def check_connection(server="www.lbry.io", port=80):
+    """Attempts to open a socket to server:port and returns True if successful."""
+    try:
+        host = socket.gethostbyname(server)
+        s = socket.create_connection((host, port), 2)
+        return True
+    except Exception as ex:
+        log.info(
+            "Failed to connect to %s:%s. Maybe the internet connection is not working",
+            server, port, exc_info=True)
+        return False
