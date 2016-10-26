@@ -26,6 +26,7 @@ from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHand
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
+from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT 
 from lbrynet.metadata.Metadata import Metadata
 
 log = logging.getLogger(__name__)
@@ -645,10 +646,9 @@ class Wallet(object):
         assert len(txid) == 64, "That's not a txid: %s" % str(txid)
         d = self.db.runQuery("delete from name_metadata where name=? and txid=? and n=? and sd_hash=?",
                              (name, txid, nout, sd_hash))
-        # delete legacy v1 database entry with missing nouts
         d.addCallback(
             lambda _: self.db.runQuery("delete from name_metadata where name=? and txid=? and n=? and sd_hash=?",
-                (name, txid, -1, sd_hash)))
+                (name, txid, UNSET_NOUT, sd_hash)))
                 
         d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?, ?)",
                                                  (name, txid, nout, sd_hash)))
@@ -663,10 +663,9 @@ class Wallet(object):
         assert len(txid) == 64, "That's not a txid: %s" % str(txid)
         d = self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=? and n=?",
                              (claim_id, name, txid, nout))
-        # delete legacy v1 database entry with missing nouts
         d.addCallback(
             lambda _: self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=? and n=?",
-                             (claim_id, name, txid, -1)))
+                             (claim_id, name, txid, UNSET_NOUT)))
                              
         d.addCallback(lambda r: self.db.runQuery("insert into claim_ids values (?, ?, ?, ?)",
                                                  (claim_id, name, txid, nout)))
