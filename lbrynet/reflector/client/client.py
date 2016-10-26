@@ -126,7 +126,7 @@ class EncryptedFileReflectorClient(Protocol):
 
         def set_blobs(blob_hashes):
             for blob_hash, position, iv, length in blob_hashes:
-                log.info("Preparing to send %s", blob_hash)
+                log.debug("Preparing to send %s", blob_hash)
                 if blob_hash is not None:
                     self.blob_hashes_to_send.append(blob_hash)
 
@@ -209,7 +209,7 @@ class EncryptedFileReflectorClient(Protocol):
         raise ValueError("Couldn't open that blob for some reason. blob_hash: {}".format(blob.blob_hash))
 
     def send_blob_info(self):
-        log.info("Send blob info for %s", self.next_blob_to_send.blob_hash)
+        log.debug("Send blob info for %s", self.next_blob_to_send.blob_hash)
         assert self.next_blob_to_send is not None, "need to have a next blob to send at this point"
         log.debug('sending blob info')
         self.write(json.dumps({
@@ -284,7 +284,7 @@ class BlobReflectorClient(Protocol):
         self.file_sender = None
         self.producer = None
         self.streaming = False
-        self.blobs_where_sent = False
+        self.sent_blobs = False
         d = self.send_handshake()
         d.addErrback(lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
 
@@ -303,7 +303,7 @@ class BlobReflectorClient(Protocol):
 
     def connectionLost(self, reason):
         if reason.check(error.ConnectionDone):
-            self.factory.sent_blobs = self.blobs_where_sent
+            self.factory.sent_blobs = self.sent_blobs
             if self.factory.sent_blobs:
                 log.info('Finished sending data via reflector')
             self.factory.finished_deferred.callback(True)
@@ -358,6 +358,7 @@ class BlobReflectorClient(Protocol):
         return defer.succeed(None)
 
     def start_transfer(self):
+        self.sent_blobs = True
         self.write(json.dumps({}))
         assert self.read_handle is not None, "self.read_handle was None when trying to start the transfer"
         d = self.file_sender.beginFileTransfer(self.read_handle, self)
@@ -377,7 +378,6 @@ class BlobReflectorClient(Protocol):
             if 'send_blob' not in response_dict:
                 raise ValueError("I don't know whether to send the blob or not!")
             if response_dict['send_blob'] is True:
-                self.blobs_where_sent = True
                 self.file_sender = FileSender()
                 return defer.succeed(True)
             else:

@@ -13,9 +13,8 @@ from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaver, 
 from lbrynet.lbryfilemanager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
-from lbrynet.reflector import BlobClientFactory, ClientFactory
+from lbrynet.reflector import BlobClientFactory, ClientFactory, ReflectorAvailabilityHelper
 from lbrynet.conf import REFLECTOR_SERVERS
-
 
 log = logging.getLogger(__name__)
 
@@ -68,41 +67,10 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             d.addCallbacks(_save_claim_id, lambda err: _notify_bad_claim(name, txid))
             return d
 
-        def _check_file_availability():
-            reflector_server = random.choice(REFLECTOR_SERVERS)
-            reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-            factory = BlobClientFactory(
-                self.blob_manager,
-                [self.sd_hash]
-            )
-            d = reactor.resolve(reflector_address)
-            d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
-            d.addCallback(lambda _: factory.finished_deferred)
-            d.addCallback(lambda _: _reflect_if_unavailable(factory.sent_blobs))
-            return d
 
-        def _reflect_if_unavailable(sent_blobs):
-            if not sent_blobs:
-                log.info("lbry://%s is available", self.uri)
-                return defer.succeed(True)
-            if self.stream_hash is None:
-                return defer.fail(Exception("no stream hash"))
-            log.info("Reflecting previously unavailable stream: %s" % self.stream_hash)
-            reflector_server = random.choice(REFLECTOR_SERVERS)
-            reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-            factory = ClientFactory(
-                self.blob_manager,
-                self.stream_info_manager,
-                self.stream_hash
-            )
-            d = reactor.resolve(reflector_address)
-            d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
-            d.addCallback(lambda _: factory.finished_deferred)
-            return d
 
         d.addCallback(_save_sd_hash)
         d.addCallback(lambda r: _save_claim(r[0], r[1]) if r else None)
-        d.addCallback(lambda _: _check_file_availability())
         d.addCallback(lambda _: self.lbry_file_manager.get_lbry_file_status(self))
 
         def restore_status(status):
@@ -115,6 +83,10 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
                 return defer.succeed(True)
 
         d.addCallback(restore_status)
+
+        reflector_server = random.choice(REFLECTOR_SERVERS)
+
+        d.addCallback(lambda _: ReflectorAvailabilityHelper.check_and_restore_availability(self, reflector_server))
         return d
 
     def stop(self, err=None, change_status=True):
