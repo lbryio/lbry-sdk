@@ -723,7 +723,7 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _set_lbryid(self, lbryid):
-        if lbryid is None or True:
+        if lbryid is None:
             return self._make_lbryid()
         else:
             log.info("LBRY ID: " + base58.b58encode(lbryid))
