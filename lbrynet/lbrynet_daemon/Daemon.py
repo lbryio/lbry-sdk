@@ -119,6 +119,8 @@ BAD_REQUEST = 400
 NOT_FOUND = 404
 OK_CODE = 200
 
+PENDING_LBRY_ID = "not set"
+
 
 class Checker:
     """The looping calls the daemon runs"""
@@ -279,7 +281,10 @@ class Daemon(AuthJSONRPCServer):
         self.first_run_after_update = False
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(generate_id())
-        self.lbryid = None
+
+        self.analytics_manager = None
+        self.lbryid = PENDING_LBRY_ID
+
         self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.yml')
 
 
@@ -414,11 +419,8 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: _log_starting_vals())
         d.addCallback(lambda _: _announce_startup())
-        # TODO: handle errors here
         d.callback(None)
-
-        return defer.succeed(None)
-
+        return d
 
     def _get_platform(self):
         r = {
@@ -629,23 +631,24 @@ class Daemon(AuthJSONRPCServer):
             for lm, lp in [('lbrynet', lbrynet_log)]:
                 if os.path.isfile(lp):
                     if exclude_previous:
-                        f = open(lp, "r")
-                        f.seek(PREVIOUS_NET_LOG)
-                        log_contents = f.read()
-                        f.close()
+                        with open( lp, "r") as f:
+                            f.seek(PREVIOUS_NET_LOG)
+                            log_contents = f.read()
                     else:
-                        f = open(lp, "r")
-                        log_contents = f.read()
-                        f.close()
+                        with open(lp, "r") as f:
+                            log_contents = f.read()
+                    if self.lbryid is not PENDING_LBRY_ID:
+                        id_hash = base58.b58encode(self.lbryid)[:20]
+                    else:
+                        id_hash = self.lbryid
                     params = {
-                            'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
-                            'hash': base58.b58encode(self.lbryid)[:20],
-                            'sys': platform.system(),
-                            'type': "%s-%s" % (lm, log_type) if log_type else lm,
-                            'log': log_contents
-                            }
+                        'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
+                        'hash': id_hash,
+                        'sys': platform.system(),
+                        'type': "%s-%s" % (lm, log_type) if log_type else lm,
+                        'log': log_contents
+                    }
                     requests.post(lbrynet_settings.LOG_POST_URL, params)
-
             return defer.succeed(None)
         else:
             return defer.succeed(None)
@@ -661,13 +664,19 @@ class Daemon(AuthJSONRPCServer):
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
         self.looping_call_manager.shutdown()
-        self.analytics_manager.shutdown()
+        if self.analytics_manager:
+            self.analytics_manager.shutdown()
         if self.lbry_ui_manager.update_checker.running:
             self.lbry_ui_manager.update_checker.stop()
 
         self._clean_up_temp_files()
 
-        d = self._upload_log(log_type="close", exclude_previous=False if self.first_run else True)
+        try:
+            d = self._upload_log(
+                log_type="close", exclude_previous=False if self.first_run else True)
+        except Exception:
+            log.warn('Failed to upload log', exc_info=True)
+            d = defer.succeed(None)
         d.addCallback(lambda _: self._stop_server())
         d.addCallback(lambda _: self._stop_reflector())
         d.addErrback(lambda err: True)
@@ -723,10 +732,10 @@ class Daemon(AuthJSONRPCServer):
         self.startup_status = STARTUP_STAGES[1]
         log.info("Loading databases...")
         if self.created_data_dir:
-            db_revision = open(os.path.join(self.db_dir, "db_revision"), mode='w')
-            db_revision.write(str(self.current_db_revision))
-            db_revision.close()
-            log.debug("Created the db revision file: %s", str(os.path.join(self.db_dir, "db_revision")))
+            db_revision_path = os.path.join(self.db_dir, "db_revision")
+            with open(db_revision_path, mode='w') as db_revision:
+                db_revision.write(str(self.current_db_revision))
+            log.debug("Created the db revision file: %s", db_revision_path)
         if not os.path.exists(self.blobfile_dir):
             os.mkdir(self.blobfile_dir)
             log.debug("Created the blobfile directory: %s", str(self.blobfile_dir))
@@ -736,6 +745,8 @@ class Daemon(AuthJSONRPCServer):
         db_revision_file = os.path.join(self.db_dir, "db_revision")
         if os.path.exists(db_revision_file):
             old_revision = int(open(db_revision_file).read().strip())
+        if old_revision > self.current_db_revision:
+            return defer.fail(Exception('This version of lbrynet is not compatible with the database'))
         if old_revision < self.current_db_revision:
             from lbrynet.db_migrator import dbmigrator
             log.info("Upgrading your databases...")
@@ -763,7 +774,7 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _set_lbryid(self, lbryid):
-        if lbryid is None:
+        if lbryid is PENDING_LBRY_ID:
             return self._make_lbryid()
         else:
             log.info("LBRY ID: " + base58.b58encode(lbryid))

@@ -136,6 +136,7 @@ def start():
         d = lbry.start()
         if args.launchui:
             d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
+        d.addErrback(log_and_kill)
 
         if settings.use_auth_http:
             log.info("Using authenticated API")
@@ -162,6 +163,12 @@ def start():
         if not args.logtoconsole:
             print "Not connected to internet, unable to start"
         return
+
+
+def log_and_kill(failure):
+    log_support.failure(failure, log, 'Failed to startup: %s')
+    reactor.stop()
+
 
 if __name__ == "__main__":
     start()
