@@ -21,7 +21,7 @@ except ImportError:
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
-from lbrynet import settings
+from lbrynet.conf import settings
 from packaging.uri_handler.LBRYURIHandler import LBRYURIHandler
 
 

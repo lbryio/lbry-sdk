@@ -5,7 +5,7 @@ import sys
 from time import sleep
 
 from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
-from lbrynet import settings
+from lbrynet.conf import settings
 
 
 class LBRYURIHandler(object):
