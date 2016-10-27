@@ -6,7 +6,7 @@ import base64
 import json
 
 from lbrynet.lbrynet_daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
-from lbrynet import settings
+from lbrynet.conf import settings
 from jsonrpc.proxy import JSONRPCProxy
 
 log = logging.getLogger(__name__)

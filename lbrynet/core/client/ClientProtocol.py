@@ -4,7 +4,7 @@ from decimal import Decimal
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.python import failure
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError, NoResponseError
 from lbrynet.core.Error import DownloadCanceledError, MisbehavingPeerError
 from lbrynet.core.Error import RequestCanceledError

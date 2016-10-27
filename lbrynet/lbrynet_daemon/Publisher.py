@@ -12,7 +12,7 @@ from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.metadata.Metadata import Metadata
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet import reflector
-from lbrynet import settings
+from lbrynet.conf import settings
 from twisted.internet import threads, defer, reactor
 
 if sys.platform != "darwin":

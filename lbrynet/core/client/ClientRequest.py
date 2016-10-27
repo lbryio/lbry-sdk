@@ -1,4 +1,4 @@
-from lbrynet import settings
+from lbrynet.conf import settings
 
 
 class ClientRequest(object):

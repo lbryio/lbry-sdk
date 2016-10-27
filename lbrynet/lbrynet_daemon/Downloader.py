@@ -12,7 +12,7 @@ from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.metadata.Fee import FeeValidator
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet import settings
+from lbrynet.conf import settings
 
 INITIALIZING_CODE = 'initializing'
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'

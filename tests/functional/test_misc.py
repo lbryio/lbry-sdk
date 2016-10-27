@@ -11,7 +11,7 @@ import unittest
 from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.Hash import MD5
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager

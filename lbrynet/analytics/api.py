@@ -5,7 +5,7 @@ import logging
 from requests import auth
 from requests_futures import sessions
 
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.analytics import utils
 
 

@@ -8,7 +8,7 @@ from urllib2 import urlopen
 from StringIO import StringIO
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.lbrynet_daemon.Resources import NoCacheStaticFile
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version

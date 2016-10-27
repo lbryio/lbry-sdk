@@ -16,7 +16,7 @@ from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
-from lbrynet import settings
+from lbrynet.conf import settings
 
 log_dir = settings.data_dir
 

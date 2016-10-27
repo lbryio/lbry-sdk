@@ -7,7 +7,7 @@ from twisted.internet import defer
 from txjsonrpc import jsonrpclib
 
 from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError, SubhandlerError
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
 

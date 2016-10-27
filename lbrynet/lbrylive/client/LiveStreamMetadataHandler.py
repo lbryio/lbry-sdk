@@ -3,7 +3,7 @@ import logging
 from zope.interface import implements
 from twisted.internet import defer
 from twisted.python.failure import Failure
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.core.client.ClientRequest import ClientRequest, ClientPaidRequest
 from lbrynet.lbrylive.LiveBlob import LiveBlobInfo
 from lbrynet.core.cryptoutils import get_lbry_hash_obj, verify_signature

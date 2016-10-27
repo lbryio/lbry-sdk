@@ -1,4 +1,4 @@
-from lbrynet import settings
+from lbrynet.conf import settings
 
 from twisted.web.client import Agent, FileBodyProducer, Headers, ResponseDone
 from twisted.internet import threads, defer, protocol

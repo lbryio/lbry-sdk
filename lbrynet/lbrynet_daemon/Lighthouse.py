@@ -1,7 +1,7 @@
 import logging
 import random
 from txjsonrpc.web.jsonrpc import Proxy
-from lbrynet import settings
+from lbrynet.conf import settings
 
 log = logging.getLogger(__name__)
 

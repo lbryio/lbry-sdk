@@ -1,5 +1,5 @@
 from lbrynet.core.Strategy import get_default_strategy
-from lbrynet import settings
+from lbrynet.conf import settings
 from decimal import Decimal
 
 

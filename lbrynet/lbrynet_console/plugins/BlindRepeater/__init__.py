@@ -1,6 +1,6 @@
 from lbrynet.lbrynet_console import Plugin
 from twisted.internet import defer
-from lbrynet import settings
+from lbrynet.conf import settings
 from BlindRepeater import BlindRepeater
 from BlindInfoManager import BlindInfoManager
 from BlindRepeaterSettings import BlindRepeaterSettings

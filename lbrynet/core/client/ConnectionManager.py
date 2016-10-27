@@ -2,7 +2,7 @@ import logging
 from twisted.internet import defer
 from zope.interface import implements
 from lbrynet import interfaces
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.core.client.ClientProtocol import ClientProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError
 

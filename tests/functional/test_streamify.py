@@ -6,7 +6,7 @@ from Crypto.Hash import MD5
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer, threads
 
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager

@@ -6,7 +6,7 @@ from lbrynet.core.cryptoutils import get_lbry_hash_obj, get_pub_key, sign_with_p
 from Crypto import Random
 import binascii
 import logging
-from lbrynet import settings
+from lbrynet.conf import settings
 from twisted.internet import interfaces, defer
 from twisted.protocols.basic import FileSender
 from zope.interface import implements

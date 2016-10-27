@@ -1,7 +1,7 @@
 import binascii
 import logging
 from Crypto.Cipher import AES
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.core.BlobInfo import BlobInfo
 
 

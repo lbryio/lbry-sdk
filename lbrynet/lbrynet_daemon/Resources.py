@@ -10,7 +10,7 @@ from appdirs import user_data_dir
 from twisted.web import server, static, resource
 from twisted.internet import defer, error
 
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.lbrynet_daemon.FileStreamer import EncryptedFileStreamer
 
 # TODO: omg, this code is essentially duplicated in Daemon

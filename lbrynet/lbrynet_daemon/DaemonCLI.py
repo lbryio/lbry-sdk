@@ -2,7 +2,7 @@ import sys
 import json
 import argparse
 
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 
 help_msg = "Usage: lbrynet-cli method json-args\n" \

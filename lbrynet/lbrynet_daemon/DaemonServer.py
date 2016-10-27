@@ -6,7 +6,7 @@ from appdirs import user_data_dir
 from twisted.internet import defer
 from lbrynet.lbrynet_daemon.Daemon import Daemon
 from lbrynet.lbrynet_daemon.Resources import LBRYindex, HostedEncryptedFile, EncryptedFileUpload
-from lbrynet import settings
+from lbrynet.conf import settings
 
 
 # TODO: omg, this code is essentially duplicated in Daemon

@@ -4,7 +4,7 @@ import shutil
 from twisted.internet import defer, threads, error
 from twisted.trial import unittest
 
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet import lbryfile
 from lbrynet import reflector
 from lbrynet.core import BlobManager

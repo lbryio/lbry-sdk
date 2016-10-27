@@ -8,7 +8,7 @@ from twisted.internet import interfaces, defer, threads
 from twisted.protocols.basic import FileSender
 from twisted.python.failure import Failure
 from zope.interface import implements
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.core.Error import DownloadCanceledError, InvalidDataError
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 

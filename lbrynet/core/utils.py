@@ -8,7 +8,7 @@ import os
 import socket
 import yaml
 
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.conf import AdjustableSettings
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 

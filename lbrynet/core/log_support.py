@@ -7,7 +7,7 @@ import traceback
 from requests_futures.sessions import FuturesSession
 
 import lbrynet
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.core import utils
 
 session = FuturesSession()

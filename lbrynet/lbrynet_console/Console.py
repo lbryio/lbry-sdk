@@ -19,7 +19,7 @@ from lbrynet.core.Session import Session
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.Settings import Settings
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet import settings
+from lbrynet.conf import settings
 from lbrynet.core.utils import generate_id
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.PaymentRateManager import PaymentRateManager
