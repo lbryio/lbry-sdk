@@ -104,9 +104,12 @@ class UIManager(object):
 
     def _up_to_date(self):
         def _get_git_info():
-            response = urlopen(self._git_url)
-            data = json.loads(response.read())
-            return defer.succeed(data['sha'])
+            try:
+                response = urlopen(self._git_url)
+                data = json.loads(response.read())
+                return defer.succeed(data['sha'])
+            except Exception:
+                return defer.fail()
 
         def _set_git(version):
             self.git_version = version.replace('\n', '')

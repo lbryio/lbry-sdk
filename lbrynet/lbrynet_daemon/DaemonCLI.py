@@ -84,6 +84,11 @@ def main():
                 result = LBRYAPIClient.config(service=meth, params=params)
             print json.dumps(result, sort_keys=True)
         except:
+            # TODO: The api should return proper error codes
+            # and messages so that they can be passed along to the user
+            # instead of this generic message.
+            # https://app.asana.com/0/158602294500137/200173944358192
+
             print "Something went wrong, here's the usage for %s:" % meth
             print api.help({'function': meth})
     else:

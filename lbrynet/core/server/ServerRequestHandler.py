@@ -9,9 +9,10 @@ log = logging.getLogger(__name__)
 
 
 class ServerRequestHandler(object):
-    """This class handles requests from clients. It can upload blobs and return request for information about
-    more blobs that are associated with streams"""
-
+    """This class handles requests from clients. It can upload blobs and
+    return request for information about more blobs that are
+    associated with streams.
+    """
     implements(interfaces.IPushProducer, interfaces.IConsumer, IRequestHandler)
 
     def __init__(self, consumer):
@@ -90,19 +91,26 @@ class ServerRequestHandler(object):
         log.debug("Received data")
         log.debug("%s", str(data))
         if self.request_received is False:
-            self.request_buff = self.request_buff + data
-            msg = self.try_to_parse_request(self.request_buff)
-            if msg is not None:
-                self.request_buff = ''
-                d = self.handle_request(msg)
-                if self.blob_sender is not None:
-                    d.addCallback(lambda _: self.blob_sender.send_blob_if_requested(self))
-                d.addCallbacks(lambda _: self.finished_response(), self.request_failure_handler)
-            else:
-                log.debug("Request buff not a valid json message")
-                log.debug("Request buff: %s", str(self.request_buff))
+            return self._parse_data_and_maybe_send_blob(data)
         else:
             log.warning("The client sent data when we were uploading a file. This should not happen")
+
+    def _parse_data_and_maybe_send_blob(self, data):
+        self.request_buff = self.request_buff + data
+        msg = self.try_to_parse_request(self.request_buff)
+        if msg:
+            self.request_buff = ''
+            self._process_msg(msg)
+        else:
+            log.debug("Request buff not a valid json message")
+            log.debug("Request buff: %s", self.request_buff)
+
+    def _process_msg(self, msg):
+        d = self.handle_request(msg)
+        if self.blob_sender:
+            d.addCallback(lambda _: self.blob_sender.send_blob_if_requested(self))
+        d.addCallbacks(lambda _: self.finished_response(), self.request_failure_handler)
+
 
     ######### IRequestHandler #########
 
