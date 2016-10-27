@@ -40,7 +40,7 @@ from lbrynet.core.Session import Session
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError
+from lbrynet.core.Error import InsufficientFundsError, InvalidNameError
 from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.lbrynet_console.Settings import Settings
@@ -1170,7 +1170,9 @@ class Daemon(AuthJSONRPCServer):
         except:
             d = defer.fail(None)
 
-        d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: self._render_response(None, OK_CODE))
+        d.addCallbacks(
+            lambda r: self._render_response(r, OK_CODE),
+            lambda _: self._render_response(None, OK_CODE))
 
         return d
 
@@ -1423,7 +1425,10 @@ class Daemon(AuthJSONRPCServer):
             return self._render_response(None, BAD_REQUEST)
 
         d = self._resolve_name(name, force_refresh=force)
-        d.addCallbacks(lambda info: self._render_response(info, OK_CODE), lambda _: server.failure)
+        d.addCallbacks(
+            lambda info: self._render_response(info, OK_CODE),
+            errback=handle_failure, errbackArgs=('Failed to resolve name: %s',)
+        )
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -1514,7 +1519,9 @@ class Daemon(AuthJSONRPCServer):
                                 file_name=params.file_name,
                                 wait_for_write=params.wait_for_write)
         # TODO: downloading can timeout.  Not sure what to do when that happens
-        d.addCallbacks(get_output_callback(params), lambda err: str(err))
+        d.addCallbacks(
+            get_output_callback(params),
+            lambda err: str(err))
         d.addCallback(lambda message: self._render_response(message, OK_CODE))
         return d
 
@@ -2244,7 +2251,9 @@ class Daemon(AuthJSONRPCServer):
         sd_hash = p[FileID.SD_HASH]
         d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
         d.addCallback(self._reflect)
-        d.addCallbacks(lambda _: self._render_response(True, OK_CODE), lambda err: self._render_response(err.getTraceback(), OK_CODE))
+        d.addCallbacks(
+            lambda _: self._render_response(True, OK_CODE),
+            lambda err: self._render_response(err.getTraceback(), OK_CODE))
         return d
 
     def jsonrpc_get_blob_hashes(self):
@@ -2327,8 +2336,9 @@ class Daemon(AuthJSONRPCServer):
         d = self._resolve_name(name, force_refresh=True)
         d.addCallback(get_sd_hash)
         d.addCallback(self._download_sd_blob)
-        d.addCallbacks(lambda descriptor: [blob.get('blob_hash') for blob in descriptor['blobs']],
-                       lambda _: [])
+        d.addCallbacks(
+            lambda descriptor: [blob.get('blob_hash') for blob in descriptor['blobs']],
+            lambda _: [])
         d.addCallback(self.session.blob_tracker.get_availability_for_blobs)
         d.addCallback(_get_mean)
         d.addCallback(lambda result: self._render_response(result, OK_CODE))
@@ -2525,7 +2535,7 @@ class _ResolveNameHelper(object):
         if self.need_fresh_stream():
             log.info("Resolving stream info for lbry://%s", self.name)
             d = self.wallet.get_stream_info_for_name(self.name)
-            d.addCallbacks(self._cache_stream_info, lambda _: defer.fail(UnknownNameError))
+            d.addCallback(self._cache_stream_info)
         else:
             log.debug("Returning cached stream info for lbry://%s", self.name)
             d = defer.succeed(self.name_data['claim_metadata'])
@@ -2693,3 +2703,15 @@ def get_lbry_file_search_value(p):
         if value:
             return searchtype, value
     raise NoValidSearch()
+
+
+def handle_failure(err, msg):
+    log_support.failure(err, log, msg)
+    # TODO: Is this a module? It looks like it:
+    #
+    # In [1]: import twisted.web.server
+    # In [2]: twisted.web.server.failure
+    # Out[2]: <module 'twisted.python.failure' from '.../site-packages/twisted/python/failure.pyc'>
+    #
+    # If so, maybe we should return something else.
+    return server.failure
