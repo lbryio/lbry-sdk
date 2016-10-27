@@ -12,7 +12,7 @@ from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.metadata.Metadata import Metadata
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet import reflector
-from lbrynet.conf import LOG_FILE_NAME, REFLECTOR_SERVERS
+from lbrynet.conf import settings
 from twisted.internet import threads, defer, reactor
 
 if sys.platform != "darwin":
@@ -23,7 +23,7 @@ else:
 if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
-lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
+lbrynet_log = os.path.join(log_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 
@@ -41,7 +41,7 @@ class Publisher(object):
         self.lbry_file = None
         self.txid = None
         self.stream_hash = None
-        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_server = random.choice(settings.reflector_servers)
         self.reflector_server, self.reflector_port = reflector_server[0], reflector_server[1]
         self.metadata = {}
 
@@ -74,7 +74,7 @@ class Publisher(object):
         return d
 
     def start_reflector(self):
-        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_server = random.choice(settings.reflector_servers)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Reflecting new publication")
         factory = reflector.ClientFactory(

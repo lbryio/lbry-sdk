@@ -6,7 +6,7 @@ from appdirs import user_data_dir
 from twisted.internet import defer
 from lbrynet.lbrynet_daemon.Daemon import Daemon
 from lbrynet.lbrynet_daemon.Resources import LBRYindex, HostedEncryptedFile, EncryptedFileUpload
-from lbrynet.conf import API_ADDRESS, DEFAULT_UI_BRANCH, LOG_FILE_NAME
+from lbrynet.conf import settings
 
 
 # TODO: omg, this code is essentially duplicated in Daemon
@@ -17,21 +17,20 @@ else:
 if not os.path.isdir(data_dir):
     os.mkdir(data_dir)
 
-lbrynet_log = os.path.join(data_dir, LOG_FILE_NAME)
+lbrynet_log = os.path.join(data_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 
 class DaemonServer(object):
-    def _setup_server(self, wallet):
+    def _setup_server(self):
         self.root = LBRYindex(os.path.join(os.path.join(data_dir, "lbry-ui"), "active"))
-        self._api = Daemon(self.root, wallet_type=wallet)
+        self._api = Daemon(self.root)
         self.root.putChild("view", HostedEncryptedFile(self._api))
         self.root.putChild("upload", EncryptedFileUpload(self._api))
-        self.root.putChild(API_ADDRESS, self._api)
+        self.root.putChild(settings.API_ADDRESS, self._api)
         return defer.succeed(True)
 
-    def start(self, branch=DEFAULT_UI_BRANCH, user_specified=False,
-              branch_specified=False, wallet=None):
-        d = self._setup_server(wallet)
-        d.addCallback(lambda _: self._api.setup(branch, user_specified, branch_specified))
+    def start(self):
+        d = self._setup_server()
+        d.addCallback(lambda _: self._api.setup())
         return d

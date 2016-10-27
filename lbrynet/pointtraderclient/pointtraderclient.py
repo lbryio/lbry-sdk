@@ -1,4 +1,4 @@
-from lbrynet.conf import POINTTRADER_SERVER
+from lbrynet.conf import settings
 
 from twisted.web.client import Agent, FileBodyProducer, Headers, ResponseDone
 from twisted.internet import threads, defer, protocol
@@ -46,7 +46,7 @@ def get_body_from_request(path, data):
 
     jsondata = FileBodyProducer(StringIO(json.dumps(data)))
     agent = Agent(reactor)
-    d = agent.request('POST', POINTTRADER_SERVER + path, Headers({'Content-Type': ['application/json']}), jsondata)
+    d = agent.request('POST', settings.pointtrader_server + path, Headers({'Content-Type': ['application/json']}), jsondata)
     d.addCallback(get_body)
     return d
 

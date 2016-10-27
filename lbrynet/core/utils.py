@@ -8,6 +8,8 @@ import os
 import socket
 import yaml
 
+from lbrynet.conf import settings
+from lbrynet.conf import AdjustableSettings
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 
@@ -85,24 +87,25 @@ settings_encoders = {
     '.yml': yaml.safe_dump
 }
 
+ADJUSTABLE_SETTINGS = AdjustableSettings().get_dict()
+
 
 def load_settings(path):
     ext = os.path.splitext(path)[1]
-    f = open(path, 'r')
-    data = f.read()
-    f.close()
+    with open(path, 'r') as settings_file:
+        data = settings_file.read()
     decoder = settings_decoders.get(ext, False)
     assert decoder is not False, "Unknown settings format .%s" % ext
     return decoder(data)
 
 
-def save_settings(path, settings):
+def save_settings(path):
+    to_save = {k: v for k, v in settings.__dict__.iteritems() if k in ADJUSTABLE_SETTINGS}
     ext = os.path.splitext(path)[1]
     encoder = settings_encoders.get(ext, False)
     assert encoder is not False, "Unknown settings format .%s" % ext
-    f = open(path, 'w')
-    f.write(encoder(settings))
-    f.close()
+    with open(path, 'w') as settings_file:
+        settings_file.write(encoder(to_save))
 
 
 def check_connection(server="www.lbry.io", port=80):

@@ -4,15 +4,14 @@ import subprocess
 import sys
 from time import sleep
 
-from jsonrpc.proxy import JSONRPCProxy
-
-from lbrynet.conf import UI_ADDRESS, API_CONNECTION_STRING
+from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
+from lbrynet.conf import settings
 
 
 class LBRYURIHandler(object):
     def __init__(self):
         self.started_daemon = False
-        self.daemon = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+        self.daemon = LBRYAPIClient.config()
 
     def handle_osx(self, lbry_name):
         self.check_daemon()
@@ -70,9 +69,9 @@ class LBRYURIHandler(object):
     @staticmethod
     def open_address(lbry_name):
         if lbry_name == "lbry" or lbry_name == "" or lbry_name is None:
-            webbrowser.open(UI_ADDRESS)
+            webbrowser.open(settings.UI_ADDRESS)
         else:
-            webbrowser.open(UI_ADDRESS + "/?show=" + lbry_name)
+            webbrowser.open(settings.UI_ADDRESS + "/?show=" + lbry_name)
 
 
 def main(args):

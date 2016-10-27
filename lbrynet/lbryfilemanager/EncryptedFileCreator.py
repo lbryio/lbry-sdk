@@ -7,7 +7,7 @@ import logging
 import os
 from lbrynet.core.StreamDescriptor import PlainStreamDescriptorWriter
 from lbrynet.cryptstream.CryptStreamCreator import CryptStreamCreator
-from lbrynet import conf
+from lbrynet.conf import settings
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from twisted.protocols.basic import FileSender
@@ -130,7 +130,7 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
 
     def make_stream_desc_file(stream_hash):
         log.debug("creating the stream descriptor file")
-        descriptor_file_path = os.path.join(session.db_dir, file_name + conf.CRYPTSD_FILE_EXTENSION)
+        descriptor_file_path = os.path.join(session.db_dir, file_name + settings.CRYPTSD_FILE_EXTENSION)
         descriptor_writer = PlainStreamDescriptorWriter(descriptor_file_path)
 
         d = get_sd_info(lbry_file_manager.stream_info_manager, stream_hash, True)

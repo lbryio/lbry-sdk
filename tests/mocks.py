@@ -2,7 +2,7 @@ import io
 
 from Crypto.PublicKey import RSA
 from decimal import Decimal
-from twisted.internet import defer, threads, task, error
+from twisted.internet import defer
 
 from lbrynet.core import PTCWallet
 from lbrynet.core import BlobAvailability

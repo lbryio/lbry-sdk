@@ -90,5 +90,17 @@ class InvalidBlobHashError(Exception):
     pass
 
 
+class InvalidHeaderError(Exception):
+    pass
+
+
+class InvalidAuthenticationToken(Exception):
+    pass
+
+
+class SubhandlerError(Exception):
+    pass
+
+
 class NegotiationError(Exception):
     pass

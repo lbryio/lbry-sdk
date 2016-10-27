@@ -1,10 +1,10 @@
 from lbrynet.core.Strategy import get_default_strategy
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, MIN_BLOB_INFO_PAYMENT_RATE, is_generous_host
+from lbrynet.conf import settings
 from decimal import Decimal
 
 
 class BasePaymentRateManager(object):
-    def __init__(self, rate=MIN_BLOB_DATA_PAYMENT_RATE, info_rate=MIN_BLOB_INFO_PAYMENT_RATE):
+    def __init__(self, rate=settings.data_rate, info_rate=settings.min_info_rate):
         self.min_blob_data_payment_rate = rate
         self.min_blob_info_payment_rate = info_rate
 
@@ -36,7 +36,7 @@ class PaymentRateManager(object):
 
 
 class NegotiatedPaymentRateManager(object):
-    def __init__(self, base, availability_tracker, generous=is_generous_host):
+    def __init__(self, base, availability_tracker, generous=settings.is_generous_host):
         """
         @param base: a BasePaymentRateManager
         @param availability_tracker: a BlobAvailabilityTracker

@@ -1,4 +1,4 @@
-from lbrynet.conf import BLOB_SIZE
+from lbrynet.conf import settings
 
 
 class ClientRequest(object):
@@ -17,7 +17,7 @@ class ClientBlobRequest(ClientPaidRequest):
     def __init__(self, request_dict, response_identifier, write_func, finished_deferred,
                  cancel_func, blob):
         if blob.length is None:
-            max_pay_units = BLOB_SIZE
+            max_pay_units = settings.BLOB_SIZE
         else:
             max_pay_units = blob.length
         ClientPaidRequest.__init__(self, request_dict, response_identifier, max_pay_units)

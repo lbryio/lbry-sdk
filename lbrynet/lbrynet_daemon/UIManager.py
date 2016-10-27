@@ -8,7 +8,7 @@ from urllib2 import urlopen
 from StringIO import StringIO
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
-from lbrynet.conf import DEFAULT_UI_BRANCH, LOG_FILE_NAME
+from lbrynet.conf import settings
 from lbrynet.lbrynet_daemon.Resources import NoCacheStaticFile
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
@@ -23,7 +23,7 @@ else:
 if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
-lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
+lbrynet_log = os.path.join(log_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 
@@ -74,30 +74,29 @@ class UIManager(object):
                 self.loaded_branch = None
                 self.loaded_requirements = None
 
-    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=None,
-              branch_specified=False, check_requirements=None):
-        if check_requirements is not None:
-            self.check_requirements = check_requirements
-        if self.branch is not None:
-            self.branch = branch
-        if user_specified:
-            if os.path.isdir(user_specified):
-                log.info("Checking user specified UI directory: " + str(user_specified))
+    def setup(self, branch=None, check_requirements=None, user_specified=None):
+        local_ui_path = settings.local_ui_path or user_specified
+        self.branch = settings.ui_branch or branch
+        self.check_requirements = settings.check_ui_requirements or check_requirements
+
+        if local_ui_path:
+            if os.path.isdir(local_ui_path):
+                log.info("Checking user specified UI directory: " + str(local_ui_path))
                 self.branch = "user-specified"
                 self.loaded_git_version = "user-specified"
-                d = self.migrate_ui(source=user_specified)
+                d = self.migrate_ui(source=local_ui_path)
                 d.addCallback(lambda _: self._load_ui())
                 return d
             else:
                 log.info("User specified UI directory doesn't exist, using " + self.branch)
-        elif self.loaded_branch == "user-specified" and not branch_specified:
+        elif self.loaded_branch == "user-specified":
             log.info("Loading user provided UI")
             d = self._load_ui()
             return d
         else:
-            log.info("Checking for updates for UI branch: " + branch)
-            self._git_url = "https://s3.amazonaws.com/lbry-ui/{}/data.json".format(branch)
-            self._dist_url = "https://s3.amazonaws.com/lbry-ui/{}/dist.zip".format(branch)
+            log.info("Checking for updates for UI branch: " + self.branch)
+            self._git_url = "https://s3.amazonaws.com/lbry-ui/{}/data.json".format(self.branch)
+            self._dist_url = "https://s3.amazonaws.com/lbry-ui/{}/dist.zip".format(self.branch)
 
         d = self._up_to_date()
         d.addCallback(lambda r: self._download_ui() if not r else self._load_ui())

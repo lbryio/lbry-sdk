@@ -2,14 +2,14 @@
 
 import os
 from setuptools import setup
-from lbrynet.conf import APP_NAME, ICON_PATH
+from lbrynet.conf import settings
 
 APP = [os.path.join('lbrygui', 'main.py')]
 DATA_FILES = []
 DATA_FILES.append('app.icns')
 
 OPTIONS = {
-    'iconfile': ICON_PATH,
+    'iconfile': settings.ICON_PATH,
     'plist': {
         'CFBundleIdentifier': 'io.lbry.LBRY',
         'LSUIElement': True,
@@ -22,7 +22,7 @@ OPTIONS = {
 
 
 setup(
-    name=APP_NAME,
+    name=settings.APP_NAME,
     app=APP,
     options={'py2app': OPTIONS},
     data_files=DATA_FILES,
