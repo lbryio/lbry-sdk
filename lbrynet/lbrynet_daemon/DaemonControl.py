@@ -109,6 +109,7 @@ def start():
                        branch_specified=True if args.branch else False)
         if args.launchui:
             d.addCallback(lambda _: webbrowser.open(UI_ADDRESS))
+        d.addErrback(log_and_kill)
 
         lbrynet_server = server.Site(lbry.root)
         lbrynet_server.requestFactory = DaemonRequest
@@ -122,6 +123,12 @@ def start():
         if not args.logtoconsole:
             print "Not connected to internet, unable to start"
         return
+
+
+def log_and_kill(failure):
+    log_support.failure(failure, log, 'Failed to startup: %s')
+    reactor.stop()
+
 
 if __name__ == "__main__":
     start()
