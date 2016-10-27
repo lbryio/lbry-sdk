@@ -16,8 +16,10 @@ elif sys.platform.startswith("win"):
     platform = WINDOWS
     from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
     default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
-    default_data_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrynet")
-    default_lbryum_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbryum")
+    default_data_dir = os.path.join(
+        get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrynet")
+    default_lbryum_dir = os.path.join(
+        get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbryum")
 else:
     platform = LINUX
     default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
@@ -25,42 +27,47 @@ else:
     default_lbryum_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
 
 
-def convert_setting(setting, current_val):
-    new_type = setting.__class__
+def convert_setting(env_val, current_val):
+    new_type = env_val.__class__
     current_type = current_val.__class__
     if current_type is bool:
         if new_type is bool:
-            return setting
-        elif str(setting).lower() == "false":
+            return env_val
+        elif str(env_val).lower() == "false":
             return False
-        elif str(setting).lower() == "true":
+        elif str(env_val).lower() == "true":
             return True
         else:
             raise ValueError
     elif current_type is int:
-        return int(setting)
+        return int(env_val)
     elif current_type is float:
-        return float(setting)
+        return float(env_val)
     elif current_type is str:
-        return str(setting)
+        return str(env_val)
     elif current_type is dict:
-        return dict(setting)
+        return dict(env_val)
     elif current_type is list:
-        return list(setting)
+        return list(env_val)
     elif current_type is tuple:
-        return tuple(setting)
+        return tuple(env_val)
     else:
-        raise ValueError()
+        raise ValueError('Type {} cannot be converted'.format(current_type))
 
 
 def convert_env_setting(setting, value):
-    env_val = os.environ.get(setting, value)
-    return convert_setting(env_val, value)
+    try:
+        env_val = os.environ[setting]
+    except KeyError:
+        return value
+    else:
+        return convert_setting(env_val, value)
 
 
 def get_env_settings(settings):
-    for setting in settings:
-        yield convert_env_setting(setting, settings[setting])
+    for setting, value in settings.iteritems():
+        setting = 'LBRY_' + setting.upper()
+        yield convert_env_setting(setting, value)
 
 
 def add_env_settings_to_dict(settings_dict):
@@ -135,10 +142,12 @@ class AdjustableSettings(Setting):
         self.min_valuable_info_rate = .05  # points/1000 infos
         self.min_valuable_hash_rate = .05  # points/1000 infos
         self.max_connections_per_stream = 5
-        self.known_dht_nodes = [('104.236.42.182', 4000),
-                                ('lbrynet1.lbry.io', 4444),
-                                ('lbrynet2.lbry.io', 4444),
-                                ('lbrynet3.lbry.io', 4444)]
+        self.known_dht_nodes = [
+            ('104.236.42.182', 4000),
+            ('lbrynet1.lbry.io', 4444),
+            ('lbrynet2.lbry.io', 4444),
+            ('lbrynet3.lbry.io', 4444)
+        ]
         self.pointtrader_server = 'http://127.0.0.1:2424'
         self.reflector_servers = [("reflector.lbry.io", 5566)]
         self.wallet = "lbryum"
@@ -171,9 +180,9 @@ class ApplicationSettings(Setting):
         self.wallet_TYPES = ["lbryum", "lbrycrd"]
         self.SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
         self.CURRENCIES = {
-                            'BTC': {'type': 'crypto'},
-                            'LBC': {'type': 'crypto'},
-                            'USD': {'type': 'fiat'},
+            'BTC': {'type': 'crypto'},
+            'LBC': {'type': 'crypto'},
+            'USD': {'type': 'fiat'},
         }
         self.LOGGLY_TOKEN = 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv'
         self.ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
@@ -211,7 +220,8 @@ class Config(DefaultSettings):
 
     @property
     def API_CONNECTION_STRING(self):
-        return "http://%s:%i/%s" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port, DEFAULT_SETTINGS.API_ADDRESS)
+        return "http://%s:%i/%s" % (
+            DEFAULT_SETTINGS.API_INTERFACE, self.api_port, DEFAULT_SETTINGS.API_ADDRESS)
 
     @property
     def UI_ADDRESS(self):
