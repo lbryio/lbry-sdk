@@ -33,7 +33,7 @@ On Ubuntu or Mint you can install the prerequisites by running
 
  ```
  sudo apt-get install libgmp3-dev build-essential python2.7 python2.7-dev \
-     python-pip git python-virtualenv
+     python-pip git python-virtualenv libssl-dev libffi-dev
  ```
 
 ##### OSX and Linux Installation
