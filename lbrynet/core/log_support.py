@@ -7,7 +7,6 @@ import platform
 import sys
 import traceback
 
-import base58
 import requests
 from requests_futures.sessions import FuturesSession
 
@@ -242,23 +241,33 @@ class LogUploader(object):
         self.log_file = log_file
         self.log_size = log_size
 
-    def upload(self, exclude_previous, lbryid, log_type):
+    def upload(self, exclude_previous, id_hash, log_type):
         if not os.path.isfile(self.log_file):
             return
+        log_contents = self.log_contents(exclude_previous)
+        params = {
+            'date': datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
+            'hash': id_hash,
+            'sys': platform.system(),
+            'type': self.get_type(log_type),
+            'log': log_contents
+        }
+        requests.post(settings.LOG_POST_URL, params)
+
+    def log_contents(self, exclude_previous):
         with open(self.log_file) as f:
             if exclude_previous:
                 f.seek(self.log_size)
                 log_contents = f.read()
             else:
                 log_contents = f.read()
-        params = {
-            'date': datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
-            'hash': base58.b58encode(lbryid)[:20],
-            'sys': platform.system(),
-            'type': "%s-%s" % (self.log_name, log_type) if log_type else self.log_name,
-            'log': log_contents
-        }
-        requests.post(settings.LOG_POST_URL, params)
+        return log_contents
+
+    def get_type(self, log_type):
+        if log_type:
+            return "%s-%s" % (self.log_name, log_type)
+        else:
+            return self.log_name
 
     @classmethod
     def load(cls, log_name, log_file):
