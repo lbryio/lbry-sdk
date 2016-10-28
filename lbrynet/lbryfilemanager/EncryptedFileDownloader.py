@@ -5,7 +5,7 @@ import random
 import logging
 
 from zope.interface import implements
-from twisted.internet import defer, reactor
+from twisted.internet import defer
 
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.core.StreamDescriptor import StreamMetadata
@@ -13,7 +13,7 @@ from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaver, 
 from lbrynet.lbryfilemanager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
-from lbrynet.reflector import BlobClientFactory, ClientFactory, ReflectorAvailabilityHelper
+from lbrynet.reflector import ReflectorAvailabilityHelper
 from lbrynet.conf import REFLECTOR_SERVERS
 
 log = logging.getLogger(__name__)
