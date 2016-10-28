@@ -1,16 +1,20 @@
 """
 Download LBRY Files from LBRYnet and save them to disk.
 """
+import random
+import logging
 
 from zope.interface import implements
+from twisted.internet import defer
+
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaver, EncryptedFileDownloader
 from lbrynet.lbryfilemanager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
-from twisted.internet import defer
-import logging
+from lbrynet.reflector import reupload
+from lbrynet.conf import settings
 
 log = logging.getLogger(__name__)
 
@@ -63,8 +67,11 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             d.addCallbacks(_save_claim_id, lambda err: _notify_bad_claim(name, txid))
             return d
 
+        reflector_server = random.choice(settings.reflector_servers)
+
         d.addCallback(_save_sd_hash)
         d.addCallback(lambda r: _save_claim(r[0], r[1]) if r else None)
+        d.addCallback(lambda _: reupload.check_and_restore_availability(self, reflector_server))
         d.addCallback(lambda _: self.lbry_file_manager.get_lbry_file_status(self))
 
         def restore_status(status):
