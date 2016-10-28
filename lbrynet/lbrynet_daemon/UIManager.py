@@ -15,15 +15,7 @@ from lbryum.version import LBRYUM_VERSION as lbryum_version
 from zipfile import ZipFile
 from appdirs import user_data_dir
 
-if sys.platform != "darwin":
-    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-else:
-    log_dir = user_data_dir("LBRY")
 
-if not os.path.isdir(log_dir):
-    os.mkdir(log_dir)
-
-lbrynet_log = os.path.join(log_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
 
 

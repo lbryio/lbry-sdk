@@ -5,30 +5,21 @@ import webbrowser
 import sys
 
 from twisted.web import server, guard
-from twisted.internet import defer, reactor
+from twisted.internet import defer, reactor, error
 from twisted.cred import portal
-
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet.lbrynet_daemon.auth.auth import PasswordChecker, HttpPasswordRealm
 from lbrynet.lbrynet_daemon.auth.util import initialize_api_key_file
+from lbrynet import conf
 from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import settings
 
-log_dir = settings.data_dir
 
-if not os.path.isdir(log_dir):
-    os.mkdir(log_dir)
-
-lbrynet_log = os.path.join(log_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-
-
-if getattr(sys, 'frozen', False) and os.name == "nt":
-    os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
 
 
 def test_internet_connection():
@@ -56,45 +47,30 @@ def start():
                         help="lbrycrd or lbryum, default lbryum",
                         type=str,
                         default='lbryum')
-
-    parser.add_argument("--ui",
-                        help="path to custom UI folder",
-                        default=None)
-
-    parser.add_argument("--branch",
-                        help="Branch of lbry-web-ui repo to use, defaults on master",
-                        default=settings.ui_branch)
-
-    parser.add_argument("--http-auth",
-                        dest="useauth",
-                        action="store_true")
-
-    parser.add_argument('--no-launch',
-                        dest='launchui',
-                        action="store_false")
-
-    parser.add_argument('--log-to-console',
-                        dest='logtoconsole',
-                        action="store_true")
-
-    parser.add_argument('--quiet',
-                        dest='quiet',
-                        action="store_true")
-
-    parser.add_argument('--verbose',
-                        action='store_true',
-                        help='enable more debug output for the console')
-
-    parser.set_defaults(branch=False, launchui=True, logtoconsole=False, quiet=False, useauth=settings.use_auth_http)
+    parser.add_argument("--ui", help="path to custom UI folder", default=None)
+    parser.add_argument(
+        "--branch",
+        help='Branch of lbry-web-ui repo to use, defaults to {}'.format(settings.ui_branch),
+        default=settings.ui_branch)
+    parser.add_argument('--no-launch', dest='launchui', action="store_false")
+    parser.add_argument("--http-auth", dest="useauth", action="store_true")
+    parser.add_argument(
+        '--log-to-console', dest='logtoconsole', action='store_true',
+        help=('Set to enable console logging. Set the --verbose flag '
+              ' to enable more detailed console logging'))
+    parser.add_argument(
+        '--quiet', dest='quiet', action="store_true",
+        help=('If log-to-console is not set, setting this disables all console output. '
+              'If log-to-console is set, this argument is ignored'))
+    parser.add_argument(
+        '--verbose', nargs="*",
+        help=('Enable debug output. Optionally specify loggers for which debug output '
+              'should selectively be applied.'))
     args = parser.parse_args()
 
-    log_support.configure_file_handler(lbrynet_log)
-    log_support.configure_loggly_handler()
-    if args.logtoconsole:
-        log_support.configure_console(level='DEBUG')
-    log_support.disable_third_party_loggers()
-    if not args.verbose:
-        log_support.disable_noisy_loggers()
+    utils.setup_certs_for_windows()
+    lbrynet_log = conf.get_log_filename()
+    log_support.configure_logging(lbrynet_log, args.logtoconsole, args.verbose)
 
     to_pass = {}
     settings_path = os.path.join(settings.data_dir, "daemon_settings.yml")
@@ -106,9 +82,10 @@ def start():
     if args.branch:
         to_pass.update({'ui_branch': args.branch})
     to_pass.update({'use_auth_http': args.useauth})
-    to_pass.update({'wallet': args.wallet})
-    print to_pass
+    to_pass.update({'wallet_type': args.wallet})
+    log.debug('Settings overrides: %s', to_pass)
     settings.update(to_pass)
+    log.debug('Final Settings: %s', settings.__dict__)
 
     try:
         JSONRPCProxy.from_url(settings.API_CONNECTION_STRING).is_running()
@@ -131,29 +108,7 @@ def start():
         print "To quit press ctrl-c or call 'stop' via the API"
 
     if test_internet_connection():
-        lbry = DaemonServer()
-
-        d = lbry.start()
-        if args.launchui:
-            d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
-        d.addErrback(log_and_kill)
-
-        if settings.use_auth_http:
-            log.info("Using authenticated API")
-            pw_path = os.path.join(settings.data_dir, ".api_keys")
-            initialize_api_key_file(pw_path)
-            checker = PasswordChecker.load_file(pw_path)
-            realm = HttpPasswordRealm(lbry.root)
-            portal_to_realm = portal.Portal(realm, [checker, ])
-            factory = guard.BasicCredentialFactory('Login to lbrynet api')
-            _lbrynet_server = guard.HTTPAuthSessionWrapper(portal_to_realm, [factory, ])
-        else:
-            log.info("Using non-authenticated API")
-            _lbrynet_server = server.Site(lbry.root)
-
-        lbrynet_server = server.Site(_lbrynet_server)
-        lbrynet_server.requestFactory = DaemonRequest
-        reactor.listenTCP(settings.api_port, lbrynet_server, interface=settings.API_INTERFACE)
+        start_server_and_listen(args.launchui, args.useauth)
         reactor.run()
 
         if not args.logtoconsole and not args.quiet:
@@ -168,6 +123,51 @@ def start():
 def log_and_kill(failure):
     log_support.failure(failure, log, 'Failed to startup: %s')
     reactor.stop()
+
+
+def start_server_and_listen(launchui, use_auth, **kwargs):
+    """The primary entry point for launching the daemon.
+
+    Args:
+        launchui: set to true to open a browser window
+        use_auth: set to true to enable http authentication
+        kwargs: passed along to `DaemonServer().start()`
+    """
+    lbry = DaemonServer()
+
+    d = lbry.start(**kwargs)
+    if launchui:
+        d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
+    d.addErrback(log_and_kill)
+
+    site_base = get_site_base(use_auth, lbry.root)
+    lbrynet_server = server.Site(site_base)
+    lbrynet_server.requestFactory = DaemonRequest
+    try:
+        reactor.listenTCP(settings.api_port, lbrynet_server, interface=settings.API_INTERFACE)
+    except error.CannotListenError:
+        log.info('Daemon already running, exiting app')
+        sys.exit(1)
+
+
+def get_site_base(use_auth, root):
+    if use_auth:
+        log.info("Using authenticated API")
+        return create_auth_session(root)
+    else:
+        log.info("Using non-authenticated API")
+        return server.Site(root)
+
+
+def create_auth_session(root):
+    pw_path = os.path.join(settings.data_dir, ".api_keys")
+    initialize_api_key_file(pw_path)
+    checker = PasswordChecker.load_file(pw_path)
+    realm = HttpPasswordRealm(root)
+    portal_to_realm = portal.Portal(realm, [checker, ])
+    factory = guard.BasicCredentialFactory('Login to lbrynet api')
+    _lbrynet_server = guard.HTTPAuthSessionWrapper(portal_to_realm, [factory, ])
+    return _lbrynet_server
 
 
 if __name__ == "__main__":

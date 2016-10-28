@@ -1377,7 +1377,8 @@ class LBRYumWallet(Wallet):
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, raw_tx)
         d.addCallback(_log_tx)
-        d.addCallback(lambda r: r if len(r) == 64 else defer.fail(Exception("Transaction rejected")))
+        d.addCallback(
+            lambda r: r if len(r) == 64 else defer.fail(Exception("Transaction rejected")))
         d.addCallback(self._save_wallet)
         return d
 

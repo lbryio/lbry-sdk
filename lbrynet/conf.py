@@ -1,11 +1,18 @@
 import copy
+import logging
 import os
 import sys
+
 from appdirs import user_data_dir
+
+
+log = logging.getLogger(__name__)
+
 
 LINUX = 1
 DARWIN = 2
 WINDOWS = 3
+
 
 if sys.platform.startswith("darwin"):
     platform = DARWIN
@@ -28,6 +35,16 @@ else:
 
 
 def convert_setting(env_val, current_val):
+    try:
+        return _convert_setting(env_val, current_val)
+    except Exception as exc:
+        log.warning(
+            'Failed to convert %s. Returning original: %s: %s',
+            env_val, current_val, exc)
+        return current_val
+
+
+def _convert_setting(env_val, current_val):
     new_type = env_val.__class__
     current_type = current_val.__class__
     if current_type is bool:
@@ -38,7 +55,7 @@ def convert_setting(env_val, current_val):
         elif str(env_val).lower() == "true":
             return True
         else:
-            raise ValueError
+            raise ValueError('{} is not a valid boolean value'.format(env_val))
     elif current_type is int:
         return int(env_val)
     elif current_type is float:
@@ -77,6 +94,7 @@ def add_env_settings_to_dict(settings_dict):
 
 
 class Setting(object):
+    """A collection of configuration settings"""
     __fixed = []
     __excluded = ['get_dict', 'update']
 
@@ -92,8 +110,9 @@ class Setting(object):
 
     def __setitem__(self, key, value):
         assert key in self and key not in self.__fixed, KeyError(key)
-        _value = convert_setting(value, self[key])
-        self.__dict__.update({key: _value})
+        old_value = self[key]
+        new_value = convert_setting(value, old_value)
+        self.__dict__[key] = new_value
 
     def __contains__(self, item):
         return item in iter(self)
@@ -105,13 +124,12 @@ class Setting(object):
         for k, v in other.iteritems():
             try:
                 self.__setitem__(k, v)
-            except KeyError:
-                pass
-            except AssertionError:
+            except (KeyError, AssertionError):
                 pass
 
 
 class AdjustableSettings(Setting):
+    """Settings that are allowed to be overriden by the user"""
     def __init__(self):
         self.is_generous_host = True
         self.run_on_startup = False
@@ -161,6 +179,7 @@ class AdjustableSettings(Setting):
 
 
 class ApplicationSettings(Setting):
+    """Settings that are constants and shouldn't be overriden"""
     def __init__(self):
         self.MAX_HANDSHAKE_SIZE = 2**16
         self.MAX_REQUEST_SIZE = 2**16
@@ -226,6 +245,24 @@ class Config(DefaultSettings):
     @property
     def UI_ADDRESS(self):
         return "http://%s:%i" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port)
+
+
+def get_data_dir():
+    if sys.platform != "darwin":
+        data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+    else:
+        data_dir = user_data_dir("LBRY")
+    if not os.path.isdir(data_dir):
+        os.mkdir(data_dir)
+    return data_dir
+
+
+def get_log_filename():
+    """Return the log file for this platform.
+
+    Also ensure the containing directory exists
+    """
+    return os.path.join(get_data_dir(), settings.LOG_FILE_NAME)
 
 
 # TODO: don't load the configuration automatically. The configuration

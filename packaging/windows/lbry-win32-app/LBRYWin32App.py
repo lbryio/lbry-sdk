@@ -1,6 +1,5 @@
 import logging
 import os
-import socket
 import sys
 import threading
 import webbrowser
@@ -11,30 +10,23 @@ import win32gui_struct
 from jsonrpc.proxy import JSONRPCProxy
 from twisted.internet import reactor, error
 from twisted.web import server
-import twisted
 
 try:
     import winxpgui as win32gui
 except ImportError:
     import win32gui
 
+from lbrynet import conf
+from lbrynet.core import log_support
 from lbrynet.core import utils
+from lbrynet.lbrynet_daemon import DaemonControl
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import settings
 from packaging.uri_handler.LBRYURIHandler import LBRYURIHandler
 
 
-# TODO: omg, this code is essentially duplicated in LBRYDaemon
-data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-if not os.path.isdir(data_dir):
-    os.mkdir(data_dir)
-
-lbrynet_log = os.path.join(data_dir, settings.LOG_FILE_NAME)
 log = logging.getLogger(__name__)
-
-if getattr(sys, 'frozen', False) and os.name == "nt":
-    os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
 
 
 def test_internet_connection():
@@ -278,19 +270,14 @@ def main(lbry_name=None):
     systray_thread.daemon = True
     systray_thread.start()
 
-    lbry = DaemonServer()
-    d = lbry.start(use_authentication=False)
-    d.addCallback(lambda _: LBRYURIHandler.open_address(lbry_name))
-    lbrynet_server = server.Site(lbry.root)
-    lbrynet_server.requestFactory = DaemonRequest
-    try:
-        reactor.listenTCP(settings.api_port, lbrynet_server, interface=settings.API_INTERFACE)
-    except error.CannotListenError:
-        log.info('Daemon already running, exiting app')
-        sys.exit(1)
+    DaemonControl.start_server_and_listen(launchui=True, use_auth=False)
     reactor.run()
 
+
 if __name__ == '__main__':
+    utils.setup_certs_for_windows()
+    log_file = conf.get_log_filename()
+    log_support.configure_logging(log_file, console=False)
     lbry_daemon = JSONRPCProxy.from_url(settings.API_CONNECTION_STRING)
 
     try:
