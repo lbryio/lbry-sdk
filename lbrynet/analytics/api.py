@@ -5,7 +5,7 @@ import logging
 from requests import auth
 from requests_futures import sessions
 
-from lbrynet import conf
+from lbrynet.conf import settings
 from lbrynet.analytics import utils
 
 
@@ -28,7 +28,7 @@ def log_response(fn):
     return wrapper
 
 
-class AnalyticsApi(object):
+class Api(object):
     def __init__(self, session, url, write_key):
         self.session = session
         self.url = url
@@ -61,11 +61,11 @@ class AnalyticsApi(object):
 
     @classmethod
     def load(cls, session=None):
-        """Initialize an instance using values from lbry.io."""
+        """Initialize an instance using values from the configuration"""
         if not session:
             session = sessions.FuturesSession()
         return cls(
             session,
-            conf.ANALYTICS_ENDPOINT,
-            utils.deobfuscate(conf.ANALYTICS_TOKEN)
+            settings.ANALYTICS_ENDPOINT,
+            utils.deobfuscate(settings.ANALYTICS_TOKEN)
         )

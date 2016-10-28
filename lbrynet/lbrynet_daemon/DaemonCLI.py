@@ -2,8 +2,8 @@ import sys
 import json
 import argparse
 
-from lbrynet.conf import API_CONNECTION_STRING
-from jsonrpc.proxy import JSONRPCProxy
+from lbrynet.conf import settings
+from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 
 help_msg = "Usage: lbrynet-cli method json-args\n" \
              + "Examples: " \
@@ -36,13 +36,20 @@ def get_params_from_kwargs(params):
 
 
 def main():
-    api = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+    api = LBRYAPIClient.config()
 
     try:
-        s = api.is_running()
-    except:
-        print "lbrynet-daemon isn't running"
-        sys.exit(1)
+        status = api.daemon_status()
+        assert status.get('code', False) == "started"
+    except Exception:
+        try:
+            settings.update({'use_auth_http': not settings.use_auth_http})
+            api = LBRYAPIClient.config()
+            status = api.daemon_status()
+            assert status.get('code', False) == "started"
+        except Exception:
+            print "lbrynet-daemon isn't running"
+            sys.exit(1)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('method', nargs=1)
@@ -72,11 +79,16 @@ def main():
     if meth in api.help():
         try:
             if params:
-                r = api.call(meth, params)
+                result = LBRYAPIClient.config(service=meth, params=params)
             else:
-                r = api.call(meth)
-            print json.dumps(r, sort_keys=True)
+                result = LBRYAPIClient.config(service=meth, params=params)
+            print json.dumps(result, sort_keys=True)
         except:
+            # TODO: The api should return proper error codes
+            # and messages so that they can be passed along to the user
+            # instead of this generic message.
+            # https://app.asana.com/0/158602294500137/200173944358192
+
             print "Something went wrong, here's the usage for %s:" % meth
             print api.help({'function': meth})
     else:

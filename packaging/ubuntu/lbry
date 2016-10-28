@@ -15,8 +15,6 @@ if [ ! -f "$LBRYCRDCONF" ]; then
   echo -e "rpcuser=lbryrpc\nrpcpassword=$(env LC_CTYPE=C LC_ALL=C tr -dc A-Za-z0-9 < /dev/urandom | head -c 16 | xargs)" > "$LBRYCRDCONF"
 fi
 
-WEB_UI_BRANCH='master'
-
 urlencode() {
   local LANG=C
   local length="${#1}"
@@ -42,7 +40,7 @@ DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 if [ -z "$(pgrep lbrynet-daemon)" ]; then
   echo "running lbrynet-daemon..."
-  $DIR/lbrynet-daemon --no-launch --branch="$WEB_UI_BRANCH" &
+  $DIR/lbrynet-daemon --no-launch &
   sleep 3 # let the daemon load before connecting
 fi
 

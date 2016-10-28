@@ -1,6 +1,6 @@
 from zope.interface import implementer
 from decimal import Decimal
-from lbrynet.conf import is_generous_host
+from lbrynet.conf import settings
 from lbrynet.interfaces import INegotiationStrategy
 from lbrynet.core.Offer import Offer
 from lbrynet.core.PriceModel import MeanAvailabilityWeightedPrice
@@ -16,7 +16,7 @@ class Strategy(object):
     """
     implementer(INegotiationStrategy)
 
-    def __init__(self, price_model, max_rate, min_rate, is_generous=is_generous_host):
+    def __init__(self, price_model, max_rate, min_rate, is_generous=settings.is_generous_host):
         self.price_model = price_model
         self.is_generous = is_generous
         self.accepted_offers = {}
@@ -101,7 +101,7 @@ class BasicAvailabilityWeightedStrategy(Strategy):
     implementer(INegotiationStrategy)
 
     def __init__(self, blob_tracker, acceleration=1.25, deceleration=0.9, max_rate=None, min_rate=0.0,
-                                    is_generous=is_generous_host, base_price=0.0001, alpha=1.0):
+                                    is_generous=settings.is_generous_host, base_price=0.0001, alpha=1.0):
         price_model = MeanAvailabilityWeightedPrice(blob_tracker, base_price=base_price, alpha=alpha)
         Strategy.__init__(self, price_model, max_rate, min_rate, is_generous)
         self._acceleration = Decimal(acceleration)  # rate of how quickly to ramp offer

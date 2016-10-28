@@ -1,3 +1,5 @@
+# TODO: THERE IS A LOT OF CODE IN THIS MODULE THAT SHOULD BE REMOVED
+#       AS IT IS REPEATED IN THE LBRYDaemon MODULE
 import logging
 import os.path
 import argparse
@@ -10,13 +12,14 @@ if sys.platform == "darwin":
     from appdirs import user_data_dir
 from yapsy.PluginManager import PluginManager
 from twisted.internet import defer, threads, stdio, task, error
-from jsonrpc.proxy import JSONRPCProxy
+from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 
+from lbrynet import analytics
 from lbrynet.core.Session import Session
 from lbrynet.lbrynet_console.ConsoleControl import ConsoleControl
 from lbrynet.lbrynet_console.Settings import Settings
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, API_CONNECTION_STRING  # , MIN_BLOB_INFO_PAYMENT_RATE
+from lbrynet.conf import settings
 from lbrynet.core.utils import generate_id
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.PaymentRateManager import PaymentRateManager
@@ -209,7 +212,7 @@ class Console():
     def _get_session(self):
         def get_default_data_rate():
             d = self.settings.get_default_data_payment_rate()
-            d.addCallback(lambda rate: {"default_data_payment_rate": rate if rate is not None else MIN_BLOB_DATA_PAYMENT_RATE})
+            d.addCallback(lambda rate: {"default_data_payment_rate": rate if rate is not None else settings.data_rate})
             return d
 
         def get_wallet():
@@ -366,11 +369,13 @@ class Console():
         ]
 
         def get_blob_request_handler_factory(rate):
-            self.blob_request_payment_rate_manager = PaymentRateManager(self.session.base_payment_rate_manager,
-                                                                        rate)
-            handlers.append(BlobRequestHandlerFactory(self.session.blob_manager,
-                                                      self.session.wallet,
-                                                      self.blob_request_payment_rate_manager))
+            self.blob_request_payment_rate_manager = PaymentRateManager(
+                self.session.base_payment_rate_manager, rate
+            )
+            handlers.append(BlobRequestHandlerFactory(
+                self.session.blob_manager, self.session.wallet,
+                self.blob_request_payment_rate_manager, analytics.Track()
+            ))
 
         d1 = self.settings.get_server_data_payment_rate()
         d1.addCallback(get_blob_request_handler_factory)
@@ -537,7 +542,7 @@ def launch_lbry_console():
         os.mkdir(data_dir)
         created_data_dir = True
 
-    daemon = JSONRPCProxy.from_url(API_CONNECTION_STRING)
+    daemon = LBRYAPIClient.config()
     try:
         daemon.is_running()
         log.info("Attempt to start lbrynet-console while lbrynet-daemon is running")

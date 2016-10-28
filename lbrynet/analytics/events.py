@@ -1,6 +1,6 @@
 import logging
 
-from lbrynet.analytics import utils
+from lbrynet.core import utils
 
 
 log = logging.getLogger(__name__)
@@ -23,30 +23,38 @@ class Events(object):
         self.session_id = session_id
 
     def heartbeat(self):
-        return {
-            'userId': 'lbry',
-            'event': 'Heartbeat',
-            'properties': {
-                'lbry_id': self.lbry_id,
-                'session_id': self.session_id
-            },
-            'context': self.context,
-            'timestamp': utils.now()
-        }
+        return self._event('Heartbeat')
 
     def download_started(self, name, stream_info=None):
+        properties = {
+            'name': name,
+            'stream_info': get_sd_hash(stream_info)
+        }
+        return self._event('Download Started', properties)
+
+    def metric_observed(self, metric_name, value):
+        properties = {
+            'value': value,
+        }
+        return self._event(metric_name, properties)
+
+    def _event(self, event, event_properties=None):
         return {
             'userId': 'lbry',
-            'event': 'Download Started',
-            'properties': {
-                'lbry_id': self.lbry_id,
-                'session_id': self.session_id,
-                'name': name,
-                'stream_info': get_sd_hash(stream_info)
-            },
+            'event': event,
+            'properties': self._properties(event_properties),
             'context': self.context,
-            'timestamp': utils.now()
+            'timestamp': utils.isonow()
         }
+
+    def _properties(self, event_properties=None):
+        event_properties = event_properties or {}
+        properties = {
+            'lbry_id': self.lbry_id,
+            'session_id': self.session_id,
+        }
+        properties.update(event_properties)
+        return properties
 
 
 def make_context(platform, wallet, is_dev=False):

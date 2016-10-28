@@ -2,7 +2,7 @@ import logging
 from twisted.internet import defer
 from zope.interface import implements
 from lbrynet import interfaces
-from lbrynet.conf import MAX_CONNECTIONS_PER_STREAM
+from lbrynet.conf import settings
 from lbrynet.core.client.ClientProtocol import ClientProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError
 
@@ -183,7 +183,7 @@ class ConnectionManager(object):
             log.debug("Couldn't find a good peer to connect to")
             return None
 
-        if len(self._peer_connections) < MAX_CONNECTIONS_PER_STREAM:
+        if len(self._peer_connections) < settings.max_connections_per_stream:
             ordered_request_creators = self._rank_request_creator_connections()
             d = get_new_peers(ordered_request_creators)
             d.addCallback(pick_best_peer)

@@ -7,7 +7,7 @@ import traceback
 from requests_futures.sessions import FuturesSession
 
 import lbrynet
-from lbrynet import conf
+from lbrynet.conf import settings
 from lbrynet.core import utils
 
 session = FuturesSession()
@@ -98,7 +98,7 @@ def configure_file_handler(file_name, **kwargs):
 
 
 def get_loggly_url(token=None, version=None):
-    token = token or utils.deobfuscate(conf.LOGGLY_TOKEN)
+    token = token or utils.deobfuscate(settings.LOGGLY_TOKEN)
     version = version or lbrynet.__version__
     return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
 
@@ -106,19 +106,44 @@ def get_loggly_url(token=None, version=None):
 @_log_decorator
 def configure_loggly_handler(url=None, **kwargs):
     url = url or get_loggly_url()
-    json_format = {
-        "loggerName": "%(name)s",
-        "asciTime": "%(asctime)s",
-        "fileName": "%(filename)s",
-        "functionName": "%(funcName)s",
-        "levelNo": "%(levelno)s",
-        "lineNo": "%(lineno)d",
-        "levelName": "%(levelname)s",
-        "message": "%(message)s",
-    }
-    json_format.update(kwargs)
-    formatter = logging.Formatter(json.dumps(json_format))
+    formatter = JsonFormatter(**kwargs)
     handler = HTTPSHandler(url)
     handler.setFormatter(formatter)
     handler.name = 'loggly'
     return handler
+
+
+class JsonFormatter(logging.Formatter):
+    """Format log records using json serialization"""
+    def __init__(self, **kwargs):
+        self.attributes = kwargs
+
+    def format(self, record):
+        data = {
+            'loggerName': record.name,
+            'asciTime': self.formatTime(record),
+            'fileName': record.filename,
+            'functionName': record.funcName,
+            'levelNo': record.levelno,
+            'lineNo': record.lineno,
+            'levelName': record.levelname,
+            'message': record.getMessage(),
+        }
+        data.update(self.attributes)
+        if record.exc_info:
+            data['exc_info'] = self.formatException(record.exc_info)
+        return json.dumps(data)
+
+
+def failure(failure, log, msg, *args):
+    """Log a failure message from a deferred.
+
+    Args:
+        failure: twisted.python.failure.Failure
+        log: a python logger instance
+        msg: the message to log. Can use normal logging string interpolation.
+             the last argument will be set to the error message from the failure.
+        args: values to substitute into `msg`
+    """
+    args += (failure.getErrorMessage(),)
+    log.error(msg, *args, exc_info=failure.getTracebackObject())

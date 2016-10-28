@@ -2,10 +2,10 @@ import io
 
 from Crypto.PublicKey import RSA
 from decimal import Decimal
-from twisted.internet import defer, threads, task, error
+from twisted.internet import defer
 
 from lbrynet.core import PTCWallet
-from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
+from lbrynet.core import BlobAvailability
 
 
 class Node(object):
@@ -53,6 +53,9 @@ class Wallet(object):
 
     def set_public_key_for_peer(self, peer, public_key):
         pass
+
+    def get_claim_metadata_for_sd_hash(self, sd_hash):
+        return "fakeuri", "faketxid"
 
 
 class PeerFinder(object):
@@ -136,7 +139,7 @@ class GenFile(io.RawIOBase):
         return output
 
 
-class DummyBlobAvailabilityTracker(BlobAvailabilityTracker):
+class BlobAvailabilityTracker(BlobAvailability.BlobAvailabilityTracker):
     """
     Class to track peer counts for known blobs, and to discover new popular blobs
 

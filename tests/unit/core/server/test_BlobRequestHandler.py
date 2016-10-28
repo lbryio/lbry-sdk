@@ -5,17 +5,20 @@ from twisted.internet import defer
 from twisted.test import proto_helpers
 from twisted.trial import unittest
 
+from lbrynet import analytics
 from lbrynet.core import Peer
 from lbrynet.core.server import BlobRequestHandler
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
-from tests.mocks import DummyBlobAvailabilityTracker
+from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 
 
 class TestBlobRequestHandlerQueries(unittest.TestCase):
     def setUp(self):
         self.blob_manager = mock.Mock()
-        self.payment_rate_manager = NegotiatedPaymentRateManager(BasePaymentRateManager(0.001), DummyBlobAvailabilityTracker())
-        self.handler = BlobRequestHandler.BlobRequestHandler(self.blob_manager, None, self.payment_rate_manager)
+        self.payment_rate_manager = NegotiatedPaymentRateManager(
+            BasePaymentRateManager(0.001), DummyBlobAvailabilityTracker())
+        self.handler = BlobRequestHandler.BlobRequestHandler(
+            self.blob_manager, None, self.payment_rate_manager, None)
 
     def test_empty_response_when_empty_query(self):
         self.assertEqual({}, self.successResultOf(self.handler.handle_queries({})))
@@ -107,7 +110,7 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
 
 class TestBlobRequestHandlerSender(unittest.TestCase):
     def test_nothing_happens_if_not_currently_uploading(self):
-        handler = BlobRequestHandler.BlobRequestHandler(None, None, None)
+        handler = BlobRequestHandler.BlobRequestHandler(None, None, None, None)
         handler.currently_uploading = None
         deferred = handler.send_blob_if_requested(None)
         self.assertEqual(True, self.successResultOf(deferred))
@@ -116,7 +119,8 @@ class TestBlobRequestHandlerSender(unittest.TestCase):
         # TODO: also check that the expected payment values are set
         consumer = proto_helpers.StringTransport()
         test_file = StringIO.StringIO('test')
-        handler = BlobRequestHandler.BlobRequestHandler(None, None, None)
+        track = analytics.Track()
+        handler = BlobRequestHandler.BlobRequestHandler(None, None, None, track)
         handler.peer = mock.create_autospec(Peer.Peer)
         handler.currently_uploading = mock.Mock()
         handler.read_handle = test_file

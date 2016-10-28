@@ -5,7 +5,6 @@ import os
 import platform
 import random
 import re
-import string
 import subprocess
 import sys
 import base58
@@ -20,43 +19,43 @@ from twisted.web import server
 from twisted.internet import defer, threads, error, reactor, task
 from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
-from txjsonrpc.web import jsonrpc
-from txjsonrpc.web.jsonrpc import Handler
 from jsonschema import ValidationError
 
 from lbrynet import __version__ as lbrynet_version
+# TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION as lbryum_version
+
+from lbrynet import __version__ as lbrynet_version
+from lbrynet.conf import settings as lbrynet_settings
 from lbrynet import analytics
+from lbrynet import reflector
+from lbrynet.metadata.Metadata import Metadata, verify_name_characters
+from lbrynet.metadata.Fee import FeeValidator
+from lbrynet.core import log_support
+from lbrynet.core import utils
+from lbrynet.core.utils import generate_id
+from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
+from lbrynet.core.Session import Session
+from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import UnknownNameError, InsufficientFundsError, InvalidNameError
+from lbrynet.core.PTCWallet import PTCWallet
+from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.lbrynet_console.Settings import Settings
+from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory, EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbrynet_daemon.UIManager import UIManager
 from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
-from lbrynet.metadata.Metadata import Metadata, verify_name_characters
-from lbrynet.core import log_support
-from lbrynet.core import utils
-from lbrynet.core.utils import generate_id
-from lbrynet.lbrynet_console.Settings import Settings
-from lbrynet.conf import MIN_BLOB_DATA_PAYMENT_RATE, DEFAULT_MAX_SEARCH_RESULTS, \
-                         KNOWN_DHT_NODES, DEFAULT_MAX_KEY_FEE, DEFAULT_WALLET, \
-                         DEFAULT_SEARCH_TIMEOUT, DEFAULT_CACHE_TIME, DEFAULT_UI_BRANCH, \
-                         LOG_POST_URL, LOG_FILE_NAME, REFLECTOR_SERVERS, SEARCH_SERVERS
-from lbrynet.conf import DEFAULT_SD_DOWNLOAD_TIMEOUT
-from lbrynet.conf import DEFAULT_TIMEOUT, is_generous_host
-from lbrynet import conf
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
-from lbrynet.core.Session import Session
-from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
-from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager, TempEncryptedFileMetadataManager
-from lbrynet import reflector
+from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
+
 
 
 # TODO: this code snippet is everywhere. Make it go away
@@ -68,7 +67,7 @@ else:
 if not os.path.isdir(log_dir):
     os.mkdir(log_dir)
 
-lbrynet_log = os.path.join(log_dir, LOG_FILE_NAME)
+lbrynet_log = os.path.join(log_dir, lbrynet_settings.LOG_FILE_NAME)
 
 log = logging.getLogger(__name__)
 
@@ -80,7 +79,7 @@ else:
 
 INITIALIZING_CODE = 'initializing'
 LOADING_DB_CODE = 'loading_db'
-LOADING_WALLET_CODE = 'loading_wallet'
+LOADING_wallet_CODE = 'loading_wallet'
 LOADING_FILE_MANAGER_CODE = 'loading_file_manager'
 LOADING_SERVER_CODE = 'loading_server'
 STARTED_CODE = 'started'
@@ -88,7 +87,7 @@ WAITING_FOR_FIRST_RUN_CREDITS = 'waiting_for_credits'
 STARTUP_STAGES = [
                     (INITIALIZING_CODE, 'Initializing...'),
                     (LOADING_DB_CODE, 'Loading databases...'),
-                    (LOADING_WALLET_CODE, 'Catching up with the blockchain... %s'),
+                    (LOADING_wallet_CODE, 'Catching up with the blockchain... %s'),
                     (LOADING_FILE_MANAGER_CODE, 'Setting up file manager'),
                     (LOADING_SERVER_CODE, 'Starting lbrynet'),
                     (STARTED_CODE, 'Started lbrynet'),
@@ -109,25 +108,42 @@ STREAM_STAGES = [
 
 CONNECT_CODE_VERSION_CHECK = 'version_check'
 CONNECT_CODE_NETWORK = 'network_connection'
-CONNECT_CODE_WALLET = 'wallet_catchup_lag'
+CONNECT_CODE_wallet = 'wallet_catchup_lag'
 CONNECTION_PROBLEM_CODES = [
         (CONNECT_CODE_VERSION_CHECK, "There was a problem checking for updates on github"),
         (CONNECT_CODE_NETWORK, "Your internet connection appears to have been interrupted"),
-        (CONNECT_CODE_WALLET, "Synchronization with the blockchain is lagging... if this continues try restarting LBRY")
+        (CONNECT_CODE_wallet, "Synchronization with the blockchain is lagging... if this continues try restarting LBRY")
         ]
-
-ALLOWED_DURING_STARTUP = ['is_running', 'is_first_run',
-                          'get_time_behind_blockchain', 'stop',
-                          'daemon_status', 'get_start_notice',
-                          'version', 'get_search_servers']
 
 BAD_REQUEST = 400
 NOT_FOUND = 404
 OK_CODE = 200
 
+PENDING_LBRY_ID = "not set"
+
+
+class Checker:
+    """The looping calls the daemon runs"""
+    INTERNET_CONNECTION = 'internet_connection_checker'
+    VERSION = 'version_checker'
+    CONNECTION_PROBLEM = 'connection_problem_checker'
+    PENDING_CLAIM = 'pending_claim_checker'
+
+
+class FileID:
+    """The different ways a file can be identified"""
+    NAME = 'name'
+    SD_HASH = 'sd_hash'
+    FILE_NAME = 'file_name'
+
+
 # TODO add login credentials in a conf file
 # TODO alert if your copy of a lbry file is out of date with the name record
 
+REMOTE_SERVER = "www.lbry.io"
+
+class NoValidSearch(Exception):
+    pass
 
 
 class Parameters(object):
@@ -135,220 +151,171 @@ class Parameters(object):
         self.__dict__.update(kwargs)
 
 
-class Daemon(jsonrpc.JSONRPC):
+class CheckInternetConnection(object):
+    def __init__(self, daemon):
+        self.daemon = daemon
+
+    def __call__(self):
+        self.daemon.connected_to_internet = utils.check_connection()
+
+
+class CheckRemoteVersions(object):
+    def __init__(self, daemon):
+        self.daemon = daemon
+
+    def __call__(self):
+        d = self._get_lbrynet_version()
+        d.addCallback(lambda _: self._get_lbryum_version())
+
+    def _get_lbryum_version(self):
+        try:
+            version = get_lbryum_version_from_github()
+            log.info(
+                "remote lbryum %s > local lbryum %s = %s",
+                version, lbryum_version,
+                utils.version_is_greater_than(version, lbryum_version)
+            )
+            self.daemon.git_lbryum_version = version
+            return defer.succeed(None)
+        except Exception:
+            log.info("Failed to get lbryum version from git")
+            self.daemon.git_lbryum_version = None
+            return defer.fail(None)
+
+    def _get_lbrynet_version(self):
+        try:
+            version = get_lbrynet_version_from_github()
+            log.info(
+                "remote lbrynet %s > local lbrynet %s = %s",
+                version, lbrynet_version,
+                utils.version_is_greater_than(version, lbrynet_version)
+            )
+            self.daemon.git_lbrynet_version = version
+            return defer.succeed(None)
+        except Exception:
+            log.info("Failed to get lbrynet version from git")
+            self.daemon.git_lbrynet_version = None
+            return defer.fail(None)
+
+
+class AlwaysSend(object):
+    def __init__(self, value_generator, *args, **kwargs):
+        self.value_generator = value_generator
+        self.args = args
+        self.kwargs = kwargs
+
+    def __call__(self):
+        d = defer.maybeDeferred(self.value_generator, *self.args, **self.kwargs)
+        d.addCallback(lambda v: (True, v))
+        return d
+
+
+def calculate_available_blob_size(blob_manager):
+    d = blob_manager.get_all_verified_blobs()
+    d.addCallback(
+        lambda blobs: defer.DeferredList([blob_manager.get_blob_length(b) for b in blobs]))
+    d.addCallback(lambda blob_lengths: sum(val for success, val in blob_lengths if success))
+    return d
+
+
+class Daemon(AuthJSONRPCServer):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
-    isLeaf = True
-
-    def __init__(self, root, wallet_type=None):
-        jsonrpc.JSONRPC.__init__(self)
+    def __init__(self, root):
+        AuthJSONRPCServer.__init__(self, lbrynet_settings.use_auth_http)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
+
+        self.allowed_during_startup = ['is_running', 'is_first_run',
+                                       'get_time_behind_blockchain', 'stop',
+                                       'daemon_status', 'get_start_notice',
+                                       'version', 'get_search_servers']
+        last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
+        lbrynet_settings.update(last_version)
+        self.db_dir = lbrynet_settings.data_dir
+        self.download_directory = lbrynet_settings.download_directory
+        self.created_data_dir = False
+        if not os.path.exists(self.db_dir):
+            os.mkdir(self.db_dir)
+            self.created_data_dir = True
+        if lbrynet_settings.BLOBFILES_DIR == "blobfiles":
+            self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
+        else:
+            log.info("Using non-default blobfiles directory: %s", lbrynet_settings.BLOBFILES_DIR)
+            self.blobfile_dir = lbrynet_settings.BLOBFILES_DIR
+
+        self.run_on_startup = lbrynet_settings.run_on_startup
+        self.data_rate = lbrynet_settings.data_rate
+        self.max_key_fee = lbrynet_settings.max_key_fee
+        self.max_upload = lbrynet_settings.max_upload
+        self.max_download = lbrynet_settings.max_download
+        self.upload_log = lbrynet_settings.upload_log
+        self.search_timeout = lbrynet_settings.search_timeout
+        self.download_timeout = lbrynet_settings.download_timeout
+        self.max_search_results = lbrynet_settings.max_search_results
+        self.run_reflector_server = lbrynet_settings.run_reflector_server
+        self.wallet_type = lbrynet_settings.wallet
+        self.delete_blobs_on_remove = lbrynet_settings.delete_blobs_on_remove
+        self.peer_port = lbrynet_settings.peer_port
+        self.reflector_port = lbrynet_settings.reflector_port
+        self.dht_node_port = lbrynet_settings.dht_node_port
+        self.use_upnp = lbrynet_settings.use_upnp
+        self.start_lbrycrdd = lbrynet_settings.start_lbrycrdd
+        self.cache_time = lbrynet_settings.cache_time
+        self.startup_scripts = lbrynet_settings.startup_scripts
 
         self.startup_status = STARTUP_STAGES[0]
         self.startup_message = None
         self.announced_startup = False
         self.connected_to_internet = True
         self.connection_problem = None
-        self.query_handlers = {}
         self.git_lbrynet_version = None
         self.git_lbryum_version = None
         self.ui_version = None
         self.ip = None
-        # TODO: this is confusing to set here, and then to be reset below.
-        self.wallet_type = wallet_type
         self.first_run = None
         self.log_file = lbrynet_log
         self.current_db_revision = 1
-        self.run_server = True
         self.session = None
-        self.exchange_rate_manager = ExchangeRateManager()
-        self.lighthouse_client = LighthouseClient()
-        self.waiting_on = {}
-        self.streams = {}
-        self.pending_claims = {}
-        self.known_dht_nodes = KNOWN_DHT_NODES
         self.first_run_after_update = False
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(generate_id())
 
-        if os.name == "nt":
-            from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
-            default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
-            self.db_dir = os.path.join(get_path(FOLDERID.RoamingAppData, UserHandle.current), "lbrynet")
-            try:
-                os.makedirs(self.db_dir)
-            except OSError:
-                if not os.path.isdir(self.db_dir):
-                    raise
-        elif sys.platform == "darwin":
-            default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
-            self.db_dir = user_data_dir("LBRY")
-        else:
-            default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
-            self.db_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-            try:
-                if not os.path.isdir(default_download_directory):
-                    os.mkdir(default_download_directory)
-            except:
-                log.info("Couldn't make download directory, using home")
-                default_download_directory = os.path.expanduser("~")
+        self.analytics_manager = None
+        self.lbryid = PENDING_LBRY_ID
 
-        old_conf_path = os.path.join(self.db_dir, 'daemon_settings.json')
         self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.yml')
 
-        if os.path.isfile(old_conf_path):
-            log.info("Migrating .json config file to .yml")
-            tmp_settings = utils.load_settings(old_conf_path)
-            utils.save_settings(self.daemon_conf, tmp_settings)
-            try:
-                os.remove(old_conf_path)
-                log.info("Cleaned up old config file")
-            except:
-                log.warning("Failed to remove old config file")
-
-        self.default_settings = {
-            'run_on_startup': False,
-            'data_rate': MIN_BLOB_DATA_PAYMENT_RATE,
-            'max_key_fee': DEFAULT_MAX_KEY_FEE,
-            'download_directory': default_download_directory,
-            'max_upload': 0.0,
-            'max_download': 0.0,
-            'upload_log': True,
-            'search_timeout': DEFAULT_SEARCH_TIMEOUT,
-            'download_timeout': DEFAULT_TIMEOUT,
-            'max_search_results': DEFAULT_MAX_SEARCH_RESULTS,
-            'wallet_type': DEFAULT_WALLET,
-            'delete_blobs_on_remove': True,
-            'peer_port': 3333,
-            'dht_node_port': 4444,
-            'reflector_port': 5566,
-            'use_upnp': True,
-            'start_lbrycrdd': True,
-            'requested_first_run_credits': False,
-            'run_reflector_server': False,
-            'cache_time': DEFAULT_CACHE_TIME,
-            'startup_scripts': [],
-            'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}
-        }
 
         if os.path.isfile(self.daemon_conf):
-            loaded_settings = utils.load_settings(self.daemon_conf)
-            missing_settings = {}
-            removed_settings = {}
-            for k in self.default_settings.keys():
-                if k not in loaded_settings.keys():
-                    missing_settings[k] = self.default_settings[k]
-            for k in loaded_settings.keys():
-                if not k in self.default_settings.keys():
-                    log.info("Removing unused setting: " + k + " with value: " + str(loaded_settings[k]))
-                    removed_settings[k] = loaded_settings[k]
-                    del loaded_settings[k]
-            for k in missing_settings.keys():
-                log.info("Adding missing setting: " + k + " with default value: " + str(missing_settings[k]))
-                loaded_settings[k] = missing_settings[k]
-            if loaded_settings['wallet_type'] != self.wallet_type and self.wallet_type:
-                loaded_settings['wallet_type'] = self.wallet_type
+            conf_settings = utils.load_settings(self.daemon_conf)
+            if 'last_version' in conf_settings:
+                if utils.version_is_greater_than(lbrynet_version, conf_settings['last_version']['lbrynet']):
+                    self.first_run_after_update = True
+                    log.info("First run after update")
+                    log.info("lbrynet %s --> %s", conf_settings['last_version']['lbrynet'], lbrynet_version)
+                    log.info("lbryum %s --> %s", conf_settings['last_version']['lbryum'], lbryum_version)
 
-            if missing_settings or removed_settings:
-                log.info("Updated and loaded lbrynet-daemon configuration")
-            else:
-                log.info("Loaded lbrynet-daemon configuration")
-            self.session_settings = loaded_settings
-        else:
-            missing_settings = self.default_settings
-            log.info("Writing default settings : " + json.dumps(self.default_settings) + " --> " + str(self.daemon_conf))
-            self.session_settings = self.default_settings
+        # utils.save_settings(self.daemon_conf)
 
-        if 'last_version' in missing_settings.keys():
-            self.session_settings['last_version'] = None
-
-        if self.session_settings['last_version'] != self.default_settings['last_version']:
-            self.session_settings['last_version'] = self.default_settings['last_version']
-            self.first_run_after_update = True
-            log.info("First run after update")
-            log.info("lbrynet %s --> %s" % (self.session_settings['last_version']['lbrynet'], self.default_settings['last_version']['lbrynet']))
-            log.info("lbryum %s --> %s" % (self.session_settings['last_version']['lbryum'], self.default_settings['last_version']['lbryum']))
-            if "0.4.5" == self.default_settings['last_version']['lbrynet']:
-                log.info("Lowering name cache time")
-                self.session_settings['cache_time'] = DEFAULT_CACHE_TIME
-
-        utils.save_settings(self.daemon_conf, self.session_settings)
-
-        self.run_on_startup = self.session_settings['run_on_startup']
-        self.data_rate = self.session_settings['data_rate']
-        self.max_key_fee = self.session_settings['max_key_fee']
-        self.download_directory = self.session_settings['download_directory']
-        self.max_upload = self.session_settings['max_upload']
-        self.max_download = self.session_settings['max_download']
-        self.upload_log = self.session_settings['upload_log']
-        self.search_timeout = self.session_settings['search_timeout']
-        self.download_timeout = self.session_settings['download_timeout']
-        self.max_search_results = self.session_settings['max_search_results']
-        self.run_reflector_server = self.session_settings['run_reflector_server']
-        ####
-        #
-        # Ignore the saved wallet type. Some users will have their wallet type
-        # saved as lbrycrd and we want wallets to be lbryum unless explicitly
-        # set on the command line to be lbrycrd.
-        #
-        # if self.session_settings['wallet_type'] in WALLET_TYPES and not wallet_type:
-        #     self.wallet_type = self.session_settings['wallet_type']
-        #     log.info("Using wallet type %s from config" % self.wallet_type)
-        # else:
-        #     self.wallet_type = wallet_type
-        #     self.session_settings['wallet_type'] = wallet_type
-        #     log.info("Using wallet type %s specified from command line" % self.wallet_type)
-        #
-        # Instead, if wallet is not set on the command line, default to the default wallet
-        #
-        if wallet_type:
-            log.info("Using wallet type %s specified from command line", wallet_type)
-            self.wallet_type = wallet_type
-        else:
-            log.info("Using the default wallet type %s", DEFAULT_WALLET)
-            self.wallet_type = DEFAULT_WALLET
-        if self.wallet_type not in conf.WALLET_TYPES:
-            raise ValueError('Wallet Type {} is not valid'.format(wallet_type))
-        #
-        ####
-        self.delete_blobs_on_remove = self.session_settings['delete_blobs_on_remove']
-        self.peer_port = self.session_settings['peer_port']
-        self.reflector_port = self.session_settings['reflector_port']
-        self.dht_node_port = self.session_settings['dht_node_port']
-        self.use_upnp = self.session_settings['use_upnp']
-        self.start_lbrycrdd = self.session_settings['start_lbrycrdd']
-        self.requested_first_run_credits = self.session_settings['requested_first_run_credits']
-        self.cache_time = self.session_settings['cache_time']
-        self.startup_scripts = self.session_settings['startup_scripts']
-
-        if os.path.isfile(os.path.join(self.db_dir, "stream_info_cache.json")):
-            f = open(os.path.join(self.db_dir, "stream_info_cache.json"), "r")
-            self.name_cache = json.loads(f.read())
-            f.close()
-            log.info("Loaded claim info cache")
-        else:
-            self.name_cache = {}
-
-        self.set_wallet_attributes()
-
-        self.created_data_dir = False
-        if not os.path.exists(self.db_dir):
-            os.mkdir(self.db_dir)
-            self.created_data_dir = True
-
-        self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
         self.wallet_user = None
         self.wallet_password = None
-
-        self.internet_connection_checker = LoopingCall(self._check_network_connection)
-        self.version_checker = LoopingCall(self._check_remote_versions)
-        self.connection_problem_checker = LoopingCall(self._check_connection_problems)
-        self.pending_claim_checker = LoopingCall(self._check_pending_claims)
-        self.send_heartbeat = LoopingCall(self._send_heartbeat)
-        # self.lbrynet_connection_checker = LoopingCall(self._check_lbrynet_connection)
-
+        self.query_handlers = {}
+        self.waiting_on = {}
+        self.streams = {}
+        self.pending_claims = {}
+        self.name_cache = {}
+        self.set_wallet_attributes()
+        self.exchange_rate_manager = ExchangeRateManager()
+        self.lighthouse_client = LighthouseClient()
+        calls = {
+            Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
+            Checker.VERSION: LoopingCall(CheckRemoteVersions(self)),
+            Checker.CONNECTION_PROBLEM: LoopingCall(self._check_connection_problems),
+            Checker.PENDING_CLAIM: LoopingCall(self._check_pending_claims),
+        }
+        self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
         self.stream_info_manager = TempEncryptedFileMetadataManager()
         self.settings = Settings(self.db_dir)
@@ -357,16 +324,17 @@ class Daemon(jsonrpc.JSONRPC):
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
 
-        if self.wallet_type == "lbrycrd":
-            if os.path.isfile(self.lbrycrd_conf):
-                log.info("Using lbrycrd.conf found at " + self.lbrycrd_conf)
-            else:
-                log.info("No lbrycrd.conf found at " + self.lbrycrd_conf + ". Generating now...")
-                password = "".join(random.SystemRandom().choice(string.ascii_letters + string.digits + "_") for i in range(20))
-                with open(self.lbrycrd_conf, 'w') as f:
-                    f.write("rpcuser=rpcuser\n")
-                    f.write("rpcpassword=" + password)
-                log.info("Done writing lbrycrd.conf")
+
+    @AuthJSONRPCServer.subhandler
+    def _exclude_lbrycrd_only_commands_from_lbryum_session(self, request):
+        request.content.seek(0, 0)
+        content = request.content.read()
+        parsed = jsonrpclib.loads(content)
+        function_path = parsed.get("method")
+        if self.wallet_type == "lbryum" and function_path in ['set_miner', 'get_miner_status']:
+            log.warning("Mining commands are not available in lbryum")
+            raise Exception("Command not available in lbryum")
+        return True
 
     def set_wallet_attributes(self):
         self.wallet_dir = None
@@ -393,100 +361,7 @@ class Daemon(jsonrpc.JSONRPC):
                 f.write(str(self.lbrycrdd_path))
                 f.close()
 
-    def _responseFailed(self, err, call):
-        log.debug(err.getTraceback())
-
-    def render(self, request):
-        origin = request.getHeader("Origin")
-        referer = request.getHeader("Referer")
-
-        if origin not in [None, 'http://localhost:5279']:
-            log.warning("Attempted api call from %s", origin)
-            return server.failure
-
-        if referer is not None and not referer.startswith('http://localhost:5279/'):
-            log.warning("Attempted api call from %s", referer)
-            return server.failure
-
-        request.content.seek(0, 0)
-        # Unmarshal the JSON-RPC data.
-        content = request.content.read()
-        parsed = jsonrpclib.loads(content)
-        functionPath = parsed.get("method")
-        args = parsed.get('params')
-
-        #TODO convert args to correct types if possible
-
-        id = parsed.get('id')
-        version = parsed.get('jsonrpc')
-        if version:
-            version = int(float(version))
-        elif id and not version:
-            version = jsonrpclib.VERSION_1
-        else:
-            version = jsonrpclib.VERSION_PRE1
-        # XXX this all needs to be re-worked to support logic for multiple
-        # versions...
-
-        if not self.announced_startup:
-            if functionPath not in ALLOWED_DURING_STARTUP:
-                return server.failure
-
-        if self.wallet_type == "lbryum" and functionPath in ['set_miner', 'get_miner_status']:
-            return server.failure
-
-        try:
-            function = self._getFunction(functionPath)
-        except jsonrpclib.Fault, f:
-            self._cbRender(f, request, id, version)
-        else:
-            request.setHeader("Access-Control-Allow-Origin", "localhost")
-            request.setHeader("content-type", "text/json")
-            if args == [{}]:
-                d = defer.maybeDeferred(function)
-            else:
-                d = defer.maybeDeferred(function, *args)
-
-            # cancel the response if the connection is broken
-            notify_finish = request.notifyFinish()
-            notify_finish.addErrback(self._responseFailed, d)
-            d.addErrback(self._ebRender, id)
-            d.addCallback(self._cbRender, request, id, version)
-            d.addErrback(notify_finish.errback)
-        return server.NOT_DONE_YET
-
-    def _cbRender(self, result, request, id, version):
-        def default_decimal(obj):
-            if isinstance(obj, Decimal):
-                return float(obj)
-
-        if isinstance(result, Handler):
-            result = result.result
-
-        if isinstance(result, dict):
-            result = result['result']
-
-        if version == jsonrpclib.VERSION_PRE1:
-            if not isinstance(result, jsonrpclib.Fault):
-                result = (result,)
-            # Convert the result (python) to JSON-RPC
-        try:
-            s = jsonrpclib.dumps(result, version=version, default=default_decimal)
-        except:
-            f = jsonrpclib.Fault(self.FAILURE, "can't serialize output")
-            s = jsonrpclib.dumps(f, version=version)
-
-        request.setHeader("content-length", str(len(s)))
-        request.write(s)
-        request.finish()
-
-    def _ebRender(self, failure, id):
-        if isinstance(failure.value, jsonrpclib.Fault):
-            return failure.value
-        log.error(failure)
-        return jsonrpclib.Fault(self.FAILURE, "error")
-
-    def setup(self, branch=DEFAULT_UI_BRANCH, user_specified=False, branch_specified=False, host_ui=True):
+    def setup(self):
         def _log_starting_vals():
             log.info("Starting balance: " + str(self.session.wallet.wallet_balance))
             return defer.succeed(None)
@@ -519,25 +394,24 @@ class Daemon(jsonrpc.JSONRPC):
 
         log.info("Starting lbrynet-daemon")
 
-        self.internet_connection_checker.start(3600)
-        self.version_checker.start(3600 * 12)
-        self.connection_problem_checker.start(1)
+        self.looping_call_manager.start(Checker.INTERNET_CONNECTION, 3600)
+        self.looping_call_manager.start(Checker.VERSION, 3600 * 12)
+        self.looping_call_manager.start(Checker.CONNECTION_PROBLEM, 1)
         self.exchange_rate_manager.start()
 
-        if host_ui:
-            self.lbry_ui_manager.update_checker.start(1800, now=False)
-
         d = defer.Deferred()
-        if host_ui:
-            d.addCallback(lambda _: self.lbry_ui_manager.setup(branch=branch,
-                                                                user_specified=user_specified,
-                                                                branch_specified=branch_specified))
+
+        if lbrynet_settings.host_ui:
+            self.lbry_ui_manager.update_checker.start(1800, now=False)
+            d.addCallback(lambda _: self.lbry_ui_manager.setup())
         d.addCallback(lambda _: self._initial_setup())
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
         d.addCallback(lambda _: self._get_settings())
+        d.addCallback(lambda _: self._load_caches())
         d.addCallback(lambda _: self._set_events())
         d.addCallback(lambda _: self._get_session())
+        d.addCallback(lambda _: self._get_analytics())
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self._setup_stream_identifier())
         d.addCallback(lambda _: self._setup_lbry_file_manager())
@@ -545,26 +419,11 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._setup_server())
         d.addCallback(lambda _: _log_starting_vals())
         d.addCallback(lambda _: _announce_startup())
-        d.addCallback(lambda _: self._load_analytics_api())
-        # TODO: handle errors here
         d.callback(None)
-
-        return defer.succeed(None)
-
-    def _load_analytics_api(self):
-        self.analytics_api = analytics.Api.load()
-        self.send_heartbeat.start(60)
-
-    def _send_heartbeat(self):
-        heartbeat = self._events.heartbeat()
-        self.analytics_api.track(heartbeat)
-
-    def _send_download_started(self, name, stream_info=None):
-        event = self._events.download_started(name, stream_info)
-        self.analytics_api.track(event)
+        return d
 
     def _get_platform(self):
-        r =  {
+        r = {
             "processor": platform.processor(),
             "python_version": platform.python_version(),
             "platform": platform.platform(),
@@ -591,6 +450,12 @@ class Daemon(jsonrpc.JSONRPC):
         d = _log_platform()
         return d
 
+    def _load_caches(self):
+        if os.path.isfile(os.path.join(self.db_dir, "stream_info_cache.json")):
+            with open(os.path.join(self.db_dir, "stream_info_cache.json"), "r") as stream_info_cache:
+                self.name_cache = json.loads(stream_info_cache.read())
+            log.info("Loaded claim info cache")
+
     def _set_events(self):
         context = analytics.make_context(self._get_platform(), self.wallet_type)
         self._events = analytics.Events(context, base58.b58encode(self.lbryid), self._session_id)
@@ -607,43 +472,6 @@ class Daemon(jsonrpc.JSONRPC):
         wonderfullife_sh = "6f3af0fa3924be98a54766aa2715d22c6c1509c3f7fa32566df4899a41f3530a9f97b2ecb817fa1dcbf1b30553aefaa7"
         d = download_sd_blob(self.session, wonderfullife_sh, self.session.base_payment_rate_manager)
         d.addCallbacks(lambda _: _log_success, lambda _: _log_failure)
-
-    def _check_remote_versions(self):
-        def _get_lbryum_version():
-            try:
-                r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
-                version = next(line.split("=")[1].split("#")[0].replace(" ", "")
-                               for line in r if "LBRYUM_VERSION" in line)
-                version = version.replace("'", "")
-                log.info(
-                    "remote lbryum %s > local lbryum %s = %s",
-                    version, lbryum_version,
-                    utils.version_is_greater_than(version, lbryum_version)
-                )
-                self.git_lbryum_version = version
-                return defer.succeed(None)
-            except Exception:
-                log.info("Failed to get lbryum version from git")
-                self.git_lbryum_version = None
-                return defer.fail(None)
-
-        def _get_lbrynet_version():
-            try:
-                version = get_lbrynet_version_from_github()
-                log.info(
-                    "remote lbrynet %s > local lbrynet %s = %s",
-                    version, lbrynet_version,
-                    utils.version_is_greater_than(version, lbrynet_version)
-                )
-                self.git_lbrynet_version = version
-                return defer.succeed(None)
-            except Exception:
-                log.info("Failed to get lbrynet version from git")
-                self.git_lbrynet_version = None
-                return defer.fail(None)
-
-        d = _get_lbrynet_version()
-        d.addCallback(lambda _: _get_lbryum_version())
 
     def _check_connection_problems(self):
         if not self.git_lbrynet_version or not self.git_lbryum_version:
@@ -671,7 +499,7 @@ class Daemon(jsonrpc.JSONRPC):
 
         def _get_and_start_file(name):
             d = defer.succeed(self.pending_claims.pop(name))
-            d.addCallback(lambda _: self._get_lbry_file("name", name, return_json=False))
+            d.addCallback(lambda _: self._get_lbry_file(FileID.NAME, name, return_json=False))
             d.addCallback(lambda l: _start_file(l) if l.stopped else "LBRY file was already running")
 
         def re_add_to_pending_claims(name):
@@ -765,8 +593,12 @@ class Daemon(jsonrpc.JSONRPC):
 
     def _setup_query_handlers(self):
         handlers = [
-            BlobRequestHandlerFactory(self.session.blob_manager, self.session.wallet,
-                                      self.session.payment_rate_manager),
+            BlobRequestHandlerFactory(
+                self.session.blob_manager,
+                self.session.wallet,
+                self.session.payment_rate_manager,
+                self.analytics_manager.track
+            ),
             self.session.wallet.get_wallet_info_query_handler_factory(),
         ]
 
@@ -799,23 +631,24 @@ class Daemon(jsonrpc.JSONRPC):
             for lm, lp in [('lbrynet', lbrynet_log)]:
                 if os.path.isfile(lp):
                     if exclude_previous:
-                        f = open(lp, "r")
-                        f.seek(PREVIOUS_NET_LOG)
-                        log_contents = f.read()
-                        f.close()
+                        with open( lp, "r") as f:
+                            f.seek(PREVIOUS_NET_LOG)
+                            log_contents = f.read()
                     else:
-                        f = open(lp, "r")
-                        log_contents = f.read()
-                        f.close()
+                        with open(lp, "r") as f:
+                            log_contents = f.read()
+                    if self.lbryid is not PENDING_LBRY_ID:
+                        id_hash = base58.b58encode(self.lbryid)[:20]
+                    else:
+                        id_hash = self.lbryid
                     params = {
-                            'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
-                            'hash': base58.b58encode(self.lbryid)[:20],
-                            'sys': platform.system(),
-                            'type': "%s-%s" % (lm, log_type) if log_type else lm,
-                            'log': log_contents
-                            }
-                    requests.post(LOG_POST_URL, params)
-
+                        'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
+                        'hash': id_hash,
+                        'sys': platform.system(),
+                        'type': "%s-%s" % (lm, log_type) if log_type else lm,
+                        'log': log_contents
+                    }
+                    requests.post(lbrynet_settings.LOG_POST_URL, params)
             return defer.succeed(None)
         else:
             return defer.succeed(None)
@@ -830,22 +663,20 @@ class Daemon(jsonrpc.JSONRPC):
     def _shutdown(self):
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
-        if self.internet_connection_checker.running:
-            self.internet_connection_checker.stop()
-        if self.version_checker.running:
-            self.version_checker.stop()
-        if self.connection_problem_checker.running:
-            self.connection_problem_checker.stop()
+        self.looping_call_manager.shutdown()
+        if self.analytics_manager:
+            self.analytics_manager.shutdown()
         if self.lbry_ui_manager.update_checker.running:
             self.lbry_ui_manager.update_checker.stop()
-        if self.pending_claim_checker.running:
-            self.pending_claim_checker.stop()
-        if self.send_heartbeat.running:
-            self.send_heartbeat.stop()
 
         self._clean_up_temp_files()
 
-        d = self._upload_log(log_type="close", exclude_previous=False if self.first_run else True)
+        try:
+            d = self._upload_log(
+                log_type="close", exclude_previous=False if self.first_run else True)
+        except Exception:
+            log.warn('Failed to upload log', exc_info=True)
+            d = defer.succeed(None)
         d.addCallback(lambda _: self._stop_server())
         d.addCallback(lambda _: self._stop_reflector())
         d.addErrback(lambda err: True)
@@ -857,87 +688,43 @@ class Daemon(jsonrpc.JSONRPC):
         return d
 
     def _update_settings(self, settings):
-        for k in settings.keys():
-            if k == 'run_on_startup':
-                if type(settings['run_on_startup']) is bool:
-                    self.session_settings['run_on_startup'] = settings['run_on_startup']
-                else:
-                    return defer.fail()
-            elif k == 'data_rate':
-                if type(settings['data_rate']) is float:
-                    self.session_settings['data_rate'] = settings['data_rate']
-                elif type(settings['data_rate']) is int:
-                    self.session_settings['data_rate'] = float(settings['data_rate'])
-                else:
-                    return defer.fail()
-            elif k == 'max_key_fee':
-                if type(settings['max_key_fee']) is float:
-                    self.session_settings['max_key_fee'] = settings['max_key_fee']
-                elif type(settings['max_key_fee']) is int:
-                    self.session_settings['max_key_fee'] = float(settings['max_key_fee'])
-                else:
-                    return defer.fail()
-            elif k == 'download_directory':
-                if type(settings['download_directory']) is unicode:
-                    if os.path.isdir(settings['download_directory']):
-                        self.session_settings['download_directory'] = settings['download_directory']
-                    else:
-                        pass
-                else:
-                    return defer.fail()
-            elif k == 'max_upload':
-                if type(settings['max_upload']) is float:
-                    self.session_settings['max_upload'] = settings['max_upload']
-                elif type(settings['max_upload']) is int:
-                    self.session_settings['max_upload'] = float(settings['max_upload'])
-                else:
-                    return defer.fail()
-            elif k == 'max_download':
-                if type(settings['max_download']) is float:
-                    self.session_settings['max_download'] = settings['max_download']
-                if type(settings['max_download']) is int:
-                    self.session_settings['max_download'] = float(settings['max_download'])
-                else:
-                    return defer.fail()
-            elif k == 'upload_log':
-                if type(settings['upload_log']) is bool:
-                    self.session_settings['upload_log'] = settings['upload_log']
-                else:
-                    return defer.fail()
-            elif k == 'download_timeout':
-                if type(settings['download_timeout']) is int:
-                    self.session_settings['download_timeout'] = settings['download_timeout']
-                elif type(settings['download_timeout']) is float:
-                    self.session_settings['download_timeout'] = int(settings['download_timeout'])
-                else:
-                    return defer.fail()
-            elif k == 'search_timeout':
-                if type(settings['search_timeout']) is float:
-                    self.session_settings['search_timeout'] = settings['search_timeout']
-                elif type(settings['search_timeout']) is int:
-                    self.session_settings['search_timeout'] = float(settings['search_timeout'])
-                else:
-                    return defer.fail()
-            elif k == 'cache_time':
-                if type(settings['cache_time']) is int:
-                    self.session_settings['cache_time'] = settings['cache_time']
-                elif type(settings['cache_time']) is float:
-                    self.session_settings['cache_time'] = int(settings['cache_time'])
-                else:
-                    return defer.fail()
+        setting_types = {
+            'run_on_startup': bool,
+            'data_rate': float,
+            'max_key_fee': float,
+            'download_directory': str,
+            'max_upload': float,
+            'max_download': float,
+            'upload_log': bool,
+            'download_timeout': int,
+            'search_timeout': float,
+            'cache_time': int
+        }
 
-        self.run_on_startup = self.session_settings['run_on_startup']
-        self.data_rate = self.session_settings['data_rate']
-        self.max_key_fee = self.session_settings['max_key_fee']
-        self.download_directory = self.session_settings['download_directory']
-        self.max_upload = self.session_settings['max_upload']
-        self.max_download = self.session_settings['max_download']
-        self.upload_log = self.session_settings['upload_log']
-        self.download_timeout = self.session_settings['download_timeout']
-        self.search_timeout = self.session_settings['search_timeout']
-        self.cache_time = self.session_settings['cache_time']
+        for key, setting_type in setting_types.iteritems():
+            if key in settings:
+                if isinstance(settings[key], setting_type):
+                    lbrynet_settings.update({key: settings[key]})
+                elif key == "max_key_fee" and isinstance(FeeValidator(settings[key]).amount, setting_type):
+                    lbrynet_settings.update({key: settings[key]})
+                else:
+                    try:
+                        converted = setting_type(settings[key])
+                        lbrynet_settings.update({key: converted})
+                    except Exception as err:
+                        log.warning(err.message)
+                        log.warning("error converting setting '%s' to type %s", key, setting_type)
 
-        utils.save_settings(self.daemon_conf, self.session_settings)
+        self.run_on_startup = lbrynet_settings.run_on_startup
+        self.data_rate = lbrynet_settings.data_rate
+        self.max_key_fee = lbrynet_settings.max_key_fee
+        self.download_directory = lbrynet_settings.download_directory
+        self.max_upload = lbrynet_settings.max_upload
+        self.max_download = lbrynet_settings.max_download
+        self.upload_log = lbrynet_settings.upload_log
+        self.download_timeout = lbrynet_settings.download_timeout
+        self.search_timeout = lbrynet_settings.search_timeout
+        self.cache_time = lbrynet_settings.cache_time
 
         return defer.succeed(True)
 
@@ -945,10 +732,10 @@ class Daemon(jsonrpc.JSONRPC):
         self.startup_status = STARTUP_STAGES[1]
         log.info("Loading databases...")
         if self.created_data_dir:
-            db_revision = open(os.path.join(self.db_dir, "db_revision"), mode='w')
-            db_revision.write(str(self.current_db_revision))
-            db_revision.close()
-            log.debug("Created the db revision file: %s", str(os.path.join(self.db_dir, "db_revision")))
+            db_revision_path = os.path.join(self.db_dir, "db_revision")
+            with open(db_revision_path, mode='w') as db_revision:
+                db_revision.write(str(self.current_db_revision))
+            log.debug("Created the db revision file: %s", db_revision_path)
         if not os.path.exists(self.blobfile_dir):
             os.mkdir(self.blobfile_dir)
             log.debug("Created the blobfile directory: %s", str(self.blobfile_dir))
@@ -958,6 +745,8 @@ class Daemon(jsonrpc.JSONRPC):
         db_revision_file = os.path.join(self.db_dir, "db_revision")
         if os.path.exists(db_revision_file):
             old_revision = int(open(db_revision_file).read().strip())
+        if old_revision > self.current_db_revision:
+            return defer.fail(Exception('This version of lbrynet is not compatible with the database'))
         if old_revision < self.current_db_revision:
             from lbrynet.db_migrator import dbmigrator
             log.info("Upgrading your databases...")
@@ -985,7 +774,7 @@ class Daemon(jsonrpc.JSONRPC):
         return d
 
     def _set_lbryid(self, lbryid):
-        if lbryid is None:
+        if lbryid is PENDING_LBRY_ID:
             return self._make_lbryid()
         else:
             log.info("LBRY ID: " + base58.b58encode(lbryid))
@@ -1003,7 +792,6 @@ class Daemon(jsonrpc.JSONRPC):
             session_id=self._session_id
         )
 
-
     def _setup_lbry_file_manager(self):
         self.startup_status = STARTUP_STAGES[3]
         self.lbry_file_metadata_manager = DBEncryptedFileMetadataManager(self.db_dir)
@@ -1020,11 +808,25 @@ class Daemon(jsonrpc.JSONRPC):
 
         return d
 
+    def _get_analytics(self):
+        analytics_api = analytics.Api.load()
+        context = analytics.make_context(self._get_platform(), self.wallet_type)
+        events_generator = analytics.Events(
+            context, base58.b58encode(self.lbryid), self._session_id)
+        self.analytics_manager = analytics.Manager(
+            analytics_api, events_generator, analytics.Track())
+        self.analytics_manager.start()
+        self.analytics_manager.register_repeating_metric(
+            analytics.BLOB_BYTES_AVAILABLE,
+            AlwaysSend(calculate_available_blob_size, self.session.blob_manager),
+            frequency=300
+        )
+
     def _get_session(self):
         def get_default_data_rate():
             d = self.settings.get_default_data_payment_rate()
             d.addCallback(lambda rate: {"default_data_payment_rate": rate if rate is not None else
-                                                                    MIN_BLOB_DATA_PAYMENT_RATE})
+                                                                    lbrynet_settings.data_rate})
             return d
 
         def get_wallet():
@@ -1038,8 +840,8 @@ class Daemon(jsonrpc.JSONRPC):
             elif self.wallet_type == "lbryum":
                 log.info("Using lbryum wallet")
                 config = {'auto-connect': True}
-                if conf.LBRYUM_WALLET_DIR:
-                    config['lbryum_path'] = conf.LBRYUM_WALLET_DIR
+                if lbrynet_settings.lbryum_wallet_dir:
+                    config['lbryum_path'] = lbrynet_settings.lbryum_wallet_dir
                 d = defer.succeed(LBRYumWallet(self.db_dir, config))
             elif self.wallet_type == "ptc":
                 log.info("Using PTC wallet")
@@ -1062,9 +864,8 @@ class Daemon(jsonrpc.JSONRPC):
         def create_session(results):
             self.session = Session(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
-                                       known_dht_nodes=self.known_dht_nodes, peer_port=self.peer_port,
-                                       use_upnp=self.use_upnp, wallet=results['wallet'],
-                                       is_generous=is_generous_host)
+                                       known_dht_nodes=lbrynet_settings.known_dht_nodes, peer_port=self.peer_port,
+                                       use_upnp=self.use_upnp, wallet=results['wallet'])
             self.startup_status = STARTUP_STAGES[2]
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
@@ -1085,7 +886,7 @@ class Daemon(jsonrpc.JSONRPC):
         self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_opener_factory)
         return defer.succeed(None)
 
-    def _download_sd_blob(self, sd_hash, timeout=DEFAULT_SD_DOWNLOAD_TIMEOUT):
+    def _download_sd_blob(self, sd_hash, timeout=lbrynet_settings.sd_download_timeout):
         def cb(result):
             if not r.called:
                 r.callback(result)
@@ -1103,13 +904,13 @@ class Daemon(jsonrpc.JSONRPC):
 
         return r
 
-    def _download_name(self, name, timeout=DEFAULT_TIMEOUT, download_directory=None,
+    def _download_name(self, name, timeout=lbrynet_settings.download_timeout, download_directory=None,
                        file_name=None, stream_info=None, wait_for_write=True):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
-        self._send_download_started(name)
+        self.analytics_manager.send_download_started(name, stream_info)
         helper = _DownloadNameHelper(
             self, name, timeout, download_directory, file_name, wait_for_write)
 
@@ -1239,108 +1040,13 @@ class Daemon(jsonrpc.JSONRPC):
         return defer.succeed(None)
 
     def _get_lbry_file(self, search_by, val, return_json=True):
-        def _log_get_lbry_file(f):
-            if f and val:
-                log.info("Found LBRY file for " + search_by + ": " + val)
-            elif val:
-                log.info("Did not find LBRY file for " + search_by + ": " + val)
-            return f
-
-        def _get_json_for_return(f):
-            def _get_file_status(file_status):
-                message = STREAM_STAGES[2][1] % (file_status.name, file_status.num_completed, file_status.num_known, file_status.running_status)
-                return defer.succeed(message)
-
-            def _generate_reply(size):
-                if f.key:
-                    key = binascii.b2a_hex(f.key)
-                else:
-                    key = None
-
-                if os.path.isfile(os.path.join(self.download_directory, f.file_name)):
-                    written_file = file(os.path.join(self.download_directory, f.file_name))
-                    written_file.seek(0, os.SEEK_END)
-                    written_bytes = written_file.tell()
-                    written_file.close()
-                else:
-                    written_bytes = False
-
-                if search_by == "name":
-                    if val in self.streams.keys():
-                        status = self.streams[val].code
-                    elif f in self.lbry_file_manager.lbry_files:
-                        # if f.stopped:
-                        #     status = STREAM_STAGES[3]
-                        # else:
-                        status = STREAM_STAGES[2]
-                    else:
-                        status = [False, False]
-                else:
-                    status = [False, False]
-
-                if status[0] == DOWNLOAD_RUNNING_CODE:
-                    d = f.status()
-                    d.addCallback(_get_file_status)
-                    d.addCallback(lambda message: {'completed': f.completed, 'file_name': f.file_name,
-                                                   'download_directory': f.download_directory,
-                                                   'download_path': os.path.join(f.download_directory, f.file_name),
-                                                   'mime_type': mimetypes.guess_type(os.path.join(f.download_directory, f.file_name))[0],
-                                                   'key': key,
-                                                   'points_paid': f.points_paid, 'stopped': f.stopped,
-                                                   'stream_hash': f.stream_hash,
-                                                   'stream_name': f.stream_name,
-                                                   'suggested_file_name': f.suggested_file_name,
-                                                   'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash,
-                                                   'lbry_uri': f.uri, 'txid': f.txid, 'claim_id': f.claim_id,
-                                                   'total_bytes': size,
-                                                   'written_bytes': written_bytes, 'code': status[0],
-                                                   'message': message})
-                else:
-                    d = defer.succeed({'completed': f.completed, 'file_name': f.file_name, 'key': key,
-                                       'download_directory': f.download_directory,
-                                       'download_path': os.path.join(f.download_directory, f.file_name),
-                                       'mime_type': mimetypes.guess_type(os.path.join(f.download_directory, f.file_name))[0],
-                                       'points_paid': f.points_paid, 'stopped': f.stopped, 'stream_hash': f.stream_hash,
-                                       'stream_name': f.stream_name, 'suggested_file_name': f.suggested_file_name,
-                                       'upload_allowed': f.upload_allowed, 'sd_hash': f.sd_hash, 'total_bytes': size,
-                                       'written_bytes': written_bytes, 'lbry_uri': f.uri, 'txid': f.txid, 'claim_id': f.claim_id,
-                                       'code': status[0], 'message': status[1]})
-
-                return d
-
-            def _add_metadata(message):
-                def _add_to_dict(metadata):
-                    message['metadata'] = metadata
-                    return defer.succeed(message)
-
-                if f.txid:
-                    d = self._resolve_name(f.uri)
-                    d.addCallbacks(_add_to_dict, lambda _: _add_to_dict("Pending confirmation"))
-                else:
-                    d = defer.succeed(message)
-                return d
-
-            if f:
-                d = f.get_total_bytes()
-                d.addCallback(_generate_reply)
-                d.addCallback(_add_metadata)
-                return d
-            else:
-                return False
-
-        if search_by == "name":
-            d = self._get_lbry_file_by_uri(val)
-        elif search_by == "sd_hash":
-            d = self._get_lbry_file_by_sd_hash(val)
-        elif search_by == "file_name":
-            d = self._get_lbry_file_by_file_name(val)
-        # d.addCallback(_log_get_lbry_file)
-        if return_json:
-            d.addCallback(_get_json_for_return)
-        return d
+        return _GetFileHelper(self, search_by, val, return_json).retrieve_file()
 
     def _get_lbry_files(self):
-        d = defer.DeferredList([self._get_lbry_file('sd_hash', l.sd_hash) for l in self.lbry_file_manager.lbry_files])
+        d = defer.DeferredList([
+            self._get_lbry_file(FileID.SD_HASH, l.sd_hash)
+            for l in self.lbry_file_manager.lbry_files
+        ])
         return d
 
     def _reflect(self, lbry_file):
@@ -1348,13 +1054,13 @@ class Daemon(jsonrpc.JSONRPC):
             return defer.fail(Exception("no lbry file given to reflect"))
 
         stream_hash = lbry_file.stream_hash
-        
+
         if stream_hash is None:
             return defer.fail(Exception("no stream hash"))
 
         log.info("Reflecting stream: %s" % stream_hash)
 
-        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_server = random.choice(lbrynet_settings.reflector_servers)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Start reflector client")
         factory = reflector.ClientFactory(
@@ -1373,7 +1079,7 @@ class Daemon(jsonrpc.JSONRPC):
 
         log.info("Reflecting %i blobs" % len(blob_hashes))
 
-        reflector_server = random.choice(REFLECTOR_SERVERS)
+        reflector_server = random.choice(lbrynet_settings.reflector_servers)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Start reflector client")
         factory = reflector.BlobClientFactory(
@@ -1396,9 +1102,9 @@ class Daemon(jsonrpc.JSONRPC):
             log.info("Removing one time startup scripts")
             remaining_scripts = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
             startup_scripts = self.startup_scripts
-            self.startup_scripts = self.session_settings['startup_scripts'] = remaining_scripts
-
-            utils.save_settings(self.daemon_conf, self.session_settings)
+            self.startup_scripts = lbrynet_settings.startup_scripts = remaining_scripts
+            conf = os.path.join(lbrynet_settings.data_dir, "daemon_settings.yml")
+            utils.save_settings(conf)
 
         for script in startup_scripts:
             if script['script_name'] == 'migrateto025':
@@ -1415,9 +1121,6 @@ class Daemon(jsonrpc.JSONRPC):
 
     def _search(self, search):
         return self.lighthouse_client.search(search)
-
-    def _render_response(self, result, code):
-        return defer.succeed({'result': result, 'code': code})
 
     def jsonrpc_is_running(self):
         """
@@ -1455,7 +1158,7 @@ class Daemon(jsonrpc.JSONRPC):
             r['problem_code'] = self.connection_problem[0]
             r['message'] = self.connection_problem[1]
             r['is_lagging'] = True
-        elif self.startup_status[0] == LOADING_WALLET_CODE:
+        elif self.startup_status[0] == LOADING_wallet_CODE:
             if self.wallet_type == 'lbryum':
                 if self.session.wallet.blocks_behind_alert != 0:
                     r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
@@ -1466,7 +1169,6 @@ class Daemon(jsonrpc.JSONRPC):
             else:
                 r['message'] = "Catching up with the blockchain"
                 r['progress'] = 0
-        log.info("daemon status: " + str(r))
         return self._render_response(r, OK_CODE)
 
     def jsonrpc_is_first_run(self):
@@ -1578,8 +1280,9 @@ class Daemon(jsonrpc.JSONRPC):
         """
 
         log.info("Get daemon settings")
-        return self._render_response(self.session_settings, OK_CODE)
+        return self._render_response(lbrynet_settings.configurable_settings, OK_CODE)
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_set_settings(self, p):
         """
         Set lbrynet daemon settings
@@ -1598,12 +1301,12 @@ class Daemon(jsonrpc.JSONRPC):
         """
 
         def _log_settings_change():
-            log.info("Set daemon settings to " + json.dumps(self.session_settings))
+            log.info("Set daemon settings to " + json.dumps(lbrynet_settings.configurable_settings))
 
         d = self._update_settings(p)
         d.addErrback(lambda err: log.info(err.getTraceback()))
         d.addCallback(lambda _: _log_settings_change())
-        d.addCallback(lambda _: self._render_response(self.session_settings, OK_CODE))
+        d.addCallback(lambda _: self._render_response(lbrynet_settings.configurable_settings, OK_CODE))
 
         return d
 
@@ -1621,12 +1324,12 @@ class Daemon(jsonrpc.JSONRPC):
         """
 
         if not p:
-            return self._render_response(self._listFunctions(), OK_CODE)
+            return self._render_response(self.callable_methods.keys(), OK_CODE)
         elif 'callable_during_start' in p.keys():
-            return self._render_response(ALLOWED_DURING_STARTUP, OK_CODE)
+            return self._render_response(self.allowed_during_startup, OK_CODE)
         elif 'function' in p.keys():
             func_path = p['function']
-            function = self._getFunction(func_path)
+            function = self.callable_methods.get(func_path)
             return self._render_response(function.__doc__, OK_CODE)
         else:
             return self._render_response(self.jsonrpc_help.__doc__, OK_CODE)
@@ -1690,8 +1393,7 @@ class Daemon(jsonrpc.JSONRPC):
         return d
 
     def jsonrpc_get_lbry_file(self, p):
-        """
-        Get lbry file
+        """Get lbry file
 
         Args:
             'name': get file by lbry uri,
@@ -1709,14 +1411,17 @@ class Daemon(jsonrpc.JSONRPC):
             'upload_allowed': bool
             'sd_hash': string
         """
-
-        if p.keys()[0] in ['name', 'sd_hash', 'file_name']:
-            search_type = p.keys()[0]
-            d = self._get_lbry_file(search_type, p[search_type])
-        else:
-            d = defer.fail()
+        d = self._get_deferred_for_lbry_file(p)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
+
+    def _get_deferred_for_lbry_file(self, p):
+        try:
+            searchtype, value = get_lbry_file_search_value(p)
+        except NoValidSearch:
+            return defer.fail()
+        else:
+            return self._get_lbry_file(searchtype, value)
 
     def jsonrpc_resolve_name(self, p):
         """
@@ -1730,15 +1435,15 @@ class Daemon(jsonrpc.JSONRPC):
 
         force = p.get('force', False)
 
-        if 'name' in p:
-            name = p['name']
-        else:
+        name = p.get(FileID.NAME)
+        if not name:
             return self._render_response(None, BAD_REQUEST)
 
         d = self._resolve_name(name, force_refresh=force)
         d.addCallbacks(lambda info: self._render_response(info, OK_CODE), lambda _: server.failure)
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_my_claim(self, p):
         """
         Return existing claim for a given name
@@ -1749,7 +1454,7 @@ class Daemon(jsonrpc.JSONRPC):
             claim info, False if no such claim exists
         """
 
-        name = p['name']
+        name = p[FileID.NAME]
         d = self.session.wallet.get_my_claim(name)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -1771,7 +1476,7 @@ class Daemon(jsonrpc.JSONRPC):
                 r['amount'] = float(r['amount']) / 10**8
                 return r
 
-        name = p['name']
+        name = p[FileID.NAME]
         txid = p.get('txid', None)
         d = self.session.wallet.get_claim_info(name, txid)
         d.addCallback(_convert_amount_to_float)
@@ -1784,11 +1489,11 @@ class Daemon(jsonrpc.JSONRPC):
         #       can spec what parameters it expects and how to set default values
         timeout = p.get('timeout', self.download_timeout)
         download_directory = p.get('download_directory', self.download_directory)
-        file_name = p.get('file_name')
+        file_name = p.get(FileID.FILE_NAME)
         stream_info = p.get('stream_info')
         sd_hash = get_sd_hash(stream_info)
         wait_for_write = p.get('wait_for_write', True)
-        name = p.get('name')
+        name = p.get(FileID.NAME)
         return Parameters(
             timeout=timeout,
             download_directory=download_directory,
@@ -1799,6 +1504,7 @@ class Daemon(jsonrpc.JSONRPC):
             name=name
         )
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get(self, p):
         """Download stream from a LBRY uri.
 
@@ -1829,6 +1535,7 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda message: self._render_response(message, OK_CODE))
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_stop_lbry_file(self, p):
         """
         Stop lbry file
@@ -1842,18 +1549,25 @@ class Daemon(jsonrpc.JSONRPC):
         """
 
         def _stop_file(f):
-            d =  self.lbry_file_manager.toggle_lbry_file_running(f)
-            d.addCallback(lambda _: "Stopped LBRY file")
-            return d
+            if f.stopped:
+                return "LBRY file wasn't running"
+            else:
+                d = self.lbry_file_manager.toggle_lbry_file_running(f)
+                d.addCallback(lambda _: "Stopped LBRY file")
+                return d
 
-        if p.keys()[0] in ['name', 'sd_hash', 'file_name']:
-            search_type = p.keys()[0]
-            d = self._get_lbry_file(search_type, p[search_type], return_json=False)
-            d.addCallback(lambda l: _stop_file(l) if not l.stopped else "LBRY file wasn't running")
+        try:
+            searchtype, value = get_lbry_file_search_value(p)
+        except NoValidSearch:
+            d = defer.fail()
+        else:
+            d = self._get_lbry_file(searchtype, value, return_json=False)
+            d.addCallback(_stop_file)
 
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_start_lbry_file(self, p):
         """
         Stop lbry file
@@ -1867,13 +1581,19 @@ class Daemon(jsonrpc.JSONRPC):
         """
 
         def _start_file(f):
-            d = self.lbry_file_manager.toggle_lbry_file_running(f)
-            return defer.succeed("Started LBRY file")
+            if f.stopped:
+                d = self.lbry_file_manager.toggle_lbry_file_running(f)
+                return defer.succeed("Started LBRY file")
+            else:
+                return "LBRY file was already running"
 
-        if p.keys()[0] in ['name', 'sd_hash', 'file_name']:
-            search_type = p.keys()[0]
-            d = self._get_lbry_file(search_type, p[search_type], return_json=False)
-            d.addCallback(lambda l: _start_file(l) if l.stopped else "LBRY file was already running")
+        try:
+            searchtype, value = get_lbry_file_search_value(p)
+        except NoValidSearch:
+            d = defer.fail()
+        else:
+            d = self._get_lbry_file(searchtype, value, return_json=False)
+            d.addCallback(_start_file)
 
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
@@ -1888,7 +1608,7 @@ class Daemon(jsonrpc.JSONRPC):
             estimated cost
         """
 
-        name = p['name']
+        name = p[FileID.NAME]
 
         d = self._get_est_cost(name)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
@@ -1930,6 +1650,7 @@ class Daemon(jsonrpc.JSONRPC):
 
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_delete_lbry_file(self, p):
         """
         Delete a lbry file
@@ -1940,25 +1661,28 @@ class Daemon(jsonrpc.JSONRPC):
             confirmation message
         """
 
-        if 'delete_target_file' in p.keys():
-            delete_file = p['delete_target_file']
-        else:
-            delete_file = True
+        delete_file = p.get('delete_target_file', True)
 
         def _delete_file(f):
+            if not f:
+                return False
             file_name = f.file_name
             d = self._delete_lbry_file(f, delete_file=delete_file)
             d.addCallback(lambda _: "Deleted LBRY file" + file_name)
             return d
 
-        if 'name' in p.keys() or 'sd_hash' in p.keys() or 'file_name' in p.keys():
-            search_type = [k for k in p.keys() if k != 'delete_target_file'][0]
-            d = self._get_lbry_file(search_type, p[search_type], return_json=False)
-            d.addCallback(lambda l: _delete_file(l) if l else False)
+        try:
+            searchtype, value = get_lbry_file_search_value(p)
+        except NoValidSearch:
+            d = defer.fail()
+        else:
+            d = self._get_lbry_file(searchtype, value, return_json=False)
+            d.addCallback(_delete_file)
 
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_publish(self, p):
         """
         Make a new name claim and publish associated data to lbrynet
@@ -1979,12 +1703,12 @@ class Daemon(jsonrpc.JSONRPC):
             return m
 
         def _reflect_if_possible(sd_hash, txid):
-            d = self._get_lbry_file('sd_hash', sd_hash, return_json=False)
+            d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
             d.addCallback(self._reflect)
             d.addCallback(lambda _: txid)
             return d
 
-        name = p['name']
+        name = p[FileID.NAME]
 
         log.info("Publish: ")
         log.info(p)
@@ -2012,8 +1736,7 @@ class Daemon(jsonrpc.JSONRPC):
             if not os.path.isfile(file_path):
                 return defer.fail(Exception("Specified file for publish doesnt exist: %s" % file_path))
 
-        if not self.pending_claim_checker.running:
-            self.pending_claim_checker.start(30)
+        self.looping_call_manager.start(Checker.PENDING_CLAIM, 30)
 
         d = self._resolve_name(name, force_refresh=True)
         d.addErrback(lambda _: None)
@@ -2040,6 +1763,7 @@ class Daemon(jsonrpc.JSONRPC):
 
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_abandon_claim(self, p):
         """
         Abandon a name and reclaim credits from the claim
@@ -2066,6 +1790,7 @@ class Daemon(jsonrpc.JSONRPC):
 
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_abandon_name(self, p):
         """
         DEPRECIATED, use abandon_claim
@@ -2078,7 +1803,7 @@ class Daemon(jsonrpc.JSONRPC):
 
         return self.jsonrpc_abandon_claim(p)
 
-
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_support_claim(self, p):
         """
         Support a name claim
@@ -2091,13 +1816,14 @@ class Daemon(jsonrpc.JSONRPC):
             txid
         """
 
-        name = p['name']
+        name = p[FileID.NAME]
         claim_id = p['claim_id']
         amount = p['amount']
         d = self.session.wallet.support_claim(name, claim_id, amount)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_name_claims(self):
         """
         Get my name claims
@@ -2131,11 +1857,12 @@ class Daemon(jsonrpc.JSONRPC):
             list of name claims
         """
 
-        name = p['name']
+        name = p[FileID.NAME]
         d = self.session.wallet.get_claims_for_name(name)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_transaction_history(self):
         """
         Get transaction history
@@ -2166,6 +1893,7 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_address_is_mine(self, p):
         """
         Checks if an address is associated with the current wallet.
@@ -2183,7 +1911,7 @@ class Daemon(jsonrpc.JSONRPC):
 
         return d
 
-
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_public_key_from_wallet(self, p):
         """
         Get public key from wallet address
@@ -2221,6 +1949,7 @@ class Daemon(jsonrpc.JSONRPC):
 
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_new_address(self):
         """
         Generate a new wallet address
@@ -2240,6 +1969,7 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda address: self._render_response(address, OK_CODE))
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_send_amount_to_address(self, p):
         """
             Send credits to an address
@@ -2319,6 +2049,7 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_download_descriptor(self, p):
         """
         Download and return a sd blob
@@ -2328,11 +2059,12 @@ class Daemon(jsonrpc.JSONRPC):
         Returns
             sd blob, dict
         """
-        sd_hash = p['sd_hash']
-        timeout = p.get('timeout', DEFAULT_SD_DOWNLOAD_TIMEOUT)
-
+        sd_hash = p[FileID.SD_HASH]
+        timeout = p.get('timeout', lbrynet_settings.sd_download_timeout)
         d = self._download_sd_blob(sd_hash, timeout)
-        d.addCallbacks(lambda r: self._render_response(r, OK_CODE), lambda _: self._render_response(False, OK_CODE))
+        d.addCallbacks(
+            lambda r: self._render_response(r, OK_CODE),
+            lambda _: self._render_response(False, OK_CODE))
         return d
 
     def jsonrpc_get_nametrie(self):
@@ -2350,6 +2082,7 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_set_miner(self, p):
         """
             Start of stop the miner, function only available when lbrycrd is set as the wallet
@@ -2438,6 +2171,7 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_configure_ui(self, p):
         """
         Configure the UI being hosted
@@ -2462,6 +2196,7 @@ class Daemon(jsonrpc.JSONRPC):
 
         return d
 
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_reveal(self, p):
         """
         Reveal a file or directory in file browser
@@ -2522,8 +2257,8 @@ class Daemon(jsonrpc.JSONRPC):
             True or traceback
         """
 
-        sd_hash = p['sd_hash']
-        d = self._get_lbry_file('sd_hash', sd_hash, return_json=False)
+        sd_hash = p[FileID.SD_HASH]
+        d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
         d.addCallback(self._reflect)
         d.addCallbacks(lambda _: self._render_response(True, OK_CODE), lambda err: self._render_response(err.getTraceback(), OK_CODE))
         return d
@@ -2560,14 +2295,13 @@ class Daemon(jsonrpc.JSONRPC):
     def jsonrpc_get_search_servers(self):
         """
         Get list of lighthouse servers
-
         Args:
             None
         Returns:
             List of address:port
         """
 
-        d = self._render_response(SEARCH_SERVERS, OK_CODE)
+        d = self._render_response(lbrynet_settings.search_servers, OK_CODE)
         return d
 
     def jsonrpc_get_mean_availability(self):
@@ -2604,7 +2338,7 @@ class Daemon(jsonrpc.JSONRPC):
             else:
                 return 0.0
 
-        name = p['name']
+        name = p[FileID.NAME]
 
         d = self._resolve_name(name, force_refresh=True)
         d.addCallback(get_sd_hash)
@@ -2616,6 +2350,20 @@ class Daemon(jsonrpc.JSONRPC):
         d.addCallback(lambda result: self._render_response(result, OK_CODE))
 
         return d
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_test_api_authentication(self):
+        if self._use_authentication:
+            return self._render_response(True, OK_CODE)
+        return self._render_response("Not using authentication", OK_CODE)
+
+
+def get_lbryum_version_from_github():
+    r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
+    version = next(line.split("=")[1].split("#")[0].replace(" ", "")
+                   for line in r if "LBRYUM_VERSION" in line)
+    version = version.replace("'", "")
+    return version
 
 
 def get_lbrynet_version_from_github():
@@ -2673,7 +2421,7 @@ def get_darwin_lbrycrdd_path():
 
 
 class _DownloadNameHelper(object):
-    def __init__(self, daemon, name, timeout=DEFAULT_TIMEOUT, download_directory=None,
+    def __init__(self, daemon, name, timeout=lbrynet_settings.download_timeout, download_directory=None,
                  file_name=None, wait_for_write=True):
         self.daemon = daemon
         self.name = name
@@ -2834,3 +2582,130 @@ class _ResolveNameHelper(object):
     def is_cached_name_expired(self):
         time_in_cache = self.now() - self.name_data['timestamp']
         return time_in_cache >= self.daemon.cache_time
+
+
+class _GetFileHelper(object):
+    def __init__(self, daemon, search_by, val, return_json=True):
+        self.daemon = daemon
+        self.search_by = search_by
+        self.val = val
+        self.return_json = return_json
+
+    def retrieve_file(self):
+        d = self.search_for_file()
+        if self.return_json:
+            d.addCallback(self._get_json)
+        return d
+
+    def search_for_file(self):
+        if self.search_by == FileID.NAME:
+            return self.daemon._get_lbry_file_by_uri(self.val)
+        elif self.search_by == FileID.SD_HASH:
+            return self.daemon._get_lbry_file_by_sd_hash(self.val)
+        elif self.search_by == FileID.FILE_NAME:
+            return self.daemon._get_lbry_file_by_file_name(self.val)
+        raise Exception('{} is not a valid search operation'.format(self.search_by))
+
+    def _get_json(self, lbry_file):
+        if lbry_file:
+            d = lbry_file.get_total_bytes()
+            d.addCallback(self._generate_reply, lbry_file)
+            d.addCallback(self._add_metadata, lbry_file)
+            return d
+        else:
+            return False
+
+    def _generate_reply(self, size, lbry_file):
+        written_bytes = self._get_written_bytes(lbry_file)
+        code, message = self._get_status(lbry_file)
+
+        if code == DOWNLOAD_RUNNING_CODE:
+            d = lbry_file.status()
+            d.addCallback(self._get_msg_for_file_status)
+            d.addCallback(
+                lambda msg: self._get_properties_dict(lbry_file, code, msg, written_bytes, size))
+        else:
+            d = defer.succeed(
+                self._get_properties_dict(lbry_file, code, message, written_bytes, size))
+        return d
+
+    def _get_msg_for_file_status(self, file_status):
+        message = STREAM_STAGES[2][1] % (
+            file_status.name, file_status.num_completed, file_status.num_known,
+            file_status.running_status)
+        return defer.succeed(message)
+
+    def _get_key(self, lbry_file):
+        return binascii.b2a_hex(lbry_file.key) if lbry_file.key else None
+
+    def _full_path(self, lbry_file):
+        return os.path.join(lbry_file.download_directory, lbry_file.file_name)
+
+    def _get_status(self, lbry_file):
+        if self.search_by == FileID.NAME:
+            if self.val in self.daemon.streams.keys():
+                status = self.daemon.streams[self.val].code
+            elif lbry_file in self.daemon.lbry_file_manager.lbry_files:
+                status = STREAM_STAGES[2]
+            else:
+                status = [False, False]
+        else:
+            status = [False, False]
+        return status
+
+    def _get_written_bytes(self, lbry_file):
+        full_path = self._full_path(lbry_file)
+        if os.path.isfile(full_path):
+            with open(full_path) as written_file:
+                written_file.seek(0, os.SEEK_END)
+                written_bytes = written_file.tell()
+        else:
+            written_bytes = False
+        return written_bytes
+
+    def _get_properties_dict(self, lbry_file, code, message, written_bytes, size):
+        key = self._get_key(lbry_file)
+        full_path = self._full_path(lbry_file)
+        mime_type = mimetypes.guess_type(full_path)[0]
+        return {
+            'completed': lbry_file.completed,
+            'file_name': lbry_file.file_name,
+            'download_directory': lbry_file.download_directory,
+            'points_paid': lbry_file.points_paid,
+            'stopped': lbry_file.stopped,
+            'stream_hash': lbry_file.stream_hash,
+            'stream_name': lbry_file.stream_name,
+            'suggested_file_name': lbry_file.suggested_file_name,
+            'upload_allowed': lbry_file.upload_allowed,
+            'sd_hash': lbry_file.sd_hash,
+            'lbry_uri': lbry_file.uri,
+            'txid': lbry_file.txid,
+            'claim_id': lbry_file.claim_id,
+            'download_path': full_path,
+            'mime_type': mime_type,
+            'key': key,
+            'total_bytes': size,
+            'written_bytes': written_bytes,
+            'code': code,
+            'message': message
+        }
+
+    def _add_metadata(self, message, lbry_file):
+        def _add_to_dict(metadata):
+            message['metadata'] = metadata
+            return defer.succeed(message)
+
+        if lbry_file.txid:
+            d = self.daemon._resolve_name(lbry_file.uri)
+            d.addCallbacks(_add_to_dict, lambda _: _add_to_dict("Pending confirmation"))
+        else:
+            d = defer.succeed(message)
+        return d
+
+
+def get_lbry_file_search_value(p):
+    for searchtype in (FileID.SD_HASH, FileID.NAME, FileID.FILE_NAME):
+        value = p.get(searchtype)
+        if value:
+            return searchtype, value
+    raise NoValidSearch()
