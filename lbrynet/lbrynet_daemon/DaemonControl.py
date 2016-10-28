@@ -69,7 +69,7 @@ def start():
     args = parser.parse_args()
 
     utils.setup_certs_for_windows()
-    lbrynet_log = conf.get_log_file()
+    lbrynet_log = conf.get_log_filename()
     log_support.configure_logging(lbrynet_log, args.logtoconsole, args.verbose)
 
     to_pass = {}
@@ -144,7 +144,7 @@ def start_server_and_listen(launchui, use_auth, **kwargs):
     lbrynet_server = server.Site(site_base)
     lbrynet_server.requestFactory = DaemonRequest
     try:
-        reactor.listenTCP(settings.API_PORT, lbrynet_server, interface=settings.API_INTERFACE)
+        reactor.listenTCP(settings.api_port, lbrynet_server, interface=settings.API_INTERFACE)
     except error.CannotListenError:
         log.info('Daemon already running, exiting app')
         sys.exit(1)

@@ -254,6 +254,7 @@ def get_data_dir():
         data_dir = user_data_dir("LBRY")
     if not os.path.isdir(data_dir):
         os.mkdir(data_dir)
+    return data_dir
 
 
 def get_log_filename():
