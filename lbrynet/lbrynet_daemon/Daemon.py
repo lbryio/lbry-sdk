@@ -273,7 +273,7 @@ class Daemon(AuthJSONRPCServer):
         self.ui_version = None
         self.ip = None
         self.first_run = None
-        self.log_file = conf.get_log_file()
+        self.log_file = conf.get_log_filename()
         self.current_db_revision = 1
         self.session = None
         self.first_run_after_update = False
@@ -282,7 +282,7 @@ class Daemon(AuthJSONRPCServer):
         # TODO: this should probably be passed into the daemon, or
         # possibly have the entire log upload functionality taken out
         # of the daemon, but I don't want to deal with that now
-        self.log_uploader = log_support.LogUploader.load('lbrynet', conf.get_log_file())
+        self.log_uploader = log_support.LogUploader.load('lbrynet', conf.get_log_filename())
 
         self.analytics_manager = None
         self.lbryid = PENDING_LBRY_ID
@@ -757,13 +757,13 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _set_lbryid(self, lbryid):
-        if lbryid is PENDING_LBRY_ID:
-            return self._make_lbryid()
+        if lbryid is PENDING_LBRY_ID or lbryid is None:
+            return self._make_set_and_save_lbryid()
         else:
             log.info("LBRY ID: " + base58.b58encode(lbryid))
             self.lbryid = lbryid
 
-    def _make_lbryid(self):
+    def _make_set_and_save_lbryid(self):
         self.lbryid = generate_id()
         log.info("Generated new LBRY ID: " + base58.b58encode(self.lbryid))
         d = self.settings.save_lbryid(self.lbryid)
