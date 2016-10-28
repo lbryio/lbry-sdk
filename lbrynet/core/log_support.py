@@ -159,7 +159,8 @@ def failure(failure, log, msg, *args):
         args: values to substitute into `msg`
     """
     args += (failure.getErrorMessage(),)
-    log.error(msg, *args, exc_info=failure.getTracebackObject())
+    exc_info = (failure.type, failure.value, failure.getTracebackObject())
+    log.error(msg, *args, exc_info=exc_info)
 
 
 def convert_verbose(verbose):
