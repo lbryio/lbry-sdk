@@ -13,7 +13,7 @@ from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaver, 
 from lbrynet.lbryfilemanager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
-from lbrynet.reflector import ReflectorAvailabilityHelper
+from lbrynet.reflector import reupload
 from lbrynet.conf import REFLECTOR_SERVERS
 
 log = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
         reflector_server = random.choice(REFLECTOR_SERVERS)
 
-        d.addCallback(lambda _: ReflectorAvailabilityHelper.check_and_restore_availability(self, reflector_server))
+        d.addCallback(lambda _: reupload.check_and_restore_availability(self, reflector_server))
         return d
 
     def stop(self, err=None, change_status=True):
