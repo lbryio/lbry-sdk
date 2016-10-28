@@ -19,6 +19,7 @@ except ImportError:
     import win32gui
 
 from lbrynet.core import utils
+from lbrynet.lbrynet_daemon import DaemonControl
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import settings
@@ -278,16 +279,7 @@ def main(lbry_name=None):
     systray_thread.daemon = True
     systray_thread.start()
 
-    lbry = DaemonServer()
-    d = lbry.start(use_authentication=False)
-    d.addCallback(lambda _: LBRYURIHandler.open_address(lbry_name))
-    lbrynet_server = server.Site(lbry.root)
-    lbrynet_server.requestFactory = DaemonRequest
-    try:
-        reactor.listenTCP(settings.api_port, lbrynet_server, interface=settings.API_INTERFACE)
-    except error.CannotListenError:
-        log.info('Daemon already running, exiting app')
-        sys.exit(1)
+    DaemonControl.start_server_and_listen(launchui=True, use_auth=False)
     reactor.run()
 
 if __name__ == '__main__':
