@@ -82,9 +82,10 @@ def start():
     if args.branch:
         to_pass.update({'ui_branch': args.branch})
     to_pass.update({'use_auth_http': args.useauth})
-    to_pass.update({'wallet': args.wallet})
-    print to_pass
+    to_pass.update({'wallet_type': args.wallet})
+    log.debug('Settings overrides: %s', to_pass)
     settings.update(to_pass)
+    log.debug('Final Settings: %s', settings.__dict__)
 
     try:
         JSONRPCProxy.from_url(settings.API_CONNECTION_STRING).is_running()
