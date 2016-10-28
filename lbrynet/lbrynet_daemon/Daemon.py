@@ -28,6 +28,7 @@ from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import __version__ as lbrynet_version
 from lbrynet.conf import settings as lbrynet_settings
 from lbrynet import analytics
+from lbrynet import conf
 from lbrynet import reflector
 from lbrynet.metadata.Metadata import Metadata, verify_name_characters
 from lbrynet.metadata.Fee import FeeValidator

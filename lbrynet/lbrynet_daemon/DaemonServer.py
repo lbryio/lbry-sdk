@@ -3,6 +3,7 @@ import os
 
 from twisted.internet import defer
 
+from lbrynet import conf
 from lbrynet.lbrynet_daemon.Daemon import Daemon
 from lbrynet.lbrynet_daemon.Resources import LBRYindex, HostedEncryptedFile, EncryptedFileUpload
 from lbrynet.conf import settings
@@ -13,7 +14,7 @@ log = logging.getLogger(__name__)
 
 class DaemonServer(object):
     def _setup_server(self):
-        ui_path = os.path.join(get_data_dir(), "lbry-ui", "active")
+        ui_path = os.path.join(conf.get_data_dir(), "lbry-ui", "active")
         self.root = LBRYindex(ui_path)
         self._api = Daemon(self.root)
         self.root.putChild("view", HostedEncryptedFile(self._api))
