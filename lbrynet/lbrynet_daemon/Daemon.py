@@ -28,6 +28,7 @@ from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import __version__ as lbrynet_version
 from lbrynet.conf import settings as lbrynet_settings
 from lbrynet import analytics
+from lbrynet import conf
 from lbrynet import reflector
 from lbrynet.metadata.Metadata import Metadata, verify_name_characters
 from lbrynet.metadata.Fee import FeeValidator
@@ -56,26 +57,23 @@ from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.Lighthouse import LighthouseClient
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
 
+from lbrynet.metadata.Metadata import Metadata, verify_name_characters
+from lbrynet.core import log_support
+from lbrynet.core import utils
+from lbrynet.core.utils import generate_id
+from lbrynet.lbrynet_console.Settings import Settings
 
+from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
+from lbrynet.core.Session import Session
+from lbrynet.core.PTCWallet import PTCWallet
+from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager, TempEncryptedFileMetadataManager
+from lbrynet import reflector
 
-# TODO: this code snippet is everywhere. Make it go away
-if sys.platform != "darwin":
-    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-else:
-    log_dir = user_data_dir("LBRY")
-
-if not os.path.isdir(log_dir):
-    os.mkdir(log_dir)
-
-lbrynet_log = os.path.join(log_dir, lbrynet_settings.LOG_FILE_NAME)
 
 log = logging.getLogger(__name__)
 
-if os.path.isfile(lbrynet_log):
-    with open(lbrynet_log, 'r') as f:
-        PREVIOUS_NET_LOG = len(f.read())
-else:
-    PREVIOUS_NET_LOG = 0
 
 INITIALIZING_CODE = 'initializing'
 LOADING_DB_CODE = 'loading_db'
@@ -275,12 +273,16 @@ class Daemon(AuthJSONRPCServer):
         self.ui_version = None
         self.ip = None
         self.first_run = None
-        self.log_file = lbrynet_log
+        self.log_file = conf.get_log_file()
         self.current_db_revision = 1
         self.session = None
         self.first_run_after_update = False
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(generate_id())
+        # TODO: this should probably be passed into the daemon, or
+        # possibly have the entire log upload functionality taken out
+        # of the daemon, but I don't want to deal with that now
+        self.log_uploader = log_support.LogUploader.load('lbrynet', conf.get_log_file())
 
         self.analytics_manager = None
         self.lbryid = PENDING_LBRY_ID
@@ -323,7 +325,6 @@ class Daemon(AuthJSONRPCServer):
         self.blob_request_payment_rate_manager = None
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
-
 
     @AuthJSONRPCServer.subhandler
     def _exclude_lbrycrd_only_commands_from_lbryum_session(self, request):
@@ -400,7 +401,6 @@ class Daemon(AuthJSONRPCServer):
         self.exchange_rate_manager.start()
 
         d = defer.Deferred()
-
         if lbrynet_settings.host_ui:
             self.lbry_ui_manager.update_checker.start(1800, now=False)
             d.addCallback(lambda _: self.lbry_ui_manager.setup())
@@ -621,37 +621,20 @@ class Daemon(AuthJSONRPCServer):
 
         ds = []
         for handler in query_handlers:
-            ds.append(self.settings.get_query_handler_status(handler.get_primary_query_identifier()))
+            query_id = handler.get_primary_query_identifier()
+            ds.append(self.settings.get_query_handler_status(query_id))
         dl = defer.DeferredList(ds)
         dl.addCallback(_set_query_handlers)
         return dl
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            for lm, lp in [('lbrynet', lbrynet_log)]:
-                if os.path.isfile(lp):
-                    if exclude_previous:
-                        with open( lp, "r") as f:
-                            f.seek(PREVIOUS_NET_LOG)
-                            log_contents = f.read()
-                    else:
-                        with open(lp, "r") as f:
-                            log_contents = f.read()
-                    if self.lbryid is not PENDING_LBRY_ID:
-                        id_hash = base58.b58encode(self.lbryid)[:20]
-                    else:
-                        id_hash = self.lbryid
-                    params = {
-                        'date': datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
-                        'hash': id_hash,
-                        'sys': platform.system(),
-                        'type': "%s-%s" % (lm, log_type) if log_type else lm,
-                        'log': log_contents
-                    }
-                    requests.post(lbrynet_settings.LOG_POST_URL, params)
-            return defer.succeed(None)
-        else:
-            return defer.succeed(None)
+            if self.lbryid is not PENDING_LBRY_ID:
+                id_hash = base58.b58encode(self.lbryid)[:20]
+            else:
+                id_hash = self.lbryid
+            self.log_uploader.upload(exclude_previous, self.lbryid, log_type)
+        return defer.succeed(None)
 
     def _clean_up_temp_files(self):
         for path in self.uploaded_temp_files:
@@ -2187,7 +2170,8 @@ class Daemon(AuthJSONRPCServer):
             check_require = True
 
         if 'path' in p:
-            d = self.lbry_ui_manager.setup(user_specified=p['path'], check_requirements=check_require)
+            d = self.lbry_ui_manager.setup(
+                user_specified=p['path'], check_requirements=check_require)
         elif 'branch' in p:
             d = self.lbry_ui_manager.setup(branch=p['branch'], check_requirements=check_require)
         else:

@@ -3,9 +3,11 @@ import os
 import sys
 from appdirs import user_data_dir
 
+
 LINUX = 1
 DARWIN = 2
 WINDOWS = 3
+
 
 if sys.platform.startswith("darwin"):
     platform = DARWIN
@@ -226,6 +228,23 @@ class Config(DefaultSettings):
     @property
     def UI_ADDRESS(self):
         return "http://%s:%i" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port)
+
+
+def get_data_dir():
+    if sys.platform != "darwin":
+        data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+    else:
+        data_dir = user_data_dir("LBRY")
+    if not os.path.isdir(data_dir):
+        os.mkdir(data_dir)
+
+
+def get_log_filename():
+    """Return the log file for this platform.
+
+    Also ensure the containing directory exists
+    """
+    return os.path.join(get_data_dir(), settings.LOG_FILE_NAME)
 
 
 # TODO: don't load the configuration automatically. The configuration

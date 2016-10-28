@@ -6,6 +6,7 @@ import json
 import random
 import os
 import socket
+import sys
 import yaml
 
 from lbrynet.conf import settings
@@ -119,3 +120,9 @@ def check_connection(server="www.lbry.io", port=80):
             "Failed to connect to %s:%s. Maybe the internet connection is not working",
             server, port, exc_info=True)
         return False
+
+
+def setup_certs_for_windows():
+    if getattr(sys, 'frozen', False) and os.name == "nt":
+        cert_path = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
+        os.environ["REQUESTS_CA_BUNDLE"] = cert_path
