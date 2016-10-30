@@ -276,7 +276,6 @@ class Daemon(AuthJSONRPCServer):
         self.log_file = conf.get_log_filename()
         self.current_db_revision = 1
         self.session = None
-        self.first_run_after_update = False
         self.uploaded_temp_files = []
         self._session_id = base58.b58encode(generate_id())
         # TODO: this should probably be passed into the daemon, or
@@ -286,20 +285,7 @@ class Daemon(AuthJSONRPCServer):
 
         self.analytics_manager = None
         self.lbryid = PENDING_LBRY_ID
-
         self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.yml')
-
-
-        if os.path.isfile(self.daemon_conf):
-            conf_settings = utils.load_settings(self.daemon_conf)
-            if 'last_version' in conf_settings:
-                if utils.version_is_greater_than(lbrynet_version, conf_settings['last_version']['lbrynet']):
-                    self.first_run_after_update = True
-                    log.info("First run after update")
-                    log.info("lbrynet %s --> %s", conf_settings['last_version']['lbrynet'], lbrynet_version)
-                    log.info("lbryum %s --> %s", conf_settings['last_version']['lbryum'], lbryum_version)
-
-        # utils.save_settings(self.daemon_conf)
 
         self.wallet_user = None
         self.wallet_password = None
@@ -993,7 +979,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda info: int(dict(info)['stream_size']) / 1000000 * self.data_rate)
         d.addCallbacks(_add_key_fee, lambda _: _add_key_fee(0.0))
         reactor.callLater(self.search_timeout, _check_est, d, name)
-
         return d
 
     def _get_lbry_file_by_uri(self, name):
