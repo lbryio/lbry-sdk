@@ -38,9 +38,10 @@ rm get-pip.py
 
 pip install -r requirements.txt
 
-pip install mock pylint
-trial tests
-# TODO: submit coverage report to coveralls
+pip install mock pylint coveralls
+# have to do `which trial` instead of simply trial because coverage needs the full path
+coverage run --source=lbrynet `which trial` tests
+coveralls
 
 # Ignoring distutils because: https://github.com/PyCQA/pylint/issues/73
 # TODO: as code quality improves, make pylint be more strict
