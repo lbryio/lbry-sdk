@@ -248,10 +248,7 @@ class Config(DefaultSettings):
 
 
 def get_data_dir():
-    if sys.platform != "darwin":
-        data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-    else:
-        data_dir = user_data_dir("LBRY")
+    data_dir = default_data_dir
     if not os.path.isdir(data_dir):
         os.mkdir(data_dir)
     return data_dir
