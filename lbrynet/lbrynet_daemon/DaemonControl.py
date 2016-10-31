@@ -136,10 +136,12 @@ def start_server_and_listen(launchui, use_auth, **kwargs):
     lbry = DaemonServer()
 
     d = lbry.start(**kwargs)
+    d.addCallback(lambda _: listen(lbry, use_auth))
     if launchui:
         d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
     d.addErrback(log_and_kill)
 
+def listen(lbry, use_auth):
     site_base = get_site_base(use_auth, lbry.root)
     lbrynet_server = server.Site(site_base)
     lbrynet_server.requestFactory = DaemonRequest
