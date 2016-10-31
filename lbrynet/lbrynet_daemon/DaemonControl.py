@@ -69,22 +69,12 @@ def start():
     args = parser.parse_args()
 
     utils.setup_certs_for_windows()
-    lbrynet_log = conf.get_log_filename()
-    log_support.configure_logging(lbrynet_log, args.logtoconsole, args.verbose)
 
-    to_pass = {}
-    settings_path = os.path.join(settings.data_dir, "daemon_settings.yml")
-    if os.path.isfile(settings_path):
-        to_pass.update(utils.load_settings(settings_path))
-        log.info("Loaded settings file")
-    if args.ui:
-        to_pass.update({'local_ui_path': args.ui})
-    if args.branch:
-        to_pass.update({'ui_branch': args.branch})
-    to_pass.update({'use_auth_http': args.useauth})
-    to_pass.update({'wallet_type': args.wallet})
-    log.debug('Settings overrides: %s', to_pass)
-    settings.update(to_pass)
+    conf.update_settings_from_file()
+    update_settings_from_args(args)
+
+    lbrynet_log = settings.get_log_filename()
+    log_support.configure_logging(lbrynet_log, args.logtoconsole, args.verbose)
     log.debug('Final Settings: %s', settings.__dict__)
 
     try:
@@ -92,8 +82,6 @@ def start():
         log.info("lbrynet-daemon is already running")
         if not args.logtoconsole:
             print "lbrynet-daemon is already running"
-        if args.launchui:
-            webbrowser.open(settings.UI_ADDRESS)
         return
     except:
         pass
@@ -120,12 +108,23 @@ def start():
         return
 
 
+def update_settings_from_args(args):
+    to_pass = {}
+    if args.ui:
+        to_pass['local_ui_path'] = args.ui
+    if args.branch:
+        to_pass['ui_branch'] = args.branch
+    to_pass['use_auth_http'] = args.useauth
+    to_pass['wallet_type'] = args.wallet
+    settings.update(to_pass)
+
+
 def log_and_kill(failure):
     log_support.failure(failure, log, 'Failed to startup: %s')
     reactor.stop()
 
 
-def start_server_and_listen(launchui, use_auth, **kwargs):
+def start_server_and_listen(launchui, use_auth):
     """The primary entry point for launching the daemon.
 
     Args:
@@ -135,7 +134,7 @@ def start_server_and_listen(launchui, use_auth, **kwargs):
     """
     lbry = DaemonServer()
 
-    d = lbry.start(**kwargs)
+    d = lbry.start()
     d.addCallback(lambda _: listen(lbry, use_auth))
     if launchui:
         d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
