@@ -7,7 +7,6 @@ import platform
 import shutil
 from appdirs import user_data_dir
 from twisted.internet import reactor
-from twisted.web import server
 import Foundation
 bundle = Foundation.NSBundle.mainBundle()
 lbrycrdd_path = bundle.pathForResource_ofType_('lbrycrdd', None)
@@ -22,9 +21,7 @@ if not os.path.isfile(lbrycrdd_path_conf):
     f.write(lbrycrdd_path)
     f.close()
 
-from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet.lbrynet_daemon import DaemonControl
-from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import settings
 from lbrynet.core import utils
 

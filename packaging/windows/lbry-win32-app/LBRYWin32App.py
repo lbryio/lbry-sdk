@@ -9,7 +9,6 @@ import win32con
 import win32gui_struct
 from jsonrpc.proxy import JSONRPCProxy
 from twisted.internet import reactor, error
-from twisted.web import server
 
 try:
     import winxpgui as win32gui
@@ -20,8 +19,6 @@ from lbrynet import conf
 from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon import DaemonControl
-from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
-from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import settings
 from packaging.uri_handler.LBRYURIHandler import LBRYURIHandler
 

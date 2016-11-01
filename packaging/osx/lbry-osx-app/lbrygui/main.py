@@ -15,7 +15,7 @@ log = logging.getLogger()
 
 def main():
     conf.update_settings_from_file()
-    log_file = settings.get_log_filename()
+    log_file = conf.settings.get_log_filename()
     log_support.configure_logging(log_file, console=True)
     app = LBRYDaemonApp.sharedApplication()
     reactor.addSystemEventTrigger("after", "shutdown", AppHelper.stopEventLoop)
