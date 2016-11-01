@@ -99,7 +99,7 @@ class EncryptedFileReflectorClient(Protocol):
             log.debug('Finished sending data via reflector')
             self.factory.finished_deferred.callback(True)
         else:
-            log.debug('reflector finished: %s', reason)
+            log.debug('Reflector finished: %s', reason)
             self.factory.finished_deferred.callback(reason)
 
     #  IConsumer stuff

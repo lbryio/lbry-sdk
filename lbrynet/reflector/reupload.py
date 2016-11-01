@@ -39,7 +39,12 @@ def _reflect_if_unavailable(reflector_has_stream, lbry_file, reflector_server):
     return _reflect_stream(lbry_file, reflector_server)
 
 
+def _catch_error(err):
+    log.error(err.getTraceback())
+
+
 def check_and_restore_availability(lbry_file, reflector_server):
     d = _check_if_reflector_has_stream(lbry_file, reflector_server)
     d.addCallback(lambda send_stream: _reflect_if_unavailable(send_stream, lbry_file, reflector_server))
+    d.addErrback(_catch_error)
     return d
