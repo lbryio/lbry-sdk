@@ -1249,7 +1249,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         log.info("Get daemon settings")
-        return self._render_response(lbrynet_settings.configurable_settings, OK_CODE)
+        return self._render_response(lbrynet_settings.__dict__, OK_CODE)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_set_settings(self, p):

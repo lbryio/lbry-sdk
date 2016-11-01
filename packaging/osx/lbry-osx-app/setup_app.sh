@@ -61,6 +61,11 @@ VERSION=`python setup.py -V`
 pip install -r requirements.txt
 # not totally sure if pyOpenSSl is needed (JIE)
 pip install pyOpenSSL
+
+pip install pylint
+pylint -E --disable=inherit-non-class --disable=no-member --ignored-modules=distutils \
+       --enable=unused-import lbrynet packaging/osx/lbry-osx-app/lbrygui/
+
 python setup.py install
 
 echo "Building URI Handler"

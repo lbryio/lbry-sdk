@@ -198,7 +198,7 @@ class ApplicationSettings(Setting):
         self.ICON_PATH = "icons" if platform is WINDOWS else "app.icns"
         self.APP_NAME = "LBRY"
         self.PROTOCOL_PREFIX = "lbry"
-        self.wallet_TYPES = ["lbryum", "lbrycrd"]
+        self.WALLET_TYPES = ["lbryum", "lbrycrd"]
         self.SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
         self.CURRENCIES = {
             'BTC': {'type': 'crypto'},
