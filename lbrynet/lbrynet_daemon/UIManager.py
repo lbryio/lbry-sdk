@@ -1,7 +1,6 @@
 import os
 import logging
 import shutil
-import sys
 import json
 
 from urllib2 import urlopen
@@ -13,7 +12,6 @@ from lbrynet.lbrynet_daemon.Resources import NoCacheStaticFile
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 from zipfile import ZipFile
-from appdirs import user_data_dir
 
 
 log = logging.getLogger(__name__)
@@ -21,17 +19,10 @@ log = logging.getLogger(__name__)
 
 class UIManager(object):
     def __init__(self, root):
-        if sys.platform != "darwin":
-            self.data_dir = os.path.join(os.path.expanduser("~"), '.lbrynet')
-        else:
-            self.data_dir = user_data_dir("LBRY")
-
-        self.ui_root = os.path.join(self.data_dir, "lbry-ui")
+        self.ui_root = os.path.join(settings.data_dir, "lbry-ui")
         self.active_dir = os.path.join(self.ui_root, "active")
         self.update_dir = os.path.join(self.ui_root, "update")
 
-        if not os.path.isdir(self.data_dir):
-            os.mkdir(self.data_dir)
         if not os.path.isdir(self.ui_root):
             os.mkdir(self.ui_root)
         if not os.path.isdir(self.active_dir):
