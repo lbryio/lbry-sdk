@@ -279,7 +279,7 @@ if __name__ == '__main__':
     conf.update_settings_from_file()
 
     log_file = settings.get_log_filename()
-    log_support.configure_logging(log_file, console=False)
+    log_support.configure_logging(log_file, console=True)
 
     lbry_daemon = JSONRPCProxy.from_url(settings.API_CONNECTION_STRING)
 
