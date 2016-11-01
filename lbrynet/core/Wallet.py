@@ -344,7 +344,7 @@ class Wallet(object):
  
         try:
             metadata = Metadata(json.loads(result['value'])) 
-        except (TypeError,ValueError,ValidationError):
+        except (TypeError, ValueError, ValidationError):
             return Failure(InvalidStreamInfoError(name,result['value']))          
   
         txid = result['txid']
@@ -427,7 +427,7 @@ class Wallet(object):
                 meta_ver = metadata.version
                 sd_hash = metadata['sources']['lbry_sd_hash']
                 d = self._save_name_metadata(name, txid, sd_hash)
-            except (TypeError,ValueError,ValidationError):
+            except (TypeError, ValueError, ValidationError):
                 metadata = claim['value']
                 meta_ver = "Non-compliant"
                 d = defer.succeed(None)

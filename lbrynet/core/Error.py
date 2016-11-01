@@ -54,11 +54,10 @@ class InvalidStreamDescriptorError(Exception):
 
 class InvalidStreamInfoError(Exception):
     def __init__(self, name, stream_info):
+        msg = '{} has claim with invalid stream info: {}'.format(name,  stream_info)
+        Exception.__init__(self, msg)
         self.name = name
         self.stream_info = stream_info
-
-    def __str__(self):
-        return '{} has claim with invalid stream info: {}'.format(self.name,self.stream_info)
 
 
 class MisbehavingPeerError(Exception):
