@@ -1,7 +1,9 @@
 import copy
+import json
 import logging
 import os
 import sys
+import yaml
 
 from appdirs import user_data_dir
 
@@ -248,20 +250,66 @@ class Config(DefaultSettings):
     def UI_ADDRESS(self):
         return "http://%s:%i" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port)
 
+    def ensure_data_dir(self):
+        # although there is a risk of a race condition here we don't
+        # expect there to be multiple processes accessing this
+        # directory so the risk can be ignored
+        if not os.path.isdir(self.data_dir):
+            os.makedirs(self.data_dir)
+        return self.data_dir
 
-def get_data_dir():
-    data_dir = default_data_dir
-    if not os.path.isdir(data_dir):
-        os.mkdir(data_dir)
-    return data_dir
+    def get_log_filename(self):
+        """Return the log file for this platform.
+
+        Also ensure the containing directory exists
+        """
+        return os.path.join(self.ensure_data_dir(), self.LOG_FILE_NAME)
+
+    def get_conf_filename(self):
+        return os.path.join(self.ensure_data_dir(), "daemon_settings.yml")
 
 
-def get_log_filename():
-    """Return the log file for this platform.
+def update_settings_from_file(filename=None):
+    filename = filename or settings.get_conf_filename()
+    try:
+        updates = load_settings(filename)
+        log.info("Loaded settings file: %s", updates)
+        settings.update(updates)
+    except OSError as ex:
+        log.info('%s: Failed to update settings from %s', ex, filename)
 
-    Also ensure the containing directory exists
-    """
-    return os.path.join(get_data_dir(), settings.LOG_FILE_NAME)
+
+settings_decoders = {
+    '.json': json.loads,
+    '.yml': yaml.load
+}
+
+settings_encoders = {
+    '.json': json.dumps,
+    '.yml': yaml.safe_dump
+}
+
+
+def load_settings(path=None):
+    path = path or settings.get_conf_filename()
+    ext = os.path.splitext(path)[1]
+    with open(path, 'r') as settings_file:
+        data = settings_file.read()
+    decoder = settings_decoders.get(ext, False)
+    assert decoder is not False, "Unknown settings format .%s" % ext
+    return decoder(data)
+
+
+# TODO: be careful with this. If a setting is overriden by an environment variable
+# or command line flag we don't want to persist it for future settings.
+def save_settings(path=None):
+    path = path or settings.get_conf_filename()
+    to_save = {k: v for k, v in settings.__dict__.iteritems() if k in ADJUSTABLE_SETTINGS}
+    ext = os.path.splitext(path)[1]
+    encoder = settings_encoders.get(ext, False)
+    assert encoder is not False, "Unknown settings format .%s" % ext
+    with open(path, 'w') as settings_file:
+        settings_file.write(encoder(to_save))
 
 
 # TODO: don't load the configuration automatically. The configuration

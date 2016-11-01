@@ -462,10 +462,7 @@ class Wallet(object):
 
         def _claim_or_update(claim, metadata, _bid):
             if not claim:
-                log.info("No claim yet, making a new one")
-                return self._send_name_claim(name, metadata, _bid)
-            if not claim['is_mine']:
-                log.info("Making a contesting claim")
+                log.info("No own claim yet, making a new one")
                 return self._send_name_claim(name, metadata, _bid)
             else:
                 log.info("Updating over own claim")
@@ -474,8 +471,7 @@ class Wallet(object):
                 return d
 
         meta = Metadata(m)
-
-        d = self.get_claim_info(name)
+        d = self.get_my_claim(name)
         d.addCallback(lambda claim: _claim_or_update(claim, meta, bid))
         d.addCallback(lambda txid: _save_metadata(txid, meta))
         return d
