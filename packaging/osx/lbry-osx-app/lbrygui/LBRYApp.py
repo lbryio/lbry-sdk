@@ -57,11 +57,9 @@ class LBRYDaemonApp(AppKit.NSApplication):
         self.statusitem.setToolTip_(settings.APP_NAME)
 
         if test_internet_connection():
-            if platform.mac_ver()[0] >= "10.10":
-                LBRYNotify("Starting LBRY")
+            notify("Starting LBRY")
         else:
-            if platform.mac_ver()[0] >= "10.10":
-                LBRYNotify("LBRY needs an internet connection to start, try again when one is available")
+            notify("LBRY needs an internet connection to start, try again when one is available")
             sys.exit(0)
 
         DaemonControl.start_server_and_listen(launchui=True, use_auth=False)
@@ -70,6 +68,10 @@ class LBRYDaemonApp(AppKit.NSApplication):
         webbrowser.open(settings.UI_ADDRESS)
 
     def replyToApplicationShouldTerminate_(self, shouldTerminate):
-        if platform.mac_ver()[0] >= "10.10":
-            LBRYNotify("Goodbye!")
+        notify("Goodbye!")
         reactor.stop()
+
+
+def notify(msg):
+    if platform.mac_ver()[0] >= "10.10":
+        LBRYNotify(msg)
