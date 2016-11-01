@@ -39,12 +39,12 @@ def _reflect_if_unavailable(reflector_has_stream, lbry_file, reflector_server):
     return _reflect_stream(lbry_file, reflector_server)
 
 
-def _catch_error(err):
-    log.error(err.getTraceback())
+def _catch_error(err, uri):
+    log.error("An error occurred while checking availability for lbry://%s : %s", uri, err.message)
 
 
 def check_and_restore_availability(lbry_file, reflector_server):
     d = _check_if_reflector_has_stream(lbry_file, reflector_server)
-    d.addCallback(lambda send_stream: _reflect_if_unavailable(send_stream, lbry_file, reflector_server))
-    d.addErrback(_catch_error)
+    d.addCallbacks(lambda send_stream: _reflect_if_unavailable(send_stream, lbry_file, reflector_server),
+                   lambda err: _catch_error(err, lbry_file.uri))
     return d
