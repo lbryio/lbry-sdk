@@ -26,9 +26,9 @@ from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 
 from lbrynet import __version__ as lbrynet_version
+from lbrynet import conf
 from lbrynet.conf import settings as lbrynet_settings
 from lbrynet import analytics
-from lbrynet import conf
 from lbrynet import reflector
 from lbrynet.metadata.Metadata import Metadata, verify_name_characters
 from lbrynet.metadata.Fee import FeeValidator
@@ -273,7 +273,7 @@ class Daemon(AuthJSONRPCServer):
         self.ui_version = None
         self.ip = None
         self.first_run = None
-        self.log_file = conf.get_log_filename()
+        self.log_file = lbrynet_settings.get_log_filename()
         self.current_db_revision = 1
         self.session = None
         self.uploaded_temp_files = []
@@ -281,11 +281,11 @@ class Daemon(AuthJSONRPCServer):
         # TODO: this should probably be passed into the daemon, or
         # possibly have the entire log upload functionality taken out
         # of the daemon, but I don't want to deal with that now
-        self.log_uploader = log_support.LogUploader.load('lbrynet', conf.get_log_filename())
+        self.log_uploader = log_support.LogUploader.load('lbrynet', self.log_file)
 
         self.analytics_manager = None
         self.lbryid = PENDING_LBRY_ID
-        self.daemon_conf = os.path.join(self.db_dir, 'daemon_settings.yml')
+        self.daemon_conf = lbrynet_settings.get_conf_filename()
 
         self.wallet_user = None
         self.wallet_password = None
@@ -1071,8 +1071,7 @@ class Daemon(AuthJSONRPCServer):
             remaining_scripts = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
             startup_scripts = self.startup_scripts
             self.startup_scripts = lbrynet_settings.startup_scripts = remaining_scripts
-            conf = os.path.join(lbrynet_settings.data_dir, "daemon_settings.yml")
-            utils.save_settings(conf)
+            conf.save_settings()
 
         for script in startup_scripts:
             if script['script_name'] == 'migrateto025':
