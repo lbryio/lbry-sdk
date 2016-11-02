@@ -271,15 +271,12 @@ class Config(DefaultSettings):
 
 def update_settings_from_file(filename=None):
     filename = filename or settings.get_conf_filename()
-    if os.path.isfile(filename):
-        try:
-            updates = load_settings(filename)
-            log.info("Loaded settings file: %s", updates)
-            settings.update(updates)
-        except OSError as ex:
-            log.info('%s: Failed to update settings from %s', ex, filename)
-    else:
-        log.warning("Invalid settings file path")
+    try:
+        updates = load_settings(filename)
+        log.info("Loaded settings file: %s", updates)
+        settings.update(updates)
+    except (IOError, OSError) as ex:
+        log.info('%s: Failed to update settings from %s', ex, filename)
 
 
 settings_decoders = {
