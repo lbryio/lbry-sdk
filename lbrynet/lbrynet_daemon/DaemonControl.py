@@ -121,7 +121,7 @@ def update_settings_from_args(args):
 
 def log_and_kill(failure):
     log_support.failure(failure, log, 'Failed to startup: %s')
-    reactor.stop()
+    reactor.callFromThread(reactor.stop)
 
 
 def start_server_and_listen(launchui, use_auth):
@@ -133,12 +133,12 @@ def start_server_and_listen(launchui, use_auth):
         kwargs: passed along to `DaemonServer().start()`
     """
     lbry = DaemonServer()
-
     d = lbry.start()
     d.addCallback(lambda _: listen(lbry, use_auth))
     if launchui:
         d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
     d.addErrback(log_and_kill)
+
 
 def listen(lbry, use_auth):
     site_base = get_site_base(use_auth, lbry.root)
