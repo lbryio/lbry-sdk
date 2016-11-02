@@ -64,6 +64,8 @@ def _convert_setting(env_val, current_val):
         return float(env_val)
     elif current_type is str:
         return str(env_val)
+    elif current_type is unicode:
+        return unicode(env_val)
     elif current_type is dict:
         return dict(env_val)
     elif current_type is list:
