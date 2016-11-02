@@ -275,7 +275,7 @@ def update_settings_from_file(filename=None):
         updates = load_settings(filename)
         log.info("Loaded settings file: %s", updates)
         settings.update(updates)
-    except OSError as ex:
+    except (IOError, OSError) as ex:
         log.info('%s: Failed to update settings from %s', ex, filename)
 
 
@@ -290,8 +290,7 @@ settings_encoders = {
 }
 
 
-def load_settings(path=None):
-    path = path or settings.get_conf_filename()
+def load_settings(path):
     ext = os.path.splitext(path)[1]
     with open(path, 'r') as settings_file:
         data = settings_file.read()
