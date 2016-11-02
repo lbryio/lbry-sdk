@@ -900,7 +900,7 @@ class AddStreamFromLBRYcrdName(AddStreamFromHash):
     def _resolve_name(self, name):
         def get_name_from_info(stream_info):
             if 'stream_hash' not in stream_info:
-                raise InvalidStreamInfoError(name)
+                raise InvalidStreamInfoError(name, stream_info)
             self.resolved_name = stream_info.get('name', None)
             self.description = stream_info.get('description', None)
             try:
