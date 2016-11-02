@@ -225,10 +225,12 @@ class Daemon(AuthJSONRPCServer):
         AuthJSONRPCServer.__init__(self, lbrynet_settings.use_auth_http)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
-        self.allowed_during_startup = ['is_running', 'is_first_run',
-                                       'get_time_behind_blockchain', 'stop',
-                                       'daemon_status', 'get_start_notice',
-                                       'version', 'get_search_servers']
+        self.allowed_during_startup = [
+            'is_running', 'is_first_run',
+            'get_time_behind_blockchain', 'stop',
+            'daemon_status', 'get_start_notice',
+            'version', 'get_search_servers'
+        ]
         last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
         lbrynet_settings.update(last_version)
         self.db_dir = lbrynet_settings.data_dir
