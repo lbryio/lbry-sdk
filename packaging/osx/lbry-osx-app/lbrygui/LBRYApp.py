@@ -47,9 +47,11 @@ class LBRYDaemonApp(AppKit.NSApplication):
         self.icon.setSize_((20, 20))
         self.statusitem.setImage_(self.icon)
         self.menubarMenu = AppKit.NSMenu.alloc().init()
-        self.open = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Open", "openui:", "")
+        self.open = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Open", "openui:", "")
         self.menubarMenu.addItem_(self.open)
-        self.quit = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Quit", "replyToApplicationShouldTerminate:", "")
+        self.quit = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Quit", "applicationShouldTerminate:", "")
         self.menubarMenu.addItem_(self.quit)
         self.statusitem.setMenu_(self.menubarMenu)
         self.statusitem.setToolTip_(settings.APP_NAME)
