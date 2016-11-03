@@ -65,10 +65,14 @@ class LBRYDaemonApp(AppKit.NSApplication):
     def openui_(self, sender):
         webbrowser.open(settings.UI_ADDRESS)
 
-    def replyToApplicationShouldTerminate_(self, shouldTerminate):
-        log.info('Shutting down')
-        notify("Goodbye!")
-        reactor.stop()
+    # this code is from the example https://pythonhosted.org/pyobjc/examples/Cocoa/Twisted/WebServicesTool/index.html
+    def applicationShouldTerminate_(self, sender):
+        if reactor.running:
+            log.info('Stopping twisted event loop')
+            notify("Goodbye!")
+            reactor.stop()
+            return False
+        return True
 
 
 def notify(msg):
