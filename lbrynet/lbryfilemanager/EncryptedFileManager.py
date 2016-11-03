@@ -160,7 +160,7 @@ class EncryptedFileManager(object):
             return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
     def stop(self):
-
+        log.info('Stopping %s', self)
         ds = []
 
         def wait_for_finished(lbry_file, count=2):

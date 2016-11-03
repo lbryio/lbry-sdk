@@ -66,6 +66,7 @@ class LBRYDaemonApp(AppKit.NSApplication):
         webbrowser.open(settings.UI_ADDRESS)
 
     def replyToApplicationShouldTerminate_(self, shouldTerminate):
+        log.info('Shutting down')
         notify("Goodbye!")
         reactor.stop()
 

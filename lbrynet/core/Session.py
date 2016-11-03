@@ -169,6 +169,7 @@ class Session(object):
 
     def shut_down(self):
         """Stop all services"""
+        log.info('Shutting down %s', self)
         ds = []
         if self.blob_manager is not None:
             ds.append(defer.maybeDeferred(self.blob_tracker.stop))
@@ -323,7 +324,7 @@ class Session(object):
         return dl
 
     def _unset_upnp(self):
-
+        log.info("Unsetting upnp for %s", self)
         def threaded_unset_upnp():
             u = miniupnpc.UPnP()
             num_devices_found = u.discover()
