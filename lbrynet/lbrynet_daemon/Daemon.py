@@ -769,14 +769,11 @@ class Daemon(AuthJSONRPCServer):
         d = self.lbry_file_metadata_manager.setup()
 
         def set_lbry_file_manager():
-            self.lbry_file_manager = EncryptedFileManager(self.session,
-                                                     self.lbry_file_metadata_manager,
-                                                     self.sd_identifier,
-                                                     download_directory=self.download_directory)
+            self.lbry_file_manager = EncryptedFileManager(
+                self.session, self.lbry_file_metadata_manager,
+                self.sd_identifier, download_directory=self.download_directory)
             return self.lbry_file_manager.setup()
-
         d.addCallback(lambda _: set_lbry_file_manager())
-
         return d
 
     def _get_analytics(self):

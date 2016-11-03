@@ -29,6 +29,7 @@ from lbrynet.core import utils
 if platform.mac_ver()[0] >= "10.10":
     from LBRYNotify import LBRYNotify
 
+
 log = logging.getLogger(__name__)
 
 
