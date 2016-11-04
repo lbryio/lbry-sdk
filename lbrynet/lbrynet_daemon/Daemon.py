@@ -627,6 +627,7 @@ class Daemon(AuthJSONRPCServer):
     def _clean_up_temp_files(self):
         for path in self.uploaded_temp_files:
             try:
+                log.debug('Removing tmp file: %s', path)
                 os.remove(path)
             except OSError:
                 pass
