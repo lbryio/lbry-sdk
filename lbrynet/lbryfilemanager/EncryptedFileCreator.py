@@ -37,9 +37,9 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
 
     def _save_stream_info(self):
         stream_info_manager = self.lbry_file_manager.stream_info_manager
-        d = stream_info_manager.save_stream(self.stream_hash, binascii.hexlify(self.name),
-                                            binascii.hexlify(self.key),
-                                            binascii.hexlify(self.suggested_file_name),
+        d = stream_info_manager.save_stream(self.stream_hash, hexlify(self.name),
+                                            hexlify(self.key),
+                                            hexlify(self.suggested_file_name),
                                             self.blob_infos)
         return d
 
@@ -68,9 +68,9 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
 
     def _make_stream_hash(self):
         hashsum = get_lbry_hash_obj()
-        hashsum.update(binascii.hexlify(self.name))
-        hashsum.update(binascii.hexlify(self.key))
-        hashsum.update(binascii.hexlify(self.suggested_file_name))
+        hashsum.update(hexlify(self.name))
+        hashsum.update(hexlify(self.key))
+        hashsum.update(hexlify(self.suggested_file_name))
         hashsum.update(self._get_blobs_hashsum())
         self.stream_hash = hashsum.hexdigest()
 
@@ -155,3 +155,11 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
     d = lbry_file_creator.setup()
     d.addCallback(lambda _: start_stream())
     return d
+
+
+def hexlify(str_or_unicode):
+    if isinstance(str_or_unicode, unicode):
+        strng = str_or_unicode.encode('utf-8')
+    else:
+        strng = str_or_unicode
+    return binascii.hexlify(strng)
