@@ -24,10 +24,7 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
                  key=None, iv_generator=None, suggested_file_name=None):
         CryptStreamCreator.__init__(self, blob_manager, name, key, iv_generator)
         self.lbry_file_manager = lbry_file_manager
-        if suggested_file_name is None:
-            self.suggested_file_name = name
-        else:
-            self.suggested_file_name = suggested_file_name
+        self.suggested_file_name = suggested_file_name or name
         self.stream_hash = None
         self.blob_infos = []
 
@@ -82,8 +79,7 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
 
 def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=None,
                      iv_generator=None, suggested_file_name=None):
-    """
-    Turn a plain file into an LBRY File.
+    """Turn a plain file into an LBRY File.
 
     An LBRY File is a collection of encrypted blobs of data and the metadata that binds them
     together which, when decrypted and put back together according to the metadata, results
@@ -113,8 +109,8 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
         be generated.
     @type key: string
 
-    @param iv_generator: a generator which yields initialization vectors for the blobs. Will be called
-        once for each blob.
+    @param iv_generator: a generator which yields initialization
+        vectors for the blobs. Will be called once for each blob.
     @type iv_generator: a generator function which yields strings
 
     @param suggested_file_name: what the file should be called when the LBRY File is saved to disk.
@@ -130,7 +126,8 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
 
     def make_stream_desc_file(stream_hash):
         log.debug("creating the stream descriptor file")
-        descriptor_file_path = os.path.join(session.db_dir, file_name + settings.CRYPTSD_FILE_EXTENSION)
+        descriptor_file_path = os.path.join(
+            session.db_dir, file_name + settings.CRYPTSD_FILE_EXTENSION)
         descriptor_writer = PlainStreamDescriptorWriter(descriptor_file_path)
 
         d = get_sd_info(lbry_file_manager.stream_info_manager, stream_hash, True)
@@ -141,8 +138,12 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
 
     base_file_name = os.path.basename(file_name)
 
-    lbry_file_creator = EncryptedFileStreamCreator(session.blob_manager, lbry_file_manager, base_file_name,
-                                              key, iv_generator, suggested_file_name)
+    lbry_file_creator = EncryptedFileStreamCreator(
+        session.blob_manager,
+        lbry_file_manager,
+        base_file_name, key,
+        iv_generator,
+        suggested_file_name)
 
     def start_stream():
         file_sender = FileSender()
