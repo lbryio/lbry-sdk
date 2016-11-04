@@ -91,7 +91,7 @@ class CryptStreamBlobMaker(object):
 
     def _write_buffer(self):
         num_bytes_to_encrypt = (len(self.buff) // AES.block_size) * AES.block_size
-        data_to_encrypt,  self.buff = self.buff[:num_bytes_to_encrypt], self.buff[num_bytes_to_encrypt:]
+        data_to_encrypt, self.buff = split(self.buff, num_bytes_to_encrypt)
         encrypted_data = self.cipher.encrypt(data_to_encrypt)
         self.blob.write(encrypted_data)
 
@@ -107,3 +107,6 @@ class CryptStreamBlobMaker(object):
 
     def _return_info(self, blob_hash):
         return CryptBlobInfo(blob_hash, self.blob_num, self.length, binascii.hexlify(self.iv))
+
+def split(buff, cutoff):
+    return buff[:cutoff], buff[cutoff:]

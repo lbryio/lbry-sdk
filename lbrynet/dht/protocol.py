@@ -266,7 +266,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
             try:
                 ##try:
                 ##    # Try to pass the sender's node id to the function...
-                result = func(*args, **{'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact})
+                kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
+                result = func(*args, **kwargs)
                 ##except TypeError:
                 ##    # ...or simply call it if that fails
                 ##    result = func(*args)
@@ -276,7 +277,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 df.callback(result)
         else:
             # No such exposed method
-            df.errback( failure.Failure( AttributeError('Invalid method: %s' % method) ) )
+            df.errback(failure.Failure(AttributeError('Invalid method: %s' % method)))
 
     def _msgTimeout(self, messageID):
         """ Called when an RPC request message times out """

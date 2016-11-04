@@ -419,4 +419,5 @@ class OptimizedTreeRoutingTable(TreeRoutingTable):
             # Replace this stale contact with one from our replacemnent cache, if we have any
             if self._replacementCache.has_key(bucketIndex):
                 if len(self._replacementCache[bucketIndex]) > 0:
-                    self._buckets[bucketIndex].addContact( self._replacementCache[bucketIndex].pop() )
+                    self._buckets[bucketIndex].addContact(
+                        self._replacementCache[bucketIndex].pop())

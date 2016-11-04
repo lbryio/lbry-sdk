@@ -145,9 +145,9 @@ if __name__ == '__main__':
     # If you wish to have a pure Kademlia network, use the entangled.kademlia.node.Node class instead
     print 'Creating Node...'
     #node = EntangledNode( udpPort=int(sys.argv[1]), dataStore=dataStore )
-    node = Node( udpPort=int(sys.argv[1]), lbryid=lbryid)
+    node = Node(udpPort=int(sys.argv[1]), lbryid=lbryid)
 
-    # Schedule the node to join the Kademlia/Entangled DHT 
+    # Schedule the node to join the Kademlia/Entangled DHT
     node.joinNetwork(knownNodes)
     # Schedule the "storeValue() call to be invoked after 2.5 seconds, using KEY and VALUE as arguments
     #twisted.internet.reactor.callLater(2.5, storeValue, KEY, VALUE)

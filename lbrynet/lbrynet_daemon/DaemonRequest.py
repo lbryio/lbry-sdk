@@ -42,7 +42,7 @@ class DaemonRequest(server.Request):
         if self.do_log:
             print '%f Request Received' % time.time()
 
-        self.content.seek(0,0)
+        self.content.seek(0, 0)
         self.args = {}
         self.stack = []
 
@@ -74,7 +74,7 @@ class DaemonRequest(server.Request):
                 args.update(parse_qs(self.content.read(), 1))
             elif key == mfd:
                 try:
-                    self.content.seek(0,0)
+                    self.content.seek(0, 0)
                     args.update(self.parse_multipart(self.content, pdict))
                     #args.update(cgi.parse_multipart(self.content, pdict))
 
@@ -100,14 +100,13 @@ class DaemonRequest(server.Request):
         if self.do_log:
             print '%f Parsing Multipart data: ' % time.time()
         rewind = fp.tell() #save cursor
-        fp.seek(0,0) #reset cursor
+        fp.seek(0, 0) #reset cursor
 
         boundary = ""
         if 'boundary' in pdict:
             boundary = pdict['boundary']
         if not cgi.valid_boundary(boundary):
-            raise ValueError,  ('Invalid boundary in multipart form: %r'
-                                % (boundary,))
+            raise ValueError('Invalid boundary in multipart form: %r' % (boundary,))
 
         nextpart = "--" + boundary
         lastpart = "--" + boundary + "--"
@@ -175,7 +174,7 @@ class DaemonRequest(server.Request):
             else:
                 # Unnamed parts are not returned at all.
                 continue
-            data.seek(0,0)
+            data.seek(0, 0)
             if name in partdict:
                 partdict[name].append(data)
             else:
