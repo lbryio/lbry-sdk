@@ -73,7 +73,6 @@ class CryptStreamCreator(StreamCreator):
         d.addCallback(self._blob_finished)
         self.finished_deferreds.append(d)
         log.debug("called close on final blob, returning from make_final_blob")
-        return d
 
     def _write(self, data):
         def close_blob(blob):
