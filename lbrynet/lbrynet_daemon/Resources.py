@@ -100,34 +100,39 @@ class EncryptedFileUpload(resource.Resource):
     it into a temporary dir, and responds with a JSON string containing
     the path of the newly created file.
     """
-
     def __init__(self, api):
         self._api = api
 
     def render_POST(self, request):
         origfilename = request.args['file_filename'][0]
-        uploaded_file = request.args['file'][0]  # Temp file created by request
-
-        # Move to a new temporary dir and restore the original file name
-        newdirpath = tempfile.mkdtemp()
-        newpath = os.path.join(newdirpath, origfilename)
-        if os.name == "nt":
-            shutil.copy(uploaded_file.name, newpath)
-            # TODO Still need to remove the file
-
-            # TODO deal with pylint error in cleaner fashion than this
-            try:
-                from exceptions import WindowsError as win_except
-            except ImportError as e:
-                log.error("This shouldn't happen")
-                win_except = Exception
-
-            try:
-                os.remove(uploaded_file.name)
-            except win_except as e:
-                pass
-        else:
-            shutil.move(uploaded_file.name, newpath)
+        # Temp file created by request
+        uploaded_file = request.args['file'][0]
+        newpath = move_to_temp_dir_and_restore_filename(uploaded_file, origfilename)
         self._api.uploaded_temp_files.append(newpath)
-
         return json.dumps(newpath)
+
+
+def move_to_temp_dir_and_restore_filename(uploaded_file, origfilename):
+    newdirpath = tempfile.mkdtemp()
+    newpath = os.path.join(newdirpath, origfilename)
+    if os.name == "nt":
+        # TODO: comment on why shutil.move doesn't work?
+        move_win(uploaded_file.name, newpath)
+    else:
+        shutil.move(uploaded_file.name, newpath)
+    return newpath
+
+
+def move_win(from_path, to_path):
+    shutil.copy(from_path, to_path)
+    # TODO Still need to remove the file
+    # TODO deal with pylint error in cleaner fashion than this
+    try:
+        from exceptions import WindowsError as win_except
+    except ImportError as e:
+        log.error("This shouldn't happen")
+        win_except = Exception
+    try:
+        os.remove(from_path)
+    except win_except as e:
+        pass
