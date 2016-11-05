@@ -115,7 +115,7 @@ def update_settings_from_args(args):
     if args.branch:
         to_pass['ui_branch'] = args.branch
     to_pass['use_auth_http'] = args.useauth
-    to_pass['wallet_type'] = args.wallet
+    to_pass['wallet'] = args.wallet
     settings.update(to_pass)
 
 
