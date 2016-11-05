@@ -266,7 +266,7 @@ class Config(DefaultSettings):
         return os.path.join(self.ensure_data_dir(), self.LOG_FILE_NAME)
 
     def get_conf_filename(self):
-        return os.path.join(self.ensure_data_dir(), "daemon_settings.yml")
+        return get_settings_file_ext(self.ensure_data_dir())
 
 
 def update_settings_from_file(filename=None):
@@ -277,6 +277,17 @@ def update_settings_from_file(filename=None):
         settings.update(updates)
     except (IOError, OSError) as ex:
         log.info('%s: Failed to update settings from %s', ex, filename)
+
+
+def get_settings_file_ext(data_dir):
+    yml_path = os.path.join(data_dir, "daemon_settings.yml")
+    json_path = os.path.join(data_dir, "daemon_settings.json")
+    if os.path.isfile(yml_path):
+        return yml_path
+    elif os.path.isfile(json_path):
+        return json_path
+    else:
+        return yml_path
 
 
 settings_decoders = {
