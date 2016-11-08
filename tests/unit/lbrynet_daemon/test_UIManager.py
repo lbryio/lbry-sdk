@@ -37,7 +37,6 @@ class BundledUIManagerTest(unittest.TestCase):
         make_data_file(self.active_dir)
         make_data_file(self.bundled_dir, 'BARFOO')
         touch(os.path.join(self.bundled_dir, 'test.html'))
-        assert os.path.exists(os.path.join(self.bundled_dir, 'test.html'))
         result = self.manager.setup()
         self.assertTrue(result)
         expected = ['data.json', 'test.html']
