@@ -299,25 +299,18 @@ elif platform == WINDOWS:
         script=os.path.join(app_dir, 'LBRYWin32App.py'),
         base='Win32GUI',
         icon=win_icon,
-        compress=True,
-        # shortcutName=dist_name,
-        # shortcutDir='DesktopFolder',
         targetName='{0}.exe'.format(dist_name)
     )
 
     daemon_exe = Executable(
         script=os.path.join(daemon_dir, 'DaemonControl.py'),
         icon=win_icon,
-        # shortcutName="lbrynet-daemon",
-        # shortcutDir='DesktopFolder',
         targetName='lbrynet-daemon.exe'
     )
 
     cli_exe = Executable(
         script=os.path.join(daemon_dir, 'DaemonCLI.py'),
         icon=win_icon,
-        # shortcutName="lbrynet-cli",
-        # shortcutDir='DesktopFolder',
         targetName='lbrynet-cli.exe'
     )
 
@@ -331,8 +324,10 @@ elif platform == WINDOWS:
         author=author,
         keywords=keywords,
         data_files=[],
-        options={'build_exe': build_exe_options,
-                 'bdist_msi': bdist_msi_options},
+        options={
+            'build_exe': build_exe_options,
+            'bdist_msi': bdist_msi_options
+        },
         executables=[
             tray_app,
             daemon_exe,
