@@ -26,6 +26,8 @@ cache:
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then ./packaging/travis/setup_osx.sh; fi
+  - mkdir -p lbrynet/resources/ui
+  - if [[ -z "$TRAVIS_TAG" ]]; then ./packaging/travis/setup_qa.sh; fi
   
 install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./packaging/travis/install_dependencies_and_run_tests.sh; fi

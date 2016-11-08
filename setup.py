@@ -64,6 +64,13 @@ console_scripts = [
     'lbrynet-cli = lbrynet.lbrynet_daemon.DaemonCLI:main'
 ]
 
+
+def package_files(directory):
+    for path, _, filenames in os.walk(directory):
+        for filename in filenames:
+            yield os.path.join('..', path, filename)
+
+
 if platform == LINUX:
     import ez_setup
     ez_setup.use_setuptools()
@@ -82,16 +89,8 @@ if platform == LINUX:
           packages=find_packages(base_dir),
           install_requires=requires,
           entry_points={'console_scripts': console_scripts},
-          data_files=[
-              ('lbrynet/lbrynet_console/plugins',
-               [
-                   os.path.join(base_dir, 'lbrynet', 'lbrynet_console', 'plugins',
-                                'blindrepeater.yapsy-plugin')
-               ]
-               ),
-          ],
-          dependency_links=['https://github.com/lbryio/lbryum/tarball/master/#egg=lbryum'],
-          )
+          package_data={package_name: package_files('lbrynet/resources/ui')}
+    )
 
 elif platform == DARWIN:
     import ez_setup
@@ -110,16 +109,8 @@ elif platform == DARWIN:
           packages=find_packages(base_dir),
           install_requires=requires,
           entry_points={'console_scripts': console_scripts},
-          data_files=[
-              ('lbrynet/lbrynet_console/plugins',
-               [
-                   os.path.join(base_dir, 'lbrynet', 'lbrynet_console', 'plugins',
-                                'blindrepeater.yapsy-plugin')
-               ]
-               ),
-          ],
-          dependency_links=['https://github.com/lbryio/lbryum/tarball/master/#egg=lbryum'],
-          )
+          package_data={package_name: package_files('lbrynet/resources/ui')}
+    )
 
 elif platform == WINDOWS:
     import opcode
@@ -343,4 +334,5 @@ elif platform == WINDOWS:
             daemon_exe,
             cli_exe
         ],
+        package_data={package_name: package_files('lbrynet/resources/ui')}
     )
