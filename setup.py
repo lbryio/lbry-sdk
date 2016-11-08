@@ -89,7 +89,9 @@ if platform == LINUX:
           packages=find_packages(base_dir),
           install_requires=requires,
           entry_points={'console_scripts': console_scripts},
-          package_data={package_name: package_files('lbrynet/resources/ui')}
+          package_data={
+              package_name: list(package_files('lbrynet/resources/ui'))
+          }
     )
 
 elif platform == DARWIN:
@@ -109,7 +111,9 @@ elif platform == DARWIN:
           packages=find_packages(base_dir),
           install_requires=requires,
           entry_points={'console_scripts': console_scripts},
-          package_data={package_name: package_files('lbrynet/resources/ui')}
+          package_data={
+              package_name: list(package_files('lbrynet/resources/ui'))
+          }
     )
 
 elif platform == WINDOWS:
@@ -334,5 +338,7 @@ elif platform == WINDOWS:
             daemon_exe,
             cli_exe
         ],
-        package_data={package_name: package_files('lbrynet/resources/ui')}
+        package_data={
+            package_name: list(package_files('lbrynet/resources/ui'))
+        }
     )
