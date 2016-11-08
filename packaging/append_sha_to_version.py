@@ -16,7 +16,7 @@ def main(args=None):
 
     new_contents = re.sub(
         r'^__version__ = [\'"](.*)[\'"]$',
-        r'__version__ = "\1-{}"'.format(args.commit),
+        r'__version__ = "\1-{}"'.format(commit),
         contents,
         flags=re.MULTILINE,
     )
