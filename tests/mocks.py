@@ -8,6 +8,8 @@ from lbrynet.core import PTCWallet
 from lbrynet.core import BlobAvailability
 
 
+KB = 2**10
+
 class Node(object):
     def __init__(self, *args, **kwargs):
         pass
@@ -129,12 +131,12 @@ class GenFile(io.RawIOBase):
     def readall(self):
         return self.read()
 
-    def _generate_chunk(self, n=2**10):
-        output = self.pattern[self.last_offset:self.last_offset + n]
-        n_left = n - len(output)
+    def _generate_chunk(self, size=KB):
+        output = self.pattern[self.last_offset:self.last_offset + size]
+        n_left = size - len(output)
         whole_patterns = n_left / len(self.pattern)
         output += self.pattern * whole_patterns
-        self.last_offset = n - len(output)
+        self.last_offset = size - len(output)
         output += self.pattern[:self.last_offset]
         return output
 

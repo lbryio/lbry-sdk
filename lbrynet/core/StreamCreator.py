@@ -65,9 +65,7 @@ class StreamCreator(object):
         pass
 
     def write(self, data):
-
         from twisted.internet import reactor
-
         self._write(data)
         if self.stopped is False and self.streaming is False:
             reactor.callLater(0, self.producer.resumeProducing)

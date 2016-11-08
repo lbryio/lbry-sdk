@@ -18,22 +18,23 @@ log = logging.getLogger(__name__)
 class CryptStreamCreator(StreamCreator):
     """Create a new stream with blobs encrypted by a symmetric cipher.
 
-    Each blob is encrypted with the same key, but each blob has its own initialization vector
-    which is associated with the blob when the blob is associated with the stream."""
+    Each blob is encrypted with the same key, but each blob has its
+    own initialization vector which is associated with the blob when
+    the blob is associated with the stream.
+    """
     def __init__(self, blob_manager, name=None, key=None, iv_generator=None):
-        """
-        @param blob_manager: Object that stores and provides access to blobs.
+        """@param blob_manager: Object that stores and provides access to blobs.
         @type blob_manager: BlobManager
 
         @param name: the name of the stream, which will be presented to the user
         @type name: string
 
-        @param key: the raw AES key which will be used to encrypt the blobs. If None, a random key will
-            be generated.
+        @param key: the raw AES key which will be used to encrypt the
+            blobs. If None, a random key will be generated.
         @type key: string
 
-        @param iv_generator: a generator which yields initialization vectors for the blobs. Will be called
-            once for each blob.
+        @param iv_generator: a generator which yields initialization
+            vectors for the blobs. Will be called once for each blob.
         @type iv_generator: a generator function which yields strings
 
         @return: None
@@ -72,10 +73,8 @@ class CryptStreamCreator(StreamCreator):
         d.addCallback(self._blob_finished)
         self.finished_deferreds.append(d)
         log.debug("called close on final blob, returning from make_final_blob")
-        return d
 
     def _write(self, data):
-
         def close_blob(blob):
             d = blob.close()
             d.addCallback(self._blob_finished)

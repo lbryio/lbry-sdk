@@ -14,6 +14,8 @@ log = logging.getLogger(__name__)
 LINUX = 1
 DARWIN = 2
 WINDOWS = 3
+KB = 2**10
+MB = 2**20
 
 
 if sys.platform.startswith("darwin"):
@@ -185,13 +187,13 @@ class AdjustableSettings(Setting):
 class ApplicationSettings(Setting):
     """Settings that are constants and shouldn't be overriden"""
     def __init__(self):
-        self.MAX_HANDSHAKE_SIZE = 2**16
-        self.MAX_REQUEST_SIZE = 2**16
-        self.MAX_BLOB_REQUEST_SIZE = 2**16
-        self.MAX_RESPONSE_INFO_SIZE = 2**16
+        self.MAX_HANDSHAKE_SIZE = 64*KB
+        self.MAX_REQUEST_SIZE = 64*KB
+        self.MAX_BLOB_REQUEST_SIZE = 64*KB
+        self.MAX_RESPONSE_INFO_SIZE = 64*KB
         self.MAX_BLOB_INFOS_TO_REQUEST = 20
         self.BLOBFILES_DIR = "blobfiles"
-        self.BLOB_SIZE = 2**21
+        self.BLOB_SIZE = 2*MB
         self.LOG_FILE_NAME = "lbrynet.log"
         self.LOG_POST_URL = "https://lbry.io/log-upload"
         self.CRYPTSD_FILE_EXTENSION = ".cryptsd"
