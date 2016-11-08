@@ -1,4 +1,11 @@
 #!/bin/sh
+#
+# Configure the library for a non-production release
+#
+
+set -euo pipefail
+set -o xtrace
+
 
 # changes here also need to be added to build.ps1 for windows
 
