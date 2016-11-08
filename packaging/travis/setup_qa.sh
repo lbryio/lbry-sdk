@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Configure the library for a non-production release
 #
