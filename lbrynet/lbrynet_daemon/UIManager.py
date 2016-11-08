@@ -187,7 +187,7 @@ class UIManager(object):
             return defer.succeed(False)
 
         def _do_migrate():
-            self._replace_active_dir(source_dir)
+            replace_dir(self.active_dir, source_dir)
             if delete_source:
                 shutil.rmtree(source_dir)
 
