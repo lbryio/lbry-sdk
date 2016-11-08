@@ -3,9 +3,7 @@ Set-PSDebug -Trace 1
 
 # this is a port of setup_qa.sh used for the unix platforms
 If (${Env:APPVEYOR_REPO_TAG} -NotMatch "true") {
-   SHA = ${Env:APPVEYOR_REPO_COMMIT}.substring(0,10)
-   cat lbrynet\__init__.py | % { $_ -replace '__version__ = ".*"',"__version__ = `"$SHA`"" } > newfile
-   Move-Item newfile lbrynet\__init__.py -force
+   C:\Python27\python.exe packaging\append_sha_to_version.py lbrynet\__init__.py ${Env:APPVEYOR_REPO_COMMIT}
 
    wget https://s3.amazonaws.com/lbry-ui/development/dist.zip -OutFile dist.zip
    Expand-Archive dist.zip -dest lbrynet\resources\ui

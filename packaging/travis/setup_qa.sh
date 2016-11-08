@@ -8,10 +8,7 @@ set -o xtrace
 
 
 # changes here also need to be added to build.ps1 for windows
-
-
-SHA=$(echo ${TRAVIS_COMMIT} | cut -c1-10)
-sed -i "s/__version__ = \".*\"/__version__ = \"${SHA}\"/g" lbrynet/__init__.py
+python packaging/append_sha_to_version.py lbrynet/__init__.py ${TRAVIS_COMMIT}
 
 wget https://s3.amazonaws.com/lbry-ui/development/dist.zip -O dist.zip
 unzip -oq dist.zip -d lbrynet/resources/ui
