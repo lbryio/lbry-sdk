@@ -26,7 +26,6 @@ C:\Python27\python.exe C:\temp\miniupnpc-1.9\setupmingw32.py install
 
 Invoke-WebRequest "https://github.com/lbryio/lbry/raw/master/packaging/windows/libs/gmpy-1.17-cp27-none-win32.whl" -OutFile "C:\temp\gmpy-1.17-cp27-none-win32.whl"
 
-C:\Python27\Scripts\pip.exe install -U pip
 C:\Python27\Scripts\pip.exe install "C:\temp\gmpy-1.17-cp27-none-win32.whl"
 
 C:\Python27\Scripts\pip.exe install pypiwin32==219
