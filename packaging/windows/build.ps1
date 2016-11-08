@@ -1,6 +1,8 @@
 
+Set-PSDebug -Trace 2
+
 # this is a port of setup_qa.sh used for the unix platforms
-If ($(APPVEYOR_REPO_TAG) -Match "true") {
+If ($(APPVEYOR_REPO_TAG) -NotMatch "true") {
    SHA = $(APPVEYOR_REPO_COMMIT).substring(0,10)
    cat lbrynet\__init__.py | % { $_ -replace '__version__ = ".*"','__version__ = "$(SHA)"' } > newfile
    Move-Item newfile lbrynet\__init__.py
