@@ -63,4 +63,4 @@ deploy:
     region: us-west-2
     artifact: /.*\.msi/
     on:
-      branch: master
+      branch: bundled-ui
