@@ -79,7 +79,7 @@ deploy:
     skip_cleanup: true
     local_dir: "${TRAVIS_BUILD_DIR}/upload"
     on:
-      branch: master
+      branch: bundled-ui
 
 
 env:
