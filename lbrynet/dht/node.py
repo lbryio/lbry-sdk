@@ -572,7 +572,7 @@ class Node(object):
     def findNode(self, key, **kwargs):
         """ Finds a number of known nodes closest to the node/value with the
         specified key.
-        
+
         @param key: the n-bit key (i.e. the node or value ID) to search for
         @type key: str
 
@@ -590,17 +590,17 @@ class Node(object):
         contacts = self._routingTable.findCloseNodes(key, constants.k, rpcSenderID)
         contactTriples = []
         for contact in contacts:
-            contactTriples.append( (contact.id, contact.address, contact.port) )
+            contactTriples.append((contact.id, contact.address, contact.port))
         return contactTriples
 
     @rpcmethod
     def findValue(self, key, **kwargs):
         """ Return the value associated with the specified key if present in
         this node's data, otherwise execute FIND_NODE for the key
-        
+
         @param key: The hashtable key of the data to return
         @type key: str
-        
+
         @return: A dictionary containing the requested key/value pair,
                  or a list of contact triples closest to the requested key.
         @rtype: dict or list

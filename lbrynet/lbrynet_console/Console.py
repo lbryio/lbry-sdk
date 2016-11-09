@@ -72,7 +72,7 @@ class Console():
         self.lbrycrd_dir = lbrycrd_dir
         if not self.lbrycrd_dir:
             if sys.platform == "darwin":
-                self.lbrycrd_dir =  os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrycrd")
+                self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), "Library/Application Support/lbrycrd")
             else:
                 self.lbrycrd_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
         if not self.lbrycrd_conf:

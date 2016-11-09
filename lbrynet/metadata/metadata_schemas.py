@@ -64,9 +64,9 @@ VER_001 = {
         },
         'fee': {
             'properties': {
-                'LBC': { '$ref': '#/definitions/fee_info' },
-                'BTC': { '$ref': '#/definitions/fee_info' },
-                'USD': { '$ref': '#/definitions/fee_info' }
+                'LBC': {'$ref': '#/definitions/fee_info'},
+                'BTC': {'$ref': '#/definitions/fee_info'},
+                'USD': {'$ref': '#/definitions/fee_info'}
             }
         },
         'contact': {
@@ -76,7 +76,8 @@ VER_001 = {
             'type': 'string'
         },
     },
-    'required': ['title', 'description', 'author',  'language', 'license', 'content-type', 'sources'],
+    'required': [
+        'title', 'description', 'author', 'language', 'license', 'content-type', 'sources'],
     'additionalProperties': False
 }
 
@@ -147,9 +148,9 @@ VER_002 = {
         },
         'fee': {
             'properties': {
-                'LBC': { '$ref': '#/definitions/fee_info' },
-                'BTC': { '$ref': '#/definitions/fee_info' },
-                'USD': { '$ref': '#/definitions/fee_info' }
+                'LBC': {'$ref': '#/definitions/fee_info'},
+                'BTC': {'$ref': '#/definitions/fee_info'},
+                'USD': {'$ref': '#/definitions/fee_info'}
             }
         },
         'contact': {
@@ -167,7 +168,10 @@ VER_002 = {
         },
 
     },
-    'required': ['ver', 'title', 'description', 'author',  'language', 'license', 'content-type', 'sources', 'nsfw'],
+    'required': [
+        'ver', 'title', 'description', 'author', 'language', 'license',
+        'content-type', 'sources', 'nsfw'
+    ],
     'additionalProperties': False
 }
 
@@ -238,9 +242,9 @@ VER_003 = {
         },
         'fee': {
             'properties': {
-                'LBC': { '$ref': '#/definitions/fee_info' },
-                'BTC': { '$ref': '#/definitions/fee_info' },
-                'USD': { '$ref': '#/definitions/fee_info' }
+                'LBC': {'$ref': '#/definitions/fee_info'},
+                'BTC': {'$ref': '#/definitions/fee_info'},
+                'USD': {'$ref': '#/definitions/fee_info'}
             }
         },
         'contact': {
@@ -260,7 +264,10 @@ VER_003 = {
             'type': 'string'
         }
     },
-    'required': ['ver', 'title', 'description', 'author',  'language', 'license', 'content_type', 'sources', 'nsfw'],
+    'required': [
+        'ver', 'title', 'description', 'author', 'language', 'license',
+        'content_type', 'sources', 'nsfw'
+    ],
     'additionalProperties': False,
     'dependencies': {
         'pubkey': ['sig'],

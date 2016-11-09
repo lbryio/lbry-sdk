@@ -330,22 +330,18 @@ class Wallet(object):
         def _check_result_fields(r):
             for k in ['value', 'txid', 'n', 'height', 'amount']:
                 assert k in r, "getvalueforname response missing field %s" % k
- 
+
         def _log_success(claim_id):
             log.info("lbry://%s complies with %s, claimid: %s", name, metadata.version, claim_id)
             return defer.succeed(None)
- 
         if 'error' in result:
             log.warning("Got an error looking up a name: %s", result['error'])
             return Failure(UnknownNameError(name))
-
         _check_result_fields(result)
- 
         try:
-            metadata = Metadata(json.loads(result['value'])) 
+            metadata = Metadata(json.loads(result['value']))
         except (TypeError, ValueError, ValidationError):
-            return Failure(InvalidStreamInfoError(name,result['value']))          
-  
+            return Failure(InvalidStreamInfoError(name, result['value']))
         txid = result['txid']
         sd_hash = metadata['sources']['lbry_sd_hash']
         d = self._save_name_metadata(name, txid, sd_hash)

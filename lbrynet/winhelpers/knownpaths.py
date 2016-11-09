@@ -2,22 +2,26 @@ from __future__ import print_function
 import ctypes, sys
 from ctypes import windll, wintypes
 from uuid import UUID
- 
-class GUID(ctypes.Structure):   # [1]
+
+# http://msdn.microsoft.com/en-us/library/windows/desktop/aa373931.aspx
+class GUID(ctypes.Structure):
     _fields_ = [
         ("Data1", wintypes.DWORD),
         ("Data2", wintypes.WORD),
         ("Data3", wintypes.WORD),
         ("Data4", wintypes.BYTE * 8)
-    ] 
- 
+    ]
+
     def __init__(self, uuid_):
         ctypes.Structure.__init__(self)
         self.Data1, self.Data2, self.Data3, self.Data4[0], self.Data4[1], rest = uuid_.fields
         for i in range(2, 8):
             self.Data4[i] = rest>>(8 - i - 1)*8 & 0xff
- 
-class FOLDERID:     # [2]
+
+
+# http://msdn.microsoft.com/en-us/library/windows/desktop/dd378457.aspx
+class FOLDERID:
+    # pylint: disable=bad-whitespace
     AccountPictures         = UUID('{008ca0b1-55b4-4c56-b8a8-4de4b299d3be}')
     AdminTools              = UUID('{724EF170-A42D-4FEF-9F26-B60E846FBA4F}')
     ApplicationShortcuts    = UUID('{A3918781-E5F2-4890-B3D9-A7E54332328C}')
@@ -112,24 +116,34 @@ class FOLDERID:     # [2]
     Videos                  = UUID('{18989B1D-99B5-455B-841C-AB7C74E4DDFC}')
     VideosLibrary           = UUID('{491E922F-5643-4AF4-A7EB-4E7A138D8174}')
     Windows                 = UUID('{F38BF404-1D43-42F2-9305-67DE0B28FC23}')
- 
-class UserHandle:   # [3]
+
+
+# http://msdn.microsoft.com/en-us/library/windows/desktop/bb762188.aspx
+class UserHandle:
     current = wintypes.HANDLE(0)
-    common  = wintypes.HANDLE(-1)
- 
-_CoTaskMemFree = windll.ole32.CoTaskMemFree     # [4]
-_CoTaskMemFree.restype= None
+    common = wintypes.HANDLE(-1)
+
+
+# http://msdn.microsoft.com/en-us/library/windows/desktop/ms680722.aspx
+_CoTaskMemFree = windll.ole32.CoTaskMemFree
+_CoTaskMemFree.restype = None
 _CoTaskMemFree.argtypes = [ctypes.c_void_p]
- 
-_SHGetKnownFolderPath = windll.shell32.SHGetKnownFolderPath     # [5] [3]
+
+
+# http://msdn.microsoft.com/en-us/library/windows/desktop/bb762188.aspx
+# http://www.themacaque.com/?p=954
+_SHGetKnownFolderPath = windll.shell32.SHGetKnownFolderPath
 _SHGetKnownFolderPath.argtypes = [
     ctypes.POINTER(GUID), wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(ctypes.c_wchar_p)
-] 
- 
-class PathNotFoundException(Exception): pass
- 
+]
+
+
+class PathNotFoundException(Exception):
+    pass
+
+
 def get_path(folderid, user_handle=UserHandle.common):
-    fid = GUID(folderid) 
+    fid = GUID(folderid)
     pPath = ctypes.c_wchar_p()
     S_OK = 0
     if _SHGetKnownFolderPath(ctypes.byref(fid), 0, user_handle, ctypes.byref(pPath)) != S_OK:
@@ -137,18 +151,19 @@ def get_path(folderid, user_handle=UserHandle.common):
     path = pPath.value
     _CoTaskMemFree(pPath)
     return path
- 
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 2 or sys.argv[1] in ['-?', '/?']:
         print('python knownpaths.py FOLDERID {current|common}')
         sys.exit(0)
- 
+
     try:
         folderid = getattr(FOLDERID, sys.argv[1])
     except AttributeError:
         print('Unknown folder id "%s"' % sys.argv[1], file=sys.stderr)
         sys.exit(1)
- 
+
     try:
         if len(sys.argv) == 2:
             print(get_path(folderid))
@@ -157,9 +172,3 @@ if __name__ == '__main__':
     except PathNotFoundException:
         print('Folder not found "%s"' % ' '.join(sys.argv[1:]), file=sys.stderr)
         sys.exit(1)
- 
-# [1] http://msdn.microsoft.com/en-us/library/windows/desktop/aa373931.aspx
-# [2] http://msdn.microsoft.com/en-us/library/windows/desktop/dd378457.aspx
-# [3] http://msdn.microsoft.com/en-us/library/windows/desktop/bb762188.aspx
-# [4] http://msdn.microsoft.com/en-us/library/windows/desktop/ms680722.aspx
-# [5] http://www.themacaque.com/?p=954

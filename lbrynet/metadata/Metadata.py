@@ -33,7 +33,7 @@ class Metadata(StructuredDict):
     ]
 
     def __init__(self, metadata, migrate=True, target_version=None):
-        if not isinstance(metadata,dict):
+        if not isinstance(metadata, dict):
             raise TypeError("metadata is not a dictionary") 
         starting_version = metadata.get('ver', '0.0.1')
 
