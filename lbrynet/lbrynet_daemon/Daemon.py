@@ -560,6 +560,7 @@ class Daemon(AuthJSONRPCServer):
         try:
             if self.lbry_server_port is not None:
                 self.lbry_server_port, p = None, self.lbry_server_port
+                log.info('Stop listening to %s', p)
                 return defer.maybeDeferred(p.stopListening)
             else:
                 return defer.succeed(True)
@@ -650,13 +651,14 @@ class Daemon(AuthJSONRPCServer):
             log.warn('Failed to upload log', exc_info=True)
             d = defer.succeed(None)
         d.addCallback(lambda _: self._stop_server())
+        d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
         d.addCallback(lambda _: self._stop_reflector())
-        d.addErrback(lambda err: True)
+        d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
         d.addCallback(lambda _: self.lbry_file_manager.stop())
-        d.addErrback(lambda err: True)
+        d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
         if self.session is not None:
             d.addCallback(lambda _: self.session.shut_down())
-            d.addErrback(lambda err: True)
+            d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
         return d
 
     def _update_settings(self, settings):
@@ -770,14 +772,11 @@ class Daemon(AuthJSONRPCServer):
         d = self.lbry_file_metadata_manager.setup()
 
         def set_lbry_file_manager():
-            self.lbry_file_manager = EncryptedFileManager(self.session,
-                                                     self.lbry_file_metadata_manager,
-                                                     self.sd_identifier,
-                                                     download_directory=self.download_directory)
+            self.lbry_file_manager = EncryptedFileManager(
+                self.session, self.lbry_file_metadata_manager,
+                self.sd_identifier, download_directory=self.download_directory)
             return self.lbry_file_manager.setup()
-
         d.addCallback(lambda _: set_lbry_file_manager())
-
         return d
 
     def _get_analytics(self):

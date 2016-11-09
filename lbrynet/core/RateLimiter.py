@@ -1,6 +1,11 @@
+import logging
+
 from zope.interface import implements
 from lbrynet.interfaces import IRateLimiter
 from twisted.internet import task
+
+
+log = logging.getLogger(__name__)
 
 
 class DummyRateLimiter(object):
@@ -64,6 +69,7 @@ class RateLimiter(object):
         self.protocols = []
 
     def start(self):
+        log.info("Starting %s", self)
         self.tick_call = task.LoopingCall(self.tick)
         self.tick_call.start(self.tick_interval)
 
@@ -74,6 +80,7 @@ class RateLimiter(object):
         self.unthrottle_ul()
 
     def stop(self):
+        log.info("Stopping %s", self)
         if self.tick_call is not None:
             self.tick_call.stop()
             self.tick_call = None

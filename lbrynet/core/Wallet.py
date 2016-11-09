@@ -97,9 +97,8 @@ class Wallet(object):
         log.error("An error occurred stopping the wallet: %s", err.getTraceback())
 
     def stop(self):
-
+        log.info("Stopping %s", self)
         self.stopped = True
-            
         # If self.next_manage_call is None, then manage is currently running or else
         # start has not been called, so set stopped and do nothing else.
         if self.next_manage_call is not None:

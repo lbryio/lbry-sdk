@@ -29,6 +29,7 @@ from lbrynet.core import utils
 if platform.mac_ver()[0] >= "10.10":
     from LBRYNotify import LBRYNotify
 
+
 log = logging.getLogger(__name__)
 
 
@@ -46,9 +47,11 @@ class LBRYDaemonApp(AppKit.NSApplication):
         self.icon.setSize_((20, 20))
         self.statusitem.setImage_(self.icon)
         self.menubarMenu = AppKit.NSMenu.alloc().init()
-        self.open = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Open", "openui:", "")
+        self.open = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Open", "openui:", "")
         self.menubarMenu.addItem_(self.open)
-        self.quit = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Quit", "replyToApplicationShouldTerminate:", "")
+        self.quit = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Quit", "applicationShouldTerminate:", "")
         self.menubarMenu.addItem_(self.quit)
         self.statusitem.setMenu_(self.menubarMenu)
         self.statusitem.setToolTip_(settings.APP_NAME)
@@ -64,9 +67,14 @@ class LBRYDaemonApp(AppKit.NSApplication):
     def openui_(self, sender):
         webbrowser.open(settings.UI_ADDRESS)
 
-    def replyToApplicationShouldTerminate_(self, shouldTerminate):
-        notify("Goodbye!")
-        reactor.stop()
+    # this code is from the example https://pythonhosted.org/pyobjc/examples/Cocoa/Twisted/WebServicesTool/index.html
+    def applicationShouldTerminate_(self, sender):
+        if reactor.running:
+            log.info('Stopping twisted event loop')
+            notify("Goodbye!")
+            reactor.stop()
+            return False
+        return True
 
 
 def notify(msg):

@@ -18,8 +18,13 @@ def main():
     log_file = conf.settings.get_log_filename()
     log_support.configure_logging(log_file, console=True)
     app = LBRYDaemonApp.sharedApplication()
-    reactor.addSystemEventTrigger("after", "shutdown", AppHelper.stopEventLoop)
+    reactor.addSystemEventTrigger("after", "shutdown", shutdown)
     reactor.run()
+
+
+def shutdown():
+    log.info('Stopping event loop')
+    AppHelper.stopEventLoop()
 
 
 if __name__ == "__main__":

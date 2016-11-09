@@ -1,6 +1,11 @@
 import binascii
-from twisted.internet import defer, reactor
 import collections
+import logging
+
+from twisted.internet import defer, reactor
+
+
+log = logging.getLogger(__name__)
 
 
 class DHTHashAnnouncer(object):
@@ -22,6 +27,7 @@ class DHTHashAnnouncer(object):
         self.next_manage_call = reactor.callLater(60, self.run_manage_loop)
 
     def stop(self):
+        log.info("Stopping %s", self)
         if self.next_manage_call is not None:
             self.next_manage_call.cancel()
             self.next_manage_call = None

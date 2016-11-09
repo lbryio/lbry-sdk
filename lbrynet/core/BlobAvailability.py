@@ -25,11 +25,12 @@ class BlobAvailabilityTracker(object):
         self._check_mine = LoopingCall(self._update_mine)
 
     def start(self):
-        log.info("Starting blob tracker")
+        log.info("Starting %s", self)
         self._check_popular.start(30)
         self._check_mine.start(120)
 
     def stop(self):
+        log.info("Stopping %s", self)
         if self._check_popular.running:
             self._check_popular.stop()
         if self._check_mine.running:

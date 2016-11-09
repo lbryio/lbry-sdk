@@ -1,6 +1,11 @@
 import binascii
+import logging
+
 from zope.interface import implements
 from lbrynet.interfaces import IPeerFinder
+
+
+log = logging.getLogger(__name__)
 
 
 class DHTPeerFinder(object):
@@ -21,6 +26,7 @@ class DHTPeerFinder(object):
         self.next_manage_call = reactor.callLater(60, self.run_manage_loop)
 
     def stop(self):
+        log.info("Stopping %s", self)
         if self.next_manage_call is not None and self.next_manage_call.active():
             self.next_manage_call.cancel()
             self.next_manage_call = None
