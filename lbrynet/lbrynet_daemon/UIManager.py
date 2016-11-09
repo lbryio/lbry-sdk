@@ -2,16 +2,19 @@ import os
 import logging
 import shutil
 import json
-
 from urllib2 import urlopen
 from StringIO import StringIO
+from zipfile import ZipFile
+
+import pkg_resources
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
+
 from lbrynet.conf import settings
 from lbrynet.lbrynet_daemon.Resources import NoCacheStaticFile
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
-from zipfile import ZipFile
+
 
 
 log = logging.getLogger(__name__)
@@ -62,6 +65,9 @@ class UIManager(object):
         self.branch = settings.ui_branch or branch
         self.check_requirements = settings.check_ui_requirements or check_requirements
 
+        if self._check_for_bundled_ui():
+            return defer.succeed(True)
+
         if local_ui_path:
             if os.path.isdir(local_ui_path):
                 log.info("Checking user specified UI directory: " + str(local_ui_path))
@@ -74,7 +80,7 @@ class UIManager(object):
                 log.info("User specified UI directory doesn't exist, using " + self.branch)
         elif self.loaded_branch == "user-specified":
             log.info("Loading user provided UI")
-            d = self._load_ui()
+            d = defer.maybeDeferred(self._load_ui())
             return d
         else:
             log.info("Checking for updates for UI branch: " + self.branch)
@@ -85,12 +91,16 @@ class UIManager(object):
         d.addCallback(lambda r: self._download_ui() if not r else self._load_ui())
         return d
 
+    def _check_for_bundled_ui(self):
+        bundle_manager = BundledUIManager(self.root, self.active_dir, get_bundled_ui_path())
+        return bundle_manager.setup()
+
     def _up_to_date(self):
         def _get_git_info():
             try:
+                # TODO: should this be switched to the non-blocking getPage?
                 response = urlopen(self._git_url)
-                data = json.loads(response.read())
-                return defer.succeed(data['sha'])
+                return defer.succeed(read_sha(response))
             except Exception:
                 return defer.fail()
 
@@ -177,9 +187,7 @@ class UIManager(object):
             return defer.succeed(False)
 
         def _do_migrate():
-            if os.path.isdir(self.active_dir):
-                shutil.rmtree(self.active_dir)
-            shutil.copytree(source_dir, self.active_dir)
+            replace_dir(self.active_dir, source_dir)
             if delete_source:
                 shutil.rmtree(source_dir)
 
@@ -220,6 +228,73 @@ class UIManager(object):
         return d
 
     def _load_ui(self):
-        for d in [i[0] for i in os.walk(self.active_dir) if os.path.dirname(i[0]) == self.active_dir]:
-            self.root.putChild(os.path.basename(d), NoCacheStaticFile(d))
-        return defer.succeed(True)
+        return load_ui(self.root, self.active_dir)
+
+
+class BundledUIManager(object):
+    """Copies the UI bundled with lbrynet, if available.
+
+    For the QA and nightly builds, we include a copy of the most
+    recent checkout of the development UI. For production builds
+    nothing is bundled.
+
+    n.b: For QA and nightly builds the update check is skipped.
+    """
+    def __init__(self, root, active_dir, bundled_ui_path):
+        self.root = root
+        self.active_dir = active_dir
+        self.bundled_ui_path = bundled_ui_path
+        self.data_path = os.path.join(bundled_ui_path, 'data.json')
+
+    def bundle_is_available(self):
+        return os.path.exists(self.data_path)
+
+    def setup(self):
+        """Load the bundled UI if possible and necessary
+
+        Returns True if there is a bundled UI, False otherwise
+        """
+        if not self.bundle_is_available():
+            return False
+        if self.is_active_already_bundled_ui():
+            return True
+        log.info('Using bundled UI')
+        replace_dir(self.active_dir, self.bundled_ui_path)
+        load_ui(self.root, self.active_dir)
+        return True
+
+    def is_active_already_bundled_ui(self):
+        target_data_path = os.path.join(self.active_dir, 'data.json')
+        if os.path.exists(target_data_path):
+            if are_same_version(self.data_path, target_data_path):
+                return True
+        return False
+
+
+def get_bundled_ui_path():
+    return pkg_resources.resource_filename('lbrynet', 'resources/ui')
+
+
+def are_same_version(data_a, data_b):
+    """Compare two data files and return True if they are the same version"""
+    with open(data_a) as a:
+        with open(data_b) as b:
+            return read_sha(a) == read_sha(b)
+
+
+def read_sha(filelike):
+    data = json.load(filelike)
+    return data['sha']
+
+
+def replace_dir(active_dir, source_dir):
+    if os.path.isdir(active_dir):
+        shutil.rmtree(active_dir)
+    shutil.copytree(source_dir, active_dir)
+
+
+def load_ui(root, active_dir):
+    for name in os.listdir(active_dir):
+        entry = os.path.join(active_dir, name)
+        if os.path.isdir(entry):
+            root.putChild(os.path.basename(entry), NoCacheStaticFile(entry))
