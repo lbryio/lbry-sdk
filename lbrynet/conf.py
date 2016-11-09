@@ -167,7 +167,6 @@ class AdjustableSettings(Setting):
         self.min_valuable_hash_rate = .05  # points/1000 infos
         self.max_connections_per_stream = 5
         self.known_dht_nodes = [
-            ('104.236.42.182', 4000),
             ('lbrynet1.lbry.io', 4444),
             ('lbrynet2.lbry.io', 4444),
             ('lbrynet3.lbry.io', 4444)
