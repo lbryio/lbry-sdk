@@ -5,7 +5,7 @@ import random
 
 from twisted.internet import threads, defer, reactor
 
-from lbrynet.core.Error import InsufficientFundsError
+from lbrynet.core import log_support
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.metadata.Metadata import Metadata
@@ -31,6 +31,7 @@ class Publisher(object):
         self.lbry_file = None
         self.txid = None
         self.stream_hash = None
+        # TODO: this needs to be passed into the constructor
         reflector_server = random.choice(settings.reflector_servers)
         self.reflector_server, self.reflector_port = reflector_server[0], reflector_server[1]
         self.metadata = {}
@@ -38,7 +39,9 @@ class Publisher(object):
     def start(self, name, file_path, bid, metadata):
         log.info('Starting publish for %s', name)
         def _show_result():
-            log.info("Success! Published %s --> lbry://%s txid: %s", self.file_name, self.publish_name, self.txid)
+            log.info(
+                "Success! Published %s --> lbry://%s txid: %s",
+                self.file_name, self.publish_name, self.txid)
             return defer.succeed(self.txid)
 
         self.publish_name = name
@@ -46,12 +49,15 @@ class Publisher(object):
         self.bid_amount = bid
         self.metadata = metadata
 
+        # TODO: we cannot have this sort of code scattered throughout
+        #       our code base. Use polymorphism instead
         if os.name == "nt":
             file_mode = 'rb'
         else:
             file_mode = 'r'
 
         d = self._check_file_path(self.file_path)
+        # TODO: ensure that we aren't leaving this resource open
         d.addCallback(lambda _: create_lbry_file(self.session, self.lbry_file_manager,
                                                  self.file_name, open(self.file_path, file_mode)))
         d.addCallback(self.add_to_lbry_files)
@@ -60,10 +66,10 @@ class Publisher(object):
         d.addCallback(lambda _: self.set_status())
         d.addCallback(lambda _: self.start_reflector())
         d.addCallbacks(lambda _: _show_result(), self._show_publish_error)
-
         return d
 
     def start_reflector(self):
+        # TODO: is self.reflector_server unused?
         reflector_server = random.choice(settings.reflector_servers)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Reflecting new publication")
@@ -136,16 +142,9 @@ class Publisher(object):
         self.metadata['ver'] = Metadata.current_version
 
     def _show_publish_error(self, err):
-        log.info(err.getTraceback())
-        message = "An error occurred publishing %s to %s. Error: %s."
-        if err.check(InsufficientFundsError):
-            error_message = "Insufficient funds"
-        else:
-            error_message = err.getErrorMessage()
-
-        log.error(error_message)
-        log.error(message, str(self.file_name), str(self.publish_name), err.getTraceback())
-
+        log_support.failure(
+            err, log, "An error occurred publishing %s to %s. Error: %s.",
+            self.file_name, self.publish_name)
         return defer.fail(Exception("Publish failed"))
 
 
