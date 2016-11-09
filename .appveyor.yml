@@ -26,8 +26,7 @@ install:
 
 
 build_script:
-- ps: C:\Python27\python.exe setup.py build bdist_msi
-- signtool.exe sign /f packaging\windows\certs\lbry2.pfx /p %key_pass% /tr http://tsa.starfieldtech.com /td SHA256 /fd SHA256 dist\*.msi
+- ps: .\packaging\windows\build.ps1
 
 
 test_script:
@@ -44,13 +43,24 @@ artifacts:
 
 
 deploy:
-  release: $(APPVEYOR_REPO_TAG_NAME)
-  description: 'Release'
-  provider: GitHub
-  auth_token:
-    secure: 28gMVxQkXr2iXP4F+5kVwefUtKCfS1ePZ97PVfaSR8UDupjAvKhSJx862TnEjukb
-  artifact: /.*\.msi/
-  draft: false
-  prerelease: true
-  on:
-    appveyor_repo_tag: true        # deploy on tag push only
+  - provider: GitHub
+    release: $(APPVEYOR_REPO_TAG_NAME)
+    description: 'Release'
+    auth_token:
+      secure: 28gMVxQkXr2iXP4F+5kVwefUtKCfS1ePZ97PVfaSR8UDupjAvKhSJx862TnEjukb
+    artifact: /.*\.msi/
+    draft: false
+    prerelease: true
+    on:
+      appveyor_repo_tag: true        # deploy on tag push only
+  - provider: S3
+    access_key_id:
+      secure: E25iHvmHiJP56GWFTe14L3pS8QKb5ZcyWZLY0zqh6BA=
+    secret_access_key:
+      secure: YwZe6fCv29akFYjMCCBJBF7LtI6mxPrxbq7SSoAbn1BPdqjATFegeteGAsqHur/C
+    bucket: lbrynet-master
+    region: us-west-2
+    artifact: /.*\.msi/
+    folder: null
+    on:
+      branch: bundled-ui
