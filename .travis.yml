@@ -78,6 +78,7 @@ deploy:
     bucket: lbrynet-master
     skip_cleanup: true
     local_dir: "${TRAVIS_BUILD_DIR}/upload"
+    region: us-west-2
     on:
       branch: bundled-ui
 
