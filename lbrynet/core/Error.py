@@ -28,7 +28,7 @@ class KeyFeeAboveMaxAllowed(Exception):
 
 class UnknownNameError(Exception):
     def __init__(self, name):
-        Exception.__init__('Name {} is unknown'.format(name))
+        Exception.__init__(self, 'Name {} is unknown'.format(name))
         self.name = name
 
 
