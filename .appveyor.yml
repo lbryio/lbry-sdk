@@ -26,7 +26,7 @@ install:
 
 
 build_script:
-- ps: .\packaging\windows\build.ps1
+- ps: .\packaging\windows\build.ps
 
 
 test_script:
@@ -61,5 +61,6 @@ deploy:
     bucket: lbrynet-master
     region: us-west-2
     artifact: /.*\.msi/
+    folder: null
     on:
       branch: bundled-ui
