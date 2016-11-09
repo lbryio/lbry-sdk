@@ -64,6 +64,13 @@ console_scripts = [
     'lbrynet-cli = lbrynet.lbrynet_daemon.DaemonCLI:main'
 ]
 
+
+def package_files(directory):
+    for path, _, filenames in os.walk(directory):
+        for filename in filenames:
+            yield os.path.join('..', path, filename)
+
+
 if platform == LINUX:
     import ez_setup
     ez_setup.use_setuptools()
@@ -82,16 +89,10 @@ if platform == LINUX:
           packages=find_packages(base_dir),
           install_requires=requires,
           entry_points={'console_scripts': console_scripts},
-          data_files=[
-              ('lbrynet/lbrynet_console/plugins',
-               [
-                   os.path.join(base_dir, 'lbrynet', 'lbrynet_console', 'plugins',
-                                'blindrepeater.yapsy-plugin')
-               ]
-               ),
-          ],
-          dependency_links=['https://github.com/lbryio/lbryum/tarball/master/#egg=lbryum'],
-          )
+          package_data={
+              package_name: list(package_files('lbrynet/resources/ui'))
+          }
+    )
 
 elif platform == DARWIN:
     import ez_setup
@@ -110,16 +111,10 @@ elif platform == DARWIN:
           packages=find_packages(base_dir),
           install_requires=requires,
           entry_points={'console_scripts': console_scripts},
-          data_files=[
-              ('lbrynet/lbrynet_console/plugins',
-               [
-                   os.path.join(base_dir, 'lbrynet', 'lbrynet_console', 'plugins',
-                                'blindrepeater.yapsy-plugin')
-               ]
-               ),
-          ],
-          dependency_links=['https://github.com/lbryio/lbryum/tarball/master/#egg=lbryum'],
-          )
+          package_data={
+              package_name: list(package_files('lbrynet/resources/ui'))
+          }
+    )
 
 elif platform == WINDOWS:
     import opcode
@@ -304,25 +299,18 @@ elif platform == WINDOWS:
         script=os.path.join(app_dir, 'LBRYWin32App.py'),
         base='Win32GUI',
         icon=win_icon,
-        compress=True,
-        # shortcutName=dist_name,
-        # shortcutDir='DesktopFolder',
         targetName='{0}.exe'.format(dist_name)
     )
 
     daemon_exe = Executable(
         script=os.path.join(daemon_dir, 'DaemonControl.py'),
         icon=win_icon,
-        # shortcutName="lbrynet-daemon",
-        # shortcutDir='DesktopFolder',
         targetName='lbrynet-daemon.exe'
     )
 
     cli_exe = Executable(
         script=os.path.join(daemon_dir, 'DaemonCLI.py'),
         icon=win_icon,
-        # shortcutName="lbrynet-cli",
-        # shortcutDir='DesktopFolder',
         targetName='lbrynet-cli.exe'
     )
 
@@ -336,11 +324,16 @@ elif platform == WINDOWS:
         author=author,
         keywords=keywords,
         data_files=[],
-        options={'build_exe': build_exe_options,
-                 'bdist_msi': bdist_msi_options},
+        options={
+            'build_exe': build_exe_options,
+            'bdist_msi': bdist_msi_options
+        },
         executables=[
             tray_app,
             daemon_exe,
             cli_exe
         ],
+        package_data={
+            package_name: list(package_files('lbrynet/resources/ui'))
+        }
     )

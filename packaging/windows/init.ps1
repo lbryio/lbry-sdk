@@ -36,7 +36,8 @@ C:\Python27\Scripts\pip.exe install requests==2.9.1
 
 C:\Python27\Scripts\pip.exe install zope.interface==4.1.3
 
-C:\Python27\Scripts\pip.exe install cx-freeze==4.3.3
+# this includes a patch to allow version numbers with non-integer values
+C:\Python27\Scripts\pip.exe install https://bitbucket.org/jobevers/cx_freeze/get/tip.tar.gz
 
 C:\Python27\Scripts\pip.exe install cython==0.24.1
 
