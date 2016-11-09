@@ -80,7 +80,7 @@ deploy:
     local_dir: "${TRAVIS_BUILD_DIR}/upload"
     region: us-west-2
     on:
-      branch: bundled-ui
+      branch: master
 
 
 env:
