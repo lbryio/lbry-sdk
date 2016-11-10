@@ -80,7 +80,7 @@ class UIManager(object):
                 log.info("User specified UI directory doesn't exist, using " + self.branch)
         elif self.loaded_branch == "user-specified":
             log.info("Loading user provided UI")
-            d = defer.maybeDeferred(self._load_ui())
+            d = defer.maybeDeferred(self._load_ui)
             return d
         else:
             log.info("Checking for updates for UI branch: " + self.branch)
