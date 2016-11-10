@@ -1,7 +1,7 @@
 import logging
 
 from lbrynet.core import utils
-
+from lbrynet.conf import LBRYUM_WALLET
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def make_context(platform, wallet, is_dev=False):
             'wallet': {
                 'name': wallet,
                 # TODO: add in version info for lbrycrdd
-                'version': platform['lbryum_version'] if wallet == 'lbryum' else None
+                'version': platform['lbryum_version'] if wallet == LBRYUM_WALLET else None
             },
         },
         # TODO: expand os info to give linux/osx specific info

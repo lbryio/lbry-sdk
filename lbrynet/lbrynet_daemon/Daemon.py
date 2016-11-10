@@ -28,6 +28,7 @@ from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import __version__ as lbrynet_version
 from lbrynet import conf
 from lbrynet.conf import settings as lbrynet_settings
+from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet import analytics
 from lbrynet import reflector
 from lbrynet.metadata.Metadata import Metadata, verify_name_characters
@@ -320,14 +321,14 @@ class Daemon(AuthJSONRPCServer):
         content = request.content.read()
         parsed = jsonrpclib.loads(content)
         function_path = parsed.get("method")
-        if self.wallet_type == "lbryum" and function_path in ['set_miner', 'get_miner_status']:
+        if self.wallet_type == LBRYUM_WALLET and function_path in ['set_miner', 'get_miner_status']:
             log.warning("Mining commands are not available in lbryum")
             raise Exception("Command not available in lbryum")
         return True
 
     def set_wallet_attributes(self):
         self.wallet_dir = None
-        if self.wallet_type != "lbrycrd":
+        if self.wallet_type != LBRYCRD_WALLET:
             return
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -804,25 +805,25 @@ class Daemon(AuthJSONRPCServer):
             return d
 
         def get_wallet():
-            if self.wallet_type == "lbrycrd":
+            if self.wallet_type == LBRYCRD_WALLET:
                 log.info("Using lbrycrd wallet")
                 wallet = LBRYcrdWallet(self.db_dir,
                                        wallet_dir=self.wallet_dir,
                                        wallet_conf=self.lbrycrd_conf,
                                        lbrycrdd_path=self.lbrycrdd_path)
                 d = defer.succeed(wallet)
-            elif self.wallet_type == "lbryum":
+            elif self.wallet_type == LBRYUM_WALLET:
                 log.info("Using lbryum wallet")
                 config = {'auto-connect': True}
                 if lbrynet_settings.lbryum_wallet_dir:
                     config['lbryum_path'] = lbrynet_settings.lbryum_wallet_dir
                 d = defer.succeed(LBRYumWallet(self.db_dir, config))
-            elif self.wallet_type == "ptc":
+            elif self.wallet_type == PTC_WALLET:
                 log.info("Using PTC wallet")
                 d = defer.succeed(PTCWallet(self.db_dir))
             else:
                 raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
-            d.addCallback(lambda wallet: {"wallet": wallet})
+            d.addCallback(lambda w: {"wallet": w})
             return d
 
         d1 = get_default_data_rate()
@@ -1113,7 +1114,7 @@ class Daemon(AuthJSONRPCServer):
             r['message'] = self.connection_problem[1]
             r['is_lagging'] = True
         elif self.startup_status[0] == LOADING_wallet_CODE:
-            if self.wallet_type == 'lbryum':
+            if self.wallet_type == LBRYUM_WALLET:
                 if self.session.wallet.blocks_behind_alert != 0:
                     r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
                     r['progress'] = self.session.wallet.catchup_progress

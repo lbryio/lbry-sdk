@@ -46,7 +46,7 @@ def start():
     parser.add_argument("--wallet",
                         help="lbrycrd or lbryum, default lbryum",
                         type=str,
-                        default='lbryum')
+                        default=conf.LBRYUM_WALLET)
     parser.add_argument("--ui", help="path to custom UI folder", default=None)
     parser.add_argument(
         "--branch",
