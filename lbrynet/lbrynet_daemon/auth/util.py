@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import yaml
 import os
+import json
 import logging
 
 log = logging.getLogger(__name__)
@@ -88,6 +89,4 @@ def initialize_api_key_file(key_path):
 
 
 def get_auth_message(message_dict):
-    to_auth = message_dict.get('method').encode('hex')
-    to_auth += str(message_dict.get('id')).encode('hex')
-    return to_auth.decode('hex')
+    return json.dumps(message_dict, sort_keys=True)
