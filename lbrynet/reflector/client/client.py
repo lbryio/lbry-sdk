@@ -49,6 +49,7 @@ Client may now send another Client Info Request
 """
 import json
 import logging
+
 from twisted.protocols.basic import FileSender
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.internet import defer, error
@@ -62,9 +63,7 @@ class IncompleteResponseError(Exception):
 
 
 class EncryptedFileReflectorClient(Protocol):
-
     #  Protocol stuff
-
     def connectionMade(self):
         self.blob_manager = self.factory.blob_manager
         self.response_buff = ''
@@ -79,7 +78,8 @@ class EncryptedFileReflectorClient(Protocol):
         self.streaming = False
         d = self.get_blobs_to_send(self.factory.stream_info_manager, self.factory.stream_hash)
         d.addCallback(lambda _: self.send_handshake())
-        d.addErrback(lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
+        d.addErrback(
+            lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
 
     def dataReceived(self, data):
         log.debug('Recieved %s', data)
@@ -206,7 +206,8 @@ class EncryptedFileReflectorClient(Protocol):
                 self.next_blob_to_send = blob
                 self.read_handle = read_handle
                 return None
-        raise ValueError("Couldn't open that blob for some reason. blob_hash: {}".format(blob.blob_hash))
+        raise ValueError(
+            "Couldn't open that blob for some reason. blob_hash: {}".format(blob.blob_hash))
 
     def send_blob_info(self):
         log.debug("Send blob info for %s", self.next_blob_to_send.blob_hash)
