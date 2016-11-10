@@ -22,6 +22,7 @@ if not os.path.isfile(lbrycrdd_path_conf):
     f.close()
 
 from lbrynet.lbrynet_daemon import DaemonControl
+from lbrynet import analytics
 from lbrynet.conf import settings
 from lbrynet.core import utils
 
@@ -62,7 +63,10 @@ class LBRYDaemonApp(AppKit.NSApplication):
             notify("LBRY needs an internet connection to start, try again when one is available")
             sys.exit(0)
 
-        DaemonControl.start_server_and_listen(launchui=True, use_auth=False)
+        DaemonControl.start_server_and_listen(
+            launchui=True, use_auth=False,
+            analytics_manager=analytics.Manager.new_instance()
+        )
 
     def openui_(self, sender):
         webbrowser.open(settings.UI_ADDRESS)

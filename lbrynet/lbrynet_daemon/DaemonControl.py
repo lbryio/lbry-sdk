@@ -9,6 +9,7 @@ from twisted.internet import defer, reactor, error
 from twisted.cred import portal
 from jsonrpc.proxy import JSONRPCProxy
 
+from lbrynet import analytics
 from lbrynet.lbrynet_daemon.auth.auth import PasswordChecker, HttpPasswordRealm
 from lbrynet.lbrynet_daemon.auth.util import initialize_api_key_file
 from lbrynet import conf
@@ -98,7 +99,9 @@ def start():
         print "To quit press ctrl-c or call 'stop' via the API"
 
     if test_internet_connection():
-        start_server_and_listen(args.launchui, args.useauth)
+        analytics_manager = analytics.Manager.new_instance()
+        analytics_manager.send_server_startup()
+        start_server_and_listen(args.launchui, args.useauth, analytics_manager)
         reactor.run()
 
         if not args.logtoconsole and not args.quiet:
@@ -121,29 +124,32 @@ def update_settings_from_args(args):
     settings.update(to_pass)
 
 
-def log_and_kill(failure):
+def log_and_kill(failure, analytics_manager):
+    analytics_manager.send_server_startup_error(failure.getErrorMessage() + " " + str(failure))
     log_support.failure(failure, log, 'Failed to startup: %s')
     reactor.callFromThread(reactor.stop)
 
 
-def start_server_and_listen(launchui, use_auth):
+def start_server_and_listen(launchui, use_auth, analytics_manager):
     """The primary entry point for launching the daemon.
 
     Args:
         launchui: set to true to open a browser window
         use_auth: set to true to enable http authentication
+        analytics_manager: to send analytics
         kwargs: passed along to `DaemonServer().start()`
     """
-    lbry = DaemonServer()
-    d = lbry.start()
-    d.addCallback(lambda _: listen(lbry, use_auth))
+    daemon_server = DaemonServer(analytics_manager)
+    d = daemon_server.start()
+    d.addCallback(lambda _: listen(daemon_server, use_auth))
     if launchui:
         d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
-    d.addErrback(log_and_kill)
+    d.addCallback(lambda _: analytics_manager.send_server_startup_success())
+    d.addErrback(log_and_kill, analytics_manager)
 
 
-def listen(lbry, use_auth):
-    site_base = get_site_base(use_auth, lbry.root)
+def listen(daemon_server, use_auth):
+    site_base = get_site_base(use_auth, daemon_server.root)
     lbrynet_server = server.Site(site_base)
     lbrynet_server.requestFactory = DaemonRequest
     try:
