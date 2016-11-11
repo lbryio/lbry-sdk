@@ -1,13 +1,24 @@
 # this is a port of setup_qa.sh used for the unix platforms
+
+function AddUi {
+   wget https://s3.amazonaws.com/lbry-ui/development/dist.zip -OutFile dist.zip
+   if ($LastExitCode -ne 0) { $host.SetShouldExit($LastExitCode)  }
+
+   Expand-Archive dist.zip -dest lbrynet\resources\ui
+   if ($LastExitCode -ne 0) { $host.SetShouldExit($LastExitCode)  }
+
+   wget https://s3.amazonaws.com/lbry-ui/development/data.json -OutFile lbrynet\resources\ui\data.json
+   if ($LastExitCode -ne 0) { $host.SetShouldExit($LastExitCode)  }
+}
+
 If (${Env:APPVEYOR_REPO_TAG} -NotMatch "true") {
    C:\Python27\python.exe packaging\append_sha_to_version.py lbrynet\__init__.py ${Env:APPVEYOR_REPO_COMMIT}
    if ($LastExitCode -ne 0) { $host.SetShouldExit($LastExitCode) }
-   wget https://s3.amazonaws.com/lbry-ui/development/dist.zip -OutFile dist.zip
-   if ($LastExitCode -ne 0) { $host.SetShouldExit($LastExitCode)  }
-   Expand-Archive dist.zip -dest lbrynet\resources\ui
-   if ($LastExitCode -ne 0) { $host.SetShouldExit($LastExitCode)  }
-   wget https://s3.amazonaws.com/lbry-ui/development/data.json -OutFile lbrynet\resources\ui\data.json
-   if ($LastExitCode -ne 0) { $host.SetShouldExit($LastExitCode)  }
+   
+   AddUi
+}
+ElseIf (${Env:APPVEYOR_REPO_TAG_NAME} -Match "v\d+.\d+.\d+-rc\d+") {
+   AddUi
 }
 
 C:\Python27\python.exe setup.py build bdist_msi
