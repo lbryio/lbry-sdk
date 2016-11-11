@@ -78,8 +78,10 @@ def obfuscate(plain):
 def check_connection(server="www.lbry.io", port=80):
     """Attempts to open a socket to server:port and returns True if successful."""
     try:
+        log.debug('Checking connection to %s:%s', server, port)
         host = socket.gethostbyname(server)
         s = socket.create_connection((host, port), 2)
+        log.debug('Connection successful')
         return True
     except Exception as ex:
         log.info(
