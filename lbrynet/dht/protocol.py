@@ -321,3 +321,4 @@ class KademliaProtocol(protocol.DatagramProtocol):
             except Exception, e:
                 log.exception('Failed to cancel %s', self._callLaterList[key])
             del self._callLaterList[key]
+            reactor.iterate()
