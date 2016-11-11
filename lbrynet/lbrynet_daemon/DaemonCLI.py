@@ -1,15 +1,17 @@
 import sys
-import json
 import argparse
-
+import json
 from lbrynet.conf import settings
 from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
+from jsonrpc.common import RPCError
 
-help_msg = "Usage: lbrynet-cli method json-args\n" \
+
+
+help_msg = "Usage: lbrynet-cli method kwargs\n" \
              + "Examples: " \
-             + "lbrynet-cli resolve_name '{\"name\": \"what\"}'\n" \
+             + "lbrynet-cli resolve_name name=what\n" \
              + "lbrynet-cli get_balance\n" \
-             + "lbrynet-cli help '{\"function\": \"resolve_name\"}'\n" \
+             + "lbrynet-cli help function=resolve_name\n" \
              + "\n******lbrynet-cli functions******\n"
 
 
@@ -59,14 +61,13 @@ def main():
     meth = args.method[0]
     params = {}
 
-    if args.params:
-        if len(args.params) > 1:
+    if len(args.params) > 1:
+        params = get_params_from_kwargs(args.params)
+    elif len(args.params) == 1:
+        try:
+            params = json.loads(args.params[0])
+        except ValueError:
             params = get_params_from_kwargs(args.params)
-        elif len(args.params) == 1:
-            try:
-                params = json.loads(args.params[0])
-            except ValueError:
-                params = get_params_from_kwargs(args.params)
 
     msg = help_msg
     for f in api.help():
@@ -83,14 +84,16 @@ def main():
             else:
                 result = LBRYAPIClient.config(service=meth, params=params)
             print json.dumps(result, sort_keys=True)
-        except:
+        except RPCError as err:
             # TODO: The api should return proper error codes
             # and messages so that they can be passed along to the user
             # instead of this generic message.
             # https://app.asana.com/0/158602294500137/200173944358192
-
             print "Something went wrong, here's the usage for %s:" % meth
             print api.help({'function': meth})
+            print "Here's the traceback for the error you encountered:"
+            print err.msg
+
     else:
         print "Unknown function"
         print msg
