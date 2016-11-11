@@ -255,11 +255,11 @@ class BundledUIManager(object):
         Returns True if there is a bundled UI, False otherwise
         """
         if not self.bundle_is_available():
+            log.debug('No bundled UI is available')
             return False
-        if self.is_active_already_bundled_ui():
-            return True
-        log.info('Using bundled UI')
-        replace_dir(self.active_dir, self.bundled_ui_path)
+        if not self.is_active_already_bundled_ui():
+            replace_dir(self.active_dir, self.bundled_ui_path)
+        log.info('Loading the bundled UI')
         load_ui(self.root, self.active_dir)
         return True
 
