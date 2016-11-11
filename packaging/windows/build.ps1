@@ -17,7 +17,7 @@ If (${Env:APPVEYOR_REPO_TAG} -NotMatch "true") {
    
    AddUi
 }
-ElseIf (${Env:APPVEYOR_REPO_TAG_NAME} -Match "v\d+.\d+.\d+-rc\d+") {
+ElseIf (${Env:APPVEYOR_REPO_TAG_NAME} -Match "v\d+\.\d+\.\d+-rc\d+") {
    AddUi
 }
 
