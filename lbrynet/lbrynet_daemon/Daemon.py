@@ -207,7 +207,7 @@ class Daemon(AuthJSONRPCServer):
             'is_running', 'is_first_run',
             'get_time_behind_blockchain', 'stop',
             'daemon_status', 'get_start_notice',
-            'version', 'get_search_servers'
+            'version'
         ]
         last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
         conf.settings.update(last_version)
@@ -276,7 +276,6 @@ class Daemon(AuthJSONRPCServer):
         self.name_cache = {}
         self.set_wallet_attributes()
         self.exchange_rate_manager = ExchangeRateManager()
-        self.lighthouse_client = LighthouseClient()
         calls = {
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
             Checker.VERSION: LoopingCall(CheckRemoteVersions(self)),
@@ -1065,9 +1064,6 @@ class Daemon(AuthJSONRPCServer):
 
         return defer.succeed(None)
 
-    def _search(self, search):
-        return self.lighthouse_client.search(search)
-
     def jsonrpc_is_running(self):
         """
         Check if lbrynet daemon is running
@@ -1565,42 +1561,6 @@ class Daemon(AuthJSONRPCServer):
 
         d = self._get_est_cost(name)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
-    def jsonrpc_search_nametrie(self, p):
-        """
-        Search the nametrie for claims
-
-        Args:
-            'search': search query, string
-        Returns:
-            List of search results
-        """
-
-        # TODO: change this function to "search"
-
-        if 'search' in p.keys():
-            search = p['search']
-        else:
-            return self._render_response(None, BAD_REQUEST)
-
-        # TODO: have ui accept the actual outputs
-        def _clean(n):
-            t = []
-            for i in n:
-                td = {k: i['value'][k] for k in i['value']}
-                td['cost_est'] = float(i['cost'])
-                td['thumbnail'] = i['value'].get('thumbnail', "img/Free-speech-flag.svg")
-                td['name'] = i['name']
-                t.append(td)
-            return t
-
-        log.info('Search: %s' % search)
-
-        d = self._search(search)
-        d.addCallback(_clean)
-        d.addCallback(lambda results: self._render_response(results, OK_CODE))
-
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -2246,18 +2206,6 @@ class Daemon(AuthJSONRPCServer):
         d = self.session.blob_manager.get_all_verified_blobs()
         d.addCallback(self._reflect_blobs)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
-    def jsonrpc_get_search_servers(self):
-        """
-        Get list of lighthouse servers
-        Args:
-            None
-        Returns:
-            List of address:port
-        """
-
-        d = self._render_response(lbrynet_settings.search_servers, OK_CODE)
         return d
 
     def jsonrpc_get_mean_availability(self):

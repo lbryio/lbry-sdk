@@ -160,7 +160,6 @@ class AdjustableSettings(Setting):
         self.check_ui_requirements = True
         self.local_ui_path = False
         self.api_port = 5279
-        self.search_servers = ['lighthouse1.lbry.io:50005']
         self.data_rate = .0001  # points/megabyte
         self.min_info_rate = .02  # points/1000 infos
         self.min_valuable_info_rate = .05  # points/1000 infos
