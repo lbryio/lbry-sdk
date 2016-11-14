@@ -6,7 +6,7 @@ from twisted.internet import defer
 from twisted.python.failure import Failure
 
 from txjsonrpc import jsonrpclib
-
+from lbrynet.core import log_support
 from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError, SubhandlerError
 from lbrynet.conf import settings
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
@@ -23,7 +23,11 @@ def default_decimal(obj):
 class JSONRPCException(Exception):
     def __init__(self, err, code):
         self.faultCode = code
-        self.faultString = err.getTraceback()
+        self.err = err
+
+    @property
+    def faultString(self):
+        return self.err.getTraceback()
 
 
 class AuthorizedBase(object):
@@ -98,7 +102,8 @@ class AuthJSONRPCServer(AuthorizedBase):
         return NotImplementedError()
 
     def _render_error(self, request, failure, version=jsonrpclib.VERSION_1, response_code=FAILURE):
-        fault = jsonrpclib.dumps(JSONRPCException(Failure(failure), response_code), version=version)
+        err = JSONRPCException(Failure(failure), response_code)
+        fault = jsonrpclib.dumps(err, version=version)
         self._set_headers(request, fault)
         if response_code != AuthJSONRPCServer.FAILURE:
             request.setResponseCode(response_code)
@@ -108,12 +113,12 @@ class AuthJSONRPCServer(AuthorizedBase):
     def render(self, request):
         notify_finish = request.notifyFinish()
         assert self._check_headers(request), InvalidHeaderError
-
         session = request.getSession()
         session_id = session.uid
 
         if self._use_authentication:
-            # if this is a new session, send a new secret and set the expiration, otherwise, session.touch()
+            # if this is a new session, send a new secret and set the expiration
+            # otherwise, session.touch()
             if self._initialize_session(session_id):
                 def expire_session():
                     self._unregister_user_session(session_id)
@@ -131,7 +136,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         try:
             parsed = jsonrpclib.loads(content)
         except ValueError as err:
-            log.error("Unable to decode request json")
+            log.warning("Unable to decode request json")
             self._render_error(request, err)
             return server.NOT_DONE_YET
 
@@ -153,8 +158,9 @@ class AuthJSONRPCServer(AuthorizedBase):
                 try:
                     self._verify_token(session_id, parsed, token)
                 except InvalidAuthenticationToken as err:
-                    log.error("API validation failed")
-                    self._render_error(request, err, version, response_code=AuthJSONRPCServer.UNAUTHORIZED)
+                    log.warning("API validation failed")
+                    self._render_error(request, err, version,
+                                       response_code=AuthJSONRPCServer.UNAUTHORIZED)
                     return server.NOT_DONE_YET
                 self._update_session_secret(session_id)
                 reply_with_next_secret = True
@@ -162,11 +168,14 @@ class AuthJSONRPCServer(AuthorizedBase):
         try:
             function = self._get_jsonrpc_method(function_name)
         except AttributeError as err:
-            log.error("Unknown method: %s", function_name)
+            log.warning("Unknown method: %s", function_name)
             self._render_error(request, err, version)
             return server.NOT_DONE_YET
 
-        d = defer.maybeDeferred(function) if args == [{}] else defer.maybeDeferred(function, *args)
+        if args == [{}]:
+            d = defer.maybeDeferred(function)
+        else:
+            d = defer.maybeDeferred(function, *args)
 
         # cancel the response if the connection is broken
         notify_finish.addErrback(self._response_failed, d)
@@ -226,7 +235,8 @@ class AuthJSONRPCServer(AuthorizedBase):
         return True
 
     def _get_jsonrpc_method(self, function_path):
-        assert self._check_function_path(function_path), AttributeError(function_path)
+        if not self._check_function_path(function_path):
+            raise AttributeError(function_path)
         return self.callable_methods.get(function_path)
 
     def _initialize_session(self, session_id):
@@ -255,11 +265,8 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _run_subhandlers(self, request):
         for handler in self.subhandlers:
-            try:
-                assert handler(request)
-            except Exception as err:
-                log.error(err.message)
-                raise SubhandlerError(err.message)
+            if not handler(request):
+                raise SubhandlerError("Subhandler error processing request: %s", request)
 
     def _callback_render(self, result, request, version, auth_required=False):
         result_for_return = result if not isinstance(result, dict) else result['result']
@@ -273,6 +280,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._set_headers(request, encoded_message, auth_required)
             self._render_message(request, encoded_message)
         except Exception as err:
+            log.exception(err.message)
             self._render_error(request, err, response_code=self.FAILURE, version=version)
 
     def _render_response(self, result, code):
