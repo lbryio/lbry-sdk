@@ -77,13 +77,10 @@ class GetStream(object):
             self.finished.callback((False, None, None))
 
     def _convert_max_fee(self):
-        if isinstance(self.max_key_fee, dict):
-            max_fee = FeeValidator(self.max_key_fee)
-            if max_fee.currency_symbol == "LBC":
-                return max_fee.amount
-            return self.exchange_rate_manager.to_lbc(self.fee).amount
-        elif isinstance(self.max_key_fee, float):
-            return float(self.max_key_fee)
+        max_fee = FeeValidator(self.max_key_fee)
+        if max_fee.currency_symbol == "LBC":
+            return max_fee.amount
+        return self.exchange_rate_manager.to_lbc(self.max_key_fee).amount
 
     def start(self, stream_info, name):
         def _cause_timeout(err):
@@ -117,14 +114,18 @@ class GetStream(object):
         if 'fee' in self.stream_info:
             self.fee = FeeValidator(self.stream_info['fee'])
             max_key_fee = self._convert_max_fee()
-            if self.exchange_rate_manager.to_lbc(self.fee).amount > max_key_fee:
-                log.info("Key fee %f above limit of %f didn't download lbry://%s" % (self.fee.amount,
-                                                                                     self.max_key_fee,
-                                                                                     self.resolved_name))
+            converted_fee = self.exchange_rate_manager.to_lbc(self.fee).amount
+            if converted_fee > self.wallet.get_balance():
+                log.warning("Insufficient funds to download lbry://%s", self.resolved_name)
+                return defer.fail(InsufficientFundsError())
+            if converted_fee > max_key_fee:
+                log.warning("Key fee %f above limit of %f didn't download lbry://%s", converted_fee,
+                                                                                      max_key_fee,
+                                                                                      self.resolved_name)
                 return defer.fail(KeyFeeAboveMaxAllowed())
-            log.info("Key fee %s below limit of %f, downloading lbry://%s" % (json.dumps(self.fee),
-                                                                              max_key_fee,
-                                                                              self.resolved_name))
+            log.info("Key fee %f below limit of %f, downloading lbry://%s", converted_fee,
+                                                                            max_key_fee,
+                                                                            self.resolved_name)
 
         self.checker.start(1)
 
