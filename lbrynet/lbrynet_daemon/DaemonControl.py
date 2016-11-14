@@ -78,12 +78,14 @@ def start():
     log.debug('Final Settings: %s', settings.__dict__)
 
     try:
+        log.debug('Checking for an existing lbrynet daemon instance')
         JSONRPCProxy.from_url(settings.API_CONNECTION_STRING).is_running()
         log.info("lbrynet-daemon is already running")
         if not args.logtoconsole:
             print "lbrynet-daemon is already running"
         return
-    except:
+    except Exception:
+        log.debug('No lbrynet instance found, continuing to start')
         pass
 
     log.info("Starting lbrynet-daemon from command line")

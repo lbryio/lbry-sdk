@@ -321,4 +321,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
             except Exception, e:
                 log.exception('Failed to cancel %s', self._callLaterList[key])
             del self._callLaterList[key]
+
+            # not sure why this is needed, but taking this out sometimes causes
+            # exceptions.AttributeError: 'Port' object has no attribute 'socket'
+            # to happen on shutdown
             reactor.iterate()
