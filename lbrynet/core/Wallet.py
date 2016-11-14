@@ -370,22 +370,15 @@ class Wallet(object):
         return d
 
     def get_my_claim(self, name):
-        def _convert_units(claim):
-            amount = Decimal(claim['nEffectiveAmount'] / COIN)
-            claim['nEffectiveAmount'] = amount
-            return claim
-
         def _get_claim_for_return(claim):
             if not claim:
                 return False
-            d = self.get_claim(name, claim['claim_id'])
-            d.addCallback(_convert_units)
-            d.addCallback(lambda clm: self._format_claim_for_return(name, clm, claim['txid']))
-            return d
+            claim['value'] = json.loads(claim['value'])
+            return claim 
 
         def _get_my_unspent_claim(claims):
             for claim in claims:
-                if claim['name'] == name and not claim['is spent'] and not claim.get('supported_claimid'):
+                if claim['name'] == name and not claim['is spent'] and not claim.get('supported_claimid',False):
                     return claim
             return False
 
