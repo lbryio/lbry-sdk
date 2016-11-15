@@ -622,7 +622,10 @@ class Daemon(AuthJSONRPCServer):
                 id_hash = base58.b58encode(self.lbryid)[:20]
             else:
                 id_hash = self.lbryid
-            self.log_uploader.upload(exclude_previous, self.lbryid, log_type)
+            try:
+                self.log_uploader.upload(exclude_previous, self.lbryid, log_type)
+            except requests.RequestException:
+                log.exception('Failed to upload log file')
         return defer.succeed(None)
 
     def _clean_up_temp_files(self):
