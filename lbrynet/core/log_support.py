@@ -171,13 +171,14 @@ def convert_verbose(verbose):
     should be at the info level.
     if --verbose is provided, but not followed by any arguments, then
     args.verbose = [] and debug logging should be enabled for all of lbrynet
+    along with info logging on lbryum.
     if --verbose is provided and followed by arguments, those arguments
     will be in a list
     """
     if verbose is None:
         return []
     if verbose == []:
-        return ['lbrynet']
+        return ['lbrynet', 'lbryum']
     return verbose
 
 
@@ -204,6 +205,13 @@ def configure_logging(file_name, console, verbose=None):
         # allow info.
         level = 'DEBUG' if verbose else 'INFO'
         handler = configure_console(level=level)
+        if 'lbryum' in verbose:
+            # TODO: this enables lbryum logging on the other handlers
+            # too which isn't consistent with how verbose logging
+            # happens with other loggers. Should change the configuration
+            # so that its only logging at the INFO level for the console.
+            logging.getLogger('lbryum').setLevel(logging.INFO)
+            verbose.remove('lbryum')
         if verbose:
             handler.addFilter(LoggerNameFilter(verbose))
 
