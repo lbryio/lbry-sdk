@@ -7,6 +7,9 @@ import yaml
 
 from appdirs import user_data_dir
 
+LBRYCRD_WALLET = 'lbrycrd'
+LBRYUM_WALLET = 'lbryum'
+PTC_WALLET = 'ptc'
 
 log = logging.getLogger(__name__)
 
@@ -173,7 +176,7 @@ class AdjustableSettings(Setting):
         ]
         self.pointtrader_server = 'http://127.0.0.1:2424'
         self.reflector_servers = [("reflector.lbry.io", 5566)]
-        self.wallet = "lbryum"
+        self.wallet = LBRYUM_WALLET
         self.ui_branch = "master"
         self.default_ui_branch = 'master'
         self.data_dir = default_data_dir
@@ -201,7 +204,7 @@ class ApplicationSettings(Setting):
         self.ICON_PATH = "icons" if platform is WINDOWS else "app.icns"
         self.APP_NAME = "LBRY"
         self.PROTOCOL_PREFIX = "lbry"
-        self.WALLET_TYPES = ["lbryum", "lbrycrd"]
+        self.WALLET_TYPES = [LBRYUM_WALLET, LBRYCRD_WALLET]
         self.SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
         self.CURRENCIES = {
             'BTC': {'type': 'crypto'},

@@ -8,6 +8,7 @@ from txjsonrpc import jsonrpclib
 
 from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError, SubhandlerError
 from lbrynet.conf import settings
+from lbrynet.core import log_support
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
 
@@ -262,10 +263,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._render_message(request, encoded_message)
 
     def _errback_render(self, failure, id):
-        log.error("Request failed:")
-        log.error(failure)
-        log.error(failure.value)
-        log.error(id)
+        log_support.failure(failure, log, "Request failed. Id: %s, Failure: %s", id)
         if isinstance(failure.value, jsonrpclib.Fault):
             return failure.value
         return server.failure

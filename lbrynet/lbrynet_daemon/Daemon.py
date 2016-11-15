@@ -2,7 +2,6 @@ import binascii
 import logging.handlers
 import mimetypes
 import os
-import platform
 import random
 import re
 import subprocess
@@ -21,35 +20,23 @@ from twisted.internet.task import LoopingCall
 from txjsonrpc import jsonrpclib
 from jsonschema import ValidationError
 
-from lbrynet import __version__ as lbrynet_version
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 
 from lbrynet import __version__ as lbrynet_version
 from lbrynet import conf
 from lbrynet.conf import settings as lbrynet_settings
+from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet import analytics
-from lbrynet import reflector
-from lbrynet.metadata.Metadata import Metadata, verify_name_characters
 from lbrynet.metadata.Fee import FeeValidator
-from lbrynet.core import log_support
-from lbrynet.core import utils
-from lbrynet.core.utils import generate_id
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
-from lbrynet.core.Session import Session
+from lbrynet.core import Platform
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError, InvalidNameError
-from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
-from lbrynet.lbrynet_console.Settings import Settings
-from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory, EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbrynet_daemon.UIManager import UIManager
 from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
@@ -221,7 +208,7 @@ class Daemon(AuthJSONRPCServer):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
-    def __init__(self, root):
+    def __init__(self, root, analytics_manager):
         AuthJSONRPCServer.__init__(self, lbrynet_settings.use_auth_http)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
@@ -273,7 +260,7 @@ class Daemon(AuthJSONRPCServer):
         self.git_lbrynet_version = None
         self.git_lbryum_version = None
         self.ui_version = None
-        self.ip = None
+        self.platform = None
         self.first_run = None
         self.log_file = lbrynet_settings.get_log_filename()
         self.current_db_revision = 1
@@ -313,6 +300,7 @@ class Daemon(AuthJSONRPCServer):
         self.blob_request_payment_rate_manager = None
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
+        self.analytics_manager = analytics_manager
 
     @AuthJSONRPCServer.subhandler
     def _exclude_lbrycrd_only_commands_from_lbryum_session(self, request):
@@ -320,14 +308,14 @@ class Daemon(AuthJSONRPCServer):
         content = request.content.read()
         parsed = jsonrpclib.loads(content)
         function_path = parsed.get("method")
-        if self.wallet_type == "lbryum" and function_path in ['set_miner', 'get_miner_status']:
+        if self.wallet_type == LBRYUM_WALLET and function_path in ['set_miner', 'get_miner_status']:
             log.warning("Mining commands are not available in lbryum")
             raise Exception("Command not available in lbryum")
         return True
 
     def set_wallet_attributes(self):
         self.wallet_dir = None
-        if self.wallet_type != "lbrycrd":
+        if self.wallet_type != LBRYCRD_WALLET:
             return
         if os.name == "nt":
             from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -411,24 +399,10 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _get_platform(self):
-        r = {
-            "processor": platform.processor(),
-            "python_version": platform.python_version(),
-            "platform": platform.platform(),
-            "os_release": platform.release(),
-            "os_system": platform.system(),
-            "lbrynet_version": lbrynet_version,
-            "lbryum_version": lbryum_version,
-            "ui_version": self.lbry_ui_manager.loaded_git_version,
-        }
-        if not self.ip:
-            try:
-                r['ip'] = json.load(urlopen('http://jsonip.com'))['ip']
-                self.ip = r['ip']
-            except:
-                r['ip'] = "Could not determine"
-
-        return r
+        if self.platform is None:
+            self.platform = Platform.get_platform()
+            self.platform["ui_version"] = self.lbry_ui_manager.loaded_git_version
+        return self.platform
 
     def _initial_setup(self):
         def _log_platform():
@@ -556,6 +530,11 @@ class Daemon(AuthJSONRPCServer):
                 return defer.succeed(True)
         return defer.succeed(True)
 
+    def _stop_file_manager(self):
+        if self.lbry_file_manager:
+            self.lbry_file_manager.stop()
+        return defer.succeed(True)
+
     def _stop_server(self):
         try:
             if self.lbry_server_port is not None:
@@ -653,11 +632,12 @@ class Daemon(AuthJSONRPCServer):
         except Exception:
             log.warn('Failed to upload log', exc_info=True)
             d = defer.succeed(None)
+
         d.addCallback(lambda _: self._stop_server())
         d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
         d.addCallback(lambda _: self._stop_reflector())
         d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
-        d.addCallback(lambda _: self.lbry_file_manager.stop())
+        d.addCallback(lambda _: self._stop_file_manager())
         d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
         if self.session is not None:
             d.addCallback(lambda _: self.session.shut_down())
@@ -783,18 +763,23 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _get_analytics(self):
-        analytics_api = analytics.Api.load()
         context = analytics.make_context(self._get_platform(), self.wallet_type)
         events_generator = analytics.Events(
             context, base58.b58encode(self.lbryid), self._session_id)
-        self.analytics_manager = analytics.Manager(
-            analytics_api, events_generator, analytics.Track())
-        self.analytics_manager.start()
-        self.analytics_manager.register_repeating_metric(
-            analytics.BLOB_BYTES_AVAILABLE,
-            AlwaysSend(calculate_available_blob_size, self.session.blob_manager),
-            frequency=300
-        )
+        if self.analytics_manager is None:
+            self.analytics_manager = analytics.Manager.new_instance(
+                events=events_generator
+            )
+        else:
+            self.analytics_manager.update_events_generator(events_generator)
+
+        if not self.analytics_manager.is_started:
+            self.analytics_manager.start()
+            self.analytics_manager.register_repeating_metric(
+                analytics.BLOB_BYTES_AVAILABLE,
+                AlwaysSend(calculate_available_blob_size, self.session.blob_manager),
+                frequency=300
+            )
 
     def _get_session(self):
         def get_default_data_rate():
@@ -804,25 +789,25 @@ class Daemon(AuthJSONRPCServer):
             return d
 
         def get_wallet():
-            if self.wallet_type == "lbrycrd":
+            if self.wallet_type == LBRYCRD_WALLET:
                 log.info("Using lbrycrd wallet")
                 wallet = LBRYcrdWallet(self.db_dir,
                                        wallet_dir=self.wallet_dir,
                                        wallet_conf=self.lbrycrd_conf,
                                        lbrycrdd_path=self.lbrycrdd_path)
                 d = defer.succeed(wallet)
-            elif self.wallet_type == "lbryum":
+            elif self.wallet_type == LBRYUM_WALLET:
                 log.info("Using lbryum wallet")
                 config = {'auto-connect': True}
                 if lbrynet_settings.lbryum_wallet_dir:
                     config['lbryum_path'] = lbrynet_settings.lbryum_wallet_dir
                 d = defer.succeed(LBRYumWallet(self.db_dir, config))
-            elif self.wallet_type == "ptc":
+            elif self.wallet_type == PTC_WALLET:
                 log.info("Using PTC wallet")
                 d = defer.succeed(PTCWallet(self.db_dir))
             else:
                 raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
-            d.addCallback(lambda wallet: {"wallet": wallet})
+            d.addCallback(lambda w: {"wallet": w})
             return d
 
         d1 = get_default_data_rate()
@@ -867,11 +852,14 @@ class Daemon(AuthJSONRPCServer):
 
         def eb():
             if not r.called:
+                self.analytics_manager.send_error("sd blob download timed out", sd_hash)
                 r.errback(Exception("sd timeout"))
 
         r = defer.Deferred(None)
         reactor.callLater(timeout, eb)
         d = download_sd_blob(self.session, sd_hash, self.session.payment_rate_manager)
+        d.addErrback(lambda err: self.analytics_manager.send_error(
+            "error downloading sd blob: " + err, sd_hash))
         d.addCallback(BlobStreamDescriptorReader)
         d.addCallback(lambda blob: blob.get_info())
         d.addCallback(cb)
@@ -1046,12 +1034,6 @@ class Daemon(AuthJSONRPCServer):
         )
         return run_reflector_factory(factory)
 
-    def _log_to_slack(self, msg):
-        URL = "https://hooks.slack.com/services/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"
-        msg = platform.platform() + ": " + base58.b58encode(self.lbryid)[:20] + ", " + msg
-        requests.post(URL, json.dumps({"text": msg}))
-        return defer.succeed(None)
-
     def _run_scripts(self):
         if len([k for k in self.startup_scripts if 'run_once' in k.keys()]):
             log.info("Removing one time startup scripts")
@@ -1113,7 +1095,7 @@ class Daemon(AuthJSONRPCServer):
             r['message'] = self.connection_problem[1]
             r['is_lagging'] = True
         elif self.startup_status[0] == LOADING_wallet_CODE:
-            if self.wallet_type == 'lbryum':
+            if self.wallet_type == LBRYUM_WALLET:
                 if self.session.wallet.blocks_behind_alert != 0:
                     r['message'] = r['message'] % (str(self.session.wallet.blocks_behind_alert) + " blocks behind")
                     r['progress'] = self.session.wallet.catchup_progress
@@ -2127,8 +2109,6 @@ class Daemon(AuthJSONRPCServer):
             exclude_previous = True
 
         d = self._upload_log(log_type=log_type, exclude_previous=exclude_previous, force=force)
-        if 'message' in p.keys():
-            d.addCallback(lambda _: self._log_to_slack(p['message']))
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
 

@@ -15,7 +15,7 @@ try:
 except ImportError:
     import win32gui
 
-from lbrynet import conf
+from lbrynet import conf, analytics
 from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon import DaemonControl
@@ -267,7 +267,10 @@ def main(lbry_name=None):
     systray_thread.daemon = True
     systray_thread.start()
 
-    DaemonControl.start_server_and_listen(launchui=True, use_auth=False)
+    DaemonControl.start_server_and_listen(
+        launchui=True, use_auth=False,
+        analytics_manager=analytics.Manager.new_instance()
+    )
     reactor.run()
 
 
