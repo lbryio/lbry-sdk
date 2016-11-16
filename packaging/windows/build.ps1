@@ -23,7 +23,8 @@ If (${Env:APPVEYOR_REPO_TAG} -NotMatch "true") {
    AddUi
    SetBuild "qa"
 }
-ElseIf (${Env:APPVEYOR_REPO_TAG_NAME} -Match "v\d+\.\d+\.\d+-rc\d+") {
+ElseIf (${Env:APPVEYOR_REPO_TAG_NAME} -Match "v\d+\.\d+\.\d+rc\d+") {
+   # If the tag looks like v0.7.6rc0 then this is a tagged release candidate.
    AddUi
    SetBuild "rc"
 }
