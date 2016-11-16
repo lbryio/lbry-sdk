@@ -92,8 +92,14 @@ class UIManager(object):
         return d
 
     def _check_for_bundled_ui(self):
-        bundle_manager = BundledUIManager(self.root, self.active_dir, get_bundled_ui_path())
-        return bundle_manager.setup()
+        try:
+            bundled_path = get_bundled_ui_path()
+        except Exception:
+            log.warning('Failed to get path for bundled UI', exc_info=True)
+            return False
+        else:
+            bundle_manager = BundledUIManager(self.root, self.active_dir, bundled_path)
+            return bundle_manager.setup()
 
     def _up_to_date(self):
         def _get_git_info():
