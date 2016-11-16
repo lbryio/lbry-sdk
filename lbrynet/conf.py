@@ -185,16 +185,21 @@ class AdjustableSettings(Settings):
     """Settings that are allowed to be overriden by the user"""
     def __init__(self, environ=None):
         self.environ = environ or ENVIRONMENT
-
         for opt in self.environ.original_schema:
             self.__dict__[opt] = self.environ(opt)
-
         Settings.__init__(self)
 
     def __getattr__(self, attr):
         if attr in self.environ.original_schema:
             return self.environ(attr)
         raise AttributeError
+
+    def get_dict(self):
+        return {
+            name: self.environ(name)
+            for name in self.environ.original_schema
+        }
+
 
 class ApplicationSettings(Settings):
     """Settings that are constants and shouldn't be overriden"""
@@ -207,7 +212,7 @@ class ApplicationSettings(Settings):
         self.BLOBFILES_DIR = "blobfiles"
         self.BLOB_SIZE = 2*MB
         self.LOG_FILE_NAME = "lbrynet.log"
-        self.LOG_POST_URL = "https://lbry.io/log-upload"        
+        self.LOG_POST_URL = "https://lbry.io/log-upload"
         self.CRYPTSD_FILE_EXTENSION = ".cryptsd"
         self.API_ADDRESS = "lbryapi"
         self.ICON_PATH = "icons" if platform is WINDOWS else "app.icns"
@@ -223,7 +228,7 @@ class ApplicationSettings(Settings):
         self.LOGGLY_TOKEN = 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv'
         self.ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
         self.ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
-        self.DB_REVISION_FILE_NAME = 'db_revision' 
+        self.DB_REVISION_FILE_NAME = 'db_revision'
         Settings.__init__(self)
 
 
@@ -271,7 +276,10 @@ class Config(DefaultSettings):
         return {k: self[k] for k in self}
 
     def get_adjustable_settings_dict(self):
-        return {opt: val for opt, val in self.get_dict().iteritems() if opt in self.environ.original_schema}
+        return {
+            opt: val for opt, val in self.get_dict().iteritems()
+            if opt in self.environ.original_schema
+        }
 
     def ensure_data_dir(self):
         # although there is a risk of a race condition here we don't
