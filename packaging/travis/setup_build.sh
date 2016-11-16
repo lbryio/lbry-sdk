@@ -20,14 +20,14 @@ set_build() {
   mv -- tmpbuildfile "$file"
 }
 
-IS_RC_REGEX="v[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+-rc[[:digit:]]+"
+IS_RC_REGEX="v[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+rc[[:digit:]]+"
 
 if [[ -z "$TRAVIS_TAG" ]]; then
     python packaging/append_sha_to_version.py lbrynet/__init__.py "${TRAVIS_COMMIT}"
     add_ui
     set_build "qa"
 elif [[ "$TRAVIS_TAG" =~ $IS_RC_REGEX ]]; then
-    # If the tag looks like v0.7.6-rc0 then this is a tagged release candidate.
+    # If the tag looks like v0.7.6rc0 then this is a tagged release candidate.
     add_ui
     set_build "rc"
 else
