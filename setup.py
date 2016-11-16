@@ -47,7 +47,8 @@ requires = [
     'base58',
     'googlefinance',
     'requests_futures',
-    'PyYAML'
+    'PyYAML',
+    'envparse'
 ]
 
 console_scripts = [
@@ -251,6 +252,7 @@ elif platform == WINDOWS:
                      'cx_Freeze',
                      'dns',
                      'ecdsa',
+                     'envparse',
                      'gmpy',
                      'googlefinance',
                      'jsonrpc',

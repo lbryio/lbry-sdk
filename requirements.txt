@@ -5,6 +5,7 @@ argparse==1.2.1
 colorama==0.3.7
 dnspython==1.12.0
 ecdsa==0.13
+envparse==0.2.0
 gmpy==1.17
 jsonrpc==1.2
 jsonrpclib==0.1.7
