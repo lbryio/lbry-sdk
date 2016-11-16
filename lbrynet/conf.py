@@ -6,6 +6,7 @@ import sys
 import yaml
 
 from appdirs import user_data_dir
+import envparse
 
 LBRYCRD_WALLET = 'lbrycrd'
 LBRYUM_WALLET = 'lbryum'
@@ -41,69 +42,6 @@ else:
     default_lbryum_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
 
 
-def convert_setting(env_val, current_val):
-    try:
-        return _convert_setting(env_val, current_val)
-    except Exception as exc:
-        log.warning(
-            'Failed to convert %s. Returning original: %s: %s',
-            env_val, current_val, exc)
-        return current_val
-
-
-def _convert_setting(env_val, current_val):
-    if isinstance(env_val, basestring):
-        return json.loads(env_val)
-    new_type = env_val.__class__
-    current_type = current_val.__class__
-    if current_type is bool:
-        if new_type is bool:
-            return env_val
-        elif str(env_val).lower() == "false":
-            return False
-        elif str(env_val).lower() == "true":
-            return True
-        else:
-            raise ValueError('{} is not a valid boolean value'.format(env_val))
-    elif current_type is int:
-        return int(env_val)
-    elif current_type is float:
-        return float(env_val)
-    elif current_type is str:
-        return str(env_val)
-    elif current_type is unicode:
-        return unicode(env_val)
-    elif current_type is dict:
-        return dict(env_val)
-    elif current_type is list:
-        return list(env_val)
-    elif current_type is tuple:
-        return tuple(env_val)
-    else:
-        raise ValueError('Type {} cannot be converted'.format(current_type))
-
-
-def convert_env_setting(setting, value):
-    try:
-        env_val = os.environ[setting]
-    except KeyError:
-        return value
-    else:
-        return convert_setting(env_val, value)
-
-
-def get_env_settings(settings):
-    for setting, value in settings.iteritems():
-        setting = 'LBRY_' + setting.upper()
-        yield convert_env_setting(setting, value)
-
-
-def add_env_settings_to_dict(settings_dict):
-    for setting, env_setting in zip(settings_dict, get_env_settings(settings_dict)):
-        settings_dict.update({setting: env_setting})
-    return settings_dict
-
-
 class Settings(object):
     """A collection of configuration settings"""
     __fixed = []
@@ -121,9 +59,7 @@ class Settings(object):
 
     def __setitem__(self, key, value):
         assert key in self and key not in self.__fixed, KeyError(key)
-        old_value = self[key]
-        new_value = convert_setting(value, old_value)
-        self.__dict__[key] = new_value
+        self.__dict__[key] = value
 
     def __contains__(self, item):
         return item in iter(self)
@@ -139,54 +75,117 @@ class Settings(object):
                 pass
 
 
+class Env(envparse.Env):
+    """An Env parser that automatically namespaces the variables with LBRY"""
+    NAMESPACE = 'LBRY_'
+    def __init__(self, **schema):
+        self.original_schema = schema
+        my_schema = {
+            self._convert_key(key): self._convert_value(value)
+            for key, value in schema.items()
+        }
+        envparse.Env.__init__(self, **my_schema)
+
+    def __call__(self, key, *args, **kwargs):
+        my_key = self._convert_key(key)
+        return super(Env, self).__call__(my_key, *args, **kwargs)
+
+    def _convert_key(self, key):
+        return Env.NAMESPACE + key.upper()
+
+    def _convert_value(self, value):
+        """Allow value to be specified as an object, tuple or dict
+
+        if object or dict, follow default envparse rules, if tuple
+        it needs to be of the form (cast, default) or (cast, default, subcast)
+        """
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, (tuple, list)):
+            new_value = {'cast': value[0], 'default': value[1]}
+            if len(value) == 3:
+                new_value['subcast'] = value[2]
+            return new_value
+        return value
+
+
+def server_port(server_port):
+    server, port = server_port.split(':')
+    return server, port
+
+
+DEFAULT_DHT_NODES = [
+    ('lbrynet1.lbry.io', 4444),
+    ('lbrynet2.lbry.io', 4444),
+    ('lbrynet3.lbry.io', 4444)
+]
+
+
+ENVIRONMENT = Env(
+    is_generous_host=(bool, True),
+    run_on_startup=(bool, False),
+    download_directory=(str, default_download_directory),
+    max_upload=(float, 0.0),
+    max_download=(float, 0.0),
+    upload_log=(bool, True),
+    delete_blobs_on_remove=(bool, True),
+    use_upnp=(bool, True),
+    start_lbrycrdd=(bool, True),
+    run_reflector_server=(bool, False),
+    startup_scripts=(list, []),
+    # TODO: this doesn't seem like the kind of thing that should
+    # be configured; move it elsewhere.
+    last_version=(dict, {'lbrynet': '0.0.1', 'lbryum': '0.0.1'}),
+    peer_port=(int, 3333),
+    dht_node_port=(int, 4444),
+    reflector_port=(int, 5566),
+    download_timeout=(int, 30),
+    max_search_results=(int, 25),
+    search_timeout=(float, 3.0),
+    cache_time=(int, 150),
+    host_ui=(bool, True),
+    check_ui_requirements=(bool, True),
+    local_ui_path=(bool, False),
+    api_port=(int, 5279),
+    search_servers=(list, ['lighthouse1.lbry.io:50005']),
+    data_rate=(float, .0001),  # points/megabyte
+    min_info_rate=(float, .02),  # points/1000 infos
+    min_valuable_info_rate=(float, .05),  # points/1000 infos
+    min_valuable_hash_rate=(float, .05),  # points/1000 infos
+    max_connections_per_stream=(int, 5),
+    known_dht_nodes=(list, DEFAULT_DHT_NODES, server_port),
+    pointtrader_server=(str, 'http://127.0.0.1:2424'),
+    reflector_servers=(list, [("reflector.lbry.io", 5566)], server_port),
+    wallet=(str, LBRYUM_WALLET),
+    ui_branch=(str, "master"),
+    default_ui_branch=(str, 'master'),
+    data_dir=(str, default_data_dir),
+    lbryum_wallet_dir=(str, default_lbryum_dir),
+    use_auth_http=(bool, False),
+    sd_download_timeout=(int, 3),
+    # TODO: document what the 'address' field is used for
+    # TODO: writing json on the cmd line is a pain, come up with a nicer
+    # parser for this data structure. (maybe MAX_KEY_FEE=USD:25
+    max_key_fee=(json.loads, {'USD': {'amount': 25.0, 'address': ''}})
+)
+
+
 class AdjustableSettings(Settings):
     """Settings that are allowed to be overriden by the user"""
-    def __init__(self):
-        self.is_generous_host = True
-        self.run_on_startup = False
-        self.download_directory = default_download_directory
-        self.max_upload = 0.0
-        self.max_download = 0.0
-        self.upload_log = True
-        self.delete_blobs_on_remove = True
-        self.use_upnp = True
-        self.start_lbrycrdd = True
-        self.run_reflector_server = False
-        self.startup_scripts = []
-        self.last_version = {'lbrynet': '0.0.1', 'lbryum': '0.0.1'}
-        self.peer_port = 3333
-        self.dht_node_port = 4444
-        self.reflector_port = 5566
-        self.download_timeout = 30
-        self.max_search_results = 25
-        self.search_timeout = 3.0
-        self.cache_time = 150
-        self.host_ui = True
-        self.check_ui_requirements = True
-        self.local_ui_path = False
-        self.api_port = 5279
-        self.search_servers = ['lighthouse1.lbry.io:50005']
-        self.data_rate = .0001  # points/megabyte
-        self.min_info_rate = .02  # points/1000 infos
-        self.min_valuable_info_rate = .05  # points/1000 infos
-        self.min_valuable_hash_rate = .05  # points/1000 infos
-        self.max_connections_per_stream = 5
-        self.known_dht_nodes = [
-            ('lbrynet1.lbry.io', 4444),
-            ('lbrynet2.lbry.io', 4444),
-            ('lbrynet3.lbry.io', 4444)
-        ]
-        self.pointtrader_server = 'http://127.0.0.1:2424'
-        self.reflector_servers = [("reflector.lbry.io", 5566)]
-        self.wallet = LBRYUM_WALLET
-        self.ui_branch = "master"
-        self.default_ui_branch = 'master'
-        self.data_dir = default_data_dir
-        self.lbryum_wallet_dir = default_lbryum_dir
-        self.use_auth_http = False
-        self.sd_download_timeout = 3
-        self.max_key_fee = {'USD': {'amount': 25.0, 'address': ''}}
+    def __init__(self, environ=None):
+        self.environ = environ or ENVIRONMENT
         Settings.__init__(self)
+
+    def __getattr__(self, attr):
+        if attr in self.environ.original_schema:
+            return self.environ(attr)
+        raise AttributeError
+
+    def get_dict(self):
+        return {
+            name: self.environ(name)
+            for name in self.environ.original_schema
+        }
 
 
 class ApplicationSettings(Settings):
@@ -231,15 +230,17 @@ class DefaultSettings(ApplicationSettings, AdjustableSettings):
         ApplicationSettings.__init__(self)
         AdjustableSettings.__init__(self)
 
+    def get_dict(self):
+        d = ApplicationSettings.get_dict(self)
+        d.update(AdjustableSettings.get_dict(self))
+        return d
+
 
 DEFAULT_SETTINGS = DefaultSettings()
 
 
 class Config(DefaultSettings):
     __shared_state = copy.deepcopy(DEFAULT_SETTINGS.get_dict())
-
-    def __init__(self):
-        self.__dict__ = add_env_settings_to_dict(self.__shared_state)
 
     @property
     def ORIGIN(self):
