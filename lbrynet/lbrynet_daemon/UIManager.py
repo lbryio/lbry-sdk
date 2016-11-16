@@ -61,10 +61,9 @@ class UIManager(object):
                 self.loaded_requirements = None
 
     def setup(self, branch=None, check_requirements=None, user_specified=None):
-        local_ui_path = (user_specified if user_specified is not None
-                         else settings.local_ui_path)
-        self.branch = branch if branch is not None else settings.ui_branch
+        local_ui_path = user_specified or settings.local_ui_path
 
+        self.branch = branch or settings.ui_branch
         self.check_requirements = (check_requirements if check_requirements is not None
                                    else settings.check_ui_requirements)
 
