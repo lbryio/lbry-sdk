@@ -52,6 +52,8 @@ def convert_setting(env_val, current_val):
 
 
 def _convert_setting(env_val, current_val):
+    if isinstance(env_val, basestring):
+        return json.loads(env_val)
     new_type = env_val.__class__
     current_type = current_val.__class__
     if current_type is bool:
