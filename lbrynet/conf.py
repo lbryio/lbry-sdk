@@ -104,7 +104,7 @@ def add_env_settings_to_dict(settings_dict):
     return settings_dict
 
 
-class Setting(object):
+class Settings(object):
     """A collection of configuration settings"""
     __fixed = []
     __excluded = ['get_dict', 'update']
@@ -139,7 +139,7 @@ class Setting(object):
                 pass
 
 
-class AdjustableSettings(Setting):
+class AdjustableSettings(Settings):
     """Settings that are allowed to be overriden by the user"""
     def __init__(self):
         self.is_generous_host = True
@@ -185,9 +185,10 @@ class AdjustableSettings(Setting):
         self.use_auth_http = False
         self.sd_download_timeout = 3
         self.max_key_fee = {'USD': {'amount': 25.0, 'address': ''}}
+        Settings.__init__(self)
 
 
-class ApplicationSettings(Setting):
+class ApplicationSettings(Settings):
     """Settings that are constants and shouldn't be overriden"""
     def __init__(self):
         self.MAX_HANDSHAKE_SIZE = 64*KB
@@ -215,6 +216,7 @@ class ApplicationSettings(Setting):
         self.LOGGLY_TOKEN = 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv'
         self.ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
         self.ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
+        Settings.__init__(self)
 
 
 APPLICATION_SETTINGS = AdjustableSettings()
