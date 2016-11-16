@@ -61,9 +61,11 @@ class UIManager(object):
                 self.loaded_requirements = None
 
     def setup(self, branch=None, check_requirements=None, user_specified=None):
-        local_ui_path = settings.local_ui_path or user_specified
-        self.branch = settings.ui_branch or branch
-        self.check_requirements = settings.check_ui_requirements or check_requirements
+        local_ui_path = user_specified or settings.local_ui_path
+
+        self.branch = branch or settings.ui_branch
+        self.check_requirements = (check_requirements if check_requirements is not None
+                                   else settings.check_ui_requirements)
 
         if self._check_for_bundled_ui():
             return defer.succeed(True)
