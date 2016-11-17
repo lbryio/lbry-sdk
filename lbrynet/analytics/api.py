@@ -16,6 +16,8 @@ def log_response(fn):
     def _log(future):
         if future.cancelled():
             log.warning('Request was unexpectedly cancelled')
+        elif future.exception():
+            log.warning(future.exception_info())
         else:
             response = future.result()
             log.debug('Response (%s): %s', response.status_code, response.content)
