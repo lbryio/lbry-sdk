@@ -1325,8 +1325,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self._get_lbry_files()
-        d.addCallback(lambda r: [d[1] for d in r])
-        d.addCallback(lambda r: self._render_response(r, OK_CODE) if len(r) else self._render_response(False, OK_CODE))
+        d.addCallback(lambda r: self._render_response([d[1] for d in r], OK_CODE))
 
         return d
 
