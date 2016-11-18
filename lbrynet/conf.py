@@ -176,6 +176,7 @@ ENVIRONMENT = Env(
     # give an attacker access to your wallet and you could lose
     # all of your credits.
     API_INTERFACE=(str, "localhost"),
+    bittrex_feed=(str, "https://bittrex.com/api/v1.1/public/getmarkethistory"),
 )
 
 
@@ -257,11 +258,11 @@ class Config(DefaultSettings):
 
     @property
     def ORIGIN(self):
-        return "http://%s:%i" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port)
+        return "http://%s:%i" % (self.API_INTERFACE, self.api_port)
 
     @property
     def REFERER(self):
-        return "http://%s:%i/" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port)
+        return "http://%s:%i/" % (self.API_INTERFACE, self.api_port)
 
     @property
     def API_CONNECTION_STRING(self):
