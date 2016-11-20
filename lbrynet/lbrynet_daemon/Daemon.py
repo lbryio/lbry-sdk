@@ -798,7 +798,7 @@ class Daemon(AuthJSONRPCServer):
                 d = defer.succeed(wallet)
             elif self.wallet_type == LBRYUM_WALLET:
                 log.info("Using lbryum wallet")
-                config = {'auto-connect': True}
+                config = {'auto_connect': True}
                 if lbrynet_settings.lbryum_wallet_dir:
                     config['lbryum_path'] = lbrynet_settings.lbryum_wallet_dir
                 d = defer.succeed(LBRYumWallet(self.db_dir, config))
