@@ -163,7 +163,11 @@ ENVIRONMENT = Env(
     lbryum_wallet_dir=(str, default_lbryum_dir),
     use_auth_http=(bool, False),
     sd_download_timeout=(int, 3),
-    # TODO: document what the 'address' field is used for
+    # TODO: this field is more complicated than it needs to be because
+    # it goes through a Fee validator when loaded by the exchange rate
+    # manager.  Look into refactoring the exchange rate conversion to
+    # take in a simpler form.
+    #
     # TODO: writing json on the cmd line is a pain, come up with a nicer
     # parser for this data structure. (maybe MAX_KEY_FEE=USD:25
     max_key_fee=(json.loads, {'USD': {'amount': 25.0, 'address': ''}})
