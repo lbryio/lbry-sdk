@@ -178,7 +178,8 @@ class AuthJSONRPCServer(AuthorizedBase):
         log.debug(err.getTraceback())
 
     def _set_headers(self, request, data, update_secret=False):
-        request.setHeader("Access-Control-Allow-Origin", settings.API_INTERFACE)
+        if settings.allowed_origin:
+            request.setHeader("Access-Control-Allow-Origin", settings.allowed_origin)
         request.setHeader("Content-Type", "text/json")
         request.setHeader("Content-Length", str(len(data)))
         if update_secret:
