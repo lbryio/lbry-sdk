@@ -17,7 +17,8 @@ def log_response(fn):
         if future.cancelled():
             log.warning('Request was unexpectedly cancelled')
         elif future.exception():
-            log.warning(future.exception_info())
+            exc, traceback = future.exception_info()
+            log.warning('Failed to send an analytics event', exc_info=(type(exc), exc, traceback))
         else:
             response = future.result()
             log.debug('Response (%s): %s', response.status_code, response.content)
