@@ -55,6 +55,7 @@ C:\Python27\Scripts\pip.exe install colorama==0.3.7
 C:\Python27\Scripts\pip.exe install dnspython==1.12.0
 
 C:\Python27\Scripts\pip.exe install ecdsa==0.13
+C:\Python27\Scripts\pip.exe install envparse==0.2.0
 
 C:\Python27\Scripts\pip.exe install jsonrpc==1.2
 

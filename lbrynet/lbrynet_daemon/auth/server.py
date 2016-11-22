@@ -1,4 +1,5 @@
 import logging
+import urlparse
 
 from decimal import Decimal
 from zope.interface import implements
@@ -177,7 +178,8 @@ class AuthJSONRPCServer(AuthorizedBase):
         log.debug(err.getTraceback())
 
     def _set_headers(self, request, data, update_secret=False):
-        request.setHeader("Access-Control-Allow-Origin", settings.API_INTERFACE)
+        if settings.allowed_origin:
+            request.setHeader("Access-Control-Allow-Origin", settings.allowed_origin)
         request.setHeader("Content-Type", "text/json")
         request.setHeader("Content-Length", str(len(data)))
         if update_secret:
@@ -189,15 +191,38 @@ class AuthJSONRPCServer(AuthorizedBase):
         request.finish()
 
     def _check_headers(self, request):
+        return self._check_origin(request) and self._check_referer(request)
+
+    def _check_origin(self, request):
         origin = request.getHeader("Origin")
-        referer = request.getHeader("Referer")
-        if origin not in [None, settings.ORIGIN]:
-            log.warning("Attempted api call from %s", origin)
-            return False
-        if referer is not None and not referer.startswith(settings.REFERER):
-            log.warning("Attempted api call from %s", referer)
+        if not self._check_source_of_request(origin):
+            log.warning("Attempted api call from invalid origin: %s", origin)
             return False
         return True
+
+    def _check_source_of_request(self, source):
+        if source is None:
+            return True
+        if settings.API_INTERFACE == '0.0.0.0':
+            return True
+        server, port = self.get_server_port(source)
+        return server == settings.API_INTERFACE
+
+    def _check_referer(self, request):
+        referer = request.getHeader("Referer")
+        if not self._check_source_of_request(referer):
+            log.warning("Attempted api call from invalid referer %s", referer)
+            return False
+        return True
+
+    def get_server_port(self, origin):
+        parsed = urlparse.urlparse(origin)
+        server_port = parsed.netloc.split(':')
+        assert len(server_port) <= 2
+        if len(server_port) == 2:
+            return server_port[0], int(server_port[1])
+        else:
+            return server_port[0], 80
 
     def _check_function_path(self, function_path):
         if function_path not in self.callable_methods:
