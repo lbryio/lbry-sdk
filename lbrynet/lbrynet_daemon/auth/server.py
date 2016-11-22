@@ -95,17 +95,14 @@ class AuthJSONRPCServer(AuthorizedBase):
     def __init__(self, use_authentication=settings.use_auth_http):
         AuthorizedBase.__init__(self)
         self._use_authentication = use_authentication
+        self.announced_startup = False
         self.allowed_during_startup = []
         self.sessions = {}
 
     def setup(self):
         return NotImplementedError()
 
-    def _render_error(self, failure, request, version=jsonrpclib.VERSION_1, response_code=FAILURE,
-                                                                    log_failure=False, log_msg=None):
-        if log_failure:
-            msg = log_msg or "API Failure: %s"
-            log_support.failure(Failure(failure), log, msg)
+    def _render_error(self, failure, request, version=jsonrpclib.VERSION_1, response_code=FAILURE):
         err = JSONRPCException(Failure(failure), response_code)
         fault = jsonrpclib.dumps(err, version=version)
         self._set_headers(request, fault)
@@ -113,6 +110,11 @@ class AuthJSONRPCServer(AuthorizedBase):
             request.setResponseCode(response_code)
         request.write(fault)
         request.finish()
+
+    def _log_and_render_error(self, failure, request, message=None, **kwargs):
+        msg = message or "API Failure: %s"
+        log_support.failure(Failure(failure), log, msg)
+        self._render_error(failure, request, **kwargs)
 
     def render(self, request):
         notify_finish = request.notifyFinish()
@@ -163,8 +165,7 @@ class AuthJSONRPCServer(AuthorizedBase):
                     self._verify_token(session_id, parsed, token)
                 except InvalidAuthenticationToken as err:
                     log.warning("API validation failed")
-                    self._render_error(err, request, version,
-                                       response_code=AuthJSONRPCServer.UNAUTHORIZED)
+                    self._render_error(err, request, version=version, response_code=AuthJSONRPCServer.UNAUTHORIZED)
                     return server.NOT_DONE_YET
                 self._update_session_secret(session_id)
                 reply_with_next_secret = True
@@ -184,7 +185,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         # cancel the response if the connection is broken
         notify_finish.addErrback(self._response_failed, d)
         d.addCallback(self._callback_render, request, version, reply_with_next_secret)
-        d.addErrback(self._render_error, request, version, log_failure=True)
+        d.addErrback(self._log_and_render_error, request, version=version)
         return server.NOT_DONE_YET
 
     def _register_user_session(self, session_id):
@@ -285,8 +286,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._render_message(request, encoded_message)
         except Exception as err:
             msg = "Failed to render API response: %s"
-            self._render_error(err, request, response_code=self.FAILURE, version=version,
-                                                           log_failure=True, log_msg=msg)
+            self._log_and_render_error(err, request, message=msg, version=version)
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
