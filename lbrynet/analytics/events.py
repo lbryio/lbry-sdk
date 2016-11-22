@@ -1,7 +1,7 @@
 import logging
 
 from lbrynet.core import utils
-
+from lbrynet.conf import LBRYUM_WALLET
 
 log = logging.getLogger(__name__)
 
@@ -22,6 +22,20 @@ class Events(object):
         self.lbry_id = lbry_id
         self.session_id = session_id
 
+    def update_context(self, context):
+        self.context = context
+
+    def server_startup(self):
+        return self._event('Server Startup')
+
+    def server_startup_success(self):
+        return self._event('Server Startup Success')
+
+    def server_startup_error(self, message):
+        return self._event('Server Startup Error', {
+            'message': message,
+        })
+
     def heartbeat(self):
         return self._event('Heartbeat')
 
@@ -31,6 +45,13 @@ class Events(object):
             'stream_info': get_sd_hash(stream_info)
         }
         return self._event('Download Started', properties)
+
+    def error(self, message, sd_hash=None):
+        properties = {
+            'message': message,
+            'stream_info': sd_hash
+        }
+        return self._event('Error', properties)
 
     def metric_observed(self, metric_name, value):
         properties = {
@@ -57,19 +78,18 @@ class Events(object):
         return properties
 
 
-def make_context(platform, wallet, is_dev=False):
-    # TODO: distinguish between developer and release instances
+def make_context(platform, wallet):
     return {
-        'is_dev': is_dev,
         'app': {
             'name': 'lbrynet',
             'version': platform['lbrynet_version'],
             'ui_version': platform['ui_version'],
             'python_version': platform['python_version'],
+            'build': platform['build'],
             'wallet': {
                 'name': wallet,
                 # TODO: add in version info for lbrycrdd
-                'version': platform['lbryum_version'] if wallet == 'lbryum' else None
+                'version': platform['lbryum_version'] if wallet == LBRYUM_WALLET else None
             },
         },
         # TODO: expand os info to give linux/osx specific info

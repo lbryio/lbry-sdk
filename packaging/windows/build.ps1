@@ -1,4 +1,4 @@
-# this is a port of setup_qa.sh used for the unix platforms
+# this is a port of setup_build.sh used for the unix platforms
 
 function AddUi {
    wget https://s3.amazonaws.com/lbry-ui/development/dist.zip -OutFile dist.zip
@@ -11,14 +11,25 @@ function AddUi {
    if ($LastExitCode -ne 0) { $host.SetShouldExit($LastExitCode)  }
 }
 
+function SetBuild([string]$build) {
+   (Get-Content lbrynet\build_type.py).replace('dev', $build) | Set-Content lbrynet\build_type.py
+   if ($LastExitCode -ne 0) { $host.SetShouldExit($LastExitCode)  }
+}
+
 If (${Env:APPVEYOR_REPO_TAG} -NotMatch "true") {
    C:\Python27\python.exe packaging\append_sha_to_version.py lbrynet\__init__.py ${Env:APPVEYOR_REPO_COMMIT}
    if ($LastExitCode -ne 0) { $host.SetShouldExit($LastExitCode) }
    
    AddUi
+   SetBuild "qa"
 }
-ElseIf (${Env:APPVEYOR_REPO_TAG_NAME} -Match "v\d+\.\d+\.\d+-rc\d+") {
+ElseIf (${Env:APPVEYOR_REPO_TAG_NAME} -Match "v\d+\.\d+\.\d+rc\d+") {
+   # If the tag looks like v0.7.6rc0 then this is a tagged release candidate.
    AddUi
+   SetBuild "rc"
+}
+Else {
+   SetBuild "release"
 }
 
 C:\Python27\python.exe setup.py build bdist_msi

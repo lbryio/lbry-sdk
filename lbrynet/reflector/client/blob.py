@@ -1,52 +1,3 @@
-"""
-The reflector protocol (all dicts encoded in json):
-
-Client Handshake (sent once per connection, at the start of the connection):
-
-{
-    'version': 0,
-}
-
-
-Server Handshake (sent once per connection, after receiving the client handshake):
-
-{
-    'version': 0,
-}
-
-
-Client Info Request:
-
-{
-    'blob_hash': "<blob_hash>",
-    'blob_size': <blob_size>
-}
-
-
-Server Info Response (sent in response to Client Info Request):
-
-{
-    'send_blob': True|False
-}
-
-If response is 'YES', client may send a Client Blob Request or a Client Info Request.
-If response is 'NO', client may only send a Client Info Request
-
-
-Client Blob Request:
-
-{}  # Yes, this is an empty dictionary, in case something needs to go here in the future
-<raw blob_data>  # this blob data must match the info sent in the most recent Client Info Request
-
-
-Server Blob Response (sent in response to Client Blob Request):
-{
-    'received_blob': True
-}
-
-Client may now send another Client Info Request
-
-"""
 import json
 import logging
 
@@ -54,19 +5,21 @@ from twisted.protocols.basic import FileSender
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.internet import defer, error
 
+from lbrynet.core import log_support
 from lbrynet.reflector.common import IncompleteResponse
 
 
 log = logging.getLogger(__name__)
 
 
-class EncryptedFileReflectorClient(Protocol):
+class BlobReflectorClient(Protocol):
     #  Protocol stuff
+
     def connectionMade(self):
         self.blob_manager = self.factory.blob_manager
         self.response_buff = ''
         self.outgoing_buff = ''
-        self.blob_hashes_to_send = []
+        self.blob_hashes_to_send = self.factory.blobs
         self.next_blob_to_send = None
         self.blob_read_handle = None
         self.received_handshake_response = False
@@ -74,8 +27,8 @@ class EncryptedFileReflectorClient(Protocol):
         self.file_sender = None
         self.producer = None
         self.streaming = False
-        d = self.get_blobs_to_send(self.factory.stream_info_manager, self.factory.stream_hash)
-        d.addCallback(lambda _: self.send_handshake())
+        self.sent_blobs = False
+        d = self.send_handshake()
         d.addErrback(
             lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
 
@@ -94,13 +47,15 @@ class EncryptedFileReflectorClient(Protocol):
 
     def connectionLost(self, reason):
         if reason.check(error.ConnectionDone):
-            log.debug('Finished sending data via reflector')
+            self.factory.sent_blobs = self.sent_blobs
+            if self.factory.sent_blobs:
+                log.info('Finished sending data via reflector')
             self.factory.finished_deferred.callback(True)
         else:
-            log.debug('Reflector finished: %s', reason)
+            log.info('Reflector finished: %s', reason)
             self.factory.finished_deferred.callback(reason)
 
-    #  IConsumer stuff
+    # IConsumer stuff
 
     def registerProducer(self, producer, streaming):
         self.producer = producer
@@ -118,30 +73,10 @@ class EncryptedFileReflectorClient(Protocol):
             from twisted.internet import reactor
             reactor.callLater(0, self.producer.resumeProducing)
 
-    def get_blobs_to_send(self, stream_info_manager, stream_hash):
-        log.debug('Getting blobs from stream hash: %s', stream_hash)
-        d = stream_info_manager.get_blobs_for_stream(stream_hash)
-
-        def set_blobs(blob_hashes):
-            for blob_hash, position, iv, length in blob_hashes:
-                log.debug("Preparing to send %s", blob_hash)
-                if blob_hash is not None:
-                    self.blob_hashes_to_send.append(blob_hash)
-
-        d.addCallback(set_blobs)
-
-        d.addCallback(lambda _: stream_info_manager.get_sd_blob_hashes_for_stream(stream_hash))
-
-        def set_sd_blobs(sd_blob_hashes):
-            for sd_blob_hash in sd_blob_hashes:
-                self.blob_hashes_to_send.append(sd_blob_hash)
-
-        d.addCallback(set_sd_blobs)
-        return d
-
     def send_handshake(self):
         log.debug('Sending handshake')
         self.write(json.dumps({'version': 0}))
+        return defer.succeed(None)
 
     def parse_response(self, buff):
         try:
@@ -167,6 +102,7 @@ class EncryptedFileReflectorClient(Protocol):
         return defer.succeed(None)
 
     def start_transfer(self):
+        self.sent_blobs = True
         self.write(json.dumps({}))
         assert self.read_handle is not None, "self.read_handle was None when trying to start the transfer"
         d = self.file_sender.beginFileTransfer(self.read_handle, self)
@@ -216,6 +152,10 @@ class EncryptedFileReflectorClient(Protocol):
             'blob_size': self.next_blob_to_send.length
         }))
 
+    def log_fail_and_disconnect(self, err, blob_hash):
+        log_support.failure(err, log, "Error reflecting blob %s: %s", blob_hash)
+        self.transport.loseConnection()
+
     def send_next_request(self):
         if self.file_sender is not None:
             # send the blob
@@ -229,7 +169,9 @@ class EncryptedFileReflectorClient(Protocol):
             d = self.blob_manager.get_blob(blob_hash, True)
             d.addCallback(self.open_blob_for_reading)
             # send the server the next blob hash + length
-            d.addCallback(lambda _: self.send_blob_info())
+            d.addCallbacks(
+                lambda _: self.send_blob_info(),
+                lambda err: self.log_fail_and_disconnect(err, blob_hash))
             return d
         else:
             # close connection
@@ -237,14 +179,14 @@ class EncryptedFileReflectorClient(Protocol):
             self.transport.loseConnection()
 
 
-class EncryptedFileReflectorClientFactory(ClientFactory):
-    protocol = EncryptedFileReflectorClient
+class BlobReflectorClientFactory(ClientFactory):
+    protocol = BlobReflectorClient
 
-    def __init__(self, blob_manager, stream_info_manager, stream_hash):
+    def __init__(self, blob_manager, blobs):
         self.blob_manager = blob_manager
-        self.stream_info_manager = stream_info_manager
-        self.stream_hash = stream_hash
+        self.blobs = blobs
         self.p = None
+        self.sent_blobs = False
         self.finished_deferred = defer.Deferred()
 
     def buildProtocol(self, addr):
@@ -262,7 +204,7 @@ class EncryptedFileReflectorClientFactory(ClientFactory):
 
     def clientConnectionLost(self, connector, reason):
         """If we get disconnected, reconnect to server."""
-        log.debug("connection lost: %s", reason)
+        log.debug("connection lost: %s", reason.getErrorMessage())
 
     def clientConnectionFailed(self, connector, reason):
-        log.debug("connection failed: %s", reason)
+        log.debug("connection failed: %s", reason.getErrorMessage())

@@ -1,0 +1,2 @@
+class IncompleteResponse(Exception):
+    pass

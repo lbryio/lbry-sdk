@@ -8,6 +8,7 @@ NAME_ALLOWED_CHARSET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0987
 
 
 def verify_name_characters(name):
+    assert len(name) > 0, "Empty uri"
     for c in name:
         assert c in NAME_ALLOWED_CHARSET, "Invalid character"
     return True

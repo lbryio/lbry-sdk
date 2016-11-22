@@ -341,7 +341,6 @@ class HashBlobCreator(object):
         else:
             self.blob_hash = self.hashsum.hexdigest()
         d = self._close()
-
         if self.blob_hash is not None:
             d.addCallback(lambda _: self.blob_manager.creator_finished(self))
             d.addCallback(lambda _: self.blob_hash)
