@@ -163,6 +163,12 @@ ENVIRONMENT = Env(
     lbryum_wallet_dir=(str, default_lbryum_dir),
     use_auth_http=(bool, False),
     sd_download_timeout=(int, 3),
+    # By default, daemon will block all cross origin requests
+    # but if this is set, this value will be used for the
+    # Access-Control-Allow-Origin. For example
+    # set to '*' to allow all requests, or set to 'http://localhost:8080'
+    # if you're running a test UI on that port
+    allowed_origin=(str, ''),
     # TODO: this field is more complicated than it needs to be because
     # it goes through a Fee validator when loaded by the exchange rate
     # manager.  Look into refactoring the exchange rate conversion to
