@@ -175,7 +175,7 @@ class Wallet(object):
 
             def set_wallet_balance(balance):
                 if self.wallet_balance != balance:
-                    log.info("Got a new balance: %s", str(balance))
+                    log.debug("Got a new balance: %s", str(balance))
                 self.wallet_balance = balance
 
             def log_error(err):
@@ -261,7 +261,7 @@ class Wallet(object):
         self.queued_payments[self.peer_addresses[peer]] += rounded_amount
         # make any unused points available
         self.total_reserved_points -= (reserved_points.amount - rounded_amount)
-        log.info("ordering that %s points be sent to %s", str(rounded_amount),
+        log.debug("ordering that %s points be sent to %s", str(rounded_amount),
                  str(self.peer_addresses[peer]))
         peer.update_stats('points_sent', amount)
         return defer.succeed(True)
@@ -282,7 +282,7 @@ class Wallet(object):
         assert(rounded_amount <= reserved_points.amount)
         self.queued_payments[address] += rounded_amount
         self.total_reserved_points -= (reserved_points.amount - rounded_amount)
-        log.info("Ordering that %s points be sent to %s", str(rounded_amount),
+        log.debug("Ordering that %s points be sent to %s", str(rounded_amount),
                  str(address))
         return defer.succeed(True)
 
@@ -291,7 +291,7 @@ class Wallet(object):
         rounded_amount = Decimal(str(round(amount, 8)))
         assert(peer in self.current_address_given_to_peer)
         address = self.current_address_given_to_peer[peer]
-        log.info("expecting a payment at address %s in the amount of %s",
+        log.debug("expecting a payment at address %s in the amount of %s",
                  str(address), str(rounded_amount))
         self.expected_balances[address] += rounded_amount
         expected_balance = self.expected_balances[address]
@@ -315,7 +315,7 @@ class Wallet(object):
         payments_to_send = {}
         for address, points in self.queued_payments.items():
             if points > 0:
-                log.info("Should be sending %s points to %s", str(points), str(address))
+                log.debug("Should be sending %s points to %s", str(points), str(address))
                 payments_to_send[address] = points
                 self.total_reserved_points -= points
                 self.wallet_balance -= points
@@ -325,7 +325,7 @@ class Wallet(object):
             del self.queued_payments[address]
 
         if payments_to_send:
-            log.info("Creating a transaction with outputs %s", str(payments_to_send))
+            log.debug("Creating a transaction with outputs %s", str(payments_to_send))
             d = self._do_send_many(payments_to_send)
             d.addCallback(lambda txid: log.debug("Sent transaction %s", txid))
             return d
@@ -363,7 +363,7 @@ class Wallet(object):
                 assert k in r, "getvalueforname response missing field %s" % k
 
         def _log_success(claim_id):
-            log.info("lbry://%s complies with %s, claimid: %s", name, metadata.version, claim_id)
+            log.debug("lbry://%s complies with %s, claimid: %s", name, metadata.version, claim_id)
             return defer.succeed(None)
         if 'error' in result:
             log.warning("Got an error looking up a name: %s", result['error'])
@@ -457,7 +457,7 @@ class Wallet(object):
                                                                   claim,
                                                                   metadata=metadata,
                                                                   meta_version=meta_ver))
-            log.info("get claim info lbry://%s metadata: %s, claimid: %s", name, meta_ver, claim['claimId'])
+            log.debug("get claim info lbry://%s metadata: %s, claimid: %s", name, meta_ver, claim['claimId'])
 
             return d
 
@@ -482,17 +482,17 @@ class Wallet(object):
                 msg = 'Claim to name {} failed: {}'.format(name, claim_out['reason'])
                 defer.fail(Exception(msg))
             claim_outpoint = ClaimOutpoint(claim_out['txid'], claim_out['nout'])
-            log.info("Saving metadata for claim %s %d" % (claim_outpoint['txid'], claim_outpoint['nout']))
+            log.debug("Saving metadata for claim %s %d" % (claim_outpoint['txid'], claim_outpoint['nout']))
             d = self._save_name_metadata(name, claim_outpoint, metadata['sources']['lbry_sd_hash'])
             d.addCallback(lambda _: claim_out)
             return d
 
         def _claim_or_update(claim, metadata, _bid):
             if not claim:
-                log.info("No own claim yet, making a new one")
+                log.debug("No own claim yet, making a new one")
                 return self._send_name_claim(name, metadata, _bid)
             else:
-                log.info("Updating over own claim")
+                log.debug("Updating over own claim")
                 d = self.update_metadata(metadata, claim['value'])
                 claim_outpoint = ClaimOutpoint(claim['txid'], claim['nOut'])
                 d.addCallback(lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'],
@@ -610,7 +610,7 @@ class Wallet(object):
             pass
         ds = []
         for balance_to_check in balances_to_check:
-            log.info("Checking balance of address %s", str(balance_to_check[1]))
+            log.debug("Checking balance of address %s", str(balance_to_check[1]))
             d = self._get_balance_for_address(balance_to_check[1])
             d.addCallback(lambda bal: bal >= balance_to_check[2])
             ds.append(d)
@@ -1340,8 +1340,8 @@ class LBRYumWallet(Wallet):
 
     def _send_name_claim_update(self, name, claim_id, claim_outpoint, value, amount):
         metadata = json.dumps(value)
-        log.info("updateclaim %s %d %f %s %s '%s'", claim_outpoint['txid'], claim_outpoint['nout'], 
-                                                    amount, name, claim_id, metadata)
+        log.debug("Update %s %d %f %s %s '%s'", claim_outpoint['txid'], claim_outpoint['nout'], 
+                                                     amount, name, claim_id, metadata)
         cmd = known_commands['update']
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func, claim_outpoint['txid'], claim_outpoint['nout'], name, claim_id, metadata, amount)
@@ -1358,14 +1358,14 @@ class LBRYumWallet(Wallet):
         return decoded_tx
 
     def _abandon_claim(self, claim_outpoint):
-        log.info("Abandon %s %s" % (claim_outpoint['txid'], claim_outpoint['nout']))
+        log.debug("Abandon %s %s" % (claim_outpoint['txid'], claim_outpoint['nout']))
         cmd = known_commands['abandon']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, claim_outpoint['txid'], claim_outpoint['nout'])
         return d
 
     def _support_claim(self, name, claim_id, amount):
-        log.info("Support %s %s %f" % (name, claim_id, amount))
+        log.debug("Support %s %s %f" % (name, claim_id, amount))
         cmd = known_commands['support']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, name, claim_id, amount)
@@ -1373,7 +1373,7 @@ class LBRYumWallet(Wallet):
 
     def _broadcast_transaction(self, raw_tx):
         def _log_tx(r):
-            log.info("Broadcast tx: %s", r)
+            log.debug("Broadcast tx: %s", r)
             return r
         cmd = known_commands['broadcast']
         func = getattr(self.cmd_runner, cmd.name)
