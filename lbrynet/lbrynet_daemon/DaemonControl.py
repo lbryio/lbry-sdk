@@ -76,7 +76,7 @@ def start():
 
     lbrynet_log = settings.get_log_filename()
     log_support.configure_logging(lbrynet_log, args.logtoconsole, args.verbose)
-    log.debug('Final Settings: %s', settings.__dict__)
+    log.debug('Final Settings: %s', settings.get_dict())
 
     try:
         log.debug('Checking for an existing lbrynet daemon instance')
