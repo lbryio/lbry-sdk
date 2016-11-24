@@ -96,7 +96,7 @@ NOT_FOUND = 404
 OK_CODE = 200
 
 PENDING_LBRY_ID = "not set"
-
+SHORT_LBRY_ID_LEN = 20
 
 class Checker:
     """The looping calls the daemon runs"""
@@ -586,7 +586,7 @@ class Daemon(AuthJSONRPCServer):
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
             if self.lbryid is not PENDING_LBRY_ID:
-                id_hash = base58.b58encode(self.lbryid)[:20]
+                id_hash = base58.b58encode(self.lbryid)[:SHORT_LBRY_ID_LEN]
             else:
                 id_hash = self.lbryid
             try:
