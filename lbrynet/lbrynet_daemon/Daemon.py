@@ -1168,6 +1168,7 @@ class Daemon(AuthJSONRPCServer):
             'lbrynet_version': lbrynet_version,
             'lbryum_version': lbryum_version,
             'ui_version': self.ui_version,
+            'lbry_id': base58.b58encode(self.lbryid)[:SHORT_LBRY_ID_LEN],
             'remote_lbrynet': self.git_lbrynet_version,
             'remote_lbryum': self.git_lbryum_version,
             'lbrynet_update_available': lbrynet_update_available,
