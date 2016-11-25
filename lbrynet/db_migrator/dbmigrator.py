@@ -1,18 +1,17 @@
 import logging
-# import os
 
 
 def migrate_db(db_dir, start, end):
     current = start
-    old_dirs = []
-    # if os.name == "nt":
-    #     return old_dirs
-    # while current < end:
-    #     if current == 0:
-    #         from lbrynet.db_migrator.migrate0to1 import do_migration
-    #         old_dirs.append(do_migration(db_dir))
-    #         current += 1
-    return old_dirs
+    while current < end:
+        if current == 1:
+            from lbrynet.db_migrator.migrate1to2 import do_migration
+            do_migration(db_dir)
+        else:
+            raise Exception("DB migration of version {} to {} is not available".format(current,current+1))
+        current += 1
+
+    return None
 
 
 def run_migration_script():

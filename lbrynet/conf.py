@@ -203,7 +203,7 @@ class ApplicationSettings(Settings):
         self.BLOBFILES_DIR = "blobfiles"
         self.BLOB_SIZE = 2*MB
         self.LOG_FILE_NAME = "lbrynet.log"
-        self.LOG_POST_URL = "https://lbry.io/log-upload"
+        self.LOG_POST_URL = "https://lbry.io/log-upload"        
         self.CRYPTSD_FILE_EXTENSION = ".cryptsd"
         self.API_INTERFACE = "localhost"
         self.API_ADDRESS = "lbryapi"
@@ -220,6 +220,7 @@ class ApplicationSettings(Settings):
         self.LOGGLY_TOKEN = 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv'
         self.ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
         self.ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
+        self.DB_REVISION_FILE_NAME = 'db_revision' 
         Settings.__init__(self)
 
 
@@ -277,6 +278,9 @@ class Config(DefaultSettings):
         Also ensure the containing directory exists
         """
         return os.path.join(self.ensure_data_dir(), self.LOG_FILE_NAME)
+
+    def get_db_revision_filename(self):
+        return os.path.join(self.ensure_data_dir(), self.DB_REVISION_FILE_NAME) 
 
     def get_conf_filename(self):
         return get_settings_file_ext(self.ensure_data_dir())

@@ -20,7 +20,6 @@ log = logging.getLogger(__name__)
 
 
 class ManagedEncryptedFileDownloader(EncryptedFileSaver):
-
     STATUS_RUNNING = "running"
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
@@ -29,10 +28,11 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
                  lbry_file_manager, payment_rate_manager, wallet, download_directory, upload_allowed,
                  file_name=None):
         EncryptedFileSaver.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
-                               stream_info_manager, payment_rate_manager, wallet, download_directory,
-                               upload_allowed, file_name)
+                                    stream_info_manager, payment_rate_manager, wallet, download_directory,
+                                    upload_allowed, file_name)
         self.sd_hash = None
         self.txid = None
+        self.nout = None
         self.uri = None
         self.claim_id = None
         self.rowid = rowid
@@ -42,35 +42,36 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     def restore(self):
         d = self.stream_info_manager._get_sd_blob_hashes_for_stream(self.stream_hash)
 
-        def _save_sd_hash(sd_hash):
-            if len(sd_hash):
+        def _save_stream_info(sd_hash):
+            if sd_hash:
                 self.sd_hash = sd_hash[0]
                 d = self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
+                d.addCallback(lambda r: _save_claim(r[0], r[1], r[2]))
+                return d
             else:
-                d = defer.succeed(None)
-
-            return d
+                return None
 
         def _save_claim_id(claim_id):
             self.claim_id = claim_id
             return defer.succeed(None)
 
-        def _notify_bad_claim(name, txid):
-            log.error("Error loading name claim for lbry file: lbry://%s, tx %s does not contain a valid claim", name, txid)
-            log.warning("lbry file for lbry://%s, tx %s has no claim, deleting it", name, txid)
+        def _notify_bad_claim(name, txid, nout):
+            err_msg = "Error loading name claim for lbry file: \
+                       lbry://%s, tx %s output %i does not contain a valid claim, deleting it"
+            log.error(err_msg, name, txid, nout)
             return self.lbry_file_manager.delete_lbry_file(self)
 
-        def _save_claim(name, txid):
+        def _save_claim(name, txid, nout):
             self.uri = name
             self.txid = txid
-            d = self.wallet.get_claimid(name, txid)
-            d.addCallbacks(_save_claim_id, lambda err: _notify_bad_claim(name, txid))
+            self.nout = nout
+            d = self.wallet.get_claimid(name, txid, nout)
+            d.addCallbacks(_save_claim_id, lambda err: _notify_bad_claim(name, txid, nout))
             return d
 
         reflector_server = random.choice(settings.reflector_servers)
 
-        d.addCallback(_save_sd_hash)
-        d.addCallback(lambda r: _save_claim(r[0], r[1]) if r else None)
+        d.addCallback(_save_stream_info)
         d.addCallback(lambda _: reupload.check_and_restore_availability(self, reflector_server))
         d.addCallback(lambda _: self.lbry_file_manager.get_lbry_file_status(self))
 
@@ -91,7 +92,8 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         def set_saving_status_done():
             self.saving_status = False
 
-        d = EncryptedFileDownloader.stop(self, err=err)  # EncryptedFileSaver deletes metadata when it's stopped. We don't want that here.
+        # EncryptedFileSaver deletes metadata when it's stopped. We don't want that here.
+        d = EncryptedFileDownloader.stop(self, err=err)
         if change_status is True:
             self.saving_status = True
             d.addCallback(lambda _: self._save_status())
@@ -140,13 +142,14 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
             return d
 
-        def _save_claim(name, txid):
+        def _save_claim(name, txid, nout):
             self.uri = name
             self.txid = txid
+            self.nout = nout 
             return defer.succeed(None)
 
         d.addCallback(_save_sd_hash)
-        d.addCallback(lambda r: _save_claim(r[0], r[1]) if r else None)
+        d.addCallback(lambda r: _save_claim(r[0], r[1], r[2]) if r else None)
         d.addCallback(lambda _: self._save_status())
 
         return d
