@@ -56,8 +56,6 @@ chunks into the original file, according to the metadata included in the 'stream
 
 For detailed instructions, see [INSTALL.md](INSTALL.md) and [RUNNING.md](RUNNING.md).
 
-Documentation: doc.lbry.io (may be out of date)
-
 Source code: https://github.com/lbryio/lbry
 
 To contribute, [join us on Slack](https://lbry-slackin.herokuapp.com/) or contact josh@lbry.io. Pull requests are also welcome.
