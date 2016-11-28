@@ -54,7 +54,7 @@ must first obtain the 'stream descriptor' and then may open it with his `lbrynet
 download all of the chunks by locating peers with the chunks via the DHT, and then combine the
 chunks into the original file, according to the metadata included in the 'stream descriptor'.
 
-For detailed instructions, see [INSTALL.md](INSTALL.md) and [RUNNING.md](RUNNING.md).
+For instructions on installing from source, see [INSTALL.md](INSTALL.md).
 
 Source code: https://github.com/lbryio/lbry
 
