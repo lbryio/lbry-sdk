@@ -1168,7 +1168,6 @@ class Daemon(AuthJSONRPCServer):
             'lbrynet_version': lbrynet_version,
             'lbryum_version': lbryum_version,
             'ui_version': self.ui_version,
-            'lbry_id': base58.b58encode(self.lbryid)[:SHORT_LBRY_ID_LEN],
             'remote_lbrynet': self.git_lbrynet_version,
             'remote_lbryum': self.git_lbryum_version,
             'lbrynet_update_available': lbrynet_update_available,
@@ -1177,6 +1176,32 @@ class Daemon(AuthJSONRPCServer):
 
         log.info("Get version info: " + json.dumps(msg))
         return self._render_response(msg, OK_CODE)
+
+    def jsonrpc_get_lbry_session_info(self):
+        """
+        Get information about the current lbrynet session
+
+        Args:
+            None
+        Returns:
+            'lbry_id': string,
+            'managed_blobs': int, number of completed blobs in the blob manager,
+            'managed_streams': int, number of lbry files in the file manager
+        """
+
+        d = self.session.blob_manager.get_all_verified_blobs()
+
+        def _prepare_message(blobs):
+            msg = {
+                'lbry_id': base58.b58encode(self.lbryid)[:SHORT_LBRY_ID_LEN],
+                'managed_blobs': len(blobs),
+                'managed_streams': len(self.lbry_file_manager.lbry_files),
+            }
+            return msg
+
+        d.addCallback(_prepare_message)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
 
     def jsonrpc_get_settings(self):
         """
