@@ -50,7 +50,8 @@ and install the package in the new virtualenv:
  ```
  git clone https://github.com/lbryio/lbry.git
  cd lbry
- python setup.py install
+ pip install -r requirements.txt
+ pip install .
  ```
 
 To start LBRY, run `lbrynet-daemon` in a terminal.
