@@ -57,7 +57,7 @@ class Wallet(object):
         pass
 
     def get_claim_metadata_for_sd_hash(self, sd_hash):
-        return "fakeuri", "faketxid"
+        return "fakeuri", "faketxid", "fakenout"
 
 
 class PeerFinder(object):

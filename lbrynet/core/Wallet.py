@@ -26,7 +26,7 @@ from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHand
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT 
+from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
 from lbrynet.metadata.Metadata import Metadata
 
 log = logging.getLogger(__name__)
@@ -44,22 +44,22 @@ class ClaimOutpoint(dict):
         if len(txid) != 64:
             raise TypeError('{} is not a txid'.format(txid))
         self['txid'] = txid
-        self['nout'] = nout 
+        self['nout'] = nout
 
     def __repr__(self):
-        return "{}:{}".format(txid,nout)
+        return "{}:{}".format(self['txid'], self['nout'])
 
     def __eq__(self, compare):
-        if isinstance(compare,dict):
+        if isinstance(compare, dict):
             # TODO: lbryum returns nout's in dicts as "nOut" , need to fix this
-            if 'nOut' in compare: 
-                return (self['txid'],self['nout']) == (compare['txid'],compare['nOut'])
-            elif 'nout' in compare:                 
-                return (self['txid'],self['nout']) == (compare['txid'],compare['nout'])
+            if 'nOut' in compare:
+                return (self['txid'], self['nout']) == (compare['txid'], compare['nOut'])
+            elif 'nout' in compare:
+                return (self['txid'], self['nout']) == (compare['txid'], compare['nout'])
         else:
             raise TypeError('cannot compare {}'.format(type(compare)))
     def __ne__(self, compare):
-        return not self.__eq__(compare) 
+        return not self.__eq__(compare)
 
 
 def _catch_connection_error(f):
@@ -67,8 +67,9 @@ def _catch_connection_error(f):
         try:
             return f(*args)
         except socket.error:
-            raise ValueError("Unable to connect to an lbrycrd server. Make sure an lbrycrd server " +
-                             "is running and that this application can connect to it.")
+            raise ValueError(
+                "Unable to connect to an lbrycrd server. Make sure an lbrycrd server " +
+                "is running and that this application can connect to it.")
     return w
 
 
@@ -90,8 +91,9 @@ class Wallet(object):
         self.queued_payments = defaultdict(Decimal)  # {address(string): amount(Decimal)}
         self.expected_balances = defaultdict(Decimal)  # {address(string): amount(Decimal)}
         self.current_address_given_to_peer = {}  # {Peer: address(string)}
-        self.expected_balance_at_time = deque()  # (Peer, address(string), amount(Decimal), time(datetime), count(int),
-                                                 # incremental_amount(float))
+        # (Peer, address(string), amount(Decimal), time(datetime), count(int),
+        # incremental_amount(float))
+        self.expected_balance_at_time = deque()
         self.max_expected_payment_time = datetime.timedelta(minutes=3)
         self.stopped = True
 
@@ -193,7 +195,8 @@ class Wallet(object):
         d.addCallback(lambda _: set_next_manage_call())
 
         def log_error(err):
-            log.error("Something went wrong during manage. Error message: %s", err.getErrorMessage())
+            log.error("Something went wrong during manage. Error message: %s",
+                      err.getErrorMessage())
             return err
 
         d.addErrback(log_error)
@@ -213,14 +216,15 @@ class Wallet(object):
         return LBRYcrdAddressQueryHandlerFactory(self)
 
     def reserve_points(self, identifier, amount):
-        """
-        Ensure a certain amount of points are available to be sent as payment, before the service is rendered
+        """Ensure a certain amount of points are available to be sent as
+        payment, before the service is rendered
 
         @param identifier: The peer to which the payment will ultimately be sent
 
         @param amount: The amount of points to reserve
 
-        @return: A ReservedPoints object which is given to send_points once the service has been rendered
+        @return: A ReservedPoints object which is given to send_points
+            once the service has been rendered
         """
         rounded_amount = Decimal(str(round(amount, 8)))
         #if peer in self.peer_addresses:
@@ -287,11 +291,13 @@ class Wallet(object):
         rounded_amount = Decimal(str(round(amount, 8)))
         assert(peer in self.current_address_given_to_peer)
         address = self.current_address_given_to_peer[peer]
-        log.info("expecting a payment at address %s in the amount of %s", str(address), str(rounded_amount))
+        log.info("expecting a payment at address %s in the amount of %s",
+                 str(address), str(rounded_amount))
         self.expected_balances[address] += rounded_amount
         expected_balance = self.expected_balances[address]
         expected_time = datetime.datetime.now() + self.max_expected_payment_time
-        self.expected_balance_at_time.append((peer, address, expected_balance, expected_time, 0, amount))
+        self.expected_balance_at_time.append(
+            (peer, address, expected_balance, expected_time, 0, amount))
         peer.update_stats('expected_points', amount)
 
     def update_peer_address(self, peer, address):
@@ -337,12 +343,12 @@ class Wallet(object):
         return d
 
     def get_stream_info_from_claim_outpoint(self, name, txid, nout):
-        claim_outpoint = ClaimOutpoint(txid, nout) 
+        claim_outpoint = ClaimOutpoint(txid, nout)
         d = self.get_claims_from_tx(claim_outpoint['txid'])
 
         def get_claim_for_name(claims):
             for claim in claims:
-                if claim_outpoint == claim: 
+                if claim_outpoint == claim:
                     claim['txid'] = txid
                     return claim
             return Failure(UnknownNameError(name))
@@ -370,7 +376,7 @@ class Wallet(object):
         sd_hash = metadata['sources']['lbry_sd_hash']
         claim_outpoint = ClaimOutpoint(result['txid'], result['n']) 
         d = self._save_name_metadata(name, claim_outpoint, sd_hash)
-        d.addCallback(lambda _: self.get_claimid(name, result['txid'],result['n']))
+        d.addCallback(lambda _: self.get_claimid(name, result['txid'], result['n']))
         d.addCallback(lambda cid: _log_success(cid))
         d.addCallback(lambda _: metadata)
         return d
@@ -416,9 +422,9 @@ class Wallet(object):
     def get_claim_info(self, name, txid=None, nout=None):
         if txid is None or nout is None:
             d = self._get_value_for_name(name)
-            d.addCallback(lambda r: self._get_claim_info(name, ClaimOutpoint(r['txid'],r['n'])))
-        else:            
-            d = self._get_claim_info(name, ClaimOutpoint(txid,nout))
+            d.addCallback(lambda r: self._get_claim_info(name, ClaimOutpoint(r['txid'], r['n'])))
+        else:
+            d = self._get_claim_info(name, ClaimOutpoint(txid, nout))
         d.addErrback(lambda _: False)
         return d
 
@@ -473,9 +479,9 @@ class Wallet(object):
     def claim_name(self, name, bid, m):
         def _save_metadata(claim_out, metadata):
             if not claim_out['success']:
-                msg = 'Claim to name {} failed: {}'.format(name,claim_out['reason'])
+                msg = 'Claim to name {} failed: {}'.format(name, claim_out['reason'])
                 defer.fail(Exception(msg))
-            claim_outpoint = ClaimOutpoint(claim_out['txid'],claim_out['nout'])
+            claim_outpoint = ClaimOutpoint(claim_out['txid'], claim_out['nout'])
             log.info("Saving metadata for claim %s %d" % (claim_outpoint['txid'], claim_outpoint['nout']))
             d = self._save_name_metadata(name, claim_outpoint, metadata['sources']['lbry_sd_hash'])
             d.addCallback(lambda _: claim_out)
@@ -488,7 +494,7 @@ class Wallet(object):
             else:
                 log.info("Updating over own claim")
                 d = self.update_metadata(metadata, claim['value'])
-                claim_outpoint = ClaimOutpoint(claim['txid'],claim['nOut'])
+                claim_outpoint = ClaimOutpoint(claim['txid'], claim['nOut'])
                 d.addCallback(lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'],
                                                                                 claim_outpoint,
                                                                                 new_metadata, _bid))
@@ -534,11 +540,11 @@ class Wallet(object):
     def get_name_and_validity_for_sd_hash(self, sd_hash):
         def _get_status_of_claim(name_txid, sd_hash):
             if name_txid:
-                claim_outpoint = ClaimOutpoint(name_txid[1],name_txid[2])
+                claim_outpoint = ClaimOutpoint(name_txid[1], name_txid[2])
                 name = name_txid[0]
                 return self._get_status_of_claim(claim_outpoint, name, sd_hash)
             else:
-        		return None
+                return None
 
         d = self._get_claim_metadata_for_sd_hash(sd_hash)
         d.addCallback(lambda name_txid: _get_status_of_claim(name_txid, sd_hash))
@@ -1352,7 +1358,7 @@ class LBRYumWallet(Wallet):
         return decoded_tx
 
     def _abandon_claim(self, claim_outpoint):
-        log.info("Abandon %s %s" % (claim_outpoint['txid'],claim_outpoint['nout']))
+        log.info("Abandon %s %s" % (claim_outpoint['txid'], claim_outpoint['nout']))
         cmd = known_commands['abandon']
         func = getattr(self.cmd_runner, cmd.name)
         d = threads.deferToThread(func, claim_outpoint['txid'], claim_outpoint['nout'])
