@@ -17,6 +17,7 @@ from decimal import Decimal
 from twisted.web import server
 from twisted.internet import defer, threads, error, reactor, task
 from twisted.internet.task import LoopingCall
+from twisted.python.failure import Failure
 from txjsonrpc import jsonrpclib
 from jsonschema import ValidationError
 
@@ -819,7 +820,8 @@ class Daemon(AuthJSONRPCServer):
             self.session = Session(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
                                        blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
                                        known_dht_nodes=conf.settings.known_dht_nodes, peer_port=self.peer_port,
-                                       use_upnp=self.use_upnp, wallet=results['wallet'])
+                                       use_upnp=self.use_upnp, wallet=results['wallet'],
+                                       is_generous=conf.settings.is_generous_host)
             self.startup_status = STARTUP_STAGES[2]
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
@@ -940,34 +942,59 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: log.info("Delete lbry file"))
         return d
 
-    def _get_est_cost(self, name):
-        def _check_est(d, name):
-            try:
-                if isinstance(d.result, float):
-                    log.info("Cost est for lbry://" + name + ": " + str(d.result) + "LBC")
-                    return defer.succeed(None)
-            except AttributeError:
-                pass
-            log.info("Timeout estimating cost for lbry://" + name + ", using key fee")
-            d.cancel()
-            return defer.succeed(None)
+    def _get_est_cost_from_name(self, name):
+        d = self._resolve_name(name)
+        d.addCallback(self._get_est_cost_from_metadata, name)
+        return d
+
+    def _get_est_cost_from_metadata(self, metadata, name):
+        d = self._get_est_cost_from_sd_hash(metadata['sources']['lbry_sd_hash'])
+
+        def _handle_err(err):
+            if isinstance(err, Failure):
+                log.warning("Timeout getting blob for cost est for lbry://%s, using only key fee", name)
+                return 0.0
+            raise err
+
+        d.addErrback(_handle_err)
 
         def _add_key_fee(data_cost):
-            d = self._resolve_name(name)
-            d.addCallback(lambda info: self.exchange_rate_manager.to_lbc(info.get('fee', None)))
-            d.addCallback(lambda fee: data_cost if fee is None else data_cost + fee.amount)
-            return d
+            fee = self.exchange_rate_manager.to_lbc(metadata.get('fee', None))
+            return data_cost if fee is None else data_cost + fee.amount
 
-        d = self._resolve_name(name)
-        d.addCallback(lambda info: info['sources']['lbry_sd_hash'])
-        d.addCallback(lambda sd_hash: download_sd_blob(self.session, sd_hash,
-                                                    self.blob_request_payment_rate_manager))
-        d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        d.addCallback(lambda metadata: metadata.validator.info_to_show())
-        d.addCallback(lambda info: int(dict(info)['stream_size']) / 1000000 * self.data_rate)
-        d.addCallbacks(_add_key_fee, lambda _: _add_key_fee(0.0))
-        reactor.callLater(self.search_timeout, _check_est, d, name)
+        d.addCallback(_add_key_fee)
         return d
+
+    def _get_sd_blob(self, blob, sd_hash):
+        if blob:
+            return self.session.blob_manager.get_blob(blob[0], True)
+
+        def _check_est(downloader):
+            if downloader.result is not None:
+                downloader.cancel()
+
+        d = defer.succeed(None)
+        reactor.callLater(self.search_timeout, _check_est, d)
+        d.addCallback(lambda _: download_sd_blob(self.session, sd_hash, self.blob_request_payment_rate_manager))
+        return d
+
+    def _get_size_from_sd_blob(self, sd_blob):
+        d = self.sd_identifier.get_metadata_for_sd_blob(sd_blob)
+        d.addCallback(lambda metadata: metadata.validator.info_to_show())
+        d.addCallback(lambda info: int(dict(info)['stream_size']))
+        return d
+
+    def _get_est_cost_from_sd_hash(self, sd_hash):
+        d = self.session.blob_manager.completed_blobs([sd_hash])
+        d.addCallback(self._get_sd_blob, sd_hash)
+        d.addCallback(self._get_size_from_sd_blob)
+        d.addCallback(self._get_est_cost_from_stream_size)
+        return d
+
+    def _get_est_cost_from_stream_size(self, size):
+        if self.session.payment_rate_manager.generous:
+            return 0.0
+        return size / (10**6) * conf.settings.data_rate
 
     def _get_lbry_file_by_uri(self, name):
         def _get_file(stream_info):
@@ -1563,17 +1590,23 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_get_est_cost(self, p):
         """
-        Get estimated cost for a lbry uri
+        Get estimated cost for a lbry stream
 
         Args:
             'name': lbry uri
+            'size': stream size, in bytes. if provided an sd blob won't be downloaded.
         Returns:
             estimated cost
         """
 
-        name = p[FileID.NAME]
+        if 'size' in p:
+            size = p['size']
+            d = defer.succeed(self._get_est_cost_from_stream_size(size))
+            d.addCallback(lambda r: self._render_response(r, OK_CODE))
+            return d
 
-        d = self._get_est_cost(name)
+        name = p[FileID.NAME]
+        d = self._get_est_cost_from_name(name)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
