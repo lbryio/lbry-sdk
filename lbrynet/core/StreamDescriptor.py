@@ -73,7 +73,9 @@ class StreamDescriptorWriter(object):
         return self._write_stream_descriptor(json.dumps(sd_info))
 
     def _write_stream_descriptor(self, raw_data):
-        """This method must be overridden by subclasses to write raw data to the stream descriptor"""
+        """This method must be overridden by subclasses to write raw data to
+        the stream descriptor
+        """
         pass
 
 
@@ -126,45 +128,55 @@ class StreamDescriptorIdentifier(object):
        and returns the appropriate ones based on the type of the stream descriptor given
     """
     def __init__(self):
-        self._sd_info_validators = {}  # {stream_type: IStreamDescriptorValidator}
-        self._stream_options = {}  # {stream_type: IStreamOptions}
-        self._stream_downloader_factories = defaultdict(list)  # {stream_type: [IStreamDownloaderFactory]}
+        # {stream_type: IStreamDescriptorValidator}
+        self._sd_info_validators = {}
+        # {stream_type: IStreamOptions
+        self._stream_options = {}
+        # {stream_type: [IStreamDownloaderFactory]}
+        self._stream_downloader_factories = defaultdict(list)
 
     def add_stream_type(self, stream_type, sd_info_validator, stream_options):
-        """
-        This is how the StreamDescriptorIdentifier learns about new types of stream descriptors.
+        """This is how the StreamDescriptorIdentifier learns about new types of stream descriptors.
 
         There can only be one StreamDescriptorValidator for each type of stream.
 
-        @param stream_type: A string representing the type of stream descriptor. This must be unique to
-            this stream descriptor.
+        @param stream_type: A string representing the type of stream
+            descriptor. This must be unique to this stream descriptor.
 
-        @param sd_info_validator: A class implementing the IStreamDescriptorValidator interface. This class's
-            constructor will be passed the raw metadata in the stream descriptor file and its 'validate' method
-            will then be called. If the validation step fails, an exception will be thrown, preventing the stream
-            descriptor from being further processed.
+        @param sd_info_validator: A class implementing the
+            IStreamDescriptorValidator interface. This class's
+            constructor will be passed the raw metadata in the stream
+            descriptor file and its 'validate' method will then be
+            called. If the validation step fails, an exception will be
+            thrown, preventing the stream descriptor from being
+            further processed.
 
-        @param stream_options: A class implementing the IStreamOptions interface. This class's constructor will be
-            passed the sd_info_validator object containing the raw metadata from the stream descriptor file.
+        @param stream_options: A class implementing the IStreamOptions
+            interface. This class's constructor will be passed the
+            sd_info_validator object containing the raw metadata from
+            the stream descriptor file.
 
         @return: None
+
         """
         self._sd_info_validators[stream_type] = sd_info_validator
         self._stream_options[stream_type] = stream_options
 
     def add_stream_downloader_factory(self, stream_type, factory):
-        """
-        Register a stream downloader factory with the StreamDescriptorIdentifier.
+        """Register a stream downloader factory with the StreamDescriptorIdentifier.
 
-        This is how the StreamDescriptorIdentifier determines what factories may be used to process different stream
-        descriptor files. There must be at least one factory for each type of stream added via
-        "add_stream_info_validator".
+        This is how the StreamDescriptorIdentifier determines what
+        factories may be used to process different stream descriptor
+        files. There must be at least one factory for each type of
+        stream added via "add_stream_info_validator".
 
-        @param stream_type: A string representing the type of stream descriptor which the factory knows how to process.
+        @param stream_type: A string representing the type of stream
+        descriptor which the factory knows how to process.
 
         @param factory: An object implementing the IStreamDownloaderFactory interface.
 
         @return: None
+
         """
         self._stream_downloader_factories[stream_type].append(factory)
 
@@ -236,6 +248,10 @@ def download_sd_blob(session, blob_hash, payment_rate_manager):
 
     @return: An object of type HashBlob
     """
-    downloader = StandaloneBlobDownloader(blob_hash, session.blob_manager, session.peer_finder,
-                                          session.rate_limiter, payment_rate_manager, session.wallet)
+    downloader = StandaloneBlobDownloader(blob_hash,
+                                          session.blob_manager,
+                                          session.peer_finder,
+                                          session.rate_limiter,
+                                          payment_rate_manager,
+                                          session.wallet)
     return downloader.download()

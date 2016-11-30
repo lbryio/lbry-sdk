@@ -73,10 +73,15 @@ class HostedEncryptedFile(resource.Resource):
         d.addErrback(self._responseFailed, d)
         return d
 
+    def is_valid_request_name(self, request):
+        return (
+            request.args['name'][0] != 'lbry' and
+            request.args['name'][0] not in self._api.waiting_on.keys())
+
     def render_GET(self, request):
         request.setHeader("Content-Security-Policy", "sandbox")
         if 'name' in request.args.keys():
-            if request.args['name'][0] != 'lbry' and request.args['name'][0] not in self._api.waiting_on.keys():
+            if self.is_valid_request_name(request):
                 d = self._api._download_name(request.args['name'][0])
                 d.addCallback(lambda stream: self._make_stream_producer(request, stream))
             elif request.args['name'][0] in self._api.waiting_on.keys():

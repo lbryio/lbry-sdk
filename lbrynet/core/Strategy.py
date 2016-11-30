@@ -92,17 +92,22 @@ class Strategy(object):
 
 
 class BasicAvailabilityWeightedStrategy(Strategy):
-    """
-    Basic strategy to target blob prices based on supply relative to mean supply
+    """Basic strategy to target blob prices based on supply relative to mean supply
 
-    Discount price target with each incoming request, and raise it with each outgoing from the modeled price
-    until the rate is accepted or a threshold is reached
+    Discount price target with each incoming request, and raise it
+    with each outgoing from the modeled price until the rate is
+    accepted or a threshold is reached
+
     """
     implementer(INegotiationStrategy)
 
-    def __init__(self, blob_tracker, acceleration=1.25, deceleration=0.9, max_rate=None, min_rate=0.0,
-                                    is_generous=settings.is_generous_host, base_price=0.0001, alpha=1.0):
-        price_model = MeanAvailabilityWeightedPrice(blob_tracker, base_price=base_price, alpha=alpha)
+    def __init__(self, blob_tracker, acceleration=1.25,
+                 deceleration=0.9, max_rate=None,
+                 min_rate=0.0,
+                 is_generous=settings.is_generous_host,
+                 base_price=0.0001, alpha=1.0):
+        price_model = MeanAvailabilityWeightedPrice(
+            blob_tracker, base_price=base_price, alpha=alpha)
         Strategy.__init__(self, price_model, max_rate, min_rate, is_generous)
         self._acceleration = Decimal(acceleration)  # rate of how quickly to ramp offer
         self._deceleration = Decimal(deceleration)

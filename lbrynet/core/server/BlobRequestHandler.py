@@ -26,7 +26,8 @@ class BlobRequestHandlerFactory(object):
     ######### IQueryHandlerFactory #########
 
     def build_query_handler(self):
-        q_h = BlobRequestHandler(self.blob_manager, self.wallet, self.payment_rate_manager, self.track)
+        q_h = BlobRequestHandler(
+            self.blob_manager, self.wallet, self.payment_rate_manager, self.track)
         return q_h
 
     def get_primary_query_identifier(self):
@@ -162,7 +163,8 @@ class BlobRequestHandler(object):
         return d
 
     def record_transaction(self, blob):
-        d = self.blob_manager.add_blob_to_upload_history(str(blob), self.peer.host, self.blob_data_payment_rate)
+        d = self.blob_manager.add_blob_to_upload_history(
+            str(blob), self.peer.host, self.blob_data_payment_rate)
         return d
 
     def _reply_to_send_request(self, response, incoming):
@@ -203,7 +205,8 @@ class BlobRequestHandler(object):
         def start_transfer():
             self.file_sender = FileSender()
             log.debug("Starting the file upload")
-            assert self.read_handle is not None, "self.read_handle was None when trying to start the transfer"
+            assert self.read_handle is not None, \
+                "self.read_handle was None when trying to start the transfer"
             d = self.file_sender.beginFileTransfer(self.read_handle, consumer, count_bytes)
             return d
 

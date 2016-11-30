@@ -93,7 +93,8 @@ class DummyBlobHandler(object):
 
 
 class StandaloneBlobDownloader(object):
-    def __init__(self, blob_hash, blob_manager, peer_finder, rate_limiter, payment_rate_manager, wallet):
+    def __init__(self, blob_hash, blob_manager, peer_finder,
+                 rate_limiter, payment_rate_manager, wallet):
         self.blob_hash = blob_hash
         self.blob_manager = blob_manager
         self.peer_finder = peer_finder

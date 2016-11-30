@@ -26,7 +26,8 @@ from lbrynet import conf, reflector, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.metadata.Fee import FeeValidator
 from lbrynet.metadata.Metadata import Metadata, verify_name_characters
-from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory, EncryptedFileOpenerFactory
+from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
+from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
@@ -39,7 +40,8 @@ from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core import log_support, utils, Platform
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
+from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
+from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.core.Session import Session
 from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.Wallet import LBRYumWallet
@@ -87,7 +89,8 @@ CONNECT_CODE_wallet = 'wallet_catchup_lag'
 CONNECTION_PROBLEM_CODES = [
         (CONNECT_CODE_VERSION_CHECK, "There was a problem checking for updates on github"),
         (CONNECT_CODE_NETWORK, "Your internet connection appears to have been interrupted"),
-        (CONNECT_CODE_wallet, "Synchronization with the blockchain is lagging... if this continues try restarting LBRY")
+        (CONNECT_CODE_wallet,
+         "Synchronization with the blockchain is lagging... if this continues try restarting LBRY")
         ]
 
 BAD_REQUEST = 400
@@ -365,7 +368,8 @@ class Daemon(AuthJSONRPCServer):
 
     def _load_caches(self):
         if os.path.isfile(os.path.join(self.db_dir, "stream_info_cache.json")):
-            with open(os.path.join(self.db_dir, "stream_info_cache.json"), "r") as stream_info_cache:
+            filename = os.path.join(self.db_dir, "stream_info_cache.json")
+            with open(filename, "r") as stream_info_cache:
                 self.name_cache = json.loads(stream_info_cache.read())
             log.info("Loaded claim info cache")
 
@@ -382,7 +386,8 @@ class Daemon(AuthJSONRPCServer):
         def _log_failure():
             log.info("lbrynet connectivity test failed")
 
-        wonderfullife_sh = "6f3af0fa3924be98a54766aa2715d22c6c1509c3f7fa32566df4899a41f3530a9f97b2ecb817fa1dcbf1b30553aefaa7"
+        wonderfullife_sh = ("6f3af0fa3924be98a54766aa2715d22c6c1509c3f7fa32566df4899"
+                            "a41f3530a9f97b2ecb817fa1dcbf1b30553aefaa7")
         d = download_sd_blob(self.session, wonderfullife_sh, self.session.base_payment_rate_manager)
         d.addCallbacks(lambda _: _log_success, lambda _: _log_failure)
 
@@ -414,9 +419,14 @@ class Daemon(AuthJSONRPCServer):
             return defer.succeed("Started LBRY file")
 
         def _get_and_start_file(name):
+            def start_stopped_file(l):
+                if l.stopped:
+                    return _start_file(l)
+                else:
+                    return "LBRY file was already running"
             d = defer.succeed(self.pending_claims.pop(name))
             d.addCallback(lambda _: self._get_lbry_file(FileID.NAME, name, return_json=False))
-            d.addCallback(lambda l: _start_file(l) if l.stopped else "LBRY file was already running")
+            d.addCallback(start_stopped_file)
 
         def re_add_to_pending_claims(name):
             log.warning("Re-add %s to pending claims", name)
@@ -468,11 +478,13 @@ class Daemon(AuthJSONRPCServer):
                     self.session.blob_manager
                 )
                 try:
-                    self.reflector_server_port = reactor.listenTCP(self.reflector_port, reflector_factory)
+                    self.reflector_server_port = reactor.listenTCP(
+                        self.reflector_port, reflector_factory)
                     log.info('Started reflector on port %s', self.reflector_port)
                 except error.CannotListenError as e:
                     log.exception("Couldn't bind reflector to port %d", self.reflector_port)
-                    raise ValueError("{} lbrynet may already be running on your computer.".format(e))
+                    raise ValueError(
+                        "{} lbrynet may already be running on your computer.".format(e))
         return defer.succeed(True)
 
     def _stop_reflector(self):
@@ -613,12 +625,18 @@ class Daemon(AuthJSONRPCServer):
             'search_timeout': float,
             'cache_time': int
         }
+        def can_update_key(settings, key, setting_type):
+            return (
+                isinstance(settings[key], setting_type) or
+                (
+                    key == "max_key_fee" and
+                    isinstance(FeeValidator(settings[key]).amount, setting_type)
+                )
+            )
 
         for key, setting_type in setting_types.iteritems():
             if key in settings:
-                if isinstance(settings[key], setting_type):
-                    conf.settings.update({key: settings[key]})
-                elif key == "max_key_fee" and isinstance(FeeValidator(settings[key]).amount, setting_type):
+                if can_update_key(settings, key, setting_type):
                     conf.settings.update({key: settings[key]})
                 else:
                     try:
@@ -666,7 +684,7 @@ class Daemon(AuthJSONRPCServer):
             old_revision = int(open(self.db_revision_file).read().strip())
 
         if old_revision > self.current_db_revision:
-            return defer.fail(Exception('This version of lbrynet is not compatible with the database'))
+            raise Exception('This version of lbrynet is not compatible with the database')
 
         def update_version_file_and_print_success():
             self._write_db_revision_file(self.current_db_revision)
@@ -675,7 +693,8 @@ class Daemon(AuthJSONRPCServer):
         if old_revision < self.current_db_revision:
             from lbrynet.db_migrator import dbmigrator
             log.info("Upgrading your databases...")
-            d = threads.deferToThread(dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision)
+            d = threads.deferToThread(
+                dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision)
             d.addCallback(lambda _: update_version_file_and_print_success())
             return d
         return defer.succeed(True)
@@ -773,11 +792,18 @@ class Daemon(AuthJSONRPCServer):
             return r
 
         def create_session(results):
-            self.session = Session(results['default_data_payment_rate'], db_dir=self.db_dir, lbryid=self.lbryid,
-                                       blob_dir=self.blobfile_dir, dht_node_port=self.dht_node_port,
-                                       known_dht_nodes=conf.settings.known_dht_nodes, peer_port=self.peer_port,
-                                       use_upnp=self.use_upnp, wallet=results['wallet'],
-                                       is_generous=conf.settings.is_generous_host)
+            self.session = Session(
+                results['default_data_payment_rate'],
+                db_dir=self.db_dir,
+                lbryid=self.lbryid,
+                blob_dir=self.blobfile_dir,
+                dht_node_port=self.dht_node_port,
+                known_dht_nodes=conf.settings.known_dht_nodes,
+                peer_port=self.peer_port,
+                use_upnp=self.use_upnp,
+                wallet=results['wallet'],
+                is_generous=conf.settings.is_generous_host
+            )
             self.startup_status = STARTUP_STAGES[2]
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
@@ -788,14 +814,25 @@ class Daemon(AuthJSONRPCServer):
         return dl
 
     def _setup_stream_identifier(self):
-        file_saver_factory = EncryptedFileSaverFactory(self.session.peer_finder, self.session.rate_limiter,
-                                                  self.session.blob_manager, self.stream_info_manager,
-                                                  self.session.wallet, self.download_directory)
-        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
-        file_opener_factory = EncryptedFileOpenerFactory(self.session.peer_finder, self.session.rate_limiter,
-                                                    self.session.blob_manager, self.stream_info_manager,
-                                                    self.session.wallet)
-        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_opener_factory)
+        file_saver_factory = EncryptedFileSaverFactory(
+            self.session.peer_finder,
+            self.session.rate_limiter,
+            self.session.blob_manager,
+            self.stream_info_manager,
+            self.session.wallet,
+            self.download_directory
+        )
+        self.sd_identifier.add_stream_downloader_factory(
+            EncryptedFileStreamType, file_saver_factory)
+        file_opener_factory = EncryptedFileOpenerFactory(
+            self.session.peer_finder,
+            self.session.rate_limiter,
+            self.session.blob_manager,
+            self.stream_info_manager,
+            self.session.wallet
+        )
+        self.sd_identifier.add_stream_downloader_factory(
+            EncryptedFileStreamType, file_opener_factory)
         return defer.succeed(None)
 
     def _download_sd_blob(self, sd_hash, timeout=conf.settings.sd_download_timeout):
@@ -890,8 +927,13 @@ class Daemon(AuthJSONRPCServer):
             # TODO: could possibly be a timing issue here
             d.addCallback(lambda c: self.stream_info_manager.delete_stream(s_h) if c == 0 else True)
             if delete_file:
-                d.addCallback(lambda _: os.remove(os.path.join(self.download_directory, lbry_file.file_name)) if
-                          os.path.isfile(os.path.join(self.download_directory, lbry_file.file_name)) else defer.succeed(None))
+                def remove_if_file():
+                    filename = os.path.join(self.download_directory, lbry_file.file_name)
+                    if os.path.isfile(filename):
+                        os.remove(filename)
+                    else:
+                        return defer.succeed(None)
+                d.addCallback(lambda _: remove_if_file)
             return d
 
         d.addCallback(lambda _: finish_deletion(lbry_file))
@@ -1294,15 +1336,15 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def jsonrpc_help(self, p=None):
-        """
-        Function to retrieve docstring for API function
+        """Function to retrieve docstring for API function
 
         Args:
             optional 'function': function to retrieve documentation for
             optional 'callable_during_startup':
         Returns:
             if given a function, returns given documentation
-            if given callable_during_startup flag, returns list of functions callable during the startup sequence
+            if given callable_during_startup flag, returns list of
+            functions callable during the startup sequence
             if no params are given, returns the list of callable functions
         """
 
@@ -1776,8 +1818,7 @@ class Daemon(AuthJSONRPCServer):
             reason : if not succesful, give reason
             txid : txid of resulting transaction if succesful
             nout : nout of the resulting support claim if succesful
-            fee : fee paid for the transaction if succesful 
-
+            fee : fee paid for the transaction if succesful
         """
 
         name = p[FileID.NAME]
@@ -2095,14 +2136,16 @@ class Daemon(AuthJSONRPCServer):
         return self._render_response(True, OK_CODE)
 
     def jsonrpc_upload_log(self, p=None):
-        """
-        Upload log
+        """Upload log
 
         Args, optional:
             'name_prefix': prefix to indicate what is requesting the log upload
-            'exclude_previous': true/false, whether or not to exclude previous sessions from upload, defaults on true
+            'exclude_previous': true/false, whether or not to exclude
+                previous sessions from upload, defaults on true
+
         Returns:
             True
+
         """
 
         if p:
@@ -2313,7 +2356,8 @@ class Daemon(AuthJSONRPCServer):
 
 
 def get_lbryum_version_from_github():
-    r = urlopen("https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
+    r = urlopen(
+        "https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
     version = next(line.split("=")[1].split("#")[0].replace(" ", "")
                    for line in r if "LBRYUM_VERSION" in line)
     version = version.replace("'", "")
@@ -2358,8 +2402,10 @@ def get_output_callback(params):
 
 
 class _DownloadNameHelper(object):
-    def __init__(self, daemon, name, timeout=conf.settings.download_timeout, download_directory=None,
-                 file_name=None, wait_for_write=True):
+    def __init__(self, daemon, name,
+                 timeout=conf.settings.download_timeout,
+                 download_directory=None, file_name=None,
+                 wait_for_write=True):
         self.daemon = daemon
         self.name = name
         self.timeout = timeout

@@ -1,9 +1,11 @@
-from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType, EncryptedFileStreamDescriptorValidator
+from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
+from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamDescriptorValidator
 from lbrynet.core.DownloadOption import DownloadOption, DownloadOptionChoice
 
 
 def add_lbry_file_to_sd_identifier(sd_identifier):
-    sd_identifier.add_stream_type(EncryptedFileStreamType, EncryptedFileStreamDescriptorValidator, EncryptedFileOptions())
+    sd_identifier.add_stream_type(
+        EncryptedFileStreamType, EncryptedFileStreamDescriptorValidator, EncryptedFileOptions())
 
 
 class EncryptedFileOptions(object):
@@ -20,13 +22,15 @@ class EncryptedFileOptions(object):
                 return "%f LBC/MB" % prm.base.min_blob_data_payment_rate
 
         rate_choices = []
-        rate_choices.append(DownloadOptionChoice(prm.base.min_blob_data_payment_rate,
-                                                 "No change - %s" % get_default_data_rate_description(),
-                                                 "No change - %s" % get_default_data_rate_description()))
+        rate_choices.append(DownloadOptionChoice(
+            prm.base.min_blob_data_payment_rate,
+            "No change - %s" % get_default_data_rate_description(),
+            "No change - %s" % get_default_data_rate_description()))
         if prm.base.min_blob_data_payment_rate is not None:
-            rate_choices.append(DownloadOptionChoice(None,
-                                                     "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate),
-                                                     "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate)))
+            rate_choices.append(DownloadOptionChoice(
+                None,
+                "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate),
+                "Application default (%s LBC/MB)" % str(prm.base.min_blob_data_payment_rate)))
         rate_choices.append(DownloadOptionChoice(float,
                                                  "Enter rate in LBC/MB",
                                                  "Enter rate in LBC/MB"))

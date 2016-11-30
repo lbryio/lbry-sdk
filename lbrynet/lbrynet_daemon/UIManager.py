@@ -167,31 +167,30 @@ class UIManager(object):
                 else:
                     c = None
                 if c:
+                    log_msg = "Local version %s of %s does not meet UI requirement for version %s"
                     if self.requirements[r]['operator'] == '==':
                         if not self.requirements[r]['version'] == c:
                             passed_requirements = False
-                            log.info("Local version %s of %s does not meet UI requirement for version %s" % (
-                            c, r, self.requirements[r]['version']))
+                            log.info(log_msg, c, r, self.requirements[r]['version'])
                         else:
                             log.info("Local version of %s meets ui requirement" % r)
                     if self.requirements[r]['operator'] == '>=':
                         if not self.requirements[r]['version'] <= c:
                             passed_requirements = False
-                            log.info("Local version %s of %s does not meet UI requirement for version %s" % (
-                            c, r, self.requirements[r]['version']))
+                            log.info(log_msg, c, r, self.requirements[r]['version'])
                         else:
                             log.info("Local version of %s meets ui requirement" % r)
                     if self.requirements[r]['operator'] == '<=':
                         if not self.requirements[r]['version'] >= c:
                             passed_requirements = False
-                            log.info("Local version %s of %s does not meet UI requirement for version %s" % (
-                            c, r, self.requirements[r]['version']))
+                            log.info(log_msg, c, r, self.requirements[r]['version'])
                         else:
                             log.info("Local version of %s meets ui requirement" % r)
             return defer.succeed(passed_requirements)
 
         def _disp_failure():
-            log.info("Failed to satisfy requirements for branch '%s', update was not loaded" % self.branch)
+            log.info("Failed to satisfy requirements for branch '%s', update was not loaded",
+                     self.branch)
             return defer.succeed(False)
 
         def _do_migrate():
@@ -202,7 +201,11 @@ class UIManager(object):
             log.info("Loaded UI update")
 
             f = open(self.config, "w")
-            loaded_ui = {'commit': self.git_version, 'branch': self.branch, 'requirements': self.requirements}
+            loaded_ui = {
+                'commit': self.git_version,
+                'branch': self.branch,
+                'requirements': self.requirements
+            }
             f.write(json.dumps(loaded_ui))
             f.close()
 

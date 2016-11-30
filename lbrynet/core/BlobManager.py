@@ -107,8 +107,11 @@ class DiskBlobManager(BlobManager):
         return defer.succeed(True)
 
     def get_blob(self, blob_hash, upload_allowed, length=None):
-        """Return a blob identified by blob_hash, which may be a new blob or a blob that is already on the hard disk"""
-        # TODO: if blob.upload_allowed and upload_allowed is False, change upload_allowed in blob and on disk
+        """Return a blob identified by blob_hash, which may be a new blob or a
+        blob that is already on the hard disk
+        """
+        # TODO: if blob.upload_allowed and upload_allowed is False,
+        # change upload_allowed in blob and on disk
         if blob_hash in self.blobs:
             return defer.succeed(self.blobs[blob_hash])
         return self._make_new_blob(blob_hash, upload_allowed, length)
@@ -228,7 +231,8 @@ class DiskBlobManager(BlobManager):
                 d = defer.succeed(True)
 
             def log_error(err):
-                log.warning("Failed to delete completed blobs from the db: %s", err.getErrorMessage())
+                log.warning(
+                    "Failed to delete completed blobs from the db: %s", err.getErrorMessage())
 
             d.addErrback(log_error)
             return d
@@ -243,7 +247,9 @@ class DiskBlobManager(BlobManager):
             if being_deleted is False:
                 self.blob_hashes_to_delete[blob_hash] = True
                 d = self.get_blob(blob_hash, True)
-                d.addCallbacks(delete, set_not_deleting, callbackArgs=(blob_hash,), errbackArgs=(blob_hash,))
+                d.addCallbacks(
+                    delete, set_not_deleting,
+                    callbackArgs=(blob_hash,), errbackArgs=(blob_hash,))
                 ds.append(d)
         dl = defer.DeferredList(ds, consumeErrors=True)
         dl.addCallback(delete_from_db)
@@ -298,8 +304,9 @@ class DiskBlobManager(BlobManager):
         def get_blobs_in_db(db_transaction):
             blobs_in_db = []  # [(blob_hash, last_verified_time)]
             for b in blobs_to_check:
-                result = db_transaction.execute("select last_verified_time from blobs where blob_hash = ?",
-                                                (b,))
+                result = db_transaction.execute(
+                    "select last_verified_time from blobs where blob_hash = ?",
+                    (b,))
                 row = result.fetchone()
                 if row is not None:
                     blobs_in_db.append((b, row[0]))
@@ -355,8 +362,9 @@ class DiskBlobManager(BlobManager):
                                     "where next_announce_time < ? and blob_hash is not null",
                                     (timestamp,))
             blobs = [b for b, in r.fetchall()]
-            transaction.execute("update blobs set next_announce_time = ? where next_announce_time < ?",
-                                (next_announce_time, timestamp))
+            transaction.execute(
+                "update blobs set next_announce_time = ? where next_announce_time < ?",
+                (next_announce_time, timestamp))
             return blobs
 
         return self.db_conn.runInteraction(get_and_update)
@@ -460,13 +468,17 @@ class DiskBlobManager(BlobManager):
     @rerun_if_locked
     def _add_blob_to_download_history(self, blob_hash, host, rate):
         ts = int(time.time())
-        d = self.db_conn.runQuery("insert into download values (null, ?, ?, ?, ?) ", (blob_hash, str(host), float(rate), ts))
+        d = self.db_conn.runQuery(
+            "insert into download values (null, ?, ?, ?, ?) ",
+            (blob_hash, str(host), float(rate), ts))
         return d
 
     @rerun_if_locked
     def _add_blob_to_upload_history(self, blob_hash, host, rate):
         ts = int(time.time())
-        d = self.db_conn.runQuery("insert into upload values (null, ?, ?, ?, ?) ", (blob_hash, str(host), float(rate), ts))
+        d = self.db_conn.runQuery(
+            "insert into upload values (null, ?, ?, ?, ?) ",
+            (blob_hash, str(host), float(rate), ts))
         return d
 
 
@@ -510,7 +522,10 @@ class TempBlobManager(BlobManager):
         return defer.succeed(True)
 
     def completed_blobs(self, blobs_to_check):
-        blobs = [b.blob_hash for b in self.blobs.itervalues() if b.blob_hash in blobs_to_check and b.is_validated()]
+        blobs = [
+            b.blob_hash for b in self.blobs.itervalues()
+            if b.blob_hash in blobs_to_check and b.is_validated()
+        ]
         return defer.succeed(blobs)
 
     def get_all_verified_blobs(self):
@@ -519,7 +534,10 @@ class TempBlobManager(BlobManager):
 
     def hashes_to_announce(self):
         now = time.time()
-        blobs = [blob_hash for blob_hash, announce_time in self.blob_next_announces.iteritems() if announce_time < now]
+        blobs = [
+            blob_hash for blob_hash, announce_time in self.blob_next_announces.iteritems()
+            if announce_time < now
+        ]
         next_announce_time = now + self.hash_reannounce_time
         for b in blobs:
             self.blob_next_announces[b] = next_announce_time

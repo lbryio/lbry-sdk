@@ -45,11 +45,19 @@ class DefaultFormat(MessageTranslator):
     def fromPrimitive(self, msgPrimitive):
         msgType = msgPrimitive[self.headerType]
         if msgType == self.typeRequest:
-            msg = msgtypes.RequestMessage(msgPrimitive[self.headerNodeID], msgPrimitive[self.headerPayload], msgPrimitive[self.headerArgs], msgPrimitive[self.headerMsgID])
+            msg = msgtypes.RequestMessage(msgPrimitive[self.headerNodeID],
+                                          msgPrimitive[self.headerPayload],
+                                          msgPrimitive[self.headerArgs],
+                                          msgPrimitive[self.headerMsgID])
         elif msgType == self.typeResponse:
-            msg = msgtypes.ResponseMessage(msgPrimitive[self.headerMsgID], msgPrimitive[self.headerNodeID], msgPrimitive[self.headerPayload])
+            msg = msgtypes.ResponseMessage(msgPrimitive[self.headerMsgID],
+                                           msgPrimitive[self.headerNodeID],
+                                           msgPrimitive[self.headerPayload])
         elif msgType == self.typeError:
-            msg = msgtypes.ErrorMessage(msgPrimitive[self.headerMsgID], msgPrimitive[self.headerNodeID], msgPrimitive[self.headerPayload], msgPrimitive[self.headerArgs])
+            msg = msgtypes.ErrorMessage(msgPrimitive[self.headerMsgID],
+                                        msgPrimitive[self.headerNodeID],
+                                        msgPrimitive[self.headerPayload],
+                                        msgPrimitive[self.headerArgs])
         else:
             # Unknown message, no payload
             msg = msgtypes.Message(msgPrimitive[self.headerMsgID], msgPrimitive[self.headerNodeID])

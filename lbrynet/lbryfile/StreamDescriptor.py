@@ -137,7 +137,8 @@ class EncryptedFileStreamDescriptorValidator(object):
             raise InvalidStreamDescriptorError("Missing '%s'" % (e.args[0]))
         for c in hex_suggested_file_name:
             if c not in '0123456789abcdef':
-                raise InvalidStreamDescriptorError("Suggested file name is not a hex-encoded string")
+                raise InvalidStreamDescriptorError(
+                    "Suggested file name is not a hex-encoded string")
         h = get_lbry_hash_obj()
         h.update(hex_stream_name)
         h.update(key)

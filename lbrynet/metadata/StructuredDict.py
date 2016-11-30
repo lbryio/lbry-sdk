@@ -50,13 +50,15 @@ class StructuredDict(dict):
 
     def migrate(self, target_version=None):
         if target_version:
-            assert self._versions.index(target_version) > self.versions.index(self.version), "Current version is above target version"
+            assert self._versions.index(target_version) > self.versions.index(self.version), \
+                "Current version is above target version"
 
         for version, schema, migration in self._upgrade_version_range(self.version, target_version):
             migration(self)
             try:
                 self.validate(version)
             except ValidationError as e:
-                raise ValidationError, "Could not migrate to version %s due to validation error: %s" % (version, e.message)
-
+                raise ValidationError(
+                    "Could not migrate to version %s due to validation error: %s" %
+                    (version, e.message))
             self.version = version

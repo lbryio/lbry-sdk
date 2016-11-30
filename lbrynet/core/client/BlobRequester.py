@@ -122,7 +122,8 @@ class BlobRequester(object):
             def choose_best_peers(peers):
                 bad_peers = self._get_bad_peers()
                 without_bad_peers = [p for p in peers if not p in bad_peers]
-                without_maxed_out_peers = [p for p in without_bad_peers if p not in self._maxed_out_peers]
+                without_maxed_out_peers = [
+                    p for p in without_bad_peers if p not in self._maxed_out_peers]
                 return without_maxed_out_peers
 
             d.addCallback(choose_best_peers)
@@ -494,9 +495,8 @@ class DownloadRequest(RequestHelper):
     def _pay_or_cancel_payment(self, arg, reserved_points, blob):
         if self._can_pay_peer(blob, arg):
             self._pay_peer(blob.length, reserved_points)
-            d = self.requestor.blob_manager.add_blob_to_download_history(str(blob),
-                                                                         str(self.peer.host),
-                                                                         float(self.protocol_prices[self.protocol]))
+            d = self.requestor.blob_manager.add_blob_to_download_history(
+                str(blob), str(self.peer.host), float(self.protocol_prices[self.protocol]))
         else:
             self._cancel_points(reserved_points)
         return arg

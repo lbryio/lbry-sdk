@@ -10,7 +10,8 @@ log = logging.getLogger(__name__)
 class StreamProgressManager(object):
     implements(IProgressManager)
 
-    def __init__(self, finished_callback, blob_manager, download_manager, delete_blob_after_finished=False):
+    def __init__(self, finished_callback, blob_manager,
+                 download_manager, delete_blob_after_finished=False):
         self.finished_callback = finished_callback
         self.blob_manager = blob_manager
         self.delete_blob_after_finished = delete_blob_after_finished
@@ -69,8 +70,8 @@ class StreamProgressManager(object):
             log.debug("delete_blob_after_finished is True")
             blobs = self.download_manager.blobs
             if blob_num in blobs:
-                log.debug("Telling the blob manager, %s,  to delete blob %s", str(self.blob_manager),
-                          blobs[blob_num].blob_hash)
+                log.debug("Telling the blob manager, %s, to delete blob %s",
+                          self.blob_manager, blobs[blob_num].blob_hash)
                 self.blob_manager.delete_blobs([blobs[blob_num].blob_hash])
             else:
                 log.debug("Blob number %s was not in blobs", str(blob_num))
@@ -79,12 +80,23 @@ class StreamProgressManager(object):
 
 
 class FullStreamProgressManager(StreamProgressManager):
-    def __init__(self, finished_callback, blob_manager, download_manager, delete_blob_after_finished=False):
+    def __init__(self, finished_callback, blob_manager,
+                 download_manager, delete_blob_after_finished=False):
         StreamProgressManager.__init__(self, finished_callback, blob_manager, download_manager,
                                        delete_blob_after_finished)
         self.outputting_d = None
 
     ######### IProgressManager #########
+
+    def _done(self, i, blobs):
+        """Return true if `i` is a blob number we don't have"""
+        return (
+            i not in blobs or
+            (
+                not blobs[i].is_validated() and
+                i not in self.provided_blob_nums
+            )
+        )
 
     def stream_position(self):
         blobs = self.download_manager.blobs
@@ -92,13 +104,16 @@ class FullStreamProgressManager(StreamProgressManager):
             return 0
         else:
             for i in xrange(max(blobs.iterkeys())):
-                if not i in blobs or (not blobs[i].is_validated() and not i in self.provided_blob_nums):
+                if self._done(i, blobs):
                     return i
             return max(blobs.iterkeys()) + 1
 
     def needed_blobs(self):
         blobs = self.download_manager.blobs
-        return [b for n, b in blobs.iteritems() if not b.is_validated() and not n in self.provided_blob_nums]
+        return [
+            b for n, b in blobs.iteritems()
+            if not b.is_validated() and not n in self.provided_blob_nums
+        ]
 
     ######### internal #########
 

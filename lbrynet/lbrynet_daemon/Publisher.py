@@ -122,7 +122,8 @@ class Publisher(object):
 
     def set_status(self):
         log.debug('Setting status')
-        d = self.lbry_file_manager.change_lbry_file_status(self.lbry_file, ManagedEncryptedFileDownloader.STATUS_FINISHED)
+        d = self.lbry_file_manager.change_lbry_file_status(
+            self.lbry_file, ManagedEncryptedFileDownloader.STATUS_FINISHED)
         d.addCallback(lambda _: self.lbry_file.restore())
         return d
 

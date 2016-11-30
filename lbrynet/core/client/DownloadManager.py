@@ -70,18 +70,22 @@ class DownloadManager(object):
 
         def add_blob_to_list(blob, blob_num):
             self.blobs[blob_num] = blob
-            log.debug("Added blob (hash: %s, number %s) to the list", str(blob.blob_hash), str(blob_num))
+            log.debug(
+                "Added blob (hash: %s, number %s) to the list", blob.blob_hash, blob_num)
 
         def error_during_add(err):
-            log.warning("An error occurred adding the blob to blobs. Error:%s", err.getErrorMessage())
+            log.warning(
+                "An error occurred adding the blob to blobs. Error:%s", err.getErrorMessage())
             return err
 
         ds = []
         for blob_info in blob_infos:
             if not blob_info.blob_num in self.blobs:
                 self.blob_infos[blob_info.blob_num] = blob_info
-                log.debug("Trying to get the blob associated with blob hash %s", str(blob_info.blob_hash))
-                d = self.blob_manager.get_blob(blob_info.blob_hash, self.upload_allowed, blob_info.length)
+                log.debug(
+                    "Trying to get the blob associated with blob hash %s", blob_info.blob_hash)
+                d = self.blob_manager.get_blob(
+                    blob_info.blob_hash, self.upload_allowed, blob_info.length)
                 d.addCallback(add_blob_to_list, blob_info.blob_num)
                 d.addErrback(error_during_add)
                 ds.append(d)
@@ -108,7 +112,10 @@ class DownloadManager(object):
         if not self.blobs:
             return self.calculate_total_bytes()
         else:
-            to_be_outputted = [b for n, b in self.blobs.iteritems() if n >= self.progress_manager.last_blob_outputted]
+            to_be_outputted = [
+                b for n, b in self.blobs.iteritems()
+                if n >= self.progress_manager.last_blob_outputted
+            ]
             return sum([b.length for b in to_be_outputted if b.length is not None])
 
     def calculate_bytes_left_to_download(self):

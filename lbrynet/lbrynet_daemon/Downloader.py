@@ -118,18 +118,19 @@ class GetStream(object):
                 log.warning("Insufficient funds to download lbry://%s", self.resolved_name)
                 return defer.fail(InsufficientFundsError())
             if converted_fee > max_key_fee:
-                log.warning("Key fee %f above limit of %f didn't download lbry://%s", converted_fee,
-                                                                                      max_key_fee,
-                                                                                      self.resolved_name)
+                log.warning(
+                    "Key fee %f above limit of %f didn't download lbry://%s",
+                    converted_fee, max_key_fee, self.resolved_name)
                 return defer.fail(KeyFeeAboveMaxAllowed())
-            log.info("Key fee %f below limit of %f, downloading lbry://%s", converted_fee,
-                                                                            max_key_fee,
-                                                                            self.resolved_name)
+            log.info(
+                "Key fee %f below limit of %f, downloading lbry://%s",
+                converted_fee, max_key_fee, self.resolved_name)
 
         self.checker.start(1)
 
         self.d.addCallback(lambda _: _set_status(None, DOWNLOAD_METADATA_CODE))
-        self.d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
+        self.d.addCallback(lambda _: download_sd_blob(
+            self.session, self.stream_hash, self.payment_rate_manager))
         self.d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         self.d.addCallback(lambda r: _set_status(r, DOWNLOAD_RUNNING_CODE))
         self.d.addCallback(get_downloader_factory)
@@ -145,7 +146,8 @@ class GetStream(object):
         self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
 
         d = self._pay_key_fee()
-        d.addCallback(lambda _: log.info("Downloading %s --> %s", self.stream_hash, self.downloader.file_name))
+        d.addCallback(lambda _: log.info(
+            "Downloading %s --> %s", self.stream_hash, self.downloader.file_name))
         d.addCallback(lambda _: self.downloader.start())
 
     def _pay_key_fee(self):

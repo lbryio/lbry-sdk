@@ -20,7 +20,8 @@ class PeerConnectionHandler(object):
 class ConnectionManager(object):
     implements(interfaces.IConnectionManager)
 
-    def __init__(self, downloader, rate_limiter, primary_request_creators, secondary_request_creators):
+    def __init__(self, downloader, rate_limiter,
+                 primary_request_creators, secondary_request_creators):
         self.downloader = downloader
         self.rate_limiter = rate_limiter
         self._primary_request_creators = primary_request_creators
@@ -134,12 +135,14 @@ class ConnectionManager(object):
             d.callback(True)
 
     def _rank_request_creator_connections(self):
-        """
-        @return: an ordered list of our request creators, ranked according to which has the least number of
-            connections open that it likes
+        """Returns an ordered list of our request creators, ranked according
+        to which has the least number of connections open that it
+        likes
         """
         def count_peers(request_creator):
-            return len([p for p in self._peer_connections.itervalues() if request_creator in p.request_creators])
+            return len([
+                p for p in self._peer_connections.itervalues()
+                if request_creator in p.request_creators])
 
         return sorted(self._primary_request_creators, key=count_peers)
 

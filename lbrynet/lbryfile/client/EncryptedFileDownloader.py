@@ -77,7 +77,8 @@ class EncryptedFileDownloader(CryptStreamDownloader):
         return d
 
     def _get_progress_manager(self, download_manager):
-        return FullStreamProgressManager(self._finished_downloading, self.blob_manager, download_manager)
+        return FullStreamProgressManager(self._finished_downloading,
+                                         self.blob_manager, download_manager)
 
     def _start(self):
         d = self._setup_output()
@@ -120,7 +121,8 @@ class EncryptedFileDownloader(CryptStreamDownloader):
             return 0
 
     def _get_metadata_handler(self, download_manager):
-        return EncryptedFileMetadataHandler(self.stream_hash, self.stream_info_manager, download_manager)
+        return EncryptedFileMetadataHandler(self.stream_hash,
+                                            self.stream_info_manager, download_manager)
 
 
 class EncryptedFileDownloaderFactory(object):
@@ -143,7 +145,8 @@ class EncryptedFileDownloaderFactory(object):
 
         def save_source_if_blob(stream_hash):
             if metadata.metadata_source == StreamMetadata.FROM_BLOB:
-                d = self.stream_info_manager.save_sd_blob_hash_to_stream(stream_hash, metadata.source_blob_hash)
+                d = self.stream_info_manager.save_sd_blob_hash_to_stream(
+                    stream_hash, metadata.source_blob_hash)
             else:
                 d = defer.succeed(True)
             d.addCallback(lambda _: stream_hash)
@@ -168,8 +171,11 @@ class EncryptedFileDownloaderFactory(object):
 class EncryptedFileSaver(EncryptedFileDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  payment_rate_manager, wallet, download_directory, upload_allowed, file_name=None):
-        EncryptedFileDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
-                                    stream_info_manager, payment_rate_manager, wallet, upload_allowed)
+        EncryptedFileDownloader.__init__(self, stream_hash,
+                                         peer_finder, rate_limiter,
+                                         blob_manager, stream_info_manager,
+                                         payment_rate_manager, wallet,
+                                         upload_allowed)
         self.download_directory = download_directory
         self.file_name = file_name
         self.file_written_to = None
@@ -200,8 +206,11 @@ class EncryptedFileSaver(EncryptedFileDownloader):
         return d
 
     def _get_progress_manager(self, download_manager):
-        return FullStreamProgressManager(self._finished_downloading, self.blob_manager, download_manager,
-                                         delete_blob_after_finished=not self.upload_allowed)
+        return FullStreamProgressManager(self._finished_downloading,
+                                         self.blob_manager,
+                                         download_manager,
+                                         delete_blob_after_finished=not
+                                         self.upload_allowed)
 
     def _setup_output(self):
         def open_file():
@@ -230,9 +239,10 @@ class EncryptedFileSaver(EncryptedFileDownloader):
                     self.file_written_to = os.path.join(self.download_directory, file_name)
                 except IOError:
                     log.error(traceback.format_exc())
-                    raise ValueError("Failed to open %s. Make sure you have permission to save files to that"
-                                     " location." % str(os.path.join(self.download_directory,
-                                                                     file_name)))
+                    raise ValueError(
+                        "Failed to open %s. Make sure you have permission to save files to that"
+                        " location." %
+                        os.path.join(self.download_directory, file_name))
         return threads.deferToThread(open_file)
 
     def _close_output(self):
@@ -265,9 +275,11 @@ class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
         self.download_directory = download_directory
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info, upload_allowed):
-        return EncryptedFileSaver(stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager,
-                             self.stream_info_manager, payment_rate_manager, self.wallet,
-                             self.download_directory, upload_allowed)
+        return EncryptedFileSaver(stream_hash, self.peer_finder,
+                                  self.rate_limiter, self.blob_manager,
+                                  self.stream_info_manager,
+                                  payment_rate_manager, self.wallet,
+                                  self.download_directory, upload_allowed)
 
     @staticmethod
     def get_description():
@@ -277,8 +289,11 @@ class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
 class EncryptedFileOpener(EncryptedFileDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  payment_rate_manager, wallet, upload_allowed):
-        EncryptedFileDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
-                                    stream_info_manager, payment_rate_manager, wallet, upload_allowed)
+        EncryptedFileDownloader.__init__(self, stream_hash,
+                                         peer_finder, rate_limiter,
+                                         blob_manager, stream_info_manager,
+                                         payment_rate_manager, wallet,
+                                         upload_allowed)
         self.process = None
         self.process_log = None
 
@@ -288,8 +303,11 @@ class EncryptedFileOpener(EncryptedFileDownloader):
         return d
 
     def _get_progress_manager(self, download_manager):
-        return FullStreamProgressManager(self._finished_downloading, self.blob_manager, download_manager,
-                                         delete_blob_after_finished=not self.upload_allowed)
+        return FullStreamProgressManager(self._finished_downloading,
+                                         self.blob_manager,
+                                         download_manager,
+                                         delete_blob_after_finished=not
+                                         self.upload_allowed)
 
     def _setup_output(self):
         def start_process():
@@ -346,8 +364,11 @@ class EncryptedFileOpenerFactory(EncryptedFileDownloaderFactory):
         return False
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info, upload_allowed):
-        return EncryptedFileOpener(stream_hash, self.peer_finder, self.rate_limiter, self.blob_manager,
-                              self.stream_info_manager, payment_rate_manager, self.wallet, upload_allowed)
+        return EncryptedFileOpener(stream_hash, self.peer_finder,
+                                   self.rate_limiter, self.blob_manager,
+                                   self.stream_info_manager,
+                                   payment_rate_manager, self.wallet,
+                                   upload_allowed)
 
     @staticmethod
     def get_description():

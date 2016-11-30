@@ -201,7 +201,8 @@ class SysTrayIcon(object):
         # First load the icon.
         ico_x = win32api.GetSystemMetrics(win32con.SM_CXSMICON)
         ico_y = win32api.GetSystemMetrics(win32con.SM_CYSMICON)
-        hicon = win32gui.LoadImage(0, icon, win32con.IMAGE_ICON, ico_x, ico_y, win32con.LR_LOADFROMFILE)
+        hicon = win32gui.LoadImage(
+            0, icon, win32con.IMAGE_ICON, ico_x, ico_y, win32con.LR_LOADFROMFILE)
 
         hdcBitmap = win32gui.CreateCompatibleDC(0)
         hdcScreen = win32gui.GetDC(0)

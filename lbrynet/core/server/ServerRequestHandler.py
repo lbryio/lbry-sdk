@@ -93,7 +93,8 @@ class ServerRequestHandler(object):
         if self.request_received is False:
             return self._parse_data_and_maybe_send_blob(data)
         else:
-            log.warning("The client sent data when we were uploading a file. This should not happen")
+            log.warning(
+                "The client sent data when we were uploading a file. This should not happen")
 
     def _parse_data_and_maybe_send_blob(self, data):
         self.request_buff = self.request_buff + data
@@ -155,7 +156,9 @@ class ServerRequestHandler(object):
             return response
 
         def log_errors(err):
-            log.warning("An error occurred handling a client request. Error message: %s", err.getErrorMessage())
+            log.warning(
+                "An error occurred handling a client request. Error message: %s",
+                err.getErrorMessage())
             return err
 
         def send_response(response):

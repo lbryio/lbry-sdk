@@ -98,8 +98,12 @@ class AuthAPIClient(object):
             return response['result']
 
     @classmethod
-    def config(cls, key_name=None, key=None, pw_path=None, timeout=HTTP_TIMEOUT, connection=None, count=0,
-                                            service=None, cookies=None, auth=None, url=None, login_url=None):
+    def config(cls, key_name=None, key=None, pw_path=None,
+               timeout=HTTP_TIMEOUT,
+               connection=None, count=0,
+               service=None,
+               cookies=None, auth=None,
+               url=None, login_url=None):
 
         api_key_name = API_KEY_NAME if not key_name else key_name
         pw_path = os.path.join(settings.data_dir, ".api_keys") if not pw_path else pw_path
@@ -153,7 +157,8 @@ class AuthAPIClient(object):
             assert cookies.get(LBRY_SECRET, False), "Missing cookie"
             secret = cookies.get(LBRY_SECRET)
             api_key = APIKey(secret, api_key_name)
-        return cls(api_key, timeout, conn, id_count, service, cookies, auth_header, url, service_url)
+        return cls(api_key, timeout, conn, id_count, service, cookies,
+                   auth_header, url, service_url)
 
 
 class LBRYAPIClient(object):

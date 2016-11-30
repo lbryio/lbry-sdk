@@ -55,9 +55,11 @@ class HashBlobWriter(object):
         self.hashsum.update(data)
         self.len_so_far += len(data)
         if self.len_so_far > self.length_getter():
-            self.finished_cb(self, Failure(InvalidDataError("Length so far is greater than the expected length."
-                                                            " %s to %s" % (str(self.len_so_far),
-                                                                           str(self.length_getter())))))
+            self.finished_cb(
+                self,
+                Failure(InvalidDataError("Length so far is greater than the expected length."
+                                         " %s to %s" % (self.len_so_far,
+                                                        self.length_getter()))))
         else:
             if self.write_handle is None:
                 log.debug("Tried to write to a write_handle that was None.")
@@ -90,7 +92,8 @@ class HashBlob(object):
         if self.length is None and 0 <= length <= settings.BLOB_SIZE:
             self.length = length
             return True
-        log.warning("Got an invalid length. Previous length: %s, Invalid length: %s", str(self.length), str(length))
+        log.warning("Got an invalid length. Previous length: %s, Invalid length: %s",
+                    self.length, length)
         return False
 
     def get_length(self):
@@ -132,8 +135,9 @@ class HashBlob(object):
                     finished_deferred.callback(self)
                     del self.writers[p]
                     return True
-            log.warning("Somehow, the writer that was accepted as being valid was already removed. writer: %s",
-                        str(writer))
+            log.warning(
+                "Somehow, the writer that was accepted as being valid was already removed: %s",
+                writer)
             return False
 
         def errback_finished_deferred(err):
@@ -238,13 +242,15 @@ class BlobFile(HashBlob):
             d = threads.deferToThread(delete_from_file_system)
 
             def log_error(err):
-                log.warning("An error occurred deleting %s: %s", str(self.file_path), err.getErrorMessage())
+                log.warning("An error occurred deleting %s: %s",
+                            str(self.file_path), err.getErrorMessage())
                 return err
 
             d.addErrback(log_error)
             return d
         else:
-            return defer.fail(Failure(ValueError("File is currently being read or written and cannot be deleted")))
+            return defer.fail(Failure(
+                ValueError("File is currently being read or written and cannot be deleted")))
 
     def close_read_handle(self, file_handle):
         if file_handle is not None:
@@ -303,7 +309,8 @@ class TempBlob(HashBlob):
             self.data_buffer = ''
             return defer.succeed(True)
         else:
-            return defer.fail(Failure(ValueError("Blob is currently being read or written and cannot be deleted")))
+            return defer.fail(Failure(
+                ValueError("Blob is currently being read or written and cannot be deleted")))
 
     def close_read_handle(self, file_handle):
         file_handle.close()

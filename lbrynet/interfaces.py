@@ -36,11 +36,11 @@ class IRequestSender(Interface):
         """
 
     def add_blob_request(self, blob_request):
-        """
-        Add a request for a blob to the next message that will be sent to the peer.
+        """Add a request for a blob to the next message that will be sent to the peer.
 
-        This will cause the protocol to call blob_request.write(data) for all incoming
-        data, after the response message has been parsed out, until blob_request.finished_deferred fires.
+        This will cause the protocol to call blob_request.write(data)
+        for all incoming data, after the response message has been
+        parsed out, until blob_request.finished_deferred fires.
 
         @param blob_request: the request for the blob
         @type blob_request: ClientBlobRequest
@@ -56,8 +56,7 @@ class IRequestCreator(Interface):
     """
 
     def send_next_request(self, peer, protocol):
-        """
-        Create a Request object for the peer and then give the protocol that request.
+        """Create a Request object for the peer and then give the protocol that request.
 
         @param peer: the Peer object which the request will be sent to.
         @type peer: Peer
@@ -65,7 +64,8 @@ class IRequestCreator(Interface):
         @param protocol: the protocol to pass the request to.
         @type protocol: object which implements IRequestSender
 
-        @return: Deferred object which will callback with True or False depending on whether a Request was sent
+        @return: Deferred object which will callback with True or
+        False depending on whether a Request was sent
         @rtype: Deferred which fires with boolean
         """
 
@@ -83,12 +83,12 @@ class IMetadataHandler(Interface):
     Get metadata for the IDownloadManager.
     """
     def get_initial_blobs(self):
-        """
-        Return metadata about blobs that are known to be associated with the stream at the time that the
-        stream is set up.
+        """Return metadata about blobs that are known to be associated with
+        the stream at the time that the stream is set up.
 
         @return: Deferred object which will call back with a list of BlobInfo objects
         @rtype: Deferred which fires with [BlobInfo]
+
         """
 
     def final_blob_num(self):
@@ -156,11 +156,12 @@ class IDownloadManager(Interface):
         """
 
     def needed_blobs(self):
-        """
-        Returns a list of BlobInfos representing all of the blobs that the stream still needs to download.
+        """Returns a list of BlobInfos representing all of the blobs that the
+        stream still needs to download.
 
         @return: the list of BlobInfos representing blobs that the stream still needs to download.
         @rtype: [BlobInfo]
+
         """
 
     def final_blob_num(self):
@@ -172,14 +173,15 @@ class IDownloadManager(Interface):
         """
 
     def handle_blob(self, blob_num):
-        """
-        This function is called when the next blob in the stream is ready to be handled, whatever that may mean.
+        """This function is called when the next blob in the stream is ready
+        to be handled, whatever that may mean.
 
         @param blob_num: The blob_num of the blob that is ready to be handled.
         @type blob_num: integer
 
         @return: A Deferred which fires when the blob has been 'handled'
         @rtype: Deferred which can fire with anything
+
         """
 
 
@@ -188,8 +190,8 @@ class IConnectionManager(Interface):
     Connects to peers so that IRequestCreators can send their requests.
     """
     def get_next_request(self, peer, protocol):
-        """
-        Ask all IRequestCreators belonging to this object to create a Request for peer and give it to protocol
+        """Ask all IRequestCreators belonging to this object to create a
+        Request for peer and give it to protocol
 
         @param peer: the peer which the request will be sent to.
         @type peer: Peer
@@ -197,9 +199,11 @@ class IConnectionManager(Interface):
         @param protocol: the protocol which the request should be sent to by the IRequestCreator.
         @type protocol: IRequestSender
 
-        @return: Deferred object which will callback with True or False depending on whether the IRequestSender
-            should send the request or hang up
+        @return: Deferred object which will callback with True or
+            False depending on whether the IRequestSender should send
+            the request or hang up
         @rtype: Deferred which fires with boolean
+
         """
 
     def protocol_disconnected(self, peer, protocol):
@@ -217,11 +221,12 @@ class IConnectionManager(Interface):
 
 
 class IProgressManager(Interface):
-    """
-    Responsible for keeping track of the progress of the download.
+    """Responsible for keeping track of the progress of the download.
 
-    Specifically, it is their responsibility to decide which blobs need to be downloaded and keep track of
-    the progress of the download
+    Specifically, it is their responsibility to decide which blobs
+    need to be downloaded and keep track of the progress of the
+    download
+
     """
     def stream_position(self):
         """
@@ -235,11 +240,12 @@ class IProgressManager(Interface):
         """
 
     def needed_blobs(self):
-        """
-        Returns a list of BlobInfos representing all of the blobs that the stream still needs to download.
+        """Returns a list of BlobInfos representing all of the blobs that the
+        stream still needs to download.
 
         @return: the list of BlobInfos representing blobs that the stream still needs to download.
         @rtype: [BlobInfo]
+
         """
 
     def blob_downloaded(self, blob, blob_info):
@@ -334,24 +340,26 @@ class IRateLimiter(Interface):
         """
 
     def register_protocol(self, protocol):
-        """
-        Register an IRateLimited object with the IRateLimiter so that the IRateLimiter can throttle it
+        """Register an IRateLimited object with the IRateLimiter so that the
+        IRateLimiter can throttle it
 
         @param protocol: An object implementing the interface IRateLimited
         @type protocol: Object implementing IRateLimited
 
         @return: None
+
         """
 
     def unregister_protocol(self, protocol):
-        """
-        Unregister an IRateLimited object so that it won't be throttled any more.
+        """Unregister an IRateLimited object so that it won't be throttled any more.
 
-        @param protocol: An object implementing the interface IRateLimited, which was previously registered with this
+        @param protocol: An object implementing the interface
+            IRateLimited, which was previously registered with this
             IRateLimiter via "register_protocol"
         @type protocol: Object implementing IRateLimited
 
         @return: None
+
         """
 
 
@@ -360,11 +368,11 @@ class IRequestHandler(Interface):
     Pass client queries on to IQueryHandlers
     """
     def register_query_handler(self, query_handler, query_identifiers):
-        """
-        Register a query handler, which will be passed any queries that
+        """Register a query handler, which will be passed any queries that
         match any of the identifiers in query_identifiers
 
-        @param query_handler: the object which will handle queries matching the given query_identifiers
+        @param query_handler: the object which will handle queries
+        matching the given query_identifiers
         @type query_handler: Object implementing IQueryHandler
 
         @param query_identifiers: A list of strings representing the query identifiers
@@ -372,6 +380,7 @@ class IRequestHandler(Interface):
         @type query_identifiers: [string]
 
         @return: None
+
         """
 
     def register_blob_sender(self, blob_sender):
@@ -462,13 +471,14 @@ class IStreamDownloaderOptions(Interface):
 
 
 class IStreamDownloaderFactory(Interface):
-    """
-    Construct IStreamDownloaders and provide options that will be passed to those IStreamDownloaders.
+    """Construct IStreamDownloaders and provide options that will be
+    passed to those IStreamDownloaders.
+
     """
 
     def can_download(self, sd_validator, payment_rate_manager):
-        """
-        Decide whether the downloaders created by this factory can download the stream described by sd_validator
+        """Decide whether the downloaders created by this factory can
+        download the stream described by sd_validator
 
         @param sd_validator: object containing stream metadata
         @type sd_validator: object which implements IStreamDescriptorValidator interface
@@ -478,13 +488,14 @@ class IStreamDownloaderFactory(Interface):
 
         @return: True if the downloaders can download the stream, False otherwise
         @rtype: bool
+
         """
 
     def make_downloader(self, sd_validator, options, payment_rate_manager):
-        """
-        Create an object that implements the IStreamDownloader interface
+        """Create an object that implements the IStreamDownloader interface
 
-        @param sd_validator: object containing stream metadata which will be given to the IStreamDownloader
+        @param sd_validator: object containing stream metadata which
+            will be given to the IStreamDownloader
         @type sd_validator: object which implements IStreamDescriptorValidator interface
 
         @param options: a list of values that will be used by the IStreamDownloaderFactory to
@@ -497,6 +508,7 @@ class IStreamDownloaderFactory(Interface):
 
         @return: a Deferred which fires with the downloader object
         @rtype: Deferred which fires with IStreamDownloader
+
         """
 
     def get_description(self):
@@ -513,12 +525,12 @@ class IStreamDownloader(Interface):
     Use metadata and data from the network for some useful purpose.
     """
     def start(self):
-        """
-        start downloading the stream
+        """start downloading the stream
 
-        @return: a Deferred which fires when the stream is finished downloading, or errbacks when the stream is
-            cancelled.
+        @return: a Deferred which fires when the stream is finished
+            downloading, or errbacks when the stream is cancelled.
         @rtype: Deferred which fires with anything
+
         """
 
     def insufficient_funds(self, err):
@@ -542,26 +554,28 @@ class IStreamDescriptorValidator(Interface):
 
     def info_to_show(self):
         """
-        @return: A list of tuples representing metadata that should be presented to the user before starting the
-            download
+
+        @return: A list of tuples representing metadata that should be
+            presented to the user before starting the download
         @rtype: [(string, string)]
         """
 
 
 class IWallet(Interface):
-    """
-    Send and receive payments.
+    """Send and receive payments.
 
-    To send a payment, a payment reservation must be obtained first. This guarantees that a payment
-    isn't promised if it can't be paid. When the service in question is rendered, the payment
-    reservation must be given to the IWallet along with the final price. The reservation can also
-    be canceled.
+    To send a payment, a payment reservation must be obtained
+    first. This guarantees that a payment isn't promised if it can't
+    be paid. When the service in question is rendered, the payment
+    reservation must be given to the IWallet along with the final
+    price. The reservation can also be canceled.
     """
     def stop(self):
-        """
-        Send out any unsent payments, close any connections, and stop checking for incoming payments.
+        """Send out any unsent payments, close any connections, and stop
+        checking for incoming payments.
 
         @return: None
+
         """
 
     def start(self):
@@ -590,8 +604,8 @@ class IWallet(Interface):
         """
 
     def reserve_points(self, peer, amount):
-        """
-        Ensure a certain amount of points are available to be sent as payment, before the service is rendered
+        """Ensure a certain amount of points are available to be sent as
+        payment, before the service is rendered
 
         @param peer: The peer to which the payment will ultimately be sent
         @type peer: Peer
@@ -599,8 +613,10 @@ class IWallet(Interface):
         @param amount: The amount of points to reserve
         @type amount: float
 
-        @return: A ReservedPoints object which is given to send_points once the service has been rendered
+        @return: A ReservedPoints object which is given to send_points
+        once the service has been rendered
         @rtype: ReservedPoints
+
         """
 
     def cancel_point_reservation(self, reserved_points):

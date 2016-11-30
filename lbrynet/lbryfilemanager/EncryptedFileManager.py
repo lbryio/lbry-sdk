@@ -13,7 +13,8 @@ from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
-from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError, CurrentlyStoppingError
+from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError
+from lbrynet.cryptstream.client.CryptStreamDownloader import CurrentlyStoppingError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
 
@@ -21,8 +22,9 @@ log = logging.getLogger(__name__)
 
 
 class EncryptedFileManager(object):
-    """
-    Keeps track of currently opened LBRY Files, their options, and their LBRY File specific metadata.
+    """Keeps track of currently opened LBRY Files, their options, and
+    their LBRY File specific metadata.
+
     """
 
     def __init__(self, session, stream_info_manager, sd_identifier, download_directory=None):
@@ -69,12 +71,14 @@ class EncryptedFileManager(object):
 
     def _add_to_sd_identifier(self):
         downloader_factory = ManagedEncryptedFileDownloaderFactory(self)
-        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, downloader_factory)
+        self.sd_identifier.add_stream_downloader_factory(
+            EncryptedFileStreamType, downloader_factory)
 
     def _start_lbry_files(self):
 
         def set_options_and_restore(rowid, stream_hash, options):
-            payment_rate_manager = NegotiatedPaymentRateManager(self.session.base_payment_rate_manager,
+            payment_rate_manager = NegotiatedPaymentRateManager(
+                self.session.base_payment_rate_manager,
                                                                 self.session.blob_tracker)
             d = self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
                                      blob_data_rate=options)
@@ -97,8 +101,9 @@ class EncryptedFileManager(object):
         d.addCallback(start_lbry_files)
         return d
 
-    def start_lbry_file(self, rowid, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True,
-                                                                        download_directory=None, file_name=None):
+    def start_lbry_file(self, rowid, stream_hash,
+                        payment_rate_manager, blob_data_rate=None, upload_allowed=True,
+                        download_directory=None, file_name=None):
         if not download_directory:
             download_directory = self.download_directory
         payment_rate_manager.min_blob_data_payment_rate = blob_data_rate
@@ -116,11 +121,16 @@ class EncryptedFileManager(object):
         d.addCallback(lambda _: lbry_file_downloader)
         return d
 
-    def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None, upload_allowed=True,
-                                                                download_directory=None, file_name=None):
+    def add_lbry_file(self, stream_hash, payment_rate_manager,
+                      blob_data_rate=None,
+                      upload_allowed=True,
+                      download_directory=None,
+                      file_name=None):
         d = self._save_lbry_file(stream_hash, blob_data_rate)
-        d.addCallback(lambda rowid: self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
-                                                         blob_data_rate, upload_allowed, download_directory, file_name))
+        d.addCallback(
+            lambda rowid: self.start_lbry_file(
+                rowid, stream_hash, payment_rate_manager,
+                blob_data_rate, upload_allowed, download_directory, file_name))
         return d
 
     def delete_lbry_file(self, lbry_file):
@@ -195,14 +205,19 @@ class EncryptedFileManager(object):
         # to a bug in twisted, where the connection is closed by a different thread than the
         # one that opened it. The individual connections in the pool are not used in multiple
         # threads.
-        self.sql_db = adbapi.ConnectionPool("sqlite3", os.path.join(self.session.db_dir, "lbryfile_info.db"),
-                                            check_same_thread=False)
-        return self.sql_db.runQuery("create table if not exists lbry_file_options (" +
-                                    "    blob_data_rate real, " +
-                                    "    status text," +
-                                    "    stream_hash text,"
-                                    "    foreign key(stream_hash) references lbry_files(stream_hash)" +
-                                    ")")
+        self.sql_db = adbapi.ConnectionPool(
+            "sqlite3",
+            os.path.join(self.session.db_dir, "lbryfile_info.db"),
+            check_same_thread=False
+        )
+        return self.sql_db.runQuery(
+            "create table if not exists lbry_file_options (" +
+            "    blob_data_rate real, " +
+            "    status text," +
+            "    stream_hash text,"
+            "    foreign key(stream_hash) references lbry_files(stream_hash)" +
+            ")"
+        )
 
     @rerun_if_locked
     def _save_lbry_file(self, stream_hash, data_payment_rate):
@@ -220,8 +235,9 @@ class EncryptedFileManager(object):
 
     @rerun_if_locked
     def _set_lbry_file_payment_rate(self, rowid, new_rate):
-        return self.sql_db.runQuery("update lbry_file_options set blob_data_rate = ? where rowid = ?",
-                                    (new_rate, rowid))
+        return self.sql_db.runQuery(
+            "update lbry_file_options set blob_data_rate = ? where rowid = ?",
+            (new_rate, rowid))
 
     @rerun_if_locked
     def _get_all_lbry_files(self):
@@ -237,7 +253,8 @@ class EncryptedFileManager(object):
     def _get_lbry_file_status(self, rowid):
         d = self.sql_db.runQuery("select status from lbry_file_options where rowid = ?",
                                  (rowid,))
-        d.addCallback(lambda r: r[0][0] if len(r) else ManagedEncryptedFileDownloader.STATUS_STOPPED)
+        d.addCallback(lambda r: (
+            r[0][0] if len(r) else ManagedEncryptedFileDownloader.STATUS_STOPPED))
         return d
 
     @rerun_if_locked

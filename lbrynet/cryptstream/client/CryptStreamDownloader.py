@@ -39,10 +39,10 @@ class CryptStreamDownloader(object):
 
     def __init__(self, peer_finder, rate_limiter, blob_manager,
                  payment_rate_manager, wallet, upload_allowed):
-        """
-        Initialize a CryptStreamDownloader
+        """Initialize a CryptStreamDownloader
 
-        @param peer_finder: An object which implements the IPeerFinder interface. Used to look up peers by a hashsum.
+        @param peer_finder: An object which implements the IPeerFinder
+        interface. Used to look up peers by a hashsum.
 
         @param rate_limiter: An object which implements the IRateLimiter interface
 
@@ -53,6 +53,7 @@ class CryptStreamDownloader(object):
         @param wallet: An object which implements the IWallet interface
 
         @return:
+
         """
 
         self.peer_finder = peer_finder
@@ -184,11 +185,13 @@ class CryptStreamDownloader(object):
         pass
 
     def _get_blob_requester(self, download_manager):
-        return BlobRequester(self.blob_manager, self.peer_finder, self.payment_rate_manager, self.wallet,
+        return BlobRequester(self.blob_manager, self.peer_finder,
+                             self.payment_rate_manager, self.wallet,
                              download_manager)
 
     def _get_progress_manager(self, download_manager):
-        return FullStreamProgressManager(self._finished_downloading, self.blob_manager, download_manager)
+        return FullStreamProgressManager(self._finished_downloading,
+                                         self.blob_manager, download_manager)
 
     def _get_write_func(self):
         pass

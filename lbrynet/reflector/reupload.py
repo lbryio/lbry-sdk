@@ -46,6 +46,7 @@ def _catch_error(err, uri):
 
 def check_and_restore_availability(lbry_file, reflector_server):
     d = _check_if_reflector_has_stream(lbry_file, reflector_server)
-    d.addCallbacks(lambda send_stream: _reflect_if_unavailable(send_stream, lbry_file, reflector_server),
-                   lambda err: _catch_error(err, lbry_file.uri))
+    d.addCallbacks(
+        lambda send_stream: _reflect_if_unavailable(send_stream, lbry_file, reflector_server),
+        lambda err: _catch_error(err, lbry_file.uri))
     return d

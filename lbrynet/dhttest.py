@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 #
-# This is a basic single-node example of how to use the Entangled DHT. It creates a Node and (optionally) joins an existing DHT.
-# It then does a Kademlia store and find, and then it deletes the stored value (non-Kademlia method).
+# This is a basic single-node example of how to use the Entangled
+# DHT. It creates a Node and (optionally) joins an existing DHT.  It
+# then does a Kademlia store and find, and then it deletes the stored
+# value (non-Kademlia method).
 #
 # No tuple space functionality is demonstrated by this script.
-# 
-# To test it properly, start a multi-node Kademlia DHT with the "create_network.py" 
+#
+# To test it properly, start a multi-node Kademlia DHT with the "create_network.py"
 # script and point this node to that, e.g.:
 # $python create_network.py 10 127.0.0.1
-# 
+#
 # $python basic_example.py 5000 127.0.0.1 4000
 #
 # This library is free software, distributed under the terms of
@@ -42,12 +44,15 @@ def storeValue(key, value):
     """ Stores the specified value in the DHT using the specified key """
     global node
     print '\nStoring value; Key: %s, Value: %s' % (key, value)
-    # Store the value in the DHT. This method returns a Twisted Deferred result, which we then add callbacks to
+    # Store the value in the DHT. This method returns a Twisted
+    # Deferred result, which we then add callbacks to
     deferredResult = node.announceHaveHash(key, value)
     # Add our callback; this method is called when the operation completes...
     deferredResult.addCallback(storeValueCallback)
     # ...and for error handling, add an "error callback" as well.
-    # For this example script, I use a generic error handler; usually you would need something more specific
+    #
+    # For this example script, I use a generic error handler; usually
+    # you would need something more specific
     deferredResult.addErrback(genericErrorCallback)
 
 
@@ -68,8 +73,10 @@ def getValue():
     """ Retrieves the value of the specified key (KEY) from the DHT """
     global node, KEY
     # Get the value for the specified key (immediately returns a Twisted deferred result)
-    print '\nRetrieving value from DHT for key "%s"...' % binascii.unhexlify("f7d9dc4de674eaa2c5a022eb95bc0d33ec2e75c6")
-    deferredResult = node.iterativeFindValue(binascii.unhexlify("f7d9dc4de674eaa2c5a022eb95bc0d33ec2e75c6"))
+    print ('\nRetrieving value from DHT for key "%s"...' %
+           binascii.unhexlify("f7d9dc4de674eaa2c5a022eb95bc0d33ec2e75c6"))
+    deferredResult = node.iterativeFindValue(
+        binascii.unhexlify("f7d9dc4de674eaa2c5a022eb95bc0d33ec2e75c6"))
     #deferredResult = node.iterativeFindValue(KEY)
     # Add a callback to this result; this will be called as soon as the operation has completed
     deferredResult.addCallback(getValueCallback)
@@ -79,7 +86,9 @@ def getValue():
 
 def getValueCallback(result):
     """ Callback function that is invoked when the getValue() operation succeeds """
-    # Check if the key was found (result is a dict of format {key: value}) or not (in which case a list of "closest" Kademlia contacts would be returned instead")
+    # Check if the key was found (result is a dict of format {key:
+    # value}) or not (in which case a list of "closest" Kademlia
+    # contacts would be returned instead")
     print "Got the value"
     print result
     #if type(result) == dict:
@@ -105,12 +114,13 @@ def stop():
     twisted.internet.reactor.stop()
 
 if __name__ == '__main__':
-    
     import sys
     if len(sys.argv) < 2:
         print 'Usage:\n%s UDP_PORT [KNOWN_NODE_IP  KNOWN_NODE_PORT]' % sys.argv[0]
         print 'or:\n%s UDP_PORT [FILE_WITH_KNOWN_NODES]' % sys.argv[0]
-        print '\nIf a file is specified, it should containg one IP address and UDP port\nper line, seperated by a space.'
+        print
+        print 'If a file is specified, it should containg one IP address and UDP port'
+        print 'per line, seperated by a space.'
         sys.exit(1)
     try:
         int(sys.argv[1])
@@ -118,7 +128,9 @@ if __name__ == '__main__':
         print '\nUDP_PORT must be an integer value.\n'
         print 'Usage:\n%s UDP_PORT  [KNOWN_NODE_IP  KNOWN_NODE_PORT]' % sys.argv[0]
         print 'or:\n%s UDP_PORT  [FILE_WITH_KNOWN_NODES]' % sys.argv[0]
-        print '\nIf a file is specified, it should contain one IP address and UDP port\nper line, seperated by a space.'
+        print
+        print 'If a file is specified, it should contain one IP address and UDP port'
+        print 'per line, seperated by a space.'
         sys.exit(1)
 
     if len(sys.argv) == 4:
@@ -134,25 +146,32 @@ if __name__ == '__main__':
     else:
         knownNodes = None
         print '\nNOTE: You have not specified any remote DHT node(s) to connect to'
-        print 'It will thus not be aware of any existing DHT, but will still function as a self-contained DHT (until another node contacts it).'
+        print 'It will thus not be aware of any existing DHT, but will still function as'
+        print ' a self-contained DHT (until another node contacts it).'
         print 'Run this script without any arguments for info.\n'
 
     # Set up SQLite-based data store (you could use an in-memory store instead, for example)
     #if os.path.isfile('/tmp/dbFile%s.db' % sys.argv[1]):
     #    os.remove('/tmp/dbFile%s.db' % sys.argv[1])
     #dataStore = SQLiteDataStore(dbFile = '/tmp/dbFile%s.db' % sys.argv[1])
-    # Create the Entangled node. It extends the functionality of a basic Kademlia node (but is fully backwards-compatible with a Kademlia-only network)
-    # If you wish to have a pure Kademlia network, use the entangled.kademlia.node.Node class instead
+    #
+    # Create the Entangled node. It extends the functionality of a
+    # basic Kademlia node (but is fully backwards-compatible with a
+    # Kademlia-only network)
+    #
+    # If you wish to have a pure Kademlia network, use the
+    # entangled.kademlia.node.Node class instead
     print 'Creating Node...'
     #node = EntangledNode( udpPort=int(sys.argv[1]), dataStore=dataStore )
     node = Node(udpPort=int(sys.argv[1]), lbryid=lbryid)
 
     # Schedule the node to join the Kademlia/Entangled DHT
     node.joinNetwork(knownNodes)
-    # Schedule the "storeValue() call to be invoked after 2.5 seconds, using KEY and VALUE as arguments
+    # Schedule the "storeValue() call to be invoked after 2.5 seconds,
+    #using KEY and VALUE as arguments
     #twisted.internet.reactor.callLater(2.5, storeValue, KEY, VALUE)
     twisted.internet.reactor.callLater(2.5, getValue)
-    # Start the Twisted reactor - this fires up all networking, and allows the scheduled join operation to take place
+    # Start the Twisted reactor - this fires up all networking, and
+    # allows the scheduled join operation to take place
     print 'Twisted reactor started (script will commence in 2.5 seconds)'
     twisted.internet.reactor.run()
-

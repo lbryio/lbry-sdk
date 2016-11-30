@@ -94,14 +94,16 @@ class RateLimiter(object):
     #throttling
 
     def check_dl(self):
-
-        if self.max_dl_bytes is not None and self.dl_bytes_this_interval > self.max_dl_bytes * self.tick_interval:
+        need_throttle = (self.max_dl_bytes is not None and
+                         self.dl_bytes_this_interval > self.max_dl_bytes * self.tick_interval)
+        if need_throttle:
             from twisted.internet import reactor
             reactor.callLater(0, self.throttle_dl)
 
     def check_ul(self):
-
-        if self.max_ul_bytes is not None and self.ul_bytes_this_interval > self.max_ul_bytes * self.tick_interval:
+        need_throttle = (self.max_ul_bytes is not None and
+                         self.ul_bytes_this_interval > self.max_ul_bytes * self.tick_interval)
+        if need_throttle:
             from twisted.internet import reactor
             reactor.callLater(0, self.throttle_ul)
 

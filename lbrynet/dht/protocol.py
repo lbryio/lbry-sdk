@@ -42,7 +42,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
     maxToSendDelay = 10**-3#0.05
     minToSendDelay = 10**-5#0.01
 
-    def __init__(self, node, msgEncoder=encoding.Bencode(), msgTranslator=msgformat.DefaultFormat()):
+    def __init__(self, node, msgEncoder=encoding.Bencode(),
+                 msgTranslator=msgformat.DefaultFormat()):
         self._node = node
         self._encoder = msgEncoder
         self._translator = msgTranslator
@@ -88,7 +89,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
             df._rpcRawResponse = True
 
         # Set the RPC timeout timer
-        timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, msg.id) #IGNORE:E1101
+        timeoutCall = reactor.callLater(
+            constants.rpcTimeout, self._msgTimeout, msg.id) #IGNORE:E1101
         # Transmit the data
         self._send(encodedMsg, msg.id, (contact.address, contact.port))
         self._sentMessages[msg.id] = (contact.id, df, timeoutCall)
@@ -193,8 +195,12 @@ class KademliaProtocol(protocol.DatagramProtocol):
                class (see C{kademlia.msgformat} and C{kademlia.encoding}). 
         """
         if len(data) > self.msgSizeLimit:
-            # We have to spread the data over multiple UDP datagrams, and provide sequencing information
-            # 1st byte is transmission type id, bytes 2 & 3 are the total number of packets in this transmission, bytes 4 & 5 are the sequence number for this specific packet
+            # We have to spread the data over multiple UDP datagrams,
+            # and provide sequencing information
+            #
+            # 1st byte is transmission type id, bytes 2 & 3 are the
+            # total number of packets in this transmission, bytes 4 &
+            # 5 are the sequence number for this specific packet
             totalPackets = len(data) / self.msgSizeLimit
             if len(data) % self.msgSizeLimit > 0:
                 totalPackets += 1
@@ -288,14 +294,18 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 # We are still receiving this message
                 # See if any progress has been made; if not, kill the message
                 if self._partialMessagesProgress.has_key(messageID):
-                    if len(self._partialMessagesProgress[messageID]) == len(self._partialMessages[messageID]):
+                    same_length = (
+                        len(self._partialMessagesProgress[messageID]) ==
+                        len(self._partialMessages[messageID]))
+                    if same_length:
                         # No progress has been made
                         del self._partialMessagesProgress[messageID]
                         del self._partialMessages[messageID]
                         df.errback(failure.Failure(TimeoutError(remoteContactID)))
                         return
                 # Reset the RPC timeout timer
-                timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, messageID) #IGNORE:E1101
+                timeoutCall = reactor.callLater(
+                    constants.rpcTimeout, self._msgTimeout, messageID) #IGNORE:E1101
                 self._sentMessages[messageID] = (remoteContactID, df, timeoutCall)
                 return
             del self._sentMessages[messageID]

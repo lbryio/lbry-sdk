@@ -61,30 +61,34 @@ class AuthorizedBase(object):
 
 
 class AuthJSONRPCServer(AuthorizedBase):
-    """
-    Authorized JSONRPC server used as the base class for the LBRY API
+    """Authorized JSONRPC server used as the base class for the LBRY API
 
     API methods are named with a leading "jsonrpc_"
 
     Decorators:
-        @AuthJSONRPCServer.auth_required: this requires the client include a valid hmac authentication token in their
-                                          request
 
-        @AuthJSONRPCServer.subhandler: include the tagged method in the processing of requests, to allow inheriting
-                                       classes to modify request handling. Tagged methods will be passed the request
-                                       object, and return True when finished to indicate success
+        @AuthJSONRPCServer.auth_required: this requires the client
+            include a valid hmac authentication token in their request
+
+        @AuthJSONRPCServer.subhandler: include the tagged method in
+            the processing of requests, to allow inheriting classes to
+            modify request handling. Tagged methods will be passed the
+            request object, and return True when finished to indicate
+            success
 
     Attributes:
-        allowed_during_startup (list): list of api methods that are callable before the server has finished
-                                       startup
+        allowed_during_startup (list): list of api methods that are
+            callable before the server has finished startup
 
-        sessions (dict): dictionary of active session_id: lbrynet.lbrynet_daemon.auth.util.APIKey values
+        sessions (dict): dictionary of active session_id:
+            lbrynet.lbrynet_daemon.auth.util.APIKey values
 
         authorized_functions (list): list of api methods that require authentication
 
         subhandlers (list): list of subhandlers
 
         callable_methods (dict): dictionary of api_callable_name: method values
+
     """
     implements(resource.IResource)
 
@@ -167,7 +171,8 @@ class AuthJSONRPCServer(AuthorizedBase):
                     self._verify_token(session_id, parsed, token)
                 except InvalidAuthenticationToken as err:
                     log.warning("API validation failed")
-                    self._render_error(err, request, version=version, response_code=AuthJSONRPCServer.UNAUTHORIZED)
+                    self._render_error(
+                        err, request, version=version, response_code=AuthJSONRPCServer.UNAUTHORIZED)
                     return server.NOT_DONE_YET
                 self._update_session_secret(session_id)
                 reply_with_next_secret = True
@@ -305,7 +310,8 @@ class AuthJSONRPCServer(AuthorizedBase):
                 result_for_return = (result_for_return,)
             # Convert the result (python) to JSON-RPC
         try:
-            encoded_message = jsonrpclib.dumps(result_for_return, version=version, default=default_decimal)
+            encoded_message = jsonrpclib.dumps(
+                result_for_return, version=version, default=default_decimal)
             self._set_headers(request, encoded_message, auth_required)
             self._render_message(request, encoded_message)
         except Exception as err:
