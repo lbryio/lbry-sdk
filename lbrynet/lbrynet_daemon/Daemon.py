@@ -942,13 +942,59 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: log.info("Delete lbry file"))
         return d
 
-    def _get_est_cost_from_name(self, name):
-        d = self._resolve_name(name)
-        d.addCallback(self._get_est_cost_from_metadata, name)
+    def _get_or_download_sd_blob(self, blob, sd_hash):
+        if blob:
+            return self.session.blob_manager.get_blob(blob[0], True)
+
+        def _check_est(downloader):
+            if downloader.result is not None:
+                downloader.cancel()
+
+        d = defer.succeed(None)
+        reactor.callLater(self.search_timeout, _check_est, d)
+        d.addCallback(lambda _: download_sd_blob(self.session, sd_hash, self.blob_request_payment_rate_manager))
+        return d
+
+    def get_or_download_sd_blob(self, sd_hash):
+        """
+        Return previously downloaded sd blob if already in the blob manager, otherwise download and return it
+        """
+
+        d = self.session.blob_manager.completed_blobs([sd_hash])
+        d.addCallback(self._get_or_download_sd_blob, sd_hash)
+        return d
+
+    def get_size_from_sd_blob(self, sd_blob):
+        """
+        Get total stream size in bytes from a sd blob
+        """
+
+        d = self.sd_identifier.get_metadata_for_sd_blob(sd_blob)
+        d.addCallback(lambda metadata: metadata.validator.info_to_show())
+        d.addCallback(lambda info: int(dict(info)['stream_size']))
+        return d
+
+    def get_est_cost_from_stream_size(self, size):
+        """
+        Calculate estimated LBC cost for a stream given its size in bytes
+        """
+
+        if self.session.payment_rate_manager.generous:
+            return 0.0
+        return size / (10**6) * conf.settings.data_rate
+
+    def get_est_cost_from_sd_hash(self, sd_hash):
+        """
+        Get estimated cost from a sd hash
+        """
+
+        d = self.get_or_download_sd_blob(sd_hash)
+        d.addCallback(self.get_size_from_sd_blob)
+        d.addCallback(self.get_est_cost_from_stream_size)
         return d
 
     def _get_est_cost_from_metadata(self, metadata, name):
-        d = self._get_est_cost_from_sd_hash(metadata['sources']['lbry_sd_hash'])
+        d = self.get_est_cost_from_sd_hash(metadata['sources']['lbry_sd_hash'])
 
         def _handle_err(err):
             if isinstance(err, Failure):
@@ -965,36 +1011,25 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(_add_key_fee)
         return d
 
-    def _get_sd_blob(self, blob, sd_hash):
-        if blob:
-            return self.session.blob_manager.get_blob(blob[0], True)
+    def get_est_cost_from_name(self, name):
+        """
+        Resolve a name and return the estimated stream cost
+        """
 
-        def _check_est(downloader):
-            if downloader.result is not None:
-                downloader.cancel()
-
-        d = defer.succeed(None)
-        reactor.callLater(self.search_timeout, _check_est, d)
-        d.addCallback(lambda _: download_sd_blob(self.session, sd_hash, self.blob_request_payment_rate_manager))
+        d = self._resolve_name(name)
+        d.addCallback(self._get_est_cost_from_metadata, name)
         return d
 
-    def _get_size_from_sd_blob(self, sd_blob):
-        d = self.sd_identifier.get_metadata_for_sd_blob(sd_blob)
-        d.addCallback(lambda metadata: metadata.validator.info_to_show())
-        d.addCallback(lambda info: int(dict(info)['stream_size']))
-        return d
-
-    def _get_est_cost_from_sd_hash(self, sd_hash):
-        d = self.session.blob_manager.completed_blobs([sd_hash])
-        d.addCallback(self._get_sd_blob, sd_hash)
-        d.addCallback(self._get_size_from_sd_blob)
-        d.addCallback(self._get_est_cost_from_stream_size)
-        return d
-
-    def _get_est_cost_from_stream_size(self, size):
-        if self.session.payment_rate_manager.generous:
-            return 0.0
-        return size / (10**6) * conf.settings.data_rate
+    def get_est_cost(self, name=None, size=None):
+        """
+        Get a cost estimate for a lbry stream, requires either a name to check or a given stream size in bytes
+        If no size is
+        """
+        if name is None and size is None:
+            return defer.fail(Exception("Neither name nor size was provided"))
+        if size is not None:
+            return defer.succeed(self.get_est_cost_from_stream_size(size))
+        return self.get_est_cost_from_name(name)
 
     def _get_lbry_file_by_uri(self, name):
         def _get_file(stream_info):
@@ -1599,14 +1634,10 @@ class Daemon(AuthJSONRPCServer):
             estimated cost
         """
 
-        if 'size' in p:
-            size = p['size']
-            d = defer.succeed(self._get_est_cost_from_stream_size(size))
-            d.addCallback(lambda r: self._render_response(r, OK_CODE))
-            return d
+        size = p.get('size', None)
+        name = p.get(FileID.NAME, None)
 
-        name = p[FileID.NAME]
-        d = self._get_est_cost_from_name(name)
+        d = self.get_est_cost(name, size)
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
