@@ -22,6 +22,13 @@ KB = 2**10
 MB = 2**20
 
 
+class InvalidSetting(Exception):
+    """Raised when an invalid setting is set"""
+    def __init__(self, key):
+        self.key = key
+        Exception.__init__(self, '{} is not a valid setting'.format(key))
+
+
 if sys.platform.startswith("darwin"):
     platform = DARWIN
     default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
@@ -72,7 +79,7 @@ class Settings(object):
             try:
                 self.__setitem__(k, v)
             except (KeyError, AssertionError):
-                pass
+                raise InvalidSetting(k)
 
 
 class Env(envparse.Env):
@@ -145,7 +152,7 @@ ENVIRONMENT = Env(
     cache_time=(int, 150),
     host_ui=(bool, True),
     check_ui_requirements=(bool, True),
-    local_ui_path=(bool, False),
+    local_ui_path=(str, None),
     api_port=(int, 5279),
     search_servers=(list, ['lighthouse1.lbry.io:50005']),
     data_rate=(float, .0001),  # points/megabyte
@@ -185,16 +192,31 @@ class AdjustableSettings(Settings):
         self.environ = environ or ENVIRONMENT
         Settings.__init__(self)
 
+    def _valid_settings(self):
+        return self.environ.original_schema
+
+    def _is_valid_setting(self, key):
+        return key in self._valid_settings()
+
     def __getattr__(self, attr):
-        if attr in self.environ.original_schema:
+        if self._is_valid_setting(attr):
+            if attr in self.__dict__:
+                return self.__dict__[attr]
             return self.environ(attr)
-        raise AttributeError
+        return self.__getattribute__(attr)
 
     def get_dict(self):
         return {
-            name: self.environ(name)
-            for name in self.environ.original_schema
+            name: getattr(self, name)
+            for name in self._valid_settings()
         }
+
+    def update(self, other):
+        for key, value in other.iteritems():
+            if self._is_valid_setting(key):
+                self.__dict__[key] = value
+            else:
+                raise InvalidSetting(key)
 
 
 class ApplicationSettings(Settings):
