@@ -1651,6 +1651,8 @@ class Daemon(AuthJSONRPCServer):
             return defer.fail(InvalidNameError("Bad name"))
 
         bid = p['bid']
+        if bid <= 0.0:
+            return defer.fail(Exception("Invalid bid"))
 
         try:
             metadata = Metadata(p['metadata'])
