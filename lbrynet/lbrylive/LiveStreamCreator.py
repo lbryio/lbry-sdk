@@ -1,3 +1,4 @@
+# pylint: skip-file
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter
 from lbrynet.lbrylive.StreamDescriptor import get_sd_info
 from lbrynet.cryptstream.CryptStreamCreator import CryptStreamCreator

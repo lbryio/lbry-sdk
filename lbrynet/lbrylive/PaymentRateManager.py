@@ -1,3 +1,4 @@
+# pylint: skip-file
 class BaseLiveStreamPaymentRateManager(object):
     def __init__(self, blob_info_rate, blob_data_rate=None):
         self.min_live_blob_info_payment_rate = blob_info_rate

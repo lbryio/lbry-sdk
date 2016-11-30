@@ -1,3 +1,4 @@
+# pylint: skip-file
 import time
 import logging
 from twisted.enterprise import adbapi

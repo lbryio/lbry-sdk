@@ -1,3 +1,4 @@
+# pylint: skip-file
 import logging
 from lbrynet.core.client.StreamProgressManager import StreamProgressManager
 from twisted.internet import defer

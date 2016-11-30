@@ -1,3 +1,4 @@
+# pylint: skip-file
 from lbrynet.lbrylive.StreamDescriptor import LiveStreamType, LiveStreamDescriptorValidator
 from lbrynet.core.DownloadOption import DownloadOption, DownloadOptionChoice
 

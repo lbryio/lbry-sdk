@@ -1,3 +1,4 @@
+# pylint: skip-file
 import logging
 from twisted.internet import defer
 from zope.interface import implements
