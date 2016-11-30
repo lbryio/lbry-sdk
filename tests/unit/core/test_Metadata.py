@@ -1,6 +1,8 @@
-from lbrynet.metadata import Metadata
 from twisted.trial import unittest
 from jsonschema import ValidationError
+
+from lbrynet.core import Error
+from lbrynet.metadata import Metadata
 
 
 class MetadataTest(unittest.TestCase):
@@ -9,13 +11,12 @@ class MetadataTest(unittest.TestCase):
             Metadata.verify_name_characters("")
 
     def test_name_error_if_contains_bad_chrs(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(Error.InvalidName):
             Metadata.verify_name_characters("wu tang")
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(Error.InvalidName):
             Metadata.verify_name_characters("$wutang")
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(Error.InvalidName):
             Metadata.verify_name_characters("#wutang")
-
 
     def test_validation_error_if_no_metadata(self):
         metadata = {}

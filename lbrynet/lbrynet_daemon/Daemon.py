@@ -47,7 +47,7 @@ from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.core.Error import InsufficientFundsError, InvalidNameError
+from lbrynet.core.Error import InsufficientFundsError
 
 
 log = logging.getLogger(__name__)
@@ -1620,7 +1620,7 @@ class Daemon(AuthJSONRPCServer):
             'metadata': metadata dictionary
             optional 'fee'
         Returns:
-            'success' : True if claim was succesful , False otherwise                            
+            'success' : True if claim was succesful , False otherwise
             'reason' : if not succesful, give reason
             'txid' : txid of resulting transaction if succesful
             'nout' : nout of the resulting support claim if succesful
@@ -1640,16 +1640,8 @@ class Daemon(AuthJSONRPCServer):
             return d
 
         name = p[FileID.NAME]
-
-        log.info("Publish: ")
-        log.info(p)
-
-        try:
-            verify_name_characters(name)
-        except AssertionError:
-            log.error("Bad name")
-            return defer.fail(InvalidNameError("Bad name"))
-
+        log.info("Publish: %s", p)
+        verify_name_characters(name)
         bid = p['bid']
 
         try:
@@ -1663,9 +1655,9 @@ class Daemon(AuthJSONRPCServer):
             metadata = p['metadata']
             file_path = p['file_path']
             if not file_path:
-                return defer.fail(Exception("No file given to publish"))
+                raise Exception("No file given to publish")
             if not os.path.isfile(file_path):
-                return defer.fail(Exception("Specified file for publish doesnt exist: %s" % file_path))
+                raise Exception("Specified file for publish doesnt exist: %s" % file_path)
 
         self.looping_call_manager.start(Checker.PENDING_CLAIM, 30)
 
