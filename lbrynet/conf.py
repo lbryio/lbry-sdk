@@ -170,7 +170,12 @@ ENVIRONMENT = Env(
     #
     # TODO: writing json on the cmd line is a pain, come up with a nicer
     # parser for this data structure. (maybe MAX_KEY_FEE=USD:25
-    max_key_fee=(json.loads, {'USD': {'amount': 25.0, 'address': ''}})
+    max_key_fee=(json.loads, {'USD': {'amount': 25.0, 'address': ''}}),
+    # Changing this value is not-advised as it could potentially
+    # expose the lbrynet daemon to the outside world which would
+    # give an attacker access to your wallet and you could lose
+    # all of your credits.
+    API_INTERFACE=(str, "localhost"),
 )
 
 
@@ -205,7 +210,6 @@ class ApplicationSettings(Settings):
         self.LOG_FILE_NAME = "lbrynet.log"
         self.LOG_POST_URL = "https://lbry.io/log-upload"        
         self.CRYPTSD_FILE_EXTENSION = ".cryptsd"
-        self.API_INTERFACE = "localhost"
         self.API_ADDRESS = "lbryapi"
         self.ICON_PATH = "icons" if platform is WINDOWS else "app.icns"
         self.APP_NAME = "LBRY"

@@ -1,4 +1,6 @@
 import logging
+import urlparse
+
 from decimal import Decimal
 from zope.interface import implements
 from twisted.web import server, resource
@@ -219,15 +221,36 @@ class AuthJSONRPCServer(AuthorizedBase):
         request.finish()
 
     def _check_headers(self, request):
-        origin = request.getHeader("Origin")
-        referer = request.getHeader("Referer")
-        if origin not in [None, settings.ORIGIN]:
-            log.warning("Attempted api call from %s", origin)
-            return False
-        if referer is not None and not referer.startswith(settings.REFERER):
-            log.warning("Attempted api call from %s", referer)
+        return (
+            self._check_header_source(request, 'Origin') and
+            self._check_header_source(request, 'Referer'))
+
+    def _check_header_source(self, request, header):
+        """Check if the source of the request is allowed based on the header value."""
+        source = request.getHeader(header)
+        if not self._check_source_of_request(source):
+            log.warning("Attempted api call from invalid %s: %s", header, source)
             return False
         return True
+
+    def _check_source_of_request(self, source):
+        if source is None:
+            return True
+        if settings.API_INTERFACE == '0.0.0.0':
+            return True
+        server, port = self.get_server_port(source)
+        return (
+            server == settings.API_INTERFACE and
+            port == settings.api_port)
+
+    def get_server_port(self, origin):
+        parsed = urlparse.urlparse(origin)
+        server_port = parsed.netloc.split(':')
+        assert len(server_port) <= 2
+        if len(server_port) == 2:
+            return server_port[0], int(server_port[1])
+        else:
+            return server_port[0], 80
 
     def _check_function_path(self, function_path):
         if function_path not in self.callable_methods:
