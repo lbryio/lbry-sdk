@@ -70,9 +70,11 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             return d
 
         reflector_server = random.choice(settings.reflector_servers)
+        light_reflector_server = random.choice(settings.light_reflector_servers)
 
         d.addCallback(_save_stream_info)
-        d.addCallback(lambda _: reupload.check_and_restore_availability(self, reflector_server))
+        d.addCallback(lambda _: reupload.check_and_restore_availability(self, reflector_server,
+                                                                        light_reflector_server))
         d.addCallback(lambda _: self.lbry_file_manager.get_lbry_file_status(self))
 
         def restore_status(status):
