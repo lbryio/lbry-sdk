@@ -1,11 +1,12 @@
 import base64
 import datetime
-import distutils.version
 import logging
 import random
 import os
 import socket
 import sys
+
+import pkg_resources
 
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
@@ -61,10 +62,7 @@ def is_valid_blobhash(blobhash):
 
 def version_is_greater_than(a, b):
     """Returns True if version a is more recent than version b"""
-    try:
-        return distutils.version.StrictVersion(a) > distutils.version.StrictVersion(b)
-    except ValueError:
-        return distutils.version.LooseVersion(a) > distutils.version.LooseVersion(b)
+    return pkg_resources.parse_version(a) > pkg_resources.parse_version(b)
 
 
 def deobfuscate(obfustacated):

@@ -17,6 +17,9 @@ class CompareVersionTest(unittest.TestCase):
     def test_version_can_have_four_parts(self):
         self.assertTrue(utils.version_is_greater_than('1.3.9.1', '1.3.9'))
 
+    def test_release_is_greater_than_rc(self):
+        self.assertTrue(utils.version_is_greater_than('1.3.9', '1.3.9rc0'))
+
 
 class ObfuscationTest(unittest.TestCase):
     def test_deobfuscation_reverses_obfuscation(self):
