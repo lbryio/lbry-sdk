@@ -1234,7 +1234,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         log.info("Get daemon settings")
-        return self._render_response(conf.settings.__dict__, OK_CODE)
+        return self._render_response(conf.settings.get_dict(), OK_CODE)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_set_settings(self, p):
