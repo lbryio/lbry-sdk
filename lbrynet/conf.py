@@ -185,19 +185,16 @@ class AdjustableSettings(Settings):
     """Settings that are allowed to be overriden by the user"""
     def __init__(self, environ=None):
         self.environ = environ or ENVIRONMENT
+
+        for opt in self.environ.original_schema:
+            self.__dict__[opt] = self.environ(opt)
+
         Settings.__init__(self)
 
     def __getattr__(self, attr):
         if attr in self.environ.original_schema:
             return self.environ(attr)
         raise AttributeError
-
-    def get_dict(self):
-        return {
-            name: self.environ(name)
-            for name in self.environ.original_schema
-        }
-
 
 class ApplicationSettings(Settings):
     """Settings that are constants and shouldn't be overriden"""
