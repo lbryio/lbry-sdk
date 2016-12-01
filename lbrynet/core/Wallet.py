@@ -480,7 +480,7 @@ class Wallet(object):
         def _save_metadata(claim_out, metadata):
             if not claim_out['success']:
                 msg = 'Claim to name {} failed: {}'.format(name, claim_out['reason'])
-                defer.fail(Exception(msg))
+                raise Exception(msg)
             claim_outpoint = ClaimOutpoint(claim_out['txid'], claim_out['nout'])
             log.debug("Saving metadata for claim %s %d" % (claim_outpoint['txid'], claim_outpoint['nout']))
             d = self._save_name_metadata(name, claim_outpoint, metadata['sources']['lbry_sd_hash'])
