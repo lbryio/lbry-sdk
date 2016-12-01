@@ -1,32 +1,20 @@
 *.pyc
-
+*.egg
+*.so
 *.xml
+*.iml
+*.log
+*.pem
+*.decTest
+
+/build
+/dist
 
 .idea/.name
-
-*.iml
-
-*.log
-
-*.txt
+.coverage
+.DS_Store
 
 lbrynet.egg-info/PKG-INFO
 
-*.egg
-
-/build
-
-/dist
-
-*.so
-
-*.pem
-
-*.decTest
-
-.coverage
-
 # temporary files from the twisted.trial test runner
 _trial_temp/
-
-.DS_Store
