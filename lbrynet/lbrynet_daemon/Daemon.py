@@ -665,6 +665,7 @@ class Daemon(AuthJSONRPCServer):
                     except Exception as err:
                         log.warning(err.message)
                         log.warning("error converting setting '%s' to type %s", key, setting_type)
+        conf.save_settings()
 
         self.run_on_startup = conf.settings.run_on_startup
         self.data_rate = conf.settings.data_rate
