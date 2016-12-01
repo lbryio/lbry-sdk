@@ -67,8 +67,8 @@ class Settings(object):
     def get_dict(self):
         return {k: self[k] for k in self}
 
-    def update(self, other):
-        for k, v in other.iteritems():
+    def update(self, updated_settings):
+        for k, v in updated_settings.iteritems():
             try:
                 self.__setitem__(k, v)
             except (KeyError, AssertionError):
