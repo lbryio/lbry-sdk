@@ -270,6 +270,9 @@ class Config(DefaultSettings):
     def UI_ADDRESS(self):
         return "http://%s:%i" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port)
 
+    def get_adjustable_settings_dict(self):
+        return {opt: val for opt, val in self.get_dict().iteritems() if opt in ENVIRONMENT.original_schema}
+
     def ensure_data_dir(self):
         # although there is a risk of a race condition here we don't
         # expect there to be multiple processes accessing this
@@ -337,7 +340,8 @@ def load_settings(path):
 # or command line flag we don't want to persist it for future settings.
 def save_settings(path=None):
     path = path or settings.get_conf_filename()
-    to_save = {k: v for k, v in settings.__dict__.iteritems() if k in ADJUSTABLE_SETTINGS}
+    to_save = settings.get_adjustable_settings_dict()
+
     ext = os.path.splitext(path)[1]
     encoder = settings_encoders.get(ext, False)
     assert encoder is not False, "Unknown settings format .%s" % ext

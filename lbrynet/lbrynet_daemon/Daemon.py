@@ -1255,12 +1255,12 @@ class Daemon(AuthJSONRPCServer):
         """
 
         def _log_settings_change():
-            log.info("Set daemon settings to " + json.dumps(conf.settings.configurable_settings))
+            log.info("Set daemon settings to " + json.dumps(conf.settings.get_adjustable_settings_dict()))
 
         d = self._update_settings(p)
         d.addErrback(lambda err: log.info(err.getTraceback()))
         d.addCallback(lambda _: _log_settings_change())
-        d.addCallback(lambda _: self._render_response(conf.settings.configurable_settings, OK_CODE))
+        d.addCallback(lambda _: self._render_response(conf.settings.get_adjustable_settings_dict(), OK_CODE))
 
         return d
 
