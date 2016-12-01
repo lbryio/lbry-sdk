@@ -270,6 +270,9 @@ class Config(DefaultSettings):
     def UI_ADDRESS(self):
         return "http://%s:%i" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port)
 
+    def get_dict(self):
+        return {k: self[k] for k in self}
+
     def get_adjustable_settings_dict(self):
         return {opt: val for opt, val in self.get_dict().iteritems() if opt in ENVIRONMENT.original_schema}
 
