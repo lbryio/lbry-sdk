@@ -45,11 +45,11 @@ else:
 class Settings(object):
     """A collection of configuration settings"""
     __fixed = []
-    __excluded = ['get_dict', 'update']
+    _excluded = ['get_dict', 'update']
 
     def __iter__(self):
         for k in self.__dict__.iterkeys():
-            if k.startswith('_') or k in self.__excluded:
+            if k.startswith('_') or k in self._excluded:
                 continue
             yield k
 
@@ -180,6 +180,8 @@ ENVIRONMENT = Env(
 
 
 class AdjustableSettings(Settings):
+    _excluded = ['get_dict', 'update', 'environ']
+
     """Settings that are allowed to be overriden by the user"""
     def __init__(self, environ=None):
         self.environ = environ or ENVIRONMENT
