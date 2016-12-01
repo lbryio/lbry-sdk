@@ -88,7 +88,6 @@ def make_context(platform, wallet):
             'build': platform['build'],
             'wallet': {
                 'name': wallet,
-                # TODO: add in version info for lbrycrdd
                 'version': platform['lbryum_version'] if wallet == LBRYUM_WALLET else None
             },
         },

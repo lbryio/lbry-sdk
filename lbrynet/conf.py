@@ -130,7 +130,6 @@ ENVIRONMENT = Env(
     upload_log=(bool, True),
     delete_blobs_on_remove=(bool, True),
     use_upnp=(bool, True),
-    start_lbrycrdd=(bool, True),
     run_reflector_server=(bool, False),
     startup_scripts=(list, []),
     # TODO: this doesn't seem like the kind of thing that should

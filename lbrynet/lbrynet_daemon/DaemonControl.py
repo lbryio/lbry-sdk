@@ -45,7 +45,7 @@ def stop():
 def start():
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
     parser.add_argument("--wallet",
-                        help="lbrycrd or lbryum, default lbryum",
+                        help="lbryum or ptc for testing, default lbryum",
                         type=str,
                         default=conf.LBRYUM_WALLET)
     parser.add_argument("--ui", help="path to custom UI folder", default=None)

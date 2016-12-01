@@ -2,18 +2,6 @@
 
 set -euo pipefail
 
-LBRYCRDDPATHCONF="$HOME/.lbrycrddpath.conf"
-LBRYCRDDIR="$HOME/.lbrycrd"
-LBRYCRDCONF="$LBRYCRDDIR/lbrycrd.conf"
-
-if [ ! -f "$LBRYCRDDPATHCONF" ]; then
-  echo "/usr/bin/lbrycrdd" > "$LBRYCRDDPATHCONF"
-fi
-
-if [ ! -f "$LBRYCRDCONF" ]; then
-  mkdir -p "$LBRYCRDDIR"
-  echo -e "rpcuser=lbryrpc\nrpcpassword=$(env LC_CTYPE=C LC_ALL=C tr -dc A-Za-z0-9 < /dev/urandom | head -c 16 | xargs)" > "$LBRYCRDCONF"
-fi
 
 urlencode() {
   local LANG=C

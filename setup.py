@@ -34,7 +34,6 @@ requires = [
     'miniupnpc',
     'yapsy',
     'seccure',
-    'python-bitcoinrpc==0.1',
     'txJSON-RPC',
     'requests>=2.4.2',
     'unqlite==0.2.0',
