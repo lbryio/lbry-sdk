@@ -43,7 +43,7 @@ from lbrynet.core import system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.core.Session import Session
-from lbrynet.core.Wallet import LBRYumWallet
+from lbrynet.core.Wallet import LBRYumWallet, SqliteStorage
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
@@ -727,7 +727,9 @@ class Daemon(AuthJSONRPCServer):
                 config = {'auto_connect': True}
                 if conf.settings.lbryum_wallet_dir:
                     config['lbryum_path'] = conf.settings.lbryum_wallet_dir
-                return defer.succeed(LBRYumWallet(self.db_dir, config))
+                storage = SqliteStorage(self.db_dir)
+                wallet = LBRYumWallet(storage, config)
+                return defer.succeed(wallet)
             elif self.wallet_type == PTC_WALLET:
                 log.info("Using PTC wallet")
                 from lbrynet.core.PTCWallet import PTCWallet
