@@ -45,11 +45,11 @@ else:
 class Settings(object):
     """A collection of configuration settings"""
     __fixed = []
-    __excluded = ['get_dict', 'update']
+    _excluded = ['get_dict', 'update']
 
     def __iter__(self):
         for k in self.__dict__.iterkeys():
-            if k.startswith('_') or k in self.__excluded:
+            if k.startswith('_') or k in self._excluded:
                 continue
             yield k
 
@@ -67,8 +67,8 @@ class Settings(object):
     def get_dict(self):
         return {k: self[k] for k in self}
 
-    def update(self, other):
-        for k, v in other.iteritems():
+    def update(self, updated_settings):
+        for k, v in updated_settings.iteritems():
             try:
                 self.__setitem__(k, v)
             except (KeyError, AssertionError):
@@ -180,22 +180,21 @@ ENVIRONMENT = Env(
 
 
 class AdjustableSettings(Settings):
+    _excluded = ['get_dict', 'update', 'environ']
+
     """Settings that are allowed to be overriden by the user"""
     def __init__(self, environ=None):
         self.environ = environ or ENVIRONMENT
+
+        for opt in self.environ.original_schema:
+            self.__dict__[opt] = self.environ(opt)
+
         Settings.__init__(self)
 
     def __getattr__(self, attr):
         if attr in self.environ.original_schema:
             return self.environ(attr)
         raise AttributeError
-
-    def get_dict(self):
-        return {
-            name: self.environ(name)
-            for name in self.environ.original_schema
-        }
-
 
 class ApplicationSettings(Settings):
     """Settings that are constants and shouldn't be overriden"""
@@ -268,6 +267,12 @@ class Config(DefaultSettings):
     def UI_ADDRESS(self):
         return "http://%s:%i" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port)
 
+    def get_dict(self):
+        return {k: self[k] for k in self}
+
+    def get_adjustable_settings_dict(self):
+        return {opt: val for opt, val in self.get_dict().iteritems() if opt in self.environ.original_schema}
+
     def ensure_data_dir(self):
         # although there is a risk of a race condition here we don't
         # expect there to be multiple processes accessing this
@@ -335,7 +340,8 @@ def load_settings(path):
 # or command line flag we don't want to persist it for future settings.
 def save_settings(path=None):
     path = path or settings.get_conf_filename()
-    to_save = {k: v for k, v in settings.__dict__.iteritems() if k in ADJUSTABLE_SETTINGS}
+    to_save = settings.get_adjustable_settings_dict()
+
     ext = os.path.splitext(path)[1]
     encoder = settings_encoders.get(ext, False)
     assert encoder is not False, "Unknown settings format .%s" % ext
