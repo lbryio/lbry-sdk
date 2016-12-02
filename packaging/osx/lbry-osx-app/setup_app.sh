@@ -45,11 +45,8 @@ else
     pip install $MODULES
 fi
 
-pip install dmgbuild
-pip show dmgbuild
-
+pip install dmgbuild==1.1.0
 export PATH=${PATH}:/Library/Frameworks/Python.framework/Versions/2.7/bin
-dmgbuild --help
 
 pip install jsonrpc certifi
 
