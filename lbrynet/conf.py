@@ -271,7 +271,7 @@ class Config(DefaultSettings):
         return {k: self[k] for k in self}
 
     def get_adjustable_settings_dict(self):
-        return {opt: val for opt, val in self.get_dict().iteritems() if opt in ENVIRONMENT.original_schema}
+        return {opt: val for opt, val in self.get_dict().iteritems() if opt in self.environ.original_schema}
 
     def ensure_data_dir(self):
         # although there is a risk of a race condition here we don't
