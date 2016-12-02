@@ -974,7 +974,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda info: int(dict(info)['stream_size']))
         return d
 
-    def get_est_cost_from_stream_size(self, size):
+    def _get_est_cost_from_stream_size(self, size):
         """
         Calculate estimated LBC cost for a stream given its size in bytes
         """
@@ -983,6 +983,17 @@ class Daemon(AuthJSONRPCServer):
             return 0.0
         return size / (10**6) * conf.settings.data_rate
 
+    def get_est_cost_using_known_size(self, name, size):
+        """
+        Calculate estimated LBC cost for a stream given its size in bytes
+        """
+
+        cost = self._get_est_cost_from_stream_size(size)
+
+        d = self._resolve_name(name)
+        d.addCallback(lambda metadata: self._add_key_fee_to_est_data_cost(metadata, cost))
+        return d
+
     def get_est_cost_from_sd_hash(self, sd_hash):
         """
         Get estimated cost from a sd hash
@@ -990,7 +1001,7 @@ class Daemon(AuthJSONRPCServer):
 
         d = self.get_or_download_sd_blob(sd_hash)
         d.addCallback(self.get_size_from_sd_blob)
-        d.addCallback(self.get_est_cost_from_stream_size)
+        d.addCallback(self._get_est_cost_from_stream_size)
         return d
 
     def _get_est_cost_from_metadata(self, metadata, name):
@@ -1003,13 +1014,13 @@ class Daemon(AuthJSONRPCServer):
             raise err
 
         d.addErrback(_handle_err)
-
-        def _add_key_fee(data_cost):
-            fee = self.exchange_rate_manager.to_lbc(metadata.get('fee', None))
-            return data_cost if fee is None else data_cost + fee.amount
-
-        d.addCallback(_add_key_fee)
+        d.addCallback(lambda data_cost: self._add_key_fee_to_est_data_cost(metadata, data_cost))
         return d
+
+    def _add_key_fee_to_est_data_cost(self, metadata, data_cost):
+        fee = self.exchange_rate_manager.to_lbc(metadata.get('fee', None))
+        fee_amount = 0.0 if fee is None else fee.amount
+        return data_cost + fee_amount
 
     def get_est_cost_from_name(self, name):
         """
@@ -1020,15 +1031,15 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(self._get_est_cost_from_metadata, name)
         return d
 
-    def get_est_cost(self, name=None, size=None):
+
+    def get_est_cost(self, name, size=None):
         """
-        Get a cost estimate for a lbry stream, requires either a name to check or a given stream size in bytes
-        If no size is
+        Get a cost estimate for a lbry stream, if size is not provided the sd blob will be downloaded
+        to determine the stream size
         """
-        if name is None and size is None:
-            return defer.fail(Exception("Neither name nor size was provided"))
+
         if size is not None:
-            return defer.succeed(self.get_est_cost_from_stream_size(size))
+            return self.get_est_cost_using_known_size(name, size)
         return self.get_est_cost_from_name(name)
 
     def _get_lbry_file_by_uri(self, name):
