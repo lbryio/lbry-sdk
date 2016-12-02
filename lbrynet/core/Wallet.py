@@ -476,11 +476,13 @@ class Wallet(object):
             meta_for_return[k] = new_metadata[k]
         return defer.succeed(Metadata(meta_for_return))
 
+
     def claim_name(self, name, bid, m):
         def _save_metadata(claim_out, metadata):
             if not claim_out['success']:
                 msg = 'Claim to name {} failed: {}'.format(name, claim_out['reason'])
                 raise Exception(msg)
+            claim_out.pop('success')
             claim_outpoint = ClaimOutpoint(claim_out['txid'], claim_out['nout'])
             log.debug("Saving metadata for claim %s %d" % (claim_outpoint['txid'], claim_outpoint['nout']))
             d = self._save_name_metadata(name, claim_outpoint, metadata['sources']['lbry_sd_hash'])
@@ -507,11 +509,29 @@ class Wallet(object):
         return d
 
     def abandon_claim(self, txid, nout):
+        def _parse_abandon_claim_out(claim_out):
+            if not claim_out['success']:
+                msg = 'Abandon of {}:{} failed: {}'.format(txid, nout, claim_out['resason'])
+                raise Exception(msg)
+            claim_out.pop('success')
+            return defer.succeed(claim_out)
+
         claim_outpoint = ClaimOutpoint(txid, nout)
-        return self._abandon_claim(claim_outpoint)
+        d = self._abandon_claim(claim_outpoint)
+        d.addCallback(lambda claim_out: _parse_abandon_claim_out(claim_out))
+        return d
 
     def support_claim(self, name, claim_id, amount):
-        return self._support_claim(name, claim_id, amount)
+        def _parse_support_claim_out(claim_out):
+            if not claim_out['success']:
+                msg = 'Support of {}:{} failed: {}'.format(name, claim_id, claim_out['reason'])
+                raise Exception(msg)
+            claim_out.pop('success')
+            return defer.succeed(claim_out)
+
+        d = self._support_claim(name, claim_id, amount)
+        d.addCallback(lambda claim_out: _parse_support_claim_out(claim_out))
+        return d
 
     def get_tx(self, txid):
         d = self._get_raw_tx(txid)
