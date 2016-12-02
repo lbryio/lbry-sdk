@@ -32,12 +32,12 @@ class UnknownNameError(Exception):
         self.name = name
 
 
-class InvalidNameError(Exception):
-    def __init__(self, name):
+class InvalidName(Exception):
+    def __init__(self, name, invalid_characters):
         self.name = name
-
-    def __str__(self):
-        return repr(self.name)
+        self.invalid_characters = invalid_characters
+        Exception.__init__(
+            self, 'URI contains invalid characters: {}'.format(','.join(invalid_characters)))
 
 
 class UnknownStreamTypeError(Exception):

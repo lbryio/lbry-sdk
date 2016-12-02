@@ -1,5 +1,6 @@
 import logging
 
+from lbrynet.core import Error
 from lbrynet.metadata.StructuredDict import StructuredDict
 import metadata_schemas
 
@@ -9,9 +10,11 @@ NAME_ALLOWED_CHARSET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0987
 
 def verify_name_characters(name):
     assert len(name) > 0, "Empty uri"
-    for c in name:
-        assert c in NAME_ALLOWED_CHARSET, "Invalid character"
+    invalid_characters = {c for c in name if c not in NAME_ALLOWED_CHARSET}
+    if invalid_characters:
+        raise Error.InvalidName(name, invalid_characters)
     return True
+
 
 def migrate_001_to_002(metadata):
     metadata['ver'] = '0.0.2'
