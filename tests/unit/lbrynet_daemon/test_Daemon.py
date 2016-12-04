@@ -44,7 +44,10 @@ class MiscTests(unittest.TestCase):
             Daemon.get_version_from_tag('garbage')
 
 
-def get_test_daemon(data_rate=conf.settings.data_rate, generous=True, with_fee=False):
+def get_test_daemon(data_rate=None, generous=True, with_fee=False):
+    if data_rate is None:
+        data_rate = conf.settings.data_rate
+
     rates = {
                 'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
                 'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
@@ -56,22 +59,22 @@ def get_test_daemon(data_rate=conf.settings.data_rate, generous=True, with_fee=F
     prm = PaymentRateManager.NegotiatedPaymentRateManager(base_prm, DummyBlobAvailabilityTracker(), generous=generous)
     daemon.session.payment_rate_manager = prm
     metadata = {
-        "author": "extra",
-        "content_type": "video/mp4",
-        "description": "How did the ancient civilization of Sumer first develop the concept of the written word? It all began with simple warehouse tallies in the temples, but as the scribes sought more simple ways to record information, those tallies gradually evolved from pictograms into cuneiform text which could be used to convey complex, abstract, or even lyrical ideas.",
-        "language": "en",
-        "license": "Creative Commons Attribution 3.0 United States",
-        "license_url": "https://creativecommons.org/licenses/by/3.0/us/legalcode",
+        "author": "fake author",
+        "content_type": "fake/format",
+        "description": "fake description",
+        "license": "fake license",
+        "license_url": "fake license url",
         "nsfw": False,
         "sources": {
-            "lbry_sd_hash": "d2b8b6e907dde95245fe6d144d16c2fdd60c4e0c6463ec98b85642d06d8e9414e8fcfdcb7cb13532ec5454fb8fe7f280"},
-        "thumbnail": "http://i.imgur.com/HFSRkKw.png",
-        "title": "The History of Writing - Where the Story Begins",
+            "lbry_sd_hash": "d2b8b6e907dde95245fe6d144d16c2fdd60c4e0c6463ec98b85642d06d8e9414e8fcfdcb7cb13532ec5454fb8fe7f280"
+        },
+        "thumbnail": "fake thumbnail",
+        "title": "fake title",
         "ver": "0.0.3"
     }
     if with_fee:
         metadata.update({"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
-    daemon._resolve_name = lambda x: defer.succeed(metadata)
+    daemon._resolve_name = lambda _: defer.succeed(metadata)
     return daemon
 
 
@@ -79,26 +82,29 @@ class TestCostEst(unittest.TestCase):
     def setUp(self):
         util.resetTime(self)
 
-    def test_cost_est_with_fee_and_generous(self):
+    def test_fee_and_generous_data(self):
         size = 10000000
-        fake_fee_amount = 4.5
+        correct_result = 4.5
         daemon = get_test_daemon(generous=True, with_fee=True)
-        self.assertEquals(daemon.get_est_cost("test", size).result, fake_fee_amount)
+        self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
 
-    def test_cost_est_with_fee_and_not_generous(self):
+    def test_fee_and_ungenerous_data(self):
         size = 10000000
         fake_fee_amount = 4.5
         data_rate = conf.settings.data_rate
+        correct_result = size / 10**6 * data_rate + fake_fee_amount
         daemon = get_test_daemon(generous=False, with_fee=True)
-        self.assertEquals(daemon.get_est_cost("test", size).result, (size / (10**6) * data_rate) + fake_fee_amount)
+        self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
 
-    def test_data_cost_with_generous(self):
+    def test_generous_data_and_no_fee(self):
         size = 10000000
+        correct_result = 0.0
         daemon = get_test_daemon(generous=True)
-        self.assertEquals(daemon.get_est_cost("test", size).result, 0.0)
+        self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
 
-    def test_data_cost_with_non_generous(self):
+    def test_ungenerous_data_and_no_fee(self):
         size = 10000000
         data_rate = conf.settings.data_rate
+        correct_result = size / 10**6 * data_rate
         daemon = get_test_daemon(generous=False)
-        self.assertEquals(daemon.get_est_cost("test", size).result, (size / (10**6) * data_rate))
+        self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
