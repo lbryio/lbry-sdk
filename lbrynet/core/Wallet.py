@@ -405,12 +405,12 @@ class Wallet(object):
             if not claim:
                 return False
             claim['value'] = json.loads(claim['value'])
-            return claim 
+            return claim
 
 
         def _get_my_unspent_claim(claims):
             for claim in claims:
-                if claim['name'] == name and not claim['is spent'] and not claim.get('supported_claimid', False):
+                if claim['name'] == name and not claim['is spent'] and claim['category'] != 'support':
                     return claim
             return False
 
