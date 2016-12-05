@@ -22,6 +22,13 @@ KB = 2**10
 MB = 2**20
 
 
+class InvalidSetting(Exception):
+    """Raised when an invalid setting is set"""
+    def __init__(self, key):
+        self.key = key
+        Exception.__init__(self, '{} is not a valid setting'.format(key))
+
+
 if sys.platform.startswith("darwin"):
     platform = DARWIN
     default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
@@ -72,7 +79,7 @@ class Settings(object):
             try:
                 self.__setitem__(k, v)
             except (KeyError, AssertionError):
-                pass
+                raise InvalidSetting(k)
 
 
 class Env(envparse.Env):
@@ -111,7 +118,7 @@ class Env(envparse.Env):
 
 def server_port(server_port):
     server, port = server_port.split(':')
-    return server, port
+    return server, int(port)
 
 
 DEFAULT_DHT_NODES = [
@@ -145,7 +152,7 @@ ENVIRONMENT = Env(
     search_timeout=(float, 5.0),
     host_ui=(bool, True),
     check_ui_requirements=(bool, True),
-    local_ui_path=(bool, False),
+    local_ui_path=(str, None),
     api_port=(int, 5279),
     search_servers=(list, ['lighthouse1.lbry.io:50005']),
     data_rate=(float, .0001),  # points/megabyte
@@ -176,6 +183,7 @@ ENVIRONMENT = Env(
     # give an attacker access to your wallet and you could lose
     # all of your credits.
     API_INTERFACE=(str, "localhost"),
+    bittrex_feed=(str, "https://bittrex.com/api/v1.1/public/getmarkethistory"),
 )
 
 
@@ -185,16 +193,36 @@ class AdjustableSettings(Settings):
     """Settings that are allowed to be overriden by the user"""
     def __init__(self, environ=None):
         self.environ = environ or ENVIRONMENT
-
         for opt in self.environ.original_schema:
             self.__dict__[opt] = self.environ(opt)
-
         Settings.__init__(self)
 
+    def _valid_settings(self):
+        return self.environ.original_schema
+
+    def _is_valid_setting(self, key):
+        return key in self._valid_settings()
+
     def __getattr__(self, attr):
-        if attr in self.environ.original_schema:
+        if self._is_valid_setting(attr):
+            if attr in self.__dict__:
+                return self.__dict__[attr]
             return self.environ(attr)
-        raise AttributeError
+        return self.__getattribute__(attr)
+
+    def get_dict(self):
+        return {
+            name: getattr(self, name)
+            for name in self._valid_settings()
+        }
+
+    def update(self, other):
+        for key, value in other.iteritems():
+            if self._is_valid_setting(key):
+                self.__dict__[key] = value
+            else:
+                raise InvalidSetting(key)
+
 
 class ApplicationSettings(Settings):
     """Settings that are constants and shouldn't be overriden"""
@@ -207,7 +235,7 @@ class ApplicationSettings(Settings):
         self.BLOBFILES_DIR = "blobfiles"
         self.BLOB_SIZE = 2*MB
         self.LOG_FILE_NAME = "lbrynet.log"
-        self.LOG_POST_URL = "https://lbry.io/log-upload"        
+        self.LOG_POST_URL = "https://lbry.io/log-upload"
         self.CRYPTSD_FILE_EXTENSION = ".cryptsd"
         self.API_ADDRESS = "lbryapi"
         self.ICON_PATH = "icons" if platform is WINDOWS else "app.icns"
@@ -223,7 +251,7 @@ class ApplicationSettings(Settings):
         self.LOGGLY_TOKEN = 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv'
         self.ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
         self.ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
-        self.DB_REVISION_FILE_NAME = 'db_revision' 
+        self.DB_REVISION_FILE_NAME = 'db_revision'
         Settings.__init__(self)
 
 
@@ -252,11 +280,11 @@ class Config(DefaultSettings):
 
     @property
     def ORIGIN(self):
-        return "http://%s:%i" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port)
+        return "http://%s:%i" % (self.API_INTERFACE, self.api_port)
 
     @property
     def REFERER(self):
-        return "http://%s:%i/" % (DEFAULT_SETTINGS.API_INTERFACE, self.api_port)
+        return "http://%s:%i/" % (self.API_INTERFACE, self.api_port)
 
     @property
     def API_CONNECTION_STRING(self):
@@ -271,7 +299,10 @@ class Config(DefaultSettings):
         return {k: self[k] for k in self}
 
     def get_adjustable_settings_dict(self):
-        return {opt: val for opt, val in self.get_dict().iteritems() if opt in self.environ.original_schema}
+        return {
+            opt: val for opt, val in self.get_dict().iteritems()
+            if opt in self.environ.original_schema
+        }
 
     def ensure_data_dir(self):
         # although there is a risk of a race condition here we don't

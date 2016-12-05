@@ -7,8 +7,11 @@ from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 
 from lbrynet.metadata.Fee import FeeValidator
+from lbrynet import conf
+
 
 log = logging.getLogger(__name__)
+
 
 CURRENCY_PAIRS = ["USDBTC", "BTCLBC"]
 BITTREX_FEE = 0.0025
@@ -81,7 +84,7 @@ class BittrexFeed(MarketFeed):
             self,
             "BTCLBC",
             "Bittrex",
-            "https://bittrex.com/api/v1.1/public/getmarkethistory",
+            conf.settings.bittrex_feed,
             {'market': 'BTC-LBC', 'count': 50},
             BITTREX_FEE
         )
