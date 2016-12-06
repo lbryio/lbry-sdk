@@ -1,8 +1,0 @@
-[Core]
-Name = BlindRepeater
-Module = BlindRepeater
-
-[Documentation]
-Author = LBRY
-Version = 0.1
-Description = A client which blindly downloads data it judges valuable so that it can be re-uploaded for profit
