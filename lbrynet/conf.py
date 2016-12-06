@@ -111,7 +111,7 @@ class Env(envparse.Env):
 
 def server_port(server_port):
     server, port = server_port.split(':')
-    return server, port
+    return server, int(port)
 
 
 DEFAULT_DHT_NODES = [
