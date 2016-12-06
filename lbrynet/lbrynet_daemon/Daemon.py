@@ -32,7 +32,7 @@ from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadat
 from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.lbrynet_console.Settings import Settings
+from lbrynet.lbrynet_daemon.Settings import Settings
 from lbrynet.lbrynet_daemon.UIManager import UIManager
 from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
