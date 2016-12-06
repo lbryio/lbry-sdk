@@ -20,7 +20,6 @@ from lbryum.transaction import Transaction
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
-from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
 from lbrynet.metadata.Metadata import Metadata
 

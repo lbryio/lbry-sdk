@@ -10,7 +10,6 @@ import base58
 import requests
 import simplejson as json
 from urllib2 import urlopen
-from appdirs import user_data_dir
 from datetime import datetime
 from decimal import Decimal
 
@@ -18,7 +17,6 @@ from twisted.web import server
 from twisted.internet import defer, threads, error, reactor, task
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
-from txjsonrpc import jsonrpclib
 from jsonschema import ValidationError
 
 # TODO: importing this when internet is disabled raises a socket.gaierror

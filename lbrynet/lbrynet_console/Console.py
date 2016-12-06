@@ -45,7 +45,7 @@ from lbrynet.lbrynet_console.ControlHandlers import ShowServerStatusFactory, Mod
 from lbrynet.lbrynet_console.ControlHandlers import ModifyEncryptedFileOptionsChooserFactory, StatusFactory
 from lbrynet.lbrynet_console.ControlHandlers import PeerStatsAndSettingsChooserFactory, PublishFactory
 from lbrynet.lbrynet_console.ControlHandlers import BlockchainStatusFactory
-from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.core.Wallet import LBRYumWallet
 
 
 log = logging.getLogger(__name__)
@@ -218,10 +218,6 @@ class Console():
         def get_wallet():
             if self.fake_wallet:
                 d = defer.succeed(PTCWallet(self.db_dir))
-            elif self.lbrycrdd_path is not None:
-                d = defer.succeed(LBRYcrdWallet(self.db_dir, wallet_dir=self.lbrycrd_dir,
-                                                wallet_conf=self.lbrycrd_conf,
-                                                lbrycrdd_path=self.lbrycrdd_path))
             else:
                 d = defer.succeed(LBRYumWallet(self.db_dir))
             d.addCallback(lambda wallet: {"wallet": wallet})
