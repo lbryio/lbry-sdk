@@ -194,7 +194,8 @@ class AdjustableSettings(Settings):
     def __getattr__(self, attr):
         if attr in self.environ.original_schema:
             return self.environ(attr)
-        raise AttributeError
+        return self.__getattribute__(attr)
+
 
 class ApplicationSettings(Settings):
     """Settings that are constants and shouldn't be overriden"""
