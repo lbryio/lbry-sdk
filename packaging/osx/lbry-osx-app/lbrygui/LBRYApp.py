@@ -1,11 +1,8 @@
 import AppKit
 import webbrowser
 import sys
-import os
 import logging
 import platform
-import shutil
-from appdirs import user_data_dir
 from twisted.internet import reactor
 
 from lbrynet.lbrynet_daemon import DaemonControl
