@@ -44,7 +44,7 @@ from lbrynet.core import log_support, utils, Platform
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob, BlobStreamDescriptorReader
 from lbrynet.core.Session import Session
 from lbrynet.core.PTCWallet import PTCWallet
-from lbrynet.core.Wallet import LBRYcrdWallet, LBRYumWallet
+from lbrynet.core.Wallet import LBRYumWallet
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
@@ -240,7 +240,6 @@ class Daemon(AuthJSONRPCServer):
         self.reflector_port = conf.settings.reflector_port
         self.dht_node_port = conf.settings.dht_node_port
         self.use_upnp = conf.settings.use_upnp
-        self.start_lbrycrdd = conf.settings.start_lbrycrdd
         self.cache_time = conf.settings.cache_time
         self.startup_scripts = conf.settings.startup_scripts
 
@@ -275,7 +274,6 @@ class Daemon(AuthJSONRPCServer):
         self.streams = {}
         self.pending_claims = {}
         self.name_cache = {}
-        self.set_wallet_attributes()
         self.exchange_rate_manager = ExchangeRateManager()
         calls = {
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
@@ -292,41 +290,6 @@ class Daemon(AuthJSONRPCServer):
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
 
-    @AuthJSONRPCServer.subhandler
-    def _exclude_lbrycrd_only_commands_from_lbryum_session(self, request):
-        request.content.seek(0, 0)
-        content = request.content.read()
-        parsed = jsonrpclib.loads(content)
-        function_path = parsed.get("method")
-        if self.wallet_type == LBRYUM_WALLET and function_path in ['set_miner', 'get_miner_status']:
-            log.warning("Mining commands are not available in lbryum")
-            raise Exception("Command not available in lbryum")
-        return True
-
-    def set_wallet_attributes(self):
-        self.wallet_dir = None
-        if self.wallet_type != LBRYCRD_WALLET:
-            return
-        if os.name == "nt":
-            from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
-            self.lbrycrdd_path = "lbrycrdd.exe"
-            user_app_dir = get_path(FOLDERID.RoamingAppData, UserHandle.current)
-            self.wallet_dir = os.path.join(user_app_dir, "lbrycrd")
-        elif sys.platform == "darwin":
-            self.lbrycrdd_path = get_darwin_lbrycrdd_path()
-            self.wallet_dir = user_data_dir("lbrycrd")
-        else:
-            self.lbrycrdd_path = "lbrycrdd"
-            self.wallet_dir = os.path.join(os.path.expanduser("~"), ".lbrycrd")
-        self.lbrycrd_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
-        self.wallet_conf = os.path.join(self.wallet_dir, "lbrycrd.conf")
-        if os.name != 'nt':
-            # TODO: are we still using this?
-            lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
-            if not os.path.isfile(lbrycrdd_path_conf):
-                f = open(lbrycrdd_path_conf, "w")
-                f.write(str(self.lbrycrdd_path))
-                f.close()
 
     def setup(self):
         def _log_starting_vals():
@@ -786,12 +749,7 @@ class Daemon(AuthJSONRPCServer):
 
         def get_wallet():
             if self.wallet_type == LBRYCRD_WALLET:
-                log.info("Using lbrycrd wallet")
-                wallet = LBRYcrdWallet(self.db_dir,
-                                       wallet_dir=self.wallet_dir,
-                                       wallet_conf=self.lbrycrd_conf,
-                                       lbrycrdd_path=self.lbrycrdd_path)
-                d = defer.succeed(wallet)
+                raise ValueError('LBRYcrd Wallet is no longer supported')
             elif self.wallet_type == LBRYUM_WALLET:
                 log.info("Using lbryum wallet")
                 config = {'auto_connect': True}
@@ -1304,7 +1262,6 @@ class Daemon(AuthJSONRPCServer):
             'peer_port': int,
             'dht_node_port': int,
             'use_upnp': bool,
-            'start_lbrycrdd': bool,
         """
 
         log.info("Get daemon settings")
@@ -2400,24 +2357,6 @@ def get_output_callback(params):
             'path': os.path.join(params.download_directory, l.file_name)
         }
     return callback
-
-
-def get_darwin_lbrycrdd_path():
-    # use the path from the bundle if its available.
-    default = "./lbrycrdd"
-    try:
-        import Foundation
-        # TODO: require pyobjc and pyobjc-core on os x
-    except ImportError:
-        log.warning('Foundation module not installed, falling back to default lbrycrdd path')
-        return default
-    else:
-        try:
-            bundle = Foundation.NSBundle.mainBundle()
-            return bundle.pathForResource_ofType_('lbrycrdd', None)
-        except Exception:
-            log.exception('Failed to get path from bundle, falling back to default')
-            return default
 
 
 class _DownloadNameHelper(object):

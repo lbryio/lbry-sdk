@@ -178,13 +178,6 @@ for script in "lbry" "lbrynet-daemon" "lbrynet-cli" "stop-lbrynet-daemon"; do
   addlink "/$BINPATH/$script" "usr/bin/$script"
 done
 
-# add lbrycrdd and lbrycrd-cli
-mkdir -p "$PACKAGING_DIR/bins"
-wget "$(curl https://api.github.com/repos/lbryio/lbrycrd/releases/latest | grep 'browser_download_url' | grep linux | cut -d'"' -f4)" --output-document "$PACKAGING_DIR/bins.zip"
-unzip "$PACKAGING_DIR/bins.zip" -d "$PACKAGING_DIR/bins/"
-addfile "$PACKAGING_DIR/bins/lbrycrdd" usr/bin/lbrycrdd
-addfile "$PACKAGING_DIR/bins/lbrycrd-cli" usr/bin/lbrycrd-cli
-
 # add postinstall script
 cat "$PACKAGING_DIR/postinst_append" >> control/postinst
 

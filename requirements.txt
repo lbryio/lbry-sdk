@@ -16,7 +16,6 @@ miniupnpc==1.9
 pbkdf2==1.3
 protobuf==3.0.0
 pycrypto==2.6.1
-python-bitcoinrpc==0.1
 qrcode==5.2.2
 requests==2.9.1
 requests_futures==0.9.7

@@ -77,16 +77,6 @@ codesign -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/
 codesign --deep -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/MacOS/LBRYURIHandler"
 codesign -vvvv "${DEST}/dist/LBRYURIHandler.app"
 
-# add lbrycrdd as a resource. Following
-# http://stackoverflow.com/questions/11370012/can-executables-made-with-py2app-include-other-terminal-scripts-and-run-them
-# LBRYCRDD_URL="$(curl https://api.github.com/repos/lbryio/lbrycrd/releases/latest | grep 'browser_download_url' | grep osx | cut -d'"' -f4)"
-LBRYCRDD_URL="https://github.com/lbryio/lbrycrd/releases/download/v0.3.15/lbrycrd-osx.zip"
-wget "${LBRYCRDD_URL}" --output-document lbrycrd-osx.zip
-unzip -o lbrycrd-osx.zip
-python setup_app.py py2app --resources lbrycrdd
-
-chmod +x "${DEST}/dist/LBRY.app/Contents/Resources/lbrycrdd"
-
 echo "Removing i386 libraries"
 
 remove_arch () {

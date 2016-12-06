@@ -7,19 +7,6 @@ import platform
 import shutil
 from appdirs import user_data_dir
 from twisted.internet import reactor
-import Foundation
-bundle = Foundation.NSBundle.mainBundle()
-lbrycrdd_path = bundle.pathForResource_ofType_('lbrycrdd', None)
-lbrycrdd_path_conf = os.path.join(os.path.expanduser("~"), ".lbrycrddpath.conf")
-wallet_dir = user_data_dir("lbrycrd")
-
-if not os.path.isdir(wallet_dir):
-    shutil.os.mkdir(wallet_dir)
-
-if not os.path.isfile(lbrycrdd_path_conf):
-    f = open(lbrycrdd_path_conf, "w")
-    f.write(lbrycrdd_path)
-    f.close()
 
 from lbrynet.lbrynet_daemon import DaemonControl
 from lbrynet import analytics
