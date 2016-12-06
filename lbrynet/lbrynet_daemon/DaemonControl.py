@@ -1,22 +1,15 @@
 import argparse
 import logging.handlers
-import os
 import webbrowser
-import sys
 
-from twisted.web import server, guard
-from twisted.internet import defer, reactor, error
-from twisted.cred import portal
+from twisted.internet import defer, reactor
 from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet import analytics
-from lbrynet.lbrynet_daemon.auth.auth import PasswordChecker, HttpPasswordRealm
-from lbrynet.lbrynet_daemon.auth.util import initialize_api_key_file
 from lbrynet import conf
 from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
-from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
 from lbrynet.conf import settings
 
 
@@ -140,43 +133,11 @@ def start_server_and_listen(launchui, use_auth, analytics_manager):
         kwargs: passed along to `DaemonServer().start()`
     """
     daemon_server = DaemonServer(analytics_manager)
-    d = daemon_server.start()
-    d.addCallback(lambda _: listen(daemon_server, use_auth))
+    d = daemon_server.start(use_auth)
     if launchui:
         d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
     d.addCallback(lambda _: analytics_manager.send_server_startup_success())
     d.addErrback(log_and_kill, analytics_manager)
-
-
-def listen(daemon_server, use_auth):
-    site_base = get_site_base(use_auth, daemon_server.root)
-    lbrynet_server = server.Site(site_base)
-    lbrynet_server.requestFactory = DaemonRequest
-    try:
-        reactor.listenTCP(settings.api_port, lbrynet_server, interface=settings.API_INTERFACE)
-    except error.CannotListenError:
-        log.info('Daemon already running, exiting app')
-        sys.exit(1)
-
-
-def get_site_base(use_auth, root):
-    if use_auth:
-        log.info("Using authenticated API")
-        return create_auth_session(root)
-    else:
-        log.info("Using non-authenticated API")
-        return server.Site(root)
-
-
-def create_auth_session(root):
-    pw_path = os.path.join(settings.data_dir, ".api_keys")
-    initialize_api_key_file(pw_path)
-    checker = PasswordChecker.load_file(pw_path)
-    realm = HttpPasswordRealm(root)
-    portal_to_realm = portal.Portal(realm, [checker, ])
-    factory = guard.BasicCredentialFactory('Login to lbrynet api')
-    _lbrynet_server = guard.HTTPAuthSessionWrapper(portal_to_realm, [factory, ])
-    return _lbrynet_server
 
 
 if __name__ == "__main__":
