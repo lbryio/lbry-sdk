@@ -6,7 +6,9 @@ import googlefinance
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 
+from lbrynet import conf
 from lbrynet.metadata.Fee import FeeValidator
+
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +83,7 @@ class BittrexFeed(MarketFeed):
             self,
             "BTCLBC",
             "Bittrex",
-            "https://bittrex.com/api/v1.1/public/getmarkethistory",
+            conf.settings.bittrex_feed,
             {'market': 'BTC-LBC', 'count': 50},
             BITTREX_FEE
         )

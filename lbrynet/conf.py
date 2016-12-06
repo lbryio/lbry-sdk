@@ -175,6 +175,7 @@ ENVIRONMENT = Env(
     # give an attacker access to your wallet and you could lose
     # all of your credits.
     API_INTERFACE=(str, "localhost"),
+    bittrex_feed=(str, "https://bittrex.com/api/v1.1/public/getmarkethistory"),
 )
 
 
