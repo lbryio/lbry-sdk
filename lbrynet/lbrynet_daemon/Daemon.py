@@ -26,6 +26,7 @@ from lbrynet import conf, reflector, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.metadata.Fee import FeeValidator
 from lbrynet.metadata.Metadata import Metadata, verify_name_characters
+from lbrynet.reflector import reupload
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory, EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
@@ -1040,12 +1041,9 @@ class Daemon(AuthJSONRPCServer):
         if stream_hash is None:
             return defer.fail(Exception("no stream hash"))
         log.info("Reflecting stream: %s" % stream_hash)
-        factory = reflector.ClientFactory(
-            self.session.blob_manager,
-            self.lbry_file_manager.stream_info_manager,
-            stream_hash
-        )
-        return run_reflector_factory(factory)
+        reflector_server = random.choice(conf.settings.reflector_servers)
+        lighthouse_server = random.choice(conf.settings.light_reflector_servers)
+        return reupload.check_and_restore_availability(lbry_file, reflector_server, lighthouse_server)
 
     def _reflect_blobs(self, blob_hashes):
         if not blob_hashes:
@@ -2660,8 +2658,8 @@ def handle_failure(err, msg):
     return server.failure
 
 
-def run_reflector_factory(factory):
-    reflector_server = random.choice(conf.settings.reflector_servers)
+def run_reflector_factory(factory, reflector_server=None):
+    reflector_server = reflector_server or random.choice(conf.settings.reflector_servers)
     reflector_address, reflector_port = reflector_server
     log.info("Start reflector client")
     d = reactor.resolve(reflector_address)

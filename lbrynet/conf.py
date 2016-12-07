@@ -155,6 +155,7 @@ ENVIRONMENT = Env(
     known_dht_nodes=(list, DEFAULT_DHT_NODES, server_port),
     pointtrader_server=(str, 'http://127.0.0.1:2424'),
     reflector_servers=(list, [("reflector.lbry.io", 5566)], server_port),
+    light_reflector_servers=(list, [("107.170.207.64", 5567)], server_port),
     wallet=(str, LBRYUM_WALLET),
     ui_branch=(str, "master"),
     default_ui_branch=(str, 'master'),
