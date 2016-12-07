@@ -950,14 +950,15 @@ class Daemon(AuthJSONRPCServer):
 
         d = defer.succeed(None)
         reactor.callLater(self.search_timeout, _check_est, d)
-        d.addCallback(lambda _: download_sd_blob(self.session, sd_hash, self.blob_request_payment_rate_manager))
+        d.addCallback(
+            lambda _: download_sd_blob(
+                self.session, sd_hash, self.blob_request_payment_rate_manager))
         return d
 
     def get_or_download_sd_blob(self, sd_hash):
+        """Return previously downloaded sd blob if already in the blob
+        manager, otherwise download and return it
         """
-        Return previously downloaded sd blob if already in the blob manager, otherwise download and return it
-        """
-
         d = self.session.blob_manager.completed_blobs([sd_hash])
         d.addCallback(self._get_or_download_sd_blob, sd_hash)
         return d
@@ -1007,7 +1008,8 @@ class Daemon(AuthJSONRPCServer):
 
         def _handle_err(err):
             if isinstance(err, Failure):
-                log.warning("Timeout getting blob for cost est for lbry://%s, using only key fee", name)
+                log.warning(
+                    "Timeout getting blob for cost est for lbry://%s, using only key fee", name)
                 return 0.0
             raise err
 
@@ -1029,11 +1031,10 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(self._get_est_cost_from_metadata, name)
         return d
 
-
     def get_est_cost(self, name, size=None):
-        """
-        Get a cost estimate for a lbry stream, if size is not provided the sd blob will be downloaded
-        to determine the stream size
+        """Get a cost estimate for a lbry stream, if size is not provided the
+        sd blob will be downloaded to determine the stream size
+
         """
 
         if size is not None:
@@ -1326,12 +1327,15 @@ class Daemon(AuthJSONRPCServer):
         """
 
         def _log_settings_change():
-            log.info("Set daemon settings to " + json.dumps(conf.settings.get_adjustable_settings_dict()))
+            log.info(
+                "Set daemon settings to %s",
+                json.dumps(conf.settings.get_adjustable_settings_dict()))
 
         d = self._update_settings(p)
         d.addErrback(lambda err: log.info(err.getTraceback()))
         d.addCallback(lambda _: _log_settings_change())
-        d.addCallback(lambda _: self._render_response(conf.settings.get_adjustable_settings_dict(), OK_CODE))
+        d.addCallback(
+            lambda _: self._regnder_response(conf.settings.get_adjustable_settings_dict(), OK_CODE))
 
         return d
 
