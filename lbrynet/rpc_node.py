@@ -42,7 +42,8 @@ def main():
     parser = argparse.ArgumentParser(description="Launch a dht node which responds to rpc commands")
 
     parser.add_argument("node_port",
-                        help="The UDP port on which the node will listen for connections from other dht nodes",
+                        help=("The UDP port on which the node will listen for connections "
+                              "from other dht nodes"),
                         type=int)
     parser.add_argument("rpc_port",
                         help="The TCP port on which the node will listen for rpc commands",

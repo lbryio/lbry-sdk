@@ -104,7 +104,8 @@ class BlobReflectorClient(Protocol):
     def start_transfer(self):
         self.sent_blobs = True
         self.write(json.dumps({}))
-        assert self.read_handle is not None, "self.read_handle was None when trying to start the transfer"
+        assert self.read_handle is not None, \
+            "self.read_handle was None when trying to start the transfer"
         d = self.file_sender.beginFileTransfer(self.read_handle, self)
         return d
 

@@ -34,11 +34,12 @@ def main():
     parser.add_argument("amount_of_nodes",
                         help="The number of nodes to create",
                         type=int)
-    parser.add_argument("--nic_ip_address",
-                        help="The network interface on which these nodes will listen for connections "
-                             "from each other and from other nodes. If omitted, an attempt will be "
-                             "made to automatically determine the system's IP address, but this may "
-                             "result in the nodes being reachable only from this system")
+    parser.add_argument(
+        "--nic_ip_address",
+        help=("The network interface on which these nodes will listen for connections "
+              "from each other and from other nodes. If omitted, an attempt will be "
+              "made to automatically determine the system's IP address, but this may "
+              "result in the nodes being reachable only from this system"))
 
     args = parser.parse_args()
 
@@ -56,14 +57,19 @@ def main():
     nodes = []
     print 'Creating Kademlia network...'
     try:
-        nodes.append(os.spawnlp(os.P_NOWAIT, 'lbrynet-launch-node', 'lbrynet-launch-node', str(startPort)))
+        node = os.spawnlp(
+            os.P_NOWAIT, 'lbrynet-launch-node', 'lbrynet-launch-node', str(startPort))
+        nodes.append(node)
         for i in range(amount-1):
             time.sleep(0.15)
             hashAmount = i*50/amount
             hashbar = '#'*hashAmount
             output = '\r[%-50s] %d/%d' % (hashbar, i, amount)
             sys.stdout.write(output)
-            nodes.append(os.spawnlp(os.P_NOWAIT, 'lbrynet-launch-node', 'lbrynet-launch-node', str(port), ipAddress, str(startPort)))
+            node = os.spawnlp(
+                os.P_NOWAIT, 'lbrynet-launch-node', 'lbrynet-launch-node', str(port),
+                ipAddress, str(startPort))
+            nodes.append(node)
             port += 1
     except KeyboardInterrupt:
         '\nNetwork creation cancelled.'

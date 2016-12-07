@@ -1,3 +1,4 @@
+# pylint: skip-file
 import binascii
 import logging
 from lbrynet.core.cryptoutils import get_lbry_hash_obj, verify_signature

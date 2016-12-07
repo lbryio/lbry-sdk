@@ -1,3 +1,5 @@
+# pylint: disable=line-too-long
+# TODO: renable pylint check after lbrycrdd code is removed
 import datetime
 import logging
 import json

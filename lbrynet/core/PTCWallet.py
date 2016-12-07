@@ -111,14 +111,16 @@ class PTCWallet(object):
         return PointTraderKeyQueryHandlerFactory(self)
 
     def reserve_points(self, peer, amount):
-        """
-        Ensure a certain amount of points are available to be sent as payment, before the service is rendered
+        """Ensure a certain amount of points are available to be sent as
+        payment, before the service is rendered
 
         @param peer: The peer to which the payment will ultimately be sent
 
         @param amount: The amount of points to reserve
 
-        @return: A ReservedPoints object which is given to send_points once the service has been rendered
+        @return: A ReservedPoints object which is given to send_points
+        once the service has been rendered
+
         """
         if self.wallet_balance >= self.total_reserved_points + amount:
             self.total_reserved_points += amount
@@ -157,7 +159,8 @@ class PTCWallet(object):
         ds = []
         for peer, points in self.queued_payments.items():
             if peer in self.peer_pub_keys:
-                d = pointtraderclient.send_points(self.private_key, self.peer_pub_keys[peer], points)
+                d = pointtraderclient.send_points(
+                    self.private_key, self.peer_pub_keys[peer], points)
                 self.wallet_balance -= points
                 self.total_reserved_points -= points
                 ds.append(d)
@@ -208,10 +211,13 @@ class PTCWallet(object):
             min_expected_balance = sum([a[0] for a in expected_payments if a[1] < expected_cutoff])
             received_balance = 0
             if self.peer_pub_keys[peer] in self.received_payments:
-                received_balance = sum([a[0] for a in self.received_payments[self.peer_pub_keys[peer]]])
+                received_balance = sum([
+                    a[0] for a in self.received_payments[self.peer_pub_keys[peer]]])
             if min_expected_balance > received_balance:
-                log.warning("Account in bad standing: %s (pub_key: %s), expected amount = %s, received_amount = %s",
-                            str(peer), self.peer_pub_keys[peer], str(min_expected_balance), str(received_balance))
+                log.warning(
+                    "Account in bad standing: %s (pub_key: %s), expected amount = %s, "
+                    "received_amount = %s",
+                    peer, self.peer_pub_keys[peer], min_expected_balance, received_balance)
 
     def _open_db(self):
         def open_db():
@@ -285,7 +291,8 @@ class PointTraderKeyQueryHandlerFactory(object):
         return 'public_key'
 
     def get_description(self):
-        return "Point Trader Address - an address for receiving payments on the point trader testing network"
+        return ("Point Trader Address - an address for receiving payments on the "
+                "point trader testing network")
 
 
 class PointTraderKeyQueryHandler(object):

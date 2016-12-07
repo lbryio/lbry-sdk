@@ -68,7 +68,9 @@ class EncryptedFileStreamer(object):
                 return
 
             if stream_status != STATUS_FINISHED:
-                self._deferred.addCallback(lambda _: task.deferLater(reactor, self.new_data_check_interval, self._check_for_new_data))
+                self._deferred.addCallback(
+                    lambda _: task.deferLater(
+                        reactor, self.new_data_check_interval, self._check_for_new_data))
             else:
                 self.stopProducing()
 
@@ -82,9 +84,12 @@ class EncryptedFileStreamer(object):
         if data:
             self._request.write(data)
             if self._running:  # .write() can trigger a pause
-                self._deferred.addCallback(lambda _: task.deferLater(reactor, self.stream_interval, self._check_for_new_data))
+                self._deferred.addCallback(
+                    lambda _: task.deferLater(
+                        reactor, self.stream_interval, self._check_for_new_data))
         else:
-            self._deferred.addCallback(lambda _: self._file_manager.get_lbry_file_status(self._stream))
+            self._deferred.addCallback(
+                lambda _: self._file_manager.get_lbry_file_status(self._stream))
             self._deferred.addCallback(_recurse_or_stop)
 
     def pauseProducing(self):

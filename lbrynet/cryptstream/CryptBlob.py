@@ -35,8 +35,8 @@ class StreamBlobDecryptor(object):
 
         def write_bytes():
             if self.len_read < self.length:
-                num_bytes_to_decrypt = (len(self.buff) // self.cipher.block_size) * self.cipher.block_size
-                data_to_decrypt, self.buff = self.buff[:num_bytes_to_decrypt], self.buff[num_bytes_to_decrypt:]
+                num_bytes_to_decrypt = greatest_multiple(len(self.buff), self.cipher.block_size)
+                data_to_decrypt, self.buff = split(self.buff, num_bytes_to_decrypt)
                 write_func(self.cipher.decrypt(data_to_decrypt))
 
         def finish_decrypt():
@@ -107,6 +107,12 @@ class CryptStreamBlobMaker(object):
 
     def _return_info(self, blob_hash):
         return CryptBlobInfo(blob_hash, self.blob_num, self.length, binascii.hexlify(self.iv))
+
+
+def greatest_multiple(a, b):
+    """return the largest value `c`, that is a multiple of `b` and is <= `a`"""
+    return (a // b) * b
+
 
 def split(buff, cutoff):
     return buff[:cutoff], buff[cutoff:]

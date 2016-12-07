@@ -60,8 +60,7 @@ pip install -r requirements.txt
 pip install pyOpenSSL
 
 pip install pylint
-pylint -E --disable=inherit-non-class --disable=no-member --ignored-modules=distutils \
-       --enable=unused-import --enable=bad-whitespace lbrynet packaging/osx/lbry-osx-app/lbrygui/
+./run_pylint.sh packaging/osx/lbry-osx-app/lbrygui/
 
 python setup.py install
 

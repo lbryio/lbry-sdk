@@ -1,3 +1,4 @@
+# pylint: skip-file
 import binascii
 from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader

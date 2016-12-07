@@ -11,6 +11,11 @@
 # paths.
 ignore=CVS
 
+# Add files or directories matching the regex patterns to the
+# blacklist. The regex matches against base names, not paths.
+# `\.#.*` - add emacs tmp files to the blacklist
+ignore-patterns=\.#.*
+
 # Pickle collected data for later comparisons.
 persistent=yes
 
@@ -121,7 +126,8 @@ logging-modules=logging
 bad-functions=map,filter,input
 
 # Good variable names which should always be accepted, separated by a comma
-good-names=i,j,k,ex,Run,_
+# allow `d` as its used frequently for deferred callback chains
+good-names=i,j,k,ex,Run,_,d
 
 # Bad variable names which should always be refused, separated by a comma
 bad-names=foo,bar,baz,toto,tutu,tata

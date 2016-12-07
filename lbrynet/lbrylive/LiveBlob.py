@@ -1,3 +1,4 @@
+# pylint: skip-file
 from lbrynet.cryptstream.CryptBlob import CryptStreamBlobMaker, CryptBlobInfo
 import binascii
 

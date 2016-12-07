@@ -1,3 +1,4 @@
+# pylint: skip-file
 from collections import defaultdict
 import logging
 from zope.interface import implements

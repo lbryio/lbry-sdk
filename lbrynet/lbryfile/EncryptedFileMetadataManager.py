@@ -47,7 +47,8 @@ class DBEncryptedFileMetadataManager(object):
     def add_blobs_to_stream(self, stream_hash, blobs):
         return self._add_blobs_to_stream(stream_hash, blobs, ignore_duplicate_error=True)
 
-    def get_blobs_for_stream(self, stream_hash, start_blob=None, end_blob=None, count=None, reverse=False):
+    def get_blobs_for_stream(self, stream_hash, start_blob=None,
+                             end_blob=None, count=None, reverse=False):
         log.debug("Getting blobs for a stream. Count is %s", str(count))
 
         def get_positions_of_start_and_end():
@@ -97,8 +98,10 @@ class DBEncryptedFileMetadataManager(object):
         # to a bug in twisted, where the connection is closed by a different thread than the
         # one that opened it. The individual connections in the pool are not used in multiple
         # threads.
-        self.db_conn = adbapi.ConnectionPool("sqlite3", (os.path.join(self.db_dir, "lbryfile_info.db")),
-                                             check_same_thread=False)
+        self.db_conn = adbapi.ConnectionPool(
+            "sqlite3",
+            (os.path.join(self.db_dir, "lbryfile_info.db")),
+            check_same_thread=False)
 
         def create_tables(transaction):
             transaction.execute("create table if not exists lbry_files (" +
@@ -125,8 +128,10 @@ class DBEncryptedFileMetadataManager(object):
 
     @rerun_if_locked
     def _delete_stream(self, stream_hash):
-        d = self.db_conn.runQuery("select stream_hash from lbry_files where stream_hash = ?", (stream_hash,))
-        d.addCallback(lambda result: result[0][0] if len(result) else Failure(NoSuchStreamHashError(stream_hash)))
+        d = self.db_conn.runQuery(
+            "select stream_hash from lbry_files where stream_hash = ?", (stream_hash,))
+        d.addCallback(
+            lambda result: result[0][0] if result else Failure(NoSuchStreamHashError(stream_hash)))
 
         def do_delete(transaction, s_h):
             transaction.execute("delete from lbry_files where stream_hash = ?", (s_h,))
@@ -157,21 +162,30 @@ class DBEncryptedFileMetadataManager(object):
 
     @rerun_if_locked
     def _get_stream_info(self, stream_hash):
-        d = self.db_conn.runQuery("select key, stream_name, suggested_file_name from lbry_files where stream_hash = ?",
-                                  (stream_hash,))
-        d.addCallback(lambda result: result[0] if len(result) else Failure(NoSuchStreamHashError(stream_hash)))
+        def get_result(res):
+            if res:
+                return res[0]
+            else:
+                raise NoSuchStreamHashError(stream_hash)
+
+        d = self.db_conn.runQuery(
+            "select key, stream_name, suggested_file_name from lbry_files where stream_hash = ?",
+            (stream_hash,))
+        d.addCallback(get_result)
         return d
 
     @rerun_if_locked
     def _check_if_stream_exists(self, stream_hash):
-        d = self.db_conn.runQuery("select stream_hash from lbry_files where stream_hash = ?", (stream_hash,))
+        d = self.db_conn.runQuery(
+            "select stream_hash from lbry_files where stream_hash = ?", (stream_hash,))
         d.addCallback(lambda r: True if len(r) else False)
         return d
 
     @rerun_if_locked
     def _get_blob_num_by_hash(self, stream_hash, blob_hash):
-        d = self.db_conn.runQuery("select position from lbry_file_blobs where stream_hash = ? and blob_hash = ?",
-                                  (stream_hash, blob_hash))
+        d = self.db_conn.runQuery(
+            "select position from lbry_file_blobs where stream_hash = ? and blob_hash = ?",
+            (stream_hash, blob_hash))
         d.addCallback(lambda r: r[0][0] if len(r) else None)
         return d
 
@@ -237,8 +251,9 @@ class DBEncryptedFileMetadataManager(object):
     @rerun_if_locked
     def _get_sd_blob_hashes_for_stream(self, stream_hash):
         log.debug("Looking up sd blob hashes for stream hash %s", str(stream_hash))
-        d = self.db_conn.runQuery("select sd_blob_hash from lbry_file_descriptors where stream_hash = ?",
-                                  (stream_hash,))
+        d = self.db_conn.runQuery(
+            "select sd_blob_hash from lbry_file_descriptors where stream_hash = ?",
+            (stream_hash,))
         d.addCallback(lambda results: [r[0] for r in results])
         return d
 
@@ -291,7 +306,8 @@ class TempEncryptedFileMetadataManager(object):
             self.stream_blobs[(stream_hash, blob.blob_hash)] = info
         return defer.succeed(True)
 
-    def get_blobs_for_stream(self, stream_hash, start_blob=None, end_blob=None, count=None, reverse=False):
+    def get_blobs_for_stream(self, stream_hash, start_blob=None,
+                             end_blob=None, count=None, reverse=False):
 
         if start_blob is not None:
             start_num = self._get_blob_num_by_hash(stream_hash, start_blob)
@@ -333,4 +349,5 @@ class TempEncryptedFileMetadataManager(object):
         return defer.succeed(True)
 
     def get_sd_blob_hashes_for_stream(self, stream_hash):
-        return defer.succeed([sd_hash for sd_hash, s_h in self.sd_files.iteritems() if stream_hash == s_h])
+        return defer.succeed(
+            [sd_hash for sd_hash, s_h in self.sd_files.iteritems() if stream_hash == s_h])

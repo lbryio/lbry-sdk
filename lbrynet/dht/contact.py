@@ -38,11 +38,13 @@ class Contact(object):
             return True
 
     def compact_ip(self):
-        compact_ip = reduce(lambda buff, x: buff + bytearray([int(x)]), self.address.split('.'), bytearray())
+        compact_ip = reduce(
+            lambda buff, x: buff + bytearray([int(x)]), self.address.split('.'), bytearray())
         return str(compact_ip)
         
     def __str__(self):
-        return '<%s.%s object; IP address: %s, UDP port: %d>' % (self.__module__, self.__class__.__name__, self.address, self.port)
+        return '<%s.%s object; IP address: %s, UDP port: %d>' % (
+            self.__module__, self.__class__.__name__, self.address, self.port)
     
     def __getattr__(self, name):
         """ This override allows the host node to call a method of the remote

@@ -12,7 +12,8 @@ def LBRYNotify(message):
     notification.setInformativeText_(message)
     notification.setUserInfo_({})
     notification.setSoundName_("NSUserNotificationDefaultSoundName")
-    notification.setDeliveryDate_(Foundation.NSDate.dateWithTimeInterval_sinceDate_(0, Foundation.NSDate.date()))
+    notification.setDeliveryDate_(
+        Foundation.NSDate.dateWithTimeInterval_sinceDate_(0, Foundation.NSDate.date()))
     NSUserNotificationCenter.defaultUserNotificationCenter().scheduleNotification_(notification)
 
 
@@ -25,5 +26,6 @@ def notify(title, subtitle, info_text, delay=0, sound=False, userInfo=None):
     notification.setUserInfo_(userInfo)
     if sound:
         notification.setSoundName_("NSUserNotificationDefaultSoundName")
-    notification.setDeliveryDate_(Foundation.NSDate.dateWithTimeInterval_sinceDate_(delay, Foundation.NSDate.date()))
+    notification.setDeliveryDate_(
+        Foundation.NSDate.dateWithTimeInterval_sinceDate_(delay, Foundation.NSDate.date()))
     NSUserNotificationCenter.defaultUserNotificationCenter().scheduleNotification_(notification)

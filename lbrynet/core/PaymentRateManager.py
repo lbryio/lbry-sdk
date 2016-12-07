@@ -77,5 +77,6 @@ class NegotiatedPaymentRateManager(object):
     def price_limit_reached(self, peer):
         if peer in self.strategy.pending_sent_offers:
             offer = self.strategy.pending_sent_offers[peer]
-            return offer.is_too_low and round(Decimal.from_float(offer.rate), 5) >= round(self.strategy.max_rate, 5)
+            return (offer.is_too_low and
+                    round(Decimal.from_float(offer.rate), 5) >= round(self.strategy.max_rate, 5))
         return False

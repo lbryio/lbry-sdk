@@ -64,8 +64,6 @@ class ClientProtocol(Protocol):
             err = failure.Failure(ConnectionClosedBeforeResponseError())
         else:
             err = reason
-        #if self._response_deferreds:
-        #    log.warning("Lost connection with active response deferreds. %s", str(self._response_deferreds))
         for key, d in self._response_deferreds.items():
             del self._response_deferreds[key]
             d.errback(err)
@@ -77,7 +75,7 @@ class ClientProtocol(Protocol):
 
     def add_request(self, request):
         if request.response_identifier in self._response_deferreds:
-            return defer.fail(failure.Failure(ValueError("There is already a request for that response active")))
+            raise ValueError("There is already a request for that response active")
         self._next_request.update(request.request_dict)
         d = defer.Deferred()
         log.debug("Adding a request. Request: %s", str(request.request_dict))
@@ -93,7 +91,7 @@ class ClientProtocol(Protocol):
             blob_request.finished_deferred.addErrback(self._handle_response_error)
             return d
         else:
-            return defer.fail(failure.Failure(ValueError("There is already a blob download request active")))
+            raise ValueError("There is already a blob download request active")
 
     def cancel_requests(self):
         self.connection_closing = True
@@ -112,8 +110,9 @@ class ClientProtocol(Protocol):
     ######### Internal request handling #########
 
     def _handle_request_error(self, err):
-        log.error("An unexpected error occurred creating or sending a request to %s. Error message: %s",
-                  str(self.peer), err.getTraceback())
+        log.error(
+            "An unexpected error occurred creating or sending a request to %s. Error message: %s",
+            self.peer, err.getTraceback())
         self.transport.loseConnection()
 
     def _ask_for_request(self):
@@ -129,7 +128,9 @@ class ClientProtocol(Protocol):
                 self._send_request_message(request_msg)
             else:
                 # The connection manager has indicated that this connection should be terminated
-                log.info("Closing the connection to %s due to having no further requests to send", str(self.peer))
+                log.info(
+                    "Closing the connection to %s due to having no further requests to send",
+                    self.peer)
                 self.transport.loseConnection()
 
         d = self._connection_manager.get_next_request(self.peer, self)
@@ -163,17 +164,19 @@ class ClientProtocol(Protocol):
 
     def _handle_response_error(self, err):
         # If an error gets to this point, log it and kill the connection.
-        if not err.check(MisbehavingPeerError, ConnectionClosedBeforeResponseError, DownloadCanceledError,
-                         RequestCanceledError):
-            log.error("The connection to %s is closing due to an unexpected error: %s", str(self.peer),
-                      err.getErrorMessage())
-        if not err.check(RequestCanceledError):  # The connection manager is closing the connection, so
-                                                 # there's no need to do it here.
+        expected_errors = (MisbehavingPeerError, ConnectionClosedBeforeResponseError,
+                           DownloadCanceledError, RequestCanceledError)
+        if not err.check(expected_errors):
+            log.error("The connection to %s is closing due to an unexpected error: %s",
+                      self.peer, err.getErrorMessage())
+        if not err.check(RequestCanceledError):
+            # The connection manager is closing the connection, so
+            # there's no need to do it here.
             return err
 
     def _handle_response(self, response):
         ds = []
-        log.debug("Handling a response. Current expected responses: %s", str(self._response_deferreds))
+        log.debug("Handling a response. Current expected responses: %s", self._response_deferreds)
         for key, val in response.items():
             if key in self._response_deferreds:
                 d = self._response_deferreds[key]
@@ -200,7 +203,8 @@ class ClientProtocol(Protocol):
                     failed = True
                     if not isinstance(result.value, DownloadCanceledError):
                         log.info(result.value)
-                        log.info("The connection is closing due to an error: %s", str(result.getTraceback()))
+                        log.info("The connection is closing due to an error: %s",
+                                 result.getTraceback())
             if failed is False:
                 log.debug("Asking for another request.")
                 from twisted.internet import reactor

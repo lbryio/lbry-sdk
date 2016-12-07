@@ -79,7 +79,8 @@ class Bencode(Encoding):
             # This (float data type) is a non-standard extension to the original Bencode algorithm 
             return 'f%fe' % data
         elif data == None:
-            # This (None/NULL data type) is a non-standard extension to the original Bencode algorithm 
+            # This (None/NULL data type) is a non-standard extension
+            # to the original Bencode algorithm
             return 'n'
         else:
             print data
@@ -133,7 +134,8 @@ class Bencode(Encoding):
             endPos = data[startIndex:].find('e')+startIndex
             return (float(data[startIndex+1:endPos]), endPos+1)
         elif data[startIndex] == 'n':
-            # This (None/NULL data type) is a non-standard extension to the original Bencode algorithm 
+            # This (None/NULL data type) is a non-standard extension
+            # to the original Bencode algorithm
             return (None, startIndex+1)
         else:
             splitPos = data[startIndex:].find(':')+startIndex

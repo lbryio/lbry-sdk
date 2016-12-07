@@ -59,7 +59,8 @@ def migrate_blockchainname_db(db_dir):
                         "    sd_hash text)")
 
     for name, txid, n, sd_hash in new_name_metadata:
-        file_cursor.execute("insert into name_metadata values (?, ?, ?, ?) ", (name, txid, n, sd_hash))
+        file_cursor.execute(
+            "insert into name_metadata values (?, ?, ?, ?) ", (name, txid, n, sd_hash))
 
     file_cursor.execute("drop table claim_ids")
     file_cursor.execute("create table claim_ids ("

@@ -59,7 +59,9 @@ class MarketFeed(object):
 
     def _log_error(self, err):
         log.error(err)
-        log.warning("There was a problem updating %s exchange rate information from %s", self.market, self.name)
+        log.warning(
+            "There was a problem updating %s exchange rate information from %s",
+            self.market, self.name)
 
     def _update_price(self):
         d = self._make_request()
@@ -133,7 +135,8 @@ def get_default_market_feed(currency_pair):
 class ExchangeRateManager(object):
     def __init__(self):
         reactor.addSystemEventTrigger('before', 'shutdown', self.stop)
-        self.market_feeds = [get_default_market_feed(currency_pair) for currency_pair in CURRENCY_PAIRS]
+        self.market_feeds = [
+            get_default_market_feed(currency_pair) for currency_pair in CURRENCY_PAIRS]
 
     def start(self):
         log.info("Starting exchange rate manager")
@@ -154,8 +157,10 @@ class ExchangeRateManager(object):
                 return amount * market.rate.spot
         for market in self.market_feeds:
             if market.rate.currency_pair[0] == from_currency:
-                return self.convert_currency(market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
-        raise Exception('Unable to convert {} from {} to {}'.format(amount, from_currency, to_currency))
+                return self.convert_currency(
+                    market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
+        raise Exception(
+            'Unable to convert {} from {} to {}'.format(amount, from_currency, to_currency))
 
     def fee_dict(self):
         return {market: market.rate.as_dict() for market in self.market_feeds}
@@ -168,11 +173,11 @@ class ExchangeRateManager(object):
         else:
             fee_in = fee
 
-        return FeeValidator({fee_in.currency_symbol:
-                                    {
-                                        'amount': self.convert_currency(fee_in.currency_symbol, "LBC", fee_in.amount),
-                                        'address': fee_in.address
-                                    }
+        return FeeValidator({
+            fee_in.currency_symbol: {
+                'amount': self.convert_currency(fee_in.currency_symbol, "LBC", fee_in.amount),
+                'address': fee_in.address
+            }
         })
 
 
@@ -204,7 +209,8 @@ class DummyExchangeRateManager(object):
     def __init__(self, rates):
         self.market_feeds = [DummyBTCLBCFeed(), DummyUSDBTCFeed()]
         for feed in self.market_feeds:
-            feed.rate = ExchangeRate(feed.market, rates[feed.market]['spot'], rates[feed.market]['ts'])
+            feed.rate = ExchangeRate(
+                feed.market, rates[feed.market]['spot'], rates[feed.market]['ts'])
 
     def convert_currency(self, from_currency, to_currency, amount):
         log.debug("Converting %f %s to %s" % (amount, from_currency, to_currency))
@@ -213,7 +219,8 @@ class DummyExchangeRateManager(object):
                 return amount * market.rate.spot
         for market in self.market_feeds:
             if market.rate.currency_pair[0] == from_currency:
-                return self.convert_currency(market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
+                return self.convert_currency(
+                    market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
 
     def to_lbc(self, fee):
         if fee is None:
@@ -223,9 +230,9 @@ class DummyExchangeRateManager(object):
         else:
             fee_in = fee
 
-        return FeeValidator({fee_in.currency_symbol:
-                                    {
-                                        'amount': self.convert_currency(fee_in.currency_symbol, "LBC", fee_in.amount),
-                                        'address': fee_in.address
-                                    }
+        return FeeValidator({
+            fee_in.currency_symbol: {
+                'amount': self.convert_currency(fee_in.currency_symbol, "LBC", fee_in.amount),
+                'address': fee_in.address
+            }
         })
