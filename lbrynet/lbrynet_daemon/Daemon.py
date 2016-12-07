@@ -1651,8 +1651,6 @@ class Daemon(AuthJSONRPCServer):
             'metadata': metadata dictionary
             optional 'fee'
         Returns:
-            'success' : True if claim was succesful , False otherwise
-            'reason' : if not succesful, give reason
             'txid' : txid of resulting transaction if succesful
             'nout' : nout of the resulting support claim if succesful
             'fee' : fee paid for the claim transaction if succesful
@@ -1727,8 +1725,6 @@ class Daemon(AuthJSONRPCServer):
             'txid': txid of claim, string
             'nout': nout of claim, integer
         Return:
-            success : True if succesful , False otherwise
-            reason : if not succesful, give reason
             txid : txid of resulting transaction if succesful
             fee : fee paid for the transaction if succesful
         """
@@ -1772,11 +1768,9 @@ class Daemon(AuthJSONRPCServer):
             'claim_id': claim id of claim to support
             'amount': amount to support by
         Return:
-            success : True if succesful , False otherwise
-            reason : if not succesful, give reason
             txid : txid of resulting transaction if succesful
             nout : nout of the resulting support claim if succesful
-            fee : fee paid for the transaction if succesful 
+            fee : fee paid for the transaction if succesful
 
         """
 
