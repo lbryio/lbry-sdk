@@ -83,7 +83,7 @@ class GetStream(object):
 
     def start(self, stream_info, name):
         def _cause_timeout(err):
-            log.info('Cancelling download')
+            log.info('Cancelling download: {}'.format(err.getErrorMessage()))
             self.timeout_counter = self.timeout * 2
 
         def _set_status(x, status):
@@ -104,32 +104,35 @@ class GetStream(object):
                                            self.payment_rate_manager,
                                            download_directory=self.download_directory,
                                            file_name=self.file_name)
+        def setup_key_fee(wallet_balance):
+            if 'fee' in self.stream_info:
+                self.fee = FeeValidator(self.stream_info['fee'])
+                max_key_fee = self._convert_max_fee()
+                converted_fee = self.exchange_rate_manager.to_lbc(self.fee).amount
+                if converted_fee > wallet_balance:
+                    log.warning("Insufficient funds to download lbry://{}, need {}, have {}".
+                                format(self.resolved_name, converted_fee, wallet_balance))
+                    return defer.fail(InsufficientFundsError())
+                if converted_fee > max_key_fee:
+                    log.warning(
+                        "Key fee %f above limit of %f didn't download lbry://%s",
+                        converted_fee, max_key_fee, self.resolved_name)
+                    return defer.fail(KeyFeeAboveMaxAllowed())
+                log.info(
+                    "Key fee %f below limit of %f, downloading lbry://%s",
+                    converted_fee, max_key_fee, self.resolved_name)
 
         self.resolved_name = name
         self.stream_info = deepcopy(stream_info)
         self.description = self.stream_info['description']
         self.stream_hash = self.stream_info['sources']['lbry_sd_hash']
 
-        if 'fee' in self.stream_info:
-            self.fee = FeeValidator(self.stream_info['fee'])
-            max_key_fee = self._convert_max_fee()
-            converted_fee = self.exchange_rate_manager.to_lbc(self.fee).amount
-            if converted_fee > self.wallet.get_balance():
-                log.warning("Insufficient funds to download lbry://%s", self.resolved_name)
-                return defer.fail(InsufficientFundsError())
-            if converted_fee > max_key_fee:
-                log.warning("Key fee %f above limit of %f didn't download lbry://%s", converted_fee,
-                                                                                      max_key_fee,
-                                                                                      self.resolved_name)
-                return defer.fail(KeyFeeAboveMaxAllowed())
-            log.info("Key fee %f below limit of %f, downloading lbry://%s", converted_fee,
-                                                                            max_key_fee,
-                                                                            self.resolved_name)
-
         self.checker.start(1)
-
+        self.d.addCallback(lambda _: self.wallet.get_balance())
+        self.d.addCallback(lambda wallet_balance: setup_key_fee(wallet_balance))
         self.d.addCallback(lambda _: _set_status(None, DOWNLOAD_METADATA_CODE))
-        self.d.addCallback(lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
+        self.d.addCallback(
+            lambda _: download_sd_blob(self.session, self.stream_hash, self.payment_rate_manager))
         self.d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
         self.d.addCallback(lambda r: _set_status(r, DOWNLOAD_RUNNING_CODE))
         self.d.addCallback(get_downloader_factory)
