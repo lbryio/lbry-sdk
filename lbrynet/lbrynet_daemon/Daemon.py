@@ -10,6 +10,7 @@ import base58
 import requests
 import urllib
 import simplejson as json
+import textwrap
 from urllib2 import urlopen
 from decimal import Decimal
 
@@ -247,7 +248,6 @@ class Daemon(AuthJSONRPCServer):
         self.startup_scripts = conf.settings.startup_scripts
 
         self.startup_status = STARTUP_STAGES[0]
-        self.startup_message = None
         self.connected_to_internet = True
         self.connection_problem = None
         self.git_lbrynet_version = None
@@ -1051,8 +1051,12 @@ class Daemon(AuthJSONRPCServer):
 
         return defer.succeed(None)
 
+    # JSON-RPC API methods start here   ##########################################
+
     def jsonrpc_is_running(self):
         """
+        DEPRECATED. Will be merged into `status` in the future.
+
         Check if lbrynet daemon is running
 
         Args:
@@ -1060,15 +1064,12 @@ class Daemon(AuthJSONRPCServer):
         Returns: true if daemon completed startup, otherwise false
         """
 
-        log.info("is_running: " + str(self.announced_startup))
-
-        if self.announced_startup:
-            return self._render_response(True, OK_CODE)
-        else:
-            return self._render_response(False, OK_CODE)
+        return self._render_response(self.announced_startup, OK_CODE)
 
     def jsonrpc_daemon_status(self):
         """
+        DEPRECATED. Will be merged into `status` in the future.
+
         Get lbrynet daemon status information
 
         Args:
@@ -1102,6 +1103,8 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_is_first_run(self):
         """
+        DEPRECATED. Will be merged into `status` in the future.
+
         Check if this is the first time lbrynet daemon has been run
 
         Args:
@@ -1121,25 +1124,6 @@ class Daemon(AuthJSONRPCServer):
             lambda _: self._render_response(None, OK_CODE))
 
         return d
-
-    def jsonrpc_get_start_notice(self):
-        """
-        Get special message to be displayed at startup
-
-        Args:
-            None
-        Returns:
-            Startup message, such as first run notification
-        """
-
-        log.info("Get startup notice")
-
-        if self.first_run and not self.session.wallet.wallet_balance:
-            return self._render_response(self.startup_message, OK_CODE)
-        elif self.first_run:
-            return self._render_response(None, OK_CODE)
-        else:
-            self._render_response(self.startup_message, OK_CODE)
 
     def jsonrpc_version(self):
         """
@@ -1202,6 +1186,8 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_get_lbry_session_info(self):
         """
+        DEPRECATED. Will be merged into `status` in the future.
+
         Get information about the current lbrynet session
 
         Args:
@@ -1227,6 +1213,12 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def jsonrpc_get_settings(self):
+        """
+        DEPRECATED. Use `settings_get` instead.
+        """
+        return self.jsonrpc_settings_get()
+
+    def jsonrpc_settings_get(self):
         """
         Get lbrynet daemon settings
 
@@ -1258,6 +1250,13 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     def jsonrpc_set_settings(self, p):
         """
+        DEPRECATED. Use `settings_set` instead.
+        """
+        return self.jsonrpc_settings_set(p)
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_settings_set(self, p):
+        """
         Set lbrynet daemon settings
 
         Args:
@@ -1287,11 +1286,12 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def jsonrpc_help(self, p=None):
-        """Function to retrieve docstring for API function
+        """
+        Function to retrieve docstring for API function
 
         Args:
-            optional 'function': function to retrieve documentation for
-            optional 'callable_during_startup':
+            'function': optional, function to retrieve documentation for
+            'callable_during_startup': optional, returns functions that are callable during startup
         Returns:
             if given a function, returns given documentation
             if given callable_during_startup flag, returns list of
@@ -1300,22 +1300,36 @@ class Daemon(AuthJSONRPCServer):
         """
 
         if not p:
-            return self._render_response(sorted(self.callable_methods.keys()), OK_CODE)
-        elif 'callable_during_start' in p.keys():
-            return self._render_response(self.allowed_during_startup, OK_CODE)
-        elif 'function' in p.keys():
-            func_path = p['function']
-            function = self.callable_methods.get(func_path)
-            return self._render_response(function.__doc__, OK_CODE)
+            return self._render_response(", ".join(sorted(self.callable_methods.keys())), OK_CODE)
+        elif 'callable_during_startup' in p:
+            return self._render_response(", ".join(sorted(self.allowed_during_startup)), OK_CODE)
+        elif 'function' in p:
+            fn = self.callable_methods.get(p['function'])
+            if fn is None:
+                return self._render_response("Function not found", OK_CODE)
+            return self._render_response(textwrap.dedent(fn.__doc__), OK_CODE)
         else:
-            return self._render_response(self.jsonrpc_help.__doc__, OK_CODE)
+            return self._render_response(textwrap.dedent(self.jsonrpc_help.__doc__), OK_CODE)
+
+    def jsonrpc_commands(self):
+        """
+        Return a list of available commands
+
+        Returns:
+            list
+        """
+        return self._render_response(sorted(self.callable_methods.keys()), OK_CODE)
 
     def jsonrpc_get_balance(self):
         """
-        Get balance
+        DEPRECATED. Use `wallet_balance` instead.
+        """
+        return self.jsonrpc_wallet_balance()
 
-        Args:
-            None
+    def jsonrpc_wallet_balance(self):
+        """
+        Return the balance of the wallet
+
         Returns:
             balance, float
         """
@@ -1327,8 +1341,6 @@ class Daemon(AuthJSONRPCServer):
         """
         Stop lbrynet-daemon
 
-        Args:
-            None
         Returns:
             shutdown message
         """
@@ -1344,12 +1356,18 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_get_lbry_files(self):
         """
-        Get LBRY files
+        DEPRECATED. Use `file_list` instead.
+        """
+        return self.jsonrpc_file_list()
+
+    def jsonrpc_file_list(self):
+        """
+        List files
 
         Args:
             None
         Returns:
-            List of lbry files:
+            List of files, with the following keys:
             'completed': bool
             'file_name': string
             'key': hex string
@@ -1368,7 +1386,14 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def jsonrpc_get_lbry_file(self, p):
-        """Get lbry file
+        """
+        DEPRECATED. Use `file_get` instead.
+        """
+        return self.jsonrpc_file_get(p)
+
+    def jsonrpc_file_get(self, p):
+        """
+        Get a file
 
         Args:
             'name': get file by lbry uri,
@@ -1499,7 +1524,8 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     def jsonrpc_get(self, p):
-        """Download stream from a LBRY uri.
+        """
+        Download stream from a LBRY uri.
 
         Args:
             'name': name to download, string
@@ -1690,6 +1716,8 @@ class Daemon(AuthJSONRPCServer):
             'metadata': metadata dictionary
             optional 'fee'
         Returns:
+            'success' : True if claim was succesful , False otherwise
+            'reason' : if not succesful, give reason
             'txid' : txid of resulting transaction if succesful
             'nout' : nout of the resulting support claim if succesful
             'fee' : fee paid for the claim transaction if succesful
@@ -2063,40 +2091,6 @@ class Daemon(AuthJSONRPCServer):
 
         d = self.session.wallet.get_nametrie()
         d.addCallback(lambda r: [i for i in r if 'txid' in i.keys()])
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_set_miner(self, p):
-        """
-            Start of stop the miner, function only available when lbrycrd is set as the wallet
-
-            Args:
-                run: True/False
-            Returns:
-                miner status, True/False
-        """
-
-        stat = p['run']
-        if stat:
-            d = self.session.wallet.start_miner()
-        else:
-            d = self.session.wallet.stop_miner()
-        d.addCallback(lambda _: self.session.wallet.get_miner_status())
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
-    def jsonrpc_get_miner_status(self):
-        """
-            Get status of miner
-
-            Args:
-                None
-            Returns:
-                True/False
-        """
-
-        d = self.session.wallet.get_miner_status()
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 

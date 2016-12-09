@@ -2,17 +2,9 @@ import sys
 import argparse
 import json
 from lbrynet import conf
+import os
 from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 from jsonrpc.common import RPCError
-
-
-
-help_msg = "Usage: lbrynet-cli method kwargs\n" \
-             + "Examples: " \
-             + "lbrynet-cli resolve_name name=what\n" \
-             + "lbrynet-cli get_balance\n" \
-             + "lbrynet-cli help function=resolve_name\n" \
-             + "\n******lbrynet-cli functions******\n"
 
 
 def guess_type(x):
@@ -59,7 +51,7 @@ def main():
     parser.add_argument('params', nargs=argparse.REMAINDER, default=None)
     args = parser.parse_args()
 
-    meth = args.method[0]
+    method = args.method[0]
     params = {}
 
     if len(args.params) > 1:
@@ -70,34 +62,36 @@ def main():
         except ValueError:
             params = get_params_from_kwargs(args.params)
 
-    msg = help_msg
-    for f in api.help():
-        msg += f + "\n"
+    if method in ['--help', '-h', 'help']:
+        helpmsg = api.help(params).strip()
+        if params is not None and 'function' in params:
+            print "\n" + params['function'] + ": " + helpmsg + "\n"
+        else:
+            print "Usage: lbrynet-cli method [params]\n" \
+              + "Examples: \n" \
+              + "  lbrynet-cli get_balance\n" \
+              + "  lbrynet-cli resolve_name name=what\n" \
+              + "  lbrynet-cli help function=resolve_name\n" \
+              + "\nAvailable functions:\n" \
+              + helpmsg + "\n"
 
-    if meth in ['--help', '-h', 'help']:
-        print msg
-        sys.exit(1)
-
-    if meth in api.help():
+    elif method not in api.commands():
+        print "Error: function \"" + method + "\" does not exist.\n" + \
+              "See \"" + os.path.basename(sys.argv[0]) + " help\""
+    else:
         try:
-            if params:
-                result = LBRYAPIClient.config(service=meth, params=params)
-            else:
-                result = LBRYAPIClient.config(service=meth, params=params)
+            result = LBRYAPIClient.config(service=method, params=params)
             print json.dumps(result, sort_keys=True)
         except RPCError as err:
             # TODO: The api should return proper error codes
             # and messages so that they can be passed along to the user
             # instead of this generic message.
             # https://app.asana.com/0/158602294500137/200173944358192
-            print "Something went wrong, here's the usage for %s:" % meth
-            print api.help({'function': meth})
+            print "Something went wrong, here's the usage for %s:" % method
+            print api.help({'function': method})
             print "Here's the traceback for the error you encountered:"
             print err.msg
 
-    else:
-        print "Unknown function"
-        print msg
 
 
 if __name__ == '__main__':
