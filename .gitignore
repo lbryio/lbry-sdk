@@ -10,6 +10,7 @@
 /build
 /dist
 /lbrynet.egg-info
+/docs_build
 
 .idea/.name
 .coverage
