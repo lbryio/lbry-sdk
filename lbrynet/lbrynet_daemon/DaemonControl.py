@@ -117,9 +117,8 @@ def update_settings_from_args(args):
     settings.update(to_pass)
 
 
-def log_and_kill(failure, analytics_manager):
+def kill(failure, analytics_manager):
     analytics_manager.send_server_startup_error(failure.getErrorMessage() + " " + str(failure))
-    log_support.failure(failure, log, 'Failed to startup: %s')
     reactor.callFromThread(reactor.stop)
 
 
@@ -130,14 +129,13 @@ def start_server_and_listen(launchui, use_auth, analytics_manager):
         launchui: set to true to open a browser window
         use_auth: set to true to enable http authentication
         analytics_manager: to send analytics
-        kwargs: passed along to `DaemonServer().start()`
     """
     daemon_server = DaemonServer(analytics_manager)
     d = daemon_server.start(use_auth)
     if launchui:
         d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
     d.addCallback(lambda _: analytics_manager.send_server_startup_success())
-    d.addErrback(log_and_kill, analytics_manager)
+    d.addErrback(log.fail(kill, analytics_manager), 'Failed to startup')
 
 
 if __name__ == "__main__":
