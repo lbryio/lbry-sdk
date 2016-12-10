@@ -23,8 +23,11 @@ def guess_type(x):
 def get_params_from_kwargs(params):
     params_for_return = {}
     for i in params:
+        if '=' not in i:
+            print 'WARNING: Argument "' + i + '" is missing a parameter name. Please use name=value'
+            continue
         eq_pos = i.index('=')
-        k, v = i[:eq_pos], i[eq_pos+1:]
+        k, v = i[:eq_pos], i[eq_pos + 1:]
         params_for_return[k] = guess_type(v)
     return params_for_return
 
@@ -68,19 +71,19 @@ def main():
             print "\n" + params['function'] + ": " + helpmsg + "\n"
         else:
             print "Usage: lbrynet-cli method [params]\n" \
-              + "Examples: \n" \
-              + "  lbrynet-cli get_balance\n" \
-              + "  lbrynet-cli resolve_name name=what\n" \
-              + "  lbrynet-cli help function=resolve_name\n" \
-              + "\nAvailable functions:\n" \
-              + helpmsg + "\n"
+                  + "Examples: \n" \
+                  + "  lbrynet-cli get_balance\n" \
+                  + "  lbrynet-cli resolve_name name=what\n" \
+                  + "  lbrynet-cli help function=resolve_name\n" \
+                  + "\nAvailable functions:\n" \
+                  + helpmsg + "\n"
 
     elif method not in api.commands():
         print "Error: function \"" + method + "\" does not exist.\n" + \
               "See \"" + os.path.basename(sys.argv[0]) + " help\""
     else:
         try:
-            result = LBRYAPIClient.config(service=method, params=params)
+            result = api.call(method, params)
             print json.dumps(result, sort_keys=True)
         except RPCError as err:
             # TODO: The api should return proper error codes
@@ -91,7 +94,12 @@ def main():
             print api.help({'function': method})
             print "Here's the traceback for the error you encountered:"
             print err.msg
-
+        except KeyError as err:
+            print "Something went wrong, here's the usage for %s:" % method
+            print api.help({'function': method})
+            if hasattr(err, 'msg'):
+                print "Here's the traceback for the error you encountered:"
+                print err.msg
 
 
 if __name__ == '__main__':
