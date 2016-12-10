@@ -120,6 +120,7 @@ class DiskBlobManager(BlobManager):
         return self.blob_creator_type(self, self.blob_dir)
 
     def _make_new_blob(self, blob_hash, upload_allowed, length=None):
+        log.debug('Making a new blob for %s', blob_hash)
         blob = self.blob_type(self.blob_dir, blob_hash, upload_allowed, length)
         self.blobs[blob_hash] = blob
         d = self._completed_blobs([blob_hash])
@@ -143,9 +144,11 @@ class DiskBlobManager(BlobManager):
 
     def blob_completed(self, blob, next_announce_time=None):
         if next_announce_time is None:
-            next_announce_time = time.time()
-        return self._add_completed_blob(blob.blob_hash, blob.length,
-                                        time.time(), next_announce_time)
+            next_announce_time = time.time() + self.hash_reannounce_time
+        d = self._add_completed_blob(blob.blob_hash, blob.length,
+                                     time.time(), next_announce_time)
+        d.addCallback(lambda _: self.hash_announcer.immediate_announce([blob.blob_hash]))
+        return d
 
     def completed_blobs(self, blobs_to_check):
         return self._completed_blobs(blobs_to_check)
