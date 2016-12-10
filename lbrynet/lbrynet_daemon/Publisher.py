@@ -5,7 +5,6 @@ import random
 
 from twisted.internet import threads, defer, reactor
 
-from lbrynet.core import log_support
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.metadata.Metadata import Metadata
@@ -68,7 +67,12 @@ class Publisher(object):
         d.addCallback(lambda _: self._claim_name())
         d.addCallback(lambda _: self.set_status())
         d.addCallback(lambda _: self.start_reflector())
-        d.addCallbacks(lambda _: _show_result(), self._show_publish_error)
+        d.addCallbacks(
+            lambda _: _show_result(),
+            errback=log.fail(self._throw_publish_error),
+            errbackArgs=(
+                "An error occurred publishing %s to %s", self.file_name, self.publish_name)
+        )
         return d
 
     def start_reflector(self):
@@ -151,11 +155,13 @@ class Publisher(object):
         self.metadata['content_type'] = get_content_type(filename)
         self.metadata['ver'] = Metadata.current_version
 
-    def _show_publish_error(self, err):
-        log_support.failure(
-            err, log, "An error occurred publishing %s to %s. Error: %s.",
-            self.file_name, self.publish_name)
-        return defer.fail(Exception("Publish failed"))
+    def _throw_publish_error(self, err):
+        # TODO: I'm not a fan of the log and re-throw, especially when
+        #       the new exception is more generic. Look over this to
+        #       see if there is a reason not to remove the errback
+        #       handler and allow the original exception to move up
+        #       the stack.
+        raise Exception("Publish failed")
 
 
 def get_content_type(filename):
