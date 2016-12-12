@@ -114,7 +114,7 @@ class GetStream(object):
             self.fee = FeeValidator(self.stream_info['fee'])
             max_key_fee = self._convert_max_fee()
             converted_fee = self.exchange_rate_manager.to_lbc(self.fee).amount
-            if converted_fee > self.wallet.get_balance():
+            if converted_fee > self.wallet.wallet_balance:
                 log.warning("Insufficient funds to download lbry://%s", self.resolved_name)
                 return defer.fail(InsufficientFundsError())
             if converted_fee > max_key_fee:
