@@ -17,7 +17,6 @@ from lbryum import SimpleConfig, Network
 from lbryum.lbrycrd import COIN
 import lbryum.wallet
 from lbryum.commands import known_commands, Commands
-from lbryum.transaction import Transaction
 
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
@@ -500,11 +499,6 @@ class Wallet(object):
     def support_claim(self, name, claim_id, amount):
         return self._support_claim(name, claim_id, amount)
 
-    def get_tx(self, txid):
-        d = self._get_raw_tx(txid)
-        d.addCallback(self._get_decoded_tx)
-        return d
-
     def get_block_info(self, height):
         d = self._get_blockhash(height)
         return d
@@ -715,13 +709,7 @@ class Wallet(object):
     def _check_first_run(self):
         return defer.fail(NotImplementedError())
 
-    def _get_raw_tx(self, txid):
-        return defer.fail(NotImplementedError())
-
     def _send_name_claim(self, name, val, amount):
-        return defer.fail(NotImplementedError())
-
-    def _get_decoded_tx(self, raw_tx):
         return defer.fail(NotImplementedError())
 
     def _abandon_claim(self, claim_outpoint):
@@ -749,9 +737,6 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def _address_is_mine(self, address):
-        return defer.fail(NotImplementedError())
-
-    def _get_transaction(self, txid):
         return defer.fail(NotImplementedError())
 
     def _start(self):
@@ -950,21 +935,6 @@ class LBRYumWallet(Wallet):
     def _check_first_run(self):
         return defer.succeed(self.first_run)
 
-    def _get_raw_tx(self, txid):
-        cmd = known_commands['gettransaction']
-        func = getattr(self.cmd_runner, cmd.name)
-        return threads.deferToThread(func, txid)
-
-    def _get_transaction(self, txid):
-        def _add_confirms(tx):
-            tx['confirmations'] = self.wallet.get_confirmations(txid)
-            return tx
-
-        d = self._get_raw_tx(txid)
-        d.addCallback(self._get_decoded_tx)
-        d.addCallback(_add_confirms)
-        return d
-
     def _send_name_claim(self, name, val, amount):
         cmd = known_commands['claim']
         func = getattr(self.cmd_runner, cmd.name)
@@ -982,17 +952,6 @@ class LBRYumWallet(Wallet):
         cmd = known_commands['update']
         func = getattr(self.cmd_runner, cmd.name)
         return threads.deferToThread(func, claim_outpoint['txid'], claim_outpoint['nout'], name, claim_id, metadata, amount)
-
-
-    def _get_decoded_tx(self, raw_tx):
-        tx = Transaction(raw_tx)
-        decoded_tx = {}
-        decoded_tx['vout'] = []
-        for output in tx.outputs():
-            out = {}
-            out['value'] = Decimal(output[2]) / Decimal(COIN)
-            decoded_tx['vout'].append(out)
-        return decoded_tx
 
     def _abandon_claim(self, claim_outpoint):
         log.debug("Abandon %s %s" % (claim_outpoint['txid'], claim_outpoint['nout']))

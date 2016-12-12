@@ -1886,22 +1886,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    def jsonrpc_get_transaction(self, p):
-        """
-        Get a decoded transaction from a txid
-
-        Args:
-            txid: txid hex string
-        Returns:
-            JSON formatted transaction
-        """
-
-
-        txid = p['txid']
-        d = self.session.wallet.get_transaction(txid)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
     @AuthJSONRPCServer.auth_required
     def jsonrpc_address_is_mine(self, p):
         """
