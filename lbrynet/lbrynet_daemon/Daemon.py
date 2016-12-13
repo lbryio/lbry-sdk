@@ -1353,7 +1353,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         if not p:
-            return self._render_response(self.callable_methods.keys(), OK_CODE)
+            return self._render_response(sorted(self.callable_methods.keys()), OK_CODE)
         elif 'callable_during_start' in p.keys():
             return self._render_response(self.allowed_during_startup, OK_CODE)
         elif 'function' in p.keys():
