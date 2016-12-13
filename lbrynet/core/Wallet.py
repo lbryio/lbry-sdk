@@ -214,7 +214,6 @@ class Wallet(object):
             once the service has been rendered
         """
         rounded_amount = Decimal(str(round(amount, 8)))
-        #if peer in self.peer_addresses:
         if self.wallet_balance >= self.total_reserved_points + rounded_amount:
             self.total_reserved_points += rounded_amount
             return ReservedPoints(identifier, rounded_amount)

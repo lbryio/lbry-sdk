@@ -282,7 +282,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         assert api_key.compare_hmac(to_auth, token), InvalidAuthenticationToken
 
     def _update_session_secret(self, session_id):
-        # log.info("Generating new token for next request")
         self.sessions.update({session_id: APIKey.new(name=session_id)})
 
     def _get_jsonrpc_version(self, version=None, id=None):
