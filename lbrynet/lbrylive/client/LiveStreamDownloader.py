@@ -46,7 +46,6 @@ class LiveStreamDownloader(_LiveStreamDownloader):
         _LiveStreamDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
                                       stream_info_manager, payment_rate_manager, wallet, upload_allowed)
 
-        #self.writer = process.ProcessWriter(reactor, self, 'write', 1)
 
     def _get_metadata_handler(self, download_manager):
         return LiveStreamMetadataHandler(self.stream_hash, self.stream_info_manager,
@@ -61,7 +60,6 @@ class LiveStreamDownloader(_LiveStreamDownloader):
     def _get_write_func(self):
         def write_func(data):
             if self.stopped is False:
-                #self.writer.write(data)
                 pass
         return write_func
 

@@ -208,7 +208,6 @@ class KademliaProtocol(protocol.DatagramProtocol):
             seqNumber = 0
             startPos = 0
             while seqNumber < totalPackets:
-                #reactor.iterate() #IGNORE:E1101
                 packetData = data[startPos:startPos+self.msgSizeLimit]
                 encSeqNumber = chr(seqNumber >> 8) + chr(seqNumber & 0xff)
                 txData = '\x00%s%s%s\x00%s' % (encTotalPackets, encSeqNumber, rpcID, packetData)
@@ -270,13 +269,11 @@ class KademliaProtocol(protocol.DatagramProtocol):
         if callable(func) and hasattr(func, 'rpcmethod'):
             # Call the exposed Node method and return the result to the deferred callback chain
             try:
-                ##try:
                 ##    # Try to pass the sender's node id to the function...
                 kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
                 result = func(*args, **kwargs)
                 ##except TypeError:
                 ##    # ...or simply call it if that fails
-                ##    result = func(*args)
             except Exception, e:
                 df.errback(failure.Failure(e))
             else:

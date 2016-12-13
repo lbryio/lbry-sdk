@@ -30,7 +30,6 @@ class ReflectorServer(Protocol):
 
     def dataReceived(self, data):
         if self.receiving_blob:
-            # log.debug('Writing data to blob')
             self.blob_write(data)
         else:
             log.debug('Not yet recieving blob, data needs further processing')
