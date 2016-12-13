@@ -68,16 +68,12 @@ class ClientDatagramProtocol(lbrynet.dht.protocol.KademliaProtocol):
         lbrynet.dht.protocol.KademliaProtocol.__init__(self, None)
 
     def startProtocol(self):
-        #self.transport.connect(self.destination[0], self.destination[1])
         self.sendDatagram()
     
     def sendDatagram(self):
         if len(self.data):
             self._send(self.data, self.msgID, self.destination)
             
-#    def datagramReceived(self, datagram, host):
-#        print 'Datagram received: ', repr(datagram)
-#        self.sendDatagram()
 
         
 
@@ -192,44 +188,6 @@ class KademliaProtocolTest(unittest.TestCase):
         self.failIf(self.error, self.error)
         # The list of sent RPC messages should be empty at this stage
         self.failUnlessEqual(len(self.protocol._sentMessages), 0, 'The protocol is still waiting for a RPC result, but the transaction is already done!')
-
-#    def testDatagramLargeMessageReconstruction(self):
-#        """ Tests if a large amount of data can be successfully re-constructed from multiple UDP datagrams """
-#        remoteContact = lbrynet.dht.contact.Contact('node2', '127.0.0.1', 9182, self.protocol)
-#        self.node.addContact(remoteContact)
-#        self.error = None
-#        #responseData = 8143 * '0' # Threshold for a single packet transmission
-#        responseData = 300000 * '0'
-#        def handleError(f):
-#            if f.check((lbrynet.dht.protocol.TimeoutError)):
-#                self.error = 'RPC from the following contact timed out: %s' % f.getErrorMessage()
-#            else:
-#                self.error = 'An RPC error occurred: %s' % f.getErrorMessage()
-#        def handleResult(result):
-#            if result != responseData:
-#                self.error = 'Result from RPC is incorrect; expected "%s", got "%s"' % (responseData, result)
-#        # Publish the "local" node on the network
-#        lbrynet.dht.protocol.reactor.listenUDP(9182, self.protocol)
-#        # ...and make it think it is waiting for a result from an RPC
-#        msgID = 'abcdefghij1234567890'
-#        df = defer.Deferred()
-#        timeoutCall = lbrynet.dht.protocol.reactor.callLater(lbrynet.dht.constants.rpcTimeout, self.protocol._msgTimeout, msgID)
-#        self.protocol._sentMessages[msgID] = (remoteContact.id, df, timeoutCall)
-#        # Simulate the "reply" transmission
-#        msg = lbrynet.dht.msgtypes.ResponseMessage(msgID, 'node2', responseData)
-#        msgPrimitive = self.protocol._translator.toPrimitive(msg)
-#        encodedMsg = self.protocol._encoder.encode(msgPrimitive)
-#        udpClient = ClientDatagramProtocol()
-#        udpClient.data = encodedMsg
-#        udpClient.msgID = msgID
-#        lbrynet.dht.protocol.reactor.listenUDP(0, udpClient)
-#        df.addCallback(handleResult)
-#        df.addErrback(handleError)
-#        df.addBoth(lambda _: lbrynet.dht.protocol.reactor.stop())
-#        lbrynet.dht.protocol.reactor.run()
-#        self.failIf(self.error, self.error)
-#        # The list of sent RPC messages should be empty at this stage
-#        #self.failUnlessEqual(len(self.protocol._sentMessages), 0, 'The protocol is still waiting for a RPC result, but the transaction is already done!')
 
 
 def suite():

@@ -63,7 +63,6 @@ class ServerRequestHandler(object):
     #IConsumer stuff
 
     def registerProducer(self, producer, streaming):
-        #assert self.file_sender == producer
         self.producer = producer
         assert streaming is False
         producer.resumeProducing()

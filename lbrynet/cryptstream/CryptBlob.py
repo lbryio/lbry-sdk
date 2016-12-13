@@ -48,7 +48,6 @@ class StreamBlobDecryptor(object):
             self.buff += data
             self.len_read += len(data)
             write_bytes()
-            #write_func(remove_padding(self.cipher.decrypt(self.buff)))
 
         d = self.blob.read(decrypt_bytes)
         d.addCallback(lambda _: finish_decrypt())

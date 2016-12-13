@@ -102,7 +102,6 @@ class DiskBlobManager(BlobManager):
         if self._next_manage_call is not None and self._next_manage_call.active():
             self._next_manage_call.cancel()
             self._next_manage_call = None
-        #d = self.db_conn.close()
         self.db_conn = None
         return defer.succeed(True)
 
@@ -348,8 +347,6 @@ class DiskBlobManager(BlobManager):
         d.addCallback(lambda r: r[0][0] if len(r) else Failure(NoSuchBlobError(blob)))
         return d
 
-        #length, verified_time, next_announce_time = json.loads(self.db.Get(blob))
-        #return length
 
     @rerun_if_locked
     def _update_blob_verified_timestamp(self, blob, timestamp):
