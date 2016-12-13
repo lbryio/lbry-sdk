@@ -10,4 +10,5 @@ pylint -E --disable=inherit-non-class --disable=no-member \
        --enable=line-too-long \
        --enable=trailing-whitespace \
        --enable=missing-final-newline \
+       --enable=mixed-indentation \
        lbrynet $@
