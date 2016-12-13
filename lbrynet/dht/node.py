@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 def rpcmethod(func):
     """ Decorator to expose Node methods as remote procedure calls
-    
+
     Apply this decorator to methods in the Node class (or a subclass) in order
     to make them remotely callable via the DHT's RPC mechanism.
     """
@@ -36,13 +36,13 @@ def rpcmethod(func):
 
 class Node(object):
     """ Local node in the Kademlia network
-    
+
     This class represents a single local node in a Kademlia network; in other
     words, this class encapsulates an Entangled-using application's "presence"
     in a Kademlia network.
-    
+
     In Entangled, all interactions with the Kademlia network by a client
-    application is performed via this class (or a subclass). 
+    application is performed via this class (or a subclass).
     """
     def __init__(self, id=None, udpPort=4000, dataStore=None,
                  routingTableClass=None, networkProtocol=None, lbryid=None,
@@ -61,7 +61,7 @@ class Node(object):
                              exposed. This should be a class, not an object,
                              in order to allow the Node to pass an
                              auto-generated node ID to the routingtable object
-                             upon instantiation (if necessary). 
+                             upon instantiation (if necessary).
         @type routingTable: entangled.kademlia.routingtable.RoutingTable
         @param networkProtocol: The network protocol to use. This can be
                                 overridden from the default to (for example)
@@ -138,7 +138,7 @@ class Node(object):
     def joinNetwork(self, knownNodeAddresses=None):
         """ Causes the Node to join the Kademlia network; normally, this
         should be called before any other DHT operations.
-        
+
         @param knownNodeAddresses: A sequence of tuples containing IP address
                                    information for existing nodes on the
                                    Kademlia network, in the format:
@@ -329,12 +329,12 @@ class Node(object):
 
     def iterativeFindNode(self, key):
         """ The basic Kademlia node lookup operation
-        
+
         Call this to find a remote node in the P2P overlay network.
-        
+
         @param key: the n-bit key (i.e. the node or value ID) to search for
         @type key: str
-        
+
         @return: This immediately returns a deferred object, which will return
                  a list of k "closest" contacts (C{kademlia.contact.Contact}
                  objects) to the specified key as soon as the operation is
@@ -345,12 +345,12 @@ class Node(object):
 
     def iterativeFindValue(self, key):
         """ The Kademlia search operation (deterministic)
-        
+
         Call this to retrieve data from the DHT.
-        
+
         @param key: the n-bit key (i.e. the value ID) to search for
         @type key: str
-        
+
         @return: This immediately returns a deferred object, which will return
                  either one of two things:
                      - If the value was found, it will return a Python
@@ -409,7 +409,7 @@ class Node(object):
         """ Remove the contact with the specified node ID from this node's
         table of known nodes. This is a simple wrapper for the same method
         in this object's RoutingTable object
-        
+
         @param contactID: The node ID of the contact to remove
         @type contactID: str
         """
@@ -418,10 +418,10 @@ class Node(object):
     def findContact(self, contactID):
         """ Find a entangled.kademlia.contact.Contact object for the specified
         cotact ID
-        
+
         @param contactID: The contact ID of the required Contact object
         @type contactID: str
-                 
+
         @return: Contact object of remote node with the specified node ID,
                  or None if the contact was not found
         @rtype: twisted.internet.defer.Deferred
@@ -444,7 +444,7 @@ class Node(object):
     @rpcmethod
     def ping(self):
         """ Used to verify contact between two Kademlia nodes
-        
+
         @rtype: str
         """
         return 'pong'
@@ -452,7 +452,7 @@ class Node(object):
     @rpcmethod
     def store(self, key, value, originalPublisherID=None, self_store=False, **kwargs):
         """ Store the received data in this node's local hash table
-        
+
         @param key: The hashtable key of the data
         @type key: str
         @param value: The actual data (the value associated with C{key})
@@ -467,7 +467,7 @@ class Node(object):
         @type age: int
 
         @rtype: str
-        
+
         @todo: Since the data (value) may be large, passing it around as a buffer
                (which is the case currently) might not be a good idea... will have
                to fix this (perhaps use a stream from the Protocol class?)
@@ -576,7 +576,7 @@ class Node(object):
 
     def _generateID(self):
         """ Generates an n-bit pseudo-random identifier
-        
+
         @return: A globally unique n-bit pseudo-random identifier
         @rtype: str
         """
@@ -586,12 +586,12 @@ class Node(object):
 
     def _iterativeFind(self, key, startupShortlist=None, rpc='findNode'):
         """ The basic Kademlia iterative lookup operation (for nodes/values)
-        
+
         This builds a list of k "closest" contacts through iterative use of
         the "FIND_NODE" RPC, or if C{findValue} is set to C{True}, using the
         "FIND_VALUE" RPC, in which case the value (if found) may be returned
         instead of a list of contacts
-        
+
         @param key: the n-bit key (i.e. the node or value ID) to search for
         @type key: str
         @param startupShortlist: A list of contacts to use as the starting
@@ -605,7 +605,7 @@ class Node(object):
                     other operations that piggy-back on the basic Kademlia
                     lookup operation (Entangled's "delete" RPC, for instance).
         @type rpc: str
-        
+
         @return: If C{findValue} is C{True}, the algorithm will stop as soon
                  as a data value for C{key} is found, and return a dictionary
                  containing the key and the found value. Otherwise, it will

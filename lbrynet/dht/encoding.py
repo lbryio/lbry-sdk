@@ -14,47 +14,47 @@ class DecodeError(Exception):
 
 class Encoding(object):
     """ Interface for RPC message encoders/decoders
-    
+
     All encoding implementations used with this library should inherit and
     implement this.
     """
     def encode(self, data):
         """ Encode the specified data
-        
+
         @param data: The data to encode
                      This method has to support encoding of the following
                      types: C{str}, C{int} and C{long}
                      Any additional data types may be supported as long as the
                      implementing class's C{decode()} method can successfully
                      decode them.
-        
+
         @return: The encoded data
         @rtype: str
         """
     def decode(self, data):
         """ Decode the specified data string
-        
+
         @param data: The data (byte string) to decode.
         @type data: str
-        
+
         @return: The decoded data (in its correct type)
         """
 
 class Bencode(Encoding):
     """ Implementation of a Bencode-based algorithm (Bencode is the encoding
     algorithm used by Bittorrent).
-    
+
     @note: This algorithm differs from the "official" Bencode algorithm in
            that it can encode/decode floating point values in addition to
            integers.
     """
-    
+
     def encode(self, data):
         """ Encoder implementation of the Bencode algorithm
-        
+
         @param data: The data to encode
         @type data: int, long, tuple, list, dict or str
-        
+
         @return: The encoded data
         @rtype: str
         """
@@ -76,7 +76,7 @@ class Bencode(Encoding):
                 encodedDictItems += self.encode(data[key])
             return 'd%se' % encodedDictItems
         elif type(data) == float:
-            # This (float data type) is a non-standard extension to the original Bencode algorithm 
+            # This (float data type) is a non-standard extension to the original Bencode algorithm
             return 'f%fe' % data
         elif data == None:
             # This (None/NULL data type) is a non-standard extension
@@ -85,16 +85,16 @@ class Bencode(Encoding):
         else:
             print data
             raise TypeError, "Cannot bencode '%s' object" % type(data)
-    
+
     def decode(self, data):
-        """ Decoder implementation of the Bencode algorithm 
-        
+        """ Decoder implementation of the Bencode algorithm
+
         @param data: The encoded data
         @type data: str
-        
+
         @note: This is a convenience wrapper for the recursive decoding
                algorithm, C{_decodeRecursive}
-       
+
         @return: The decoded data, as a native Python type
         @rtype:  int, list, dict or str
         """
@@ -104,11 +104,11 @@ class Bencode(Encoding):
             return self._decodeRecursive(data)[0]
         except ValueError as e:
             raise DecodeError, e.message
-    
+
     @staticmethod
     def _decodeRecursive(data, startIndex=0):
         """ Actual implementation of the recursive Bencode algorithm
-        
+
         Do not call this; use C{decode()} instead
         """
         if data[startIndex] == 'i':
