@@ -8,4 +8,5 @@ pylint -E --disable=inherit-non-class --disable=no-member \
        --enable=unused-import \
        --enable=bad-whitespace \
        --enable=line-too-long \
+       --enable=trailing-whitespace \
        lbrynet $@

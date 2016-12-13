@@ -10,7 +10,7 @@
 """ This module defines the charaterizing constants of the Kademlia network
 
 C{checkRefreshInterval} and C{udpDatagramMaxSize} are implementation-specific
-constants, and do not affect general Kademlia operation. 
+constants, and do not affect general Kademlia operation.
 """
 
 ######### KADEMLIA CONSTANTS ###########

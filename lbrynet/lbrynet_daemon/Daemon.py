@@ -407,7 +407,7 @@ class Daemon(AuthJSONRPCServer):
     # claim_out is dictionary containing 'txid' and 'nout'
     def _add_to_pending_claims(self, name, claim_out):
         txid = claim_out['txid']
-        nout = claim_out['nout'] 
+        nout = claim_out['nout']
         log.info("Adding lbry://%s to pending claims, txid %s nout %d" % (name, txid, nout))
         self.pending_claims[name] = (txid, nout)
         return claim_out
@@ -1498,7 +1498,7 @@ class Daemon(AuthJSONRPCServer):
                 'name': name to look up, string, do not include lbry:// prefix
                 'txid': optional, if specified, look for claim with this txid
                 'nout': optional, if specified, look for claim with this nout
- 
+
             Returns:
                 txid, amount, value, n, height
         """
