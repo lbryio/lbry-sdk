@@ -167,7 +167,7 @@ class BlobAvailabilityTracker(BlobAvailability.BlobAvailabilityTracker):
         self._dht_node = None
         self._check_popular = None
         self._check_mine = None
-        self._get_mean_peers()
+        self._set_mean_peers()
 
     def start(self):
         pass

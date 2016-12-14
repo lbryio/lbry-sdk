@@ -1,4 +1,6 @@
 import logging
+import random
+import time
 
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
@@ -27,7 +29,7 @@ class BlobAvailabilityTracker(object):
     def start(self):
         log.info("Starting %s", self)
         self._check_popular.start(30)
-        self._check_mine.start(120)
+        self._check_mine.start(600)
 
     def stop(self):
         log.info("Stopping %s", self)
@@ -76,7 +78,8 @@ class BlobAvailabilityTracker(object):
 
     def _update_most_popular(self):
         d = self._get_most_popular()
-        d.addCallback(lambda _: self._get_mean_peers())
+        d.addCallback(lambda _: self._set_mean_peers())
+
 
     def _update_mine(self):
         def _get_peers(blobs):
@@ -85,11 +88,26 @@ class BlobAvailabilityTracker(object):
                 dl.append(self._update_peers_for_blob(hash))
             return defer.DeferredList(dl)
 
-        d = self._blob_manager.get_all_verified_blobs()
-        d.addCallback(_get_peers)
-        d.addCallback(lambda _: self._get_mean_peers())
+        def sample(blobs):
+            return random.sample(blobs, 100)
 
-    def _get_mean_peers(self):
+        start = time.time()
+        log.debug('==> Updating the peers for my blobs')
+        d = self._blob_manager.get_all_verified_blobs()
+        # as far as I can tell, this only is used to set _last_mean_availability
+        # which... seems like a very expensive operation for such little payoff.
+        # so taking a sample should get about the same effect as querying the entire
+        # list of blobs
+        d.addCallback(sample)
+        d.addCallback(_get_peers)
+        d.addCallback(lambda _: self._set_mean_peers())
+        d.addCallback(lambda _: log.debug('<== Done updating peers for my blobs. Took %s seconds',
+                                          time.time() - start))
+        # although unused, need to return or else the looping call
+        # could overrun on a previous call
+        return d
+
+    def _set_mean_peers(self):
         num_peers = [len(self.availability[blob]) for blob in self.availability]
         mean = Decimal(sum(num_peers)) / Decimal(max(1, len(num_peers)))
         self._last_mean_availability = mean
