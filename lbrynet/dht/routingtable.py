@@ -31,16 +31,6 @@ class RoutingTable(object):
         @type contact: kademlia.contact.Contact
         """
 
-    def distance(self, keyOne, keyTwo):
-        """ Calculate the XOR result between two string variables
-
-        @return: XOR result of two long variables
-        @rtype: long
-        """
-        valKeyOne = long(keyOne.encode('hex'), 16)
-        valKeyTwo = long(keyTwo.encode('hex'), 16)
-        return valKeyOne ^ valKeyTwo
-
     def findCloseNodes(self, key, count, _rpcNodeID=None):
         """ Finds a number of known nodes closest to the node/value with the
         specified key.
