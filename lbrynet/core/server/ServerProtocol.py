@@ -64,7 +64,7 @@ class ServerProtocol(Protocol):
         self.transport.loseConnection()
 
     def write(self, data):
-        log.debug("Writing %s bytes of data to the transport", str(len(data)))
+        log.trace("Writing %s bytes of data to the transport", len(data))
         self.transport.write(data)
         self.factory.rate_limiter.report_ul_bytes(len(data))
 
