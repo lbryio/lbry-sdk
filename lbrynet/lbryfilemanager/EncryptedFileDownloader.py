@@ -74,10 +74,8 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             d.addCallbacks(_save_claim_id, lambda err: _notify_bad_claim(name, txid, nout))
             return d
 
-        reflector_server = random.choice(settings.reflector_servers)
-
         d.addCallback(_save_stream_info)
-        d.addCallback(lambda _: reupload.check_and_restore_availability(self, reflector_server))
+        d.addCallback(lambda _: self._reupload())
         d.addCallback(lambda _: self.lbry_file_manager.get_lbry_file_status(self))
 
         def restore_status(status):
@@ -91,6 +89,12 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
         d.addCallback(restore_status)
         return d
+
+    def _reupload(self):
+        if not settings.reflector_reupload:
+            return
+        reflector_server = random.choice(settings.reflector_servers)
+        return reupload.check_and_restore_availability(self, reflector_server)
 
     def stop(self, err=None, change_status=True):
 
