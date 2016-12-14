@@ -267,9 +267,7 @@ class Node(object):
 
         def requestPeers(contacts):
             if self.externalIP is not None and len(contacts) >= constants.k:
-                is_closer = (
-                    self._routingTable.distance(blob_hash, self.id) <
-                    self._routingTable.distance(blob_hash, contacts[-1].id))
+                is_closer = Distance(blob_hash).is_closer(self.id, contacts[-1].id)
                 if is_closer:
                     contacts.pop()
                     self.store(blob_hash, value, self_store=True, originalPublisherID=self.id)
