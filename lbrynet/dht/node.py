@@ -669,7 +669,7 @@ class _IterativeFindHelper(object):
         responseMsg = responseTuple[0]
         originAddress = responseTuple[1] # tuple: (ip adress, udp port)
         # Make sure the responding node is valid, and abort the operation if it isn't
-        if responseMsg.nodeID in self.active_contacts or responseMsg.nodeID == self.id:
+        if responseMsg.nodeID in self.active_contacts or responseMsg.nodeID == self.node.id:
             return responseMsg.nodeID
 
         # Mark this node as active
@@ -705,15 +705,15 @@ class _IterativeFindHelper(object):
                 responseMsg.nodeID, originAddress[0], originAddress[1], self.node._protocol)
 
     def _keepSearching(self, result):
-        contactTriples = self.getContactTriples(result)
+        contactTriples = self._getContactTriples(result)
         for contactTriple in contactTriples:
             self._addIfValid(contactTriple)
 
     def _getContactTriples(self, result):
         if self.find_value is True:
-            contactTriples = result['contacts']
+            return result['contacts']
         else:
-            contactTriples = result
+            return result
 
     def _setClosestNodeValue(self, responseMsg, aContact):
         # We are looking for a value, and the remote node didn't have it
@@ -805,7 +805,7 @@ class _IterativeFindHelper(object):
             self.searchIteration()
         else:
             # If no probes were sent, there will not be any improvement, so we're done
-            self.outer_d.callback(self.activeContacts)
+            self.outer_d.callback(self.active_contacts)
 
     def _probeContact(self, contact):
         self.active_probes.append(contact.id)
