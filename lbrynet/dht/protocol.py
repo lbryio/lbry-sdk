@@ -282,34 +282,41 @@ class KademliaProtocol(protocol.DatagramProtocol):
     def _msgTimeout(self, messageID):
         """ Called when an RPC request message times out """
         # Find the message that timed out
-        if self._sentMessages.has_key(messageID):
-            remoteContactID, df = self._sentMessages[messageID][0:2]
-            if self._partialMessages.has_key(messageID):
-                # We are still receiving this message
-                # See if any progress has been made; if not, kill the message
-                if self._partialMessagesProgress.has_key(messageID):
-                    same_length = (
-                        len(self._partialMessagesProgress[messageID]) ==
-                        len(self._partialMessages[messageID]))
-                    if same_length:
-                        # No progress has been made
-                        del self._partialMessagesProgress[messageID]
-                        del self._partialMessages[messageID]
-                        df.errback(failure.Failure(TimeoutError(remoteContactID)))
-                        return
-                # Reset the RPC timeout timer
-                timeoutCall = reactor.callLater(
-                    constants.rpcTimeout, self._msgTimeout, messageID) #IGNORE:E1101
-                self._sentMessages[messageID] = (remoteContactID, df, timeoutCall)
-                return
-            del self._sentMessages[messageID]
-            # The message's destination node is now considered to be dead;
-            # raise an (asynchronous) TimeoutError exception and update the host node
-            self._node.removeContact(remoteContactID)
-            df.errback(failure.Failure(TimeoutError(remoteContactID)))
-        else:
+        if not self._sentMessages.has_key(messageID):
             # This should never be reached
             log.error("deferred timed out, but is not present in sent messages list!")
+            return
+        remoteContactID, df = self._sentMessages[messageID][0:2]
+        if self._partialMessages.has_key(messageID):
+            # We are still receiving this message
+            self._msgTimeoutInProgress(messageID, remoteContactID, df)
+            return
+        del self._sentMessages[messageID]
+        # The message's destination node is now considered to be dead;
+        # raise an (asynchronous) TimeoutError exception and update the host node
+        self._node.removeContact(remoteContactID)
+        df.errback(failure.Failure(TimeoutError(remoteContactID)))
+
+    def _msgTimeoutInProgress(self, messageID, remoteContactID, df):
+        # See if any progress has been made; if not, kill the message
+        if self._hasProgressBeenMade(messageID):
+            # Reset the RPC timeout timer
+            timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, messageID)
+            self._sentMessages[messageID] = (remoteContactID, df, timeoutCall)
+        else:
+            # No progress has been made
+            del self._partialMessagesProgress[messageID]
+            del self._partialMessages[messageID]
+            df.errback(failure.Failure(TimeoutError(remoteContactID)))
+
+    def _hasProgressBeenMade(self, messageID):
+        return (
+            self._partialMessagesProgress.has_key(messageID) and
+            (
+                len(self._partialMessagesProgress[messageID]) !=
+                len(self._partialMessages[messageID])
+            )
+        )
 
     def stopProtocol(self):
         """ Called when the transport is disconnected.
