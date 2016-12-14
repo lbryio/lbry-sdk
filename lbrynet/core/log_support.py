@@ -33,6 +33,7 @@ _srcfile = os.path.normcase(_srcfile)
 
 
 session = FuturesSession()
+TRACE = 5
 
 
 def bg_cb(sess, resp):
@@ -371,5 +372,10 @@ class Logger(logging.Logger):
                 callback(err, *args, **kwargs)
         return _fail
 
+    def trace(self, msg, *args, **kwargs):
+        if self.isEnabledFor(TRACE):
+            self._log(TRACE, msg, args, **kwargs)
+
 
 logging.setLoggerClass(Logger)
+logging.addLevelName(TRACE, 'TRACE')
