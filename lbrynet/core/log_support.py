@@ -332,7 +332,7 @@ class LogUploader(object):
 
 class Logger(logging.Logger):
     """A logger that has an extra `fail` method useful for handling twisted failures."""
-    def fail(self, callback=None, *args):
+    def fail(self, callback=None, *args, **kwargs):
         """Returns a function to log a failure from an errback.
 
         The returned function appends the error message and extracts
@@ -355,20 +355,20 @@ class Logger(logging.Logger):
             err: twisted.python.failure.Failure
             msg: the message to log, using normal logging string iterpolation.
             msg_args: the values to subtitute into `msg`
-            kwargs: set `level` to change from the default ERROR severity. Other
+            msg_kwargs: set `level` to change from the default ERROR severity. Other
                 keywoards are treated as normal log kwargs.
         """
         fn, lno, func = findCaller()
-        def _fail(err, msg, *msg_args, **kwargs):
-            level = kwargs.pop('level', logging.ERROR)
+        def _fail(err, msg, *msg_args, **msg_kwargs):
+            level = msg_kwargs.pop('level', logging.ERROR)
             msg += ": %s"
             msg_args += (err.getErrorMessage(),)
             exc_info = (err.type, err.value, err.getTracebackObject())
             record = self.makeRecord(
-                self.name, level, fn, lno, msg, msg_args, exc_info, func, kwargs)
+                self.name, level, fn, lno, msg, msg_args, exc_info, func, msg_kwargs)
             self.handle(record)
             if callback:
-                callback(err, *args)
+                callback(err, *args, **kwargs)
         return _fail
 
 
