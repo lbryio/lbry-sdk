@@ -235,9 +235,14 @@ class Node(object):
         known_nodes = {}
 
         def log_error(err, n):
-            log.debug("error storing blob_hash %s at %s", binascii.hexlify(blob_hash), str(n))
-            log.debug(err.getErrorMessage())
-            log.debug(err.getTraceback())
+            if err.check(protocol.TimeoutError):
+                log.debug(
+                    "Timeout while storing blob_hash %s at %s",
+                    binascii.hexlify(blob_hash), n)
+            else:
+                log.error(
+                    "Unexpected error while storing blob_hash %s at %s: %s",
+                    binascii.hexlify(blob_hash), n, err.getErrorMessage())
 
         def log_success(res):
             log.debug("Response to store request: %s", str(res))
