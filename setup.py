@@ -113,7 +113,11 @@ elif platform == DARWIN:
           entry_points={'console_scripts': console_scripts},
           package_data={
               package_name: list(package_files('lbrynet/resources/ui'))
-          }
+          },
+          # If this is True, setuptools tries to build an egg
+          # and py2app / modulegraph / imp.find_module
+          # doesn't like that.
+          zip_safe=False,
     )
 
 elif platform == WINDOWS:
