@@ -673,15 +673,9 @@ class _IterativeFindHelper(object):
             return responseMsg.nodeID
 
         # Mark this node as active
-        if responseMsg.nodeID in self.shortlist:
-            # Get the contact information from the shortlist...
-            aContact = self.shortlist[self.shortlist.index(responseMsg.nodeID)]
-        else:
-            # If it's not in the shortlist; we probably used a fake ID to reach it
-            # - reconstruct the contact, using the real node ID this time
-            aContact = Contact(
-                responseMsg.nodeID, originAddress[0], originAddress[1], self._protocol)
+        aContact = self._getActiveContact(responseMsg, originAddress)
         self.active_contacts.append(aContact)
+
         # This makes sure "bootstrap"-nodes with "fake" IDs don't get queried twice
         if responseMsg.nodeID not in self.already_contacted:
             self.already_contacted.append(responseMsg.nodeID)
@@ -696,26 +690,52 @@ class _IterativeFindHelper(object):
             self.find_value_result['from_peer'] = aContact.address
         else:
             if self.find_value is True:
-                # We are looking for a value, and the remote node didn't have it
-                # - mark it as the closest "empty" node, if it is
-                if 'closestNodeNoValue' in self.find_value_result:
-                    is_closer = (
-                        self._routingTable.distance(self.key, responseMsg.nodeID) <
-                        self._routingTable.distance(self.key, self.active_contacts[0].id))
-                    if is_closer:
-                        self.find_value_result['closestNodeNoValue'] = aContact
-                else:
-                    self.find_value_result['closestNodeNoValue'] = aContact
-                contactTriples = result['contacts']
-            else:
-                contactTriples = result
-            for contactTriple in contactTriples:
-                if isinstance(contactTriple, (list, tuple)) and len(contactTriple) == 3:
-                    testContact = Contact(
-                        contactTriple[0], contactTriple[1], contactTriple[2], self._protocol)
-                    if testContact not in self.shortlist:
-                        self.shortlist.append(testContact)
+                self._setClosestNodeValue(responseMsg, aContact)
+            self._keepSearching(result)
         return responseMsg.nodeID
+
+    def _getActiveContact(self, responseMsg, originAddress):
+        if responseMsg.nodeID in self.shortlist:
+            # Get the contact information from the shortlist...
+            return self.shortlist[self.shortlist.index(responseMsg.nodeID)]
+        else:
+            # If it's not in the shortlist; we probably used a fake ID to reach it
+            # - reconstruct the contact, using the real node ID this time
+            return Contact(
+                responseMsg.nodeID, originAddress[0], originAddress[1], self.node._protocol)
+
+    def _keepSearching(self, result):
+        contactTriples = self.getContactTriples(result)
+        for contactTriple in contactTriples:
+            self._addIfValid(contactTriple)
+
+    def _getContactTriples(self, result):
+        if self.find_value is True:
+            contactTriples = result['contacts']
+        else:
+            contactTriples = result
+
+    def _setClosestNodeValue(self, responseMsg, aContact):
+        # We are looking for a value, and the remote node didn't have it
+        # - mark it as the closest "empty" node, if it is
+        if 'closestNodeNoValue' in self.find_value_result:
+            if self._is_closer(responseMsg):
+                self.find_value_result['closestNodeNoValue'] = aContact
+        else:
+            self.find_value_result['closestNodeNoValue'] = aContact
+
+    def _is_closer(self, responseMsg):
+        return (
+            self.node._routingTable.distance(self.key, responseMsg.nodeID) <
+            self.node._routingTable.distance(self.key, self.active_contacts[0].id)
+        )
+
+    def _addIfValid(self, contactTriple):
+        if isinstance(contactTriple, (list, tuple)) and len(contactTriple) == 3:
+            testContact = Contact(
+                contactTriple[0], contactTriple[1], contactTriple[2], self.node._protocol)
+            if testContact not in self.shortlist:
+                self.shortlist.append(testContact)
 
     def removeFromShortlist(self, failure):
         """ @type failure: twisted.python.failure.Failure """
@@ -739,8 +759,8 @@ class _IterativeFindHelper(object):
         # TODO: move sort_key to be a method on the class
         def sort_key(firstContact, secondContact, targetKey=self.key):
             return cmp(
-                self._routingTable.distance(firstContact.id, targetKey),
-                self._routingTable.distance(secondContact.id, targetKey)
+                self.node._routingTable.distance(firstContact.id, targetKey),
+                self.node._routingTable.distance(secondContact.id, targetKey)
             )
         # Sort the discovered active nodes from closest to furthest
         self.active_contacts.sort(sort_key)
@@ -752,19 +772,12 @@ class _IterativeFindHelper(object):
             self.outer_d.callback(self.find_value_result)
             return
         elif len(self.active_contacts) and self.find_value == False:
-            is_all_done = (
-                len(self.active_contacts) >= constants.k or
-                (
-                    self.active_contacts[0] == self.prev_closest_node[0] and
-                    len(self.active_probes) == self.slow_node_count[0]
-                )
-            )
-            if is_all_done:
+            if self._is_all_done():
                 # TODO: Re-send the FIND_NODEs to all of the k closest nodes not already queried
                 #
-                # Ok, we're done; either we have accumulated k
-                # active contacts or no improvement in closestNode
-                # has been noted
+                # Ok, we're done; either we have accumulated k active
+                # contacts or no improvement in closestNode has been
+                # noted
                 self.outer_d.callback(self.active_contacts)
                 return
         # The search continues...
@@ -776,26 +789,11 @@ class _IterativeFindHelper(object):
         prevShortlistLength = len(self.shortlist)
         for contact in self.shortlist:
             if contact.id not in self.already_contacted:
-                self.active_probes.append(contact.id)
-                rpcMethod = getattr(contact, self.rpc)
-                df = rpcMethod(self.key, rawResponse=True)
-                df.addCallback(self.extendShortlist)
-                df.addErrback(self.removeFromShortlist)
-                df.addCallback(self.cancelActiveProbe)
-                df.addErrback(log.fail(), 'Failed to contact %s', contact)
-                self.already_contacted.append(contact.id)
+                self._probeContact(contact)
                 contactedNow += 1
             if contactedNow == constants.alpha:
                 break
-        should_lookup_active_calls = (
-            len(self.active_probes) > self.slow_node_count[0] or
-            (
-                len(self.shortlist) < constants.k and
-                len(self.active_contacts) < len(self.shortlist) and
-                len(self.active_probes) > 0
-            )
-        )
-        if should_lookup_active_calls:
+        if self._should_lookup_active_calls():
             # Schedule the next iteration if there are any active
             # calls (Kademlia uses loose parallelism)
             call = twisted.internet.reactor.callLater(
@@ -808,6 +806,36 @@ class _IterativeFindHelper(object):
         else:
             # If no probes were sent, there will not be any improvement, so we're done
             self.outer_d.callback(self.activeContacts)
+
+    def _probeContact(self, contact):
+        self.active_probes.append(contact.id)
+        rpcMethod = getattr(contact, self.rpc)
+        df = rpcMethod(self.key, rawResponse=True)
+        df.addCallback(self.extendShortlist)
+        df.addErrback(self.removeFromShortlist)
+        df.addCallback(self.cancelActiveProbe)
+        df.addErrback(log.fail(), 'Failed to contact %s', contact)
+        self.already_contacted.append(contact.id)
+
+    def _should_lookup_active_calls(self):
+        return (
+            len(self.active_probes) > self.slow_node_count[0] or
+            (
+                len(self.shortlist) < constants.k and
+                len(self.active_contacts) < len(self.shortlist) and
+                len(self.active_probes) > 0
+            )
+        )
+
+    def _is_all_done(self):
+        return (
+            len(self.active_contacts) >= constants.k or
+            (
+                self.active_contacts[0] == self.prev_closest_node[0] and
+                len(self.active_probes) == self.slow_node_count[0]
+            )
+        )
+
 
 
 def main():
