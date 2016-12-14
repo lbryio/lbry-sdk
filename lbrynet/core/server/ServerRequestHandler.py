@@ -52,13 +52,15 @@ class ServerRequestHandler(object):
 
         from twisted.internet import reactor
 
-        if self.production_paused is False:
-            chunk = self.response_buff[:self.CHUNK_SIZE]
-            self.response_buff = self.response_buff[self.CHUNK_SIZE:]
-            if chunk != '':
-                log.debug("writing %s bytes to the client", str(len(chunk)))
-                self.consumer.write(chunk)
-                reactor.callLater(0, self._produce_more)
+        if self.production_paused:
+            return
+        chunk = self.response_buff[:self.CHUNK_SIZE]
+        self.response_buff = self.response_buff[self.CHUNK_SIZE:]
+        if chunk == '':
+            return
+        log.trace("writing %s bytes to the client", len(chunk))
+        self.consumer.write(chunk)
+        reactor.callLater(0, self._produce_more)
 
     #IConsumer stuff
 
@@ -80,7 +82,7 @@ class ServerRequestHandler(object):
 
         def get_more_data():
             if self.producer is not None:
-                log.debug("Requesting more data from the producer")
+                log.trace("Requesting more data from the producer")
                 self.producer.resumeProducing()
 
         reactor.callLater(0, get_more_data)
