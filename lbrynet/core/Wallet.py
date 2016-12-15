@@ -984,7 +984,7 @@ class LBRYumWallet(Wallet):
             d.addCallback(lambda _: claim_out)
             return d
         else:
-            return claim_out
+            return defer.succeed(claim_out)
 
     def _broadcast_transaction(self, raw_tx):
         def _log_tx(r):
