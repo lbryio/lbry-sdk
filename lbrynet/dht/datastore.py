@@ -16,7 +16,7 @@ import constants
 class DataStore(UserDict.DictMixin):
     """ Interface for classes implementing physical storage (for data
     published via the "STORE" RPC) for the Kademlia DHT
-    
+
     @note: This provides an interface for a dict-like object
     """
     def keys(self):

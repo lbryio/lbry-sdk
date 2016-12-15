@@ -76,7 +76,6 @@ class DaemonRequest(server.Request):
                 try:
                     self.content.seek(0, 0)
                     args.update(self.parse_multipart(self.content, pdict))
-                    #args.update(cgi.parse_multipart(self.content, pdict))
 
                 except KeyError as e:
                     if e.args[0] == b'content-disposition':

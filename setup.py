@@ -51,14 +51,6 @@ requires = [
 ]
 
 console_scripts = [
-    # 'lbrynet-stdin-uploader = lbrynet.lbrynet_console.LBRYStdinUploader:launch_stdin_uploader',
-    # 'lbrynet-stdout-downloader = lbrynet.lbrynet_console.LBRYStdoutDownloader:launch_stdout_downloader',
-    # 'lbrynet-create-network = lbrynet.create_network:main',
-    # 'lbrynet-launch-node = lbrynet.dht.node:main',
-    # 'lbrynet-launch-rpc-node = lbrynet.rpc_node:main',
-    # 'lbrynet-rpc-node-cli = lbrynet.node_rpc_cli:main',
-    # 'lbrynet-lookup-hosts-for-hash = lbrynet.dht_scripts:get_hosts_for_hash_in_dht',
-    # 'lbrynet-announce_hash_to_dht = lbrynet.dht_scripts:announce_hash_to_dht',
     'lbrynet-daemon = lbrynet.lbrynet_daemon.DaemonControl:start',
     'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.DaemonControl:stop',
     'lbrynet-cli = lbrynet.lbrynet_daemon.DaemonCLI:main'

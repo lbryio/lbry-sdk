@@ -40,11 +40,11 @@ class Publisher(object):
     def start(self, name, file_path, bid, metadata):
         log.info('Starting publish for %s', name)
         def _show_result():
-            log.info("Success! Published %s --> lbry://%s txid: %s nout: %d", 
+            log.info("Success! Published %s --> lbry://%s txid: %s nout: %d",
                       self.file_name, self.publish_name, self.txid, self.nout)
             out = {}
             out['nout'] = self.nout
-            out['txid'] = self.txid 
+            out['txid'] = self.txid
             return defer.succeed(out)
 
         self.publish_name = name
@@ -137,10 +137,10 @@ class Publisher(object):
                 msg = 'Failed to claim name:{}'.format(claim_out['reason'])
                 defer.fail(Exception(msg))
             txid = claim_out['txid']
-            nout = claim_out['nout'] 
+            nout = claim_out['nout']
             log.debug('Name claimed using txid: %s, nout: %d', txid, nout)
             self.txid = txid
-            self.nout = nout 
+            self.nout = nout
 
         d = self.wallet.claim_name(self.publish_name, self.bid_amount, m)
         d.addCallback(set_txid_nout)

@@ -209,7 +209,6 @@ class ClientProtocol(Protocol):
                 log.debug("Asking for another request.")
                 from twisted.internet import reactor
                 reactor.callLater(0, self._ask_for_request)
-                #self._ask_for_request()
             else:
                 log.debug("Not asking for another request.")
                 self.transport.loseConnection()
@@ -230,8 +229,6 @@ class ClientProtocol(Protocol):
             # TODO: protocol had such a mechanism.
             log.debug("Closing the connection to %s because the download of blob %s was canceled",
                      str(self.peer), str(self._blob_download_request.blob))
-            #self.transport.loseConnection()
-            #return True
         return err
 
     ######### IRateLimited #########
