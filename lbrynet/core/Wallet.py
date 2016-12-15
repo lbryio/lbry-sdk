@@ -785,6 +785,7 @@ class LBRYumWallet(Wallet):
 
         def setup_network():
             self.config = make_config(self._config)
+            self.config.set_key('auto_connect',True)
             self.network = Network(self.config)
             alert.info("Loading the wallet...")
             return defer.succeed(self.network.start())
