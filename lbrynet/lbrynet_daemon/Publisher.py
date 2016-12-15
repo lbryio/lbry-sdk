@@ -5,7 +5,6 @@ import random
 
 from twisted.internet import threads, defer, reactor
 
-from lbrynet.core import log_support
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.metadata.Metadata import Metadata
@@ -40,11 +39,11 @@ class Publisher(object):
     def start(self, name, file_path, bid, metadata):
         log.info('Starting publish for %s', name)
         def _show_result():
-            log.info("Success! Published %s --> lbry://%s txid: %s nout: %d", 
+            log.info("Success! Published %s --> lbry://%s txid: %s nout: %d",
                       self.file_name, self.publish_name, self.txid, self.nout)
             out = {}
             out['nout'] = self.nout
-            out['txid'] = self.txid 
+            out['txid'] = self.txid
             return defer.succeed(out)
 
         self.publish_name = name
@@ -68,7 +67,12 @@ class Publisher(object):
         d.addCallback(lambda _: self._claim_name())
         d.addCallback(lambda _: self.set_status())
         d.addCallback(lambda _: self.start_reflector())
-        d.addCallbacks(lambda _: _show_result(), self._show_publish_error)
+        d.addCallbacks(
+            lambda _: _show_result(),
+            errback=log.fail(self._throw_publish_error),
+            errbackArgs=(
+                "An error occurred publishing %s to %s", self.file_name, self.publish_name)
+        )
         return d
 
     def start_reflector(self):
@@ -137,10 +141,10 @@ class Publisher(object):
                 msg = 'Failed to claim name:{}'.format(claim_out['reason'])
                 defer.fail(Exception(msg))
             txid = claim_out['txid']
-            nout = claim_out['nout'] 
+            nout = claim_out['nout']
             log.debug('Name claimed using txid: %s, nout: %d', txid, nout)
             self.txid = txid
-            self.nout = nout 
+            self.nout = nout
 
         d = self.wallet.claim_name(self.publish_name, self.bid_amount, m)
         d.addCallback(set_txid_nout)
@@ -151,11 +155,13 @@ class Publisher(object):
         self.metadata['content_type'] = get_content_type(filename)
         self.metadata['ver'] = Metadata.current_version
 
-    def _show_publish_error(self, err):
-        log_support.failure(
-            err, log, "An error occurred publishing %s to %s. Error: %s.",
-            self.file_name, self.publish_name)
-        return defer.fail(Exception("Publish failed"))
+    def _throw_publish_error(self, err):
+        # TODO: I'm not a fan of the log and re-throw, especially when
+        #       the new exception is more generic. Look over this to
+        #       see if there is a reason not to remove the errback
+        #       handler and allow the original exception to move up
+        #       the stack.
+        raise Exception("Publish failed")
 
 
 def get_content_type(filename):
