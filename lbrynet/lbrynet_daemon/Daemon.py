@@ -407,7 +407,7 @@ class Daemon(AuthJSONRPCServer):
     # claim_out is dictionary containing 'txid' and 'nout'
     def _add_to_pending_claims(self, name, claim_out):
         txid = claim_out['txid']
-        nout = claim_out['nout'] 
+        nout = claim_out['nout']
         log.info("Adding lbry://%s to pending claims, txid %s nout %d" % (name, txid, nout))
         self.pending_claims[name] = (txid, nout)
         return claim_out
@@ -602,14 +602,14 @@ class Daemon(AuthJSONRPCServer):
             d = defer.succeed(None)
 
         d.addCallback(lambda _: self._stop_server())
-        d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
+        d.addErrback(log.fail(), 'Failure while shutting down')
         d.addCallback(lambda _: self._stop_reflector())
-        d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
+        d.addErrback(log.fail(), 'Failure while shutting down')
         d.addCallback(lambda _: self._stop_file_manager())
-        d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
+        d.addErrback(log.fail(), 'Failure while shutting down')
         if self.session is not None:
             d.addCallback(lambda _: self.session.shut_down())
-            d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
+            d.addErrback(log.fail(), 'Failure while shutting down')
         return d
 
     def _update_settings(self, settings):
@@ -1468,9 +1468,20 @@ class Daemon(AuthJSONRPCServer):
             return self._render_response(None, BAD_REQUEST)
 
         d = self._resolve_name(name, force_refresh=force)
+        # TODO: this is the rpc call that returns a server.failure.
+        #       what is up with that?
         d.addCallbacks(
             lambda info: self._render_response(info, OK_CODE),
-            errback=handle_failure, errbackArgs=('Failed to resolve name: %s',)
+            # TODO: Is server.failure a module? It looks like it:
+            #
+            # In [1]: import twisted.web.server
+            # In [2]: twisted.web.server.failure
+            # Out[2]: <module 'twisted.python.failure' from
+            #         '.../site-packages/twisted/python/failure.pyc'>
+            #
+            # If so, maybe we should return something else.
+            errback=log.fail(lambda: server.failure),
+            errbackArgs=('Failed to resolve name: %s',)
         )
         return d
 
@@ -1498,7 +1509,7 @@ class Daemon(AuthJSONRPCServer):
                 'name': name to look up, string, do not include lbry:// prefix
                 'txid': optional, if specified, look for claim with this txid
                 'nout': optional, if specified, look for claim with this nout
- 
+
             Returns:
                 txid, amount, value, n, height
         """
@@ -2680,18 +2691,6 @@ def get_lbry_file_search_value(p):
         if value:
             return searchtype, value
     raise NoValidSearch()
-
-
-def handle_failure(err, msg):
-    log_support.failure(err, log, msg)
-    # TODO: Is this a module? It looks like it:
-    #
-    # In [1]: import twisted.web.server
-    # In [2]: twisted.web.server.failure
-    # Out[2]: <module 'twisted.python.failure' from '.../site-packages/twisted/python/failure.pyc'>
-    #
-    # If so, maybe we should return something else.
-    return server.failure
 
 
 def run_reflector_factory(factory):

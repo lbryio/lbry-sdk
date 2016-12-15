@@ -152,7 +152,6 @@ class StdinStreamProducer(object):
 
         self.finished_deferred = defer.Deferred()
         self.consumer.registerProducer(self, True)
-        #self.reader = process.ProcessReader(reactor, self, 'read', 0)
         self.resumeProducing()
         return self.finished_deferred
 

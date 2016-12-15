@@ -212,7 +212,6 @@ class Wallet(object):
             once the service has been rendered
         """
         rounded_amount = Decimal(str(round(amount, 8)))
-        #if peer in self.peer_addresses:
         if self.wallet_balance >= self.total_reserved_points + rounded_amount:
             self.total_reserved_points += rounded_amount
             return ReservedPoints(identifier, rounded_amount)
@@ -359,7 +358,7 @@ class Wallet(object):
         except (TypeError, ValueError, ValidationError):
             return Failure(InvalidStreamInfoError(name, result['value']))
         sd_hash = metadata['sources']['lbry_sd_hash']
-        claim_outpoint = ClaimOutpoint(result['txid'], result['n']) 
+        claim_outpoint = ClaimOutpoint(result['txid'], result['n'])
         d = self._save_name_metadata(name, claim_outpoint, sd_hash)
         d.addCallback(lambda _: self.get_claimid(name, result['txid'], result['n']))
         d.addCallback(lambda cid: _log_success(cid))
@@ -380,7 +379,7 @@ class Wallet(object):
                 d.addCallback(lambda claims: next(c for c in claims if c['name'] == name and c['nOut'] == claim_outpoint['nout']))
                 d.addCallback(lambda claim: self._update_claimid(claim['claimId'], name, ClaimOutpoint(txid, claim['nOut'])))
                 return d
-        claim_outpoint = ClaimOutpoint(txid, nout) 
+        claim_outpoint = ClaimOutpoint(txid, nout)
         d = self._get_claimid_for_tx(name, claim_outpoint)
         d.addCallback(_get_id_for_return)
         return d
@@ -556,7 +555,7 @@ class Wallet(object):
             for claim in claims:
                 if 'in claim trie' in claim:
                     name_is_equal = 'name' in claim and str(claim['name']) == name
-                    nout_is_equal = 'nOut' in claim and claim['nOut'] == claim_outpoint['nout'] 
+                    nout_is_equal = 'nOut' in claim and claim['nOut'] == claim_outpoint['nout']
                     if name_is_equal and nout_is_equal and 'value' in claim:
                         try:
                             value_dict = json.loads(claim['value'])
@@ -655,7 +654,7 @@ class Wallet(object):
         d.addCallback(
             lambda _: self.db.runQuery("delete from name_metadata where name=? and txid=? and n=? and sd_hash=?",
                 (name, claim_outpoint['txid'], UNSET_NOUT, sd_hash)))
-                
+
         d.addCallback(lambda _: self.db.runQuery("insert into name_metadata values (?, ?, ?, ?)",
                                                  (name, claim_outpoint['txid'], claim_outpoint['nout'], sd_hash)))
         return d
@@ -671,7 +670,7 @@ class Wallet(object):
         d.addCallback(
             lambda _: self.db.runQuery("delete from claim_ids where claimId=? and name=? and txid=? and n=?",
                              (claim_id, name, claim_outpoint['txid'], UNSET_NOUT)))
-                             
+
         d.addCallback(lambda r: self.db.runQuery("insert into claim_ids values (?, ?, ?, ?)",
                                                  (claim_id, name, claim_outpoint['txid'], claim_outpoint['nout'])))
         d.addCallback(lambda _: claim_id)
