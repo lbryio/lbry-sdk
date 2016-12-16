@@ -31,3 +31,4 @@ base58==0.2.2
 googlefinance==0.7
 pyyaml==3.12
 service_identity==16.0.0
+ndg-httpsclient==0.4.2
