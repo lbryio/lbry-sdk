@@ -25,7 +25,7 @@ else
 fi
 
 pip install wheel
-MODULES="pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-CFNetwork pyobjc-framework-Quartz"
+MODULES="pyobjc-core==3.1.1 pyobjc-framework-Cocoa==3.1.1 pyobjc-framework-CFNetwork==3.1.1 pyobjc-framework-Quartz==3.1.1"
 if [ ${ON_TRAVIS} = true ]; then
     WHEEL_DIR="${TRAVIS_BUILD_DIR}/cache/wheel"
     mkdir -p "${WHEEL_DIR}"
@@ -38,12 +38,12 @@ if [ ${ON_TRAVIS} = true ]; then
 	if [ ! -f "${WHEEL_DIR}"/${MODULE}.finished ]; then
 	    pip wheel -w "${WHEEL_DIR}" ${MODULE}
 	    touch "${WHEEL_DIR}"/${MODULE}.finished
+	    pip install ${MODULE}
 	fi
     done
-    pip install "${WHEEL_DIR}"/*.whl
-else
-    pip install $MODULES
 fi
+pip install $MODULES
+
 
 pip install dmgbuild==1.1.0
 export PATH=${PATH}:/Library/Frameworks/Python.framework/Versions/2.7/bin
