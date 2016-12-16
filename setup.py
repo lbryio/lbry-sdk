@@ -28,27 +28,45 @@ maintainer = "Jack Robison"
 maintainer_email = "jack@lbry.io"
 keywords = "LBRY"
 
+
+# TODO: find a way to keep this in sync with requirements.txt
 requires = [
-    'pycrypto',
-    'twisted',
-    'miniupnpc',
-    'yapsy',
-    'seccure',
-    'txJSON-RPC',
-    'requests>=2.4.2',
-    'unqlite==0.2.0',
+    'Twisted==16.0.0',
+    'Yapsy==1.11.223',
+    'appdirs==1.4.0',
+    'argparse==1.2.1',
+    'colorama==0.3.7',
+    'dnspython==1.12.0',
+    'ecdsa==0.13',
+    'envparse==0.2.0',
+    'gmpy==1.17',
+    'jsonrpc==1.2',
+    'jsonrpclib==0.1.7',
+    'jsonschema==2.5.1',
     'lbryum',
-    'jsonrpc',
-    'simplejson',
-    'jsonschema',
-    'appdirs',
+    'loggly-python-handler==1.0.0',
+    'miniupnpc==1.9',
+    'pbkdf2==1.3',
+    'protobuf==3.0.0',
+    'pycrypto==2.6.1',
+    'qrcode==5.2.2',
+    'requests==2.9.1',
+    'requests_futures==0.9.7',
+    'seccure==0.3.1.3',
+    'simplejson==3.8.2',
     'six==1.9.0',
-    'base58',
-    'googlefinance',
-    'requests_futures',
-    'PyYAML',
-    'envparse'
+    'slowaes==0.1a1',
+    'txJSON-RPC==0.3.1',
+    'unqlite==0.2.0',
+    'wsgiref==0.1.2',
+    'zope.interface==4.1.3',
+    'base58==0.2.2',
+    'googlefinance==0.7',
+    'pyyaml==3.12',
+    'service_identity==16.0.0',
+    'ndg-httpsclient==0.4.2',
 ]
+
 
 console_scripts = [
     'lbrynet-daemon = lbrynet.lbrynet_daemon.DaemonControl:start',
