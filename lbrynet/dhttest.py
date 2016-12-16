@@ -25,7 +25,6 @@
 import sys, hashlib, random
 import twisted.internet.reactor
 from lbrynet.dht.node import Node
-#from entangled.kademlia.datastore import SQLiteDataStore
 
 # The Entangled DHT node; instantiated in the main() method
 node = None
@@ -77,7 +76,6 @@ def getValue():
            binascii.unhexlify("f7d9dc4de674eaa2c5a022eb95bc0d33ec2e75c6"))
     deferredResult = node.iterativeFindValue(
         binascii.unhexlify("f7d9dc4de674eaa2c5a022eb95bc0d33ec2e75c6"))
-    #deferredResult = node.iterativeFindValue(KEY)
     # Add a callback to this result; this will be called as soon as the operation has completed
     deferredResult.addCallback(getValueCallback)
     # As before, add the generic error callback
@@ -91,19 +89,8 @@ def getValueCallback(result):
     # contacts would be returned instead")
     print "Got the value"
     print result
-    #if type(result) == dict:
-    #    for v in result[binascii.unhexlify("5292fa9c426621f02419f5050900392bdff5036c")]:
-    #        print "v:", v
-    #        print "v[6:", v[6:]
-    #        print "lbryid:",lbryid
-    #        print "lbryid == v[6:]:", lbryid == v[6:]
-    #    print 'Value successfully retrieved: %s' % result[KEY]
 
-    #else:
-    #    print 'Value not found'
     # Either way, schedule a "delete" operation for the key
-    #print 'Scheduling removal in 2.5 seconds...'
-    #twisted.internet.reactor.callLater(2.5, deleteValue)
     print 'Scheduling shutdown in 2.5 seconds...'
     twisted.internet.reactor.callLater(2.5, stop)
 
@@ -151,9 +138,6 @@ if __name__ == '__main__':
         print 'Run this script without any arguments for info.\n'
 
     # Set up SQLite-based data store (you could use an in-memory store instead, for example)
-    #if os.path.isfile('/tmp/dbFile%s.db' % sys.argv[1]):
-    #    os.remove('/tmp/dbFile%s.db' % sys.argv[1])
-    #dataStore = SQLiteDataStore(dbFile = '/tmp/dbFile%s.db' % sys.argv[1])
     #
     # Create the Entangled node. It extends the functionality of a
     # basic Kademlia node (but is fully backwards-compatible with a
@@ -162,14 +146,12 @@ if __name__ == '__main__':
     # If you wish to have a pure Kademlia network, use the
     # entangled.kademlia.node.Node class instead
     print 'Creating Node...'
-    #node = EntangledNode( udpPort=int(sys.argv[1]), dataStore=dataStore )
     node = Node(udpPort=int(sys.argv[1]), lbryid=lbryid)
 
     # Schedule the node to join the Kademlia/Entangled DHT
     node.joinNetwork(knownNodes)
     # Schedule the "storeValue() call to be invoked after 2.5 seconds,
     #using KEY and VALUE as arguments
-    #twisted.internet.reactor.callLater(2.5, storeValue, KEY, VALUE)
     twisted.internet.reactor.callLater(2.5, getValue)
     # Start the Twisted reactor - this fires up all networking, and
     # allows the scheduled join operation to take place

@@ -5,7 +5,6 @@ from twisted.protocols.basic import FileSender
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.internet import defer, error
 
-from lbrynet.core import log_support
 from lbrynet.reflector.common import IncompleteResponse
 
 
@@ -153,8 +152,7 @@ class BlobReflectorClient(Protocol):
             'blob_size': self.next_blob_to_send.length
         }))
 
-    def log_fail_and_disconnect(self, err, blob_hash):
-        log_support.failure(err, log, "Error reflecting blob %s: %s", blob_hash)
+    def disconnect(self, err):
         self.transport.loseConnection()
 
     def send_next_request(self):
@@ -172,7 +170,9 @@ class BlobReflectorClient(Protocol):
             # send the server the next blob hash + length
             d.addCallbacks(
                 lambda _: self.send_blob_info(),
-                lambda err: self.log_fail_and_disconnect(err, blob_hash))
+                errback=log.fail(self.disconnect),
+                errbackArgs=("Error reflecting blob %s", blob_hash)
+            )
             return d
         else:
             # close connection

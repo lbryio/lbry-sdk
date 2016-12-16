@@ -9,9 +9,9 @@ from twisted.enterprise import adbapi
 from lbrynet.core.HashBlob import BlobFile, TempBlob, BlobFileCreator, TempBlobCreator
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
 from lbrynet.core.utils import is_valid_blobhash
-from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from lbrynet.core.Error import NoSuchBlobError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
+
 
 log = logging.getLogger(__name__)
 
@@ -52,9 +52,6 @@ class BlobManager(DHTHashSupplier):
     def get_blob_length(self, blob_hash):
         pass
 
-    def check_consistency(self):
-        pass
-
     def blob_requested(self, blob_hash):
         pass
 
@@ -86,6 +83,8 @@ class DiskBlobManager(BlobManager):
         self.db_conn = None
         self.blob_type = BlobFile
         self.blob_creator_type = BlobFileCreator
+        # TODO: consider using an LRU for blobs as there could potentially
+        #       be thousands of blobs loaded up, many stale
         self.blobs = {}
         self.blob_hashes_to_delete = {} # {blob_hash: being_deleted (True/False)}
         self._next_manage_call = None
@@ -102,7 +101,6 @@ class DiskBlobManager(BlobManager):
         if self._next_manage_call is not None and self._next_manage_call.active():
             self._next_manage_call.cancel()
             self._next_manage_call = None
-        #d = self.db_conn.close()
         self.db_conn = None
         return defer.succeed(True)
 
@@ -120,6 +118,7 @@ class DiskBlobManager(BlobManager):
         return self.blob_creator_type(self, self.blob_dir)
 
     def _make_new_blob(self, blob_hash, upload_allowed, length=None):
+        log.debug('Making a new blob for %s', blob_hash)
         blob = self.blob_type(self.blob_dir, blob_hash, upload_allowed, length)
         self.blobs[blob_hash] = blob
         d = self._completed_blobs([blob_hash])
@@ -143,9 +142,11 @@ class DiskBlobManager(BlobManager):
 
     def blob_completed(self, blob, next_announce_time=None):
         if next_announce_time is None:
-            next_announce_time = time.time()
-        return self._add_completed_blob(blob.blob_hash, blob.length,
-                                        time.time(), next_announce_time)
+            next_announce_time = time.time() + self.hash_reannounce_time
+        d = self._add_completed_blob(blob.blob_hash, blob.length,
+                                     time.time(), next_announce_time)
+        d.addCallback(lambda _: self.hash_announcer.immediate_announce([blob.blob_hash]))
+        return d
 
     def completed_blobs(self, blobs_to_check):
         return self._completed_blobs(blobs_to_check)
@@ -185,9 +186,6 @@ class DiskBlobManager(BlobManager):
 
     def get_blob_length(self, blob_hash):
         return self._get_blob_length(blob_hash)
-
-    def check_consistency(self):
-        return self._check_consistency()
 
     def get_all_verified_blobs(self):
         d = self._get_all_verified_blob_hashes()
@@ -299,18 +297,27 @@ class DiskBlobManager(BlobManager):
 
     @rerun_if_locked
     def _completed_blobs(self, blobs_to_check):
+        """Returns of the blobs_to_check, which are valid"""
         blobs_to_check = filter(is_valid_blobhash, blobs_to_check)
 
-        def get_blobs_in_db(db_transaction):
-            blobs_in_db = []  # [(blob_hash, last_verified_time)]
+        def _get_last_verified_time(db_transaction, blob_hash):
+            result = db_transaction.execute(
+                "select last_verified_time from blobs where blob_hash = ?", (blob_hash,))
+            row = result.fetchone()
+            if row:
+                return row[0]
+            else:
+                return None
+
+        def _filter_blobs_in_db(db_transaction, blobs_to_check):
             for b in blobs_to_check:
-                result = db_transaction.execute(
-                    "select last_verified_time from blobs where blob_hash = ?",
-                    (b,))
-                row = result.fetchone()
-                if row is not None:
-                    blobs_in_db.append((b, row[0]))
-            return blobs_in_db
+                verified_time = _get_last_verified_time(db_transaction, b)
+                if verified_time:
+                    yield (b, verified_time)
+
+        def get_blobs_in_db(db_transaction, blob_to_check):
+            # [(blob_hash, last_verified_time)]
+            return list(_filter_blobs_in_db(db_transaction, blobs_to_check))
 
         def get_valid_blobs(blobs_in_db):
 
@@ -319,23 +326,31 @@ class DiskBlobManager(BlobManager):
                 if os.path.isfile(file_path):
                     if verified_time > os.path.getctime(file_path):
                         return True
+                    else:
+                        log.debug('Verification time for %s is too old (%s < %s)',
+                                  file_path, verified_time, os.path.getctime(file_path))
+                else:
+                    log.debug('file %s does not exist', file_path)
                 return False
 
-            def return_valid_blobs(results):
-                valid_blobs = []
-                for (b, verified_date), (success, result) in zip(blobs_in_db, results):
-                    if success is True and result is True:
-                        valid_blobs.append(b)
+            def filter_valid_blobs(results):
+                assert len(blobs_in_db) == len(results)
+                valid_blobs = [
+                    b for (b, verified_date), (success, result) in zip(blobs_in_db, results)
+                    if success is True and result is True
+                ]
+                log.debug('Of %s blobs, %s were valid', len(results), len(valid_blobs))
                 return valid_blobs
 
-            ds = []
-            for b, verified_date in blobs_in_db:
-                ds.append(threads.deferToThread(check_blob_verified_date, b, verified_date))
+            ds = [
+                threads.deferToThread(check_blob_verified_date, b, verified_date)
+                for b, verified_date in blobs_in_db
+            ]
             dl = defer.DeferredList(ds)
-            dl.addCallback(return_valid_blobs)
+            dl.addCallback(filter_valid_blobs)
             return dl
 
-        d = self.db_conn.runInteraction(get_blobs_in_db)
+        d = self.db_conn.runInteraction(get_blobs_in_db, blobs_to_check)
         d.addCallback(get_valid_blobs)
         return d
 
@@ -345,8 +360,6 @@ class DiskBlobManager(BlobManager):
         d.addCallback(lambda r: r[0][0] if len(r) else Failure(NoSuchBlobError(blob)))
         return d
 
-        #length, verified_time, next_announce_time = json.loads(self.db.Get(blob))
-        #return length
 
     @rerun_if_locked
     def _update_blob_verified_timestamp(self, blob, timestamp):
@@ -381,73 +394,6 @@ class DiskBlobManager(BlobManager):
                 transaction.execute("delete from blobs where blob_hash = ?", (b,))
 
         return self.db_conn.runInteraction(delete_blobs)
-
-    @rerun_if_locked
-    def _check_consistency(self):
-
-        ALREADY_VERIFIED = 1
-        NEWLY_VERIFIED = 2
-        INVALID = 3
-
-        current_time = time.time()
-        d = self.db_conn.runQuery("select blob_hash, blob_length, last_verified_time from blobs")
-
-        def check_blob(blob_hash, blob_length, verified_time):
-            file_path = os.path.join(self.blob_dir, blob_hash)
-            if os.path.isfile(file_path):
-                if verified_time >= os.path.getctime(file_path):
-                    return ALREADY_VERIFIED
-                else:
-                    h = get_lbry_hash_obj()
-                    len_so_far = 0
-                    f = open(file_path)
-                    while True:
-                        data = f.read(2**12)
-                        if not data:
-                            break
-                        h.update(data)
-                        len_so_far += len(data)
-                    if len_so_far == blob_length and h.hexdigest() == blob_hash:
-                        return NEWLY_VERIFIED
-            return INVALID
-
-        def do_check(blobs):
-            already_verified = []
-            newly_verified = []
-            invalid = []
-            for blob_hash, blob_length, verified_time in blobs:
-                status = check_blob(blob_hash, blob_length, verified_time)
-                if status == ALREADY_VERIFIED:
-                    already_verified.append(blob_hash)
-                elif status == NEWLY_VERIFIED:
-                    newly_verified.append(blob_hash)
-                else:
-                    invalid.append(blob_hash)
-            return already_verified, newly_verified, invalid
-
-        def update_newly_verified(transaction, blobs):
-            for b in blobs:
-                transaction.execute("update blobs set last_verified_time = ? where blob_hash = ?",
-                                    (current_time, b))
-
-        def check_blobs(blobs):
-
-            @rerun_if_locked
-            def update_and_return(status_lists):
-
-                already_verified, newly_verified, invalid = status_lists
-
-                d = self.db_conn.runInteraction(update_newly_verified, newly_verified)
-                d.addCallback(lambda _: status_lists)
-                return d
-
-            d = threads.deferToThread(do_check, blobs)
-
-            d.addCallback(update_and_return)
-            return d
-
-        d.addCallback(check_blobs)
-        return d
 
     @rerun_if_locked
     def _get_all_verified_blob_hashes(self):

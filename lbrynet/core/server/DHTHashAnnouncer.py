@@ -1,6 +1,7 @@
 import binascii
 import collections
 import logging
+import time
 
 from twisted.internet import defer, reactor
 
@@ -42,6 +43,7 @@ class DHTHashAnnouncer(object):
             return defer.succeed(False)
 
     def _announce_available_hashes(self):
+        log.debug('Announcing available hashes')
         ds = []
         for supplier in self.suppliers:
             d = supplier.hashes_to_announce()
@@ -51,7 +53,11 @@ class DHTHashAnnouncer(object):
         return dl
 
     def _announce_hashes(self, hashes):
-
+        if not hashes:
+            return
+        log.debug('Announcing %s hashes', len(hashes))
+        # TODO: add a timeit decorator
+        start = time.time()
         ds = []
 
         for h in hashes:
@@ -62,6 +68,7 @@ class DHTHashAnnouncer(object):
         def announce():
             if len(self.hash_queue):
                 h, announce_deferred = self.hash_queue.popleft()
+                log.debug('Announcing blob %s to dht', h)
                 d = self.dht_node.announceHaveBlob(binascii.unhexlify(h), self.peer_port)
                 d.chainDeferred(announce_deferred)
                 d.addBoth(lambda _: reactor.callLater(0, announce))
@@ -72,7 +79,10 @@ class DHTHashAnnouncer(object):
             # TODO: maybe make the 5 configurable
             self._concurrent_announcers += 1
             announce()
-        return defer.DeferredList(ds)
+        d = defer.DeferredList(ds)
+        d.addCallback(lambda _: log.debug('Took %s seconds to announce %s hashes',
+                                          time.time() - start, len(hashes)))
+        return d
 
 
 class DHTHashSupplier(object):

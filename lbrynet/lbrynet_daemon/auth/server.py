@@ -10,7 +10,6 @@ from twisted.python.failure import Failure
 from txjsonrpc import jsonrpclib
 from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError, SubhandlerError
 from lbrynet.conf import settings
-from lbrynet.core import log_support
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
 
@@ -117,11 +116,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         request.write(fault)
         request.finish()
 
-    def _log_and_render_error(self, failure, request, message=None, **kwargs):
-        msg = message or "API Failure: %s"
-        log_support.failure(Failure(failure), log, msg)
-        self._render_error(failure, request, **kwargs)
-
     def render(self, request):
         notify_finish = request.notifyFinish()
         assert self._check_headers(request), InvalidHeaderError
@@ -192,7 +186,10 @@ class AuthJSONRPCServer(AuthorizedBase):
         # cancel the response if the connection is broken
         notify_finish.addErrback(self._response_failed, d)
         d.addCallback(self._callback_render, request, version, reply_with_next_secret)
-        d.addErrback(self._log_and_render_error, request, version=version)
+        d.addErrback(
+            log.fail(self._render_error, request, version=version),
+            'Failed to process %s', function_name
+        )
         return server.NOT_DONE_YET
 
     def _register_user_session(self, session_id):
@@ -285,7 +282,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         assert api_key.compare_hmac(to_auth, token), InvalidAuthenticationToken
 
     def _update_session_secret(self, session_id):
-        # log.info("Generating new token for next request")
         self.sessions.update({session_id: APIKey.new(name=session_id)})
 
     def _get_jsonrpc_version(self, version=None, id=None):

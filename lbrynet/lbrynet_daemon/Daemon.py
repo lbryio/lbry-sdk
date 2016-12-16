@@ -39,7 +39,8 @@ from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
-from lbrynet.core import log_support, utils, Platform
+from lbrynet.core import log_support, utils
+from lbrynet.core import system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.core.Session import Session
@@ -354,7 +355,7 @@ class Daemon(AuthJSONRPCServer):
 
     def _get_platform(self):
         if self.platform is None:
-            self.platform = Platform.get_platform()
+            self.platform = system_info.get_platform()
             self.platform["ui_version"] = self.lbry_ui_manager.loaded_git_version
         return self.platform
 
@@ -407,7 +408,7 @@ class Daemon(AuthJSONRPCServer):
     # claim_out is dictionary containing 'txid' and 'nout'
     def _add_to_pending_claims(self, name, claim_out):
         txid = claim_out['txid']
-        nout = claim_out['nout'] 
+        nout = claim_out['nout']
         log.info("Adding lbry://%s to pending claims, txid %s nout %d" % (name, txid, nout))
         self.pending_claims[name] = (txid, nout)
         return claim_out
@@ -602,14 +603,14 @@ class Daemon(AuthJSONRPCServer):
             d = defer.succeed(None)
 
         d.addCallback(lambda _: self._stop_server())
-        d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
+        d.addErrback(log.fail(), 'Failure while shutting down')
         d.addCallback(lambda _: self._stop_reflector())
-        d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
+        d.addErrback(log.fail(), 'Failure while shutting down')
         d.addCallback(lambda _: self._stop_file_manager())
-        d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
+        d.addErrback(log.fail(), 'Failure while shutting down')
         if self.session is not None:
             d.addCallback(lambda _: self.session.shut_down())
-            d.addErrback(log_support.failure, log, 'Failure while shutting down: %s')
+            d.addErrback(log.fail(), 'Failure while shutting down')
         return d
 
     def _update_settings(self, settings):
@@ -1353,7 +1354,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         if not p:
-            return self._render_response(self.callable_methods.keys(), OK_CODE)
+            return self._render_response(sorted(self.callable_methods.keys()), OK_CODE)
         elif 'callable_during_start' in p.keys():
             return self._render_response(self.allowed_during_startup, OK_CODE)
         elif 'function' in p.keys():
@@ -1468,9 +1469,20 @@ class Daemon(AuthJSONRPCServer):
             return self._render_response(None, BAD_REQUEST)
 
         d = self._resolve_name(name, force_refresh=force)
+        # TODO: this is the rpc call that returns a server.failure.
+        #       what is up with that?
         d.addCallbacks(
             lambda info: self._render_response(info, OK_CODE),
-            errback=handle_failure, errbackArgs=('Failed to resolve name: %s',)
+            # TODO: Is server.failure a module? It looks like it:
+            #
+            # In [1]: import twisted.web.server
+            # In [2]: twisted.web.server.failure
+            # Out[2]: <module 'twisted.python.failure' from
+            #         '.../site-packages/twisted/python/failure.pyc'>
+            #
+            # If so, maybe we should return something else.
+            errback=log.fail(lambda: server.failure),
+            errbackArgs=('Failed to resolve name: %s',)
         )
         return d
 
@@ -1498,7 +1510,7 @@ class Daemon(AuthJSONRPCServer):
                 'name': name to look up, string, do not include lbry:// prefix
                 'txid': optional, if specified, look for claim with this txid
                 'nout': optional, if specified, look for claim with this nout
- 
+
             Returns:
                 txid, amount, value, n, height
         """
@@ -1697,8 +1709,6 @@ class Daemon(AuthJSONRPCServer):
             'metadata': metadata dictionary
             optional 'fee'
         Returns:
-            'success' : True if claim was succesful , False otherwise
-            'reason' : if not succesful, give reason
             'txid' : txid of resulting transaction if succesful
             'nout' : nout of the resulting support claim if succesful
             'fee' : fee paid for the claim transaction if succesful
@@ -1773,8 +1783,6 @@ class Daemon(AuthJSONRPCServer):
             'txid': txid of claim, string
             'nout': nout of claim, integer
         Return:
-            success : True if succesful , False otherwise
-            reason : if not succesful, give reason
             txid : txid of resulting transaction if succesful
             fee : fee paid for the transaction if succesful
         """
@@ -1818,8 +1826,6 @@ class Daemon(AuthJSONRPCServer):
             'claim_id': claim id of claim to support
             'amount': amount to support by
         Return:
-            success : True if succesful , False otherwise
-            reason : if not succesful, give reason
             txid : txid of resulting transaction if succesful
             nout : nout of the resulting support claim if succesful
             fee : fee paid for the transaction if succesful
@@ -2680,18 +2686,6 @@ def get_lbry_file_search_value(p):
         if value:
             return searchtype, value
     raise NoValidSearch()
-
-
-def handle_failure(err, msg):
-    log_support.failure(err, log, msg)
-    # TODO: Is this a module? It looks like it:
-    #
-    # In [1]: import twisted.web.server
-    # In [2]: twisted.web.server.failure
-    # Out[2]: <module 'twisted.python.failure' from '.../site-packages/twisted/python/failure.pyc'>
-    #
-    # If so, maybe we should return something else.
-    return server.failure
 
 
 def run_reflector_factory(factory):
