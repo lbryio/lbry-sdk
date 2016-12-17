@@ -59,8 +59,11 @@ pip install -r requirements.txt
 # not totally sure if pyOpenSSl is needed (JIE)
 pip install pyOpenSSL
 
-pip install pylint
-./run_pylint.sh packaging/osx/lbry-osx-app/lbrygui/
+
+if [ -z ${SKIP_PYLINT+x} ]; then
+    pip install pylint
+    ./run_pylint.sh packaging/osx/lbry-osx-app/lbrygui/
+fi
 
 python setup.py install
 
@@ -104,5 +107,8 @@ codesign -vvvv "${DEST}/dist/LBRY.app"
 
 rm -rf $tmp
 mv dist/LBRY.app LBRY.app
-rm -rf dist "${NAME}.${VERSION}.dmg"
-dmgbuild -s dmg_settings.py "LBRY" "${NAME}.${VERSION}.dmg"
+
+if [ -z ${SKIP_SMG+x} ]; then
+    rm -rf dist "${NAME}.${VERSION}.dmg"
+    dmgbuild -s dmg_settings.py "LBRY" "${NAME}.${VERSION}.dmg"
+fi
