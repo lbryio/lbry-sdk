@@ -1481,8 +1481,9 @@ class Daemon(AuthJSONRPCServer):
             #         '.../site-packages/twisted/python/failure.pyc'>
             #
             # If so, maybe we should return something else.
-            errback=log.fail(lambda: server.failure),
-            errbackArgs=('Failed to resolve name: %s',)
+            errback=log.fail(lambda err: server.failure),
+            errbackArgs=('Failed to resolve name',),
+            errbackKeywords={'level':'INFO'},
         )
         return d
 
