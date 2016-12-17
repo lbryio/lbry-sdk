@@ -48,24 +48,38 @@ pip install $MODULES
 pip install dmgbuild==1.1.0
 export PATH=${PATH}:/Library/Frameworks/Python.framework/Versions/2.7/bin
 
-pip install jsonrpc certifi
-
-# the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
-pip install git+https://github.com/metachris/py2app
+# pyopenssl is needed because OSX ships an old version of openssl by default
+# and python will use it without pyopenssl
+pip install PyOpenSSL jsonrpc certifi
 
 NAME=`python setup.py --name`
 VERSION=`python setup.py -V`
 pip install -r requirements.txt
-# not totally sure if pyOpenSSl is needed (JIE)
-pip install pyOpenSSL
 
-pip install pylint
-./run_pylint.sh packaging/osx/lbry-osx-app/lbrygui/
+
+if [ -z ${SKIP_PYLINT+x} ]; then
+    pip install pylint
+    ./run_pylint.sh packaging/osx/lbry-osx-app/lbrygui/
+fi
 
 python setup.py install
 
 echo "Building URI Handler"
 cd "${DEST}"
+
+
+if [ ! -d "py2app" ]; then
+   hg clone https://bitbucket.org/ronaldoussoren/py2app
+   cd py2app
+   hg checkout py2app-0.10
+   # this commit fixes a bug that should have been fixed as part of 0.10
+   hg graft 149c25c413420120d3f383a9e854a17bc10d96fd
+   pip install .
+   cd ..
+   rm -rf py2app
+fi
+
+
 rm -rf build dist
 python setup_uri_handler.py py2app
 
@@ -76,7 +90,10 @@ codesign -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/
 codesign --deep -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/MacOS/LBRYURIHandler"
 codesign -vvvv "${DEST}/dist/LBRYURIHandler.app"
 
-python setup_app.py py2app
+# py2app will skip _cffi_backend without explicitly including it
+# and without this, we will get SSL handshake errors when connecting
+# to bittrex
+python setup_app.py py2app -i _cffi_backend
 
 echo "Removing i386 libraries"
 
@@ -104,5 +121,8 @@ codesign -vvvv "${DEST}/dist/LBRY.app"
 
 rm -rf $tmp
 mv dist/LBRY.app LBRY.app
-rm -rf dist "${NAME}.${VERSION}.dmg"
-dmgbuild -s dmg_settings.py "LBRY" "${NAME}.${VERSION}.dmg"
+
+if [ -z ${SKIP_SMG+x} ]; then
+    rm -rf dist "${NAME}.${VERSION}.dmg"
+    dmgbuild -s dmg_settings.py "LBRY" "${NAME}.${VERSION}.dmg"
+fi
