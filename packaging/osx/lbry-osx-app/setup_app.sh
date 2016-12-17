@@ -48,16 +48,13 @@ pip install $MODULES
 pip install dmgbuild==1.1.0
 export PATH=${PATH}:/Library/Frameworks/Python.framework/Versions/2.7/bin
 
-pip install jsonrpc certifi
-
-# the default py2app (v0.9) has a bug that is fixed in the head of /metachris/py2app
-pip install git+https://github.com/metachris/py2app
+# pyopenssl is needed because OSX ships an old version of openssl by default
+# and python will use it without pyopenssl
+pip install PyOpenSSL jsonrpc certifi
 
 NAME=`python setup.py --name`
 VERSION=`python setup.py -V`
 pip install -r requirements.txt
-# not totally sure if pyOpenSSl is needed (JIE)
-pip install pyOpenSSL
 
 
 if [ -z ${SKIP_PYLINT+x} ]; then
@@ -93,7 +90,10 @@ codesign -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/
 codesign --deep -s "${LBRY_DEVELOPER_ID}" -f "${DEST}/dist/LBRYURIHandler.app/Contents/MacOS/LBRYURIHandler"
 codesign -vvvv "${DEST}/dist/LBRYURIHandler.app"
 
-python setup_app.py py2app
+# py2app will skip _cffi_backend without explicitly including it
+# and without this, we will get SSL handshake errors when connecting
+# to bittrex
+python setup_app.py py2app -i _cffi_backend
 
 echo "Removing i386 libraries"
 
