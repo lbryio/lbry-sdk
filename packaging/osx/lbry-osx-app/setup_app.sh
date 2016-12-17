@@ -69,6 +69,20 @@ python setup.py install
 
 echo "Building URI Handler"
 cd "${DEST}"
+
+
+if [ ! -d "py2app" ]; then
+   hg clone https://bitbucket.org/ronaldoussoren/py2app
+   cd py2app
+   hg checkout py2app-0.10
+   # this commit fixes a bug that should have been fixed as part of 0.10
+   hg graft 149c25c413420120d3f383a9e854a17bc10d96fd
+   pip install .
+   cd ..
+   rm -rf py2app
+fi
+
+
 rm -rf build dist
 python setup_uri_handler.py py2app
 
