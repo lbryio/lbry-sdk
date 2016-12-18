@@ -15,7 +15,7 @@ OPTIONS = {
         'LSUIElement': True,
     },
     'packages': [
-        'lbrynet', 'lbryum', 'requests', 'unqlite', 'certifi',
+        'lbrynet', 'lbryum', 'requests', 'certifi',
         'pkg_resources', 'json', 'jsonrpc', 'seccure',
     ],
 }

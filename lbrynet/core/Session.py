@@ -1,6 +1,5 @@
 import logging
 import miniupnpc
-from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.BlobManager import DiskBlobManager, TempBlobManager
 from lbrynet.dht import node
 from lbrynet.core.PeerManager import PeerManager
@@ -147,6 +146,7 @@ class Session(object):
             self.lbryid = generate_id()
 
         if self.wallet is None:
+            from lbrynet.core.PTCWallet import PTCWallet
             self.wallet = PTCWallet(self.db_dir)
 
         if self.peer_manager is None:

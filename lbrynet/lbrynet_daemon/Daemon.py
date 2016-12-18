@@ -43,7 +43,6 @@ from lbrynet.core import system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.core.Session import Session
-from lbrynet.core.PTCWallet import PTCWallet
 from lbrynet.core.Wallet import LBRYumWallet
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -719,6 +718,7 @@ class Daemon(AuthJSONRPCServer):
                 return defer.succeed(LBRYumWallet(self.db_dir, config))
             elif self.wallet_type == PTC_WALLET:
                 log.info("Using PTC wallet")
+                from lbrynet.core.PTCWallet import PTCWallet
                 return defer.succeed(PTCWallet(self.db_dir))
             else:
                 raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
