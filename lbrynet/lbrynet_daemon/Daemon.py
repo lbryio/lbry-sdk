@@ -33,7 +33,6 @@ from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadat
 from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.lbrynet_daemon.Settings import Settings
 from lbrynet.lbrynet_daemon.UIManager import UIManager
 from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
@@ -266,7 +265,7 @@ class Daemon(AuthJSONRPCServer):
         self.log_uploader = log_support.LogUploader.load('lbrynet', self.log_file)
 
         self.analytics_manager = analytics_manager
-        self.lbryid = PENDING_LBRY_ID
+        self.lbryid = utils.generate_id()
         self.daemon_conf = conf.settings.get_conf_filename()
 
         self.wallet_user = None
@@ -286,14 +285,13 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
         self.stream_info_manager = TempEncryptedFileMetadataManager()
-        self.settings = Settings(self.db_dir)
         self.lbry_ui_manager = UIManager(root)
-        self.blob_request_payment_rate_manager = None
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
 
-
     def setup(self):
+        self._modify_loggly_formatter()
+
         def _log_starting_vals():
             log.info("Starting balance: " + str(self.session.wallet.wallet_balance))
             return defer.succeed(None)
@@ -338,7 +336,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: self._initial_setup())
         d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
         d.addCallback(lambda _: self._check_db_migration())
-        d.addCallback(lambda _: self._get_settings())
         d.addCallback(lambda _: self._load_caches())
         d.addCallback(lambda _: self._set_events())
         d.addCallback(lambda _: self._get_session())
@@ -516,17 +513,10 @@ class Daemon(AuthJSONRPCServer):
             return defer.succeed(True)
 
     def _setup_server(self):
-        def restore_running_status(running):
-            if running is True:
-                d = self._start_server()
-                d.addCallback(lambda _: self._start_reflector())
-            return defer.succeed(True)
-
         self.startup_status = STARTUP_STAGES[4]
-
-        dl = self.settings.get_server_running_status()
-        dl.addCallback(restore_running_status)
-        return dl
+        d = self._start_server()
+        d.addCallback(lambda _: self._start_reflector())
+        return d
 
     def _setup_query_handlers(self):
         handlers = [
@@ -538,42 +528,21 @@ class Daemon(AuthJSONRPCServer):
             ),
             self.session.wallet.get_wallet_info_query_handler_factory(),
         ]
-
-        def get_blob_request_handler_factory(rate):
-            self.blob_request_payment_rate_manager = self.session.payment_rate_manager
-
-        d1 = self.settings.get_server_data_payment_rate()
-        d1.addCallback(get_blob_request_handler_factory)
-
-        dl = defer.DeferredList([d1])
-        dl.addCallback(lambda _: self._add_query_handlers(handlers))
-        return dl
+        return self._add_query_handlers(handlers)
 
     def _add_query_handlers(self, query_handlers):
-        def _set_query_handlers(statuses):
-            from future_builtins import zip
-            for handler, (success, status) in zip(query_handlers, statuses):
-                if success is True:
-                    self.query_handlers[handler] = status
-
-        ds = []
         for handler in query_handlers:
             query_id = handler.get_primary_query_identifier()
-            ds.append(self.settings.get_query_handler_status(query_id))
-        dl = defer.DeferredList(ds)
-        dl.addCallback(_set_query_handlers)
-        return dl
+            self.query_handlers[query_id] = handler
+        return defer.succeed(None)
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            if self.lbryid is not PENDING_LBRY_ID:
-                id_hash = base58.b58encode(self.lbryid)[:SHORT_LBRY_ID_LEN]
-            else:
-                id_hash = self.lbryid
+            lbry_id = base58.b58encode(self.lbryid)[:SHORT_LBRY_ID_LEN]
             try:
-                self.log_uploader.upload(exclude_previous, self.lbryid, log_type)
+                self.log_uploader.upload(exclude_previous, lbry_id, log_type)
             except requests.RequestException:
-                log.exception('Failed to upload log file')
+                log.warning('Failed to upload log file')
         return defer.succeed(None)
 
     def _clean_up_temp_files(self):
@@ -700,26 +669,6 @@ class Daemon(AuthJSONRPCServer):
             return d
         return defer.succeed(True)
 
-    def _get_settings(self):
-        d = self.settings.start()
-        d.addCallback(lambda _: self.settings.get_lbryid())
-        d.addCallback(self._set_lbryid)
-        d.addCallback(lambda _: self._modify_loggly_formatter())
-        return d
-
-    def _set_lbryid(self, lbryid):
-        if lbryid is PENDING_LBRY_ID or lbryid is None:
-            return self._make_set_and_save_lbryid()
-        else:
-            log.info("LBRY ID: " + base58.b58encode(lbryid))
-            self.lbryid = lbryid
-
-    def _make_set_and_save_lbryid(self):
-        self.lbryid = utils.generate_id()
-        log.info("Generated new LBRY ID: " + base58.b58encode(self.lbryid))
-        d = self.settings.save_lbryid(self.lbryid)
-        return d
-
     def _modify_loggly_formatter(self):
         log_support.configure_loggly_handler(
             lbry_id=base58.b58encode(self.lbryid),
@@ -759,12 +708,6 @@ class Daemon(AuthJSONRPCServer):
             )
 
     def _get_session(self):
-        def get_default_data_rate():
-            d = self.settings.get_default_data_payment_rate()
-            d.addCallback(lambda rate: {"default_data_payment_rate": rate if rate is not None else
-                                                                    conf.settings.data_rate})
-            return d
-
         def get_wallet():
             if self.wallet_type == LBRYCRD_WALLET:
                 raise ValueError('LBRYcrd Wallet is no longer supported')
@@ -773,28 +716,18 @@ class Daemon(AuthJSONRPCServer):
                 config = {'auto_connect': True}
                 if conf.settings.lbryum_wallet_dir:
                     config['lbryum_path'] = conf.settings.lbryum_wallet_dir
-                d = defer.succeed(LBRYumWallet(self.db_dir, config))
+                return defer.succeed(LBRYumWallet(self.db_dir, config))
             elif self.wallet_type == PTC_WALLET:
                 log.info("Using PTC wallet")
-                d = defer.succeed(PTCWallet(self.db_dir))
+                return defer.succeed(PTCWallet(self.db_dir))
             else:
                 raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
-            d.addCallback(lambda w: {"wallet": w})
-            return d
 
-        d1 = get_default_data_rate()
-        d2 = get_wallet()
+        d = get_wallet()
 
-        def combine_results(results):
-            r = {}
-            for success, result in results:
-                if success is True:
-                    r.update(result)
-            return r
-
-        def create_session(results):
+        def create_session(wallet):
             self.session = Session(
-                results['default_data_payment_rate'],
+                conf.settings.data_rate,
                 db_dir=self.db_dir,
                 lbryid=self.lbryid,
                 blob_dir=self.blobfile_dir,
@@ -802,17 +735,15 @@ class Daemon(AuthJSONRPCServer):
                 known_dht_nodes=conf.settings.known_dht_nodes,
                 peer_port=self.peer_port,
                 use_upnp=self.use_upnp,
-                wallet=results['wallet'],
+                wallet=wallet,
                 is_generous=conf.settings.is_generous_host
             )
             self.startup_status = STARTUP_STAGES[2]
 
-        dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
-        dl.addCallback(combine_results)
-        dl.addCallback(create_session)
-        dl.addCallback(lambda _: self.session.setup())
+        d.addCallback(create_session)
+        d.addCallback(lambda _: self.session.setup())
 
-        return dl
+        return d
 
     def _setup_stream_identifier(self):
         file_saver_factory = EncryptedFileSaverFactory(
@@ -953,7 +884,7 @@ class Daemon(AuthJSONRPCServer):
         reactor.callLater(self.search_timeout, _check_est, d)
         d.addCallback(
             lambda _: download_sd_blob(
-                self.session, sd_hash, self.blob_request_payment_rate_manager))
+                self.session, sd_hash, self.session.payment_rate_manager))
         return d
 
     def get_or_download_sd_blob(self, sd_hash):
