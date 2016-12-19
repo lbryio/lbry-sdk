@@ -89,7 +89,8 @@ class BlobAvailabilityTracker(object):
             return defer.DeferredList(dl)
 
         def sample(blobs):
-            return random.sample(blobs, 100)
+            sample_size = min(len(blobs), 100)
+            return random.sample(blobs, sample_size)
 
         start = time.time()
         log.debug('==> Updating the peers for my blobs')
