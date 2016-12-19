@@ -80,7 +80,6 @@ class BlobAvailabilityTracker(object):
         d = self._get_most_popular()
         d.addCallback(lambda _: self._set_mean_peers())
 
-
     def _update_mine(self):
         def _get_peers(blobs):
             dl = []
@@ -89,7 +88,7 @@ class BlobAvailabilityTracker(object):
             return defer.DeferredList(dl)
 
         def sample(blobs):
-            return random.sample(blobs, 100)
+            return random.sample(blobs, min(len(blobs), 100))
 
         start = time.time()
         log.debug('==> Updating the peers for my blobs')

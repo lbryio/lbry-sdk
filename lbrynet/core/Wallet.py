@@ -919,7 +919,6 @@ class LBRYumWallet(Wallet):
         func = getattr(self.cmd_runner, cmd.name)
         return defer.succeed(func(*args))
 
-
     # run commands as a deferToThread,  lbryum commands that only make
     # queries to lbryum server should be run this way
     def _run_cmd_as_defer_to_thread(self, command_name, *args):
@@ -1053,7 +1052,6 @@ class LBRYumWallet(Wallet):
     def _save_wallet(self, val):
         self.wallet.storage.write()
         return defer.succeed(val)
-
 
 
 class LBRYcrdAddressRequester(object):

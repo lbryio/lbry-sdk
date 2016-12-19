@@ -37,6 +37,8 @@ python get-pip.py
 rm get-pip.py
 
 pip install -r requirements.txt
+pip install cython
+pip install unqlite
 
 pip install mock pylint coveralls
 # have to do `which trial` instead of simply trial because coverage needs the full path
