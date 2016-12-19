@@ -809,9 +809,11 @@ class LBRYumWallet(Wallet):
 
         self._start_check = task.LoopingCall(check_started)
 
+        d.addCallback(lambda _: self._load_wallet())
+        d.addCallback(self._save_wallet)
         d.addCallback(lambda _: self._start_check.start(.1))
         d.addCallback(lambda _: network_start_d)
-        d.addCallback(lambda _: self._load_wallet())
+        d.addCallback(lambda _: self._load_blockchain())
         d.addCallback(lambda _: self._get_cmd_runner())
         return d
 
@@ -843,21 +845,20 @@ class LBRYumWallet(Wallet):
         return d
 
     def _load_wallet(self):
+        path = self.config.get_wallet_path()
+        storage = lbryum.wallet.WalletStorage(path)
+        wallet = lbryum.wallet.Wallet(storage)
+        if not storage.file_exists:
+            self.first_run = True
+            seed = wallet.make_seed()
+            wallet.add_seed(seed, None)
+            wallet.create_master_keys(None)
+            wallet.create_main_account()
+            wallet.synchronize()
+        self.wallet = wallet
+        return defer.succeed(True)
 
-        def get_wallet():
-            path = self.config.get_wallet_path()
-            storage = lbryum.wallet.WalletStorage(path)
-            wallet = lbryum.wallet.Wallet(storage)
-            if not storage.file_exists:
-                self.first_run = True
-                seed = wallet.make_seed()
-                wallet.add_seed(seed, None)
-                wallet.create_master_keys(None)
-                wallet.create_main_account()
-                wallet.synchronize()
-            self.wallet = wallet
-            return defer.succeed(True)
-
+    def _load_blockchain(self):
         blockchain_caught_d = defer.Deferred()
 
         def check_caught_up():
@@ -900,9 +901,7 @@ class LBRYumWallet(Wallet):
             return defer.fail(err)
 
         self._catch_up_check = task.LoopingCall(check_caught_up)
-        d = get_wallet()
-        d.addCallback(self._save_wallet)
-        d.addCallback(lambda _: self.wallet.start_threads(self.network))
+        d = defer.succeed(self.wallet.start_threads(self.network))
         d.addCallback(lambda _: self._catch_up_check.start(.1))
         d.addErrback(log_error)
         d.addCallback(lambda _: blockchain_caught_d)
