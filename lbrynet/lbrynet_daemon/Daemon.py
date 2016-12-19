@@ -1014,8 +1014,13 @@ class Daemon(AuthJSONRPCServer):
         return _GetFileHelper(self, search_by, val, return_json).retrieve_file()
 
     def _get_lbry_files(self):
+        def safe_get(sd_hash):
+            d = self._get_lbry_file(FileID.SD_HASH, sd_hash)
+            d.addErrback(log.fail(), 'Failed to get file for hash: %s', sd_hash)
+            return d
+
         d = defer.DeferredList([
-            self._get_lbry_file(FileID.SD_HASH, l.sd_hash)
+            safe_get(l.sd_hash)
             for l in self.lbry_file_manager.lbry_files
         ])
         return d
@@ -1360,7 +1365,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self._get_lbry_files()
-        d.addCallback(lambda r: self._render_response([d[1] for d in r], OK_CODE))
+        d.addCallback(lambda r: self._render_response([d[1] for d in r if d[0]], OK_CODE))
 
         return d
 
