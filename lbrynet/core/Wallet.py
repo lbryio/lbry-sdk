@@ -771,7 +771,6 @@ class LBRYumWallet(Wallet):
         self._config = config
         self.network = None
         self.wallet = None
-        self.cmd_runner = None
         self.first_run = False
         self.printed_retrieving_headers = False
         self._start_check = None
@@ -814,7 +813,6 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda _: self._start_check.start(.1))
         d.addCallback(lambda _: network_start_d)
         d.addCallback(lambda _: self._load_blockchain())
-        d.addCallback(lambda _: self._get_cmd_runner())
         return d
 
     def _stop(self):
@@ -908,21 +906,23 @@ class LBRYumWallet(Wallet):
         return d
 
     def _get_cmd_runner(self):
-        self.cmd_runner = Commands(self.config, self.wallet, self.network)
+        return Commands(self.config, self.wallet, self.network)
 
     # run commands as a defer.succeed,
     # lbryum commands should be run this way , unless if the command
     # only makes a lbrum server query, use _run_cmd_as_defer_to_thread()
     def _run_cmd_as_defer_succeed(self, command_name, *args):
+        cmd_runner = self._get_cmd_runner()
         cmd = known_commands[command_name]
-        func = getattr(self.cmd_runner, cmd.name)
+        func = getattr(cmd_runner, cmd.name)
         return defer.succeed(func(*args))
 
     # run commands as a deferToThread,  lbryum commands that only make
     # queries to lbryum server should be run this way
     def _run_cmd_as_defer_to_thread(self, command_name, *args):
+        cmd_runner = self._get_cmd_runner()
         cmd = known_commands[command_name]
-        func = getattr(self.cmd_runner, cmd.name)
+        func = getattr(cmd_runner, cmd.name)
         return threads.deferToThread(func, *args)
 
     def get_balance(self):
