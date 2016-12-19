@@ -137,9 +137,6 @@ class Publisher(object):
         m = Metadata(self.metadata)
 
         def set_txid_nout(claim_out):
-            if not claim_out['success']:
-                msg = 'Failed to claim name:{}'.format(claim_out['reason'])
-                defer.fail(Exception(msg))
             txid = claim_out['txid']
             nout = claim_out['nout']
             log.debug('Name claimed using txid: %s, nout: %d', txid, nout)
