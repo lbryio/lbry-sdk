@@ -96,8 +96,9 @@ BAD_REQUEST = 400
 NOT_FOUND = 404
 OK_CODE = 200
 
-PENDING_LBRY_ID = "not set"
-SHORT_LBRY_ID_LEN = 20
+PENDING_ID = "not set"
+SHORT_ID_LEN = 20
+
 
 class Checker:
     """The looping calls the daemon runs"""
@@ -118,6 +119,7 @@ class FileID:
 # TODO alert if your copy of a lbry file is out of date with the name record
 
 REMOTE_SERVER = "www.lbry.io"
+
 
 class NoValidSearch(Exception):
     pass
@@ -264,7 +266,7 @@ class Daemon(AuthJSONRPCServer):
         self.log_uploader = log_support.LogUploader.load('lbrynet', self.log_file)
 
         self.analytics_manager = analytics_manager
-        self.lbryid = utils.generate_id()
+        self.lbryid = PENDING_ID
         self.daemon_conf = conf.settings.get_conf_filename()
 
         self.wallet_user = None
@@ -364,11 +366,21 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _load_caches(self):
-        if os.path.isfile(os.path.join(self.db_dir, "stream_info_cache.json")):
-            filename = os.path.join(self.db_dir, "stream_info_cache.json")
-            with open(filename, "r") as stream_info_cache:
-                self.name_cache = json.loads(stream_info_cache.read())
+        name_cache_filename = os.path.join(self.db_dir, "stream_info_cache.json")
+        lbry_id_filename = os.path.join(self.db_dir, "lbry_id")
+
+        if os.path.isfile(name_cache_filename):
+            with open(name_cache_filename, "r") as name_cache:
+                self.name_cache = json.loads(name_cache.read())
             log.info("Loaded claim info cache")
+
+        if os.path.isfile(lbry_id_filename):
+            with open(lbry_id_filename, "r") as lbry_id_file:
+                self.lbryid = base58.b58decode(lbry_id_file.read())
+        else:
+            with open(lbry_id_filename, "w") as lbry_id_file:
+                self.lbryid = utils.generate_id()
+                lbry_id_file.write(base58.b58encode(self.lbryid))
 
     def _set_events(self):
         context = analytics.make_context(self._get_platform(), self.wallet_type)
@@ -537,7 +549,7 @@ class Daemon(AuthJSONRPCServer):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            lbry_id = base58.b58encode(self.lbryid)[:SHORT_LBRY_ID_LEN]
+            lbry_id = base58.b58encode(self.lbryid)[:SHORT_ID_LEN]
             try:
                 self.log_uploader.upload(exclude_previous, lbry_id, log_type)
             except requests.RequestException:
@@ -1203,7 +1215,7 @@ class Daemon(AuthJSONRPCServer):
 
         def _prepare_message(blobs):
             msg = {
-                'lbry_id': base58.b58encode(self.lbryid)[:SHORT_LBRY_ID_LEN],
+                'lbry_id': base58.b58encode(self.lbryid)[:SHORT_ID_LEN],
                 'managed_blobs': len(blobs),
                 'managed_streams': len(self.lbry_file_manager.lbry_files),
             }
