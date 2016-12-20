@@ -16,9 +16,9 @@ from lbrynet.lbrylive.StreamDescriptor import LiveStreamType
 class _LiveStreamDownloader(CryptStreamDownloader):
 
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
-                 payment_rate_manager, wallet, upload_allowed):
+                 payment_rate_manager, wallet):
         CryptStreamDownloader.__init__(self, peer_finder, rate_limiter, blob_manager,
-                                       payment_rate_manager, wallet, upload_allowed)
+                                       payment_rate_manager, wallet)
         self.stream_hash = stream_hash
         self.stream_info_manager = stream_info_manager
         self.public_key = None
@@ -42,9 +42,9 @@ class _LiveStreamDownloader(CryptStreamDownloader):
 
 class LiveStreamDownloader(_LiveStreamDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
-                 payment_rate_manager, wallet, upload_allowed):
+                 payment_rate_manager, wallet):
         _LiveStreamDownloader.__init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
-                                      stream_info_manager, payment_rate_manager, wallet, upload_allowed)
+                                      stream_info_manager, payment_rate_manager, wallet)
 
 
     def _get_metadata_handler(self, download_manager):
@@ -66,10 +66,10 @@ class LiveStreamDownloader(_LiveStreamDownloader):
 
 class FullLiveStreamDownloader(_LiveStreamDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
-                 payment_rate_manager, wallet, upload_allowed):
+                 payment_rate_manager, wallet):
         _LiveStreamDownloader.__init__(self, stream_hash, peer_finder, rate_limiter,
                                       blob_manager, stream_info_manager, payment_rate_manager,
-                                      wallet, upload_allowed)
+                                      wallet)
         self.file_handle = None
         self.file_name = None
 
@@ -161,7 +161,6 @@ class FullLiveStreamDownloaderFactory(object):
             stream_downloader = FullLiveStreamDownloader(stream_hash, self.peer_finder, self.rate_limiter,
                                                          self.blob_manager, self.stream_info_manager,
                                                          prm, self.wallet, True)
-            # TODO: change upload_allowed=True above to something better
             d = stream_downloader.set_stream_info()
             d.addCallback(lambda _: stream_downloader)
             return d

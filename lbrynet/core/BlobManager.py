@@ -24,13 +24,13 @@ class BlobManager(DHTHashSupplier):
     def setup(self):
         pass
 
-    def get_blob(self, blob_hash, upload_allowed, length):
+    def get_blob(self, blob_hash, length=None):
         pass
 
     def get_blob_creator(self):
         pass
 
-    def _make_new_blob(self, blob_hash, upload_allowed, length):
+    def _make_new_blob(self, blob_hash, length):
         pass
 
     def blob_completed(self, blob, next_announce_time=None):
@@ -107,22 +107,20 @@ class DiskBlobManager(BlobManager):
         self.db_conn = None
         return defer.succeed(True)
 
-    def get_blob(self, blob_hash, upload_allowed, length=None):
+    def get_blob(self, blob_hash, length=None):
         """Return a blob identified by blob_hash, which may be a new blob or a
         blob that is already on the hard disk
         """
-        # TODO: if blob.upload_allowed and upload_allowed is False,
-        # change upload_allowed in blob and on disk
         if blob_hash in self.blobs:
             return defer.succeed(self.blobs[blob_hash])
-        return self._make_new_blob(blob_hash, upload_allowed, length)
+        return self._make_new_blob(blob_hash, length)
 
     def get_blob_creator(self):
         return self.blob_creator_type(self, self.blob_dir)
 
-    def _make_new_blob(self, blob_hash, upload_allowed, length=None):
+    def _make_new_blob(self, blob_hash, length=None):
         log.debug('Making a new blob for %s', blob_hash)
-        blob = self.blob_type(self.blob_dir, blob_hash, upload_allowed, length)
+        blob = self.blob_type(self.blob_dir, blob_hash, length)
         self.blobs[blob_hash] = blob
         return defer.succeed(blob)
 
@@ -144,7 +142,7 @@ class DiskBlobManager(BlobManager):
         assert blob_creator.blob_hash is not None
         assert blob_creator.blob_hash not in self.blobs
         assert blob_creator.length is not None
-        new_blob = self.blob_type(self.blob_dir, blob_creator.blob_hash, True, blob_creator.length)
+        new_blob = self.blob_type(self.blob_dir, blob_creator.blob_hash, blob_creator.length)
         self.blobs[blob_creator.blob_hash] = new_blob
         self._immediate_announce([blob_creator.blob_hash])
         next_announce_time = self.get_next_announce_time()
@@ -364,16 +362,16 @@ class TempBlobManager(BlobManager):
             self._next_manage_call.cancel()
             self._next_manage_call = None
 
-    def get_blob(self, blob_hash, upload_allowed, length=None):
+    def get_blob(self, blob_hash, length=None):
         if blob_hash in self.blobs:
             return defer.succeed(self.blobs[blob_hash])
-        return self._make_new_blob(blob_hash, upload_allowed, length)
+        return self._make_new_blob(blob_hash, length)
 
     def get_blob_creator(self):
         return self.blob_creator_type(self)
 
-    def _make_new_blob(self, blob_hash, upload_allowed, length=None):
-        blob = self.blob_type(blob_hash, upload_allowed, length)
+    def _make_new_blob(self, blob_hash, length=None):
+        blob = self.blob_type(blob_hash, length)
         self.blobs[blob_hash] = blob
         return defer.succeed(blob)
 
@@ -409,7 +407,7 @@ class TempBlobManager(BlobManager):
         assert blob_creator.blob_hash is not None
         assert blob_creator.blob_hash not in self.blobs
         assert blob_creator.length is not None
-        new_blob = self.blob_type(blob_creator.blob_hash, True, blob_creator.length)
+        new_blob = self.blob_type(blob_creator.blob_hash, blob_creator.length)
         # TODO: change this; its breaks the encapsulation of the
         #       blob. Maybe better would be to have the blob_creator
         #       produce a blob.

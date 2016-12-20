@@ -38,7 +38,7 @@ class CryptStreamDownloader(object):
     implements(IStreamDownloader)
 
     def __init__(self, peer_finder, rate_limiter, blob_manager,
-                 payment_rate_manager, wallet, upload_allowed):
+                 payment_rate_manager, wallet):
         """Initialize a CryptStreamDownloader
 
         @param peer_finder: An object which implements the IPeerFinder
@@ -61,7 +61,6 @@ class CryptStreamDownloader(object):
         self.blob_manager = blob_manager
         self.payment_rate_manager = payment_rate_manager
         self.wallet = wallet
-        self.upload_allowed = upload_allowed
         self.key = None
         self.stream_name = None
         self.completed = False
@@ -146,7 +145,7 @@ class CryptStreamDownloader(object):
 
     def _get_download_manager(self):
         assert self.blob_requester is None
-        download_manager = DownloadManager(self.blob_manager, self.upload_allowed)
+        download_manager = DownloadManager(self.blob_manager)
         # TODO: can we get rid of these circular references. I'm not
         #       smart enough to handle thinking about the interactions
         #       between them and have hope that there is a simpler way

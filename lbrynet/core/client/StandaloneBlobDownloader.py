@@ -112,7 +112,7 @@ class StandaloneBlobDownloader(object):
             self.stop()
 
         self.finished_deferred = defer.Deferred(canceller=cancel_download)
-        self.download_manager = DownloadManager(self.blob_manager, True)
+        self.download_manager = DownloadManager(self.blob_manager)
         self.download_manager.blob_requester = BlobRequester(self.blob_manager, self.peer_finder,
                                                              self.payment_rate_manager, self.wallet,
                                                              self.download_manager)

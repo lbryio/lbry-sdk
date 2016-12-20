@@ -23,9 +23,9 @@ class EncryptedFileDownloader(CryptStreamDownloader):
     """Classes which inherit from this class download LBRY files"""
 
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
-                 stream_info_manager, payment_rate_manager, wallet, upload_allowed):
+                 stream_info_manager, payment_rate_manager, wallet):
         CryptStreamDownloader.__init__(self, peer_finder, rate_limiter, blob_manager,
-                                       payment_rate_manager, wallet, upload_allowed)
+                                       payment_rate_manager, wallet)
         self.stream_hash = stream_hash
         self.stream_info_manager = stream_info_manager
         self.suggested_file_name = None
@@ -141,7 +141,6 @@ class EncryptedFileDownloaderFactory(object):
 
     def make_downloader(self, metadata, options, payment_rate_manager, **kwargs):
         payment_rate_manager.min_blob_data_payment_rate = options[0]
-        upload_allowed = options[1]
 
         def save_source_if_blob(stream_hash):
             if metadata.metadata_source == StreamMetadata.FROM_BLOB:
@@ -154,7 +153,7 @@ class EncryptedFileDownloaderFactory(object):
 
         def create_downloader(stream_hash):
             downloader = self._make_downloader(stream_hash, payment_rate_manager,
-                                               metadata.validator.raw_info, upload_allowed)
+                                               metadata.validator.raw_info)
             d = downloader.set_stream_info()
             d.addCallback(lambda _: downloader)
             return d
@@ -164,18 +163,17 @@ class EncryptedFileDownloaderFactory(object):
         d.addCallback(create_downloader)
         return d
 
-    def _make_downloader(self, stream_hash, payment_rate_manager, stream_info, upload_allowed):
+    def _make_downloader(self, stream_hash, payment_rate_manager, stream_info):
         pass
 
 
 class EncryptedFileSaver(EncryptedFileDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
-                 payment_rate_manager, wallet, download_directory, upload_allowed, file_name=None):
+                 payment_rate_manager, wallet, download_directory, file_name=None):
         EncryptedFileDownloader.__init__(self, stream_hash,
                                          peer_finder, rate_limiter,
                                          blob_manager, stream_info_manager,
-                                         payment_rate_manager, wallet,
-                                         upload_allowed)
+                                         payment_rate_manager, wallet)
         self.download_directory = download_directory
         self.file_name = file_name
         self.file_written_to = None
@@ -208,9 +206,7 @@ class EncryptedFileSaver(EncryptedFileDownloader):
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading,
                                          self.blob_manager,
-                                         download_manager,
-                                         delete_blob_after_finished=not
-                                         self.upload_allowed)
+                                         download_manager)
 
     def _setup_output(self):
         def open_file():
@@ -274,12 +270,12 @@ class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
                                            stream_info_manager, wallet)
         self.download_directory = download_directory
 
-    def _make_downloader(self, stream_hash, payment_rate_manager, stream_info, upload_allowed):
+    def _make_downloader(self, stream_hash, payment_rate_manager, stream_info):
         return EncryptedFileSaver(stream_hash, self.peer_finder,
                                   self.rate_limiter, self.blob_manager,
                                   self.stream_info_manager,
                                   payment_rate_manager, self.wallet,
-                                  self.download_directory, upload_allowed)
+                                  self.download_directory)
 
     @staticmethod
     def get_description():
@@ -288,12 +284,12 @@ class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
 
 class EncryptedFileOpener(EncryptedFileDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
-                 payment_rate_manager, wallet, upload_allowed):
+                 payment_rate_manager, wallet):
         EncryptedFileDownloader.__init__(self, stream_hash,
                                          peer_finder, rate_limiter,
                                          blob_manager, stream_info_manager,
                                          payment_rate_manager, wallet,
-                                         upload_allowed)
+                                         )
         self.process = None
         self.process_log = None
 
@@ -305,9 +301,7 @@ class EncryptedFileOpener(EncryptedFileDownloader):
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading,
                                          self.blob_manager,
-                                         download_manager,
-                                         delete_blob_after_finished=not
-                                         self.upload_allowed)
+                                         download_manager)
 
     def _setup_output(self):
         def start_process():
@@ -363,12 +357,12 @@ class EncryptedFileOpenerFactory(EncryptedFileDownloaderFactory):
                     return True
         return False
 
-    def _make_downloader(self, stream_hash, payment_rate_manager, stream_info, upload_allowed):
+    def _make_downloader(self, stream_hash, payment_rate_manager, stream_info):
         return EncryptedFileOpener(stream_hash, self.peer_finder,
                                    self.rate_limiter, self.blob_manager,
                                    self.stream_info_manager,
                                    payment_rate_manager, self.wallet,
-                                   upload_allowed)
+                                   )
 
     @staticmethod
     def get_description():
