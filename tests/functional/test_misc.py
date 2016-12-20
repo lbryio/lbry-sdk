@@ -1,3 +1,5 @@
+from lbrynet.core import log_support
+
 import io
 import logging
 from multiprocessing import Process, Event, Queue
@@ -59,6 +61,7 @@ GenFile = mocks.GenFile
 test_create_stream_sd_file = mocks.create_stream_sd_file
 DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
+log = logging.getLogger(__name__)
 
 log_format = "%(funcName)s(): %(message)s"
 logging.basicConfig(level=logging.WARNING, format=log_format)
@@ -139,11 +142,7 @@ class LbryUploader(object):
         d.addCallback(lambda _: self.create_stream())
         d.addCallback(self.create_stream_descriptor)
         d.addCallback(self.put_sd_hash_on_queue)
-
-        def print_error(err):
-            logging.critical("Server error: %s", err.getErrorMessage())
-
-        d.addErrback(print_error)
+        d.addErrback(log.fail(), 'Failed to start')
         return d
 
     def start_server(self):
@@ -473,11 +472,7 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
         d.addCallback(lambda _: start_server())
         d.addCallback(lambda _: create_single_blob())
         d.addCallback(put_blob_hash_on_queue)
-
-        def print_error(err):
-            logging.critical("Server error: %s", err.getErrorMessage())
-
-        d.addErrback(print_error)
+        d.addErrback(log.fail(), 'Failed to start')
         return d
 
     def start_server():
