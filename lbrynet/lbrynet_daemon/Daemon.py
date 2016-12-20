@@ -1823,7 +1823,7 @@ class Daemon(AuthJSONRPCServer):
             return self._render_response(x, OK_CODE)
 
         d = defer.Deferred()
-        d.addCallback(lambda _: self.session.wallet.abandon_claim(p.['txid'], p['nout']))
+        d.addCallback(lambda _: self.session.wallet.abandon_claim(p['txid'], p['nout']))
         d.addCallback(_disp)
         d.callback(None) # TODO: is this line necessary???
         return d
