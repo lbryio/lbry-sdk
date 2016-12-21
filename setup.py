@@ -54,7 +54,7 @@ requires = [
     'requests_futures==0.9.7',
     'seccure==0.3.1.3',
     'simplejson==3.8.2',
-    'six==1.9.0',
+    'six>=1.9.0',
     'slowaes==0.1a1',
     'txJSON-RPC==0.3.1',
     'wsgiref==0.1.2',
