@@ -4,7 +4,7 @@ from twisted.internet import defer
 from twisted.internet import task
 
 from lbrynet.core.system_info import get_platform
-from lbrynet.conf import settings
+from lbrynet import conf
 
 import constants
 from api import Api

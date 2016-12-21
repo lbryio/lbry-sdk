@@ -1,6 +1,6 @@
 from setuptools import setup
 import os
-from lbrynet.conf import settings
+from lbrynet import conf
 
 APP = [os.path.join('lbry_uri_handler', 'LBRYURIHandler.py')]
 DATA_FILES = []
@@ -12,7 +12,7 @@ OPTIONS = {'argv_emulation': True,
                'CFBundleURLTypes': [
                     {
                     'CFBundleURLTypes': 'LBRYURIHandler',
-                    'CFBundleURLSchemes': [settings.PROTOCOL_PREFIX]
+                    'CFBundleURLSchemes': [conf.PROTOCOL_PREFIX]
                     }
                ]
            }

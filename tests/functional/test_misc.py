@@ -11,7 +11,7 @@ import unittest
 from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.Hash import MD5
-from lbrynet.conf import settings
+from lbrynet import conf
 from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
@@ -117,7 +117,7 @@ class LbryUploader(object):
         db_dir = "server"
         os.mkdir(db_dir)
         self.session = Session(
-            settings.data_rate, db_dir=db_dir, lbryid="abcd",
+            conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
@@ -222,11 +222,11 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
     os.mkdir(db_dir)
     os.mkdir(blob_dir)
 
-    session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd" + str(n),
+    session = Session(conf.settings.data_rate, db_dir=db_dir, lbryid="abcd" + str(n),
                       peer_finder=peer_finder, hash_announcer=hash_announcer,
                       blob_dir=None, peer_port=peer_port,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-                      blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=settings.is_generous_host)
+                      blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=conf.settings.is_generous_host)
 
     stream_info_manager = TempEncryptedFileMetadataManager()
 
@@ -329,10 +329,10 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
     db_dir = "server"
     os.mkdir(db_dir)
 
-    session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
+    session = Session(conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
                       peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-                      blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=settings.is_generous_host)
+                      blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=conf.settings.is_generous_host)
     stream_info_manager = DBLiveStreamMetadataManager(session.db_dir, hash_announcer)
 
     logging.debug("Created the session")
@@ -457,11 +457,11 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
     os.mkdir(db_dir)
     os.mkdir(blob_dir)
 
-    session = Session(settings.data_rate, db_dir=db_dir, lbryid="efgh",
+    session = Session(conf.settings.data_rate, db_dir=db_dir, lbryid="efgh",
                       peer_finder=peer_finder, hash_announcer=hash_announcer,
                       blob_dir=blob_dir, peer_port=peer_port,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-                      blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=settings.is_generous_host)
+                      blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=conf.settings.is_generous_host)
 
     if slow is True:
         session.rate_limiter.set_ul_limit(2 ** 11)
@@ -635,7 +635,7 @@ class TestTransfer(TestCase):
         os.mkdir(blob_dir)
 
         self.session = Session(
-            settings.data_rate, db_dir=db_dir, lbryid="abcd",
+            conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
             blob_dir=blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
@@ -725,7 +725,7 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
 
         self.session = Session(
-            settings.data_rate, db_dir=db_dir, lbryid="abcd",
+            conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer, blob_dir=None,
             peer_port=5553, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker, dht_node_class=Node
@@ -827,12 +827,12 @@ class TestTransfer(TestCase):
         os.mkdir(blob_dir)
 
         self.session = Session(
-            settings.data_rate, db_dir=db_dir, lbryid="abcd",
+            conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
             blob_dir=blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
-            is_generous=settings.is_generous_host)
+            is_generous=conf.settings.is_generous_host)
 
         d1 = self.wait_for_hash_from_queue(blob_hash_queue_1)
         d2 = self.wait_for_hash_from_queue(blob_hash_queue_2)
@@ -905,11 +905,11 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
                                peer_finder=peer_finder, hash_announcer=hash_announcer,
                                blob_dir=blob_dir, peer_port=5553, use_upnp=False,
                                rate_limiter=rate_limiter, wallet=wallet,
-                               blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=settings.is_generous_host)
+                               blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=conf.settings.is_generous_host)
 
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
         self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
@@ -1022,12 +1022,12 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = Session(settings.data_rate, db_dir=db_dir, lbryid="abcd",
+        self.session = Session(conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
                                peer_finder=peer_finder, hash_announcer=hash_announcer,
                                blob_dir=None, peer_port=5553,
                                use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                                blob_tracker_class=DummyBlobAvailabilityTracker,
-                               is_generous=settings.is_generous_host)
+                               is_generous=conf.settings.is_generous_host)
 
         self.stream_info_manager = TempEncryptedFileMetadataManager()
 

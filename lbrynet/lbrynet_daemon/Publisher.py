@@ -10,7 +10,7 @@ from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.metadata.Metadata import Metadata
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet import reflector
-from lbrynet.conf import settings
+from lbrynet import conf
 
 
 log = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class Publisher(object):
         self.nout = None
         self.stream_hash = None
         # TODO: this needs to be passed into the constructor
-        reflector_server = random.choice(settings.reflector_servers)
+        reflector_server = random.choice(conf.settings.reflector_servers)
         self.reflector_server, self.reflector_port = reflector_server[0], reflector_server[1]
         self.metadata = {}
 
@@ -77,7 +77,7 @@ class Publisher(object):
 
     def start_reflector(self):
         # TODO: is self.reflector_server unused?
-        reflector_server = random.choice(settings.reflector_servers)
+        reflector_server = random.choice(conf.settings.reflector_servers)
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Reflecting new publication")
         factory = reflector.ClientFactory(

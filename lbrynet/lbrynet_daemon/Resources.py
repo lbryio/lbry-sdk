@@ -10,7 +10,7 @@ from appdirs import user_data_dir
 from twisted.web import server, static, resource
 from twisted.internet import defer, error
 
-from lbrynet.conf import settings
+from lbrynet import conf
 from lbrynet.lbrynet_daemon.FileStreamer import EncryptedFileStreamer
 
 # TODO: omg, this code is essentially duplicated in Daemon
@@ -85,10 +85,10 @@ class HostedEncryptedFile(resource.Resource):
                 d = self._api._download_name(request.args['name'][0])
                 d.addCallback(lambda stream: self._make_stream_producer(request, stream))
             elif request.args['name'][0] in self._api.waiting_on.keys():
-                request.redirect(settings.UI_ADDRESS + "/?watch=" + request.args['name'][0])
+                request.redirect(conf.settings.UI_ADDRESS + "/?watch=" + request.args['name'][0])
                 request.finish()
             else:
-                request.redirect(settings.UI_ADDRESS)
+                request.redirect(conf.settings.UI_ADDRESS)
                 request.finish()
             return server.NOT_DONE_YET
 

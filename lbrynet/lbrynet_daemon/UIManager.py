@@ -10,7 +10,7 @@ import pkg_resources
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
-from lbrynet.conf import settings
+from lbrynet import conf
 from lbrynet.lbrynet_daemon.Resources import NoCacheStaticFile
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 class UIManager(object):
     def __init__(self, root):
-        self.ui_root = os.path.join(settings.data_dir, "lbry-ui")
+        self.ui_root = os.path.join(conf.settings.data_dir, "lbry-ui")
         self.active_dir = os.path.join(self.ui_root, "active")
         self.update_dir = os.path.join(self.ui_root, "update")
 
@@ -61,11 +61,11 @@ class UIManager(object):
                 self.loaded_requirements = None
 
     def setup(self, branch=None, check_requirements=None, user_specified=None):
-        local_ui_path = user_specified or settings.local_ui_path
+        local_ui_path = user_specified or conf.settings.local_ui_path
 
-        self.branch = branch or settings.ui_branch
+        self.branch = branch or conf.settings.ui_branch
         self.check_requirements = (check_requirements if check_requirements is not None
-                                   else settings.check_ui_requirements)
+                                   else conf.settings.check_ui_requirements)
 
         if self._check_for_bundled_ui():
             return defer.succeed(True)

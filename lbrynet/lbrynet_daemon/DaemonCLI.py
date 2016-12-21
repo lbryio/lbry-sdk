@@ -1,7 +1,7 @@
 import sys
 import argparse
 import json
-from lbrynet.conf import settings
+from lbrynet import conf
 from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 from jsonrpc.common import RPCError
 
@@ -45,7 +45,7 @@ def main():
         assert status.get('code', False) == "started"
     except Exception:
         try:
-            settings.update({'use_auth_http': not settings.use_auth_http})
+            conf.settings.update({'use_auth_http': not conf.settings.use_auth_http})
             api = LBRYAPIClient.config()
             status = api.daemon_status()
             assert status.get('code', False) == "started"

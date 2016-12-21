@@ -6,7 +6,7 @@ import base64
 import json
 
 from lbrynet.lbrynet_daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
-from lbrynet.conf import settings
+from lbrynet import conf
 from jsonrpc.proxy import JSONRPCProxy
 
 log = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ class AuthAPIClient(object):
                url=None, login_url=None):
 
         api_key_name = API_KEY_NAME if not key_name else key_name
-        pw_path = os.path.join(settings.data_dir, ".api_keys") if not pw_path else pw_path
+        pw_path = os.path.join(conf.settings.data_dir, ".api_keys") if not pw_path else pw_path
         if not key:
             keys = load_api_keys(pw_path)
             api_key = keys.get(api_key_name, False)
@@ -115,9 +115,9 @@ class AuthAPIClient(object):
         if login_url is None:
             service_url = "http://%s:%s@%s:%i/%s" % (api_key_name,
                                                      api_key.secret,
-                                                     settings.API_INTERFACE,
-                                                     settings.api_port,
-                                                     settings.API_ADDRESS)
+                                                     conf.settings.API_INTERFACE,
+                                                     conf.settings.api_port,
+                                                     conf.settings.API_ADDRESS)
         else:
             service_url = login_url
         id_count = count
@@ -164,14 +164,14 @@ class AuthAPIClient(object):
 class LBRYAPIClient(object):
     @staticmethod
     def config(service=None, params=None):
-        if settings.use_auth_http:
+        if conf.settings.use_auth_http:
             if service is None:
                 return AuthAPIClient.config()
             log.error("Try auth")
             if params is not None:
                 return AuthAPIClient.config(service=service)(params)
             return AuthAPIClient.config(service=service)()
-        url = settings.API_CONNECTION_STRING
+        url = conf.settings.API_CONNECTION_STRING
         if service is None:
             return JSONRPCProxy.from_url(url)
         return JSONRPCProxy.from_url(url).call(service, params)

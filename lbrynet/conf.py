@@ -11,6 +11,9 @@ import envparse
 LBRYCRD_WALLET = 'lbrycrd'
 LBRYUM_WALLET = 'lbryum'
 PTC_WALLET = 'ptc'
+PROTOCOL_PREFIX = "lbry"
+APP_NAME = "LBRY"
+
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +43,9 @@ else:
     default_download_directory = os.path.join(os.path.expanduser("~"), 'Downloads')
     default_data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
     default_lbryum_dir = os.path.join(os.path.expanduser("~"), ".lbryum")
+
+
+ICON_PATH = "icons" if platform is WINDOWS else "app.icns"
 
 
 class Settings(object):
@@ -218,9 +224,9 @@ class ApplicationSettings(Settings):
         self.LOG_POST_URL = "https://lbry.io/log-upload"
         self.CRYPTSD_FILE_EXTENSION = ".cryptsd"
         self.API_ADDRESS = "lbryapi"
-        self.ICON_PATH = "icons" if platform is WINDOWS else "app.icns"
-        self.APP_NAME = "LBRY"
-        self.PROTOCOL_PREFIX = "lbry"
+        self.ICON_PATH = ICON_PATH
+        self.APP_NAME = APP_NAME
+        self.PROTOCOL_PREFIX = PROTOCOL_PREFIX
         self.WALLET_TYPES = [LBRYUM_WALLET, LBRYCRD_WALLET]
         self.SOURCE_TYPES = ['lbry_sd_hash', 'url', 'btih']
         self.CURRENCIES = {

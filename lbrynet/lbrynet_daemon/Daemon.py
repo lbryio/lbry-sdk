@@ -774,7 +774,8 @@ class Daemon(AuthJSONRPCServer):
             EncryptedFileStreamType, file_opener_factory)
         return defer.succeed(None)
 
-    def _download_sd_blob(self, sd_hash, timeout=conf.settings.sd_download_timeout):
+    def _download_sd_blob(self, sd_hash, timeout=None):
+        timeout = timeout if timeout is not None else conf.settings.sd_download_timeout
         def cb(result):
             if not r.called:
                 r.callback(result)
@@ -795,12 +796,13 @@ class Daemon(AuthJSONRPCServer):
 
         return r
 
-    def _download_name(self, name, timeout=conf.settings.download_timeout, download_directory=None,
+    def _download_name(self, name, timeout=None, download_directory=None,
                        file_name=None, stream_info=None, wait_for_write=True):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
+        timeout = timeout if timeout is not None else conf.settings.download_timeout
         self.analytics_manager.send_download_started(name, stream_info)
         helper = _DownloadNameHelper(
             self, name, timeout, download_directory, file_name, wait_for_write)
@@ -2341,12 +2343,12 @@ def get_output_callback(params):
 
 class _DownloadNameHelper(object):
     def __init__(self, daemon, name,
-                 timeout=conf.settings.download_timeout,
+                 timeout=None,
                  download_directory=None, file_name=None,
                  wait_for_write=True):
         self.daemon = daemon
         self.name = name
-        self.timeout = timeout
+        self.timeout = timeout if timeout is not None else conf.settings.download_timeout
         if not download_directory or not os.path.isdir(download_directory):
             self.download_directory = daemon.download_directory
         else:

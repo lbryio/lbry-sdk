@@ -9,7 +9,7 @@ from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.metadata.Fee import FeeValidator
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet.conf import settings
+from lbrynet import conf
 
 INITIALIZING_CODE = 'initializing'
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'
@@ -34,7 +34,7 @@ class GetStream(object):
                  max_key_fee, data_rate=0.5, timeout=None,
                  download_directory=None, file_name=None):
         if timeout is None:
-            timeout = settings.download_timeout
+            timeout = conf.settings.download_timeout
         self.wallet = wallet
         self.resolved_name = None
         self.description = None
