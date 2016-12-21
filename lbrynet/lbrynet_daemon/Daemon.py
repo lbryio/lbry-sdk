@@ -361,20 +361,20 @@ class Daemon(AuthJSONRPCServer):
 
     def _load_caches(self):
         name_cache_filename = os.path.join(self.db_dir, "stream_info_cache.json")
-        lbry_id_filename = os.path.join(self.db_dir, "lbry_id")
+        lbryid_filename = os.path.join(self.db_dir, "lbryid")
 
         if os.path.isfile(name_cache_filename):
             with open(name_cache_filename, "r") as name_cache:
                 self.name_cache = json.loads(name_cache.read())
             log.info("Loaded claim info cache")
 
-        if os.path.isfile(lbry_id_filename):
-            with open(lbry_id_filename, "r") as lbry_id_file:
-                self.lbryid = base58.b58decode(lbry_id_file.read())
+        if os.path.isfile(lbryid_filename):
+            with open(lbryid_filename, "r") as lbryid_file:
+                self.lbryid = base58.b58decode(lbryid_file.read())
         else:
-            with open(lbry_id_filename, "w") as lbry_id_file:
+            with open(lbryid_filename, "w") as lbryid_file:
                 self.lbryid = utils.generate_id()
-                lbry_id_file.write(base58.b58encode(self.lbryid))
+                lbryid_file.write(base58.b58encode(self.lbryid))
 
     def _set_events(self):
         context = analytics.make_context(self._get_platform(), self.wallet_type)
@@ -543,9 +543,9 @@ class Daemon(AuthJSONRPCServer):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            lbry_id = base58.b58encode(self.lbryid)[:SHORT_ID_LEN]
+            lbryid = base58.b58encode(self.lbryid)[:SHORT_ID_LEN]
             try:
-                self.log_uploader.upload(exclude_previous, lbry_id, log_type)
+                self.log_uploader.upload(exclude_previous, lbryid, log_type)
             except requests.RequestException:
                 log.warning('Failed to upload log file')
         return defer.succeed(None)
