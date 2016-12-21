@@ -1,3 +1,5 @@
+from lbrynet.core import log_support
+
 import argparse
 import logging.handlers
 import webbrowser
@@ -7,7 +9,6 @@ from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet import analytics
 from lbrynet import conf
-from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 from lbrynet import conf
