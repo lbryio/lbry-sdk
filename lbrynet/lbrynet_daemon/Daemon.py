@@ -376,10 +376,6 @@ class Daemon(AuthJSONRPCServer):
                 self.lbryid = utils.generate_id()
                 lbryid_file.write(base58.b58encode(self.lbryid))
 
-    def _set_events(self):
-        context = analytics.make_context(self._get_platform(), self.wallet_type)
-        self._events = analytics.Events(context, base58.b58encode(self.lbryid), self._session_id)
-
     def _check_network_connection(self):
         self.connected_to_internet = utils.check_connection()
 
@@ -694,16 +690,6 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _get_analytics(self):
-        context = analytics.make_context(self._get_platform(), self.wallet_type)
-        events_generator = analytics.Events(
-            context, base58.b58encode(self.lbryid), self._session_id)
-        if self.analytics_manager is None:
-            self.analytics_manager = analytics.Manager.new_instance(
-                events=events_generator
-            )
-        else:
-            self.analytics_manager.update_events_generator(events_generator)
-
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
             self.analytics_manager.register_repeating_metric(
