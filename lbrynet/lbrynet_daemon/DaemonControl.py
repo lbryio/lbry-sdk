@@ -97,7 +97,6 @@ def start():
 
     if test_internet_connection():
         analytics_manager = analytics.Manager.new_instance()
-        analytics_manager.send_server_startup()
         start_server_and_listen(args.launchui, args.useauth, analytics_manager)
         reactor.run()
 
@@ -130,6 +129,7 @@ def start_server_and_listen(launchui, use_auth, analytics_manager):
         use_auth: set to true to enable http authentication
         analytics_manager: to send analytics
     """
+    analytics_manager.send_server_startup()
     try:
         daemon_server = DaemonServer(analytics_manager)
         yield daemon_server.start(use_auth)
