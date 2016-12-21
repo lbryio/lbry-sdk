@@ -18,6 +18,15 @@ def get_sd_hash(stream_info):
 
 class Events(object):
     def __init__(self, context, lbryid, session_id):
+        """Contains all of the analytics events that can be sent
+
+        Attributes:
+            context: usually the output of `make_context`
+            lbryid: id unique to this installation. Can be anything, but
+               generally should be base58 encoded.
+            session_id: id for tracking events during this session. Can be
+               anything, but generally should be base58 encoded.
+        """
         self.context = context
         self.lbryid = lbryid
         self.session_id = session_id
