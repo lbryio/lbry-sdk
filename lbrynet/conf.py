@@ -1,3 +1,4 @@
+import base58
 import copy
 import json
 import logging
@@ -7,6 +8,9 @@ import yaml
 
 from appdirs import user_data_dir
 import envparse
+
+from lbrynet.core import utils
+
 
 LBRYCRD_WALLET = 'lbrycrd'
 LBRYUM_WALLET = 'lbryum'
@@ -366,9 +370,23 @@ def save_settings(path=None):
         settings_file.write(encoder(to_save))
 
 
-# TODO: don't load the configuration automatically. The configuration
-#       should be loaded at runtime, not at module import time. Module
-#       import should have no side-effects. This is also bad because
-#       it means that settings are read from the environment even for
-#       tests, which is rarely what you want to happen.
-settings = Config()
+settings = None
+
+
+def initialize_settings():
+    global settings
+    settings = Config()
+    settings.lbryid = get_lbryid()
+    settings.session_id = base58.b58encode(utils.generate_id())
+
+
+def get_lbryid():
+    lbryid_filename = os.path.join(settings.ensure_data_dir(), "lbryid")
+    if os.path.isfile(lbryid_filename):
+        with open(lbryid_filename, "r") as lbryid_file:
+            return base58.b58decode(lbryid_file.read())
+    else:
+        lbryid = utils.generate_id()
+        with open(lbryid_filename, "w") as lbryid_file:
+            lbryid_file.write(base58.b58encode(lbryid))
+        return lbryid

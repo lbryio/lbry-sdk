@@ -259,14 +259,14 @@ class Daemon(AuthJSONRPCServer):
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self.uploaded_temp_files = []
-        self._session_id = base58.b58encode(utils.generate_id())
+        self._session_id = conf.settings.session_id
         # TODO: this should probably be passed into the daemon, or
         # possibly have the entire log upload functionality taken out
         # of the daemon, but I don't want to deal with that now
         self.log_uploader = log_support.LogUploader.load('lbrynet', self.log_file)
 
         self.analytics_manager = analytics_manager
-        self.lbryid = PENDING_ID
+        self.lbryid = conf.settings.lbryid
         self.daemon_conf = conf.settings.get_conf_filename()
 
         self.wallet_user = None

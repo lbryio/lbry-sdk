@@ -63,6 +63,7 @@ def start():
               'should selectively be applied.'))
     args = parser.parse_args()
 
+    conf.initialize_settings()
     utils.setup_certs_for_windows()
 
     conf.update_settings_from_file()

@@ -276,6 +276,7 @@ def main(lbry_name=None):
 
 if __name__ == '__main__':
     utils.setup_certs_for_windows()
+    conf.initialize_settings()
     conf.update_settings_from_file()
 
     log_file = conf.settings.get_log_filename()
