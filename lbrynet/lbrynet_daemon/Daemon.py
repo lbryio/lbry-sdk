@@ -290,12 +290,9 @@ class Daemon(AuthJSONRPCServer):
         self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
 
+    @defer.inlineCallbacks
     def setup(self):
         self._modify_loggly_formatter()
-
-        def _log_starting_vals():
-            log.info("Starting balance: " + str(self.session.wallet.wallet_balance))
-            return defer.succeed(None)
 
         def _announce_startup():
             def _wait_for_credits():
@@ -330,26 +327,23 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager.start(Checker.CONNECTION_PROBLEM, 1)
         self.exchange_rate_manager.start()
 
-        d = defer.Deferred()
         if conf.settings.host_ui:
             self.lbry_ui_manager.update_checker.start(1800, now=False)
-            d.addCallback(lambda _: self.lbry_ui_manager.setup())
-        d.addCallback(lambda _: self._initial_setup())
-        d.addCallback(lambda _: threads.deferToThread(self._setup_data_directory))
-        d.addCallback(lambda _: self._check_db_migration())
-        d.addCallback(lambda _: self._load_caches())
-        d.addCallback(lambda _: self._set_events())
-        d.addCallback(lambda _: self._get_session())
-        d.addCallback(lambda _: self._get_analytics())
-        d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
-        d.addCallback(lambda _: self._setup_stream_identifier())
-        d.addCallback(lambda _: self._setup_lbry_file_manager())
-        d.addCallback(lambda _: self._setup_query_handlers())
-        d.addCallback(lambda _: self._setup_server())
-        d.addCallback(lambda _: _log_starting_vals())
-        d.addCallback(lambda _: _announce_startup())
-        d.callback(None)
-        return d
+            yield self.lbry_ui_manager.setup()
+        yield self._initial_setup()
+        yield threads.deferToThread(self._setup_data_directory)
+        yield self._check_db_migration()
+        yield self._load_caches()
+        yield self._set_events()
+        yield self._get_session()
+        yield self._get_analytics()
+        yield add_lbry_file_to_sd_identifier(self.sd_identifier)
+        yield self._setup_stream_identifier()
+        yield self._setup_lbry_file_manager()
+        yield self._setup_query_handlers()
+        yield self._setup_server()
+        log.info("Starting balance: " + str(self.session.wallet.wallet_balance))
+        yield _announce_startup()
 
     def _get_platform(self):
         if self.platform is None:
@@ -756,7 +750,6 @@ class Daemon(AuthJSONRPCServer):
 
         d.addCallback(create_session)
         d.addCallback(lambda _: self.session.setup())
-
         return d
 
     def _setup_stream_identifier(self):

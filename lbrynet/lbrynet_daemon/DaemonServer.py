@@ -41,10 +41,10 @@ class DaemonServer(object):
 
         return defer.succeed(True)
 
+    @defer.inlineCallbacks
     def start(self, use_auth):
-        d = self._setup_server(use_auth)
-        d.addCallback(lambda _: self._api.setup())
-        return d
+        yield self._setup_server(use_auth)
+        yield self._api.setup()
 
 
 def get_site_base(use_auth, root):
