@@ -1024,7 +1024,8 @@ class LBRYumWallet(Wallet):
         return d
 
     def _get_value_for_name(self, name):
-        block_header = self.network.blockchain.read_header(self.network.get_local_height() - RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS)
+        block_header = self.network.blockchain.read_header(
+            self.network.get_local_height() - RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS + 1)
         block_hash = self.network.blockchain.hash_header(block_header)
         d = self._run_cmd_as_defer_to_thread('requestvalueforname', name, block_hash)
         d.addCallback(lambda response: Commands._verify_proof(name, block_header['claim_trie_root'], response))
