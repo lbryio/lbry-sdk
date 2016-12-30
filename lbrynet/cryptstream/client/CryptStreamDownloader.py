@@ -97,25 +97,20 @@ class CryptStreamDownloader(object):
         d.addCallback(lambda _: self.finished_deferred)
         return d
 
+    @defer.inlineCallbacks
     def stop(self, err=None):
-
-        def check_if_stop_succeeded(success):
-            self.stopping = False
-            if success is True:
-                self.stopped = True
-                self._remove_download_manager()
-            return success
-
         if self.stopped is True:
             raise AlreadyStoppedError()
         if self.stopping is True:
             raise CurrentlyStoppingError()
         assert self.download_manager is not None
         self.stopping = True
-        d = self.download_manager.stop_downloading()
-        d.addCallback(check_if_stop_succeeded)
-        d.addCallback(lambda _: self._fire_completed_deferred(err))
-        return d
+        success = yield self.download_manager.stop_downloading()
+        self.stopping = False
+        if success is True:
+            self.stopped = True
+            self._remove_download_manager()
+        yield self._fire_completed_deferred(err)
 
     def _start_failed(self):
 
@@ -204,7 +199,8 @@ class CryptStreamDownloader(object):
             if err is not None:
                 d.errback(err)
             else:
-                d.callback(self._get_finished_deferred_callback_value())
+                value = self._get_finished_deferred_callback_value()
+                d.callback(value)
         else:
             log.debug("Not firing the completed deferred because d is None")
 
