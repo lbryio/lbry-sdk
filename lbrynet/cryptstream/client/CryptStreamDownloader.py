@@ -83,7 +83,6 @@ class CryptStreamDownloader(object):
             return self.stop()
 
     def start(self):
-
         if self.starting is True:
             raise CurrentlyStartingError()
         if self.stopping is True:
@@ -94,9 +93,8 @@ class CryptStreamDownloader(object):
         self.starting = True
         self.completed = False
         self.finished_deferred = defer.Deferred()
-        fd = self.finished_deferred
         d = self._start()
-        d.addCallback(lambda _: fd)
+        d.addCallback(lambda _: self.finished_deferred)
         return d
 
     def stop(self, err=None):
