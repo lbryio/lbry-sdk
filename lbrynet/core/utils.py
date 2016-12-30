@@ -4,6 +4,7 @@ import logging
 import random
 import os
 import socket
+import string
 import sys
 
 import pkg_resources
@@ -92,3 +93,7 @@ def setup_certs_for_windows():
     if getattr(sys, 'frozen', False) and os.name == "nt":
         cert_path = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
         os.environ["REQUESTS_CA_BUNDLE"] = cert_path
+
+
+def random_string(length=10, chars=string.ascii_lowercase):
+    return ''.join([random.choice(chars) for _ in range(length)])

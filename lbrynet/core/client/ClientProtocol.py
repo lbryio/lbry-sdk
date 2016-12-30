@@ -176,11 +176,12 @@ class ClientProtocol(Protocol):
 
     def _handle_response(self, response):
         ds = []
-        log.debug("Handling a response. Current expected responses: %s", self._response_deferreds)
+        log.debug(
+            "Handling a response from %s. Expected responses: %s. Actual responses: %s",
+            self.peer, self._response_deferreds.keys(), response.keys())
         for key, val in response.items():
             if key in self._response_deferreds:
-                d = self._response_deferreds[key]
-                del self._response_deferreds[key]
+                d = self._response_deferreds.pop(key)
                 d.callback({key: val})
                 ds.append(d)
         for k, d in self._response_deferreds.items():
@@ -194,6 +195,7 @@ class ClientProtocol(Protocol):
             d.addErrback(self._handle_response_error)
             ds.append(d)
 
+        # TODO: are we sure we want to consume errors here
         dl = defer.DeferredList(ds, consumeErrors=True)
 
         def get_next_request(results):

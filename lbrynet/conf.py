@@ -8,6 +8,8 @@ import yaml
 from appdirs import user_data_dir
 import envparse
 
+from lbrynet.core import utils
+
 LBRYCRD_WALLET = 'lbrycrd'
 LBRYUM_WALLET = 'lbryum'
 PTC_WALLET = 'ptc'
@@ -230,7 +232,8 @@ class ApplicationSettings(Settings):
         }
         self.LOGGLY_TOKEN = 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv'
         self.ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
-        self.ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
+        self.ANALYTICS_TOKEN = utils.obfuscate('imhsylnF2Ovg7rTz3uqRUjOOrPK7qv1w')
+        #self.ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
         self.DB_REVISION_FILE_NAME = 'db_revision'
         Settings.__init__(self)
 
