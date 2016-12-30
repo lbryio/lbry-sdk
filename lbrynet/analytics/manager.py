@@ -71,6 +71,14 @@ class Manager(object):
         event = self.events_generator.download_started(name, stream_info)
         self.analytics_api.track(event)
 
+    def send_download_errored(self, name, stream_info=None):
+        event = self.events_generator.download_errored(name, stream_info)
+        self.analytics_api.track(event)
+
+    def send_download_finished(self, name, stream_info=None):
+        event = self.events_generator.download_finished(name, stream_info)
+        self.analytics_api.track(event)
+
     def send_error(self, message, sd_hash=None):
         event = self.events_generator.error(message, sd_hash)
         self.analytics_api.track(event)

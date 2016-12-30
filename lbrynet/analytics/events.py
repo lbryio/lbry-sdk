@@ -46,6 +46,20 @@ class Events(object):
         }
         return self._event('Download Started', properties)
 
+    def download_errored(self, name, stream_info=None):
+        properties = {
+            'name': name,
+            'stream_info': get_sd_hash(stream_info)
+        }
+        return self._event('Download Errored', properties)
+
+    def download_finished(self, name, stream_info=None):
+        properties = {
+            'name': name,
+            'stream_info': get_sd_hash(stream_info)
+        }
+        return self._event('Download Finished', properties)
+
     def error(self, message, sd_hash=None):
         properties = {
             'message': message,
