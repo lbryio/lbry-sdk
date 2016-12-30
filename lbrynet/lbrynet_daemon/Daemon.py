@@ -790,7 +790,7 @@ class Daemon(AuthJSONRPCServer):
         If it already exists in the file manager, return the existing lbry file
         """
         timeout = timeout if timeout is not None else conf.settings.download_timeout
-        self.analytics_manager.send_download_started(name, stream_info)
+
         helper = _DownloadNameHelper(
             self, name, timeout, download_directory, file_name, wait_for_write)
 
@@ -1504,6 +1504,9 @@ class Daemon(AuthJSONRPCServer):
             # TODO: return a useful error message here, like "already
             # waiting for name to be resolved"
             defer.returnValue(server.failure)
+        name = params.name
+        stream_info = params.stream_info
+        self.analytics_manager.send_download_started(name, stream_info)
         try:
             sd_hash, file_path = yield self._download_name(
                 name=params.name,
@@ -1514,6 +1517,7 @@ class Daemon(AuthJSONRPCServer):
                 wait_for_write=params.wait_for_write
             )
         except Exception as e:
+            self.analytics_manager.send_download_errored(name, stream_info)
             log.exception('Failed to get %s', params.name)
             response = yield self._render_response(str(e), OK_CODE)
         else:
@@ -1522,6 +1526,10 @@ class Daemon(AuthJSONRPCServer):
                 'stream_hash': params.sd_hash if params.stream_info else sd_hash,
                 'path': file_path
             }
+            stream = self.streams.get(name)
+            if stream:
+                stream.downloader.finished_deferred.addCallback(
+                    lambda _: self.analytics_manager.send_download_finished(name, stream_info))
             response = yield self._render_response(message, OK_CODE)
         defer.returnValue(response)
 
