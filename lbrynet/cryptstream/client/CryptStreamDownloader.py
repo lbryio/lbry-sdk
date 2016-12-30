@@ -62,19 +62,16 @@ class CryptStreamDownloader(object):
         self.payment_rate_manager = payment_rate_manager
         self.wallet = wallet
         self.upload_allowed = upload_allowed
-
         self.key = None
         self.stream_name = None
-
         self.completed = False
         self.stopped = True
         self.stopping = False
         self.starting = False
-
         self.download_manager = None
         self.finished_deferred = None
-
         self.points_paid = 0.0
+        self.blob_requester = None
 
     def __str__(self):
         return str(self.stream_name)
@@ -155,20 +152,19 @@ class CryptStreamDownloader(object):
         return d
 
     def _get_download_manager(self):
+        assert self.blob_requester is None
         download_manager = DownloadManager(self.blob_manager, self.upload_allowed)
         download_manager.blob_info_finder = self._get_metadata_handler(download_manager)
-        download_manager.blob_requester = self._get_blob_requester(download_manager)
         download_manager.progress_manager = self._get_progress_manager(download_manager)
         download_manager.blob_handler = self._get_blob_handler(download_manager)
         download_manager.wallet_info_exchanger = self.wallet.get_info_exchanger()
+        # blob_requester needs to be set before the connection manager is setup
+        self.blob_requester = self._get_blob_requester(download_manager)
         download_manager.connection_manager = self._get_connection_manager(download_manager)
-        #return DownloadManager(self.blob_manager, self.blob_requester, self.metadata_handler,
-        #                       self.progress_manager, self.blob_handler, self.connection_manager)
         return download_manager
 
     def _remove_download_manager(self):
         self.download_manager.blob_info_finder = None
-        self.download_manager.blob_requester = None
         self.download_manager.progress_manager = None
         self.download_manager.blob_handler = None
         self.download_manager.wallet_info_exchanger = None
@@ -176,7 +172,7 @@ class CryptStreamDownloader(object):
         self.download_manager = None
 
     def _get_primary_request_creators(self, download_manager):
-        return [download_manager.blob_requester]
+        return [self.blob_requester]
 
     def _get_secondary_request_creators(self, download_manager):
         return [download_manager.wallet_info_exchanger]
