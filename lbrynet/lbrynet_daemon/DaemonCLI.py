@@ -38,6 +38,7 @@ def get_params_from_kwargs(params):
 
 
 def main():
+    conf.initialize_settings()
     api = LBRYAPIClient.config()
 
     try:
