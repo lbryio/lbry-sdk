@@ -50,7 +50,7 @@ class GetStream(object):
         self.max_key_fee = max_key_fee
         self.stream_info = None
         self.stream_info_manager = None
-        self.d = defer.Deferred(None)
+        self._d = defer.Deferred(None)
         self.timeout = timeout
         self.timeout_counter = 0
         self.download_directory = download_directory
@@ -71,7 +71,7 @@ class GetStream(object):
         elif self.timeout_counter >= self.timeout:
             log.info("Timeout downloading lbry://%s" % self.resolved_name)
             self.checker.stop()
-            self.d.cancel()
+            self._d.cancel()
             self.code = STREAM_STAGES[4]
             self.finished.callback((False, None, None))
 
@@ -128,15 +128,15 @@ class GetStream(object):
 
         self.checker.start(1)
 
-        self.d.addCallback(lambda _: _set_status(None, DOWNLOAD_METADATA_CODE))
-        self.d.addCallback(lambda _: download_sd_blob(
+        self._d.addCallback(lambda _: _set_status(None, DOWNLOAD_METADATA_CODE))
+        self._d.addCallback(lambda _: download_sd_blob(
             self.session, self.stream_hash, self.payment_rate_manager))
-        self.d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        self.d.addCallback(lambda r: _set_status(r, DOWNLOAD_RUNNING_CODE))
-        self.d.addCallback(get_downloader_factory)
-        self.d.addCallback(make_downloader)
-        self.d.addCallbacks(self._start_download, _cause_timeout)
-        self.d.callback(None)
+        self._d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
+        self._d.addCallback(lambda r: _set_status(r, DOWNLOAD_RUNNING_CODE))
+        self._d.addCallback(get_downloader_factory)
+        self._d.addCallback(make_downloader)
+        self._d.addCallbacks(self._start_download, _cause_timeout)
+        self._d.callback(None)
 
         return self.finished
 
