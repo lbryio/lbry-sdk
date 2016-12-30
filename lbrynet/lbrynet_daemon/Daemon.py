@@ -334,7 +334,6 @@ class Daemon(AuthJSONRPCServer):
         yield threads.deferToThread(self._setup_data_directory)
         yield self._check_db_migration()
         yield self._load_caches()
-        yield self._set_events()
         yield self._get_session()
         yield self._get_analytics()
         yield add_lbry_file_to_sd_identifier(self.sd_identifier)
