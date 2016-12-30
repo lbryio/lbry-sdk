@@ -798,10 +798,10 @@ class Daemon(AuthJSONRPCServer):
             d = self._resolve_name(name)
         else:
             d = defer.succeed(stream_info)
-        d.addCallback(helper._setup_stream)
+        d.addCallback(helper.setup_stream)
         d.addCallback(helper.wait_or_get_stream)
         if not stream_info:
-            d.addCallback(helper._remove_from_wait)
+            d.addCallback(helper.remove_from_wait)
         return d
 
     def add_stream(self, name, timeout, download_directory, file_name, stream_info):
@@ -2342,7 +2342,7 @@ class _DownloadNameHelper(object):
         self.file_name = file_name
         self.wait_for_write = wait_for_write
 
-    def _setup_stream(self, stream_info):
+    def setup_stream(self, stream_info):
         stream_hash = get_sd_hash(stream_info)
         d = self.daemon._get_lbry_file_by_sd_hash(stream_hash)
         d.addCallback(self._prepend_stream_info, stream_info)
@@ -2383,7 +2383,7 @@ class _DownloadNameHelper(object):
             if stream:
                 return stream.downloader
             else:
-                self._remove_from_wait("Timed out")
+                self.remove_from_wait("Timed out")
                 return defer.fail(Exception("Timed out"))
 
         d.addCallback(lambda _: _get_stream_for_return())
@@ -2391,27 +2391,24 @@ class _DownloadNameHelper(object):
 
     def _wait_for_write(self):
         d = defer.succeed(None)
-        if not self.has_downloader_wrote():
+        if not self._has_downloader_wrote():
             d.addCallback(lambda _: reactor.callLater(1, self._wait_for_write))
         return d
 
-    def has_downloader_wrote(self):
+    def _has_downloader_wrote(self):
         stream = self.daemon.streams.get(self.name, False)
         if stream:
-            downloader = stream.downloader
+            return self._get_written_bytes(stream.downloader.file_name)
         else:
-            downloader = False
-        if not downloader:
             return False
-        return self.get_written_bytes(downloader.file_name)
 
     def _wait_on_lbry_file(self, f):
-        written_bytes = self.get_written_bytes(f.file_name)
+        written_bytes = self._get_written_bytes(f.file_name)
         if written_bytes:
             return defer.succeed(self._disp_file(f))
         return task.deferLater(reactor, 1, self._wait_on_lbry_file, f)
 
-    def get_written_bytes(self, file_name):
+    def _get_written_bytes(self, file_name):
         """Returns the number of bytes written to `file_name`.
 
         Returns False if there were issues reading `file_name`.
@@ -2434,10 +2431,10 @@ class _DownloadNameHelper(object):
         log.info("Already downloaded: %s --> %s", f.sd_hash, file_path)
         return f
 
-    def _remove_from_wait(self, r):
+    def remove_from_wait(self, reason):
         if self.name in self.daemon.waiting_on:
             del self.daemon.waiting_on[self.name]
-        return r
+        return reason
 
 
 class _ResolveNameHelper(object):
