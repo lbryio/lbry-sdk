@@ -1506,6 +1506,18 @@ class Daemon(AuthJSONRPCServer):
             defer.returnValue(server.failure)
         name = params.name
         stream_info = params.stream_info
+
+        # first check if we already have this
+        lbry_file = yield self._get_lbry_file(FileID.NAME, name, return_json=False)
+        if lbry_file:
+            log.info('Already have a file for %s', name)
+            message = {
+                'stream_hash': params.sd_hash if params.stream_info else lbry_file.sd_hash,
+                'path': os.path.join(lbry_file.download_directory, lbry_file.file_name)
+            }
+            response = yield self._render_response(message, OK_CODE)
+            defer.returnValue(response)
+
         self.analytics_manager.send_download_started(name, stream_info)
         try:
             sd_hash, file_path = yield self._download_name(
