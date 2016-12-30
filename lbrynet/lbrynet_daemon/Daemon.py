@@ -1235,7 +1235,9 @@ class Daemon(AuthJSONRPCServer):
         """
 
         log.info("Get daemon settings")
-        return self._render_response(conf.settings.get_dict(), OK_CODE)
+        settings_dict = conf.settings.get_dict()
+        settings_dict['lbryid'] = binascii.hexlify(settings_dict['lbryid'])
+        return self._render_response(settings_dict, OK_CODE)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_set_settings(self, p):
