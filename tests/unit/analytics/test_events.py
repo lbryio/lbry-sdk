@@ -22,7 +22,7 @@ class EventsTest(unittest.TestCase):
         self.assertEqual(desired_result, result)
 
     def test_download_started(self):
-        result = self.event_generator.download_started('great gatsby')
+        result = self.event_generator.download_started('1', 'great gatsby')
         desired_result = {
             'context': 'any valid json datatype',
             'event': 'Download Started',
@@ -31,6 +31,7 @@ class EventsTest(unittest.TestCase):
                 'session_id': 'session456',
                 'name': 'great gatsby',
                 'stream_info': None,
+                'download_id': '1'
             },
             'timestamp': '2016-01-01T00:00:00Z',
             'userId': 'lbry'
