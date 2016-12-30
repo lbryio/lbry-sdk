@@ -33,10 +33,9 @@ class ServerProtocol(Protocol):
         peer_info = self.transport.getPeer()
         self.peer = self.factory.peer_manager.get_peer(peer_info.host, peer_info.port)
         self.request_handler = ServerRequestHandler(self)
-        for query_handler_factory, enabled in self.factory.query_handler_factories.iteritems():
-            if enabled is True:
-                query_handler = query_handler_factory.build_query_handler()
-                query_handler.register_with_request_handler(self.request_handler, self.peer)
+        for query_handler_factory in self.factory.query_handler_factories.values():
+            query_handler = query_handler_factory.build_query_handler()
+            query_handler.register_with_request_handler(self.request_handler, self.peer)
         log.debug("Setting the request handler")
         self.factory.rate_limiter.register_protocol(self)
 

@@ -149,12 +149,12 @@ class LbryUploader(object):
     def start_server(self):
         session = self.session
         query_handler_factories = {
-            BlobAvailabilityHandlerFactory(session.blob_manager): True,
-            BlobRequestHandlerFactory(
+            1: BlobAvailabilityHandlerFactory(session.blob_manager),
+            2: BlobRequestHandlerFactory(
                 session.blob_manager, session.wallet,
                 session.payment_rate_manager,
-                analytics.Track()): True,
-            session.wallet.get_wallet_info_query_handler_factory(): True,
+                analytics.Track()),
+            3: session.wallet.get_wallet_info_query_handler_factory(),
         }
         server_factory = ServerProtocolFactory(session.rate_limiter,
                                                query_handler_factories,
@@ -266,12 +266,12 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
         server_port = None
 
         query_handler_factories = {
-            BlobAvailabilityHandlerFactory(session.blob_manager): True,
-            BlobRequestHandlerFactory(
+            1: BlobAvailabilityHandlerFactory(session.blob_manager),
+            2: BlobRequestHandlerFactory(
                 session.blob_manager, session.wallet,
                 session.payment_rate_manager,
-                analytics.Track()): True,
-            session.wallet.get_wallet_info_query_handler_factory(): True,
+                analytics.Track()),
+            3: session.wallet.get_wallet_info_query_handler_factory(),
         }
 
         server_factory = ServerProtocolFactory(session.rate_limiter,
@@ -342,12 +342,12 @@ def start_live_server(sd_hash_queue, kill_event, dead_event):
     def start_listening():
         logging.debug("Starting the server protocol")
         query_handler_factories = {
-            CryptBlobInfoQueryHandlerFactory(stream_info_manager, session.wallet,
-                                             session.payment_rate_manager): True,
-            BlobRequestHandlerFactory(session.blob_manager, session.wallet,
+            1: CryptBlobInfoQueryHandlerFactory(stream_info_manager, session.wallet,
+                                             session.payment_rate_manager),
+            2: BlobRequestHandlerFactory(session.blob_manager, session.wallet,
                                       session.payment_rate_manager,
-                                      analytics.Track()): True,
-            session.wallet.get_wallet_info_query_handler_factory(): True,
+                                      analytics.Track()),
+            3: session.wallet.get_wallet_info_query_handler_factory()
         }
 
         server_factory = ServerProtocolFactory(session.rate_limiter,
@@ -483,11 +483,11 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
         server_port = None
 
         query_handler_factories = {
-            BlobAvailabilityHandlerFactory(session.blob_manager): True,
-            BlobRequestHandlerFactory(session.blob_manager, session.wallet,
+            1: BlobAvailabilityHandlerFactory(session.blob_manager),
+            2: BlobRequestHandlerFactory(session.blob_manager, session.wallet,
                                       session.payment_rate_manager,
-                                      analytics.Track()): True,
-            session.wallet.get_wallet_info_query_handler_factory(): True,
+                                      analytics.Track()),
+            3: session.wallet.get_wallet_info_query_handler_factory(),
         }
 
         server_factory = ServerProtocolFactory(session.rate_limiter,
