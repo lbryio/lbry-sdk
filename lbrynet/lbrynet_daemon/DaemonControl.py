@@ -117,11 +117,7 @@ def update_settings_from_args(args):
     settings.update(to_pass)
 
 
-def kill(failure, analytics_manager):
-    analytics_manager.send_server_startup_error(failure.getErrorMessage() + " " + str(failure))
-    reactor.callFromThread(reactor.stop)
-
-
+@defer.inlineCallbacks
 def start_server_and_listen(launchui, use_auth, analytics_manager):
     """The primary entry point for launching the daemon.
 
@@ -130,12 +126,16 @@ def start_server_and_listen(launchui, use_auth, analytics_manager):
         use_auth: set to true to enable http authentication
         analytics_manager: to send analytics
     """
-    daemon_server = DaemonServer(analytics_manager)
-    d = daemon_server.start(use_auth)
-    if launchui:
-        d.addCallback(lambda _: webbrowser.open(settings.UI_ADDRESS))
-    d.addCallback(lambda _: analytics_manager.send_server_startup_success())
-    d.addErrback(log.fail(kill, analytics_manager), 'Failed to startup')
+    try:
+        daemon_server = DaemonServer(analytics_manager)
+        yield daemon_server.start(use_auth)
+        if launchui:
+            yield webbrowser.open(settings.UI_ADDRESS)
+        yield analytics_manager.send_server_startup_success()
+    except Exception as e:
+        log.exception('Failed to startup')
+        analytics_manager.send_server_startup_error(str(e))
+        reactor.callFromThread(reactor.stop)
 
 
 if __name__ == "__main__":
