@@ -49,7 +49,7 @@ class DBEncryptedFileMetadataManager(object):
 
     def get_blobs_for_stream(self, stream_hash, start_blob=None,
                              end_blob=None, count=None, reverse=False):
-        log.debug("Getting blobs for a stream. Count is %s", str(count))
+        log.debug("Getting blobs for stream %s. Count is %s", stream_hash, count)
 
         def get_positions_of_start_and_end():
             if start_blob is not None:
