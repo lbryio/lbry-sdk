@@ -1,10 +1,12 @@
+import base58
+
 from lbrynet.core import looping_call_manager
 
 from twisted.internet import defer
 from twisted.internet import task
 
 from lbrynet.core.system_info import get_platform
-from lbrynet.conf import settings
+from lbrynet import conf
 
 import constants
 from api import Api
@@ -26,8 +28,9 @@ class Manager(object):
             api = Api.new_instance()
         if events is None:
             events = Events(
-                make_context(get_platform(), settings.wallet),
-                'not loaded', 'not loaded'
+                make_context(get_platform(), conf.settings.wallet),
+                base58.b58encode(conf.settings.lbryid),
+                conf.settings.session_id,
             )
         return cls(api, events, Track())
 

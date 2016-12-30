@@ -122,7 +122,7 @@ codesign -vvvv "${DEST}/dist/LBRY.app"
 rm -rf $tmp
 mv dist/LBRY.app LBRY.app
 
-if [ -z ${SKIP_SMG+x} ]; then
+if [ -z ${SKIP_DMG+x} ]; then
     rm -rf dist "${NAME}.${VERSION}.dmg"
     dmgbuild -s dmg_settings.py "LBRY" "${NAME}.${VERSION}.dmg"
 fi

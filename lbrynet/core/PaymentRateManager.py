@@ -1,12 +1,13 @@
 from lbrynet.core.Strategy import get_default_strategy
-from lbrynet.conf import settings
+from lbrynet import conf
 from decimal import Decimal
 
 
 class BasePaymentRateManager(object):
-    def __init__(self, rate=settings.data_rate, info_rate=settings.min_info_rate):
-        self.min_blob_data_payment_rate = rate
-        self.min_blob_info_payment_rate = info_rate
+    def __init__(self, rate=None, info_rate=None):
+        self.min_blob_data_payment_rate = rate if rate is not None else conf.settings.data_rate
+        self.min_blob_info_payment_rate = (
+            info_rate if info_rate is not None else conf.settings.min_info_rate)
 
 
 class PaymentRateManager(object):
@@ -36,7 +37,7 @@ class PaymentRateManager(object):
 
 
 class NegotiatedPaymentRateManager(object):
-    def __init__(self, base, availability_tracker, generous=settings.is_generous_host):
+    def __init__(self, base, availability_tracker, generous=None):
         """
         @param base: a BasePaymentRateManager
         @param availability_tracker: a BlobAvailabilityTracker
@@ -46,7 +47,7 @@ class NegotiatedPaymentRateManager(object):
         self.base = base
         self.points_paid = 0.0
         self.blob_tracker = availability_tracker
-        self.generous = generous
+        self.generous = generous if generous is not None else conf.settings.is_generous_host
         self.strategy = get_default_strategy(self.blob_tracker,
                                              base_price=self.base.min_blob_data_payment_rate,
                                              is_generous=generous)

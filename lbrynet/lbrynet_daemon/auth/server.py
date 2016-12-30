@@ -9,7 +9,7 @@ from twisted.python.failure import Failure
 
 from txjsonrpc import jsonrpclib
 from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError, SubhandlerError
-from lbrynet.conf import settings
+from lbrynet import conf
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
 
@@ -97,9 +97,10 @@ class AuthJSONRPCServer(AuthorizedBase):
     NOT_FOUND = 8001
     FAILURE = 8002
 
-    def __init__(self, use_authentication=settings.use_auth_http):
+    def __init__(self, use_authentication=None):
         AuthorizedBase.__init__(self)
-        self._use_authentication = use_authentication
+        self._use_authentication = (
+            use_authentication if use_authentication is not None else conf.settings.use_auth_http)
         self.announced_startup = False
         self.allowed_during_startup = []
         self.sessions = {}
@@ -211,8 +212,8 @@ class AuthJSONRPCServer(AuthorizedBase):
         log.debug(err.getTraceback())
 
     def _set_headers(self, request, data, update_secret=False):
-        if settings.allowed_origin:
-            request.setHeader("Access-Control-Allow-Origin", settings.allowed_origin)
+        if conf.settings.allowed_origin:
+            request.setHeader("Access-Control-Allow-Origin", conf.settings.allowed_origin)
         request.setHeader("Content-Type", "text/json")
         request.setHeader("Content-Length", str(len(data)))
         if update_secret:
@@ -239,12 +240,12 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _check_source_of_request(self, source):
         if source is None:
             return True
-        if settings.API_INTERFACE == '0.0.0.0':
+        if conf.settings.API_INTERFACE == '0.0.0.0':
             return True
         server, port = self.get_server_port(source)
         return (
-            server == settings.API_INTERFACE and
-            port == settings.api_port)
+            server == conf.settings.API_INTERFACE and
+            port == conf.settings.api_port)
 
     def get_server_port(self, origin):
         parsed = urlparse.urlparse(origin)

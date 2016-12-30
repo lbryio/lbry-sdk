@@ -1,3 +1,5 @@
+from lbrynet.core import log_support
+
 import argparse
 import logging.handlers
 import webbrowser
@@ -7,10 +9,9 @@ from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet import analytics
 from lbrynet import conf
-from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
-from lbrynet.conf import settings
+from lbrynet import conf
 
 
 log = logging.getLogger(__name__)
@@ -30,12 +31,13 @@ def stop():
         log.info("Attempt to shut down lbrynet-daemon from command line when daemon isn't running")
 
     d = defer.Deferred(None)
-    d.addCallback(lambda _: JSONRPCProxy.from_url(settings.API_CONNECTION_STRING).stop())
+    d.addCallback(lambda _: JSONRPCProxy.from_url(conf.settings.API_CONNECTION_STRING).stop())
     d.addCallbacks(lambda _: _disp_shutdown(), lambda _: _disp_not_running())
     d.callback(None)
 
 
 def start():
+    conf.initialize_settings()
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
     parser.add_argument("--wallet",
                         help="lbryum or ptc for testing, default lbryum",
@@ -44,8 +46,8 @@ def start():
     parser.add_argument("--ui", help="path to custom UI folder", default=None)
     parser.add_argument(
         "--branch",
-        help='Branch of lbry-web-ui repo to use, defaults to {}'.format(settings.ui_branch),
-        default=settings.ui_branch)
+        help='Branch of lbry-web-ui repo to use, defaults to {}'.format(conf.settings.ui_branch),
+        default=conf.settings.ui_branch)
     parser.add_argument('--no-launch', dest='launchui', action="store_false")
     parser.add_argument("--http-auth", dest="useauth", action="store_true")
     parser.add_argument(
@@ -62,18 +64,19 @@ def start():
               'should selectively be applied.'))
     args = parser.parse_args()
 
+    conf.initialize_settings()
     utils.setup_certs_for_windows()
 
     conf.update_settings_from_file()
     update_settings_from_args(args)
 
-    lbrynet_log = settings.get_log_filename()
+    lbrynet_log = conf.settings.get_log_filename()
     log_support.configure_logging(lbrynet_log, args.logtoconsole, args.verbose)
-    log.debug('Final Settings: %s', settings.get_dict())
+    log.debug('Final Settings: %s', conf.settings.get_dict())
 
     try:
         log.debug('Checking for an existing lbrynet daemon instance')
-        JSONRPCProxy.from_url(settings.API_CONNECTION_STRING).is_running()
+        JSONRPCProxy.from_url(conf.settings.API_CONNECTION_STRING).is_running()
         log.info("lbrynet-daemon is already running")
         if not args.logtoconsole:
             print "lbrynet-daemon is already running"
@@ -87,13 +90,13 @@ def start():
     if not args.logtoconsole and not args.quiet:
         print "Starting lbrynet-daemon from command line"
         print "To view activity, view the log file here: " + lbrynet_log
-        print "Web UI is available at http://%s:%i" % (settings.API_INTERFACE, settings.api_port)
-        print "JSONRPC API is available at " + settings.API_CONNECTION_STRING
+        print "Web UI is available at http://%s:%i" % (
+            conf.settings.API_INTERFACE, conf.settings.api_port)
+        print "JSONRPC API is available at " + conf.settings.API_CONNECTION_STRING
         print "To quit press ctrl-c or call 'stop' via the API"
 
     if test_internet_connection():
         analytics_manager = analytics.Manager.new_instance()
-        analytics_manager.send_server_startup()
         start_server_and_listen(args.launchui, args.useauth, analytics_manager)
         reactor.run()
 
@@ -114,7 +117,7 @@ def update_settings_from_args(args):
         to_pass['ui_branch'] = args.branch
     to_pass['use_auth_http'] = args.useauth
     to_pass['wallet'] = args.wallet
-    settings.update(to_pass)
+    conf.settings.update(to_pass)
 
 
 @defer.inlineCallbacks
@@ -126,12 +129,13 @@ def start_server_and_listen(launchui, use_auth, analytics_manager):
         use_auth: set to true to enable http authentication
         analytics_manager: to send analytics
     """
+    analytics_manager.send_server_startup()
     try:
         daemon_server = DaemonServer(analytics_manager)
         yield daemon_server.start(use_auth)
         if launchui:
-            yield webbrowser.open(settings.UI_ADDRESS)
-        yield analytics_manager.send_server_startup_success()
+            yield webbrowser.open(conf.settings.UI_ADDRESS)
+        analytics_manager.send_server_startup_success()
     except Exception as e:
         log.exception('Failed to startup')
         analytics_manager.send_server_startup_error(str(e))

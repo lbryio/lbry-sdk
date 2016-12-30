@@ -12,7 +12,7 @@ import requests
 from requests_futures.sessions import FuturesSession
 
 import lbrynet
-from lbrynet.conf import settings
+from lbrynet import conf
 from lbrynet.core import utils
 
 ####
@@ -130,7 +130,7 @@ def configure_file_handler(file_name, **kwargs):
 
 
 def get_loggly_url(token=None, version=None):
-    token = token or utils.deobfuscate(settings.LOGGLY_TOKEN)
+    token = token or utils.deobfuscate(conf.settings.LOGGLY_TOKEN)
     version = version or lbrynet.__version__
     return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
 
@@ -304,7 +304,7 @@ class LogUploader(object):
             'type': self.get_type(log_type),
             'log': log_contents
         }
-        requests.post(settings.LOG_POST_URL, params)
+        requests.post(conf.settings.LOG_POST_URL, params)
 
     def log_contents(self, exclude_previous):
         with open(self.log_file) as f:

@@ -259,14 +259,14 @@ class Daemon(AuthJSONRPCServer):
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self.uploaded_temp_files = []
-        self._session_id = base58.b58encode(utils.generate_id())
+        self._session_id = conf.settings.session_id
         # TODO: this should probably be passed into the daemon, or
         # possibly have the entire log upload functionality taken out
         # of the daemon, but I don't want to deal with that now
         self.log_uploader = log_support.LogUploader.load('lbrynet', self.log_file)
 
         self.analytics_manager = analytics_manager
-        self.lbryid = PENDING_ID
+        self.lbryid = conf.settings.lbryid
         self.daemon_conf = conf.settings.get_conf_filename()
 
         self.wallet_user = None
@@ -361,24 +361,20 @@ class Daemon(AuthJSONRPCServer):
 
     def _load_caches(self):
         name_cache_filename = os.path.join(self.db_dir, "stream_info_cache.json")
-        lbry_id_filename = os.path.join(self.db_dir, "lbry_id")
+        lbryid_filename = os.path.join(self.db_dir, "lbryid")
 
         if os.path.isfile(name_cache_filename):
             with open(name_cache_filename, "r") as name_cache:
                 self.name_cache = json.loads(name_cache.read())
             log.info("Loaded claim info cache")
 
-        if os.path.isfile(lbry_id_filename):
-            with open(lbry_id_filename, "r") as lbry_id_file:
-                self.lbryid = base58.b58decode(lbry_id_file.read())
+        if os.path.isfile(lbryid_filename):
+            with open(lbryid_filename, "r") as lbryid_file:
+                self.lbryid = base58.b58decode(lbryid_file.read())
         else:
-            with open(lbry_id_filename, "w") as lbry_id_file:
+            with open(lbryid_filename, "w") as lbryid_file:
                 self.lbryid = utils.generate_id()
-                lbry_id_file.write(base58.b58encode(self.lbryid))
-
-    def _set_events(self):
-        context = analytics.make_context(self._get_platform(), self.wallet_type)
-        self._events = analytics.Events(context, base58.b58encode(self.lbryid), self._session_id)
+                lbryid_file.write(base58.b58encode(self.lbryid))
 
     def _check_network_connection(self):
         self.connected_to_internet = utils.check_connection()
@@ -543,9 +539,9 @@ class Daemon(AuthJSONRPCServer):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            lbry_id = base58.b58encode(self.lbryid)[:SHORT_ID_LEN]
+            lbryid = base58.b58encode(self.lbryid)[:SHORT_ID_LEN]
             try:
-                self.log_uploader.upload(exclude_previous, lbry_id, log_type)
+                self.log_uploader.upload(exclude_previous, lbryid, log_type)
             except requests.RequestException:
                 log.warning('Failed to upload log file')
         return defer.succeed(None)
@@ -694,16 +690,6 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _get_analytics(self):
-        context = analytics.make_context(self._get_platform(), self.wallet_type)
-        events_generator = analytics.Events(
-            context, base58.b58encode(self.lbryid), self._session_id)
-        if self.analytics_manager is None:
-            self.analytics_manager = analytics.Manager.new_instance(
-                events=events_generator
-            )
-        else:
-            self.analytics_manager.update_events_generator(events_generator)
-
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
             self.analytics_manager.register_repeating_metric(
@@ -774,7 +760,8 @@ class Daemon(AuthJSONRPCServer):
             EncryptedFileStreamType, file_opener_factory)
         return defer.succeed(None)
 
-    def _download_sd_blob(self, sd_hash, timeout=conf.settings.sd_download_timeout):
+    def _download_sd_blob(self, sd_hash, timeout=None):
+        timeout = timeout if timeout is not None else conf.settings.sd_download_timeout
         def cb(result):
             if not r.called:
                 r.callback(result)
@@ -795,12 +782,13 @@ class Daemon(AuthJSONRPCServer):
 
         return r
 
-    def _download_name(self, name, timeout=conf.settings.download_timeout, download_directory=None,
+    def _download_name(self, name, timeout=None, download_directory=None,
                        file_name=None, stream_info=None, wait_for_write=True):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
+        timeout = timeout if timeout is not None else conf.settings.download_timeout
         self.analytics_manager.send_download_started(name, stream_info)
         helper = _DownloadNameHelper(
             self, name, timeout, download_directory, file_name, wait_for_write)
@@ -2341,12 +2329,12 @@ def get_output_callback(params):
 
 class _DownloadNameHelper(object):
     def __init__(self, daemon, name,
-                 timeout=conf.settings.download_timeout,
+                 timeout=None,
                  download_directory=None, file_name=None,
                  wait_for_write=True):
         self.daemon = daemon
         self.name = name
-        self.timeout = timeout
+        self.timeout = timeout if timeout is not None else conf.settings.download_timeout
         if not download_directory or not os.path.isdir(download_directory):
             self.download_directory = daemon.download_directory
         else:

@@ -4,7 +4,7 @@ import shutil
 from twisted.internet import defer, threads, error
 from twisted.trial import unittest
 
-from lbrynet.conf import settings
+from lbrynet import conf
 from lbrynet import lbryfile
 from lbrynet import reflector
 from lbrynet.core import BlobManager
@@ -83,7 +83,7 @@ class TestReflector(unittest.TestCase):
         os.mkdir(db_dir)
 
         self.session = Session.Session(
-            settings.data_rate,
+            conf.settings.data_rate,
             db_dir=db_dir,
             lbryid="abcd",
             peer_finder=peer_finder,

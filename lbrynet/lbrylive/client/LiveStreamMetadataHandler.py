@@ -4,7 +4,7 @@ import logging
 from zope.interface import implements
 from twisted.internet import defer
 from twisted.python.failure import Failure
-from lbrynet.conf import settings
+from lbrynet import conf
 from lbrynet.core.client.ClientRequest import ClientRequest, ClientPaidRequest
 from lbrynet.lbrylive.LiveBlob import LiveBlobInfo
 from lbrynet.core.cryptoutils import get_lbry_hash_obj, verify_signature
@@ -137,7 +137,7 @@ class LiveStreamMetadataHandler(object):
             if count is not None:
                 further_blobs_request['count'] = count
             else:
-                further_blobs_request['count'] = settings.MAX_BLOB_INFOS_TO_REQUEST
+                further_blobs_request['count'] = conf.settings.MAX_BLOB_INFOS_TO_REQUEST
             log.debug("Requesting %s blob infos from %s", str(further_blobs_request['count']), str(peer))
             r_dict = {'further_blobs': further_blobs_request}
             response_identifier = 'further_blobs'

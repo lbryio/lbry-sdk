@@ -6,7 +6,7 @@ from Crypto.Hash import MD5
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer, threads
 
-from lbrynet.conf import settings
+from lbrynet import conf
 from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
@@ -70,7 +70,7 @@ class TestStreamify(TestCase):
         os.mkdir(blob_dir)
 
         self.session = Session(
-            settings.data_rate, db_dir=db_dir, lbryid="abcd",
+            conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
             blob_dir=blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
@@ -126,7 +126,7 @@ class TestStreamify(TestCase):
         os.mkdir(blob_dir)
 
         self.session = Session(
-            settings.data_rate, db_dir=db_dir, lbryid="abcd",
+            conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
             blob_dir=blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,

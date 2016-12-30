@@ -7,7 +7,7 @@ from lbrynet.core.cryptoutils import get_lbry_hash_obj, get_pub_key, sign_with_p
 from Crypto import Random
 import binascii
 import logging
-from lbrynet.conf import settings
+from lbrynet import conf
 from twisted.internet import interfaces, defer
 from twisted.protocols.basic import FileSender
 from zope.interface import implements
@@ -24,7 +24,7 @@ class LiveStreamCreator(CryptStreamCreator):
         self.stream_info_manager = stream_info_manager
         self.delete_after_num = delete_after_num
         self.secret_pass_phrase = secret_pass_phrase
-        self.file_extension = settings.CRYPTSD_FILE_EXTENSION
+        self.file_extension = conf.settings.CRYPTSD_FILE_EXTENSION
         self.finished_blob_hashes = {}
 
     def _save_stream(self):

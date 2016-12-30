@@ -2,7 +2,7 @@ from zope.interface import implementer
 from decimal import Decimal
 
 from lbrynet.interfaces import IBlobPriceModel
-from lbrynet.conf import settings
+from lbrynet import conf
 
 
 def get_default_price_model(blob_tracker, base_price, **kwargs):
@@ -22,8 +22,9 @@ class MeanAvailabilityWeightedPrice(object):
     """
     implementer(IBlobPriceModel)
 
-    def __init__(self, tracker, base_price=settings.data_rate, alpha=1.0):
+    def __init__(self, tracker, base_price=None, alpha=1.0):
         self.blob_tracker = tracker
+        base_price = base_price if base_price is not None else conf.settings.data_rate
         self.base_price = Decimal(base_price)
         self.alpha = Decimal(alpha)
 
