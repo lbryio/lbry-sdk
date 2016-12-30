@@ -369,7 +369,7 @@ class Logger(logging.Logger):
                 self.name, level, fn, lno, msg, msg_args, exc_info, func, msg_kwargs)
             self.handle(record)
             if callback:
-                callback(err, *args, **kwargs)
+                return callback(err, *args, **kwargs)
         return _fail
 
     def trace(self, msg, *args, **kwargs):
