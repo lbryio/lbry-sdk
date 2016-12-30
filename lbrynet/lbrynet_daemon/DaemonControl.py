@@ -130,6 +130,7 @@ def start_server_and_listen(launchui, use_auth, analytics_manager):
         analytics_manager: to send analytics
     """
     analytics_manager.send_server_startup()
+    log_support.configure_analytics_handler(analytics_manager)
     try:
         daemon_server = DaemonServer(analytics_manager)
         yield daemon_server.start(use_auth)

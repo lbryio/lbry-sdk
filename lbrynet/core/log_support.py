@@ -12,6 +12,7 @@ import requests
 from requests_futures.sessions import FuturesSession
 
 import lbrynet
+from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils
 
@@ -91,17 +92,22 @@ def _log_decorator(fn):
             # the numeric level when passed a text level
             level = logging.getLevelName(level)
         handler = fn(*args, **kwargs)
-        if handler.name:
-            remove_handlers(log, handler.name)
-        handler.setLevel(level)
-        log.addHandler(handler)
-        # need to reduce the logger's level down to the
-        # handler's level or else the handler won't
-        # get those messages
-        if log.level > level:
-            log.setLevel(level)
+        configure_handler(handler, log, level)
         return handler
     return helper
+
+
+def configure_handler(handler, log, level):
+    if handler.name:
+        remove_handlers(log, handler.name)
+    handler.setLevel(level)
+    log.addHandler(handler)
+    # need to reduce the logger's level down to the
+    # handler's level or else the handler won't
+    # get those messages
+    if log.level > level:
+        log.setLevel(level)
+    return handler
 
 
 def disable_third_party_loggers():
@@ -127,6 +133,12 @@ def configure_file_handler(file_name, **kwargs):
     handler.setFormatter(DEFAULT_FORMATTER)
     handler.name = 'file'
     return handler
+
+
+def configure_analytics_handler(analytics_manager):
+    handler = analytics.Handler(analytics_manager)
+    handler.name = 'analytics'
+    return configure_handler(handler, logging.getLogger(), logging.ERROR)
 
 
 def get_loggly_url(token=None, version=None):
