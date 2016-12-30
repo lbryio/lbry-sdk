@@ -31,7 +31,7 @@ keywords = "LBRY"
 
 # TODO: find a way to keep this in sync with requirements.txt
 requires = [
-    'Twisted==16.0.0',
+    'Twisted==16.6.0',
     'Yapsy==1.11.223',
     'appdirs==1.4.0',
     'argparse==1.2.1',
@@ -58,7 +58,7 @@ requires = [
     'slowaes==0.1a1',
     'txJSON-RPC==0.5',
     'wsgiref==0.1.2',
-    'zope.interface==4.1.3',
+    'zope.interface==4.3.3',
     'base58==0.2.2',
     'googlefinance==0.7',
     'pyyaml==3.12',

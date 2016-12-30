@@ -42,7 +42,9 @@ pip install unqlite
 
 pip install mock pylint coveralls
 # have to do `which trial` instead of simply trial because coverage needs the full path
-coverage run --source=lbrynet `which trial` tests
+# trial, strangely, requires that the package be installed, which we don't want
+# so we have to hack the PYTHONPATH to allow it to find lbry and tests
+PYTHONPATH="." coverage run --source=lbrynet `which trial` tests
 coveralls
 
 ./run_pylint.sh
