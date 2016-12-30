@@ -137,32 +137,20 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         d.addCallback(make_full_status)
         return d
 
+    @defer.inlineCallbacks
     def _start(self):
-
-        d = EncryptedFileSaver._start(self)
-        d.addCallback(
-            lambda _: self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash))
-
-        def _save_sd_hash(sd_hash):
-            if len(sd_hash):
-                self.sd_hash = sd_hash[0]
-                d = self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
-            else:
-                d = defer.succeed(None)
-
-            return d
-
-        def _save_claim(name, txid, nout):
-            self.uri = name
-            self.txid = txid
-            self.nout = nout
-            return defer.succeed(None)
-
-        d.addCallback(_save_sd_hash)
-        d.addCallback(lambda r: _save_claim(r[0], r[1], r[2]) if r else None)
-        d.addCallback(lambda _: self._save_status())
-
-        return d
+        yield EncryptedFileSaver._start(self)
+        sd_hash = yield self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
+        if len(sd_hash):
+            self.sd_hash = sd_hash[0]
+            maybe_metadata = yield self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
+            if maybe_metadata:
+                name, txid, nout = maybe_metadata
+                self.uri = name
+                self.txid = txid
+                self.nout = nout
+        status = yield self._save_status()
+        defer.returnValue(status)
 
     def _get_finished_deferred_callback_value(self):
         if self.completed is True:
