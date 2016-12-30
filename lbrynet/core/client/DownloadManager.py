@@ -14,7 +14,6 @@ class DownloadManager(object):
     def __init__(self, blob_manager, upload_allowed):
         self.blob_manager = blob_manager
         self.upload_allowed = upload_allowed
-        self.blob_requester = None
         self.blob_info_finder = None
         self.progress_manager = None
         self.blob_handler = None
