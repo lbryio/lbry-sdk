@@ -223,7 +223,7 @@ class RequestHelper(object):
             return
         return reason
 
-    def get_and_save_rate(self):
+    def get_rate(self):
         if self.payment_rate_manager.price_limit_reached(self.peer):
             if self.peer not in self.maxed_out_peers:
                 self.maxed_out_peers.append(self.peer)
@@ -235,7 +235,6 @@ class RequestHelper(object):
                 if not pending.is_too_low and not pending.is_accepted:
                     return pending.rate
             rate = self.payment_rate_manager.get_rate_blob_data(self.peer, self.available_blobs)
-            self.protocol_offers[self.protocol] = rate
         return rate
 
 
@@ -360,7 +359,7 @@ class PriceRequest(RequestHelper):
     """Ask a peer if a certain price is acceptable"""
     def can_make_request(self):
         if len(self.available_blobs) and not self.protocol in self.protocol_prices:
-            return self.get_and_save_rate() is not None
+            return self.get_rate() is not None
         return False
 
     def make_request_and_handle_response(self):
@@ -368,13 +367,15 @@ class PriceRequest(RequestHelper):
         self._handle_price_request(request)
 
     def _get_price_request(self):
-        rate = self.get_and_save_rate()
+        rate = self.get_rate()
         if rate is None:
             log.debug("No blobs to request from %s", self.peer)
             raise Exception('Cannot make a price request without a payment rate')
         log.debug("Offer rate %s to %s for %i blobs", rate, self.peer, len(self.available_blobs))
 
         request_dict = {'blob_data_payment_rate': rate}
+        assert self.protocol not in self.protocol_offers
+        self.protocol_offers[self.protocol] = rate
         return ClientRequest(request_dict, 'blob_data_payment_rate')
 
     def _handle_price_request(self, price_request):
@@ -386,8 +387,8 @@ class PriceRequest(RequestHelper):
         assert request.response_identifier == 'blob_data_payment_rate'
         if 'blob_data_payment_rate' not in response_dict:
             return InvalidResponseError("response identifier not in response")
-        assert self.protocol in self.protocol_offers
-        offer = Offer(self.protocol_offers[self.protocol])
+        offer_value = self.protocol_offers.pop(self.protocol)
+        offer = Offer(offer_value)
         offer.handle(response_dict['blob_data_payment_rate'])
         self.payment_rate_manager.record_offer_reply(self.peer, offer)
         if offer.is_accepted:
@@ -509,7 +510,7 @@ class DownloadRequest(RequestHelper):
 
     def _pay_peer(self, num_bytes, reserved_points):
         assert num_bytes != 0
-        rate = self.get_and_save_rate()
+        rate = self.get_rate()
         point_amount = get_points(num_bytes, rate)
         self.wallet.send_points(reserved_points, point_amount)
         self.payment_rate_manager.record_points_paid(point_amount)
@@ -536,7 +537,7 @@ class DownloadRequest(RequestHelper):
         # not yet been set for this protocol or for it to have been
         # removed so instead I switched it to check if a rate has been set
         # and calculate it if it has not
-        rate = self.get_and_save_rate()
+        rate = self.get_rate()
         points_to_reserve = get_points(num_bytes, rate)
         return self.wallet.reserve_points(self.peer, points_to_reserve)
 
