@@ -1518,7 +1518,8 @@ class Daemon(AuthJSONRPCServer):
             response = yield self._render_response(message, OK_CODE)
             defer.returnValue(response)
 
-        self.analytics_manager.send_download_started(name, stream_info)
+        download_id = utils.random_string()
+        self.analytics_manager.send_download_started(download_id, name, stream_info)
         try:
             sd_hash, file_path = yield self._download_name(
                 name=params.name,
@@ -1529,7 +1530,7 @@ class Daemon(AuthJSONRPCServer):
                 wait_for_write=params.wait_for_write
             )
         except Exception as e:
-            self.analytics_manager.send_download_errored(name, stream_info)
+            self.analytics_manager.send_download_errored(download_id, name, stream_info)
             log.exception('Failed to get %s', params.name)
             response = yield self._render_response(str(e), OK_CODE)
         else:
@@ -1541,7 +1542,9 @@ class Daemon(AuthJSONRPCServer):
             stream = self.streams.get(name)
             if stream:
                 stream.downloader.finished_deferred.addCallback(
-                    lambda _: self.analytics_manager.send_download_finished(name, stream_info))
+                    lambda _: self.analytics_manager.send_download_finished(
+                        download_id, name, stream_info)
+                )
             response = yield self._render_response(message, OK_CODE)
         defer.returnValue(response)
 
