@@ -39,25 +39,16 @@ class Events(object):
     def heartbeat(self):
         return self._event('Heartbeat')
 
-    def download_started(self, name, stream_info=None):
-        properties = {
-            'name': name,
-            'stream_info': get_sd_hash(stream_info)
-        }
+    def download_started(self, *args, **kwargs):
+        properties = download_properties(*args, **kwargs)
         return self._event('Download Started', properties)
 
-    def download_errored(self, name, stream_info=None):
-        properties = {
-            'name': name,
-            'stream_info': get_sd_hash(stream_info)
-        }
+    def download_errored(self, *args, **kwargs):
+        properties = download_properties(*args, **kwargs)
         return self._event('Download Errored', properties)
 
-    def download_finished(self, name, stream_info=None):
-        properties = {
-            'name': name,
-            'stream_info': get_sd_hash(stream_info)
-        }
+    def download_finished(self, *args, **kwargs):
+        properties = download_properties(*args, **kwargs)
         return self._event('Download Finished', properties)
 
     def error(self, message, sd_hash=None):
@@ -114,4 +105,12 @@ def make_context(platform, wallet):
             'name': 'lbrynet-analytics',
             'version': '1.0.0'
         },
+    }
+
+
+def download_properties(id_, name, stream_info=None):
+    return {
+        'download_id': id_,
+        'name': name,
+        'stream_info': get_sd_hash(stream_info)
     }
