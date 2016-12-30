@@ -1284,7 +1284,7 @@ class Daemon(AuthJSONRPCServer):
         d.addErrback(lambda err: log.info(err.getTraceback()))
         d.addCallback(lambda _: _log_settings_change())
         d.addCallback(
-            lambda _: self._regnder_response(conf.settings.get_adjustable_settings_dict(), OK_CODE))
+            lambda _: self._render_response(conf.settings.get_adjustable_settings_dict(), OK_CODE))
 
         return d
 
