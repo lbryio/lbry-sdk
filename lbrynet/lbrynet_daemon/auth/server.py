@@ -312,8 +312,8 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._set_headers(request, encoded_message, auth_required)
             self._render_message(request, encoded_message)
         except Exception as err:
-            msg = "Failed to render API response: %s"
-            self._log_and_render_error(err, request, message=msg, version=version)
+            log.exception("Failed to render API response: %s", result)
+            self._render_error(err, request, version)
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
