@@ -67,6 +67,10 @@ class UIManager(object):
         self.check_requirements = (check_requirements if check_requirements is not None
                                    else conf.settings.check_ui_requirements)
 
+        # Note that this currently overrides any manual setting of UI.
+        # It might be worth considering changing that behavior but the expectation
+        # is generally that any manual setting of the UI will happen during development
+        # and not for folks checking out the QA / RC builds that bundle the UI.
         if self._check_for_bundled_ui():
             return defer.succeed(True)
 
@@ -94,6 +98,7 @@ class UIManager(object):
         return d
 
     def _check_for_bundled_ui(self):
+        """Try to load a bundled UI and return True if successful, False otherwise"""
         try:
             bundled_path = get_bundled_ui_path()
         except Exception:
@@ -101,7 +106,10 @@ class UIManager(object):
             return False
         else:
             bundle_manager = BundledUIManager(self.root, self.active_dir, bundled_path)
-            return bundle_manager.setup()
+            loaded = bundle_manager.setup()
+            if loaded:
+                self.loaded_git_version = bundle_manager.version()
+            return loaded
 
     def _up_to_date(self):
         def _get_git_info():
@@ -256,6 +264,12 @@ class BundledUIManager(object):
         self.active_dir = active_dir
         self.bundled_ui_path = bundled_ui_path
         self.data_path = os.path.join(bundled_ui_path, 'data.json')
+        self._version = None
+
+    def version(self):
+        if not self._version:
+            self._version = open_and_read_sha(self.data_path)
+        return self._version
 
     def bundle_is_available(self):
         return os.path.exists(self.data_path)
@@ -277,7 +291,8 @@ class BundledUIManager(object):
     def is_active_already_bundled_ui(self):
         target_data_path = os.path.join(self.active_dir, 'data.json')
         if os.path.exists(target_data_path):
-            if are_same_version(self.data_path, target_data_path):
+            target_version = open_and_read_sha(target_data_path)
+            if self.version() == target_version:
                 return True
         return False
 
@@ -291,6 +306,11 @@ def are_same_version(data_a, data_b):
     with open(data_a) as a:
         with open(data_b) as b:
             return read_sha(a) == read_sha(b)
+
+
+def open_and_read_sha(filename):
+    with open(filename) as f:
+        return read_sha(f)
 
 
 def read_sha(filelike):

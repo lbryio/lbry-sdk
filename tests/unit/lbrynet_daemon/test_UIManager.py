@@ -39,6 +39,7 @@ class BundledUIManagerTest(unittest.TestCase):
         touch(os.path.join(self.bundled_dir, 'test.html'))
         result = self.manager.setup()
         self.assertTrue(result)
+        self.assertEqual('BARFOO', self.manager.version())
         expected = ['data.json', 'test.html']
         self.assertItemsEqual(os.listdir(self.active_dir), expected)
 

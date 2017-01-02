@@ -252,7 +252,6 @@ class Daemon(AuthJSONRPCServer):
         self.connection_problem = None
         self.git_lbrynet_version = None
         self.git_lbryum_version = None
-        self.ui_version = None
         self.platform = None
         self.first_run = None
         self.log_file = conf.settings.get_log_filename()
@@ -1174,7 +1173,7 @@ class Daemon(AuthJSONRPCServer):
             'os_system': platform_info['os_system'],
             'lbrynet_version': lbrynet_version,
             'lbryum_version': lbryum_version,
-            'ui_version': self.ui_version,
+            'ui_version': platform_info['ui_version'],
             'remote_lbrynet': self.git_lbrynet_version,
             'remote_lbryum': self.git_lbryum_version,
             'lbrynet_update_available': lbrynet_update_available,
