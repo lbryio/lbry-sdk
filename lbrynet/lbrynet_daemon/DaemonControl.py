@@ -10,8 +10,8 @@ from jsonrpc.proxy import JSONRPCProxy
 from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils
+from lbrynet.lbrynet_daemon.auth import client
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
-from lbrynet import conf
 
 
 log = logging.getLogger(__name__)
@@ -22,18 +22,14 @@ def test_internet_connection():
 
 
 def stop():
-    def _disp_shutdown():
-        print "Shutting down lbrynet-daemon from command line"
+    conf.initialize_settings()
+    log_support.configure_console()
+    try:
+        client.LBRYAPIClient.config().stop()
+    except Exception:
+        log.exception('Failed to stop deamon')
+    else:
         log.info("Shutting down lbrynet-daemon from command line")
-
-    def _disp_not_running():
-        print "Attempt to shut down lbrynet-daemon from command line when daemon isn't running"
-        log.info("Attempt to shut down lbrynet-daemon from command line when daemon isn't running")
-
-    d = defer.Deferred(None)
-    d.addCallback(lambda _: JSONRPCProxy.from_url(conf.settings.API_CONNECTION_STRING).stop())
-    d.addCallbacks(lambda _: _disp_shutdown(), lambda _: _disp_not_running())
-    d.callback(None)
 
 
 def start():
