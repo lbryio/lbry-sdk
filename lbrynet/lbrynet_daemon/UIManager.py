@@ -155,45 +155,8 @@ class UIManager(object):
             if not os.path.isfile(requires_file):
                 log.info("No requirements.txt file, rejecting request to migrate this UI")
                 return defer.succeed(False)
-
-            f = open(requires_file, "r")
-            for requirement in [line for line in f.read().split('\n') if line]:
-                t = requirement.split('=')
-                if len(t) == 3:
-                    self.requirements[t[0]] = {'version': t[1], 'operator': '=='}
-                elif t[0][-1] == ">":
-                    self.requirements[t[0][:-1]] = {'version': t[1], 'operator': '>='}
-                elif t[0][-1] == "<":
-                    self.requirements[t[0][:-1]] = {'version': t[1], 'operator': '<='}
-            f.close()
-            passed_requirements = True
-            for r in self.requirements:
-                if r == 'lbrynet':
-                    c = lbrynet_version
-                elif r == 'lbryum':
-                    c = lbryum_version
-                else:
-                    c = None
-                if c:
-                    log_msg = "Local version %s of %s does not meet UI requirement for version %s"
-                    if self.requirements[r]['operator'] == '==':
-                        if not self.requirements[r]['version'] == c:
-                            passed_requirements = False
-                            log.info(log_msg, c, r, self.requirements[r]['version'])
-                        else:
-                            log.info("Local version of %s meets ui requirement" % r)
-                    if self.requirements[r]['operator'] == '>=':
-                        if not self.requirements[r]['version'] <= c:
-                            passed_requirements = False
-                            log.info(log_msg, c, r, self.requirements[r]['version'])
-                        else:
-                            log.info("Local version of %s meets ui requirement" % r)
-                    if self.requirements[r]['operator'] == '<=':
-                        if not self.requirements[r]['version'] >= c:
-                            passed_requirements = False
-                            log.info(log_msg, c, r, self.requirements[r]['version'])
-                        else:
-                            log.info("Local version of %s meets ui requirement" % r)
+            requirements = Requirements(requires_file)
+            passed_requirements = requirements.check(lbrynet_version, lbryum_version)
             return defer.succeed(passed_requirements)
 
         def _disp_failure():
@@ -329,3 +292,55 @@ def load_ui(root, active_dir):
         entry = os.path.join(active_dir, name)
         if os.path.isdir(entry):
             root.putChild(os.path.basename(entry), NoCacheStaticFile(entry))
+
+
+class Requirements(object):
+    def __init__(self, requires_file):
+        self.requires_file = requires_file
+
+    def check(self, lbrynet_version, lbryum_version):
+        requirements = self._read()
+        expected = {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}
+        return check_requirements(requirements, expected)
+
+    def _read(self):
+        requirements = {}
+        with open(self.requires_file, "r") as f:
+            for requirement in [line for line in f.read().split('\n') if line]:
+                t = requirement.split('=')
+                if len(t) == 3:
+                    requirements[t[0]] = {'version': t[1], 'operator': '=='}
+                elif t[0][-1] == ">":
+                    requirements[t[0][:-1]] = {'version': t[1], 'operator': '>='}
+                elif t[0][-1] == "<":
+                    requirements[t[0][:-1]] = {'version': t[1], 'operator': '<='}
+        return requirements
+
+
+def check_requirements(expected, actual):
+    passed_requirements = True
+    for name in expected:
+        if name in actual:
+            version = actual[name]
+        else:
+            continue
+        log_msg = "Local version %s of %s does not meet UI requirement for version %s"
+        if expected[name]['operator'] == '==':
+            if not expected[name]['version'] == version:
+                passed_requirements = False
+                log.info(log_msg, version, name, expected[name]['version'])
+            else:
+                log.info("Local version of %s meets ui requirement" % name)
+        if expected[name]['operator'] == '>=':
+            if not expected[name]['version'] <= version:
+                passed_requirements = False
+                log.info(log_msg, version, name, expected[name]['version'])
+            else:
+                log.info("Local version of %s meets ui requirement" % name)
+        if expected[name]['operator'] == '<=':
+            if not expected[name]['version'] >= version:
+                passed_requirements = False
+                log.info(log_msg, version, name, expected[name]['version'])
+            else:
+                log.info("Local version of %s meets ui requirement" % name)
+    return passed_requirements
