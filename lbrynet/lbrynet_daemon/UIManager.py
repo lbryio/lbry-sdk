@@ -67,6 +67,10 @@ class UIManager(object):
         self.check_requirements = (check_requirements if check_requirements is not None
                                    else conf.settings.check_ui_requirements)
 
+        # Note that this currently overrides any manual setting of UI.
+        # It might be worth considering changing that behavior but the expectation
+        # is generally that any manual setting of the UI will happen during development
+        # and not for folks checking out the QA / RC builds that bundle the UI.
         if self._check_for_bundled_ui():
             return defer.succeed(True)
 
@@ -94,6 +98,7 @@ class UIManager(object):
         return d
 
     def _check_for_bundled_ui(self):
+        """Try to load a bundled UI and return True if successful, False otherwise"""
         try:
             bundled_path = get_bundled_ui_path()
         except Exception:
@@ -101,7 +106,10 @@ class UIManager(object):
             return False
         else:
             bundle_manager = BundledUIManager(self.root, self.active_dir, bundled_path)
-            return bundle_manager.setup()
+            loaded = bundle_manager.setup()
+            if loaded:
+                self.loaded_git_version = bundle_manager.version()
+            return loaded
 
     def _up_to_date(self):
         def _get_git_info():
@@ -147,45 +155,8 @@ class UIManager(object):
             if not os.path.isfile(requires_file):
                 log.info("No requirements.txt file, rejecting request to migrate this UI")
                 return defer.succeed(False)
-
-            f = open(requires_file, "r")
-            for requirement in [line for line in f.read().split('\n') if line]:
-                t = requirement.split('=')
-                if len(t) == 3:
-                    self.requirements[t[0]] = {'version': t[1], 'operator': '=='}
-                elif t[0][-1] == ">":
-                    self.requirements[t[0][:-1]] = {'version': t[1], 'operator': '>='}
-                elif t[0][-1] == "<":
-                    self.requirements[t[0][:-1]] = {'version': t[1], 'operator': '<='}
-            f.close()
-            passed_requirements = True
-            for r in self.requirements:
-                if r == 'lbrynet':
-                    c = lbrynet_version
-                elif r == 'lbryum':
-                    c = lbryum_version
-                else:
-                    c = None
-                if c:
-                    log_msg = "Local version %s of %s does not meet UI requirement for version %s"
-                    if self.requirements[r]['operator'] == '==':
-                        if not self.requirements[r]['version'] == c:
-                            passed_requirements = False
-                            log.info(log_msg, c, r, self.requirements[r]['version'])
-                        else:
-                            log.info("Local version of %s meets ui requirement" % r)
-                    if self.requirements[r]['operator'] == '>=':
-                        if not self.requirements[r]['version'] <= c:
-                            passed_requirements = False
-                            log.info(log_msg, c, r, self.requirements[r]['version'])
-                        else:
-                            log.info("Local version of %s meets ui requirement" % r)
-                    if self.requirements[r]['operator'] == '<=':
-                        if not self.requirements[r]['version'] >= c:
-                            passed_requirements = False
-                            log.info(log_msg, c, r, self.requirements[r]['version'])
-                        else:
-                            log.info("Local version of %s meets ui requirement" % r)
+            requirements = Requirements(requires_file)
+            passed_requirements = requirements.check(lbrynet_version, lbryum_version)
             return defer.succeed(passed_requirements)
 
         def _disp_failure():
@@ -256,6 +227,12 @@ class BundledUIManager(object):
         self.active_dir = active_dir
         self.bundled_ui_path = bundled_ui_path
         self.data_path = os.path.join(bundled_ui_path, 'data.json')
+        self._version = None
+
+    def version(self):
+        if not self._version:
+            self._version = open_and_read_sha(self.data_path)
+        return self._version
 
     def bundle_is_available(self):
         return os.path.exists(self.data_path)
@@ -277,7 +254,8 @@ class BundledUIManager(object):
     def is_active_already_bundled_ui(self):
         target_data_path = os.path.join(self.active_dir, 'data.json')
         if os.path.exists(target_data_path):
-            if are_same_version(self.data_path, target_data_path):
+            target_version = open_and_read_sha(target_data_path)
+            if self.version() == target_version:
                 return True
         return False
 
@@ -291,6 +269,11 @@ def are_same_version(data_a, data_b):
     with open(data_a) as a:
         with open(data_b) as b:
             return read_sha(a) == read_sha(b)
+
+
+def open_and_read_sha(filename):
+    with open(filename) as f:
+        return read_sha(f)
 
 
 def read_sha(filelike):
@@ -309,3 +292,55 @@ def load_ui(root, active_dir):
         entry = os.path.join(active_dir, name)
         if os.path.isdir(entry):
             root.putChild(os.path.basename(entry), NoCacheStaticFile(entry))
+
+
+class Requirements(object):
+    def __init__(self, requires_file):
+        self.requires_file = requires_file
+
+    def check(self, lbrynet_version, lbryum_version):
+        requirements = self._read()
+        expected = {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}
+        return check_requirements(requirements, expected)
+
+    def _read(self):
+        requirements = {}
+        with open(self.requires_file, "r") as f:
+            for requirement in [line for line in f.read().split('\n') if line]:
+                t = requirement.split('=')
+                if len(t) == 3:
+                    requirements[t[0]] = {'version': t[1], 'operator': '=='}
+                elif t[0][-1] == ">":
+                    requirements[t[0][:-1]] = {'version': t[1], 'operator': '>='}
+                elif t[0][-1] == "<":
+                    requirements[t[0][:-1]] = {'version': t[1], 'operator': '<='}
+        return requirements
+
+
+def check_requirements(expected, actual):
+    passed_requirements = True
+    for name in expected:
+        if name in actual:
+            version = actual[name]
+        else:
+            continue
+        log_msg = "Local version %s of %s does not meet UI requirement for version %s"
+        if expected[name]['operator'] == '==':
+            if not expected[name]['version'] == version:
+                passed_requirements = False
+                log.info(log_msg, version, name, expected[name]['version'])
+            else:
+                log.info("Local version of %s meets ui requirement" % name)
+        if expected[name]['operator'] == '>=':
+            if not expected[name]['version'] <= version:
+                passed_requirements = False
+                log.info(log_msg, version, name, expected[name]['version'])
+            else:
+                log.info("Local version of %s meets ui requirement" % name)
+        if expected[name]['operator'] == '<=':
+            if not expected[name]['version'] >= version:
+                passed_requirements = False
+                log.info(log_msg, version, name, expected[name]['version'])
+            else:
+                log.info("Local version of %s meets ui requirement" % name)
+    return passed_requirements
