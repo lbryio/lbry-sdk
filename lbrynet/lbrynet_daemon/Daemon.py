@@ -2645,22 +2645,22 @@ class _GetFileHelper(object):
 
 def loggly_time_string(dt):
     formatted_dt = dt.strftime("%Y-%m-%dT%H:%M:%S")
-    microseconds = str(round(dt.microsecond * (10.0**-5), 3))
-    return urllib.quote_plus(formatted_dt + microseconds + "Z")
+    milliseconds = str(round(dt.microsecond * (10.0**-5), 3))
+    return urllib.quote_plus(formatted_dt + milliseconds + "Z")
 
 
 def get_loggly_query_string(lbry_id):
     decoded_id = base58.b58encode(lbry_id)
-    base_loggly_search_url = "https://lbry.loggly.com/search#terms=json.lbry_id%3A"
+    base_loggly_search_url = "https://lbry.loggly.com/search#"
     now = utils.now()
     yesterday = now - utils.timedelta(days=1)
-    params = (
-        decoded_id[:SHORT_ID_LEN],
-        loggly_time_string(yesterday),
-        loggly_time_string(now)
-    )
-    formatted_params = "%s*&from=%s&until=%s&source_group=" % params
-    return base_loggly_search_url + formatted_params
+    params = {
+        'terms': 'json.lbry_id:{}*'.format(decoded_id[:SHORT_ID_LEN]),
+        'from': loggly_time_string(yesterday),
+        'to': loggly_time_string(now)
+    }
+    data = urllib.urlencode(params)
+    return base_loggly_search_url + data
 
 
 def report_bug_to_slack(message, lbry_id, platform_name, app_version):
