@@ -241,6 +241,8 @@ class ApplicationSettings(Settings):
         self.LOGGLY_TOKEN = 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv'
         self.ANALYTICS_ENDPOINT = 'https://api.segment.io/v1'
         self.ANALYTICS_TOKEN = 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H='
+        self.SLACK_WEBHOOK = ('nUE0pUZ6Yl9bo29epl5moTSwnl5wo20ip2IlqzywMKZiIQSFZR5'
+                              'AHx4mY0VmF0WQZ1ESEP9kMHZlp1WzJwWOoKN3ImR1M2yUAaMyqGZ=')
         self.DB_REVISION_FILE_NAME = 'db_revision'
         Settings.__init__(self)
 

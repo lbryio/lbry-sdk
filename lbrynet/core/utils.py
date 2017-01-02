@@ -37,6 +37,14 @@ def today():
     return datetime.datetime.today()
 
 
+def timedelta(**kwargs):
+    return datetime.timedelta(**kwargs)
+
+
+def datetime_obj(*args, **kwargs):
+    return datetime.datetime(*args, **kwargs)
+
+
 def generate_id(num=None):
     h = get_lbry_hash_obj()
     if num is not None:
