@@ -319,8 +319,6 @@ class Session(object):
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True, consumeErrors=True)
         dl.addCallback(lambda _: self.blob_tracker.start())
-
-        dl.addErrback(self._subfailure)
         return dl
 
     def _unset_upnp(self):
@@ -343,7 +341,3 @@ class Session(object):
         d = threads.deferToThread(threaded_unset_upnp)
         d.addErrback(lambda err: str(err))
         return d
-
-    def _subfailure(self, err):
-        log.error(err.getTraceback())
-        return err.value
