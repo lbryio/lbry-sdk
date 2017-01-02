@@ -23,8 +23,7 @@ class JSONRPCException(Exception):
 
 
 class AuthAPIClient(object):
-    def __init__(self, key, timeout, connection, count, service, cookies, auth, url, login_url):
-        self.__service_name = service
+    def __init__(self, key, timeout, connection, count, cookies, auth, url, login_url):
         self.__api_key = key
         self.__service_url = login_url
         self.__id_count = count
@@ -35,26 +34,21 @@ class AuthAPIClient(object):
 
     def __getattr__(self, name):
         if name.startswith('__') and name.endswith('__'):
-            # Python internal stuff
-            raise AttributeError
-        if self.__service_name is not None:
-            name = "%s.%s" % (self.__service_name, name)
-        return AuthAPIClient(key=self.__api_key,
-                             timeout=HTTP_TIMEOUT,
-                             connection=self.__conn,
-                             count=self.__id_count,
-                             service=name,
-                             cookies=self.__cookies,
-                             auth=self.__auth_header,
-                             url=self.__url,
-                             login_url=self.__service_url)
+            raise AttributeError  # Python internal stuff
 
-    def __call__(self, *args):
+        def f(*args):
+            return self.call(name, args)
+
+        return f
+
+    def call(self, method, params={}):
         self.__id_count += 1
-        pre_auth_postdata = {'version': '1.1',
-                             'method': self.__service_name,
-                             'params': args,
-                             'id': self.__id_count}
+        pre_auth_postdata = {
+            'version': '1.1',
+            'method': method,
+            'params': params,
+            'id': self.__id_count
+        }
         to_auth = get_auth_message(pre_auth_postdata)
         token = self.__api_key.get_hmac(to_auth)
         pre_auth_postdata.update({'hmac': token})
@@ -67,10 +61,12 @@ class AuthAPIClient(object):
         req = requests.Request(method='POST',
                                url=service_url,
                                data=postdata,
-                               headers={'Host': host,
-                                        'User-Agent': USER_AGENT,
-                                        'Authorization': auth_header,
-                                        'Content-type': 'application/json'},
+                               headers={
+                                   'Host': host,
+                                   'User-Agent': USER_AGENT,
+                                   'Authorization': auth_header,
+                                   'Content-type': 'application/json'
+                               },
                                cookies=cookies)
         r = req.prepare()
         http_response = self.__conn.send(r)
@@ -163,15 +159,6 @@ class AuthAPIClient(object):
 
 class LBRYAPIClient(object):
     @staticmethod
-    def config(service=None, params=None):
-        if conf.settings.use_auth_http:
-            if service is None:
-                return AuthAPIClient.config()
-            log.error("Try auth")
-            if params is not None:
-                return AuthAPIClient.config(service=service)(params)
-            return AuthAPIClient.config(service=service)()
-        url = conf.settings.API_CONNECTION_STRING
-        if service is None:
-            return JSONRPCProxy.from_url(url)
-        return JSONRPCProxy.from_url(url).call(service, params)
+    def get_client():
+        return AuthAPIClient.config() if conf.settings.use_auth_http else \
+            JSONRPCProxy.from_url(conf.settings.API_CONNECTION_STRING)

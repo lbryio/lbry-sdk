@@ -11,7 +11,7 @@ from lbrynet import conf
 class LBRYURIHandler(object):
     def __init__(self):
         self.started_daemon = False
-        self.daemon = LBRYAPIClient.config()
+        self.daemon = LBRYAPIClient.get_client()
 
     def handle_osx(self, lbry_name):
         self.check_daemon()
