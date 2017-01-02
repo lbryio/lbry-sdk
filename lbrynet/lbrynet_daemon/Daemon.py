@@ -8,9 +8,9 @@ import subprocess
 import sys
 import base58
 import requests
+import urllib
 import simplejson as json
 from urllib2 import urlopen
-from datetime import datetime
 from decimal import Decimal
 
 from twisted.web import server
@@ -817,7 +817,8 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _get_long_count_timestamp(self):
-        return int((datetime.utcnow() - (datetime(year=2012, month=12, day=21))).total_seconds())
+        dt = utils.utcnow() - utils.datetime_obj(year=2012, month=12, day=21)
+        return int(dt.total_seconds())
 
     def _update_claim_cache(self):
         f = open(os.path.join(self.db_dir, "stream_info_cache.json"), "w")
@@ -1183,6 +1184,21 @@ class Daemon(AuthJSONRPCServer):
 
         log.info("Get version info: " + json.dumps(msg))
         return self._render_response(msg, OK_CODE)
+
+    def jsonrpc_report_bug(self, p):
+        """
+        Report a bug to slack
+
+        Args:
+            'message': string, message to send
+        Returns:
+            True if successful
+        """
+
+        bug_message = p['message']
+        platform_name = self._get_platform()['platform']
+        report_bug_to_slack(bug_message, self.lbryid, platform_name, lbrynet_version)
+        return self._render_response(True, OK_CODE)
 
     def jsonrpc_get_lbry_session_info(self):
         """
@@ -2625,6 +2641,41 @@ class _GetFileHelper(object):
         else:
             d = defer.succeed(message)
         return d
+
+
+def loggly_time_string(dt):
+    formatted_dt = dt.strftime("%Y-%m-%dT%H:%M:%S")
+    microseconds = str(round(dt.microsecond * (10.0**-5), 3))
+    return urllib.quote_plus(formatted_dt + microseconds + "Z")
+
+
+def get_loggly_query_string(lbry_id):
+    decoded_id = base58.b58encode(lbry_id)
+    base_loggly_search_url = "https://lbry.loggly.com/search#terms=json.lbry_id%3A"
+    now = utils.now()
+    yesterday = now - utils.timedelta(days=1)
+    params = (
+        decoded_id[:SHORT_ID_LEN],
+        loggly_time_string(yesterday),
+        loggly_time_string(now)
+    )
+    formatted_params = "%s*&from=%s&until=%s&source_group=" % params
+    return base_loggly_search_url + formatted_params
+
+
+def report_bug_to_slack(message, lbry_id, platform_name, app_version):
+    webhook = utils.deobfuscate(conf.settings.SLACK_WEBHOOK)
+    payload_template = "os: %s\n version: %s\n<%s|loggly>\n%s"
+    payload_params = (
+        platform_name,
+        app_version,
+        get_loggly_query_string(lbry_id),
+        message
+    )
+    payload = {
+        "text": payload_template % payload_params
+    }
+    requests.post(webhook, json.dumps(payload))
 
 
 def get_lbry_file_search_value(p):
