@@ -329,7 +329,9 @@ class Daemon(AuthJSONRPCServer):
 
         if conf.settings.host_ui:
             self.lbry_ui_manager.update_checker.start(1800, now=False)
-            yield self.lbry_ui_manager.setup(launch=launch_ui)
+            yield self.lbry_ui_manager.setup()
+        if launch_ui:
+            self.lbry_ui_manager.launch()
         yield self._initial_setup()
         yield threads.deferToThread(self._setup_data_directory)
         yield self._check_db_migration()

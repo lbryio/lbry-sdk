@@ -59,7 +59,7 @@ class UIManager(object):
                 self.loaded_branch = None
                 self.loaded_requirements = None
 
-    def setup(self, branch=None, check_requirements=None, user_specified=None, launch=False):
+    def setup(self, branch=None, check_requirements=None, user_specified=None):
         local_ui_path = user_specified or conf.settings.local_ui_path
 
         self.branch = branch or conf.settings.ui_branch
@@ -94,8 +94,6 @@ class UIManager(object):
 
         d = self._up_to_date()
         d.addCallback(lambda r: self._download_ui() if not r else self._load_ui())
-        if launch:
-            d.addCallback(lambda _: webbrowser.open(conf.settings.UI_ADDRESS))
         return d
 
     def _check_for_bundled_ui(self):
@@ -212,6 +210,9 @@ class UIManager(object):
 
     def _load_ui(self):
         return load_ui(self.root, self.active_dir)
+
+    def launch(self):
+        webbrowser.open(conf.settings.UI_ADDRESS)
 
 
 class BundledUIManager(object):
