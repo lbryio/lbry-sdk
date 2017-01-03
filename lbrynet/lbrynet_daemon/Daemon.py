@@ -2674,7 +2674,7 @@ def get_lbry_file_search_value(p):
         value = p.get(searchtype)
         if value:
             return searchtype, value
-    raise NoValidSearch()
+    raise NoValidSearch('{} is missing a valid search type'.format(p))
 
 
 def run_reflector_factory(factory):
