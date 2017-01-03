@@ -108,9 +108,10 @@ class AuthJSONRPCServer(AuthorizedBase):
     def setup(self):
         return NotImplementedError()
 
-    def _render_error(self, failure, request, version=jsonrpclib.VERSION_1, response_code=FAILURE):
+    def _render_error(self, failure, request, id_,
+                      version=jsonrpclib.VERSION_2, response_code=FAILURE):
         err = JSONRPCException(Failure(failure), response_code)
-        fault = jsonrpclib.dumps(err, version=version)
+        fault = jsonrpclib.dumps(err, id=id_, version=version)
         self._set_headers(request, fault)
         if response_code != AuthJSONRPCServer.FAILURE:
             request.setResponseCode(response_code)
@@ -144,19 +145,19 @@ class AuthJSONRPCServer(AuthorizedBase):
             parsed = jsonrpclib.loads(content)
         except ValueError as err:
             log.warning("Unable to decode request json")
-            self._render_error(err, request)
+            self._render_error(err, request, None)
             return server.NOT_DONE_YET
 
         function_name = parsed.get('method')
         args = parsed.get('params')
-        id = parsed.get('id')
+        id_ = parsed.get('id')
         token = parsed.pop('hmac', None)
-        version = self._get_jsonrpc_version(parsed.get('jsonrpc'), id)
+        version = self._get_jsonrpc_version(parsed.get('jsonrpc'), id_)
 
         try:
             self._run_subhandlers(request)
         except SubhandlerError as err:
-            self._render_error(err, request, version)
+            self._render_error(err, request, id_, version)
             return server.NOT_DONE_YET
 
         reply_with_next_secret = False
@@ -167,7 +168,8 @@ class AuthJSONRPCServer(AuthorizedBase):
                 except InvalidAuthenticationToken as err:
                     log.warning("API validation failed")
                     self._render_error(
-                        err, request, version=version, response_code=AuthJSONRPCServer.UNAUTHORIZED)
+                        err, request, id_, version=version,
+                        response_code=AuthJSONRPCServer.UNAUTHORIZED)
                     return server.NOT_DONE_YET
                 self._update_session_secret(session_id)
                 reply_with_next_secret = True
@@ -176,7 +178,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             function = self._get_jsonrpc_method(function_name)
         except AttributeError as err:
             log.warning("Unknown method: %s", function_name)
-            self._render_error(err, request, version)
+            self._render_error(err, request, id_, version)
             return server.NOT_DONE_YET
 
         if args == [{}]:
@@ -186,9 +188,9 @@ class AuthJSONRPCServer(AuthorizedBase):
 
         # cancel the response if the connection is broken
         notify_finish.addErrback(self._response_failed, d)
-        d.addCallback(self._callback_render, request, version, reply_with_next_secret)
+        d.addCallback(self._callback_render, request, id_, version, reply_with_next_secret)
         d.addErrback(
-            log.fail(self._render_error, request, version=version),
+            log.fail(self._render_error, request, id_, version=version),
             'Failed to process %s', function_name
         )
         return server.NOT_DONE_YET
@@ -299,7 +301,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             if not handler(request):
                 raise SubhandlerError("Subhandler error processing request: %s", request)
 
-    def _callback_render(self, result, request, version, auth_required=False):
+    def _callback_render(self, result, request, id_, version, auth_required=False):
         result_for_return = result if not isinstance(result, dict) else result['result']
 
         if version == jsonrpclib.VERSION_PRE1:
@@ -308,12 +310,12 @@ class AuthJSONRPCServer(AuthorizedBase):
             # Convert the result (python) to JSON-RPC
         try:
             encoded_message = jsonrpclib.dumps(
-                result_for_return, version=version, default=default_decimal)
+                result_for_return, id=id_, version=version, default=default_decimal)
             self._set_headers(request, encoded_message, auth_required)
             self._render_message(request, encoded_message)
         except Exception as err:
             log.exception("Failed to render API response: %s", result)
-            self._render_error(err, request, version)
+            self._render_error(err, request, id_, version)
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
