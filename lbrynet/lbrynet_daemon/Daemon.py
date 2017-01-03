@@ -291,7 +291,7 @@ class Daemon(AuthJSONRPCServer):
         self.lbry_file_manager = None
 
     @defer.inlineCallbacks
-    def setup(self):
+    def setup(self, launch_ui):
         self._modify_loggly_formatter()
 
         def _announce_startup():
@@ -329,7 +329,7 @@ class Daemon(AuthJSONRPCServer):
 
         if conf.settings.host_ui:
             self.lbry_ui_manager.update_checker.start(1800, now=False)
-            yield self.lbry_ui_manager.setup()
+            yield self.lbry_ui_manager.setup(launch=launch_ui)
         yield self._initial_setup()
         yield threads.deferToThread(self._setup_data_directory)
         yield self._check_db_migration()

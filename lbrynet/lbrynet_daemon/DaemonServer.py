@@ -43,9 +43,9 @@ class DaemonServer(object):
         return defer.succeed(True)
 
     @defer.inlineCallbacks
-    def start(self, use_auth):
+    def start(self, use_auth, launch_ui=False):
         yield self._setup_server(use_auth)
-        yield self._api.setup()
+        yield self._api.setup(launch_ui)
 
 
 def get_site_base(use_auth, root):
