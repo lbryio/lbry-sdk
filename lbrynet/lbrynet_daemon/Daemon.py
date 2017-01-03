@@ -1565,6 +1565,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_stop_lbry_file(self, p):
         """
         Stop lbry file
@@ -1576,25 +1577,16 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             confirmation message
         """
-
-        def _stop_file(f):
-            if f.stopped:
-                return "LBRY file wasn't running"
-            else:
-                d = self.lbry_file_manager.toggle_lbry_file_running(f)
-                d.addCallback(lambda _: "Stopped LBRY file")
-                return d
-
-        try:
-            searchtype, value = get_lbry_file_search_value(p)
-        except NoValidSearch:
-            d = defer.fail()
+        searchtype, value = get_lbry_file_search_value(p)
+        lbry_file = yield self._get_lbry_file(searchtype, value, return_json=False)
+        if not lbry_file:
+            raise Exception('Unable to find a file for {}:{}'.format(searchtype, value))
+        if lbry_file.stopped:
+            msg = "LBRY file wasn't running"
         else:
-            d = self._get_lbry_file(searchtype, value, return_json=False)
-            d.addCallback(_stop_file)
-
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
+            yield self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
+            msg = "Stopped LBRY file"
+        defer.returnValue(self._render_response(msg, OK_CODE))
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_start_lbry_file(self, p):
