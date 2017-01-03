@@ -2,7 +2,6 @@ from lbrynet.core import log_support
 
 import argparse
 import logging.handlers
-import webbrowser
 
 from twisted.internet import defer, reactor
 from jsonrpc.proxy import JSONRPCProxy
@@ -129,9 +128,7 @@ def start_server_and_listen(launchui, use_auth, analytics_manager):
     log_support.configure_analytics_handler(analytics_manager)
     try:
         daemon_server = DaemonServer(analytics_manager)
-        yield daemon_server.start(use_auth)
-        if launchui:
-            yield webbrowser.open(conf.settings.UI_ADDRESS)
+        yield daemon_server.start(use_auth, launchui)
         analytics_manager.send_server_startup_success()
     except Exception as e:
         log.exception('Failed to startup')

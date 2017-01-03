@@ -2,6 +2,7 @@ import os
 import logging
 import shutil
 import json
+import webbrowser
 from urllib2 import urlopen
 from StringIO import StringIO
 from zipfile import ZipFile
@@ -14,8 +15,6 @@ from lbrynet import conf
 from lbrynet.lbrynet_daemon.Resources import NoCacheStaticFile
 from lbrynet import __version__ as lbrynet_version
 from lbryum.version import LBRYUM_VERSION as lbryum_version
-
-
 
 log = logging.getLogger(__name__)
 
@@ -211,6 +210,9 @@ class UIManager(object):
 
     def _load_ui(self):
         return load_ui(self.root, self.active_dir)
+
+    def launch(self):
+        webbrowser.open(conf.settings.UI_ADDRESS)
 
 
 class BundledUIManager(object):
