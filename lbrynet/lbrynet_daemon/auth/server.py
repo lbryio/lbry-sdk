@@ -94,6 +94,7 @@ class AuthJSONRPCServer(AuthorizedBase):
     isLeaf = True
     OK = 200
     UNAUTHORIZED = 401
+    # TODO: codes should follow jsonrpc spec: http://www.jsonrpc.org/specification#error_object
     NOT_FOUND = 8001
     FAILURE = 8002
 
