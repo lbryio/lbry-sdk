@@ -10,6 +10,8 @@ import base58
 import requests
 import urllib
 import simplejson as json
+import textwrap
+from urllib2 import urlopen
 from decimal import Decimal
 
 from twisted.web import server
@@ -48,26 +50,24 @@ from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError
 
-
 log = logging.getLogger(__name__)
-
 
 INITIALIZING_CODE = 'initializing'
 LOADING_DB_CODE = 'loading_db'
-LOADING_wallet_CODE = 'loading_wallet'
+LOADING_WALLET_CODE = 'loading_wallet'
 LOADING_FILE_MANAGER_CODE = 'loading_file_manager'
 LOADING_SERVER_CODE = 'loading_server'
 STARTED_CODE = 'started'
 WAITING_FOR_FIRST_RUN_CREDITS = 'waiting_for_credits'
 STARTUP_STAGES = [
-                    (INITIALIZING_CODE, 'Initializing...'),
-                    (LOADING_DB_CODE, 'Loading databases...'),
-                    (LOADING_wallet_CODE, 'Catching up with the blockchain... %s'),
-                    (LOADING_FILE_MANAGER_CODE, 'Setting up file manager'),
-                    (LOADING_SERVER_CODE, 'Starting lbrynet'),
-                    (STARTED_CODE, 'Started lbrynet'),
-                    (WAITING_FOR_FIRST_RUN_CREDITS, 'Waiting for first run credits...')
-                  ]
+    (INITIALIZING_CODE, 'Initializing'),
+    (LOADING_DB_CODE, 'Loading databases'),
+    (LOADING_WALLET_CODE, 'Catching up with the blockchain'),
+    (LOADING_FILE_MANAGER_CODE, 'Setting up file manager'),
+    (LOADING_SERVER_CODE, 'Starting lbrynet'),
+    (STARTED_CODE, 'Started lbrynet'),
+    (WAITING_FOR_FIRST_RUN_CREDITS, 'Waiting for first run credits'),
+]
 
 # TODO: make this consistent with the stages in Downloader.py
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'
@@ -75,22 +75,24 @@ DOWNLOAD_TIMEOUT_CODE = 'timeout'
 DOWNLOAD_RUNNING_CODE = 'running'
 DOWNLOAD_STOPPED_CODE = 'stopped'
 STREAM_STAGES = [
-                    (INITIALIZING_CODE, 'Initializing...'),
-                    (DOWNLOAD_METADATA_CODE, 'Downloading metadata'),
-                    (DOWNLOAD_RUNNING_CODE, 'Started %s, got %s/%s blobs, stream status: %s'),
-                    (DOWNLOAD_STOPPED_CODE, 'Paused stream'),
-                    (DOWNLOAD_TIMEOUT_CODE, 'Stream timed out')
-                ]
+    (INITIALIZING_CODE, 'Initializing...'),
+    (DOWNLOAD_METADATA_CODE, 'Downloading metadata'),
+    (DOWNLOAD_RUNNING_CODE, 'Started %s, got %s/%s blobs, stream status: %s'),
+    (DOWNLOAD_STOPPED_CODE, 'Paused stream'),
+    (DOWNLOAD_TIMEOUT_CODE, 'Stream timed out')
+]
 
-CONNECT_CODE_VERSION_CHECK = 'version_check'
-CONNECT_CODE_NETWORK = 'network_connection'
-CONNECT_CODE_wallet = 'wallet_catchup_lag'
-CONNECTION_PROBLEM_CODES = [
-        (CONNECT_CODE_VERSION_CHECK, "There was a problem checking for updates on github"),
-        (CONNECT_CODE_NETWORK, "Your internet connection appears to have been interrupted"),
-        (CONNECT_CODE_wallet,
-         "Synchronization with the blockchain is lagging... if this continues try restarting LBRY")
-        ]
+CONNECTION_STATUS_CONNECTED = 'connected'
+CONNECTION_STATUS_VERSION_CHECK = 'version_check'
+CONNECTION_STATUS_NETWORK = 'network_connection'
+CONNECTION_STATUS_WALLET = 'wallet_catchup_lag'
+CONNECTION_MESSAGES = {
+    CONNECTION_STATUS_CONNECTED: 'No connection problems detected',
+    CONNECTION_STATUS_VERSION_CHECK: "There was a problem checking for updates on github",
+    CONNECTION_STATUS_NETWORK: "Your internet connection appears to have been interrupted",
+    CONNECTION_STATUS_WALLET: "Catching up with the blockchain is slow. " +
+                              "If this continues try restarting LBRY",
+}
 
 BAD_REQUEST = 400
 NOT_FOUND = 404
@@ -104,7 +106,7 @@ class Checker:
     """The looping calls the daemon runs"""
     INTERNET_CONNECTION = 'internet_connection_checker'
     VERSION = 'version_checker'
-    CONNECTION_PROBLEM = 'connection_problem_checker'
+    CONNECTION_STATUS = 'connection_status_checker'
     PENDING_CLAIM = 'pending_claim_checker'
 
 
@@ -117,8 +119,6 @@ class FileID:
 
 # TODO add login credentials in a conf file
 # TODO alert if your copy of a lbry file is out of date with the name record
-
-REMOTE_SERVER = "www.lbry.io"
 
 
 class NoValidSearch(Exception):
@@ -207,10 +207,8 @@ class Daemon(AuthJSONRPCServer):
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
         self.allowed_during_startup = [
-            'is_running', 'is_first_run',
             'get_time_behind_blockchain', 'stop',
-            'daemon_status', 'get_start_notice',
-            'version'
+            'status', 'version'
         ]
         last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
         conf.settings.update(last_version)
@@ -246,9 +244,8 @@ class Daemon(AuthJSONRPCServer):
         self.startup_scripts = conf.settings.startup_scripts
 
         self.startup_status = STARTUP_STAGES[0]
-        self.startup_message = None
         self.connected_to_internet = True
-        self.connection_problem = None
+        self.connection_status_code = None
         self.git_lbrynet_version = None
         self.git_lbryum_version = None
         self.platform = None
@@ -279,7 +276,7 @@ class Daemon(AuthJSONRPCServer):
         calls = {
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
             Checker.VERSION: LoopingCall(CheckRemoteVersions(self)),
-            Checker.CONNECTION_PROBLEM: LoopingCall(self._check_connection_problems),
+            Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
             Checker.PENDING_CLAIM: LoopingCall(self._check_pending_claims),
         }
         self.looping_call_manager = LoopingCallManager(calls)
@@ -323,7 +320,7 @@ class Daemon(AuthJSONRPCServer):
 
         self.looping_call_manager.start(Checker.INTERNET_CONNECTION, 3600)
         self.looping_call_manager.start(Checker.VERSION, 3600 * 12)
-        self.looping_call_manager.start(Checker.CONNECTION_PROBLEM, 1)
+        self.looping_call_manager.start(Checker.CONNECTION_STATUS, 1)
         self.exchange_rate_manager.start()
 
         if conf.settings.host_ui:
@@ -382,6 +379,7 @@ class Daemon(AuthJSONRPCServer):
     def _check_lbrynet_connection(self):
         def _log_success():
             log.info("lbrynet connectivity test passed")
+
         def _log_failure():
             log.info("lbrynet connectivity test failed")
 
@@ -390,18 +388,17 @@ class Daemon(AuthJSONRPCServer):
         d = download_sd_blob(self.session, wonderfullife_sh, self.session.base_payment_rate_manager)
         d.addCallbacks(lambda _: _log_success, lambda _: _log_failure)
 
-    def _check_connection_problems(self):
-        if not self.git_lbrynet_version or not self.git_lbryum_version:
-            self.connection_problem = CONNECTION_PROBLEM_CODES[0]
+    def _update_connection_status(self):
+        self.connection_status_code = CONNECTION_STATUS_CONNECTED
 
-        elif self.startup_status[0] == 'loading_wallet':
-            if self.session.wallet.is_lagging:
-                self.connection_problem = CONNECTION_PROBLEM_CODES[2]
-        else:
-            self.connection_problem = None
+        if not self.git_lbrynet_version or not self.git_lbryum_version:
+            self.connection_status_code = CONNECTION_STATUS_VERSION_CHECK
+
+        elif self.startup_status[0] == 'loading_wallet' and self.session.wallet.is_lagging:
+            self.connection_status_code = CONNECTION_STATUS_WALLET
 
         if not self.connected_to_internet:
-            self.connection_problem = CONNECTION_PROBLEM_CODES[1]
+            self.connection_status_code = CONNECTION_STATUS_NETWORK
 
     # claim_out is dictionary containing 'txid' and 'nout'
     def _add_to_pending_claims(self, name, claim_out):
@@ -423,6 +420,7 @@ class Daemon(AuthJSONRPCServer):
                     return _start_file(l)
                 else:
                     return "LBRY file was already running"
+
             d = defer.succeed(self.pending_claims.pop(name))
             d.addCallback(lambda _: self._get_lbry_file(FileID.NAME, name, return_json=False))
             d.addCallback(start_stopped_file)
@@ -430,7 +428,7 @@ class Daemon(AuthJSONRPCServer):
         def re_add_to_pending_claims(name):
             log.warning("Re-add %s to pending claims", name)
             txid, nout = self.pending_claims.pop(name)
-            claim_out = {'txid':txid, 'nout':nout}
+            claim_out = {'txid': txid, 'nout': nout}
             self._add_to_pending_claims(name, claim_out)
 
         def _process_lbry_file(name, lbry_file):
@@ -596,6 +594,7 @@ class Daemon(AuthJSONRPCServer):
             'search_timeout': float,
             'cache_time': int
         }
+
         def can_update_key(settings, key, setting_type):
             return (
                 isinstance(settings[key], setting_type) or
@@ -686,6 +685,7 @@ class Daemon(AuthJSONRPCServer):
                 self.session, self.lbry_file_metadata_manager,
                 self.sd_identifier, download_directory=self.download_directory)
             return self.lbry_file_manager.setup()
+
         d.addCallback(lambda _: set_lbry_file_manager())
         return d
 
@@ -762,6 +762,7 @@ class Daemon(AuthJSONRPCServer):
 
     def _download_sd_blob(self, sd_hash, timeout=None):
         timeout = timeout if timeout is not None else conf.settings.sd_download_timeout
+
         def cb(result):
             if not r.called:
                 r.callback(result)
@@ -858,6 +859,7 @@ class Daemon(AuthJSONRPCServer):
                         os.remove(filename)
                     else:
                         return defer.succeed(None)
+
                 d.addCallback(lambda _: remove_if_file)
             return d
 
@@ -905,7 +907,7 @@ class Daemon(AuthJSONRPCServer):
 
         if self.session.payment_rate_manager.generous:
             return 0.0
-        return size / (10**6) * conf.settings.data_rate
+        return size / (10 ** 6) * conf.settings.data_rate
 
     def get_est_cost_using_known_size(self, name, size):
         """
@@ -974,6 +976,7 @@ class Daemon(AuthJSONRPCServer):
                 if l.sd_hash == sd:
                     return defer.succeed(l)
             return defer.succeed(None)
+
         d = self._resolve_name(name)
         d.addCallback(_get_file)
 
@@ -1001,9 +1004,9 @@ class Daemon(AuthJSONRPCServer):
             return d
 
         d = defer.DeferredList([
-            safe_get(l.sd_hash)
-            for l in self.lbry_file_manager.lbry_files
-        ])
+                                   safe_get(l.sd_hash)
+                                   for l in self.lbry_file_manager.lbry_files
+                                   ])
         return d
 
     def _reflect(self, lbry_file):
@@ -1051,95 +1054,113 @@ class Daemon(AuthJSONRPCServer):
 
         return defer.succeed(None)
 
-    def jsonrpc_is_running(self):
+    ############################################################################
+    #                                                                          #
+    #                JSON-RPC API methods start here                           #
+    #                                                                          #
+    ############################################################################
+
+    def jsonrpc_status(self, p={}):
         """
-        Check if lbrynet daemon is running
+        Return daemon status
 
         Args:
-            None
-        Returns: true if daemon completed startup, otherwise false
+            session_status: bool
+            blockchain_status: bool
+        Returns:
+            daemon status
         """
 
-        log.info("is_running: " + str(self.announced_startup))
+        response = {
+            'lbry_id': base58.b58encode(self.lbryid)[:SHORT_ID_LEN],
+            'is_running': self.announced_startup,
+            'is_first_run': self.session.wallet.is_first_run if self.session else None,
+            'startup_status': {
+                'code': self.startup_status[0],
+                'message': self.startup_status[1],
+            },
+            'connection_status': {
+                'code': self.connection_status_code,
+                'message': (
+                    CONNECTION_MESSAGES[self.connection_status_code]
+                    if self.connection_status_code is not None
+                    else ''
+                ),
+            },
+            'blocks_behind': (
+                self.session.wallet.blocks_behind
+                if self.session and self.wallet_type == LBRYUM_WALLET
+                else 'unknown'
+            ),
+        }
 
-        if self.announced_startup:
-            return self._render_response(True, OK_CODE)
-        else:
-            return self._render_response(False, OK_CODE)
+        d = defer.succeed(None)
+
+        if p.get('session_status', False):
+            d.addCallback(lambda _: self.session.blob_manager.get_all_verified_blobs())
+
+            def _include_session_status(blobs):
+                response['session_status'] = {
+                    'managed_blobs': len(blobs),
+                    'managed_streams': len(self.lbry_file_manager.lbry_files),
+                }
+
+            d.addCallback(_include_session_status)
+
+        if p.get('blockchain_status', False) and self.session and self.session.wallet:
+            # calculate blocks_behind more accurately
+            local_height = self.session.wallet.network.get_local_height()
+            remote_height = self.session.wallet.network.get_server_height()
+            response['blocks_behind'] = remote_height - local_height
+
+            d.addCallback(lambda _: self.session.wallet.get_best_blockhash())
+
+            def _include_blockchain_status(best_hash):
+                response['blockchain_status'] = {
+                    'best_blockhash': best_hash,
+                }
+
+            d.addCallback(_include_blockchain_status)
+
+        d.addCallback(lambda x: self._render_response(response, OK_CODE))
+        return d
+        # return self._render_response(response, OK_CODE)
+
+    def jsonrpc_get_best_blockhash(self):
+        """
+        DEPRECATED. Use `status blockchain_status=True` instead
+        """
+        return self._render_response("DEPRECATED: Use `status blockchain_status=True` instead.", OK_CODE)
+
+    def jsonrpc_is_running(self):
+        """
+        DEPRECATED. Use `status` instead
+        """
+        return self._render_response("DEPRECATED: Use `status` command instead.", OK_CODE)
 
     def jsonrpc_daemon_status(self):
         """
-        Get lbrynet daemon status information
-
-        Args:
-            None
-        Returns:
-            'message': startup status message
-            'code': status_code
-            'progress': progress, only used in loading_wallet
-            'is_lagging': flag set to indicate lag, if set message will contain relevant message
+        DEPRECATED. Use `status` instead
         """
-
-        r = {'code': self.startup_status[0], 'message': self.startup_status[1],
-             'progress': None, 'is_lagging': None, 'problem_code': None}
-
-        if self.connection_problem:
-            r['problem_code'] = self.connection_problem[0]
-            r['message'] = self.connection_problem[1]
-            r['is_lagging'] = True
-        elif self.startup_status[0] == LOADING_wallet_CODE:
-            if self.wallet_type == LBRYUM_WALLET:
-                if self.session.wallet.blocks_behind_alert != 0:
-                    r['message'] %= str(self.session.wallet.blocks_behind_alert) + " blocks behind"
-                    r['progress'] = self.session.wallet.catchup_progress
-                else:
-                    r['message'] = "Catching up with the blockchain"
-                    r['progress'] = 0
-            else:
-                r['message'] = "Catching up with the blockchain"
-                r['progress'] = 0
-        return self._render_response(r, OK_CODE)
+        return self._render_response("DEPRECATED: Use `status` command instead.", OK_CODE)
 
     def jsonrpc_is_first_run(self):
         """
-        Check if this is the first time lbrynet daemon has been run
-
-        Args:
-            None
-        Returns:
-            True if first run, otherwise False
+        DEPRECATED. Use `status` instead
         """
+        return self._render_response("DEPRECATED: Use `status` command instead.", OK_CODE)
 
-        log.info("Check if is first run")
-        try:
-            d = self.session.wallet.is_first_run()
-        except:
-            d = defer.fail(None)
-
-        d.addCallbacks(
-            lambda r: self._render_response(r, OK_CODE),
-            lambda _: self._render_response(None, OK_CODE))
-
-        return d
-
-    def jsonrpc_get_start_notice(self):
+    def jsonrpc_get_lbry_session_info(self):
         """
-        Get special message to be displayed at startup
-
-        Args:
-            None
-        Returns:
-            Startup message, such as first run notification
+        DEPRECATED. Use `status` instead
         """
+        return self._render_response("DEPRECATED: Use `status` command instead.", OK_CODE)
 
-        log.info("Get startup notice")
-
-        if self.first_run and not self.session.wallet.wallet_balance:
-            return self._render_response(self.startup_message, OK_CODE)
-        elif self.first_run:
-            return self._render_response(None, OK_CODE)
-        else:
-            self._render_response(self.startup_message, OK_CODE)
+    def jsonrpc_get_time_behind_blockchain(self):
+        """
+        DEPRECATED. Use `status` instead
+        """
+        return self._render_response("DEPRECATED: Use `status` command instead.", OK_CODE)
 
     def jsonrpc_version(self):
         """
@@ -1200,33 +1221,13 @@ class Daemon(AuthJSONRPCServer):
         report_bug_to_slack(bug_message, self.lbryid, platform_name, lbrynet_version)
         return self._render_response(True, OK_CODE)
 
-    def jsonrpc_get_lbry_session_info(self):
-        """
-        Get information about the current lbrynet session
-
-        Args:
-            None
-        Returns:
-            'lbry_id': string,
-            'managed_blobs': int, number of completed blobs in the blob manager,
-            'managed_streams': int, number of lbry files in the file manager
-        """
-
-        d = self.session.blob_manager.get_all_verified_blobs()
-
-        def _prepare_message(blobs):
-            msg = {
-                'lbry_id': base58.b58encode(self.lbryid)[:SHORT_ID_LEN],
-                'managed_blobs': len(blobs),
-                'managed_streams': len(self.lbry_file_manager.lbry_files),
-            }
-            return msg
-
-        d.addCallback(_prepare_message)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
     def jsonrpc_get_settings(self):
+        """
+        DEPRECATED. Use `settings_get` instead.
+        """
+        return self.jsonrpc_settings_get()
+
+    def jsonrpc_settings_get(self):
         """
         Get lbrynet daemon settings
 
@@ -1258,6 +1259,13 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     def jsonrpc_set_settings(self, p):
         """
+        DEPRECATED. Use `settings_set` instead.
+        """
+        return self.jsonrpc_settings_set(p)
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_settings_set(self, p):
+        """
         Set lbrynet daemon settings
 
         Args:
@@ -1287,11 +1295,12 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def jsonrpc_help(self, p=None):
-        """Function to retrieve docstring for API function
+        """
+        Function to retrieve docstring for API function
 
         Args:
-            optional 'function': function to retrieve documentation for
-            optional 'callable_during_startup':
+            'function': optional, function to retrieve documentation for
+            'callable_during_startup': optional, returns functions that are callable during startup
         Returns:
             if given a function, returns given documentation
             if given callable_during_startup flag, returns list of
@@ -1300,22 +1309,36 @@ class Daemon(AuthJSONRPCServer):
         """
 
         if not p:
-            return self._render_response(sorted(self.callable_methods.keys()), OK_CODE)
-        elif 'callable_during_start' in p.keys():
-            return self._render_response(self.allowed_during_startup, OK_CODE)
-        elif 'function' in p.keys():
-            func_path = p['function']
-            function = self.callable_methods.get(func_path)
-            return self._render_response(function.__doc__, OK_CODE)
+            return self._render_response(", ".join(sorted(self.callable_methods.keys())), OK_CODE)
+        elif 'callable_during_startup' in p:
+            return self._render_response(", ".join(sorted(self.allowed_during_startup)), OK_CODE)
+        elif 'function' in p:
+            fn = self.callable_methods.get(p['function'])
+            if fn is None:
+                return self._render_response("Function not found", OK_CODE)
+            return self._render_response(textwrap.dedent(fn.__doc__), OK_CODE)
         else:
-            return self._render_response(self.jsonrpc_help.__doc__, OK_CODE)
+            return self._render_response(textwrap.dedent(self.jsonrpc_help.__doc__), OK_CODE)
+
+    def jsonrpc_commands(self):
+        """
+        Return a list of available commands
+
+        Returns:
+            list
+        """
+        return self._render_response(sorted(self.callable_methods.keys()), OK_CODE)
 
     def jsonrpc_get_balance(self):
         """
-        Get balance
+        DEPRECATED. Use `wallet_balance` instead.
+        """
+        return self.jsonrpc_wallet_balance()
 
-        Args:
-            None
+    def jsonrpc_wallet_balance(self):
+        """
+        Return the balance of the wallet
+
         Returns:
             balance, float
         """
@@ -1325,31 +1348,40 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_stop(self):
         """
+        DEPRECATED. Use `daemon_stop` instead.
+        """
+        return self.jsonrpc_daemon_stop()
+
+    def jsonrpc_daemon_stop(self):
+        """
         Stop lbrynet-daemon
 
-        Args:
-            None
         Returns:
             shutdown message
         """
 
-        def _disp_shutdown():
+        def _display_shutdown_message():
             log.info("Shutting down lbrynet daemon")
 
         d = self._shutdown()
-        d.addCallback(lambda _: _disp_shutdown())
+        d.addCallback(lambda _: _display_shutdown_message())
         d.addCallback(lambda _: reactor.callLater(0.0, reactor.stop))
-
         return self._render_response("Shutting down", OK_CODE)
 
     def jsonrpc_get_lbry_files(self):
         """
-        Get LBRY files
+        DEPRECATED. Use `file_list` instead.
+        """
+        return self.jsonrpc_file_list()
+
+    def jsonrpc_file_list(self):
+        """
+        List files
 
         Args:
             None
         Returns:
-            List of lbry files:
+            List of files, with the following keys:
             'completed': bool
             'file_name': string
             'key': hex string
@@ -1368,7 +1400,14 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def jsonrpc_get_lbry_file(self, p):
-        """Get lbry file
+        """
+        DEPRECATED. Use `file_get` instead.
+        """
+        return self.jsonrpc_file_get(p)
+
+    def jsonrpc_file_get(self, p):
+        """
+        Get a file
 
         Args:
             'name': get file by lbry uri,
@@ -1427,27 +1466,18 @@ class Daemon(AuthJSONRPCServer):
             # If so, maybe we should return something else.
             errback=log.fail(lambda err: server.failure),
             errbackArgs=('Failed to resolve name',),
-            errbackKeywords={'level':'INFO'},
+            errbackKeywords={'level': 'INFO'},
         )
         return d
 
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_get_my_claim(self, p):
-        """
-        Return existing claim for a given name
-
-        Args:
-            'name': name to look up
-        Returns:
-            claim info, False if no such claim exists
-        """
-
-        name = p[FileID.NAME]
-        d = self.session.wallet.get_my_claim(name)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
     def jsonrpc_get_claim_info(self, p):
+        """
+        DEPRECATED. Use `claim_show` instead.
+        """
+        return self.jsonrpc_claim_show(p)
+
+    def jsonrpc_claim_show(self, p):
+
         """
             Resolve claim info from a LBRY uri
 
@@ -1464,7 +1494,7 @@ class Daemon(AuthJSONRPCServer):
             if not r:
                 return False
             else:
-                r['amount'] = float(r['amount']) / 10**8
+                r['amount'] = float(r['amount']) / 10 ** 8
                 return r
 
         name = p[FileID.NAME]
@@ -1499,7 +1529,8 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     def jsonrpc_get(self, p):
-        """Download stream from a LBRY uri.
+        """
+        Download stream from a LBRY uri.
 
         Args:
             'name': name to download, string
@@ -1566,48 +1597,82 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
-    @defer.inlineCallbacks
     def jsonrpc_stop_lbry_file(self, p):
         """
-        Stop lbry file
-
-        Args:
-            'name': stop file by lbry uri,
-            'sd_hash': stop file by the hash in the name claim,
-            'file_name': stop file by its name in the downloads folder,
-        Returns:
-            confirmation message
+        DEPRECATED. Use `file_seed status=stop` instead.
         """
-        searchtype, value = get_lbry_file_search_value(p)
-        lbry_file = yield self._get_lbry_file(searchtype, value, return_json=False)
-        if not lbry_file:
-            raise Exception('Unable to find a file for {}:{}'.format(searchtype, value))
-        if lbry_file.stopped:
-            msg = "LBRY file wasn't running"
-        else:
-            yield self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
-            msg = "Stopped LBRY file"
-        defer.returnValue(self._render_response(msg, OK_CODE))
+        p['status'] = 'stop'
+        return self.jsonrpc_file_seed(p)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_start_lbry_file(self, p):
         """
-        Stop lbry file
+        DEPRECATED. Use `file_seed status=start` instead.
+        """
+        p['status'] = 'start'
+        return self.jsonrpc_file_seed(p)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_file_seed(self, p):
+        """
+        Start or stop seeding a file
 
         Args:
-            'name': stop file by lbry uri,
-            'sd_hash': stop file by the hash in the name claim,
-            'file_name': stop file by its name in the downloads folder,
+            'status': "start" or "stop"
+            'name': start file by lbry uri,
+            'sd_hash': start file by the hash in the name claim,
+            'file_name': start file by its name in the downloads folder,
         Returns:
             confirmation message
         """
 
-        def _start_file(f):
-            if f.stopped:
-                d = self.lbry_file_manager.toggle_lbry_file_running(f)
-                return defer.succeed("Started LBRY file")
-            else:
-                return "LBRY file was already running"
+        status = p.get('status', None)
+        if status is None:
+            raise Exception('"status" option required')
+        if status not in ['start', 'stop']:
+            raise Exception('Status must be "start" or "stop".')
+
+        search_type, value = get_lbry_file_search_value(p)
+        lbry_file = yield self._get_lbry_file(search_type, value, return_json=False)
+        if not lbry_file:
+            raise Exception('Unable to find a file for {}:{}'.format(search_type, value))
+
+        if status == 'start' and lbry_file.stopped or status == 'stop' and not lbry_file.stopped:
+            yield self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
+            msg = "Started seeding file" if status == 'start' else "Stopped seeding file"
+        else:
+            msg = "File was already being seeded" if status == 'start' else "File was already stopped"
+        defer.returnValue(self._render_response(msg, OK_CODE))
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_delete_lbry_file(self, p):
+        """
+        DEPRECATED. Use `file_delete` instead
+        """
+        return self.jsonrpc_file_delete(p)
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_file_delete(self, p):
+        """
+        Delete a lbry file
+
+        Args:
+            'file_name': downloaded file name, string
+        Returns:
+            confirmation message
+        """
+
+        # TODO: is this option used? if yes, document it. if no, remove it
+        delete_file = p.get('delete_target_file', True)
+
+        def _delete_file(f):
+            if not f:
+                return False
+            file_name = f.file_name
+            d = self._delete_lbry_file(f, delete_file=delete_file)
+            d.addCallback(lambda _: "Deleted file: " + file_name)
+            return d
 
         try:
             searchtype, value = get_lbry_file_search_value(p)
@@ -1615,12 +1680,18 @@ class Daemon(AuthJSONRPCServer):
             d = defer.fail()
         else:
             d = self._get_lbry_file(searchtype, value, return_json=False)
-            d.addCallback(_start_file)
+            d.addCallback(_delete_file)
 
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
     def jsonrpc_get_est_cost(self, p):
+        """
+        DEPRECATED. Use `stream_cost_estimate` instead
+        """
+        return self.jsonrpc_stream_cost_estimate(p)
+
+    def jsonrpc_stream_cost_estimate(self, p):
         """
         Get estimated cost for a lbry stream
 
@@ -1639,38 +1710,6 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @AuthJSONRPCServer.auth_required
-    def jsonrpc_delete_lbry_file(self, p):
-        """
-        Delete a lbry file
-
-        Args:
-            'file_name': downloaded file name, string
-        Returns:
-            confirmation message
-        """
-
-        delete_file = p.get('delete_target_file', True)
-
-        def _delete_file(f):
-            if not f:
-                return False
-            file_name = f.file_name
-            d = self._delete_lbry_file(f, delete_file=delete_file)
-            d.addCallback(lambda _: "Deleted LBRY file" + file_name)
-            return d
-
-        try:
-            searchtype, value = get_lbry_file_search_value(p)
-        except NoValidSearch:
-            d = defer.fail()
-        else:
-            d = self._get_lbry_file(searchtype, value, return_json=False)
-            d.addCallback(_delete_file)
-
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
-    @AuthJSONRPCServer.auth_required
     def jsonrpc_publish(self, p):
         """
         Make a new name claim and publish associated data to lbrynet
@@ -1682,6 +1721,8 @@ class Daemon(AuthJSONRPCServer):
             'metadata': metadata dictionary
             optional 'fee'
         Returns:
+            'success' : True if claim was succesful , False otherwise
+            'reason' : if not succesful, give reason
             'txid' : txid of resulting transaction if succesful
             'nout' : nout of the resulting support claim if succesful
             'fee' : fee paid for the claim transaction if succesful
@@ -1751,6 +1792,13 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     def jsonrpc_abandon_claim(self, p):
         """
+        DEPRECATED. Use `claim_abandon` instead
+        """
+        return self.jsonrpc_claim_abandon(p)
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_claim_abandon(self, p):
+        """
         Abandon a name and reclaim credits from the claim
         Args:
             'txid': txid of claim, string
@@ -1759,11 +1807,7 @@ class Daemon(AuthJSONRPCServer):
             txid : txid of resulting transaction if succesful
             fee : fee paid for the transaction if succesful
         """
-        if 'txid' in p.keys() and 'nout' in p.keys():
-            txid = p['txid']
-            nout = p['nout']
-        else:
-            # TODO: return a useful error message
+        if 'txid' not in p or 'nout' not in p:
             return server.failure
 
         def _disp(x):
@@ -1771,10 +1815,9 @@ class Daemon(AuthJSONRPCServer):
             return self._render_response(x, OK_CODE)
 
         d = defer.Deferred()
-        d.addCallback(lambda _: self.session.wallet.abandon_claim(txid, nout))
+        d.addCallback(lambda _: self.session.wallet.abandon_claim(p['txid'], p['nout']))
         d.addCallback(_disp)
-        d.callback(None)
-
+        d.callback(None)  # TODO: is this line necessary???
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -1792,6 +1835,13 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_support_claim(self, p):
+        """
+        DEPRECATED. Use `claim_abandon` instead
+        """
+        return self.jsonrpc_claim_new_support(p)
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_claim_new_support(self, p):
         """
         Support a name claim
 
@@ -1812,10 +1862,37 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    # TODO: merge this into claim_list
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_get_my_claim(self, p):
+        """
+        DEPRECATED. This method will be removed in a future release.
+
+        Return existing claim for a given name
+
+        Args:
+            'name': name to look up
+        Returns:
+            claim info, False if no such claim exists
+        """
+
+        name = p[FileID.NAME]
+        d = self.session.wallet.get_my_claim(name)
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
     @AuthJSONRPCServer.auth_required
     def jsonrpc_get_name_claims(self):
         """
-        Get my name claims
+        DEPRECATED. Use `claim_list_mine` instead
+        """
+        return self.jsonrpc_claim_list_mine()
+
+    # TODO: claim_list_mine should be merged into claim_list, but idk how to authenticate it -Grin
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_claim_list_mine(self):
+        """
+        List my name claims
 
         Args:
             None
@@ -1833,28 +1910,52 @@ class Daemon(AuthJSONRPCServer):
         d = self.session.wallet.get_name_claims()
         d.addCallback(_clean)
         d.addCallback(lambda claims: self._render_response(claims, OK_CODE))
-
         return d
 
     def jsonrpc_get_claims_for_name(self, p):
         """
+        DEPRECATED. Use `claim_list` instead.
+        """
+        return self.jsonrpc_claim_list(p)
+
+    def jsonrpc_get_claims_for_tx(self, p):
+        """
+        DEPRECATED. Use `claim_list` instead.
+        """
+        return self.jsonrpc_claim_list(p)
+
+    def jsonrpc_claim_list(self, p):
+        """
         Get claims for a name
 
         Args:
-            'name': name
+            name: file name
+            txid: transaction id of a name claim transaction
         Returns
             list of name claims
         """
 
-        name = p[FileID.NAME]
-        d = self.session.wallet.get_claims_for_name(name)
+        if FileID.NAME in p:
+            d = self.session.wallet.get_claims_for_name(p[FileID.NAME])
+        elif 'txid' in p:
+            d = self.session.wallet.get_claims_from_tx(p['txid'])
+        else:
+            return server.failure
+
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_get_transaction_history(self):
         """
-        Get transaction history
+        DEPRECATED. Use `transaction_list` instead
+        """
+        return self.jsonrpc_transaction_list()
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_transaction_list(self):
+        """
+        List transactions
 
         Args:
             None
@@ -1866,8 +1967,35 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
+    def jsonrpc_get_transaction(self, p):
+        """
+        DEPRECATED. Use `transaction_show` instead
+        """
+        return self.jsonrpc_transaction_show(p)
+
+    def jsonrpc_transaction_show(self, p):
+        """
+        Get a decoded transaction from a txid
+
+        Args:
+            txid: txid hex string
+        Returns:
+            JSON formatted transaction
+        """
+
+        d = self.session.wallet.get_transaction(p['txid'])
+        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        return d
+
     @AuthJSONRPCServer.auth_required
     def jsonrpc_address_is_mine(self, p):
+        """
+        DEPRECATED. Use `wallet_is_address_mine` instead
+        """
+        return self.jsonrpc_wallet_is_address_mine(p)
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_wallet_is_address_mine(self, p):
         """
         Checks if an address is associated with the current wallet.
 
@@ -1877,15 +2005,19 @@ class Daemon(AuthJSONRPCServer):
             is_mine: bool
         """
 
-        address = p['address']
-
-        d = self.session.wallet.address_is_mine(address)
+        d = self.session.wallet.address_is_mine(p['address'])
         d.addCallback(lambda is_mine: self._render_response(is_mine, OK_CODE))
-
         return d
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_get_public_key_from_wallet(self, p):
+        """
+        DEPRECATED. Use `wallet_is_address_mine` instead
+        """
+        return self.jsonrpc_wallet_public_key(p)
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_wallet_public_key(self, p):
         """
         Get public key from wallet address
 
@@ -1895,35 +2027,18 @@ class Daemon(AuthJSONRPCServer):
             public key
         """
 
-        wallet = p['wallet']
-        d = self.session.wallet.get_pub_keys(wallet)
+        d = self.session.wallet.get_pub_keys(p['wallet'])
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
-
-    def jsonrpc_get_time_behind_blockchain(self):
-        """
-        Get number of blocks behind the blockchain
-
-        Args:
-            None
-        Returns:
-            number of blocks behind blockchain, int
-        """
-
-        def _get_time_behind():
-            try:
-                local_height = self.session.wallet.network.get_local_height()
-                remote_height = self.session.wallet.network.get_server_height()
-                return defer.succeed(remote_height - local_height)
-            except:
-                return defer.fail()
-
-        d = _get_time_behind()
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-
-        return d
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_get_new_address(self):
+        """
+        DEPRECATED. Use `wallet_new_address` instead
+        """
+        return self.jsonrpc_wallet_new_address()
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_wallet_new_address(self):
         """
         Generate a new wallet address
 
@@ -1954,7 +2069,7 @@ class Daemon(AuthJSONRPCServer):
                 True if payment successfully scheduled
         """
 
-        if 'amount' in p.keys() and 'address' in p.keys():
+        if 'amount' in p and 'address' in p:
             amount = p['amount']
             address = p['address']
         else:
@@ -1968,21 +2083,13 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
         return d
 
-    def jsonrpc_get_best_blockhash(self):
-        """
-            Get hash of most recent block
-
-            Args:
-                None
-            Returns:
-                Hash of most recent block
-        """
-
-        d = self.session.wallet.get_best_blockhash()
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
     def jsonrpc_get_block(self, p):
+        """
+        DEPRECATED. Use `block_show` instead
+        """
+        return self.jsonrpc_block_show(p)
+
+    def jsonrpc_block_show(self, p):
         """
             Get contents of a block
 
@@ -1992,12 +2099,10 @@ class Daemon(AuthJSONRPCServer):
                 requested block
         """
 
-        if 'blockhash' in p.keys():
-            blockhash = p['blockhash']
-            d = self.session.wallet.get_block(blockhash)
-        elif 'height' in p.keys():
-            height = p['height']
-            d = self.session.wallet.get_block_info(height)
+        if 'blockhash' in p:
+            d = self.session.wallet.get_block(p['blockhash'])
+        elif 'height' in p:
+            d = self.session.wallet.get_block_info(p['height'])
             d.addCallback(lambda blockhash: self.session.wallet.get_block(blockhash))
         else:
             # TODO: return a useful error message
@@ -2005,28 +2110,15 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    def jsonrpc_get_claims_for_tx(self, p):
-        """
-            Get claims for tx
-
-            Args:
-                txid: txid of a name claim transaction
-            Returns:
-                any claims contained in the requested tx
-        """
-
-        if 'txid' in p.keys():
-            txid = p['txid']
-        else:
-            # TODO: return a useful error message
-            return server.failure
-
-        d = self.session.wallet.get_claims_from_tx(txid)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
     @AuthJSONRPCServer.auth_required
     def jsonrpc_download_descriptor(self, p):
+        """
+        DEPRECATED. Use `blob_get` instead
+        """
+        return self.jsonrpc_blob_get(p)
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_blob_get(self, p):
         """
         Download and return a sd blob
 
@@ -2058,42 +2150,10 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_set_miner(self, p):
-        """
-            Start of stop the miner, function only available when lbrycrd is set as the wallet
-
-            Args:
-                run: True/False
-            Returns:
-                miner status, True/False
-        """
-
-        stat = p['run']
-        if stat:
-            d = self.session.wallet.start_miner()
-        else:
-            d = self.session.wallet.stop_miner()
-        d.addCallback(lambda _: self.session.wallet.get_miner_status())
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
-    def jsonrpc_get_miner_status(self):
-        """
-            Get status of miner
-
-            Args:
-                None
-            Returns:
-                True/False
-        """
-
-        d = self.session.wallet.get_miner_status()
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
-        return d
-
     def jsonrpc_log(self, p):
         """
+        DEPRECATED. This method will be removed in a future release.
+
         Log message
 
         Args:
@@ -2107,7 +2167,10 @@ class Daemon(AuthJSONRPCServer):
         return self._render_response(True, OK_CODE)
 
     def jsonrpc_upload_log(self, p=None):
-        """Upload log
+        """
+        DEPRECATED. This method will be removed in a future release.
+
+        Upload log
 
         Args, optional:
             'name_prefix': prefix to indicate what is requesting the log upload
@@ -2120,22 +2183,22 @@ class Daemon(AuthJSONRPCServer):
         """
 
         if p:
-            if 'name_prefix' in p.keys():
+            if 'name_prefix' in p:
                 log_type = p['name_prefix'] + '_api'
-            elif 'log_type' in p.keys():
+            elif 'log_type' in p:
                 log_type = p['log_type'] + '_api'
             else:
                 log_type = None
 
-            if 'exclude_previous' in p.keys():
+            if 'exclude_previous' in p:
                 exclude_previous = p['exclude_previous']
             else:
                 exclude_previous = True
 
-            if 'message' in p.keys():
+            if 'message' in p:
                 log.info("Upload log message: " + str(p['message']))
 
-            if 'force' in p.keys():
+            if 'force' in p:
                 force = p['force']
             else:
                 force = False
@@ -2195,6 +2258,12 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_get_peers_for_hash(self, p):
         """
+        DEPRECATED. Use `peer_list` instead
+        """
+        return self.jsonrpc_peer_list(p)
+
+    def jsonrpc_peer_list(self, p):
+        """
         Get peers for blob hash
 
         Args:
@@ -2212,7 +2281,13 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_announce_all_blobs_to_dht(self):
         """
-        Announce all blobs to the dht
+        DEPRECATED. Use `blob_announce_all` instead.
+        """
+        return self.jsonrpc_blob_announce_all()
+
+    def jsonrpc_blob_announce_all(self):
+        """
+        Announce all blobs to the DHT
 
         Args:
             None
@@ -2244,6 +2319,12 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_get_blob_hashes(self):
         """
+        DEPRECATED. Use `blob_list` instead
+        """
+        return self.jsonrpc_blob_list()
+
+    def jsonrpc_blob_list(self):
+        """
         Returns all blob hashes
 
         Args:
@@ -2257,6 +2338,12 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def jsonrpc_reflect_all_blobs(self):
+        """
+        DEPRECATED. Use `blob_reflect_all` instead
+        """
+        return self.jsonrpc_blob_reflect_all()
+
+    def jsonrpc_blob_reflect_all(self):
         """
         Reflects all saved blobs
 
@@ -2305,9 +2392,7 @@ class Daemon(AuthJSONRPCServer):
             else:
                 return 0.0
 
-        name = p[FileID.NAME]
-
-        d = self._resolve_name(name, force_refresh=True)
+        d = self._resolve_name(p[FileID.NAME], force_refresh=True)
         d.addCallback(get_sd_hash)
         d.addCallback(self._download_sd_blob)
         d.addCallbacks(
@@ -2636,7 +2721,7 @@ class _GetFileHelper(object):
 
 def loggly_time_string(dt):
     formatted_dt = dt.strftime("%Y-%m-%dT%H:%M:%S")
-    milliseconds = str(round(dt.microsecond * (10.0**-5), 3))
+    milliseconds = str(round(dt.microsecond * (10.0 ** -5), 3))
     return urllib.quote_plus(formatted_dt + milliseconds + "Z")
 
 

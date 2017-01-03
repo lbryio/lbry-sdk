@@ -182,10 +182,6 @@ class Wallet(object):
     """This class implements the Wallet interface for the LBRYcrd payment system"""
     implements(IWallet)
 
-    _FIRST_RUN_UNKNOWN = 0
-    _FIRST_RUN_YES = 1
-    _FIRST_RUN_NO = 2
-
     def __init__(self, storage):
         if not isinstance(storage, MetaDataStorage):
             raise ValueError('storage must be an instance of MetaDataStorage')
@@ -209,7 +205,6 @@ class Wallet(object):
         self._manage_count = 0
         self._balance_refresh_time = 3
         self._batch_count = 20
-        self._first_run = self._FIRST_RUN_UNKNOWN
 
     def start(self):
         def start_manage():
@@ -703,20 +698,6 @@ class Wallet(object):
     def get_available_balance(self):
         return float(self.wallet_balance - self.total_reserved_points)
 
-    def is_first_run(self):
-        if self._first_run == self._FIRST_RUN_UNKNOWN:
-            d = self._check_first_run()
-
-            def set_first_run(is_first):
-                self._first_run = self._FIRST_RUN_YES if is_first else self._FIRST_RUN_NO
-
-            d.addCallback(set_first_run)
-        else:
-            d = defer.succeed(self._FIRST_RUN_YES if self._first_run else self._FIRST_RUN_NO)
-
-        d.addCallback(lambda _: self._first_run == self._FIRST_RUN_YES)
-        return d
-
     def _get_status_of_claim(self, claim_outpoint, name, sd_hash):
         d = self.get_claims_from_tx(claim_outpoint['txid'])
 
@@ -819,9 +800,6 @@ class Wallet(object):
     def _get_claims_for_name(self, name):
         return defer.fail(NotImplementedError())
 
-    def _check_first_run(self):
-        return defer.fail(NotImplementedError())
-
     def _send_name_claim(self, name, val, amount):
         return defer.fail(NotImplementedError())
 
@@ -865,13 +843,13 @@ class LBRYumWallet(Wallet):
         self._config = config
         self.network = None
         self.wallet = None
-        self.first_run = False
+        self.is_first_run = False
         self.printed_retrieving_headers = False
         self._start_check = None
         self._catch_up_check = None
         self._caught_up_counter = 0
         self._lag_counter = 0
-        self.blocks_behind_alert = 0
+        self.blocks_behind = 0
         self.catchup_progress = 0
         self.max_behind = 0
 
@@ -883,7 +861,6 @@ class LBRYumWallet(Wallet):
             self.network = Network(self.config)
             alert.info("Loading the wallet...")
             return defer.succeed(self.network.start())
-
 
         d = setup_network()
 
@@ -941,7 +918,7 @@ class LBRYumWallet(Wallet):
         storage = lbryum.wallet.WalletStorage(path)
         wallet = lbryum.wallet.Wallet(storage)
         if not storage.file_exists:
-            self.first_run = True
+            self.is_first_run = True
             seed = wallet.make_seed()
             wallet.add_seed(seed, None)
             wallet.create_master_keys(None)
@@ -957,7 +934,13 @@ class LBRYumWallet(Wallet):
             local_height = self.network.get_catchup_progress()
             remote_height = self.network.get_server_height()
 
-            if remote_height != 0 and remote_height - local_height <= 5:
+            if remote_height == 0:
+                return
+
+            height_diff = remote_height - local_height
+
+            if height_diff <= 5:
+                self.blocks_behind = 0
                 msg = ""
                 if self._caught_up_counter != 0:
                     msg += "All caught up. "
@@ -966,27 +949,29 @@ class LBRYumWallet(Wallet):
                 self._catch_up_check.stop()
                 self._catch_up_check = None
                 blockchain_caught_d.callback(True)
+                return
 
-            elif remote_height != 0:
-                past_blocks_behind = self.blocks_behind_alert
-                self.blocks_behind_alert = remote_height - local_height
-                if self.blocks_behind_alert < past_blocks_behind:
-                    self._lag_counter = 0
-                    self.is_lagging = False
-                else:
-                    self._lag_counter += 1
-                    if self._lag_counter >= 900:
-                        self.is_lagging = True
+            if height_diff < self.blocks_behind:
+                # We're making progress in catching up
+                self._lag_counter = 0
+                self.is_lagging = False
+            else:
+                # No progress. Might be lagging
+                self._lag_counter += 1
+                if self._lag_counter >= 900:
+                    self.is_lagging = True
 
-                if self.blocks_behind_alert > self.max_behind:
-                    self.max_behind = self.blocks_behind_alert
-                self.catchup_progress = int(100 * (self.blocks_behind_alert / (5 + self.max_behind)))
-                if self._caught_up_counter == 0:
-                    alert.info('Catching up with the blockchain...showing blocks left...')
-                if self._caught_up_counter % 30 == 0:
-                    alert.info('%d...', (remote_height - local_height))
+            self.blocks_behind = height_diff
 
-                self._caught_up_counter += 1
+            if self.blocks_behind > self.max_behind:
+                self.max_behind = self.blocks_behind
+            self.catchup_progress = int(100 * (self.blocks_behind / (5 + self.max_behind)))
+            if self._caught_up_counter == 0:
+                alert.info('Catching up with the blockchain')
+            if self._caught_up_counter % 30 == 0:
+                alert.info('Blocks left: %d', (remote_height - local_height))
+
+            self._caught_up_counter += 1
 
         def log_error(err):
             log.warning(err.getErrorMessage())
@@ -1051,9 +1036,6 @@ class LBRYumWallet(Wallet):
 
     def get_name_claims(self):
         return self._run_cmd_as_defer_succeed('getnameclaims')
-
-    def _check_first_run(self):
-        return defer.succeed(self.first_run)
 
     def _get_claims_for_name(self, name):
         return self._run_cmd_as_defer_to_thread('getclaimsforname', name)
