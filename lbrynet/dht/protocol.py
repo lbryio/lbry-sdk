@@ -10,6 +10,8 @@
 import logging
 import binascii
 import time
+import socket
+import errno
 
 from twisted.internet import protocol, defer
 from twisted.python import failure
@@ -251,7 +253,13 @@ class KademliaProtocol(protocol.DatagramProtocol):
     def _write_and_remove(self, key, txData, address):
         del self._call_later_list[key]
         if self.transport:
-            self.transport.write(txData, address)
+            try:
+                # i'm scared this may swallow important errors, but i get a million of these
+                # on Linux and it doesnt seem to affect anything  -grin
+                self.transport.write(txData, address)
+            except socket.error as err:
+                if err.errno != errno.EWOULDBLOCK:
+                    raise err
 
     def _sendResponse(self, contact, rpcID, response):
         """ Send a RPC response to the specified contact
