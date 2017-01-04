@@ -1130,37 +1130,80 @@ class Daemon(AuthJSONRPCServer):
         """
         DEPRECATED. Use `status blockchain_status=True` instead
         """
-        return self._render_response("DEPRECATED: Use `status blockchain_status=True` instead.", OK_CODE)
+        d = self.jsonrpc_status({'blockchain_status': True})
+        d.addCallback(lambda x: self._render_response(
+            x['result']['blockchain_status']['best_blockhash'], OK_CODE))
+        return d
 
     def jsonrpc_is_running(self):
         """
         DEPRECATED. Use `status` instead
         """
-        return self._render_response("DEPRECATED: Use `status` command instead.", OK_CODE)
+        d = self.jsonrpc_status({'blockchain_status': True})
+        d.addCallback(lambda x: self._render_response(x['result']['is_running'], OK_CODE))
+        return d
 
     def jsonrpc_daemon_status(self):
         """
         DEPRECATED. Use `status` instead
         """
-        return self._render_response("DEPRECATED: Use `status` command instead.", OK_CODE)
+
+        def _simulate_old_daemon_status(status):
+            message = status['result']['startup_status']['message']
+            problem_code = None
+            progress = None
+
+            if self.connection_status_code != CONNECTION_STATUS_CONNECTED:
+                problem_code = self.connection_status_code
+                message = CONNECTION_MESSAGES[self.connection_status_code]
+            elif status['result']['startup_status']['code'] == LOADING_WALLET_CODE:
+                message = "Catching up with the blockchain."
+                progress = 0
+                if status['result']['blocks_behind'] > 0:
+                    message += ' ' + str(status['result']['blocks_behind']) + " blocks behind."
+                    progress = self.session.wallet.catchup_progress
+
+            return {
+                'message': message,
+                'code': status['result']['startup_status']['code'],
+                'progress': progress,
+                'is_lagging': self.connection_status_code != CONNECTION_STATUS_CONNECTED,
+                'problem_code': problem_code,
+            }
+
+        d = self.jsonrpc_status()
+        d.addCallback(_simulate_old_daemon_status)
+        d.addCallback(lambda x: self._render_response(x, OK_CODE))  # is this necessary?
+        return d
 
     def jsonrpc_is_first_run(self):
         """
         DEPRECATED. Use `status` instead
         """
-        return self._render_response("DEPRECATED: Use `status` command instead.", OK_CODE)
+        d = self.jsonrpc_status({'blockchain_status': True})
+        d.addCallback(lambda x: self._render_response(x['result']['is_first_run'], OK_CODE))
+        return d
 
     def jsonrpc_get_lbry_session_info(self):
         """
         DEPRECATED. Use `status` instead
         """
-        return self._render_response("DEPRECATED: Use `status` command instead.", OK_CODE)
+
+        d = self.jsonrpc_status({'session_status': True})
+        d.addCallback(lambda x: self._render_response({
+            'lbry_id': x['result']['lbry_id'],
+            'managed_blobs': x['result']['session_status']['managed_blobs'],
+            'managed_streams': x['result']['session_status']['managed_streams'],
+        }, OK_CODE))
+        return d
 
     def jsonrpc_get_time_behind_blockchain(self):
         """
         DEPRECATED. Use `status` instead
         """
-        return self._render_response("DEPRECATED: Use `status` command instead.", OK_CODE)
+        d = self.jsonrpc_status({'blockchain_status': True})  # blockchain_status=True is needed
+        d.addCallback(lambda x: self._render_response(x['result']['blocks_behind'], OK_CODE))
+        return d
 
     def jsonrpc_version(self):
         """
@@ -1343,8 +1386,6 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             balance, float
         """
-
-        log.info("Get balance")
         return self._render_response(float(self.session.wallet.wallet_balance), OK_CODE)
 
     def jsonrpc_stop(self):
@@ -1877,8 +1918,7 @@ class Daemon(AuthJSONRPCServer):
             claim info, False if no such claim exists
         """
 
-        name = p[FileID.NAME]
-        d = self.session.wallet.get_my_claim(name)
+        d = self.session.wallet.get_my_claim(p[FileID.NAME])
         d.addCallback(lambda r: self._render_response(r, OK_CODE))
         return d
 
@@ -2163,8 +2203,7 @@ class Daemon(AuthJSONRPCServer):
              True
         """
 
-        message = p['message']
-        log.info("API client log request: %s" % message)
+        log.info("API client log request: %s" % p['message'])
         return self._render_response(True, OK_CODE)
 
     def jsonrpc_upload_log(self, p=None):
