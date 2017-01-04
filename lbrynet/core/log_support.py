@@ -10,6 +10,7 @@ import traceback
 
 import requests
 from requests_futures.sessions import FuturesSession
+import twisted.python.log
 
 import lbrynet
 from lbrynet import analytics
@@ -250,6 +251,7 @@ def configure_logging(file_name, console, verbose=None):
             See `convert_verbose` for more details.
     """
     verbose = convert_verbose(verbose)
+    configure_twisted()
     configure_file_handler(file_name)
     configure_loggly_handler()
     disable_third_party_loggers()
@@ -268,6 +270,15 @@ def configure_logging(file_name, console, verbose=None):
             verbose.remove('lbryum')
         if verbose:
             handler.addFilter(LoggerNameFilter(verbose))
+
+
+def configure_twisted():
+    """Setup twisted logging to output events to the python stdlib logger"""
+    # I tried using the new logging api
+    # https://twistedmatrix.com/documents/current/core/howto/logger.html#compatibility-with-standard-library-logging
+    # and it simply didn't work
+    observer = twisted.python.log.PythonLoggingObserver()
+    observer.start()
 
 
 class LoggerNameFilter(object):
