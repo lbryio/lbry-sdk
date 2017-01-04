@@ -944,7 +944,7 @@ class TestTransfer(TestCase):
             self.assertEqual(hashsum.hexdigest(), "4ca2aafb4101c1e42235aad24fbb83be")
 
         def delete_lbry_file():
-            logging.debug("deleting the file...")
+            logging.debug("deleting the file")
             d = self.lbry_file_manager.delete_lbry_file(downloaders[0])
             d.addCallback(lambda _: self.lbry_file_manager.get_count_for_stream_hash(downloaders[0].stream_hash))
             d.addCallback(

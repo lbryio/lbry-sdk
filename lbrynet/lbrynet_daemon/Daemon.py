@@ -75,7 +75,7 @@ DOWNLOAD_TIMEOUT_CODE = 'timeout'
 DOWNLOAD_RUNNING_CODE = 'running'
 DOWNLOAD_STOPPED_CODE = 'stopped'
 STREAM_STAGES = [
-    (INITIALIZING_CODE, 'Initializing...'),
+    (INITIALIZING_CODE, 'Initializing'),
     (DOWNLOAD_METADATA_CODE, 'Downloading metadata'),
     (DOWNLOAD_RUNNING_CODE, 'Started %s, got %s/%s blobs, stream status: %s'),
     (DOWNLOAD_STOPPED_CODE, 'Paused stream'),
@@ -637,7 +637,7 @@ class Daemon(AuthJSONRPCServer):
     def _setup_data_directory(self):
         old_revision = 1
         self.startup_status = STARTUP_STAGES[1]
-        log.info("Loading databases...")
+        log.info("Loading databases")
         if self.created_data_dir:
             self._write_db_revision_file(self.current_db_revision)
             log.debug("Created the db revision file: %s", self.db_revision_file)
@@ -662,7 +662,7 @@ class Daemon(AuthJSONRPCServer):
 
         if old_revision < self.current_db_revision:
             from lbrynet.db_migrator import dbmigrator
-            log.info("Upgrading your databases...")
+            log.info("Upgrading your databases")
             d = threads.deferToThread(
                 dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision)
             d.addCallback(lambda _: update_version_file_and_print_success())
@@ -1315,7 +1315,8 @@ class Daemon(AuthJSONRPCServer):
         elif 'function' in p:
             fn = self.callable_methods.get(p['function'])
             if fn is None:
-                return self._render_response("Function not found", OK_CODE)
+                return self._render_response(
+                    "Function '" + p['function'] + "' is not a valid function", OK_CODE)
             return self._render_response(textwrap.dedent(fn.__doc__), OK_CODE)
         else:
             return self._render_response(textwrap.dedent(self.jsonrpc_help.__doc__), OK_CODE)

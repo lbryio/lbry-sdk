@@ -16,10 +16,10 @@ def print_usage():
 def join_network(udp_port, known_nodes):
     lbryid = generate_id()
 
-    log.info('Creating Node...')
+    log.info('Creating Node')
     node = Node(udpPort=udp_port, lbryid=lbryid)
 
-    log.info('Joining network...')
+    log.info('Joining network')
     d = node.joinNetwork(known_nodes)
 
     def log_network_size():

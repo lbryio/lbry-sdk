@@ -14,7 +14,7 @@ amount = 0
 
 
 def destroyNetwork(nodes):
-    print 'Destroying Kademlia network...'
+    print 'Destroying Kademlia network'
     i = 0
     for node in nodes:
         i += 1
@@ -50,12 +50,12 @@ def main():
     else:
         import socket
         ipAddress = socket.gethostbyname(socket.gethostname())
-        print 'Network interface IP address omitted; using %s...' % ipAddress
+        print 'Network interface IP address omitted; using %s' % ipAddress
 
     startPort = 4000
     port = startPort+1
     nodes = []
-    print 'Creating Kademlia network...'
+    print 'Creating Kademlia network'
     try:
         node = os.spawnlp(
             os.P_NOWAIT, 'lbrynet-launch-node', 'lbrynet-launch-node', str(startPort))

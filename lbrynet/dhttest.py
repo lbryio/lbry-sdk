@@ -59,7 +59,7 @@ def storeValueCallback(*args, **kwargs):
     """ Callback function that is invoked when the storeValue() operation succeeds """
     print 'Value has been stored in the DHT'
     # Now that the value has been stored, schedule that the value is read again after 2.5 seconds
-    print 'Scheduling retrieval in 2.5 seconds...'
+    print 'Scheduling retrieval in 2.5 seconds'
     twisted.internet.reactor.callLater(2.5, getValue)
 
 
@@ -72,7 +72,7 @@ def getValue():
     """ Retrieves the value of the specified key (KEY) from the DHT """
     global node, KEY
     # Get the value for the specified key (immediately returns a Twisted deferred result)
-    print ('\nRetrieving value from DHT for key "%s"...' %
+    print ('\nRetrieving value from DHT for key "%s"' %
            binascii.unhexlify("f7d9dc4de674eaa2c5a022eb95bc0d33ec2e75c6"))
     deferredResult = node.iterativeFindValue(
         binascii.unhexlify("f7d9dc4de674eaa2c5a022eb95bc0d33ec2e75c6"))
@@ -91,13 +91,13 @@ def getValueCallback(result):
     print result
 
     # Either way, schedule a "delete" operation for the key
-    print 'Scheduling shutdown in 2.5 seconds...'
+    print 'Scheduling shutdown in 2.5 seconds'
     twisted.internet.reactor.callLater(2.5, stop)
 
 
 def stop():
     """ Stops the Twisted reactor, and thus the script """
-    print '\nStopping Kademlia node and terminating script...'
+    print '\nStopping Kademlia node and terminating script'
     twisted.internet.reactor.stop()
 
 if __name__ == '__main__':
@@ -145,7 +145,7 @@ if __name__ == '__main__':
     #
     # If you wish to have a pure Kademlia network, use the
     # entangled.kademlia.node.Node class instead
-    print 'Creating Node...'
+    print 'Creating Node'
     node = Node(udpPort=int(sys.argv[1]), lbryid=lbryid)
 
     # Schedule the node to join the Kademlia/Entangled DHT

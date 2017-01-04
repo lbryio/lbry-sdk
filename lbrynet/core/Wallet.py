@@ -859,7 +859,7 @@ class LBRYumWallet(Wallet):
         def setup_network():
             self.config = make_config(self._config)
             self.network = Network(self.config)
-            alert.info("Loading the wallet...")
+            alert.info("Loading the wallet")
             return defer.succeed(self.network.start())
 
         d = setup_network()
@@ -867,7 +867,7 @@ class LBRYumWallet(Wallet):
         def check_started():
             if self.network.is_connecting():
                 if not self.printed_retrieving_headers and self.network.blockchain.retrieving_headers:
-                    alert.info("Running the wallet for the first time...this may take a moment.")
+                    alert.info("Running the wallet for the first time. This may take a moment.")
                     self.printed_retrieving_headers = True
                 return False
             self._start_check.stop()

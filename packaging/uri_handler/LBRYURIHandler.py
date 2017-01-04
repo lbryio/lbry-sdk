@@ -27,7 +27,7 @@ class LBRYURIHandler(object):
         if not self.started_daemon:
             cmd = r'DIR = "$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"' \
                   r'if [-z "$(pgrep lbrynet-daemon)"]; then' \
-                    r'echo "running lbrynet-daemon..."' \
+                    r'echo "running lbrynet-daemon"' \
                     r'$DIR / lbrynet - daemon &' \
                     r'sleep 3  # let the daemon load before connecting' \
                   r'fi'

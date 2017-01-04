@@ -18,7 +18,7 @@ DOWNLOAD_RUNNING_CODE = 'running'
 # TODO: is this ever used?
 DOWNLOAD_STOPPED_CODE = 'stopped'
 STREAM_STAGES = [
-    (INITIALIZING_CODE, 'Initializing...'),
+    (INITIALIZING_CODE, 'Initializing'),
     (DOWNLOAD_METADATA_CODE, 'Downloading metadata'),
     (DOWNLOAD_RUNNING_CODE, 'Started stream'),
     (DOWNLOAD_STOPPED_CODE, 'Paused stream'),
