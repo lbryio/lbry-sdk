@@ -14,6 +14,7 @@ import twisted.python.log
 
 import lbrynet
 from lbrynet import analytics
+from lbrynet import build_type
 from lbrynet import conf
 from lbrynet.core import utils
 
@@ -148,8 +149,14 @@ def get_loggly_url(token=None, version=None):
     return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
 
 
+def configure_loggly_handler(*args, **kwargs):
+    if build_type.BUILD == 'dev':
+        return
+    _configure_loggly_handler(*args, **kwargs)
+
+
 @_log_decorator
-def configure_loggly_handler(url=None, **kwargs):
+def _configure_loggly_handler(url=None, **kwargs):
     url = url or get_loggly_url()
     formatter = JsonFormatter(**kwargs)
     handler = HTTPSHandler(url)
