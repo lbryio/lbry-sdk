@@ -29,14 +29,75 @@ def get_params_from_kwargs(params):
             print 'WARNING: Argument "' + i + '" is missing a parameter name. Please use name=value'
             continue
         eq_pos = i.index('=')
-        k, v = i[:eq_pos], i[eq_pos + 1:]
-        params_for_return[k] = guess_type(v)
+        params_for_return[i[:eq_pos]] = guess_type(i[eq_pos + 1:])
     return params_for_return
 
 
+def print_help():
+    print "\n".join([
+        "NAME",
+        "   lbrynet-cli - LBRY command line client.",
+        "",
+        "USAGE",
+        "   lbrynet-cli <command> [<args>]",
+        "",
+        "EXAMPLES",
+        "   lbrynet-cli commands                    # list available commands",
+        "   lbrynet-cli status                      # get daemon status",
+        "   lbrynet-cli resolve_name name=what      # resolve a name",
+        "   lbrynet-cli help function=resolve_name  # get help about a method",
+    ])
+
+
+def wrap_list_to_term_width(l, width=None, separator=', ', prefix=''):
+    if width is None:
+        try:
+            _, width = os.popen('stty size', 'r').read().split()
+            width = int(width)
+        except:
+            pass
+        if not width:
+            width = 80
+
+    lines = []
+    curr_line = prefix
+    for item in l:
+        new_line = curr_line + item + separator
+        if len(new_line) > width:
+            lines.append(curr_line)
+            curr_line = prefix + item + separator
+        else:
+            curr_line = new_line
+
+    return "\n".join(lines)
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('params', nargs=argparse.ZERO_OR_MORE, default=None)
+    args = parser.parse_args()
+
+    if len(args.params) < 1:
+        print_help()
+        sys.exit(1)
+
+    method = args.params[0]
+    params = args.params[1:]
+
+    if len(params) > 1:
+        params = get_params_from_kwargs(params)
+    elif len(params) == 1:
+        try:
+            params = json.loads(params[0])
+        except ValueError:
+            params = get_params_from_kwargs(params)
+    else:
+        params = {}
+
     conf.initialize_settings()
     api = LBRYAPIClient.get_client()
+
+    # TODO: check if port is bound
 
     try:
         status = api.status()
@@ -54,38 +115,19 @@ def main():
             print "  Status: " + message
         sys.exit(1)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('method', nargs=1)
-    parser.add_argument('params', nargs=argparse.REMAINDER, default=None)
-    args = parser.parse_args()
-
-    method = args.method[0]
-    params = {}
-
-    if len(args.params) > 1:
-        params = get_params_from_kwargs(args.params)
-    elif len(args.params) == 1:
-        try:
-            params = json.loads(args.params[0])
-        except ValueError:
-            params = get_params_from_kwargs(args.params)
-
     if method in ['--help', '-h', 'help']:
-        helpmsg = api.help(params).strip()
-        if params is not None and 'function' in params:
-            print "\n" + params['function'] + ": " + helpmsg + "\n"
+        if len(params) == 0:
+            print_help()
+            print "\nCOMMANDS\n" + wrap_list_to_term_width(api.commands(), prefix='   ')
         else:
-            print "Usage: lbrynet-cli method [params]\n" \
-                  + "Examples: \n" \
-                  + "  lbrynet-cli get_balance\n" \
-                  + "  lbrynet-cli resolve_name name=what\n" \
-                  + "  lbrynet-cli help function=resolve_name\n" \
-                  + "\nAvailable functions:\n" \
-                  + helpmsg + "\n"
+            print api.help(params).strip()
 
     elif method not in api.commands():
-        print "Error: function \"" + method + "\" does not exist.\n" + \
-              "See \"" + os.path.basename(sys.argv[0]) + " help\""
+        print (
+            "Function '" + method + "' is not a valid function.\n"
+            "See '" + os.path.basename(sys.argv[0]) + " help'"
+        )
+
     else:
         try:
             result = api.call(method, params)
