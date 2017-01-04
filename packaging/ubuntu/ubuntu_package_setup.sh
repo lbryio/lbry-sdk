@@ -170,7 +170,7 @@ addfile "$PACKAGING_DIR/icons/lbry256.png" usr/share/icons/hicolor/256x256/apps/
 addfile "$PACKAGING_DIR/lbry.desktop" usr/share/applications/lbry.desktop
 
 # add lbry executable script
-BINPATH=usr/share/python/lbrynet/bin
+BINPATH=opt/venvs/lbrynet/bin
 addfile "$PACKAGING_DIR/lbry" "$BINPATH/lbry"
 
 # symlink scripts into /usr/bin
