@@ -73,6 +73,11 @@ class BlobManager(DHTHashSupplier):
     def add_blob_to_upload_history(self, blob_hash, host, rate):
         pass
 
+    def _immediate_announce(self, blob_hashes):
+        if self.hash_announcer:
+            return self.hash_announcer.immediate_announce(blob_hashes)
+
+
 
 class DiskBlobManager(BlobManager):
     """This class stores blobs on the hard disk"""
@@ -145,7 +150,7 @@ class DiskBlobManager(BlobManager):
             next_announce_time = time.time() + self.hash_reannounce_time
         d = self._add_completed_blob(blob.blob_hash, blob.length,
                                      time.time(), next_announce_time)
-        d.addCallback(lambda _: self.hash_announcer.immediate_announce([blob.blob_hash]))
+        d.addCallback(lambda _: self._immediate_announce([blob.blob_hash]))
         return d
 
     def completed_blobs(self, blobs_to_check):
@@ -163,12 +168,9 @@ class DiskBlobManager(BlobManager):
         new_blob = self.blob_type(self.blob_dir, blob_creator.blob_hash, True, blob_creator.length)
         new_blob.verified = True
         self.blobs[blob_creator.blob_hash] = new_blob
-        if self.hash_announcer is not None:
-            self.hash_announcer.immediate_announce([blob_creator.blob_hash])
-            next_announce_time = time.time() + self.hash_reannounce_time
-            d = self.blob_completed(new_blob, next_announce_time)
-        else:
-            d = self.blob_completed(new_blob)
+        self._immediate_announce([blob_creator.blob_hash])
+        next_announce_time = time.time() + self.hash_reannounce_time
+        d = self.blob_completed(new_blob, next_announce_time)
         return d
 
     def delete_blobs(self, blob_hashes):
@@ -181,7 +183,7 @@ class DiskBlobManager(BlobManager):
 
     def immediate_announce_all_blobs(self):
         d = self._get_all_verified_blob_hashes()
-        d.addCallback(self.hash_announcer.immediate_announce)
+        d.addCallback(self._immediate_announce)
         return d
 
     def get_blob_length(self, blob_hash):
@@ -498,12 +500,9 @@ class TempBlobManager(BlobManager):
         new_blob.data_buffer = blob_creator.data_buffer
         new_blob.length = blob_creator.length
         self.blobs[blob_creator.blob_hash] = new_blob
-        if self.hash_announcer is not None:
-            self.hash_announcer.immediate_announce([blob_creator.blob_hash])
-            next_announce_time = time.time() + self.hash_reannounce_time
-            d = self.blob_completed(new_blob, next_announce_time)
-        else:
-            d = self.blob_completed(new_blob)
+        self._immediate_announce([blob_creator.blob_hash])
+        next_announce_time = time.time() + self.hash_reannounce_time
+        d = self.blob_completed(new_blob, next_announce_time)
         d.addCallback(lambda _: new_blob)
         return d
 
@@ -519,7 +518,8 @@ class TempBlobManager(BlobManager):
         return defer.fail(NoSuchBlobError(blob_hash))
 
     def immediate_announce_all_blobs(self):
-        return self.hash_announcer.immediate_announce(self.blobs.iterkeys())
+        if self.hash_announcer:
+            return self.hash_announcer.immediate_announce(self.blobs.iterkeys())
 
     def _manage(self):
         from twisted.internet import reactor
