@@ -609,7 +609,21 @@ class Wallet(object):
             meta_for_return[k] = new_metadata[k]
         return defer.succeed(Metadata(meta_for_return))
 
+    """
+    Claim a name, update if name already claimed by user
+    @param name: name to claim
 
+    @param bid: bid amount
+
+    @param m: metadata
+
+    @return: Deferred which returns a dict containing below items
+        txid - txid of the resulting transaction
+        nout - nout of the resulting claim
+        fee - transaction fee paid to make claim
+        claim_id -  claim id of the claim
+
+    """
     def claim_name(self, name, bid, m):
         def _save_metadata(claim_out, metadata):
             if not claim_out['success']:
@@ -635,6 +649,7 @@ class Wallet(object):
                     lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'],
                                                                       claim_outpoint,
                                                                       new_metadata, _bid))
+                d.addCallback(lambda claim_out: claim_out.update({'claim_id':claim['claim_id']}))
                 return d
 
         meta = Metadata(m)

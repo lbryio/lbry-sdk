@@ -30,6 +30,8 @@ class Publisher(object):
         self.lbry_file = None
         self.txid = None
         self.nout = None
+        self.claim_id = None
+        self.fee = None
         self.stream_hash = None
         # TODO: this needs to be passed into the constructor
         reflector_server = random.choice(conf.settings.reflector_servers)
@@ -44,6 +46,8 @@ class Publisher(object):
             out = {}
             out['nout'] = self.nout
             out['txid'] = self.txid
+            out['claim_id'] = self.claim_id
+            out['fee'] = self.fee
             return defer.succeed(out)
 
         self.publish_name = name
@@ -136,15 +140,17 @@ class Publisher(object):
         self._update_metadata()
         m = Metadata(self.metadata)
 
-        def set_txid_nout(claim_out):
-            txid = claim_out['txid']
-            nout = claim_out['nout']
-            log.debug('Name claimed using txid: %s, nout: %d', txid, nout)
-            self.txid = txid
-            self.nout = nout
+        def set_claim_out(claim_out):
+            log.debug('Name claimed using txid: %s, nout: %d, claim_id: %s, fee :%f',
+                        claim_out['txid'], claim_out['nout'],
+                        claim_out['claim_id'], claim_out['fee'])
+            self.txid = claim_out['txid']
+            self.nout = claim_out['nout']
+            self.claim_id = claim_out['claim_id']
+            self.fee = claim_out['fee']
 
         d = self.wallet.claim_name(self.publish_name, self.bid_amount, m)
-        d.addCallback(set_txid_nout)
+        d.addCallback(set_claim_out)
         return d
 
     def _update_metadata(self):
