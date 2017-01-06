@@ -10,10 +10,10 @@ Type=Application
 
 MimeType=x-scheme-handler/lbry;
 
-Exec=/usr/share/python/lbrynet/bin/lbry %U
+Exec=/usr/bin/lbry %U
 
 Actions=StopDaemon;
 
 [Desktop Action StopDaemon]
 Name=Stop Daemon
-Exec=/usr/share/python/lbrynet/bin/stop-lbrynet-daemon
+Exec=/opt/venvs/lbrynet/bin/stop-lbrynet-daemon
