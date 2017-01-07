@@ -94,10 +94,6 @@ CONNECTION_MESSAGES = {
                               "If this continues try restarting LBRY",
 }
 
-BAD_REQUEST = 400
-NOT_FOUND = 404
-OK_CODE = 200
-
 PENDING_ID = "not set"
 SHORT_ID_LEN = 20
 
@@ -206,10 +202,7 @@ class Daemon(AuthJSONRPCServer):
         AuthJSONRPCServer.__init__(self, conf.settings.use_auth_http)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
-        self.allowed_during_startup = [
-            'get_time_behind_blockchain', 'stop',
-            'status', 'version'
-        ]
+        self.allowed_during_startup = ['get_time_behind_blockchain', 'stop','status', 'version']
         last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
         conf.settings.update(last_version)
         self.db_dir = conf.settings.data_dir
@@ -1122,9 +1115,9 @@ class Daemon(AuthJSONRPCServer):
 
             d.addCallback(_include_blockchain_status)
 
-        d.addCallback(lambda x: self._render_response(response, OK_CODE))
+        d.addCallback(lambda x: self._render_response(response))
         return d
-        # return self._render_response(response, OK_CODE)
+        # return self._render_response(response)
 
     def jsonrpc_get_best_blockhash(self):
         """
@@ -1132,7 +1125,7 @@ class Daemon(AuthJSONRPCServer):
         """
         d = self.jsonrpc_status({'blockchain_status': True})
         d.addCallback(lambda x: self._render_response(
-            x['result']['blockchain_status']['best_blockhash'], OK_CODE))
+            x['result']['blockchain_status']['best_blockhash']))
         return d
 
     def jsonrpc_is_running(self):
@@ -1140,7 +1133,7 @@ class Daemon(AuthJSONRPCServer):
         DEPRECATED. Use `status` instead
         """
         d = self.jsonrpc_status({'blockchain_status': True})
-        d.addCallback(lambda x: self._render_response(x['result']['is_running'], OK_CODE))
+        d.addCallback(lambda x: self._render_response(x['result']['is_running']))
         return d
 
     def jsonrpc_daemon_status(self):
@@ -1173,7 +1166,7 @@ class Daemon(AuthJSONRPCServer):
 
         d = self.jsonrpc_status()
         d.addCallback(_simulate_old_daemon_status)
-        d.addCallback(lambda x: self._render_response(x, OK_CODE))  # is this necessary?
+        d.addCallback(lambda x: self._render_response(x))  # is this necessary?
         return d
 
     def jsonrpc_is_first_run(self):
@@ -1181,7 +1174,7 @@ class Daemon(AuthJSONRPCServer):
         DEPRECATED. Use `status` instead
         """
         d = self.jsonrpc_status({'blockchain_status': True})
-        d.addCallback(lambda x: self._render_response(x['result']['is_first_run'], OK_CODE))
+        d.addCallback(lambda x: self._render_response(x['result']['is_first_run']))
         return d
 
     def jsonrpc_get_lbry_session_info(self):
@@ -1194,7 +1187,7 @@ class Daemon(AuthJSONRPCServer):
             'lbry_id': x['result']['lbry_id'],
             'managed_blobs': x['result']['session_status']['managed_blobs'],
             'managed_streams': x['result']['session_status']['managed_streams'],
-        }, OK_CODE))
+        }))
         return d
 
     def jsonrpc_get_time_behind_blockchain(self):
@@ -1202,7 +1195,7 @@ class Daemon(AuthJSONRPCServer):
         DEPRECATED. Use `status` instead
         """
         d = self.jsonrpc_status({'blockchain_status': True})  # blockchain_status=True is needed
-        d.addCallback(lambda x: self._render_response(x['result']['blocks_behind'], OK_CODE))
+        d.addCallback(lambda x: self._render_response(x['result']['blocks_behind']))
         return d
 
     def jsonrpc_version(self):
@@ -1247,7 +1240,7 @@ class Daemon(AuthJSONRPCServer):
         }
 
         log.info("Get version info: " + json.dumps(msg))
-        return self._render_response(msg, OK_CODE)
+        return self._render_response(msg)
 
     def jsonrpc_report_bug(self, p):
         """
@@ -1262,7 +1255,7 @@ class Daemon(AuthJSONRPCServer):
         bug_message = p['message']
         platform_name = self._get_platform()['platform']
         report_bug_to_slack(bug_message, self.lbryid, platform_name, lbrynet_version)
-        return self._render_response(True, OK_CODE)
+        return self._render_response(True)
 
     def jsonrpc_get_settings(self):
         """
@@ -1297,7 +1290,7 @@ class Daemon(AuthJSONRPCServer):
         log.info("Get daemon settings")
         settings_dict = conf.settings.get_dict()
         settings_dict['lbryid'] = binascii.hexlify(settings_dict['lbryid'])
-        return self._render_response(settings_dict, OK_CODE)
+        return self._render_response(settings_dict)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_set_settings(self, p):
@@ -1333,7 +1326,7 @@ class Daemon(AuthJSONRPCServer):
         d.addErrback(lambda err: log.info(err.getTraceback()))
         d.addCallback(lambda _: _log_settings_change())
         d.addCallback(
-            lambda _: self._render_response(conf.settings.get_adjustable_settings_dict(), OK_CODE))
+            lambda _: self._render_response(conf.settings.get_adjustable_settings_dict()))
 
         return d
 
@@ -1352,17 +1345,17 @@ class Daemon(AuthJSONRPCServer):
         """
 
         if not p:
-            return self._render_response(", ".join(sorted(self.callable_methods.keys())), OK_CODE)
+            return self._render_response(", ".join(sorted(self.callable_methods.keys())))
         elif 'callable_during_startup' in p:
-            return self._render_response(", ".join(sorted(self.allowed_during_startup)), OK_CODE)
+            return self._render_response(", ".join(sorted(self.allowed_during_startup)))
         elif 'function' in p:
             fn = self.callable_methods.get(p['function'])
             if fn is None:
                 return self._render_response(
-                    "Function '" + p['function'] + "' is not a valid function", OK_CODE)
-            return self._render_response(textwrap.dedent(fn.__doc__), OK_CODE)
+                    "Function '" + p['function'] + "' is not a valid function")
+            return self._render_response(textwrap.dedent(fn.__doc__))
         else:
-            return self._render_response(textwrap.dedent(self.jsonrpc_help.__doc__), OK_CODE)
+            return self._render_response(textwrap.dedent(self.jsonrpc_help.__doc__))
 
     def jsonrpc_commands(self):
         """
@@ -1371,7 +1364,7 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             list
         """
-        return self._render_response(sorted(self.callable_methods.keys()), OK_CODE)
+        return self._render_response(sorted(self.callable_methods.keys()))
 
     def jsonrpc_get_balance(self):
         """
@@ -1386,7 +1379,7 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             balance, float
         """
-        return self._render_response(float(self.session.wallet.wallet_balance), OK_CODE)
+        return self._render_response(float(self.session.wallet.wallet_balance))
 
     def jsonrpc_stop(self):
         """
@@ -1408,7 +1401,7 @@ class Daemon(AuthJSONRPCServer):
         d = self._shutdown()
         d.addCallback(lambda _: _display_shutdown_message())
         d.addCallback(lambda _: reactor.callLater(0.0, reactor.stop))
-        return self._render_response("Shutting down", OK_CODE)
+        return self._render_response("Shutting down")
 
     def jsonrpc_get_lbry_files(self):
         """
@@ -1437,7 +1430,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self._get_lbry_files()
-        d.addCallback(lambda r: self._render_response([d[1] for d in r if d[0]], OK_CODE))
+        d.addCallback(lambda r: self._render_response([d[1] for d in r if d[0]]))
 
         return d
 
@@ -1468,7 +1461,7 @@ class Daemon(AuthJSONRPCServer):
             'sd_hash': string
         """
         d = self._get_deferred_for_lbry_file(p)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     def _get_deferred_for_lbry_file(self, p):
@@ -1493,11 +1486,11 @@ class Daemon(AuthJSONRPCServer):
 
         name = p.get(FileID.NAME)
         if not name:
-            return self._render_response(None, BAD_REQUEST)
+            return self._render_response(None)
 
         d = self._resolve_name(name, force_refresh=force)
         d.addCallbacks(
-            lambda info: self._render_response(info, OK_CODE),
+            lambda info: self._render_response(info),
             # TODO: Is server.failure a module? It looks like it:
             #
             # In [1]: import twisted.web.server
@@ -1544,7 +1537,7 @@ class Daemon(AuthJSONRPCServer):
         nout = p.get('nout', None)
         d = self.session.wallet.get_claim_info(name, txid, nout)
         d.addCallback(_convert_amount_to_float)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     def _process_get_parameters(self, p):
@@ -1605,7 +1598,7 @@ class Daemon(AuthJSONRPCServer):
                 'stream_hash': params.sd_hash if params.stream_info else lbry_file.sd_hash,
                 'path': os.path.join(lbry_file.download_directory, lbry_file.file_name)
             }
-            response = yield self._render_response(message, OK_CODE)
+            response = yield self._render_response(message)
             defer.returnValue(response)
 
         download_id = utils.random_string()
@@ -1622,7 +1615,7 @@ class Daemon(AuthJSONRPCServer):
         except Exception as e:
             self.analytics_manager.send_download_errored(download_id, name, stream_info)
             log.exception('Failed to get %s', params.name)
-            response = yield self._render_response(str(e), OK_CODE)
+            response = yield self._render_response(str(e))
         else:
             # TODO: should stream_hash key be changed to sd_hash?
             message = {
@@ -1635,7 +1628,7 @@ class Daemon(AuthJSONRPCServer):
                     lambda _: self.analytics_manager.send_download_finished(
                         download_id, name, stream_info)
                 )
-            response = yield self._render_response(message, OK_CODE)
+            response = yield self._render_response(message)
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
@@ -1685,7 +1678,7 @@ class Daemon(AuthJSONRPCServer):
             msg = "Started seeding file" if status == 'start' else "Stopped seeding file"
         else:
             msg = "File was already being seeded" if status == 'start' else "File was already stopped"
-        defer.returnValue(self._render_response(msg, OK_CODE))
+        defer.returnValue(self._render_response(msg))
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_delete_lbry_file(self, p):
@@ -1724,7 +1717,7 @@ class Daemon(AuthJSONRPCServer):
             d = self._get_lbry_file(searchtype, value, return_json=False)
             d.addCallback(_delete_file)
 
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     def jsonrpc_get_est_cost(self, p):
@@ -1748,7 +1741,7 @@ class Daemon(AuthJSONRPCServer):
         name = p.get(FileID.NAME, None)
 
         d = self.get_est_cost(name, size)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -1827,7 +1820,7 @@ class Daemon(AuthJSONRPCServer):
                 d.addCallback(lambda claim_out: _reflect_if_possible(sd_hash, claim_out))
 
         d.addCallback(lambda claim_out: self._add_to_pending_claims(name, claim_out))
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
 
         return d
 
@@ -1854,7 +1847,7 @@ class Daemon(AuthJSONRPCServer):
 
         def _disp(x):
             log.info("Abandoned name claim tx " + str(x))
-            return self._render_response(x, OK_CODE)
+            return self._render_response(x)
 
         d = defer.Deferred()
         d.addCallback(lambda _: self.session.wallet.abandon_claim(p['txid'], p['nout']))
@@ -1901,7 +1894,7 @@ class Daemon(AuthJSONRPCServer):
         claim_id = p['claim_id']
         amount = p['amount']
         d = self.session.wallet.support_claim(name, claim_id, amount)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     # TODO: merge this into claim_list
@@ -1919,7 +1912,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_my_claim(p[FileID.NAME])
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -1950,7 +1943,7 @@ class Daemon(AuthJSONRPCServer):
 
         d = self.session.wallet.get_name_claims()
         d.addCallback(_clean)
-        d.addCallback(lambda claims: self._render_response(claims, OK_CODE))
+        d.addCallback(lambda claims: self._render_response(claims))
         return d
 
     def jsonrpc_get_claims_for_name(self, p):
@@ -1983,7 +1976,7 @@ class Daemon(AuthJSONRPCServer):
         else:
             return server.failure
 
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -2005,7 +1998,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_history()
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     def jsonrpc_get_transaction(self, p):
@@ -2025,7 +2018,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_transaction(p['txid'])
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -2047,7 +2040,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.address_is_mine(p['address'])
-        d.addCallback(lambda is_mine: self._render_response(is_mine, OK_CODE))
+        d.addCallback(lambda is_mine: self._render_response(is_mine))
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -2069,7 +2062,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_pub_keys(p['wallet'])
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_get_new_address(self):
@@ -2095,7 +2088,7 @@ class Daemon(AuthJSONRPCServer):
 
         d = self.session.wallet.get_new_address()
         d.addCallback(_disp)
-        d.addCallback(lambda address: self._render_response(address, OK_CODE))
+        d.addCallback(lambda address: self._render_response(address))
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -2121,7 +2114,7 @@ class Daemon(AuthJSONRPCServer):
         if reserved_points is None:
             return defer.fail(InsufficientFundsError())
         d = self.session.wallet.send_points_to_address(reserved_points, amount)
-        d.addCallback(lambda _: self._render_response(True, OK_CODE))
+        d.addCallback(lambda _: self._render_response(True))
         return d
 
     def jsonrpc_get_block(self, p):
@@ -2148,7 +2141,7 @@ class Daemon(AuthJSONRPCServer):
         else:
             # TODO: return a useful error message
             return server.failure
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -2172,8 +2165,8 @@ class Daemon(AuthJSONRPCServer):
         timeout = p.get('timeout', conf.settings.sd_download_timeout)
         d = self._download_sd_blob(sd_hash, timeout)
         d.addCallbacks(
-            lambda r: self._render_response(r, OK_CODE),
-            lambda _: self._render_response(False, OK_CODE))
+            lambda r: self._render_response(r),
+            lambda _: self._render_response(False))
         return d
 
     def jsonrpc_get_nametrie(self):
@@ -2188,7 +2181,7 @@ class Daemon(AuthJSONRPCServer):
 
         d = self.session.wallet.get_nametrie()
         d.addCallback(lambda r: [i for i in r if 'txid' in i.keys()])
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     def jsonrpc_log(self, p):
@@ -2204,7 +2197,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         log.info("API client log request: %s" % p['message'])
-        return self._render_response(True, OK_CODE)
+        return self._render_response(True)
 
     def jsonrpc_upload_log(self, p=None):
         """
@@ -2247,7 +2240,7 @@ class Daemon(AuthJSONRPCServer):
             exclude_previous = True
 
         d = self._upload_log(log_type=log_type, exclude_previous=exclude_previous, force=force)
-        d.addCallback(lambda _: self._render_response(True, OK_CODE))
+        d.addCallback(lambda _: self._render_response(True))
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -2272,7 +2265,7 @@ class Daemon(AuthJSONRPCServer):
             d = self.lbry_ui_manager.setup(branch=p['branch'], check_requirements=check_require)
         else:
             d = self.lbry_ui_manager.setup(check_requirements=check_require)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
 
         return d
 
@@ -2293,7 +2286,7 @@ class Daemon(AuthJSONRPCServer):
             # No easy way to reveal specific files on Linux, so just open the containing directory
             d = threads.deferToThread(subprocess.Popen, ['xdg-open', os.path.dirname(path)])
 
-        d.addCallback(lambda _: self._render_response(True, OK_CODE))
+        d.addCallback(lambda _: self._render_response(True))
         return d
 
     def jsonrpc_get_peers_for_hash(self, p):
@@ -2316,7 +2309,7 @@ class Daemon(AuthJSONRPCServer):
 
         d = self.session.peer_finder.find_peers_for_blob(blob_hash)
         d.addCallback(lambda r: [[c.host, c.port, c.is_available()] for c in r])
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     def jsonrpc_announce_all_blobs_to_dht(self):
@@ -2336,7 +2329,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.blob_manager.immediate_announce_all_blobs()
-        d.addCallback(lambda _: self._render_response("Announced", OK_CODE))
+        d.addCallback(lambda _: self._render_response("Announced"))
         return d
 
     def jsonrpc_reflect(self, p):
@@ -2353,8 +2346,8 @@ class Daemon(AuthJSONRPCServer):
         d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
         d.addCallback(self._reflect)
         d.addCallbacks(
-            lambda _: self._render_response(True, OK_CODE),
-            lambda err: self._render_response(err.getTraceback(), OK_CODE))
+            lambda _: self._render_response(True),
+            lambda err: self._render_response(err.getTraceback()))
         return d
 
     def jsonrpc_get_blob_hashes(self):
@@ -2374,7 +2367,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.blob_manager.get_all_verified_blobs()
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     def jsonrpc_reflect_all_blobs(self):
@@ -2395,7 +2388,7 @@ class Daemon(AuthJSONRPCServer):
 
         d = self.session.blob_manager.get_all_verified_blobs()
         d.addCallback(self._reflect_blobs)
-        d.addCallback(lambda r: self._render_response(r, OK_CODE))
+        d.addCallback(lambda r: self._render_response(r))
         return d
 
     def jsonrpc_get_mean_availability(self):
@@ -2408,7 +2401,7 @@ class Daemon(AuthJSONRPCServer):
             Mean peers for a blob
         """
 
-        d = self._render_response(self.session.blob_tracker.last_mean_availability, OK_CODE)
+        d = self._render_response(self.session.blob_tracker.last_mean_availability)
         return d
 
     def jsonrpc_get_availability(self, p):
@@ -2440,15 +2433,15 @@ class Daemon(AuthJSONRPCServer):
             lambda _: [])
         d.addCallback(self.session.blob_tracker.get_availability_for_blobs)
         d.addCallback(_get_mean)
-        d.addCallback(lambda result: self._render_response(result, OK_CODE))
+        d.addCallback(lambda result: self._render_response(result))
 
         return d
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_test_api_authentication(self):
         if self._use_authentication:
-            return self._render_response(True, OK_CODE)
-        return self._render_response("Not using authentication", OK_CODE)
+            return self._render_response(True)
+        return self._render_response("Not using authentication")
 
 
 def get_lbryum_version_from_github():
