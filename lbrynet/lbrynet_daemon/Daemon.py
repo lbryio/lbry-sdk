@@ -1299,7 +1299,6 @@ class Daemon(AuthJSONRPCServer):
             functions callable during the startup sequence
             if no params are given, returns the list of callable functions
         """
-
         if not p:
             return self._render_response(sorted(self.callable_methods.keys()), OK_CODE)
         elif 'callable_during_start' in p.keys():
