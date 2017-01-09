@@ -202,7 +202,12 @@ class Daemon(AuthJSONRPCServer):
         AuthJSONRPCServer.__init__(self, conf.settings.use_auth_http)
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
-        self.allowed_during_startup = ['get_time_behind_blockchain', 'stop','status', 'version']
+        self.allowed_during_startup = [
+            'stop', 'status', 'version',
+            # delete these once they are fully removed:
+            'is_running', 'is_first_run', 'get_time_behind_blockchain', 'daemon_status',
+            'get_start_notice',
+        ]
         last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
         conf.settings.update(last_version)
         self.db_dir = conf.settings.data_dir
@@ -2442,6 +2447,29 @@ class Daemon(AuthJSONRPCServer):
         if self._use_authentication:
             return self._render_response(True)
         return self._render_response("Not using authentication")
+
+    def jsonrpc_get_start_notice(self):
+        """
+        DEPRECATED.
+
+        Get special message to be displayed at startup
+        Args:
+            None
+        Returns:
+            Startup message, such as first run notification
+        """
+
+        def _get_startup_message(resp):
+            status = resp['result']
+            if status['is_first_run'] and self.session.wallet.wallet_balance:
+                return self._render_response(None)
+            else:
+                return self._render_response(status['startup_status']['message'])
+
+        d = self.jsonrpc_status()
+        d.addCallback(_get_startup_message)
+        return d
+
 
 
 def get_lbryum_version_from_github():
