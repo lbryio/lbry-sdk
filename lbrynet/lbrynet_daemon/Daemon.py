@@ -10,7 +10,6 @@ import base58
 import requests
 import urllib
 import simplejson as json
-from urllib2 import urlopen
 from decimal import Decimal
 
 from twisted.web import server
@@ -2328,17 +2327,16 @@ class Daemon(AuthJSONRPCServer):
 
 
 def get_lbryum_version_from_github():
-    r = urlopen(
-        "https://raw.githubusercontent.com/lbryio/lbryum/master/lib/version.py").read().split('\n')
-    version = next(line.split("=")[1].split("#")[0].replace(" ", "")
-                   for line in r if "LBRYUM_VERSION" in line)
-    version = version.replace("'", "")
-    return version
+    return get_version_from_github('https://api.github.com/repos/lbryio/lbryum/releases/latest')
 
 
 def get_lbrynet_version_from_github():
+    return get_version_from_github('https://api.github.com/repos/lbryio/lbry/releases/latest')
+
+
+def get_version_from_github(url):
     """Return the latest released version from github."""
-    response = requests.get('https://api.github.com/repos/lbryio/lbry/releases/latest')
+    response = requests.get(url, timeout=20)
     release = response.json()
     tag = release['tag_name']
     # githubs documentation claims this should never happen, but we'll check just in case
