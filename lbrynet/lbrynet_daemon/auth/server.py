@@ -4,12 +4,13 @@ import urlparse
 from decimal import Decimal
 from zope.interface import implements
 from twisted.web import server, resource
-from twisted.internet import defer
+from twisted.internet import defer, reactor
 from twisted.python.failure import Failure
-
+from twisted.internet.error import ConnectionDone, ConnectionLost
 from txjsonrpc import jsonrpclib
-from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError, SubhandlerError
 from lbrynet import conf
+from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError, SubhandlerError
+from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
 
@@ -29,6 +30,18 @@ class JSONRPCException(Exception):
     @property
     def faultString(self):
         return self.err.getTraceback()
+
+
+class UnknownAPIMethodError(Exception):
+    pass
+
+
+class NotAllowedDuringStartupError(Exception):
+    pass
+
+
+def trap(err, *to_trap):
+    err.trap(*to_trap)
 
 
 class AuthorizedBase(object):
@@ -109,20 +122,38 @@ class AuthJSONRPCServer(AuthorizedBase):
     def setup(self):
         return NotImplementedError()
 
+    def _set_headers(self, request, data, update_secret=False):
+        if conf.settings.allowed_origin:
+            request.setHeader("Access-Control-Allow-Origin", conf.settings.allowed_origin)
+        request.setHeader("Content-Type", "text/json")
+        request.setHeader("Content-Length", str(len(data)))
+        if update_secret:
+            session_id = request.getSession().uid
+            request.setHeader(LBRY_SECRET, self.sessions.get(session_id).secret)
+
+    def _render_message(self, request, message):
+        request.write(message)
+        request.finish()
+
     def _render_error(self, failure, request, version=jsonrpclib.VERSION_1, response_code=FAILURE):
         err = JSONRPCException(Failure(failure), response_code)
         fault = jsonrpclib.dumps(err, version=version)
         self._set_headers(request, fault)
         if response_code != AuthJSONRPCServer.FAILURE:
             request.setResponseCode(response_code)
-        request.write(fault)
-        request.finish()
+        self._render_message(request, fault)
+
+    def _handle_dropped_request(self, result, d, function_name):
+        if not d.called:
+            log.warning("Cancelling dropped api request %s", function_name)
+            reactor.callFromThread(d.cancel)
 
     def render(self, request):
-        notify_finish = request.notifyFinish()
+        time_in = utils.now()
         assert self._check_headers(request), InvalidHeaderError
         session = request.getSession()
         session_id = session.uid
+        finished_deferred = request.notifyFinish()
 
         if self._use_authentication:
             # if this is a new session, send a new secret and set the expiration
@@ -167,16 +198,17 @@ class AuthJSONRPCServer(AuthorizedBase):
                     self._verify_token(session_id, parsed, token)
                 except InvalidAuthenticationToken as err:
                     log.warning("API validation failed")
-                    self._render_error(
-                        err, request, version=version, response_code=AuthJSONRPCServer.UNAUTHORIZED)
+                    self._render_error(err, request,
+                                       version=version,
+                                       response_code=AuthJSONRPCServer.UNAUTHORIZED)
                     return server.NOT_DONE_YET
                 self._update_session_secret(session_id)
                 reply_with_next_secret = True
 
         try:
             function = self._get_jsonrpc_method(function_name)
-        except AttributeError as err:
-            log.warning("Unknown method: %s", function_name)
+        except (UnknownAPIMethodError, NotAllowedDuringStartupError) as err:
+            log.warning(err)
             self._render_error(err, request, version)
             return server.NOT_DONE_YET
 
@@ -185,13 +217,23 @@ class AuthJSONRPCServer(AuthorizedBase):
         else:
             d = defer.maybeDeferred(function, *args)
 
-        # cancel the response if the connection is broken
-        notify_finish.addErrback(self._response_failed, d)
+        # finished_deferred will fire when the request is finished
+        # this could be because the request is really done, or because the connection dropped
+        # if the connection dropped, cancel the deferred stack
+        # otherwise it'll try writing to a closed request and twisted doesn't like that
+
+        # TODO: don't trap RuntimeError, which is presently done to handle deferredLists that
+        # won't peacefully cancel, namely get_lbry_files
+
+        finished_deferred.addBoth(self._handle_dropped_request, d, function_name)
         d.addCallback(self._callback_render, request, version, reply_with_next_secret)
-        d.addErrback(
-            log.fail(self._render_error, request, version=version),
-            'Failed to process %s', function_name
-        )
+        d.addErrback(trap, ConnectionDone, ConnectionLost, defer.CancelledError, RuntimeError)
+        d.addErrback(self._render_error, request, version)
+        d.addErrback(log.fail(self._render_error, request, version=version),
+                     'Failed to process %s', function_name)
+        d.addBoth(lambda _: log.debug("%s took %f",
+                                     function_name,
+                                     (utils.now() - time_in).total_seconds()))
         return server.NOT_DONE_YET
 
     def _register_user_session(self, session_id):
@@ -208,22 +250,6 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _unregister_user_session(self, session_id):
         log.info("Unregister API session")
         del self.sessions[session_id]
-
-    def _response_failed(self, err, call):
-        log.debug(err.getTraceback())
-
-    def _set_headers(self, request, data, update_secret=False):
-        if conf.settings.allowed_origin:
-            request.setHeader("Access-Control-Allow-Origin", conf.settings.allowed_origin)
-        request.setHeader("Content-Type", "text/json")
-        request.setHeader("Content-Length", str(len(data)))
-        if update_secret:
-            session_id = request.getSession().uid
-            request.setHeader(LBRY_SECRET, self.sessions.get(session_id).secret)
-
-    def _render_message(self, request, message):
-        request.write(message)
-        request.finish()
 
     def _check_headers(self, request):
         return (
@@ -257,19 +283,15 @@ class AuthJSONRPCServer(AuthorizedBase):
         else:
             return server_port[0], 80
 
-    def _check_function_path(self, function_path):
+    def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
-            log.warning("Unknown method: %s", function_path)
-            return False
+            raise UnknownAPIMethodError(function_path)
         if not self.announced_startup:
             if function_path not in self.allowed_during_startup:
-                log.warning("Cannot call %s during startup", function_path)
-                return False
-        return True
+                raise NotAllowedDuringStartupError(function_path)
 
     def _get_jsonrpc_method(self, function_path):
-        if not self._check_function_path(function_path):
-            raise AttributeError(function_path)
+        self._verify_method_is_callable(function_path)
         return self.callable_methods.get(function_path)
 
     def _initialize_session(self, session_id):
@@ -302,19 +324,15 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _callback_render(self, result, request, version, auth_required=False):
         result_for_return = result if not isinstance(result, dict) else result['result']
-
         if version == jsonrpclib.VERSION_PRE1:
             if not isinstance(result, jsonrpclib.Fault):
                 result_for_return = (result_for_return,)
             # Convert the result (python) to JSON-RPC
-        try:
-            encoded_message = jsonrpclib.dumps(
-                result_for_return, version=version, default=default_decimal)
-            self._set_headers(request, encoded_message, auth_required)
-            self._render_message(request, encoded_message)
-        except Exception as err:
-            log.exception("Failed to render API response: %s", result)
-            self._render_error(err, request, version)
+        encoded_message = jsonrpclib.dumps(result_for_return,
+                                           version=version,
+                                           default=default_decimal)
+        self._set_headers(request, encoded_message, auth_required)
+        self._render_message(request, encoded_message)
 
     def _render_response(self, result, code):
         return defer.succeed({'result': result, 'code': code})
