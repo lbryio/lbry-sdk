@@ -21,14 +21,15 @@ sudo pip install virtualenv
 ```
 
 ### Linux Prerequisites
-On any Linux system with apt, just run:
+
+On Ubuntu (we recommend 16.04), install the following:
 
 ```
 sudo apt-get install libgmp3-dev build-essential python2.7 python2.7-dev \
      python-pip git python-virtualenv libssl-dev libffi-dev
 ```
 
-If you're running Linux without apt, you're presumably smart enough to unpack the above example.
+If you're running another Linux flavor, install the equivalent of the above packages for your system.
 
 ### Windows Prerequisites
 
@@ -65,7 +66,7 @@ Then, install the module by running `python setupmingw32.py install`.
 
 ## Installation
 
-It is strongly recommended to create a new virtualenv for LBRY:
+We strongly recommend creating a new virtualenv for LBRY:
 
  ```
  virtualenv lbry-venv
@@ -82,4 +83,3 @@ Then, install the package in the new virtualenv:
  ```
 
 To start LBRY, run `lbrynet-daemon` in a terminal.
-
