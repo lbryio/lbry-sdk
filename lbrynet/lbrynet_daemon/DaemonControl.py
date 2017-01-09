@@ -9,7 +9,7 @@ from jsonrpc.proxy import JSONRPCProxy
 from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils
-from lbrynet.lbrynet_daemon.auth import client
+from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 
 
@@ -24,7 +24,7 @@ def stop():
     conf.initialize_settings()
     log_support.configure_console()
     try:
-        client.LBRYAPIClient.config().stop()
+        LBRYAPIClient.get_client().call('stop')
     except Exception:
         log.exception('Failed to stop deamon')
     else:

@@ -15,6 +15,8 @@ from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
 
 log = logging.getLogger(__name__)
 
+EMPTY_PARAMS = [{}]
+
 
 def default_decimal(obj):
     if isinstance(obj, Decimal):
@@ -131,6 +133,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             if self._initialize_session(session_id):
                 def expire_session():
                     self._unregister_user_session(session_id)
+
                 session.startCheckingExpiration()
                 session.notifyOnExpire(expire_session)
                 message = "OK"
@@ -182,7 +185,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._render_error(err, request, id_, version)
             return server.NOT_DONE_YET
 
-        if args == [{}]:
+        if args == EMPTY_PARAMS:
             d = defer.maybeDeferred(function)
         else:
             d = defer.maybeDeferred(function, *args)
@@ -308,7 +311,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         if version == jsonrpclib.VERSION_PRE1:
             if not isinstance(result, jsonrpclib.Fault):
                 result_for_return = (result_for_return,)
-            # Convert the result (python) to JSON-RPC
+
         try:
             encoded_message = jsonrpclib.dumps(
                 result_for_return, id=id_, version=version, default=default_decimal)

@@ -49,7 +49,8 @@ class LBRYURIHandler(object):
 
     def check_daemon(self):
         try:
-            self.started_daemon = self.daemon.is_running()
+            status = self.daemon.call('status')
+            self.started_daemon = status['is_running']
         except:
             self.started_daemon = False
 
