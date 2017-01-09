@@ -10,20 +10,20 @@ LBRY is a fully decentralized, open-source protocol facilitating the discovery, 
 We've provided binaries for Windows, macOS, and Debian-based Linux.
 
 | Windows | macOS | Linux |
-| ------------- | ------------- |
-| [Download MSI](https://lbry.io/get/lbry.msi)  | [Download PKG](https://lbry.io/get/lbry.pkg) | [Download DEB](https://lbry.io/get/lbry.deb) |
+| --- | --- | --- |
+| [Download MSI](https://lbry.io/get/lbry.msi) | [Download PKG](https://lbry.io/get/lbry.pkg) | [Download DEB](https://lbry.io/get/lbry.deb) |
 
-Our [releases page](https://github.com/lbryio/lbry/releases/latest) also contains pre-release and past builds.
+Our [releases page](https://github.com/lbryio/lbry/releases/latest) also contains the latest release, pre-releases, and past builds.
 
 For instructions on building from source, see [INSTALL.md](INSTALL.md).
 
 ## What is LBRY?
 
-LBRYnet is a fully decentralized network for distributing data. It consists of peers uploading
+LBRY is a fully decentralized network for distributing data. It consists of peers uploading
 and downloading data from other peers, possibly in exchange for payments, and a distributed hash
 table, used by peers to discover other peers.
 
-On LBRYnet, data is broken into chunks, and each chunk is specified by its sha384 hash sum. This
+On LBRY, data is broken into chunks, and each chunk is specified by its sha384 hash sum. This
 guarantees that peers can verify the correctness of each chunk without having to know anything
 about its contents, and can confidently re-transmit the chunk to other peers. Peers wishing to
 transmit chunks to other peers announce to the distributed hash table that they are associated
