@@ -4,6 +4,7 @@ import json
 from lbrynet import conf
 from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 from jsonrpc.common import RPCError
+from urllib2 import URLError
 
 
 
@@ -43,16 +44,16 @@ def main():
 
     try:
         status = api.daemon_status()
-        assert status.get('code', False) == "started"
-    except Exception:
-        try:
-            conf.settings.update({'use_auth_http': not conf.settings.use_auth_http})
-            api = LBRYAPIClient.config()
-            status = api.daemon_status()
-            assert status.get('code', False) == "started"
-        except Exception:
-            print "lbrynet-daemon isn't running"
-            sys.exit(1)
+    except URLError:
+        print "Could not connect to lbrynet-daemon. Are you sure it's running?"
+        sys.exit(1)
+
+    if status.get('code', False) != "started":
+        print "Daemon is in the process of starting. Please try again in a bit."
+        message = status.get('message', False)
+        if message:
+            print "  Status: " + message
+        sys.exit(1)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('method', nargs=1)
