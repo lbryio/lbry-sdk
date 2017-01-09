@@ -7,7 +7,7 @@ LBRY is a fully decentralized, open-source protocol facilitating the discovery, 
 
 ## Installing LBRY
 
-We've provided binaries for Windows, macOS, and Debian-based Linux.
+We provide binaries for Windows, macOS, and Debian-based Linux.
 
 | Windows | macOS | Linux |
 | --- | --- | --- |
