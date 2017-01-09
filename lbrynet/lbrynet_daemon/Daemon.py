@@ -1416,20 +1416,7 @@ class Daemon(AuthJSONRPCServer):
             return self._render_response(None, BAD_REQUEST)
 
         d = self._resolve_name(name, force_refresh=force)
-        d.addCallbacks(
-            lambda info: self._render_response(info, OK_CODE),
-            # TODO: Is server.failure a module? It looks like it:
-            #
-            # In [1]: import twisted.web.server
-            # In [2]: twisted.web.server.failure
-            # Out[2]: <module 'twisted.python.failure' from
-            #         '.../site-packages/twisted/python/failure.pyc'>
-            #
-            # If so, maybe we should return something else.
-            errback=log.fail(lambda err: server.failure),
-            errbackArgs=('Failed to resolve name',),
-            errbackKeywords={'level':'INFO'},
-        )
+        d.addCallback(self._render_response, OK_CODE)
         return d
 
     @AuthJSONRPCServer.auth_required
