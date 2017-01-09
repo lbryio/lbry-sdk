@@ -1,17 +1,27 @@
 [![Build Status](https://travis-ci.org/lbryio/lbry.svg?branch=master)](https://travis-ci.org/lbryio/lbry)
 [![Coverage Status](https://coveralls.io/repos/github/lbryio/lbry/badge.svg)](https://coveralls.io/github/lbryio/lbry)
 
-# LBRYnet
+# LBRY
+
+LBRY is a fully decentralized, open-source protocol facilitating the discovery, access, and (sometimes) purchase of data.
+
+## Installing LBRY
+
+We've provided binaries for Windows, macOS, and Debian-based Linux.
+
+| Windows | macOS | Linux |
+| ------------- | ------------- |
+| [Download MSI](https://lbry.io/get/lbry.msi)  | [Download PKG](https://lbry.io/get/lbry.pkg) | [Download DEB](https://lbry.io/get/lbry.deb) |
+
+Our [releases page](https://github.com/lbryio/lbry/releases/latest) also contains pre-release and past builds.
+
+For instructions on building from source, see [INSTALL.md](INSTALL.md).
+
+## What is LBRY?
 
 LBRYnet is a fully decentralized network for distributing data. It consists of peers uploading
 and downloading data from other peers, possibly in exchange for payments, and a distributed hash
 table, used by peers to discover other peers.
-
-## Installation
-
-Download the [latest release](https://github.com/lbryio/lbry/releases/latest) or see [INSTALL.md](INSTALL.md) for manual installation.
-
-## Overview
 
 On LBRYnet, data is broken into chunks, and each chunk is specified by its sha384 hash sum. This
 guarantees that peers can verify the correctness of each chunk without having to know anything
@@ -58,13 +68,13 @@ For instructions on installing from source, see [INSTALL.md](INSTALL.md).
 
 Source code: https://github.com/lbryio/lbry
 
-To contribute, [join us on Slack](https://lbry-slackin.herokuapp.com/) or contact josh@lbry.io. Pull requests are also welcome.
+To contribute, [join us on Slack](https://lbry-slackin.herokuapp.com/) or contact jeremy@lbry.io. Pull requests are also welcome.
 
 ## Support
 
 Please open an issue and describe your situation in detail. We will respond as soon as we can.
 
-For private issues, contact josh@lbry.io.
+For private issues, contact jeremy@lbry.io.
 
 ## License
 
