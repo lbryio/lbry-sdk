@@ -63,7 +63,6 @@ class AuthAPIClient(object):
         auth_header = self.__auth_header
         cookies = self.__cookies
         host = self.__url.hostname
-
         req = requests.Request(method='POST',
                                url=service_url,
                                data=postdata,
@@ -165,13 +164,24 @@ class LBRYAPIClient(object):
     @staticmethod
     def config(service=None, params=None):
         if conf.settings.use_auth_http:
-            if service is None:
-                return AuthAPIClient.config()
-            log.error("Try auth")
-            if params is not None:
-                return AuthAPIClient.config(service=service)(params)
-            return AuthAPIClient.config(service=service)()
-        url = conf.settings.API_CONNECTION_STRING
-        if service is None:
-            return JSONRPCProxy.from_url(url)
+            return send_authenticated_call(service, params)
+        else:
+            return send_unauthenticated_call(service, params)
+
+
+def send_authenticated_call(service, params):
+    if service is None:
+        return AuthAPIClient.config()
+    if params is not None:
+        return AuthAPIClient.config(service=service)(params)
+    return AuthAPIClient.config(service=service)()
+
+
+def send_unauthenticated_call(service, params):
+    url = conf.settings.API_CONNECTION_STRING
+    if service is None:
+        return JSONRPCProxy.from_url(url)
+    if params:
         return JSONRPCProxy.from_url(url).call(service, params)
+    else:
+        return JSONRPCProxy.from_url(url).call(service)
