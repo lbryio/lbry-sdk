@@ -7,7 +7,8 @@ from lbrynet import conf
 from lbrynet.lbrynet_daemon.auth.client import JSONRPCException, LBRYAPIClient
 from lbrynet.lbrynet_daemon.Daemon import LOADING_WALLET_CODE
 from jsonrpc.common import RPCError
-from urllib2 import URLError
+from urllib2 import URLError, HTTPError
+from httplib import UNAUTHORIZED
 
 
 def main():
@@ -33,9 +34,13 @@ def main():
 
     try:
         status = api.status()
-    except URLError:
-        print_error("Could not connect to daemon. Are you sure it's running?",
-                    suggest_help=False)
+    except URLError as err:
+        if isinstance(err, HTTPError) and err.code == UNAUTHORIZED:
+            print_error("Daemon requires authentication, but none was provided.",
+                        suggest_help=False)
+        else:
+            print_error("Could not connect to daemon. Are you sure it's running?",
+                        suggest_help=False)
         return 1
 
     if status['startup_status']['code'] != "started":
