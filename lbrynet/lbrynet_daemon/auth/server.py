@@ -8,7 +8,7 @@ from twisted.internet import defer
 from twisted.python.failure import Failure
 
 from txjsonrpc import jsonrpclib
-from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError, SubhandlerError
+from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError
 from lbrynet import conf
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
@@ -36,7 +36,6 @@ class JSONRPCException(Exception):
 class AuthorizedBase(object):
     def __init__(self):
         self.authorized_functions = []
-        self.subhandlers = []
         self.callable_methods = {}
 
         for methodname in dir(self):
@@ -45,19 +44,10 @@ class AuthorizedBase(object):
                 self.callable_methods.update({methodname.split("jsonrpc_")[1]: method})
                 if hasattr(method, '_auth_required'):
                     self.authorized_functions.append(methodname.split("jsonrpc_")[1])
-            elif not methodname.startswith("__"):
-                method = getattr(self, methodname)
-                if hasattr(method, '_subhandler'):
-                    self.subhandlers.append(method)
 
     @staticmethod
     def auth_required(f):
         f._auth_required = True
-        return f
-
-    @staticmethod
-    def subhandler(f):
-        f._subhandler = True
         return f
 
 
@@ -71,12 +61,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         @AuthJSONRPCServer.auth_required: this requires the client
             include a valid hmac authentication token in their request
 
-        @AuthJSONRPCServer.subhandler: include the tagged method in
-            the processing of requests, to allow inheriting classes to
-            modify request handling. Tagged methods will be passed the
-            request object, and return True when finished to indicate
-            success
-
     Attributes:
         allowed_during_startup (list): list of api methods that are
             callable before the server has finished startup
@@ -85,8 +69,6 @@ class AuthJSONRPCServer(AuthorizedBase):
             lbrynet.lbrynet_daemon.auth.util.APIKey values
 
         authorized_functions (list): list of api methods that require authentication
-
-        subhandlers (list): list of subhandlers
 
         callable_methods (dict): dictionary of api_callable_name: method values
 
@@ -158,12 +140,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         id_ = parsed.get('id')
         token = parsed.pop('hmac', None)
         version = self._get_jsonrpc_version(parsed.get('jsonrpc'), id_)
-
-        try:
-            self._run_subhandlers(request)
-        except SubhandlerError as err:
-            self._render_error(err, request, id_, version)
-            return server.NOT_DONE_YET
 
         reply_with_next_secret = False
         if self._use_authentication:
@@ -301,11 +277,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         else:
             version_for_return = jsonrpclib.VERSION_PRE1
         return version_for_return
-
-    def _run_subhandlers(self, request):
-        for handler in self.subhandlers:
-            if not handler(request):
-                raise SubhandlerError("Subhandler error processing request: %s", request)
 
     def _callback_render(self, result, request, id_, version, auth_required=False):
         result_for_return = result if not isinstance(result, dict) else result['result']
