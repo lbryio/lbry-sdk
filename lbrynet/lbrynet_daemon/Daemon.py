@@ -261,7 +261,6 @@ class Daemon(AuthJSONRPCServer):
 
         self.analytics_manager = analytics_manager
         self.lbryid = conf.settings.lbryid
-        self.daemon_conf = conf.settings.get_conf_filename()
 
         self.wallet_user = None
         self.wallet_password = None
@@ -1357,7 +1356,8 @@ class Daemon(AuthJSONRPCServer):
             fn = self.callable_methods.get(p['function'])
             if fn is None:
                 return self._render_response(
-                    "Function '" + p['function'] + "' is not a valid function")
+                    "No help available for '" + p['function'] + "'. It is not a valid function."
+                )
             return self._render_response(textwrap.dedent(fn.__doc__))
         else:
             return self._render_response(textwrap.dedent(self.jsonrpc_help.__doc__))
@@ -2220,29 +2220,26 @@ class Daemon(AuthJSONRPCServer):
 
         """
 
+        exclude_previous = True
+        force = False
+        log_type = None
+
         if p:
             if 'name_prefix' in p:
                 log_type = p['name_prefix'] + '_api'
             elif 'log_type' in p:
                 log_type = p['log_type'] + '_api'
-            else:
-                log_type = None
 
             if 'exclude_previous' in p:
                 exclude_previous = p['exclude_previous']
-            else:
-                exclude_previous = True
 
             if 'message' in p:
                 log.info("Upload log message: " + str(p['message']))
 
             if 'force' in p:
                 force = p['force']
-            else:
-                force = False
         else:
             log_type = "api"
-            exclude_previous = True
 
         d = self._upload_log(log_type=log_type, exclude_previous=exclude_previous, force=force)
         d.addCallback(lambda _: self._render_response(True))

@@ -141,7 +141,8 @@ class AuthJSONRPCServer(AuthorizedBase):
                 self._set_headers(request, message, True)
                 self._render_message(request, message)
                 return server.NOT_DONE_YET
-            session.touch()
+            else:
+                session.touch()
 
         request.content.seek(0, 0)
         content = request.content.read()
@@ -284,6 +285,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         return False
 
     def _verify_token(self, session_id, message, token):
+        assert token is not None, InvalidAuthenticationToken
         to_auth = get_auth_message(message)
         api_key = self.sessions.get(session_id)
         assert api_key.compare_hmac(to_auth, token), InvalidAuthenticationToken

@@ -37,22 +37,22 @@ class AuthAPIClient(object):
             raise AttributeError  # Python internal stuff
 
         def f(*args):
-            return self.call(name, args)
+            return self.call(name, args[0] if args else {})
 
         return f
 
     def call(self, method, params={}):
         self.__id_count += 1
-        pre_auth_postdata = {
+        pre_auth_post_data = {
             'version': '1.1',
             'method': method,
-            'params': params,
+            'params': [params],
             'id': self.__id_count
         }
-        to_auth = get_auth_message(pre_auth_postdata)
+        to_auth = get_auth_message(pre_auth_post_data)
         token = self.__api_key.get_hmac(to_auth)
-        pre_auth_postdata.update({'hmac': token})
-        postdata = json.dumps(pre_auth_postdata)
+        pre_auth_post_data.update({'hmac': token})
+        post_data = json.dumps(pre_auth_post_data)
         service_url = self.__service_url
         auth_header = self.__auth_header
         cookies = self.__cookies
@@ -60,7 +60,7 @@ class AuthAPIClient(object):
 
         req = requests.Request(method='POST',
                                url=service_url,
-                               data=postdata,
+                               data=post_data,
                                headers={
                                    'Host': host,
                                    'User-Agent': USER_AGENT,
@@ -97,7 +97,6 @@ class AuthAPIClient(object):
     def config(cls, key_name=None, key=None, pw_path=None,
                timeout=HTTP_TIMEOUT,
                connection=None, count=0,
-               service=None,
                cookies=None, auth=None,
                url=None, login_url=None):
 
@@ -153,8 +152,7 @@ class AuthAPIClient(object):
             assert cookies.get(LBRY_SECRET, False), "Missing cookie"
             secret = cookies.get(LBRY_SECRET)
             api_key = APIKey(secret, api_key_name)
-        return cls(api_key, timeout, conn, id_count, service, cookies,
-                   auth_header, url, service_url)
+        return cls(api_key, timeout, conn, id_count, cookies, auth_header, url, service_url)
 
 
 class LBRYAPIClient(object):

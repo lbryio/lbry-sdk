@@ -4,7 +4,7 @@ import os
 import sys
 
 from lbrynet import conf
-from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
+from lbrynet.lbrynet_daemon.auth.client import JSONRPCException, LBRYAPIClient
 from lbrynet.lbrynet_daemon.Daemon import LOADING_WALLET_CODE
 from jsonrpc.common import RPCError
 from urllib2 import URLError
@@ -26,6 +26,7 @@ def main():
         return 1
 
     conf.initialize_settings()
+    conf.update_settings_from_file()
     api = LBRYAPIClient.get_client()
 
     # TODO: check if port is bound. Error if its not
@@ -67,22 +68,17 @@ def main():
                 print result
             else:
                 print json.dumps(result, sort_keys=True, indent=2, separators=(',', ': '))
-        except RPCError as err:
-            handle_error(err, api, method)
-        except KeyError as err:
-            handle_error(err, api, method)
-
-
-def handle_error(err, api, method):
-    # TODO: The api should return proper error codes
-    # and messages so that they can be passed along to the user
-    # instead of this generic message.
-    # https://app.asana.com/0/158602294500137/200173944358192
-    print "Something went wrong, here's the usage for %s:" % method
-    print api.help({'function': method})
-    if hasattr(err, 'msg'):
-        print "Here's the traceback for the error you encountered:"
-        print err.msg
+        except (RPCError, KeyError, JSONRPCException) as err:
+            # TODO: The api should return proper error codes
+            # and messages so that they can be passed along to the user
+            # instead of this generic message.
+            # https://app.asana.com/0/158602294500137/200173944358192
+            print "Something went wrong, here's the usage for %s:" % method
+            print api.help({'function': method})
+            if hasattr(err, 'msg'):
+                print "Here's the traceback for the error you encountered:"
+                print err.msg
+            return 1
 
 
 def guess_type(x):
