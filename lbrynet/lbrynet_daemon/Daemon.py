@@ -1682,7 +1682,9 @@ class Daemon(AuthJSONRPCServer):
             yield self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
             msg = "Started seeding file" if status == 'start' else "Stopped seeding file"
         else:
-            msg = "File was already being seeded" if status == 'start' else "File was already stopped"
+            msg = (
+                "File was already being seeded" if status == 'start' else "File was already stopped"
+            )
         defer.returnValue(self._render_response(msg))
 
     @AuthJSONRPCServer.auth_required
