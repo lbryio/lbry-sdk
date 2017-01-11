@@ -11,7 +11,6 @@ import requests
 import urllib
 import simplejson as json
 import textwrap
-from urllib2 import urlopen
 from decimal import Decimal
 
 from twisted.web import server
@@ -1835,6 +1834,7 @@ class Daemon(AuthJSONRPCServer):
     def jsonrpc_claim_abandon(self, p):
         """
         Abandon a name and reclaim credits from the claim
+
         Args:
             'txid': txid of claim, string
             'nout': nout of claim, integer
@@ -2433,12 +2433,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda result: self._render_response(result))
 
         return d
-
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_test_api_authentication(self):
-        if self._use_authentication:
-            return self._render_response(True)
-        return self._render_response("Not using authentication")
 
     def jsonrpc_get_start_notice(self):
         """

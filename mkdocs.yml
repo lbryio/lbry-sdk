@@ -1,0 +1,7 @@
+site_name: LBRY
+repo_url: https://github.com/lbryio/lbry
+pages:
+  - Home: index.md
+  - "JSON-RPC API": api.md
+#theme: readthedocs
+site_dir: docs_build
