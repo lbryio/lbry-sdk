@@ -85,9 +85,10 @@ class GetStream(object):
         return self.exchange_rate_manager.to_lbc(self.max_key_fee).amount
 
     def start(self, stream_info, name):
-        def _cause_timeout(err):
-            log.info('Cancelling download')
-            self.timeout_counter = self.timeout * 2
+        def _cancel(err):
+            if self.checker:
+                self.checker.stop()
+            self.finished.errback(err)
 
         def _set_status(x, status):
             log.info("Download lbry://%s status changed to %s" % (self.resolved_name, status))
@@ -138,7 +139,7 @@ class GetStream(object):
         self._d.addCallback(lambda r: _set_status(r, DOWNLOAD_RUNNING_CODE))
         self._d.addCallback(get_downloader_factory)
         self._d.addCallback(make_downloader)
-        self._d.addCallbacks(self._start_download, _cause_timeout)
+        self._d.addCallbacks(self._start_download, _cancel)
         self._d.callback(None)
 
         return self.finished
