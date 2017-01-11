@@ -29,6 +29,8 @@ class ConnectionManager(object):
         self._peer_connections = {}  # {Peer: PeerConnectionHandler}
         self._connections_closing = {}  # {Peer: deferred (fired when the connection is closed)}
         self._next_manage_call = None
+        # a deferred that gets fired when a _manage call is set
+        self._manage_deferred = None
         self.stopped = True
 
     def start(self):
@@ -44,6 +46,10 @@ class ConnectionManager(object):
     @defer.inlineCallbacks
     def stop(self):
         self.stopped = True
+        # wait for the current manage call to finish
+        if self._manage_deferred:
+            yield self._manage_deferred
+        # in case we stopped between manage calls, cancel the next one
         if self._next_manage_call and self._next_manage_call.active():
             self._next_manage_call.cancel()
         self._next_manage_call = None
@@ -127,6 +133,8 @@ class ConnectionManager(object):
 
     @defer.inlineCallbacks
     def _manage(self):
+        self._manage_deferred = defer.Deferred()
+
         from twisted.internet import reactor
         if len(self._peer_connections) < conf.settings.max_connections_per_stream:
             try:
@@ -137,7 +145,10 @@ class ConnectionManager(object):
             except Exception:
                 # log this otherwise it will just end up as an unhandled error in deferred
                 log.exception('Something bad happened picking a peer')
-        self._next_manage_call = reactor.callLater(1, self._manage)
+        self._manage_deferred.callback(None)
+        self._manage_deferred = None
+        if not self.stopped:
+            self._next_manage_call = reactor.callLater(1, self._manage)
 
     def _rank_request_creator_connections(self):
         """Returns an ordered list of our request creators, ranked according
