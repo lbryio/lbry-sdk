@@ -165,6 +165,7 @@ class CryptStreamDownloader(object):
         self.download_manager.progress_manager = None
         self.download_manager.blob_handler = None
         self.download_manager.wallet_info_exchanger = None
+        self.blob_requester = None
         self.download_manager.connection_manager = None
         self.download_manager = None
 
