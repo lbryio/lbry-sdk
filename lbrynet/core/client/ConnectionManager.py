@@ -125,31 +125,6 @@ class ConnectionManager(object):
             del self._connections_closing[peer]
             d.callback(True)
 
-    def _rank_request_creator_connections(self):
-        """Returns an ordered list of our request creators, ranked according
-        to which has the least number of connections open that it
-        likes
-        """
-        def count_peers(request_creator):
-            return len([
-                p for p in self._peer_connections.itervalues()
-                if request_creator in p.request_creators])
-
-        return sorted(self._primary_request_creators, key=count_peers)
-
-    def _connect_to_peer(self, peer):
-        if peer is None or self.stopped:
-            return
-
-        from twisted.internet import reactor
-
-        log.debug("Trying to connect to %s", peer)
-        factory = ClientProtocolFactory(peer, self.rate_limiter, self)
-        self._peer_connections[peer] = PeerConnectionHandler(self._primary_request_creators[:],
-                                                             factory)
-        connection = reactor.connectTCP(peer.host, peer.port, factory)
-        self._peer_connections[peer].connection = connection
-
     @defer.inlineCallbacks
     def _manage(self):
         from twisted.internet import reactor
@@ -163,6 +138,18 @@ class ConnectionManager(object):
                 # log this otherwise it will just end up as an unhandled error in deferred
                 log.exception('Something bad happened picking a peer')
         self._next_manage_call = reactor.callLater(1, self._manage)
+
+    def _rank_request_creator_connections(self):
+        """Returns an ordered list of our request creators, ranked according
+        to which has the least number of connections open that it
+        likes
+        """
+        def count_peers(request_creator):
+            return len([
+                p for p in self._peer_connections.itervalues()
+                if request_creator in p.request_creators])
+
+        return sorted(self._primary_request_creators, key=count_peers)
 
     @defer.inlineCallbacks
     def _get_new_peers(self, request_creators):
@@ -187,3 +174,16 @@ class ConnectionManager(object):
                 return peer
         log.debug("Couldn't find a good peer to connect to")
         return None
+
+    def _connect_to_peer(self, peer):
+        if peer is None or self.stopped:
+            return
+
+        from twisted.internet import reactor
+
+        log.debug("Trying to connect to %s", peer)
+        factory = ClientProtocolFactory(peer, self.rate_limiter, self)
+        self._peer_connections[peer] = PeerConnectionHandler(self._primary_request_creators[:],
+                                                             factory)
+        connection = reactor.connectTCP(peer.host, peer.port, factory)
+        self._peer_connections[peer].connection = connection
