@@ -18,7 +18,6 @@ class DownloadManager(object):
         self.progress_manager = None
         self.blob_handler = None
         self.connection_manager = None
-
         self.blobs = {}
         self.blob_infos = {}
 
@@ -59,8 +58,8 @@ class DownloadManager(object):
         d1.addBoth(check_stop, "progress manager")
         d2 = self.connection_manager.stop()
         d2.addBoth(check_stop, "connection manager")
-        dl = defer.DeferredList([d1, d2])
-        dl.addCallback(lambda xs: False not in xs)
+        dl = defer.DeferredList([d1, d2], fireOnOneErrback=True, consumeErrors=True)
+        dl.addCallback(lambda results: all([success for success, val in results]))
         return dl
 
     def add_blobs_to_download(self, blob_infos):
