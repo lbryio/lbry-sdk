@@ -1336,27 +1336,20 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_help(self, p=None):
         """
-        Function to retrieve docstring for API function
+        Return a useful message for an API command
 
         Args:
-            'function': optional, function to retrieve documentation for
-            'callable_during_startup': optional, returns functions that are callable during startup
+            'command': optional, command to retrieve documentation for
         Returns:
-            if given a function, returns given documentation
-            if given callable_during_startup flag, returns list of
-            functions callable during the startup sequence
-            if no params are given, returns the list of callable functions
+            if given a command, returns documentation about that command
+            otherwise returns general help message
         """
 
-        if not p:
-            return self._render_response(", ".join(sorted(self.callable_methods.keys())))
-        elif 'callable_during_startup' in p:
-            return self._render_response(", ".join(sorted(self.allowed_during_startup)))
-        elif 'function' in p:
-            fn = self.callable_methods.get(p['function'])
+        if p and 'command' in p:
+            fn = self.callable_methods.get(p['command'])
             if fn is None:
                 return self._render_response(
-                    "No help available for '" + p['function'] + "'. It is not a valid function."
+                    "No help available for '" + p['command'] + "'. It is not a valid command."
                 )
             return self._render_response(textwrap.dedent(fn.__doc__))
         else:

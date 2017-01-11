@@ -81,6 +81,6 @@ Note: the lbry api can only be used while either the app or lbrynet-daemon comma
     if not status['is_running']:
       print status
     else:
-      for func in api.help():
-        print "%s:\n%s" % (func, api.help({'function': func}))
+      for cmd in api.commands():
+        print "%s:\n%s" % (cmd, api.help({'command': cmd}))
 

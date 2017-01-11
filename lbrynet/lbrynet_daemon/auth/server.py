@@ -279,7 +279,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         return version_for_return
 
     def _callback_render(self, result, request, id_, version, auth_required=False):
-        result_for_return = result if not isinstance(result, dict) else result['result']
+        result_for_return = result
 
         if version == jsonrpclib.VERSION_PRE1:
             if not isinstance(result, jsonrpclib.Fault):
@@ -295,4 +295,4 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._render_error(err, request, id_, version)
 
     def _render_response(self, result):
-        return defer.succeed({'result': result, 'code': 200})
+        return defer.succeed(result)

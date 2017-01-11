@@ -53,8 +53,8 @@ status = api.status()
 if not status['is_running']:
       print status
 else:
-  for func in api.help():
-    print "%s:\n%s" % (func, api.help({'function': func}))
+    for cmd in api.commands():
+        print "%s:\n%s" % (cmd, api.help({'command': cmd}))
 ```
 
 If you've installed lbrynet, it comes with a file sharing application, called `lbrynet-daemon`, which breaks

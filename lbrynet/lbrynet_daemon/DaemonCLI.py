@@ -15,22 +15,9 @@ def main():
     parser = argparse.ArgumentParser(add_help=False)
     _, arguments = parser.parse_known_args()
 
-    if len(arguments) < 1:
-        print_help()
-        return 1
-
-    method = arguments[0]
-    try:
-        params = parse_params(arguments[1:])
-    except InvalidParameters as e:
-        print_error(e.message)
-        return 1
-
     conf.initialize_settings()
     conf.update_settings_from_file()
     api = LBRYAPIClient.get_client()
-
-    # TODO: check if port is bound. Error if its not
 
     try:
         status = api.status()
@@ -55,15 +42,32 @@ def main():
             print "  Status: " + message
         return 1
 
+    if len(arguments) < 1:
+        print_help(api)
+        return 1
+
+    method = arguments[0]
+    try:
+        params = parse_params(arguments[1:])
+    except InvalidParameters as e:
+        print_error(e.message)
+        return 1
+
+    # TODO: check if port is bound. Error if its not
+
     if method in ['--help', '-h', 'help']:
         if len(params) == 0:
-            print_help()
-            print "\nCOMMANDS\n" + wrap_list_to_term_width(api.commands(), prefix='   ')
+            print_help(api)
+        elif 'command' not in params:
+            print_error(
+                'To get help on a specific command, use `{} help command=COMMAND_NAME`'.format(
+                    os.path.basename(sys.argv[0]))
+            )
         else:
-            print api.help(params).strip()
+            print api.call('help', params).strip()
 
     elif method not in api.commands():
-        print_error("Function '" + method + "' is not a valid function.")
+        print_error("'" + method + "' is not a valid command.")
 
     else:
         try:
@@ -79,7 +83,7 @@ def main():
             # instead of this generic message.
             # https://app.asana.com/0/158602294500137/200173944358192
             print "Something went wrong, here's the usage for %s:" % method
-            print api.help({'function': method})
+            print api.call('help', {'command': method})
             if hasattr(err, 'msg'):
                 print "Here's the traceback for the error you encountered:"
                 print err.msg
@@ -137,7 +141,7 @@ def print_error(message, suggest_help=True):
         print_help_suggestion()
 
 
-def print_help():
+def print_help(api):
     print "\n".join([
         "NAME",
         "   lbrynet-cli - LBRY command line client.",
@@ -146,10 +150,13 @@ def print_help():
         "   lbrynet-cli <command> [<args>]",
         "",
         "EXAMPLES",
-        "   lbrynet-cli commands                    # list available commands",
-        "   lbrynet-cli status                      # get daemon status",
-        "   lbrynet-cli resolve_name name=what      # resolve a name",
-        "   lbrynet-cli help function=resolve_name  # get help about a method",
+        "   lbrynet-cli commands                   # list available commands",
+        "   lbrynet-cli status                     # get daemon status",
+        "   lbrynet-cli resolve_name name=what     # resolve a name",
+        "   lbrynet-cli help command=resolve_name  # get help for a command",
+        "",
+        "COMMANDS",
+        wrap_list_to_term_width(api.commands(), prefix='   ')
     ])
 
 
