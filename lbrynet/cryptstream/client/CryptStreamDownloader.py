@@ -147,6 +147,10 @@ class CryptStreamDownloader(object):
     def _get_download_manager(self):
         assert self.blob_requester is None
         download_manager = DownloadManager(self.blob_manager, self.upload_allowed)
+        # TODO: can we get rid of these circular references. I'm not
+        #       smart enough to handle thinking about the interactions
+        #       between them and have hope that there is a simpler way
+        #       to accomplish what we want
         download_manager.blob_info_finder = self._get_metadata_handler(download_manager)
         download_manager.progress_manager = self._get_progress_manager(download_manager)
         download_manager.blob_handler = self._get_blob_handler(download_manager)
