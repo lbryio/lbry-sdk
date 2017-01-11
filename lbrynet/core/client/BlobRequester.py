@@ -46,7 +46,7 @@ class BlobRequester(object):
         self.peer_finder = peer_finder
         self.payment_rate_manager = payment_rate_manager
         self.wallet = wallet
-        self.download_manager = download_manager
+        self._download_manager = download_manager
         self._peers = defaultdict(int)  # {Peer: score}
         self._available_blobs = defaultdict(list)  # {Peer: [blob_hash]}
         self._unavailable_blobs = defaultdict(list)  # {Peer: [blob_hash]}}
@@ -159,12 +159,12 @@ class BlobRequester(object):
         return False
 
     def _blobs_to_download(self):
-        needed_blobs = self.download_manager.needed_blobs()
+        needed_blobs = self._download_manager.needed_blobs()
         return sorted(needed_blobs, key=lambda b: b.is_downloading())
 
     def _blobs_without_sources(self):
         return [
-            b for b in self.download_manager.needed_blobs()
+            b for b in self._download_manager.needed_blobs()
             if not self._hash_available(b.blob_hash)
         ]
 
