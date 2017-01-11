@@ -2220,6 +2220,27 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @AuthJSONRPCServer.auth_required
+    def jsonrpc_open_file(self, p):
+        """
+        Instruct the OS to open a file.
+
+        Args:
+            'path': path of file to be opened
+        Returns:
+            True, opens file
+        """
+        path = p['path']
+        if sys.platform == 'darwin':
+            d = threads.deferToThread(subprocess.Popen, ['open', path])
+        elif os.name == 'posix':
+            d = threads.deferToThread(subprocess.Popen, ['xdg-open', path])
+        elif sys.platform == 'win32':
+            d = threads.deferToThread(os.startfile, path)
+
+        d.addCallback(lambda _: self._render_response(True, OK_CODE))
+        return d
+
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_reveal(self, p):
         """
         Reveal a file or directory in file browser
