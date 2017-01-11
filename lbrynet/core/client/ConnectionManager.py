@@ -41,13 +41,13 @@ class ConnectionManager(object):
         self._next_manage_call = reactor.callLater(0, self._manage)
         return defer.succeed(True)
 
+    @defer.inlineCallbacks
     def stop(self):
         self.stopped = True
-        if self._next_manage_call is not None and self._next_manage_call.active() is True:
+        if self._next_manage_call and self._next_manage_call.active():
             self._next_manage_call.cancel()
         self._next_manage_call = None
-
-        return self._close_peers()
+        yield self._close_peers()
 
     def _close_peers(self):
 
