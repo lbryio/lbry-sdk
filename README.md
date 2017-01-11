@@ -49,11 +49,12 @@ except:
   API_CONNECTION_STRING = "http://localhost:5279/lbryapi"
   
 api = JSONRPCProxy.from_url(API_CONNECTION_STRING)
-if not api.is_running():
-  print api.daemon_status()
+status = api.status()
+if not status['is_running']:
+      print status
 else:
-  for func in api.help():
-    print "%s:\n%s" % (func, api.help({'function': func}))
+    for cmd in api.commands():
+        print "%s:\n%s" % (cmd, api.help({'command': cmd}))
 ```
 
 If you've installed lbrynet, it comes with a file sharing application, called `lbrynet-daemon`, which breaks

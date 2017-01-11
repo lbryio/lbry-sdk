@@ -11,7 +11,7 @@ from lbrynet import conf
 class LBRYURIHandler(object):
     def __init__(self):
         self.started_daemon = False
-        self.daemon = LBRYAPIClient.config()
+        self.daemon = LBRYAPIClient.get_client()
 
     def handle_osx(self, lbry_name):
         self.check_daemon()
@@ -27,7 +27,7 @@ class LBRYURIHandler(object):
         if not self.started_daemon:
             cmd = r'DIR = "$( cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd )"' \
                   r'if [-z "$(pgrep lbrynet-daemon)"]; then' \
-                    r'echo "running lbrynet-daemon..."' \
+                    r'echo "running lbrynet-daemon"' \
                     r'$DIR / lbrynet - daemon &' \
                     r'sleep 3  # let the daemon load before connecting' \
                   r'fi'
@@ -49,7 +49,8 @@ class LBRYURIHandler(object):
 
     def check_daemon(self):
         try:
-            self.started_daemon = self.daemon.is_running()
+            status = self.daemon.call('status')
+            self.started_daemon = status['is_running']
         except:
             self.started_daemon = False
 

@@ -9,12 +9,11 @@
 
 /build
 /dist
+/lbrynet.egg-info
 
 .idea/.name
 .coverage
 .DS_Store
-
-lbrynet.egg-info/PKG-INFO
 
 # temporary files from the twisted.trial test runner
 _trial_temp/
