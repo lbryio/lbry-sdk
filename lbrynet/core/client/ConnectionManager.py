@@ -46,30 +46,29 @@ class ConnectionManager(object):
         if self._next_manage_call is not None and self._next_manage_call.active() is True:
             self._next_manage_call.cancel()
         self._next_manage_call = None
-        closing_deferreds = []
-        for peer in self._peer_connections.keys():
 
-            def close_connection(p):
-                log.info(
-                    "Abruptly closing a connection to %s due to downloading being paused", p)
+        return self._close_peers()
 
-                if self._peer_connections[p].factory.p is not None:
-                    d = self._peer_connections[p].factory.p.cancel_requests()
-                else:
-                    d = defer.succeed(True)
+    def _close_peers(self):
 
-                def disconnect_peer():
-                    d = defer.Deferred()
-                    self._connections_closing[p] = d
-                    self._peer_connections[p].connection.disconnect()
-                    if p in self._peer_connections:
-                        del self._peer_connections[p]
-                    return d
+        def disconnect_peer(p):
+            d = defer.Deferred()
+            self._connections_closing[p] = d
+            self._peer_connections[p].connection.disconnect()
+            if p in self._peer_connections:
+                del self._peer_connections[p]
+            return d
 
-                d.addBoth(lambda _: disconnect_peer())
-                return d
+        def close_connection(p):
+            log.info("Abruptly closing a connection to %s due to downloading being paused", p)
+            if self._peer_connections[p].factory.p is not None:
+                d = self._peer_connections[p].factory.p.cancel_requests()
+            else:
+                d = defer.succeed(True)
+            d.addBoth(lambda _: disconnect_peer(p))
+            return d
 
-            closing_deferreds.append(close_connection(peer))
+        closing_deferreds = [close_connection(peer) for peer in self._peer_connections.keys()]
         return defer.DeferredList(closing_deferreds)
 
     @defer.inlineCallbacks
