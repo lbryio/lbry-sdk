@@ -7,12 +7,6 @@ matrix:
           # that comes with the system, so we don't want to use anything that
           # travis would try to set-up for us in python
           language: generic
-        - os: osx
-          # Use generic language for osx
-          # python 2.7 is broken on osx on travis, so follow we have to specify the installation ourselves
-          # https://github.com/travis-ci/travis-ci/issues/2312#issuecomment-195620855
-          language: generic
-          osx_image: xcode7.3
 
 notifications:
   slack:
