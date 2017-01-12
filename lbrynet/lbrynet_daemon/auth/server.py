@@ -4,7 +4,7 @@ import urlparse
 from decimal import Decimal
 from zope.interface import implements
 from twisted.web import server, resource
-from twisted.internet import defer, reactor
+from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.internet.error import ConnectionDone, ConnectionLost
 from txjsonrpc import jsonrpclib
