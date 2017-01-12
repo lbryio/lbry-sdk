@@ -1128,7 +1128,7 @@ class Daemon(AuthJSONRPCServer):
         """
         d = self.jsonrpc_status({'blockchain_status': True})
         d.addCallback(lambda x: self._render_response(
-            x['result']['blockchain_status']['best_blockhash']))
+            x['blockchain_status']['best_blockhash']))
         return d
 
     def jsonrpc_is_running(self):
@@ -1136,7 +1136,7 @@ class Daemon(AuthJSONRPCServer):
         DEPRECATED. Use `status` instead
         """
         d = self.jsonrpc_status({'blockchain_status': True})
-        d.addCallback(lambda x: self._render_response(x['result']['is_running']))
+        d.addCallback(lambda x: self._render_response(x['is_running']))
         return d
 
     def jsonrpc_daemon_status(self):
@@ -1145,23 +1145,23 @@ class Daemon(AuthJSONRPCServer):
         """
 
         def _simulate_old_daemon_status(status):
-            message = status['result']['startup_status']['message']
+            message = status['startup_status']['message']
             problem_code = None
             progress = None
 
             if self.connection_status_code != CONNECTION_STATUS_CONNECTED:
                 problem_code = self.connection_status_code
                 message = CONNECTION_MESSAGES[self.connection_status_code]
-            elif status['result']['startup_status']['code'] == LOADING_WALLET_CODE:
+            elif status['startup_status']['code'] == LOADING_WALLET_CODE:
                 message = "Catching up with the blockchain."
                 progress = 0
-                if status['result']['blocks_behind'] > 0:
-                    message += ' ' + str(status['result']['blocks_behind']) + " blocks behind."
+                if status['blocks_behind'] > 0:
+                    message += ' ' + str(status['blocks_behind']) + " blocks behind."
                     progress = self.session.wallet.catchup_progress
 
             return {
                 'message': message,
-                'code': status['result']['startup_status']['code'],
+                'code': status['startup_status']['code'],
                 'progress': progress,
                 'is_lagging': self.connection_status_code != CONNECTION_STATUS_CONNECTED,
                 'problem_code': problem_code,
@@ -1177,7 +1177,7 @@ class Daemon(AuthJSONRPCServer):
         DEPRECATED. Use `status` instead
         """
         d = self.jsonrpc_status({'blockchain_status': True})
-        d.addCallback(lambda x: self._render_response(x['result']['is_first_run']))
+        d.addCallback(lambda x: self._render_response(x['is_first_run']))
         return d
 
     def jsonrpc_get_lbry_session_info(self):
@@ -1187,9 +1187,9 @@ class Daemon(AuthJSONRPCServer):
 
         d = self.jsonrpc_status({'session_status': True})
         d.addCallback(lambda x: self._render_response({
-            'lbry_id': x['result']['lbry_id'],
-            'managed_blobs': x['result']['session_status']['managed_blobs'],
-            'managed_streams': x['result']['session_status']['managed_streams'],
+            'lbry_id': x['lbry_id'],
+            'managed_blobs': x['session_status']['managed_blobs'],
+            'managed_streams': x['session_status']['managed_streams'],
         }))
         return d
 
@@ -1198,7 +1198,7 @@ class Daemon(AuthJSONRPCServer):
         DEPRECATED. Use `status` instead
         """
         d = self.jsonrpc_status({'blockchain_status': True})  # blockchain_status=True is needed
-        d.addCallback(lambda x: self._render_response(x['result']['blocks_behind']))
+        d.addCallback(lambda x: self._render_response(x['blocks_behind']))
         return d
 
     def jsonrpc_version(self):
@@ -2445,8 +2445,7 @@ class Daemon(AuthJSONRPCServer):
             Startup message, such as first run notification
         """
 
-        def _get_startup_message(resp):
-            status = resp['result']
+        def _get_startup_message(status):
             if status['is_first_run'] and self.session.wallet.wallet_balance:
                 return self._render_response(None)
             else:
