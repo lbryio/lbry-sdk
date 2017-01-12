@@ -194,7 +194,7 @@ class HashBlob(object):
         return self.blob_hash[:16]
 
     def __repr__(self):
-        return str(self)
+        return '<{}({})>'.format(self.__class__.__name__, str(self))
 
 
 class BlobFile(HashBlob):
