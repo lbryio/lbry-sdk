@@ -217,15 +217,14 @@ class AuthJSONRPCServer(AuthorizedBase):
         else:
             d = defer.maybeDeferred(function, *args)
 
-        # finished_deferred will fire when the request is finished
-        # this could be because the request is really done, or because the connection dropped
-        # if the connection dropped, cancel the deferred stack
-        # otherwise it'll try writing to a closed request and twisted doesn't like that
+        # finished_deferred will callback when the request is finished and errback if something went wrong
+        # if the errback is called, cancel the deferred stack, this is to prevent request.finish()
+        # from being called on a closed request
 
-        # TODO: don't trap RuntimeError, which is presently done to handle deferredLists that
+        # TODO: don't trap RuntimeError, which is presently caught to handle deferredLists that
         # won't peacefully cancel, namely get_lbry_files
 
-        finished_deferred.addBoth(self._handle_dropped_request, d, function_name)
+        finished_deferred.addErrback(self._handle_dropped_request, d, function_name)
         d.addCallback(self._callback_render, request, version, reply_with_next_secret)
         d.addErrback(trap, ConnectionDone, ConnectionLost, defer.CancelledError, RuntimeError)
         d.addErrback(self._render_error, request, version)
