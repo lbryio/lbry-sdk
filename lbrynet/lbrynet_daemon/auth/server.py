@@ -146,7 +146,7 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _handle_dropped_request(self, result, d, function_name):
         if not d.called:
             log.warning("Cancelling dropped api request %s", function_name)
-            reactor.callFromThread(d.cancel)
+            d.cancel()
 
     def render(self, request):
         time_in = utils.now()
