@@ -1748,7 +1748,7 @@ class Daemon(AuthJSONRPCServer):
             'txid' : txid of resulting transaction if succesful
             'nout' : nout of the resulting support claim if succesful
             'fee' : fee paid for the claim transaction if succesful
-            'claimid' : claimid of the resulting transaction
+            'claim_id' : claim id of the resulting transaction
         """
 
         def _set_address(address, currency, m):
