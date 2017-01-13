@@ -10,9 +10,11 @@ import traceback
 
 import requests
 from requests_futures.sessions import FuturesSession
+import twisted.python.log
 
 import lbrynet
 from lbrynet import analytics
+from lbrynet import build_type
 from lbrynet import conf
 from lbrynet.core import utils
 
@@ -147,8 +149,14 @@ def get_loggly_url(token=None, version=None):
     return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
 
 
+def configure_loggly_handler(*args, **kwargs):
+    if build_type.BUILD == 'dev':
+        return
+    _configure_loggly_handler(*args, **kwargs)
+
+
 @_log_decorator
-def configure_loggly_handler(url=None, **kwargs):
+def _configure_loggly_handler(url=None, **kwargs):
     url = url or get_loggly_url()
     formatter = JsonFormatter(**kwargs)
     handler = HTTPSHandler(url)
@@ -250,6 +258,7 @@ def configure_logging(file_name, console, verbose=None):
             See `convert_verbose` for more details.
     """
     verbose = convert_verbose(verbose)
+    configure_twisted()
     configure_file_handler(file_name)
     configure_loggly_handler()
     disable_third_party_loggers()
@@ -268,6 +277,15 @@ def configure_logging(file_name, console, verbose=None):
             verbose.remove('lbryum')
         if verbose:
             handler.addFilter(LoggerNameFilter(verbose))
+
+
+def configure_twisted():
+    """Setup twisted logging to output events to the python stdlib logger"""
+    # I tried using the new logging api
+    # https://twistedmatrix.com/documents/current/core/howto/logger.html#compatibility-with-standard-library-logging
+    # and it simply didn't work
+    observer = twisted.python.log.PythonLoggingObserver()
+    observer.start()
 
 
 class LoggerNameFilter(object):
