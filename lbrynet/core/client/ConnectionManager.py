@@ -29,6 +29,8 @@ class ConnectionManager(object):
         self._peer_connections = {}  # {Peer: PeerConnectionHandler}
         self._connections_closing = {}  # {Peer: deferred (fired when the connection is closed)}
         self._next_manage_call = None
+        # a deferred that gets fired when a _manage call is set
+        self._manage_deferred = None
         self.stopped = True
 
     def start(self):
@@ -41,35 +43,38 @@ class ConnectionManager(object):
         self._next_manage_call = reactor.callLater(0, self._manage)
         return defer.succeed(True)
 
+    @defer.inlineCallbacks
     def stop(self):
         self.stopped = True
-        if self._next_manage_call is not None and self._next_manage_call.active() is True:
+        # wait for the current manage call to finish
+        if self._manage_deferred:
+            yield self._manage_deferred
+        # in case we stopped between manage calls, cancel the next one
+        if self._next_manage_call and self._next_manage_call.active():
             self._next_manage_call.cancel()
         self._next_manage_call = None
-        closing_deferreds = []
-        for peer in self._peer_connections.keys():
+        yield self._close_peers()
 
-            def close_connection(p):
-                log.info(
-                    "Abruptly closing a connection to %s due to downloading being paused", p)
+    def _close_peers(self):
 
-                if self._peer_connections[p].factory.p is not None:
-                    d = self._peer_connections[p].factory.p.cancel_requests()
-                else:
-                    d = defer.succeed(True)
+        def disconnect_peer(p):
+            d = defer.Deferred()
+            self._connections_closing[p] = d
+            self._peer_connections[p].connection.disconnect()
+            if p in self._peer_connections:
+                del self._peer_connections[p]
+            return d
 
-                def disconnect_peer():
-                    d = defer.Deferred()
-                    self._connections_closing[p] = d
-                    self._peer_connections[p].connection.disconnect()
-                    if p in self._peer_connections:
-                        del self._peer_connections[p]
-                    return d
+        def close_connection(p):
+            log.info("Abruptly closing a connection to %s due to downloading being paused", p)
+            if self._peer_connections[p].factory.p is not None:
+                d = self._peer_connections[p].factory.p.cancel_requests()
+            else:
+                d = defer.succeed(True)
+            d.addBoth(lambda _: disconnect_peer(p))
+            return d
 
-                d.addBoth(lambda _: disconnect_peer())
-                return d
-
-            closing_deferreds.append(close_connection(peer))
+        closing_deferreds = [close_connection(peer) for peer in self._peer_connections.keys()]
         return defer.DeferredList(closing_deferreds)
 
     @defer.inlineCallbacks
@@ -126,6 +131,25 @@ class ConnectionManager(object):
             del self._connections_closing[peer]
             d.callback(True)
 
+    @defer.inlineCallbacks
+    def _manage(self):
+        self._manage_deferred = defer.Deferred()
+
+        from twisted.internet import reactor
+        if len(self._peer_connections) < conf.settings.max_connections_per_stream:
+            try:
+                ordered_request_creators = self._rank_request_creator_connections()
+                peers = yield self._get_new_peers(ordered_request_creators)
+                peer = self._pick_best_peer(peers)
+                yield self._connect_to_peer(peer)
+            except Exception:
+                # log this otherwise it will just end up as an unhandled error in deferred
+                log.exception('Something bad happened picking a peer')
+        self._manage_deferred.callback(None)
+        self._manage_deferred = None
+        if not self.stopped:
+            self._next_manage_call = reactor.callLater(1, self._manage)
+
     def _rank_request_creator_connections(self):
         """Returns an ordered list of our request creators, ranked according
         to which has the least number of connections open that it
@@ -137,33 +161,6 @@ class ConnectionManager(object):
                 if request_creator in p.request_creators])
 
         return sorted(self._primary_request_creators, key=count_peers)
-
-    def _connect_to_peer(self, peer):
-        if peer is None or self.stopped:
-            return
-
-        from twisted.internet import reactor
-
-        log.debug("Trying to connect to %s", peer)
-        factory = ClientProtocolFactory(peer, self.rate_limiter, self)
-        self._peer_connections[peer] = PeerConnectionHandler(self._primary_request_creators[:],
-                                                             factory)
-        connection = reactor.connectTCP(peer.host, peer.port, factory)
-        self._peer_connections[peer].connection = connection
-
-    @defer.inlineCallbacks
-    def _manage(self):
-        from twisted.internet import reactor
-        if len(self._peer_connections) < conf.settings.max_connections_per_stream:
-            try:
-                ordered_request_creators = self._rank_request_creator_connections()
-                peers = yield self._get_new_peers(ordered_request_creators)
-                peer = self._pick_best_peer(peers)
-                yield self._connect_to_peer(peer)
-            except Exception:
-                # log this otherwise it will just end up as an unhandled error in deferred
-                log.exception('Something bad happened picking a peer')
-        self._next_manage_call = reactor.callLater(1, self._manage)
 
     @defer.inlineCallbacks
     def _get_new_peers(self, request_creators):
@@ -188,3 +185,16 @@ class ConnectionManager(object):
                 return peer
         log.debug("Couldn't find a good peer to connect to")
         return None
+
+    def _connect_to_peer(self, peer):
+        if peer is None or self.stopped:
+            return
+
+        from twisted.internet import reactor
+
+        log.debug("Trying to connect to %s", peer)
+        factory = ClientProtocolFactory(peer, self.rate_limiter, self)
+        self._peer_connections[peer] = PeerConnectionHandler(self._primary_request_creators[:],
+                                                             factory)
+        connection = reactor.connectTCP(peer.host, peer.port, factory)
+        self._peer_connections[peer].connection = connection

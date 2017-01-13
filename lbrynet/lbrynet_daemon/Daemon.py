@@ -1677,7 +1677,8 @@ class Daemon(AuthJSONRPCServer):
             msg = (
                 "File was already being seeded" if status == 'start' else "File was already stopped"
             )
-        defer.returnValue(self._render_response(msg))
+        response = yield self._render_response(msg)
+        defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_delete_lbry_file(self, p):

@@ -42,7 +42,11 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.claim_id = None
         self.rowid = rowid
         self.lbry_file_manager = lbry_file_manager
-        self.saving_status = False
+        self._saving_status = False
+
+    @property
+    def saving_status(self):
+        return self._saving_status
 
     def restore(self):
         d = self.stream_info_manager._get_sd_blob_hashes_for_stream(self.stream_hash)
@@ -96,18 +100,13 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         reflector_server = random.choice(conf.settings.reflector_servers)
         return reupload.check_and_restore_availability(self, reflector_server)
 
+    @defer.inlineCallbacks
     def stop(self, err=None, change_status=True):
-
-        def set_saving_status_done():
-            self.saving_status = False
-
+        log.debug('Stopping download for %s', self.sd_hash)
         # EncryptedFileSaver deletes metadata when it's stopped. We don't want that here.
-        d = EncryptedFileDownloader.stop(self, err=err)
+        yield EncryptedFileDownloader.stop(self, err=err)
         if change_status is True:
-            self.saving_status = True
-            d.addCallback(lambda _: self._save_status())
-            d.addCallback(lambda _: set_saving_status_done())
-        return d
+            status = yield self._save_status()
 
     def status(self):
         def find_completed_blobhashes(blobs):
@@ -158,14 +157,17 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         else:
             return "Download stopped"
 
+    @defer.inlineCallbacks
     def _save_status(self):
+        self._saving_status = True
         if self.completed is True:
-            s = ManagedEncryptedFileDownloader.STATUS_FINISHED
+            status = ManagedEncryptedFileDownloader.STATUS_FINISHED
         elif self.stopped is True:
-            s = ManagedEncryptedFileDownloader.STATUS_STOPPED
+            status = ManagedEncryptedFileDownloader.STATUS_STOPPED
         else:
-            s = ManagedEncryptedFileDownloader.STATUS_RUNNING
-        return self.lbry_file_manager.change_lbry_file_status(self, s)
+            status = ManagedEncryptedFileDownloader.STATUS_RUNNING
+        yield self.lbry_file_manager.change_lbry_file_status(self, status)
+        self._saving_status = False
 
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading,
