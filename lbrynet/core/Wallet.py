@@ -649,7 +649,7 @@ class Wallet(object):
                     lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'],
                                                                       claim_outpoint,
                                                                       new_metadata, _bid))
-                d.addCallback(lambda claim_out: claim_out.update({'claim_id':claim['claim_id']}))
+                d.addCallback(lambda claim_out: claim_out.update({'claim_id': claim['claim_id']}))
                 return d
 
         meta = Metadata(m)

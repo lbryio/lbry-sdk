@@ -40,15 +40,18 @@ class Publisher(object):
 
     def start(self, name, file_path, bid, metadata):
         log.info('Starting publish for %s', name)
+
         def _show_result():
-            log.info("Success! Published %s --> lbry://%s txid: %s nout: %d",
-                      self.file_name, self.publish_name, self.txid, self.nout)
-            out = {}
-            out['nout'] = self.nout
-            out['txid'] = self.txid
-            out['claim_id'] = self.claim_id
-            out['fee'] = self.fee
-            return defer.succeed(out)
+            log.info(
+                "Success! Published %s --> lbry://%s txid: %s nout: %d",
+                self.file_name, self.publish_name, self.txid, self.nout
+            )
+            return defer.succeed({
+                'nout': self.nout,
+                'txid': self.txid,
+                'claim_id': self.claim_id,
+                'fee': self.fee,
+            })
 
         self.publish_name = name
         self.file_path = file_path
