@@ -58,7 +58,7 @@ class DownloadManager(object):
         d1.addBoth(check_stop, "progress manager")
         d2 = self.connection_manager.stop()
         d2.addBoth(check_stop, "connection manager")
-        dl = defer.DeferredList([d1, d2], fireOnOneErrback=True, consumeErrors=True)
+        dl = defer.DeferredList([d1, d2], consumeErrors=True)
         dl.addCallback(lambda results: all([success for success, val in results]))
         return dl
 
