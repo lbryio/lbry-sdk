@@ -106,9 +106,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         # EncryptedFileSaver deletes metadata when it's stopped. We don't want that here.
         yield EncryptedFileDownloader.stop(self, err=err)
         if change_status is True:
-            self._saving_status = True
             status = yield self._save_status()
-            self._saving_status = False
 
     def status(self):
         def find_completed_blobhashes(blobs):
@@ -159,14 +157,17 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         else:
             return "Download stopped"
 
+    @defer.inlineCallbacks
     def _save_status(self):
+        self._saving_status = True
         if self.completed is True:
-            s = ManagedEncryptedFileDownloader.STATUS_FINISHED
+            status = ManagedEncryptedFileDownloader.STATUS_FINISHED
         elif self.stopped is True:
-            s = ManagedEncryptedFileDownloader.STATUS_STOPPED
+            status = ManagedEncryptedFileDownloader.STATUS_STOPPED
         else:
-            s = ManagedEncryptedFileDownloader.STATUS_RUNNING
-        return self.lbry_file_manager.change_lbry_file_status(self, s)
+            status = ManagedEncryptedFileDownloader.STATUS_RUNNING
+        yield self.lbry_file_manager.change_lbry_file_status(self, status)
+        self._saving_status = False
 
     def _get_progress_manager(self, download_manager):
         return FullStreamProgressManager(self._finished_downloading,
