@@ -38,7 +38,7 @@ from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
-from lbrynet.core import log_support, utils
+from lbrynet.core import log_support, utils, file_utils
 from lbrynet.core import system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
@@ -2222,22 +2222,24 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     def jsonrpc_open(self, p):
         """
-        Instruct the OS to open a file.
+        Instruct the OS to open a file with its default program.
 
         Args:
-            'path': path of file to be opened
+            'sd_hash': SD hash of file to be opened
         Returns:
             True, opens file
         """
-        path = p['path']
-        if sys.platform == 'darwin':
-            d = threads.deferToThread(subprocess.Popen, ['open', path])
-        elif os.name == 'posix':
-            d = threads.deferToThread(subprocess.Popen, ['xdg-open', path])
-        elif sys.platform == 'win32':
-            d = threads.deferToThread(os.startfile, path)
 
+        def _open_lbry_file(lbry_file):
+            try:
+                file_utils.start(lbry_file['download_path'])
+            except IOError:
+                pass
+
+        d = self._get_lbry_file(FileID.SD_HASH, p['sd_hash'])
+        d.addCallback(_open_lbry_file)
         d.addCallback(lambda _: self._render_response(True, OK_CODE))
+
         return d
 
     @AuthJSONRPCServer.auth_required
@@ -2246,19 +2248,23 @@ class Daemon(AuthJSONRPCServer):
         Reveal a file or directory in file browser
 
         Args:
-            'path': path to be selected in file browser
+            'path': path to be revealed in file browser
         Returns:
             True, opens file browser
         """
-        path = p['path']
-        if sys.platform == "darwin":
-            d = threads.deferToThread(subprocess.Popen, ['open', '-R', path])
-        else:
-            # No easy way to reveal specific files on Linux, so just open the containing directory
-            d = threads.deferToThread(subprocess.Popen, ['xdg-open', os.path.dirname(path)])
 
-        d.addCallback(lambda _: self._render_response(True))
+        def _reveal_lbry_file(lbry_file):
+            try:
+                file_utils.reveal(lbry_file['download_path'])
+            except IOError:
+                pass
+
+        d = self._get_lbry_file(FileID.SD_HASH, p['sd_hash'])
+        d.addCallback(_reveal_lbry_file)
+        d.addCallback(lambda _: self._render_response(True, OK_CODE))
+
         return d
+
 
     def jsonrpc_get_peers_for_hash(self, p):
         """
