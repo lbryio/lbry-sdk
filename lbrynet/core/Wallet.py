@@ -604,6 +604,12 @@ class Wallet(object):
             meta_for_return[k] = new_metadata[k]
         return defer.succeed(Metadata(meta_for_return))
 
+
+    def _process_claim_out(self, claim_out):
+        claim_out.pop('success')
+        claim_out['fee'] = float(claim_out['fee'])
+        return claim_out
+
     """
     Claim a name, update if name already claimed by user
     @param name: name to claim
@@ -624,7 +630,7 @@ class Wallet(object):
             if not claim_out['success']:
                 msg = 'Claim to name {} failed: {}'.format(name, claim_out['reason'])
                 raise Exception(msg)
-            claim_out.pop('success')
+            claim_out = self._process_claim_out(claim_out)
             claim_outpoint = ClaimOutpoint(claim_out['txid'], claim_out['nout'])
             log.info("Saving metadata for claim %s %d",
                      claim_outpoint['txid'], claim_outpoint['nout'])
@@ -658,7 +664,7 @@ class Wallet(object):
             if not claim_out['success']:
                 msg = 'Abandon of {}:{} failed: {}'.format(txid, nout, claim_out['resason'])
                 raise Exception(msg)
-            claim_out.pop('success')
+            claim_out = self._process_claim_out(claim_out)
             return defer.succeed(claim_out)
 
         claim_outpoint = ClaimOutpoint(txid, nout)
@@ -671,7 +677,7 @@ class Wallet(object):
             if not claim_out['success']:
                 msg = 'Support of {}:{} failed: {}'.format(name, claim_id, claim_out['reason'])
                 raise Exception(msg)
-            claim_out.pop('success')
+            claim_out = self._process_claim_out(claim_out)
             return defer.succeed(claim_out)
 
         d = self._support_claim(name, claim_id, amount)
