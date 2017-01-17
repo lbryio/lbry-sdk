@@ -240,7 +240,7 @@ def main(lbry_name=None):
         return SysTrayIcon(icon, hover_text, menu_options, on_quit=stop)
 
     def openui_(sender):
-        webbrowser.open(conf.settings.UI_ADDRESS)
+        webbrowser.open(conf.settings.get_ui_address())
 
     def replyToApplicationShouldTerminate_():
         try:
@@ -252,11 +252,11 @@ def main(lbry_name=None):
         replyToApplicationShouldTerminate_()
 
     if getattr(sys, 'frozen', False) and os.name == "nt":
-        icon = os.path.join(os.path.dirname(sys.executable), conf.settings.ICON_PATH, 'lbry16.ico')
+        icon = os.path.join(os.path.dirname(sys.executable), conf.settings['ICON_PATH'], 'lbry16.ico')
     else:
-        icon = os.path.join(conf.settings.ICON_PATH, 'lbry16.ico')
+        icon = os.path.join(conf.settings['ICON_PATH'], 'lbry16.ico')
 
-    hover_text = conf.settings.APP_NAME
+    hover_text = conf.settings['APP_NAME']
     menu_options = (('Open', icon, openui_),)
 
     if not test_internet_connection():
@@ -277,12 +277,11 @@ def main(lbry_name=None):
 if __name__ == '__main__':
     utils.setup_certs_for_windows()
     conf.initialize_settings()
-    conf.update_settings_from_file()
 
     log_file = conf.settings.get_log_filename()
     log_support.configure_logging(log_file, console=True)
 
-    lbry_daemon = JSONRPCProxy.from_url(conf.settings.API_CONNECTION_STRING)
+    lbry_daemon = JSONRPCProxy.from_url(conf.settings.get_api_connection_string())
 
     try:
         daemon_running = lbry_daemon.is_running()

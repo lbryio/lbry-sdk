@@ -69,8 +69,8 @@ class MyBlobManager(BlobManager.BlobManager):
 
 def getWallet():
     config = {'auto_connect': True}
-    if conf.settings.lbryum_wallet_dir:
-        config['lbryum_path'] = conf.settings.lbryum_wallet_dir
+    if conf.settings['lbryum_wallet_dir']:
+        config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
     db_dir = tempfile.mkdtemp()
     return Wallet.LBRYumWallet(db_dir, config)
 

@@ -32,6 +32,7 @@ DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 class TestStreamify(TestCase):
     def setUp(self):
+        mocks.mock_conf_settings(self)
         self.session = None
         self.stream_info_manager = None
         self.lbry_file_manager = None
@@ -70,7 +71,7 @@ class TestStreamify(TestCase):
         os.mkdir(blob_dir)
 
         self.session = Session(
-            conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
+            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
             blob_dir=blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
@@ -126,7 +127,7 @@ class TestStreamify(TestCase):
         os.mkdir(blob_dir)
 
         self.session = Session(
-            conf.settings.data_rate, db_dir=db_dir, lbryid="abcd",
+            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
             blob_dir=blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,

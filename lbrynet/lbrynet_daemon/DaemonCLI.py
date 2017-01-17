@@ -16,7 +16,6 @@ def main():
     _, arguments = parser.parse_known_args()
 
     conf.initialize_settings()
-    conf.update_settings_from_file()
     api = LBRYAPIClient.get_client()
 
     try:

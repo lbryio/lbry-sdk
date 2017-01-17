@@ -197,10 +197,11 @@ class Daemon(AuthJSONRPCServer):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
-    def __init__(self, root, analytics_manager):
-        AuthJSONRPCServer.__init__(self, conf.settings.use_auth_http)
+    def __init__(self, root, analytics_manager, upload_logs_on_shutdown=True):
+        AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
+        self.upload_logs_on_shutdown = upload_logs_on_shutdown
         self.allowed_during_startup = [
             'stop', 'status', 'version',
             # delete these once they are fully removed:
@@ -209,36 +210,35 @@ class Daemon(AuthJSONRPCServer):
         ]
         last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
         conf.settings.update(last_version)
-        self.db_dir = conf.settings.data_dir
-        self.download_directory = conf.settings.download_directory
+        self.db_dir = conf.settings['data_dir']
+        self.download_directory = conf.settings['download_directory']
         self.created_data_dir = False
         if not os.path.exists(self.db_dir):
             os.mkdir(self.db_dir)
             self.created_data_dir = True
-        if conf.settings.BLOBFILES_DIR == "blobfiles":
+        if conf.settings['BLOBFILES_DIR'] == "blobfiles":
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
         else:
-            log.info("Using non-default blobfiles directory: %s", conf.settings.BLOBFILES_DIR)
-            self.blobfile_dir = conf.settings.BLOBFILES_DIR
+            log.info("Using non-default blobfiles directory: %s", conf.settings['BLOBFILES_DIR'])
+            self.blobfile_dir = conf.settings['BLOBFILES_DIR']
 
-        self.run_on_startup = conf.settings.run_on_startup
-        self.data_rate = conf.settings.data_rate
-        self.max_key_fee = conf.settings.max_key_fee
-        self.max_upload = conf.settings.max_upload
-        self.max_download = conf.settings.max_download
-        self.upload_log = conf.settings.upload_log
-        self.search_timeout = conf.settings.search_timeout
-        self.download_timeout = conf.settings.download_timeout
-        self.max_search_results = conf.settings.max_search_results
-        self.run_reflector_server = conf.settings.run_reflector_server
-        self.wallet_type = conf.settings.wallet
-        self.delete_blobs_on_remove = conf.settings.delete_blobs_on_remove
-        self.peer_port = conf.settings.peer_port
-        self.reflector_port = conf.settings.reflector_port
-        self.dht_node_port = conf.settings.dht_node_port
-        self.use_upnp = conf.settings.use_upnp
-        self.cache_time = conf.settings.cache_time
-        self.startup_scripts = conf.settings.startup_scripts
+        self.run_on_startup = conf.settings['run_on_startup']
+        self.data_rate = conf.settings['data_rate']
+        self.max_key_fee = conf.settings['max_key_fee']
+        self.max_upload = conf.settings['max_upload']
+        self.max_download = conf.settings['max_download']
+        self.upload_log = conf.settings['upload_log']
+        self.search_timeout = conf.settings['search_timeout']
+        self.download_timeout = conf.settings['download_timeout']
+        self.max_search_results = conf.settings['max_search_results']
+        self.run_reflector_server = conf.settings['run_reflector_server']
+        self.wallet_type = conf.settings['wallet']
+        self.delete_blobs_on_remove = conf.settings['delete_blobs_on_remove']
+        self.peer_port = conf.settings['peer_port']
+        self.reflector_port = conf.settings['reflector_port']
+        self.dht_node_port = conf.settings['dht_node_port']
+        self.use_upnp = conf.settings['use_upnp']
+        self.cache_time = conf.settings['cache_time']
 
         self.startup_status = STARTUP_STAGES[0]
         self.connected_to_internet = True
@@ -252,14 +252,14 @@ class Daemon(AuthJSONRPCServer):
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self.uploaded_temp_files = []
-        self._session_id = conf.settings.session_id
+        self._session_id = conf.settings.get_session_id()
         # TODO: this should probably be passed into the daemon, or
         # possibly have the entire log upload functionality taken out
         # of the daemon, but I don't want to deal with that now
         self.log_uploader = log_support.LogUploader.load('lbrynet', self.log_file)
 
         self.analytics_manager = analytics_manager
-        self.lbryid = conf.settings.lbryid
+        self.lbryid = conf.settings.get_lbry_id()
 
         self.wallet_user = None
         self.wallet_password = None
@@ -298,9 +298,6 @@ class Daemon(AuthJSONRPCServer):
                 self.announced_startup = True
                 self.startup_status = STARTUP_STAGES[5]
                 log.info("Started lbrynet-daemon")
-                if len(self.startup_scripts):
-                    log.info("Scheduling scripts")
-                    reactor.callLater(3, self._run_scripts)
 
             if self.first_run:
                 d = self._upload_log(log_type="first_run")
@@ -319,7 +316,7 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager.start(Checker.CONNECTION_STATUS, 1)
         self.exchange_rate_manager.start()
 
-        if conf.settings.host_ui:
+        if conf.settings['host_ui']:
             self.lbry_ui_manager.update_checker.start(1800, now=False)
             yield self.lbry_ui_manager.setup()
         if launch_ui:
@@ -559,11 +556,14 @@ class Daemon(AuthJSONRPCServer):
 
         self._clean_up_temp_files()
 
-        try:
-            d = self._upload_log(
-                log_type="close", exclude_previous=False if self.first_run else True)
-        except Exception:
-            log.warn('Failed to upload log', exc_info=True)
+        if self.upload_logs_on_shutdown:
+            try:
+                d = self._upload_log(
+                    log_type="close", exclude_previous=False if self.first_run else True)
+            except Exception:
+                log.warn('Failed to upload log', exc_info=True)
+                d = defer.succeed(None)
+        else:
             d = defer.succeed(None)
 
         d.addCallback(lambda _: self._stop_server())
@@ -603,26 +603,26 @@ class Daemon(AuthJSONRPCServer):
         for key, setting_type in setting_types.iteritems():
             if key in settings:
                 if can_update_key(settings, key, setting_type):
-                    conf.settings.update({key: settings[key]})
+                    conf.settings.update({key: settings[key]}, set_conf_setting=True)
                 else:
                     try:
                         converted = setting_type(settings[key])
-                        conf.settings.update({key: converted})
+                        conf.settings.update({key: converted}, set_conf_setting=True)
                     except Exception as err:
                         log.warning(err.message)
                         log.warning("error converting setting '%s' to type %s", key, setting_type)
-        conf.save_settings()
+        conf.settings.save_conf_file_settings()
 
-        self.run_on_startup = conf.settings.run_on_startup
-        self.data_rate = conf.settings.data_rate
-        self.max_key_fee = conf.settings.max_key_fee
-        self.download_directory = conf.settings.download_directory
-        self.max_upload = conf.settings.max_upload
-        self.max_download = conf.settings.max_download
-        self.upload_log = conf.settings.upload_log
-        self.download_timeout = conf.settings.download_timeout
-        self.search_timeout = conf.settings.search_timeout
-        self.cache_time = conf.settings.cache_time
+        self.run_on_startup = conf.settings['run_on_startup']
+        self.data_rate = conf.settings['data_rate']
+        self.max_key_fee = conf.settings['max_key_fee']
+        self.download_directory = conf.settings['download_directory']
+        self.max_upload = conf.settings['max_upload']
+        self.max_download = conf.settings['max_download']
+        self.upload_log = conf.settings['upload_log']
+        self.download_timeout = conf.settings['download_timeout']
+        self.search_timeout = conf.settings['search_timeout']
+        self.cache_time = conf.settings['cache_time']
 
         return defer.succeed(True)
 
@@ -701,8 +701,8 @@ class Daemon(AuthJSONRPCServer):
             elif self.wallet_type == LBRYUM_WALLET:
                 log.info("Using lbryum wallet")
                 config = {'auto_connect': True}
-                if conf.settings.lbryum_wallet_dir:
-                    config['lbryum_path'] = conf.settings.lbryum_wallet_dir
+                if conf.settings['lbryum_wallet_dir']:
+                    config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
                 storage = SqliteStorage(self.db_dir)
                 wallet = LBRYumWallet(storage, config)
                 return defer.succeed(wallet)
@@ -717,16 +717,16 @@ class Daemon(AuthJSONRPCServer):
 
         def create_session(wallet):
             self.session = Session(
-                conf.settings.data_rate,
+                conf.settings['data_rate'],
                 db_dir=self.db_dir,
                 lbryid=self.lbryid,
                 blob_dir=self.blobfile_dir,
                 dht_node_port=self.dht_node_port,
-                known_dht_nodes=conf.settings.known_dht_nodes,
+                known_dht_nodes=conf.settings['known_dht_nodes'],
                 peer_port=self.peer_port,
                 use_upnp=self.use_upnp,
                 wallet=wallet,
-                is_generous=conf.settings.is_generous_host
+                is_generous=conf.settings['is_generous_host']
             )
             self.startup_status = STARTUP_STAGES[2]
 
@@ -757,7 +757,7 @@ class Daemon(AuthJSONRPCServer):
         return defer.succeed(None)
 
     def _download_sd_blob(self, sd_hash, timeout=None):
-        timeout = timeout if timeout is not None else conf.settings.sd_download_timeout
+        timeout = timeout if timeout is not None else conf.settings['sd_download_timeout']
 
         def cb(result):
             if not r.called:
@@ -785,7 +785,7 @@ class Daemon(AuthJSONRPCServer):
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
-        timeout = timeout if timeout is not None else conf.settings.download_timeout
+        timeout = timeout if timeout is not None else conf.settings['download_timeout']
 
         helper = _DownloadNameHelper(
             self, name, timeout, download_directory, file_name, wait_for_write)
@@ -903,7 +903,7 @@ class Daemon(AuthJSONRPCServer):
 
         if self.session.payment_rate_manager.generous:
             return 0.0
-        return size / (10 ** 6) * conf.settings.data_rate
+        return size / (10 ** 6) * conf.settings['data_rate']
 
     def get_est_cost_using_known_size(self, name, size):
         """
@@ -1029,26 +1029,6 @@ class Daemon(AuthJSONRPCServer):
         )
         return run_reflector_factory(factory)
 
-    def _run_scripts(self):
-        if len([k for k in self.startup_scripts if 'run_once' in k.keys()]):
-            log.info("Removing one time startup scripts")
-            remaining_scripts = [s for s in self.startup_scripts if 'run_once' not in s.keys()]
-            startup_scripts = self.startup_scripts
-            self.startup_scripts = conf.settings.startup_scripts = remaining_scripts
-            conf.save_settings()
-
-        for script in startup_scripts:
-            if script['script_name'] == 'migrateto025':
-                log.info("Running migrator to 0.2.5")
-                from lbrynet.lbrynet_daemon.daemon_scripts.migrateto025 import run as run_migrate
-                run_migrate(self)
-
-            if script['script_name'] == 'Autofetcher':
-                log.info("Starting autofetcher script")
-                from lbrynet.lbrynet_daemon.daemon_scripts.Autofetcher import run as run_autofetcher
-                run_autofetcher(self)
-
-        return defer.succeed(None)
 
     ############################################################################
     #                                                                          #
@@ -1291,9 +1271,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         log.info("Get daemon settings")
-        settings_dict = conf.settings.get_dict()
-        settings_dict['lbryid'] = binascii.hexlify(settings_dict['lbryid'])
-        return self._render_response(settings_dict)
+        return self._render_response(conf.settings.get_current_settings_dict())
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_set_settings(self, p):
@@ -2150,7 +2128,7 @@ class Daemon(AuthJSONRPCServer):
             sd blob, dict
         """
         sd_hash = p[FileID.SD_HASH]
-        timeout = p.get('timeout', conf.settings.sd_download_timeout)
+        timeout = p.get('timeout', conf.settings['sd_download_timeout'])
         d = self._download_sd_blob(sd_hash, timeout)
         d.addCallbacks(
             lambda r: self._render_response(r),
@@ -2488,7 +2466,7 @@ class _DownloadNameHelper(object):
                  wait_for_write=True):
         self.daemon = daemon
         self.name = name
-        self.timeout = timeout if timeout is not None else conf.settings.download_timeout
+        self.timeout = timeout if timeout is not None else conf.settings['download_timeout']
         if not download_directory or not os.path.isdir(download_directory):
             self.download_directory = daemon.download_directory
         else:
@@ -2774,7 +2752,7 @@ def get_loggly_query_string(lbry_id):
 
 
 def report_bug_to_slack(message, lbry_id, platform_name, app_version):
-    webhook = utils.deobfuscate(conf.settings.SLACK_WEBHOOK)
+    webhook = utils.deobfuscate(conf.settings['SLACK_WEBHOOK'])
     payload_template = "os: %s\n version: %s\n<%s|loggly>\n%s"
     payload_params = (
         platform_name,
@@ -2797,7 +2775,7 @@ def get_lbry_file_search_value(p):
 
 
 def run_reflector_factory(factory):
-    reflector_server = random.choice(conf.settings.reflector_servers)
+    reflector_server = random.choice(conf.settings['reflector_servers'])
     reflector_address, reflector_port = reflector_server
     log.info("Start reflector client")
     d = reactor.resolve(reflector_address)

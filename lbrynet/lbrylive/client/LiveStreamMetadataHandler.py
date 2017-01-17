@@ -137,7 +137,7 @@ class LiveStreamMetadataHandler(object):
             if count is not None:
                 further_blobs_request['count'] = count
             else:
-                further_blobs_request['count'] = conf.settings.MAX_BLOB_INFOS_TO_REQUEST
+                further_blobs_request['count'] = conf.settings['MAX_BLOB_INFOS_TO_REQUEST']
             log.debug("Requesting %s blob infos from %s", str(further_blobs_request['count']), str(peer))
             r_dict = {'further_blobs': further_blobs_request}
             response_identifier = 'further_blobs'

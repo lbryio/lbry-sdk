@@ -28,14 +28,14 @@ class DaemonServer(object):
         self._api = Daemon(self.root, self.analytics_manager)
         self.root.putChild("view", HostedEncryptedFile(self._api))
         self.root.putChild("upload", EncryptedFileUpload(self._api))
-        self.root.putChild(conf.settings.API_ADDRESS, self._api)
+        self.root.putChild(conf.settings['API_ADDRESS'], self._api)
 
         lbrynet_server = server.Site(get_site_base(use_auth, self.root))
         lbrynet_server.requestFactory = DaemonRequest
 
         try:
             reactor.listenTCP(
-                conf.settings.api_port, lbrynet_server, interface=conf.settings.API_INTERFACE)
+                conf.settings['api_port'], lbrynet_server, interface=conf.settings['api_host'])
         except error.CannotListenError:
             log.info('Daemon already running, exiting app')
             sys.exit(1)
@@ -58,7 +58,7 @@ def get_site_base(use_auth, root):
 
 
 def create_auth_session(root):
-    pw_path = os.path.join(conf.settings.data_dir, ".api_keys")
+    pw_path = os.path.join(conf.settings['data_dir'], ".api_keys")
     initialize_api_key_file(pw_path)
     checker = PasswordChecker.load_file(pw_path)
     realm = HttpPasswordRealm(root)

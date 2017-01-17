@@ -144,7 +144,7 @@ def configure_analytics_handler(analytics_manager):
 
 
 def get_loggly_url(token=None, version=None):
-    token = token or utils.deobfuscate(conf.settings.LOGGLY_TOKEN)
+    token = token or utils.deobfuscate(conf.settings['LOGGLY_TOKEN'])
     version = version or lbrynet.__version__
     return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
 
@@ -334,7 +334,7 @@ class LogUploader(object):
             'type': self.get_type(log_type),
             'log': log_contents
         }
-        requests.post(conf.settings.LOG_POST_URL, params)
+        requests.post(conf.settings['LOG_POST_URL'], params)
 
     def log_contents(self, exclude_previous):
         with open(self.log_file) as f:

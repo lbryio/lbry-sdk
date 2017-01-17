@@ -23,6 +23,7 @@ from tests import mocks
 
 class TestReflector(unittest.TestCase):
     def setUp(self):
+        mocks.mock_conf_settings(self)
         self.session = None
         self.stream_info_manager = None
         self.lbry_file_manager = None
@@ -83,7 +84,7 @@ class TestReflector(unittest.TestCase):
         os.mkdir(db_dir)
 
         self.session = Session.Session(
-            conf.settings.data_rate,
+            conf.settings['data_rate'],
             db_dir=db_dir,
             lbryid="abcd",
             peer_finder=peer_finder,

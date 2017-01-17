@@ -26,6 +26,7 @@ def iv_generator():
 class CreateEncryptedFileTest(unittest.TestCase):
     timeout = 5
     def setUp(self):
+        mocks.mock_conf_settings(self)
         self.tmp_dir = tempfile.mkdtemp()
 
     def tearDown(self):

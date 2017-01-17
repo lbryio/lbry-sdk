@@ -6,7 +6,7 @@ from twisted.internet import defer
 
 from lbrynet.core import PTCWallet
 from lbrynet.core import BlobAvailability
-
+from lbrynet import conf
 
 KB = 2**10
 
@@ -205,3 +205,14 @@ create_stream_sd_file = {
     'suggested_file_name': '746573745f66696c65',
     'stream_hash': '6d27fbe10c86d81aacfb897c7a426d0a2214f5a299455a6d315c0f998c4b3545c2dc60906122d94653c23b1898229e3f'
 }
+
+
+def mock_conf_settings(obj, settings={}):
+    original_settings = conf.settings
+    conf.settings = conf.Config(conf.FIXED_SETTINGS, conf.ADJUSTABLE_SETTINGS, environment=False)
+    conf.settings.update(settings)
+
+    def _reset_settings():
+        conf.settings = original_settings
+
+    obj.addCleanup(_reset_settings)

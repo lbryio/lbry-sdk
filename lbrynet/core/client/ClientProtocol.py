@@ -48,7 +48,7 @@ class ClientProtocol(Protocol):
             self._blob_download_request.write(data)
         else:
             self._response_buff += data
-            if len(self._response_buff) > conf.settings.MAX_RESPONSE_INFO_SIZE:
+            if len(self._response_buff) > conf.settings['MAX_RESPONSE_INFO_SIZE']:
                 log.warning("Response is too large. Size %s", len(self._response_buff))
                 self.transport.loseConnection()
             response, extra_data = self._get_valid_response(self._response_buff)

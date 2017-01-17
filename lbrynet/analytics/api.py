@@ -83,6 +83,6 @@ class Api(object):
             session = sessions.FuturesSession()
         return cls(
             session,
-            conf.settings.ANALYTICS_ENDPOINT,
-            utils.deobfuscate(conf.settings.ANALYTICS_TOKEN)
+            conf.settings['ANALYTICS_ENDPOINT'],
+            utils.deobfuscate(conf.settings['ANALYTICS_TOKEN'])
         )

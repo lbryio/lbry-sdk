@@ -5,7 +5,7 @@ import mock
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
 from lbrynet.core.Strategy import BasicAvailabilityWeightedStrategy
 from lbrynet.core.Offer import Offer
-from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
+from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker, mock_conf_settings
 
 MAX_NEGOTIATION_TURNS = 10
 random.seed(12345)
@@ -57,6 +57,9 @@ def calculate_negotation_turns(client_base, host_base, host_is_generous=True, cl
 
 
 class AvailabilityWeightedStrategyTests(unittest.TestCase):
+    def setUp(self):
+        mock_conf_settings(self)
+
     def test_first_offer_is_zero_and_second_is_not_if_offer_not_accepted(self):
         strategy = BasicAvailabilityWeightedStrategy(DummyBlobAvailabilityTracker())
         peer = "1.1.1.1"

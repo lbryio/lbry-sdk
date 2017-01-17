@@ -42,6 +42,7 @@ log = logging.getLogger('main')
 
 def main(args=None):
     conf.initialize_settings()
+
     parser = argparse.ArgumentParser()
     parser.add_argument('destination', type=conf.server_port, nargs='+')
     parser.add_argument('--names', nargs='*')
@@ -69,7 +70,7 @@ def main(args=None):
         lbryid=utils.generate_id(),
         blob_dir=blob_dir,
         dht_node_port=4444,
-        known_dht_nodes=conf.settings.known_dht_nodes,
+        known_dht_nodes=conf.settings['known_dht_nodes'],
         peer_port=3333,
         use_upnp=False,
         wallet=wallet,

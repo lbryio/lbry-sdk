@@ -28,9 +28,9 @@ class Manager(object):
             api = Api.new_instance()
         if events is None:
             events = Events(
-                make_context(get_platform(), conf.settings.wallet),
-                base58.b58encode(conf.settings.lbryid),
-                conf.settings.session_id,
+                make_context(get_platform(), conf.settings['wallet']),
+                base58.b58encode(conf.settings.get_lbry_id()),
+                conf.settings.get_session_id(),
             )
         return cls(api, events, Track())
 

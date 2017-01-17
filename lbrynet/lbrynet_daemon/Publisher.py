@@ -34,7 +34,7 @@ class Publisher(object):
         self.fee = None
         self.stream_hash = None
         # TODO: this needs to be passed into the constructor
-        reflector_server = random.choice(conf.settings.reflector_servers)
+        reflector_server = random.choice(conf.settings['reflector_servers'])
         self.reflector_server, self.reflector_port = reflector_server[0], reflector_server[1]
         self.metadata = {}
 
@@ -84,7 +84,7 @@ class Publisher(object):
 
     def start_reflector(self):
         # TODO: is self.reflector_server unused?
-        reflector_server = random.choice(conf.settings.reflector_servers)
+        reflector_server = random.choice(conf.settings['reflector_servers'])
         reflector_address, reflector_port = reflector_server[0], reflector_server[1]
         log.info("Reflecting new publication")
         factory = reflector.ClientFactory(

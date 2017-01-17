@@ -70,9 +70,9 @@ class LBRYURIHandler(object):
     @staticmethod
     def open_address(lbry_name):
         if lbry_name == "lbry" or lbry_name == "" or lbry_name is None:
-            webbrowser.open(conf.settings.UI_ADDRESS)
+            webbrowser.open(conf.settings.get_ui_address())
         else:
-            webbrowser.open(conf.settings.UI_ADDRESS + "/?show=" + lbry_name)
+            webbrowser.open(conf.settings.get_ui_address() + "/?show=" + lbry_name)
 
 
 def main(args):

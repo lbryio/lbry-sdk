@@ -9,6 +9,7 @@ from lbrynet.core import Session, PaymentRateManager
 from lbrynet.lbrynet_daemon.Daemon import Daemon as LBRYDaemon
 from lbrynet.lbrynet_daemon import ExchangeRateManager
 from lbrynet import conf
+from tests.mocks import mock_conf_settings
 
 
 class MiscTests(unittest.TestCase):
@@ -46,13 +47,13 @@ class MiscTests(unittest.TestCase):
 
 def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     if data_rate is None:
-        data_rate = conf.settings.data_rate
+        data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
 
     rates = {
                 'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
                 'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
             }
-    daemon = LBRYDaemon(None, None)
+    daemon = LBRYDaemon(None, None, upload_logs_on_shutdown=False)
     daemon.session = mock.Mock(spec=Session.Session)
     daemon.exchange_rate_manager = ExchangeRateManager.DummyExchangeRateManager(rates)
     base_prm = PaymentRateManager.BasePaymentRateManager(rate=data_rate)
@@ -80,6 +81,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
 
 class TestCostEst(unittest.TestCase):
     def setUp(self):
+        mock_conf_settings(self)
         util.resetTime(self)
 
     def test_fee_and_generous_data(self):
@@ -91,7 +93,7 @@ class TestCostEst(unittest.TestCase):
     def test_fee_and_ungenerous_data(self):
         size = 10000000
         fake_fee_amount = 4.5
-        data_rate = conf.settings.data_rate
+        data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
         correct_result = size / 10**6 * data_rate + fake_fee_amount
         daemon = get_test_daemon(generous=False, with_fee=True)
         self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
@@ -104,7 +106,7 @@ class TestCostEst(unittest.TestCase):
 
     def test_ungenerous_data_and_no_fee(self):
         size = 10000000
-        data_rate = conf.settings.data_rate
+        data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
         correct_result = size / 10**6 * data_rate
         daemon = get_test_daemon(generous=False)
         self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)

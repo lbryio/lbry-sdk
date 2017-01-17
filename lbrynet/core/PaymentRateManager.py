@@ -5,9 +5,9 @@ from decimal import Decimal
 
 class BasePaymentRateManager(object):
     def __init__(self, rate=None, info_rate=None):
-        self.min_blob_data_payment_rate = rate if rate is not None else conf.settings.data_rate
+        self.min_blob_data_payment_rate = rate if rate is not None else conf.settings['data_rate']
         self.min_blob_info_payment_rate = (
-            info_rate if info_rate is not None else conf.settings.min_info_rate)
+            info_rate if info_rate is not None else conf.settings['min_info_rate'])
 
 
 class PaymentRateManager(object):
@@ -47,7 +47,7 @@ class NegotiatedPaymentRateManager(object):
         self.base = base
         self.points_paid = 0.0
         self.blob_tracker = availability_tracker
-        self.generous = generous if generous is not None else conf.settings.is_generous_host
+        self.generous = generous if generous is not None else conf.settings['is_generous_host']
         self.strategy = get_default_strategy(self.blob_tracker,
                                              base_price=self.base.min_blob_data_payment_rate,
                                              is_generous=generous)
