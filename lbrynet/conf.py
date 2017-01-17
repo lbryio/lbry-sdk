@@ -77,7 +77,7 @@ class Env(envparse.Env):
         my_schema = {
             self._convert_key(key): self._convert_value(value)
             for key, value in schema.items()
-            }
+        }
         envparse.Env.__init__(self, **my_schema)
 
     def __call__(self, key, *args, **kwargs):
@@ -90,9 +90,10 @@ class Env(envparse.Env):
 
     @staticmethod
     def _convert_value(value):
-        """
-        Allow value to be specified as a tuple or list. If you do this, the tuple/list
-        must be of the form (cast, default) or (cast, default, subcast)
+        """ Allow value to be specified as a tuple or list.
+
+        If you do this, the tuple/list must be of the
+        form (cast, default) or (cast, default, subcast)
         """
         if isinstance(value, (tuple, list)):
             new_value = {'cast': value[0], 'default': value[1]}
@@ -101,6 +102,11 @@ class Env(envparse.Env):
             return new_value
         return value
 
+TYPE_DEFAULT = 'default'
+TYPE_PERSISTED = 'persisted'
+TYPE_ENV = 'env'
+TYPE_CLI = 'cli'
+TYPE_RUNTIME = 'runtime'
 
 FIXED_SETTINGS = {
     'ANALYTICS_ENDPOINT': 'https://api.segment.io/v1',
@@ -202,28 +208,52 @@ ADJUSTABLE_SETTINGS = {
 }
 
 
-class Config:
-    def __init__(self, fixed_defaults, adjustable_defaults, conf_file_settings={}, environment=None,
-                 cli_settings={}):
+class Config(object):
+    def __init__(self, fixed_defaults, adjustable_defaults, persisted_settings=None,
+                 environment=None, cli_settings=None):
+
         self._lbry_id = None
         self._session_id = base58.b58encode(utils.generate_id())
 
-        self.__fixed = fixed_defaults
-        self.__adjustable = adjustable_defaults
+        self._fixed_defaults = fixed_defaults
+        self._adjustable_defaults = adjustable_defaults
 
-        self._init_defaults()
-        self.conf_file_settings = conf_file_settings  # from daemon_settings.yml
-        self.env_settings = self._parse_environment(environment)  # from environment variables
-        self.cli_settings = cli_settings  # from command_line flags/args
-        self.runtime_settings = {}  # set by self.set() during runtime
-        self._assert_valid_settings()
-        self._combine_settings()
+        self._data = {
+            TYPE_DEFAULT: {},    # defaults
+            TYPE_PERSISTED: {},  # stored settings from daemon_settings.yml (or from a db, etc)
+            TYPE_ENV: {},        # settings from environment variables
+            TYPE_CLI: {},        # command-line arguments
+            TYPE_RUNTIME: {},    # set during runtime (using self.set(), etc)
+        }
+
+        # the order in which a piece of data is searched for. earlier types override later types
+        self._search_order = (
+            TYPE_RUNTIME, TYPE_CLI, TYPE_ENV, TYPE_PERSISTED, TYPE_DEFAULT
+        )
+
+        self._data[TYPE_DEFAULT].update(self._fixed_defaults)
+        self._data[TYPE_DEFAULT].update(
+            {k: v[1] for (k, v) in self._adjustable_defaults.iteritems()})
+
+        if persisted_settings is None:
+            persisted_settings = {}
+        self._validate_settings(persisted_settings)
+        self._data[TYPE_PERSISTED].update(persisted_settings)
+
+        env_settings = self._parse_environment(environment)
+        self._validate_settings(env_settings)
+        self._data[TYPE_ENV].update(env_settings)
+
+        if cli_settings is None:
+            cli_settings = {}
+        self._validate_settings(cli_settings)
+        self._data[TYPE_CLI].update(cli_settings)
 
     def __repr__(self):
-        return self.combined_settings.__repr__()
+        return self.get_current_settings_dict().__repr__()
 
     def __iter__(self):
-        for k in self.combined_settings.iterkeys():
+        for k in self._data[TYPE_DEFAULT].iterkeys():
             yield k
 
     def __getitem__(self, name):
@@ -233,88 +263,118 @@ class Config:
         return self.set(name, value)
 
     def __contains__(self, name):
-        return name in self.combined_settings
+        return name in self._data[TYPE_DEFAULT]
 
-    def _parse_environment(self, environment):
+    @staticmethod
+    def _parse_environment(environment):
         env_settings = {}
-        if environment is None:
-            environment = Env(**self.__adjustable)
-        if environment:
+        if environment is not None:
             assert isinstance(environment, Env)
             for opt in environment.original_schema:
                 env_settings[opt] = environment(opt)
         return env_settings
 
-    def _init_defaults(self):
-        self.defaults = self.__fixed.copy()
-        for k, v in self.__adjustable.iteritems():
-            self.defaults[k] = v[1]
+    def _assert_valid_data_type(self, data_type):
+        assert data_type in self._data, KeyError('{} in is not a valid data type'.format(data_type))
 
-    def _assert_valid_settings(self):
-        for s in [self.conf_file_settings, self.env_settings, self.cli_settings,
-                  self.runtime_settings]:
-            for name in s:
-                assert name in self.defaults, IndexError('%s is not a valid setting' % name)
+    def _is_valid_setting(self, name):
+        return name in self._data[TYPE_DEFAULT]
 
-    def _combine_settings(self):
-        self.combined_settings = {}
-        for s in [self.defaults, self.conf_file_settings, self.env_settings, self.cli_settings,
-                  self.runtime_settings]:
-            self.combined_settings.update(s)
+    def _assert_valid_setting(self, name):
+        assert self._is_valid_setting(name), \
+            KeyError('{} in is not a valid setting'.format(name))
 
-    def get(self, name):
-        assert name in self.defaults, IndexError('%s is not a valid setting' % name)
-        return self.combined_settings[name]
+    def _validate_settings(self, data):
+        for name in data:
+            if not self._is_valid_setting(name):
+                raise KeyError('{} in is not a valid setting'.format(name))
 
-    def set(self, name, value, set_conf_setting=False):
-        assert name in self.defaults and name not in self.__fixed, KeyError
-        self.runtime_settings[name] = value
-        if set_conf_setting:
-            self.conf_file_settings[name] = value
-        self._combine_settings()
+    def _assert_editable_setting(self, name):
+        self._assert_valid_setting(name)
+        assert name not in self._fixed_defaults, \
+            ValueError('{} in is not an editable setting'.format(name))
 
-    def set_cli_settings(self, cli_settings):
-        self.cli_settings = cli_settings
-        self._assert_valid_settings()
-        self._combine_settings()
+    def get(self, name, data_type=None):
+        """Get a config value
 
-    def update(self, updated_settings, set_conf_setting=False):
+        Args:
+            name: the name of the value to get
+            data_type: if given, get the value from a specific data set (see below)
+
+        Returns: the config value for the given name
+
+        If data_type is None, get() will search for the given name in each data set, in
+        order of precedence. It will return the first value it finds. This is the "effective"
+        value of a config name. For example, ENV values take precedence over DEFAULT values,
+        so if a value is present in ENV and in DEFAULT, the ENV value will be returned
+        """
+        self._assert_valid_setting(name)
+        if data_type is not None:
+            self._assert_valid_data_type(data_type)
+            return self._data[data_type][name]
+        for data_type in self._search_order:
+            if name in self._data[data_type]:
+                return self._data[data_type][name]
+        raise KeyError('{} is not a valid setting'.format(name))
+
+    def set(self, name, value, data_types=(TYPE_RUNTIME,)):
+        """Set a config value
+
+        Args:
+            name: the name of the value to set
+            value: the value
+            data_types: what type(s) of data this is
+
+        Returns: None
+
+        By default, this sets the RUNTIME value of a config. If you wish to set other
+        data types (e.g. PERSISTED values to save to a file, CLI values from parsed
+        command-line options, etc), you can specify that with the data_types param
+        """
+        self._assert_editable_setting(name)
+        for data_type in data_types:
+            self._assert_valid_data_type(data_type)
+            self._data[data_type][name] = value
+
+    def update(self, updated_settings, data_types=(TYPE_RUNTIME,)):
         for k, v in updated_settings.iteritems():
             try:
-                self.set(k, v, set_conf_setting=set_conf_setting)
+                self.set(k, v, data_types=data_types)
             except (KeyError, AssertionError):
                 pass
 
     def get_current_settings_dict(self):
-        return self.combined_settings
+        current_settings = {}
+        for k, v in self._data[TYPE_DEFAULT].iteritems():
+            current_settings[k] = self.get(k)
+        return current_settings
 
     def get_adjustable_settings_dict(self):
         return {
             opt: val for opt, val in self.get_current_settings_dict().iteritems()
-            if opt in self.__adjustable
-            }
+            if opt in self._adjustable_defaults
+        }
 
     def save_conf_file_settings(self):
         path = self.get_conf_filename()
         ext = os.path.splitext(path)[1]
         encoder = settings_encoders.get(ext, False)
-        assert encoder is not False, 'Unknown settings format .%s' % ext
+        assert encoder is not False, 'Unknown settings format %s' % ext
         with open(path, 'w') as settings_file:
-            settings_file.write(encoder(self.conf_file_settings))
+            settings_file.write(encoder(self._data[TYPE_PERSISTED]))
 
     def load_conf_file_settings(self):
         path = self.get_conf_filename()
         ext = os.path.splitext(path)[1]
         decoder = settings_decoders.get(ext, False)
-        assert decoder is not False, 'Unknown settings format .%s' % ext
+        assert decoder is not False, 'Unknown settings format %s' % ext
         try:
             with open(path, 'r') as settings_file:
                 data = settings_file.read()
             decoded = self._fix_old_conf_file_settings(decoder(data))
             log.info('Loaded settings file: %s', path)
-            self.conf_file_settings.update(decoded)
-            self._assert_valid_settings()
-            self._combine_settings()
+            self._validate_settings(decoded)
+            self._data[TYPE_PERSISTED].update(decoded)
         except (IOError, OSError) as err:
             log.info('%s: Failed to update settings from %s', err, path)
 
@@ -382,9 +442,14 @@ class Config:
 settings = None
 
 
+def get_default_env():
+    return Env(**ADJUSTABLE_SETTINGS)
+
+
 def initialize_settings(load_conf_file=True):
     global settings
     if settings is None:
-        settings = Config(FIXED_SETTINGS, ADJUSTABLE_SETTINGS)
+        settings = Config(FIXED_SETTINGS, ADJUSTABLE_SETTINGS,
+                          environment=get_default_env())
         if load_conf_file:
             settings.load_conf_file_settings()

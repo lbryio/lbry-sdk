@@ -110,7 +110,7 @@ def update_settings_from_args(args):
         cli_settings['ui_branch'] = args.branch
     cli_settings['use_auth_http'] = args.useauth
     cli_settings['wallet'] = args.wallet
-    conf.settings.set_cli_settings(cli_settings)
+    conf.settings.update(cli_settings, data_types=(conf.TYPE_CLI,))
 
 
 @defer.inlineCallbacks

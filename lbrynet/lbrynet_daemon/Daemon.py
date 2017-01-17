@@ -603,11 +603,13 @@ class Daemon(AuthJSONRPCServer):
         for key, setting_type in setting_types.iteritems():
             if key in settings:
                 if can_update_key(settings, key, setting_type):
-                    conf.settings.update({key: settings[key]}, set_conf_setting=True)
+                    conf.settings.update({key: settings[key]},
+                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
                 else:
                     try:
                         converted = setting_type(settings[key])
-                        conf.settings.update({key: converted}, set_conf_setting=True)
+                        conf.settings.update({key: converted},
+                                             data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
                     except Exception as err:
                         log.warning(err.message)
                         log.warning("error converting setting '%s' to type %s", key, setting_type)
