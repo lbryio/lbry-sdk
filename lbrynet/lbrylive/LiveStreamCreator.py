@@ -24,7 +24,7 @@ class LiveStreamCreator(CryptStreamCreator):
         self.stream_info_manager = stream_info_manager
         self.delete_after_num = delete_after_num
         self.secret_pass_phrase = secret_pass_phrase
-        self.file_extension = conf.settings.CRYPTSD_FILE_EXTENSION
+        self.file_extension = conf.settings['CRYPTSD_FILE_EXTENSION']
         self.finished_blob_hashes = {}
 
     def _save_stream(self):

@@ -12,25 +12,45 @@ class SettingsTest(unittest.TestCase):
     def tearDown(self):
         del os.environ['LBRY_TEST']
 
-    def test_envvar_is_read(self):
-        env = conf.Env(test=(str, ''))
-        settings = conf.AdjustableSettings(env)
-        self.assertEqual('test_string', settings.test)
+    @staticmethod
+    def get_mock_config_instance():
+        settings = {'test': (str, '')}
+        env = conf.Env(**settings)
+        return conf.Config({}, settings, environment=env)
 
-    def test_setting_can_be_overriden(self):
-        env = conf.Env(test=(str, ''))
-        settings = conf.AdjustableSettings(env)
-        settings.test = 'my_override'
-        self.assertEqual('my_override', settings.test)
+    def test_envvar_is_read(self):
+        settings = self.get_mock_config_instance()
+        self.assertEqual('test_string', settings['test'])
+
+    def test_setting_can_be_overridden(self):
+        settings = self.get_mock_config_instance()
+        settings['test'] = 'my_override'
+        self.assertEqual('my_override', settings['test'])
 
     def test_setting_can_be_updated(self):
-        env = conf.Env(test=(str, ''))
-        settings = conf.AdjustableSettings(env)
+        settings = self.get_mock_config_instance()
         settings.update({'test': 'my_update'})
-        self.assertEqual('my_update', settings.test)
+        self.assertEqual('my_update', settings['test'])
 
     def test_setting_is_in_dict(self):
-        env = conf.Env(test=(str, ''))
-        settings = conf.AdjustableSettings(env)
-        setting_dict = settings.get_dict()
+        settings = self.get_mock_config_instance()
+        setting_dict = settings.get_current_settings_dict()
         self.assertEqual({'test': 'test_string'}, setting_dict)
+
+    def test_invalid_setting_raises_exception(self):
+        settings = self.get_mock_config_instance()
+        self.assertRaises(AssertionError, settings.set, 'invalid_name', 123)
+
+    def test_invalid_data_type_raises_exception(self):
+        settings = self.get_mock_config_instance()
+        self.assertIsNone(settings.set('test', 123))
+        self.assertRaises(AssertionError, settings.set, 'test', 123, ('fake_data_type',))
+
+    def test_setting_precedence(self):
+        settings = self.get_mock_config_instance()
+        settings.set('test', 'cli_test_string', data_types=(conf.TYPE_CLI,))
+        self.assertEqual('cli_test_string', settings['test'])
+        settings.set('test', 'this_should_not_take_precedence', data_types=(conf.TYPE_ENV,))
+        self.assertEqual('cli_test_string', settings['test'])
+        settings.set('test', 'runtime_takes_precedence', data_types=(conf.TYPE_RUNTIME,))
+        self.assertEqual('runtime_takes_precedence', settings['test'])

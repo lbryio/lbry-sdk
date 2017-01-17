@@ -24,7 +24,7 @@ class MeanAvailabilityWeightedPrice(object):
 
     def __init__(self, tracker, base_price=None, alpha=1.0):
         self.blob_tracker = tracker
-        base_price = base_price if base_price is not None else conf.settings.data_rate
+        base_price = base_price if base_price is not None else conf.settings['data_rate']
         self.base_price = Decimal(base_price)
         self.alpha = Decimal(alpha)
 

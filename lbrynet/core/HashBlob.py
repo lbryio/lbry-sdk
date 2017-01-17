@@ -89,7 +89,7 @@ class HashBlob(object):
     def set_length(self, length):
         if self.length is not None and length == self.length:
             return True
-        if self.length is None and 0 <= length <= conf.settings.BLOB_SIZE:
+        if self.length is None and 0 <= length <= conf.settings['BLOB_SIZE']:
             self.length = length
             return True
         log.warning("Got an invalid length. Previous length: %s, Invalid length: %s",

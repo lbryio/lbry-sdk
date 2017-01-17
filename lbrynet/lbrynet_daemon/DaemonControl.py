@@ -12,7 +12,6 @@ from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 
-
 log = logging.getLogger(__name__)
 
 
@@ -32,19 +31,22 @@ def stop():
 
 
 def start():
+    utils.setup_certs_for_windows()
     conf.initialize_settings()
+
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
     parser.add_argument("--wallet",
                         help="lbryum or ptc for testing, default lbryum",
                         type=str,
-                        default=conf.LBRYUM_WALLET)
+                        default=conf.settings['wallet'])
     parser.add_argument("--ui", help="path to custom UI folder", default=None)
     parser.add_argument(
         "--branch",
-        help='Branch of lbry-web-ui repo to use, defaults to {}'.format(conf.settings.ui_branch),
-        default=conf.settings.ui_branch)
+        help='Branch of lbry-web-ui repo to use, defaults to {}'.format(conf.settings['ui_branch']),
+        default=conf.settings['ui_branch'])
     parser.add_argument('--no-launch', dest='launchui', action="store_false")
-    parser.add_argument("--http-auth", dest="useauth", action="store_true")
+    parser.add_argument("--http-auth", dest="useauth", action="store_true",
+                        default=conf.settings['use_auth_http'])
     parser.add_argument(
         '--log-to-console', dest='logtoconsole', action='store_true',
         help=('Set to enable console logging. Set the --verbose flag '
@@ -57,21 +59,17 @@ def start():
         '--verbose', nargs="*",
         help=('Enable debug output. Optionally specify loggers for which debug output '
               'should selectively be applied.'))
+
     args = parser.parse_args()
-
-    conf.initialize_settings()
-    utils.setup_certs_for_windows()
-
-    conf.update_settings_from_file()
     update_settings_from_args(args)
 
     lbrynet_log = conf.settings.get_log_filename()
     log_support.configure_logging(lbrynet_log, args.logtoconsole, args.verbose)
-    log.debug('Final Settings: %s', conf.settings.get_dict())
+    log.debug('Final Settings: %s', conf.settings.get_current_settings_dict())
 
     try:
         log.debug('Checking for an existing lbrynet daemon instance')
-        JSONRPCProxy.from_url(conf.settings.API_CONNECTION_STRING).is_running()
+        JSONRPCProxy.from_url(conf.settings.get_api_connection_string()).is_running()
         log.info("lbrynet-daemon is already running")
         if not args.logtoconsole:
             print "lbrynet-daemon is already running"
@@ -86,8 +84,8 @@ def start():
         print "Starting lbrynet-daemon from command line"
         print "To view activity, view the log file here: " + lbrynet_log
         print "Web UI is available at http://%s:%i" % (
-            conf.settings.API_INTERFACE, conf.settings.api_port)
-        print "JSONRPC API is available at " + conf.settings.API_CONNECTION_STRING
+            conf.settings['api_host'], conf.settings['api_port'])
+        print "JSONRPC API is available at " + conf.settings.get_api_connection_string()
         print "To quit press ctrl-c or call 'stop' via the API"
 
     if test_internet_connection():
@@ -105,14 +103,14 @@ def start():
 
 
 def update_settings_from_args(args):
-    to_pass = {}
+    cli_settings = {}
     if args.ui:
-        to_pass['local_ui_path'] = args.ui
+        cli_settings['local_ui_path'] = args.ui
     if args.branch:
-        to_pass['ui_branch'] = args.branch
-    to_pass['use_auth_http'] = args.useauth
-    to_pass['wallet'] = args.wallet
-    conf.settings.update(to_pass)
+        cli_settings['ui_branch'] = args.branch
+    cli_settings['use_auth_http'] = args.useauth
+    cli_settings['wallet'] = args.wallet
+    conf.settings.update(cli_settings, data_types=(conf.TYPE_CLI,))
 
 
 @defer.inlineCallbacks

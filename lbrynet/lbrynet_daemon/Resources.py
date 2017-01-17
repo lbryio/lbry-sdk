@@ -88,10 +88,12 @@ class HostedEncryptedFile(resource.Resource):
                 d.addCallback(lambda sd_hash: self._api._get_lbry_file_by_sd_hash(sd_hash))
                 d.addCallback(lambda lbry_file: self._make_stream_producer(request, lbry_file))
             elif request.args['name'][0] in self._api.waiting_on.keys():
-                request.redirect(conf.settings.UI_ADDRESS + "/?watch=" + request.args['name'][0])
+                request.redirect(
+                    conf.settings.get_ui_address() + "/?watch=" + request.args['name'][0]
+                )
                 request.finish()
             else:
-                request.redirect(conf.settings.UI_ADDRESS)
+                request.redirect(conf.settings.get_ui_address())
                 request.finish()
             return server.NOT_DONE_YET
 

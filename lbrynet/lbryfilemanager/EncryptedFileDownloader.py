@@ -95,9 +95,9 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         return d
 
     def _reupload(self):
-        if not conf.settings.reflector_reupload:
+        if not conf.settings['reflector_reupload']:
             return
-        reflector_server = random.choice(conf.settings.reflector_servers)
+        reflector_server = random.choice(conf.settings['reflector_servers'])
         return reupload.check_and_restore_availability(self, reflector_server)
 
     @defer.inlineCallbacks

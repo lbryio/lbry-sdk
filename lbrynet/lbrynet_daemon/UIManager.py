@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 class UIManager(object):
     def __init__(self, root):
-        self.ui_root = os.path.join(conf.settings.data_dir, "lbry-ui")
+        self.ui_root = os.path.join(conf.settings['data_dir'], "lbry-ui")
         self.active_dir = os.path.join(self.ui_root, "active")
         self.update_dir = os.path.join(self.ui_root, "update")
 
@@ -60,11 +60,11 @@ class UIManager(object):
                 self.loaded_requirements = None
 
     def setup(self, branch=None, check_requirements=None, user_specified=None):
-        local_ui_path = user_specified or conf.settings.local_ui_path
+        local_ui_path = user_specified or conf.settings['local_ui_path']
 
-        self.branch = branch or conf.settings.ui_branch
+        self.branch = branch or conf.settings['ui_branch']
         self.check_requirements = (check_requirements if check_requirements is not None
-                                   else conf.settings.check_ui_requirements)
+                                   else conf.settings['check_ui_requirements'])
 
         # Note that this currently overrides any manual setting of UI.
         # It might be worth considering changing that behavior but the expectation
@@ -212,7 +212,7 @@ class UIManager(object):
         return load_ui(self.root, self.active_dir)
 
     def launch(self):
-        webbrowser.open(conf.settings.UI_ADDRESS)
+        webbrowser.open(conf.settings.get_ui_address())
 
 
 class BundledUIManager(object):

@@ -99,7 +99,8 @@ class AuthJSONRPCServer(AuthorizedBase):
     def __init__(self, use_authentication=None):
         AuthorizedBase.__init__(self)
         self._use_authentication = (
-            use_authentication if use_authentication is not None else conf.settings.use_auth_http)
+            use_authentication if use_authentication is not None else conf.settings['use_auth_http']
+        )
         self.announced_startup = False
         self.allowed_during_startup = []
         self.sessions = {}
@@ -108,8 +109,8 @@ class AuthJSONRPCServer(AuthorizedBase):
         return NotImplementedError()
 
     def _set_headers(self, request, data, update_secret=False):
-        if conf.settings.allowed_origin:
-            request.setHeader("Access-Control-Allow-Origin", conf.settings.allowed_origin)
+        if conf.settings['allowed_origin']:
+            request.setHeader("Access-Control-Allow-Origin", conf.settings['allowed_origin'])
         request.setHeader("Content-Type", "text/json")
         request.setHeader("Content-Length", str(len(data)))
         if update_secret:
@@ -248,12 +249,12 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _check_source_of_request(self, source):
         if source is None:
             return True
-        if conf.settings.API_INTERFACE == '0.0.0.0':
+        if conf.settings['api_host'] == '0.0.0.0':
             return True
         server, port = self.get_server_port(source)
         return (
-            server == conf.settings.API_INTERFACE and
-            port == conf.settings.api_port)
+            server == conf.settings['api_host'] and
+            port == conf.settings['api_port'])
 
     def get_server_port(self, origin):
         parsed = urlparse.urlparse(origin)

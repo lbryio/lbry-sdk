@@ -35,7 +35,7 @@ class GetStream(object):
                  max_key_fee, data_rate=0.5, timeout=None,
                  download_directory=None, file_name=None):
         if timeout is None:
-            timeout = conf.settings.download_timeout
+            timeout = conf.settings['download_timeout']
         self.wallet = wallet
         self.resolved_name = None
         self.description = None

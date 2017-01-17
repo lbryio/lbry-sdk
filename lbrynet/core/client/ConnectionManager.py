@@ -136,7 +136,7 @@ class ConnectionManager(object):
         self._manage_deferred = defer.Deferred()
 
         from twisted.internet import reactor
-        if len(self._peer_connections) < conf.settings.max_connections_per_stream:
+        if len(self._peer_connections) < conf.settings['max_connections_per_stream']:
             try:
                 ordered_request_creators = self._rank_request_creator_connections()
                 peers = yield self._get_new_peers(ordered_request_creators)

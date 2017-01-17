@@ -66,7 +66,7 @@ class CryptStreamBlobMaker(object):
         self.length = 0
 
     def write(self, data):
-        max_bytes_to_write = conf.settings.BLOB_SIZE - self.length - 1
+        max_bytes_to_write = conf.settings['BLOB_SIZE'] - self.length - 1
         done = False
         if max_bytes_to_write <= len(data):
             num_bytes_to_write = max_bytes_to_write

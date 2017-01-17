@@ -19,7 +19,7 @@ class Strategy(object):
     def __init__(self, price_model, max_rate, min_rate, is_generous=None):
         self.price_model = price_model
         self.is_generous = (
-            is_generous if is_generous is not None else conf.settings.is_generous_host)
+            is_generous if is_generous is not None else conf.settings['is_generous_host'])
         self.accepted_offers = {}
         self.pending_sent_offers = {}
         self.offers_sent = {}

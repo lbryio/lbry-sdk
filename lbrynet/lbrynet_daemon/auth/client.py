@@ -101,7 +101,7 @@ class AuthAPIClient(object):
                url=None, login_url=None):
 
         api_key_name = API_KEY_NAME if not key_name else key_name
-        pw_path = os.path.join(conf.settings.data_dir, ".api_keys") if not pw_path else pw_path
+        pw_path = os.path.join(conf.settings['data_dir'], ".api_keys") if not pw_path else pw_path
         if not key:
             keys = load_api_keys(pw_path)
             api_key = keys.get(api_key_name, False)
@@ -110,9 +110,9 @@ class AuthAPIClient(object):
         if login_url is None:
             service_url = "http://%s:%s@%s:%i/%s" % (api_key_name,
                                                      api_key.secret,
-                                                     conf.settings.API_INTERFACE,
-                                                     conf.settings.api_port,
-                                                     conf.settings.API_ADDRESS)
+                                                     conf.settings['api_host'],
+                                                     conf.settings['api_port'],
+                                                     conf.settings['API_ADDRESS'])
         else:
             service_url = login_url
         id_count = count
@@ -158,5 +158,5 @@ class AuthAPIClient(object):
 class LBRYAPIClient(object):
     @staticmethod
     def get_client():
-        return AuthAPIClient.config() if conf.settings.use_auth_http else \
-            JSONRPCProxy.from_url(conf.settings.API_CONNECTION_STRING)
+        return AuthAPIClient.config() if conf.settings['use_auth_http'] else \
+            JSONRPCProxy.from_url(conf.settings.get_api_connection_string())

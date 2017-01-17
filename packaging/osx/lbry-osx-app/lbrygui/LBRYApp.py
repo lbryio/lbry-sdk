@@ -27,7 +27,7 @@ class LBRYDaemonApp(AppKit.NSApplication):
         self.connection = False
         statusbar = AppKit.NSStatusBar.systemStatusBar()
         self.statusitem = statusbar.statusItemWithLength_(AppKit.NSVariableStatusItemLength)
-        self.icon = AppKit.NSImage.alloc().initByReferencingFile_(conf.settings.ICON_PATH)
+        self.icon = AppKit.NSImage.alloc().initByReferencingFile_(conf.settings['ICON_PATH'])
         self.icon.setScalesWhenResized_(True)
         self.icon.setSize_((20, 20))
         self.statusitem.setImage_(self.icon)
@@ -39,7 +39,7 @@ class LBRYDaemonApp(AppKit.NSApplication):
             "Quit", "applicationShouldTerminate:", "")
         self.menubarMenu.addItem_(self.quit)
         self.statusitem.setMenu_(self.menubarMenu)
-        self.statusitem.setToolTip_(conf.settings.APP_NAME)
+        self.statusitem.setToolTip_(conf.settings['APP_NAME'])
 
         if test_internet_connection():
             notify("Starting LBRY")
@@ -53,7 +53,7 @@ class LBRYDaemonApp(AppKit.NSApplication):
         )
 
     def openui_(self, sender):
-        webbrowser.open(conf.settings.UI_ADDRESS)
+        webbrowser.open(conf.settings.get_ui_address())
 
     # this code is from the example
     # https://pythonhosted.org/pyobjc/examples/Cocoa/Twisted/WebServicesTool/index.html

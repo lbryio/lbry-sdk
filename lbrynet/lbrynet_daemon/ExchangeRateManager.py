@@ -85,7 +85,7 @@ class BittrexFeed(MarketFeed):
             self,
             "BTCLBC",
             "Bittrex",
-            conf.settings.bittrex_feed,
+            conf.settings['bittrex_feed'],
             {'market': 'BTC-LBC', 'count': 50},
             BITTREX_FEE
         )

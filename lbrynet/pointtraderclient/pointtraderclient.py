@@ -47,7 +47,7 @@ def get_body_from_request(path, data):
     jsondata = FileBodyProducer(StringIO(json.dumps(data)))
     agent = Agent(reactor)
     d = agent.request(
-        'POST', conf.settings.pointtrader_server + path,
+        'POST', conf.settings['pointtrader_server'] + path,
         Headers({'Content-Type': ['application/json']}), jsondata)
     d.addCallback(get_body)
     return d

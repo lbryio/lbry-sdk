@@ -9,11 +9,12 @@ from lbrynet import analytics
 from lbrynet.core import Peer
 from lbrynet.core.server import BlobRequestHandler
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
-from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
+from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker, mock_conf_settings
 
 
 class TestBlobRequestHandlerQueries(unittest.TestCase):
     def setUp(self):
+        mock_conf_settings(self)
         self.blob_manager = mock.Mock()
         self.payment_rate_manager = NegotiatedPaymentRateManager(
             BasePaymentRateManager(0.001), DummyBlobAvailabilityTracker())
