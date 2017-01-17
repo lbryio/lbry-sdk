@@ -26,6 +26,7 @@ SUCCESS = False
 
 
 def main(args=None):
+    conf.initialize_settings()
     parser = argparse.ArgumentParser()
     parser.add_argument('--timeout', type=int, default=30)
     parser.add_argument('peer')
@@ -71,8 +72,8 @@ def getWallet():
     config = {'auto_connect': True}
     if conf.settings['lbryum_wallet_dir']:
         config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
-    db_dir = tempfile.mkdtemp()
-    return Wallet.LBRYumWallet(db_dir, config)
+    storage = Wallet.InMemoryStorage()
+    return Wallet.LBRYumWallet(storage, config)
 
 
 class SingleBlobDownloader(object):
@@ -107,6 +108,9 @@ class DumbPaymentRateManager(object):
         return 0.0
 
     def record_offer_reply(self, peer, offer):
+        pass
+
+    def record_points_paid(self, point_ammount):
         pass
 
 
