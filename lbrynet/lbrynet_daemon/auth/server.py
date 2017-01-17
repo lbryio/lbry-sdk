@@ -137,7 +137,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def render(self, request):
         time_in = utils.now()
-        assert self._check_headers(request), InvalidHeaderError
+        # assert self._check_headers(request), InvalidHeaderError
         session = request.getSession()
         session_id = session.uid
         finished_deferred = request.notifyFinish()
