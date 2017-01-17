@@ -252,7 +252,9 @@ def main(lbry_name=None):
         replyToApplicationShouldTerminate_()
 
     if getattr(sys, 'frozen', False) and os.name == "nt":
-        icon = os.path.join(os.path.dirname(sys.executable), conf.settings['ICON_PATH'], 'lbry16.ico')
+        icon = os.path.join(
+            os.path.dirname(sys.executable), conf.settings['ICON_PATH'], 'lbry16.ico'
+        )
     else:
         icon = os.path.join(conf.settings['ICON_PATH'], 'lbry16.ico')
 
