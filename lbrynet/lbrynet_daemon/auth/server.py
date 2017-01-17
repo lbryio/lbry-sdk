@@ -99,7 +99,8 @@ class AuthJSONRPCServer(AuthorizedBase):
     def __init__(self, use_authentication=None):
         AuthorizedBase.__init__(self)
         self._use_authentication = (
-            use_authentication if use_authentication is not None else conf.settings['use_auth_http'])
+            use_authentication if use_authentication is not None else conf.settings['use_auth_http']
+        )
         self.announced_startup = False
         self.allowed_during_startup = []
         self.sessions = {}
