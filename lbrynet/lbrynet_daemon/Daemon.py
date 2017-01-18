@@ -1038,6 +1038,7 @@ class Daemon(AuthJSONRPCServer):
     #                                                                          #
     ############################################################################
 
+    @defer.inlineCallbacks
     def jsonrpc_status(self, p={}):
         """
         Return daemon status
@@ -1048,11 +1049,11 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             daemon status
         """
-
+        has_wallet = self.session and self.session.wallet
         response = {
             'lbry_id': base58.b58encode(self.lbryid)[:SHORT_ID_LEN],
             'is_running': self.announced_startup,
-            'is_first_run': self.session.wallet.is_first_run if self.session else None,
+            'is_first_run': self.session.wallet.is_first_run if has_wallet  else None,
             'startup_status': {
                 'code': self.startup_status[0],
                 'message': self.startup_status[1],
@@ -1067,42 +1068,24 @@ class Daemon(AuthJSONRPCServer):
             },
             'blocks_behind': (
                 self.session.wallet.blocks_behind
-                if self.session and self.wallet_type == LBRYUM_WALLET
+                if has_wallet  and self.wallet_type == LBRYUM_WALLET
                 else 'unknown'
             ),
         }
-
-        d = defer.succeed(None)
-
         if p.get('session_status', False):
-            d.addCallback(lambda _: self.session.blob_manager.get_all_verified_blobs())
-
-            def _include_session_status(blobs):
-                response['session_status'] = {
-                    'managed_blobs': len(blobs),
-                    'managed_streams': len(self.lbry_file_manager.lbry_files),
-                }
-
-            d.addCallback(_include_session_status)
-
-        if p.get('blockchain_status', False) and self.session and self.session.wallet:
+            blobs = yield self.session.blob_manager.get_all_verified_blobs()
+            response['session_status'] = {
+                'managed_blobs': len(blobs),
+                'managed_streams': len(self.lbry_file_manager.lbry_files),
+            }
+        if p.get('blockchain_status', False) and has_wallet:
             # calculate blocks_behind more accurately
             local_height = self.session.wallet.network.get_local_height()
             remote_height = self.session.wallet.network.get_server_height()
             response['blocks_behind'] = remote_height - local_height
-
-            d.addCallback(lambda _: self.session.wallet.get_best_blockhash())
-
-            def _include_blockchain_status(best_hash):
-                response['blockchain_status'] = {
-                    'best_blockhash': best_hash,
-                }
-
-            d.addCallback(_include_blockchain_status)
-
-        d.addCallback(lambda x: self._render_response(response))
-        return d
-        # return self._render_response(response)
+            best_hash = yield self.session.wallet.get_best_blockhash()
+            response['blockchain_status'] = {'best_blockhash': best_hash}
+        defer.returnValue(response)
 
     def jsonrpc_get_best_blockhash(self):
         """
@@ -1117,7 +1100,7 @@ class Daemon(AuthJSONRPCServer):
         """
         DEPRECATED. Use `status` instead
         """
-        d = self.jsonrpc_status({'blockchain_status': True})
+        d = self.jsonrpc_status()
         d.addCallback(lambda x: self._render_response(x['is_running']))
         return d
 
