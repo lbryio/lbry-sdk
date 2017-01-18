@@ -84,7 +84,7 @@ class HostedEncryptedFile(resource.Resource):
             if self.is_valid_request_name(request):
                 name = request.args['name'][0]
                 d = self._api.jsonrpc_get({'name': name})
-                d.addCallback(lambda response: response['result']['stream_hash'])
+                d.addCallback(lambda response: response['stream_hash'])
                 d.addCallback(lambda sd_hash: self._api._get_lbry_file_by_sd_hash(sd_hash))
                 d.addCallback(lambda lbry_file: self._make_stream_producer(request, lbry_file))
             elif request.args['name'][0] in self._api.waiting_on.keys():
