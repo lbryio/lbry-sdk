@@ -211,7 +211,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         # handle deferredLists that won't peacefully cancel, namely
         # get_lbry_files
         d.addErrback(trap, ConnectionDone, ConnectionLost, defer.CancelledError, RuntimeError)
-        d.addErrback(log.fail(self._render_error, request, version=version),
+        d.addErrback(log.fail(self._render_error, request, id_, version=version),
                      'Failed to process %s', function_name)
         d.addBoth(lambda _: log.debug("%s took %f",
                                       function_name,
