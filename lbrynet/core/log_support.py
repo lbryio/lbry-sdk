@@ -399,7 +399,16 @@ class Logger(logging.Logger):
                 self.name, level, fn, lno, msg, msg_args, exc_info, func, msg_kwargs)
             self.handle(record)
             if callback:
-                return callback(err, *args, **kwargs)
+                try:
+                    return callback(err, *args, **kwargs)
+                except Exception:
+                    # log.fail is almost always called within an
+                    # errback. If callback fails and we didn't catch
+                    # the exception we would need to attach a second
+                    # errback to deal with that, which we will almost
+                    # never do and then we end up with an unhandled
+                    # error that will get swallowed by twisted
+                    self.exception('Failed to run callback')
         return _fail
 
     def trace(self, msg, *args, **kwargs):
