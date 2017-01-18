@@ -2220,6 +2220,7 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_open(self, p):
         """
         Instruct the OS to open a file with its default program.
@@ -2230,18 +2231,20 @@ class Daemon(AuthJSONRPCServer):
             True, opens file
         """
 
-        def _open_lbry_file(lbry_file):
-            try:
-                file_utils.start(lbry_file['download_path'])
-            except IOError:
-                pass
+        if 'sd_hash' not in p:
+            raise ValueError('sd_hash is required')
 
-        d = self._get_lbry_file(FileID.SD_HASH, p['sd_hash'])
-        d.addCallback(_open_lbry_file)
-        d.addCallback(lambda _: self._render_response(True, OK_CODE))
+        lbry_file = yield self._get_lbry_file(FileID.SD_HASH, p['sd_hash'])
+        if not lbry_file:
+            raise Exception('Unable to find file for {}'.format(p['sd_hash']))
 
-        return d
+        try:
+            file_utils.start(lbry_file['download_path'])
+        except IOError:
+            pass
+        defer.returnValue(True)
 
+    @defer.inlineCallbacks
     @AuthJSONRPCServer.auth_required
     def jsonrpc_reveal(self, p):
         """
@@ -2253,18 +2256,18 @@ class Daemon(AuthJSONRPCServer):
             True, opens file browser
         """
 
-        def _reveal_lbry_file(lbry_file):
-            try:
-                file_utils.reveal(lbry_file['download_path'])
-            except IOError:
-                pass
+        if 'sd_hash' not in p:
+            raise ValueError('sd_hash is required')
 
-        d = self._get_lbry_file(FileID.SD_HASH, p['sd_hash'])
-        d.addCallback(_reveal_lbry_file)
-        d.addCallback(lambda _: self._render_response(True, OK_CODE))
+        lbry_file = yield self._get_lbry_file(FileID.SD_HASH, p['sd_hash'])
+        if not lbry_file:
+            raise Exception('Unable to find file for {}'.format(p['sd_hash']))
 
-        return d
-
+        try:
+            file_utils.reveal(lbry_file['download_path'])
+        except IOError:
+            pass
+        defer.returnValue(True)
 
     def jsonrpc_get_peers_for_hash(self, p):
         """
