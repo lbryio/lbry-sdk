@@ -48,9 +48,6 @@ class BlobManager(DHTHashSupplier):
     def delete_blob(self, blob_hash):
         pass
 
-    def get_blob_length(self, blob_hash):
-        pass
-
     def blob_requested(self, blob_hash):
         pass
 
@@ -164,9 +161,6 @@ class DiskBlobManager(BlobManager):
         d = self._get_all_verified_blob_hashes()
         d.addCallback(self._immediate_announce)
         return d
-
-    def get_blob_length(self, blob_hash):
-        return self._get_blob_length(blob_hash)
 
     def get_all_verified_blobs(self):
         d = self._get_all_verified_blob_hashes()
@@ -282,12 +276,6 @@ class DiskBlobManager(BlobManager):
         blobs = yield defer.DeferredList([self.get_blob(b, True) for b in blobhashes_to_check])
         blob_hashes = [b.blob_hash for success, b in blobs if success and b.verified]
         defer.returnValue(blob_hashes)
-
-    @rerun_if_locked
-    def _get_blob_length(self, blob):
-        d = self.db_conn.runQuery("select blob_length from blobs where blob_hash = ?", (blob,))
-        d.addCallback(lambda r: r[0][0] if len(r) else Failure(NoSuchBlobError(blob)))
-        return d
 
     @rerun_if_locked
     def _update_blob_verified_timestamp(self, blob, timestamp):
@@ -437,12 +425,6 @@ class TempBlobManager(BlobManager):
         for blob_hash in blob_hashes:
             if not blob_hash in self.blob_hashes_to_delete:
                 self.blob_hashes_to_delete[blob_hash] = False
-
-    def get_blob_length(self, blob_hash):
-        if blob_hash in self.blobs:
-            if self.blobs[blob_hash].length is not None:
-                return defer.succeed(self.blobs[blob_hash].length)
-        return defer.fail(NoSuchBlobError(blob_hash))
 
     def immediate_announce_all_blobs(self):
         if self.hash_announcer:

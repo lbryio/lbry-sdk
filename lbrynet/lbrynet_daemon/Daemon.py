@@ -184,12 +184,11 @@ class AlwaysSend(object):
         return d
 
 
+@defer.inlineCallbacks
 def calculate_available_blob_size(blob_manager):
-    d = blob_manager.get_all_verified_blobs()
-    d.addCallback(
-        lambda blobs: defer.DeferredList([blob_manager.get_blob_length(b) for b in blobs]))
-    d.addCallback(lambda blob_lengths: sum(val for success, val in blob_lengths if success))
-    return d
+    blob_hashes = yield blob_manager.get_all_verified_blobs()
+    blobs = yield defer.DeferredList([blob_manager.get_blob(b) for b in blob_hashes])
+    defer.returnValue(sum(b.length for success, b in blobs if success and b.length))
 
 
 class Daemon(AuthJSONRPCServer):
