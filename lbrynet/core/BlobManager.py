@@ -36,7 +36,7 @@ class BlobManager(DHTHashSupplier):
     def blob_completed(self, blob, next_announce_time=None):
         pass
 
-    def completed_blobs(self, blobs_to_check):
+    def completed_blobs(self, blobhashes_to_check):
         pass
 
     def hashes_to_announce(self):
@@ -136,8 +136,8 @@ class DiskBlobManager(BlobManager):
         d.addCallback(lambda _: self._immediate_announce([blob.blob_hash]))
         return d
 
-    def completed_blobs(self, blobs_to_check):
-        return self._completed_blobs(blobs_to_check)
+    def completed_blobs(self, blobhashes_to_check):
+        return self._completed_blobs(blobhashes_to_check)
 
     def hashes_to_announce(self):
         next_announce_time = time.time() + self.hash_reannounce_time
@@ -276,10 +276,12 @@ class DiskBlobManager(BlobManager):
         d.addErrback(lambda err: err.trap(sqlite3.IntegrityError))
         return d
 
-    def _completed_blobs(self, blobs_to_check):
-        """Returns of the blobs_to_check, which are valid"""
-        blobs = [b for b in blobs_to_check if b.verified]
-        return defer.succeed(blobs)
+    @defer.inlineCallbacks
+    def _completed_blobs(self, blobhashes_to_check):
+        """Returns of the blobhashes_to_check, which are valid"""
+        blobs = yield defer.DeferredList([self.get_blob(b, True) for b in blobhashes_to_check])
+        blob_hashes = [b.blob_hash for success, b in blobs if success and b.verified]
+        defer.returnValue(blob_hashes)
 
     @rerun_if_locked
     def _get_blob_length(self, blob):
@@ -392,10 +394,10 @@ class TempBlobManager(BlobManager):
         self.blob_next_announces[blob.blob_hash] = next_announce_time
         return defer.succeed(True)
 
-    def completed_blobs(self, blobs_to_check):
+    def completed_blobs(self, blobhashes_to_check):
         blobs = [
             b.blob_hash for b in self.blobs.itervalues()
-            if b.blob_hash in blobs_to_check and b.is_validated()
+            if b.blob_hash in blobhashes_to_check and b.is_validated()
         ]
         return defer.succeed(blobs)
 

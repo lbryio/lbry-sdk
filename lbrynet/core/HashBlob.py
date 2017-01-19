@@ -52,6 +52,10 @@ class HashBlobWriter(object):
         self._hashsum = get_lbry_hash_obj()
         self.len_so_far = 0
 
+    @property
+    def blob_hash(self):
+        return self._hashsum.hexdigest()
+
     def write(self, data):
         self._hashsum.update(data)
         self.len_so_far += len(data)
@@ -107,10 +111,7 @@ class HashBlob(object):
         return self.length
 
     def is_validated(self):
-        if self._verified:
-            return True
-        else:
-            return False
+        return bool(self._verified)
 
     def is_downloading(self):
         if self.writers:
@@ -158,7 +159,7 @@ class HashBlob(object):
                 w.cancel()
 
         if err is None:
-            if writer.len_so_far == self.length and writer.hashsum.hexdigest() == self.blob_hash:
+            if writer.len_so_far == self.length and writer.blob_hash == self.blob_hash:
                 if self._verified is False:
                     d = self._save_verified_blob(writer)
                     d.addCallbacks(lambda _: fire_finished_deferred(), errback_finished_deferred)
@@ -169,7 +170,7 @@ class HashBlob(object):
             else:
                 err_string = "length vs expected: {0}, {1}, hash vs expected: {2}, {3}"
                 err_string = err_string.format(self.length, writer.len_so_far, self.blob_hash,
-                                               writer.hashsum.hexdigest())
+                                               writer.blob_hash)
                 errback_finished_deferred(Failure(InvalidDataError(err_string)))
                 d = defer.succeed(True)
         else:
@@ -348,7 +349,7 @@ class TempBlob(HashBlob):
 class HashBlobCreator(object):
     def __init__(self, blob_manager):
         self.blob_manager = blob_manager
-        self.hashsum = get_lbry_hash_obj()
+        self._hashsum = get_lbry_hash_obj()
         self.len_so_far = 0
         self.blob_hash = None
         self.length = None
@@ -361,7 +362,7 @@ class HashBlobCreator(object):
         if self.length == 0:
             self.blob_hash = None
         else:
-            self.blob_hash = self.hashsum.hexdigest()
+            self.blob_hash = self._hashsum.hexdigest()
         d = self._close()
         if self.blob_hash is not None:
             d.addCallback(lambda _: self.blob_manager.creator_finished(self))
@@ -371,7 +372,7 @@ class HashBlobCreator(object):
         return d
 
     def write(self, data):
-        self.hashsum.update(data)
+        self._hashsum.update(data)
         self.len_so_far += len(data)
         self._write(data)
 
