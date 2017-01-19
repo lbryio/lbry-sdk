@@ -858,7 +858,7 @@ class Daemon(AuthJSONRPCServer):
 
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
-            return self.session.blob_manager.get_blob(blob[0], True)
+            return self.session.blob_manager.get_blob(blob[0])
 
         def _check_est(downloader):
             if downloader.result is not None:
