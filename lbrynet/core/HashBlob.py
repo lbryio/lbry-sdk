@@ -11,6 +11,7 @@ from zope.interface import implements
 from lbrynet import conf
 from lbrynet.core.Error import DownloadCanceledError, InvalidDataError
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
+from lbrynet.core.utils import is_valid_blobhash
 
 
 log = logging.getLogger(__name__)
@@ -48,11 +49,11 @@ class HashBlobWriter(object):
         self.write_handle = write_handle
         self.length_getter = length_getter
         self.finished_cb = finished_cb
-        self.hashsum = get_lbry_hash_obj()
+        self._hashsum = get_lbry_hash_obj()
         self.len_so_far = 0
 
     def write(self, data):
-        self.hashsum.update(data)
+        self._hashsum.update(data)
         self.len_so_far += len(data)
         if self.len_so_far > self.length_getter():
             self.finished_cb(
@@ -78,13 +79,19 @@ class HashBlob(object):
     """A chunk of data available on the network which is specified by a hashsum"""
 
     def __init__(self, blob_hash, upload_allowed, length=None):
+        assert is_valid_blobhash(blob_hash)
         self.blob_hash = blob_hash
         self.length = length
         self.writers = {}  # {Peer: writer, finished_deferred}
         self.finished_deferred = None
-        self.verified = False
+        self._verified = False
         self.upload_allowed = upload_allowed
         self.readers = 0
+
+    @property
+    def verified(self):
+        # protect verified from being modified by other classes
+        return self._verified
 
     def set_length(self, length):
         if self.length is not None and length == self.length:
@@ -100,7 +107,7 @@ class HashBlob(object):
         return self.length
 
     def is_validated(self):
-        if self.verified:
+        if self._verified:
             return True
         else:
             return False
@@ -129,7 +136,7 @@ class HashBlob(object):
     def writer_finished(self, writer, err=None):
 
         def fire_finished_deferred():
-            self.verified = True
+            self._verified = True
             for p, (w, finished_deferred) in self.writers.items():
                 if w == writer:
                     finished_deferred.callback(self)
@@ -152,7 +159,7 @@ class HashBlob(object):
 
         if err is None:
             if writer.len_so_far == self.length and writer.hashsum.hexdigest() == self.blob_hash:
-                if self.verified is False:
+                if self._verified is False:
                     d = self._save_verified_blob(writer)
                     d.addCallbacks(lambda _: fire_finished_deferred(), errback_finished_deferred)
                     d.addCallback(lambda _: cancel_other_downloads())
@@ -206,6 +213,14 @@ class BlobFile(HashBlob):
         self.file_path = os.path.join(blob_dir, self.blob_hash)
         self.setting_verified_blob_lock = threading.Lock()
         self.moved_verified_blob = False
+        if os.path.isfile(self.file_path):
+            self.set_length(os.path.getsize(self.file_path))
+            # This assumes that the hash of the blob has already been
+            # checked as part of the blob creation process. It might
+            # be worth having a function that checks the actual hash;
+            # its probably too expensive to have that check be part of
+            # this call.
+            self._verified = True
 
     def open_for_writing(self, peer):
         if not peer in self.writers:
@@ -220,7 +235,7 @@ class BlobFile(HashBlob):
         return None, None, None
 
     def open_for_reading(self):
-        if self.verified is True:
+        if self._verified is True:
             file_handle = None
             try:
                 file_handle = open(self.file_path, 'rb')
@@ -232,7 +247,7 @@ class BlobFile(HashBlob):
 
     def delete(self):
         if not self.writers and not self.readers:
-            self.verified = False
+            self._verified = False
             self.moved_verified_blob = False
 
             def delete_from_file_system():
@@ -299,13 +314,13 @@ class TempBlob(HashBlob):
         return None, None, None
 
     def open_for_reading(self):
-        if self.verified is True:
+        if self._verified is True:
             return StringIO(self.data_buffer)
         return None
 
     def delete(self):
         if not self.writers and not self.readers:
-            self.verified = False
+            self._verified = False
             self.data_buffer = ''
             return defer.succeed(True)
         else:
@@ -394,6 +409,7 @@ class BlobFileCreator(HashBlobCreator):
 class TempBlobCreator(HashBlobCreator):
     def __init__(self, blob_manager):
         HashBlobCreator.__init__(self, blob_manager)
+        # TODO: use StringIO
         self.data_buffer = ''
 
     def _close(self):
