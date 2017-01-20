@@ -41,6 +41,7 @@ class EncryptedFileManager(object):
     def __init__(self, session, stream_info_manager, sd_identifier, download_directory=None):
         self.session = session
         self.stream_info_manager = stream_info_manager
+        # TODO: why is sd_identifier part of the file manager?
         self.sd_identifier = sd_identifier
         self.lbry_files = []
         self.sql_db = None
