@@ -8,7 +8,6 @@ from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
 from lbrynet.core.HashBlob import BlobFile, TempBlob, BlobFileCreator, TempBlobCreator
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
-from lbrynet.core.utils import is_valid_blobhash
 from lbrynet.core.Error import NoSuchBlobError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
@@ -37,7 +36,7 @@ class BlobManager(DHTHashSupplier):
     def blob_completed(self, blob, next_announce_time=None):
         pass
 
-    def completed_blobs(self, blobs_to_check):
+    def completed_blobs(self, blobhashes_to_check):
         pass
 
     def hashes_to_announce(self):
@@ -47,9 +46,6 @@ class BlobManager(DHTHashSupplier):
         pass
 
     def delete_blob(self, blob_hash):
-        pass
-
-    def get_blob_length(self, blob_hash):
         pass
 
     def blob_requested(self, blob_hash):
@@ -78,7 +74,9 @@ class BlobManager(DHTHashSupplier):
             return self.hash_announcer.immediate_announce(blob_hashes)
 
 
-
+# TODO: Having different managers for different blobs breaks the
+#       abstraction of a HashBlob. Why should the management of blobs
+#       care what kind of Blob it has?
 class DiskBlobManager(BlobManager):
     """This class stores blobs on the hard disk"""
     def __init__(self, hash_announcer, blob_dir, db_dir):
@@ -126,35 +124,17 @@ class DiskBlobManager(BlobManager):
         log.debug('Making a new blob for %s', blob_hash)
         blob = self.blob_type(self.blob_dir, blob_hash, upload_allowed, length)
         self.blobs[blob_hash] = blob
-        d = self._completed_blobs([blob_hash])
-
-        def check_completed(completed_blobs):
-
-            def set_length(length):
-                blob.length = length
-
-            if len(completed_blobs) == 1 and completed_blobs[0] == blob_hash:
-                blob.verified = True
-                inner_d = self._get_blob_length(blob_hash)
-                inner_d.addCallback(set_length)
-                inner_d.addCallback(lambda _: blob)
-            else:
-                inner_d = defer.succeed(blob)
-            return inner_d
-
-        d.addCallback(check_completed)
-        return d
+        return defer.succeed(blob)
 
     def blob_completed(self, blob, next_announce_time=None):
         if next_announce_time is None:
             next_announce_time = time.time() + self.hash_reannounce_time
-        d = self._add_completed_blob(blob.blob_hash, blob.length,
-                                     time.time(), next_announce_time)
+        d = self._add_completed_blob(blob.blob_hash, blob.length, next_announce_time)
         d.addCallback(lambda _: self._immediate_announce([blob.blob_hash]))
         return d
 
-    def completed_blobs(self, blobs_to_check):
-        return self._completed_blobs(blobs_to_check)
+    def completed_blobs(self, blobhashes_to_check):
+        return self._completed_blobs(blobhashes_to_check)
 
     def hashes_to_announce(self):
         next_announce_time = time.time() + self.hash_reannounce_time
@@ -166,7 +146,6 @@ class DiskBlobManager(BlobManager):
         assert blob_creator.blob_hash not in self.blobs
         assert blob_creator.length is not None
         new_blob = self.blob_type(self.blob_dir, blob_creator.blob_hash, True, blob_creator.length)
-        new_blob.verified = True
         self.blobs[blob_creator.blob_hash] = new_blob
         self._immediate_announce([blob_creator.blob_hash])
         next_announce_time = time.time() + self.hash_reannounce_time
@@ -178,16 +157,10 @@ class DiskBlobManager(BlobManager):
             if not blob_hash in self.blob_hashes_to_delete:
                 self.blob_hashes_to_delete[blob_hash] = False
 
-    def update_all_last_verified_dates(self, timestamp):
-        return self._update_all_last_verified_dates(timestamp)
-
     def immediate_announce_all_blobs(self):
         d = self._get_all_verified_blob_hashes()
         d.addCallback(self._immediate_announce)
         return d
-
-    def get_blob_length(self, blob_hash):
-        return self._get_blob_length(blob_hash)
 
     def get_all_verified_blobs(self):
         d = self._get_all_verified_blob_hashes()
@@ -246,7 +219,7 @@ class DiskBlobManager(BlobManager):
         for blob_hash, being_deleted in self.blob_hashes_to_delete.items():
             if being_deleted is False:
                 self.blob_hashes_to_delete[blob_hash] = True
-                d = self.get_blob(blob_hash, True)
+                d = self.get_blob(blob_hash)
                 d.addCallbacks(
                     delete, set_not_deleting,
                     callbackArgs=(blob_hash,), errbackArgs=(blob_hash,))
@@ -288,80 +261,21 @@ class DiskBlobManager(BlobManager):
         return self.db_conn.runInteraction(create_tables)
 
     @rerun_if_locked
-    def _add_completed_blob(self, blob_hash, length, timestamp, next_announce_time=None):
+    def _add_completed_blob(self, blob_hash, length, next_announce_time):
         log.debug("Adding a completed blob. blob_hash=%s, length=%s", blob_hash, str(length))
-        if next_announce_time is None:
-            next_announce_time = timestamp
-        d = self.db_conn.runQuery("insert into blobs values (?, ?, ?, ?)",
-                                  (blob_hash, length, timestamp, next_announce_time))
+        d = self.db_conn.runQuery(
+            "insert into blobs (blob_hash, blob_length, next_announce_time) values (?, ?, ?)",
+            (blob_hash, length, next_announce_time)
+        )
         d.addErrback(lambda err: err.trap(sqlite3.IntegrityError))
         return d
 
-    @rerun_if_locked
-    def _completed_blobs(self, blobs_to_check):
-        """Returns of the blobs_to_check, which are valid"""
-        blobs_to_check = filter(is_valid_blobhash, blobs_to_check)
-
-        def _get_last_verified_time(db_transaction, blob_hash):
-            result = db_transaction.execute(
-                "select last_verified_time from blobs where blob_hash = ?", (blob_hash,))
-            row = result.fetchone()
-            if row:
-                return row[0]
-            else:
-                return None
-
-        def _filter_blobs_in_db(db_transaction, blobs_to_check):
-            for b in blobs_to_check:
-                verified_time = _get_last_verified_time(db_transaction, b)
-                if verified_time:
-                    yield (b, verified_time)
-
-        def get_blobs_in_db(db_transaction, blob_to_check):
-            # [(blob_hash, last_verified_time)]
-            return list(_filter_blobs_in_db(db_transaction, blobs_to_check))
-
-        def get_valid_blobs(blobs_in_db):
-
-            def check_blob_verified_date(b, verified_time):
-                file_path = os.path.join(self.blob_dir, b)
-                if os.path.isfile(file_path):
-                    if verified_time > os.path.getctime(file_path):
-                        return True
-                    else:
-                        log.debug('Verification time for %s is too old (%s < %s)',
-                                  file_path, verified_time, os.path.getctime(file_path))
-                else:
-                    log.debug('file %s does not exist', file_path)
-                return False
-
-            def filter_valid_blobs(results):
-                assert len(blobs_in_db) == len(results)
-                valid_blobs = [
-                    b for (b, verified_date), (success, result) in zip(blobs_in_db, results)
-                    if success is True and result is True
-                ]
-                log.debug('Of %s blobs, %s were valid', len(results), len(valid_blobs))
-                return valid_blobs
-
-            ds = [
-                threads.deferToThread(check_blob_verified_date, b, verified_date)
-                for b, verified_date in blobs_in_db
-            ]
-            dl = defer.DeferredList(ds)
-            dl.addCallback(filter_valid_blobs)
-            return dl
-
-        d = self.db_conn.runInteraction(get_blobs_in_db, blobs_to_check)
-        d.addCallback(get_valid_blobs)
-        return d
-
-    @rerun_if_locked
-    def _get_blob_length(self, blob):
-        d = self.db_conn.runQuery("select blob_length from blobs where blob_hash = ?", (blob,))
-        d.addCallback(lambda r: r[0][0] if len(r) else Failure(NoSuchBlobError(blob)))
-        return d
-
+    @defer.inlineCallbacks
+    def _completed_blobs(self, blobhashes_to_check):
+        """Returns of the blobhashes_to_check, which are valid"""
+        blobs = yield defer.DeferredList([self.get_blob(b, True) for b in blobhashes_to_check])
+        blob_hashes = [b.blob_hash for success, b in blobs if success and b.verified]
+        defer.returnValue(blob_hashes)
 
     @rerun_if_locked
     def _update_blob_verified_timestamp(self, blob, timestamp):
@@ -383,10 +297,6 @@ class DiskBlobManager(BlobManager):
             return blobs
 
         return self.db_conn.runInteraction(get_and_update)
-
-    @rerun_if_locked
-    def _update_all_last_verified_dates(self, timestamp):
-        return self.db_conn.runQuery("update blobs set last_verified_date = ?", (timestamp,))
 
     @rerun_if_locked
     def _delete_blobs_from_db(self, blob_hashes):
@@ -430,6 +340,9 @@ class DiskBlobManager(BlobManager):
         return d
 
 
+# TODO: Having different managers for different blobs breaks the
+#       abstraction of a HashBlob. Why should the management of blobs
+#       care what kind of Blob it has?
 class TempBlobManager(BlobManager):
     """This class stores blobs in memory"""
     def __init__(self, hash_announcer):
@@ -469,10 +382,10 @@ class TempBlobManager(BlobManager):
         self.blob_next_announces[blob.blob_hash] = next_announce_time
         return defer.succeed(True)
 
-    def completed_blobs(self, blobs_to_check):
+    def completed_blobs(self, blobhashes_to_check):
         blobs = [
             b.blob_hash for b in self.blobs.itervalues()
-            if b.blob_hash in blobs_to_check and b.is_validated()
+            if b.blob_hash in blobhashes_to_check and b.is_validated()
         ]
         return defer.succeed(blobs)
 
@@ -496,9 +409,11 @@ class TempBlobManager(BlobManager):
         assert blob_creator.blob_hash not in self.blobs
         assert blob_creator.length is not None
         new_blob = self.blob_type(blob_creator.blob_hash, True, blob_creator.length)
-        new_blob.verified = True
+        # TODO: change this; its breaks the encapsulation of the
+        #       blob. Maybe better would be to have the blob_creator
+        #       produce a blob.
         new_blob.data_buffer = blob_creator.data_buffer
-        new_blob.length = blob_creator.length
+        new_blob._verified = True
         self.blobs[blob_creator.blob_hash] = new_blob
         self._immediate_announce([blob_creator.blob_hash])
         next_announce_time = time.time() + self.hash_reannounce_time
@@ -510,12 +425,6 @@ class TempBlobManager(BlobManager):
         for blob_hash in blob_hashes:
             if not blob_hash in self.blob_hashes_to_delete:
                 self.blob_hashes_to_delete[blob_hash] = False
-
-    def get_blob_length(self, blob_hash):
-        if blob_hash in self.blobs:
-            if self.blobs[blob_hash].length is not None:
-                return defer.succeed(self.blobs[blob_hash].length)
-        return defer.fail(NoSuchBlobError(blob_hash))
 
     def immediate_announce_all_blobs(self):
         if self.hash_announcer:
