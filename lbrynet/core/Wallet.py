@@ -1035,7 +1035,10 @@ class LBRYumWallet(Wallet):
         return d
 
     def get_new_address(self):
-        d = defer.succeed(self.wallet.create_new_address())
+        addr = self.wallet.get_unused_address(account=None)
+        if addr is None:
+            addr = self.wallet.create_new_address()
+        d = defer.succeed(addr)
         d.addCallback(self._save_wallet)
         return d
 
