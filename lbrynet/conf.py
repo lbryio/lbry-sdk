@@ -378,13 +378,16 @@ class Config(object):
         except (IOError, OSError) as err:
             log.info('%s: Failed to update settings from %s', err, path)
 
-    @staticmethod
-    def _fix_old_conf_file_settings(settings_dict):
+    def _fix_old_conf_file_settings(self, settings_dict):
         if 'API_INTERFACE' in settings_dict:
             settings_dict['api_host'] = settings_dict['API_INTERFACE']
             del settings_dict['API_INTERFACE']
         if 'startup_scripts' in settings_dict:
             del settings_dict['startup_scripts']
+        for key in settings_dict.keys():
+            if not self._is_valid_setting(key):
+                log.warning('Ignoring invalid conf file setting: %s', key)
+                del settings_dict[key]
         return settings_dict
 
     def ensure_data_dir(self):
