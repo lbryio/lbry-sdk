@@ -184,6 +184,9 @@ class AlwaysSend(object):
         return d
 
 
+# If an instance has a lot of blobs, this call might get very expensive.
+# For reflector, with 50k blobs, it definitely has an impact on the first run
+# But doesn't seem to impact performance after that.
 @defer.inlineCallbacks
 def calculate_available_blob_size(blob_manager):
     blob_hashes = yield blob_manager.get_all_verified_blobs()

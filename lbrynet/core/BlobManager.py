@@ -309,15 +309,14 @@ class DiskBlobManager(BlobManager):
 
     @rerun_if_locked
     def _get_all_verified_blob_hashes(self):
-        d = self.db_conn.runQuery("select blob_hash, last_verified_time from blobs")
+        d = self.db_conn.runQuery("select blob_hash from blobs")
 
         def get_verified_blobs(blobs):
             verified_blobs = []
-            for blob_hash, verified_time in blobs:
+            for blob_hash, in blobs:
                 file_path = os.path.join(self.blob_dir, blob_hash)
                 if os.path.isfile(file_path):
-                    if verified_time > os.path.getctime(file_path):
-                        verified_blobs.append(blob_hash)
+                    verified_blobs.append(blob_hash)
             return verified_blobs
 
         d.addCallback(lambda blobs: threads.deferToThread(get_verified_blobs, blobs))
