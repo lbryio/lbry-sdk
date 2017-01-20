@@ -271,28 +271,32 @@ class Config(object):
         if environment is not None:
             assert isinstance(environment, Env)
             for opt in environment.original_schema:
-                env_settings[opt] = environment(opt)
+                if environment(opt) is not None:
+                    env_settings[opt] = environment(opt)
         return env_settings
 
     def _assert_valid_data_type(self, data_type):
         assert data_type in self._data, KeyError('{} in is not a valid data type'.format(data_type))
 
+    def get_valid_setting_names(self):
+        return self._data[TYPE_DEFAULT].keys()
+
     def _is_valid_setting(self, name):
-        return name in self._data[TYPE_DEFAULT]
+        return name in self.get_valid_setting_names()
 
     def _assert_valid_setting(self, name):
         assert self._is_valid_setting(name), \
-            KeyError('{} in is not a valid setting'.format(name))
+            KeyError('{} is not a valid setting'.format(name))
 
     def _validate_settings(self, data):
-        for name in data:
-            if not self._is_valid_setting(name):
-                raise KeyError('{} in is not a valid setting'.format(name))
+        invalid_settings = set(data.keys()) - set(self.get_valid_setting_names())
+        if len(invalid_settings) > 0:
+            raise KeyError('invalid settings: {}'.format(', '.join(invalid_settings)))
 
     def _assert_editable_setting(self, name):
         self._assert_valid_setting(name)
         assert name not in self._fixed_defaults, \
-            ValueError('{} in is not an editable setting'.format(name))
+            ValueError('{} is not an editable setting'.format(name))
 
     def get(self, name, data_type=None):
         """Get a config value
@@ -345,14 +349,14 @@ class Config(object):
 
     def get_current_settings_dict(self):
         current_settings = {}
-        for k, v in self._data[TYPE_DEFAULT].iteritems():
-            current_settings[k] = self.get(k)
+        for key in self.get_valid_setting_names():
+            current_settings[key] = self.get(key)
         return current_settings
 
     def get_adjustable_settings_dict(self):
         return {
-            opt: val for opt, val in self.get_current_settings_dict().iteritems()
-            if opt in self._adjustable_defaults
+            key: val for key, val in self.get_current_settings_dict().iteritems()
+            if key in self._adjustable_defaults
         }
 
     def save_conf_file_settings(self):
@@ -446,7 +450,13 @@ settings = None
 
 
 def get_default_env():
-    return Env(**ADJUSTABLE_SETTINGS)
+    env_defaults = {}
+    for k, v in ADJUSTABLE_SETTINGS.iteritems():
+        if len(v) == 3:
+            env_defaults[k] = (v[0], None, v[2])
+        else:
+            env_defaults[k] = (v[0], None)
+    return Env(**env_defaults)
 
 
 def initialize_settings(load_conf_file=True):
