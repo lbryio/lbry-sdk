@@ -219,7 +219,7 @@ class DiskBlobManager(BlobManager):
         for blob_hash, being_deleted in self.blob_hashes_to_delete.items():
             if being_deleted is False:
                 self.blob_hashes_to_delete[blob_hash] = True
-                d = self.get_blob(blob_hash)
+                d = self.get_blob(blob_hash, True)
                 d.addCallbacks(
                     delete, set_not_deleting,
                     callbackArgs=(blob_hash,), errbackArgs=(blob_hash,))
