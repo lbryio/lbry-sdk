@@ -3,7 +3,7 @@ import sys
 import subprocess
 
 def start(path):
-    """ 
+    """
     Open a file with the OS's default program. (Cross-platform equivalent of os.startfile() for
     Windows)
     """

@@ -4,8 +4,6 @@ import mimetypes
 import os
 import random
 import re
-import subprocess
-import sys
 import base58
 import requests
 import urllib
