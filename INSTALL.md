@@ -66,20 +66,27 @@ Then, install the module by running `python setupmingw32.py install`.
 
 ## Installation
 
-We strongly recommend creating a new virtualenv for LBRY:
+To install:
 
- ```
- virtualenv lbry-venv
- source lbry-venv/bin/activate
- ```
-
-Then, install the package in the new virtualenv:
- 
  ```
  git clone https://github.com/lbryio/lbry.git
  cd lbry
+ 
+ #the next two commands set up a virtual environment for lbry - these are optional but strongly recommended
+ virtualenv lbry-venv
+ source lbry-venv/bin/activate
+ 
  pip install -r requirements.txt
  pip install .
  ```
 
 To start LBRY, run `lbrynet-daemon` in a terminal.
+
+To verify your install, `which lbrynet-daemon` should return a path inside of the `lbry-venv` folder created by the `virtual-env` command.
+
+## Making a Change
+
+```
+source lbry-venv/bin/activate #this only needs to be run once, if you are not already in the virtual environment
+python setup.py install #this will update lbrynet-daemon and other executables
+```
