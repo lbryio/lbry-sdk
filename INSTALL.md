@@ -72,7 +72,6 @@ To install:
  git clone https://github.com/lbryio/lbry.git
  cd lbry
  
- #the next two commands set up a virtual environment for lbry - these are optional but strongly recommended
  virtualenv lbry-venv
  source lbry-venv/bin/activate
  
@@ -86,7 +85,16 @@ To verify your install, `which lbrynet-daemon` should return a path inside of th
 
 ## Making a Change
 
+If you are not already inside the virtual environment, run:
+
 ```
-source lbry-venv/bin/activate #this only needs to be run once, if you are not already in the virtual environment
-python setup.py install #this will update lbrynet-daemon and other executables
+source lbry-venv/bin/activate
 ```
+
+Then run:
+
+```
+python setup.py install
+```
+
+This will update `lbrynet-daemon` and other executables.
