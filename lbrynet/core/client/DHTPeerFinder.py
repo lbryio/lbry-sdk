@@ -3,7 +3,8 @@ import logging
 
 from zope.interface import implements
 from lbrynet.interfaces import IPeerFinder
-
+from lbrynet import conf
+from lbrynet.core.Peer import Peer
 
 log = logging.getLogger(__name__)
 
@@ -46,8 +47,14 @@ class DHTPeerFinder(object):
                     good_peers.append(peer)
             return good_peers
 
+        def add_default_peers(peers):
+            for host, port in conf.settings['known_blob_peers']:
+                peers.append(Peer(host, port))
+            return peers
+
         d = self.dht_node.getPeersForBlob(bin_hash)
         d.addCallback(filter_peers)
+        d.addCallback(add_default_peers)
         return d
 
     def get_most_popular_hashes(self, num_to_return):

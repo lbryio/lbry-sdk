@@ -31,6 +31,21 @@ DEFAULT_DHT_NODES = [
     ('lbrynet3.lbry.io', 4444)
 ]
 
+DEFAULT_BLOB_PEERS = [
+	('54.89.95.83',33),
+	('54.89.151.12',33),
+	('4.164.104.233',33),
+	('198.199.87.180',33),
+	('67.205.133.39',33),
+	('67.205.154.20',33),
+	('162.243.160.85',33),
+	('104.236.17.33',33),
+	('45.55.220.143',33),
+	('54.236.227.82',33),
+	('54.235.233.242',33),
+	('54.157.43.4',33)
+]
+
 settings_decoders = {
     '.json': json.loads,
     '.yml': yaml.load
@@ -166,6 +181,10 @@ ADJUSTABLE_SETTINGS = {
     'host_ui': (bool, True),
     'is_generous_host': (bool, True),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_port),
+     # When trying to download blobs, we alaways add these servers
+     # to the list of potential peer, as they are reliable LBRY
+     # servers
+    'known_blob_peers': (list, DEFAULT_BLOB_PEERS, server_port),
 
     # TODO: this should not be configured; move it elsewhere
     'last_version': (dict, {'lbrynet': '0.0.1', 'lbryum': '0.0.1'}),
