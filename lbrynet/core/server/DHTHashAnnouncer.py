@@ -64,6 +64,7 @@ class DHTHashAnnouncer(object):
             announce_deferred = defer.Deferred()
             ds.append(announce_deferred)
             self.hash_queue.append((h, announce_deferred))
+        log.debug('There are now %s hashes remaining to be announced', len(self.hash_queue))
 
         def announce():
             if len(self.hash_queue):
