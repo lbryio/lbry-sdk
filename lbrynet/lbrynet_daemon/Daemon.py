@@ -4,8 +4,6 @@ import mimetypes
 import os
 import random
 import re
-import subprocess
-import sys
 import base58
 import requests
 import urllib
@@ -38,7 +36,7 @@ from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
-from lbrynet.core import log_support, utils
+from lbrynet.core import log_support, utils, file_utils
 from lbrynet.core import system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
@@ -2220,24 +2218,54 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_open(self, p):
+        """
+        Instruct the OS to open a file with its default program.
+
+        Args:
+            'sd_hash': SD hash of file to be opened
+        Returns:
+            True, opens file
+        """
+
+        if 'sd_hash' not in p:
+            raise ValueError('sd_hash is required')
+
+        lbry_file = yield self._get_lbry_file(FileID.SD_HASH, p['sd_hash'])
+        if not lbry_file:
+            raise Exception('Unable to find file for {}'.format(p['sd_hash']))
+
+        try:
+            file_utils.start(lbry_file['download_path'])
+        except IOError:
+            pass
+        defer.returnValue(True)
+
+    @defer.inlineCallbacks
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_reveal(self, p):
         """
         Reveal a file or directory in file browser
 
         Args:
-            'path': path to be selected in file browser
+            'path': path to be revealed in file browser
         Returns:
             True, opens file browser
         """
-        path = p['path']
-        if sys.platform == "darwin":
-            d = threads.deferToThread(subprocess.Popen, ['open', '-R', path])
-        else:
-            # No easy way to reveal specific files on Linux, so just open the containing directory
-            d = threads.deferToThread(subprocess.Popen, ['xdg-open', os.path.dirname(path)])
 
-        d.addCallback(lambda _: self._render_response(True))
-        return d
+        if 'sd_hash' not in p:
+            raise ValueError('sd_hash is required')
+
+        lbry_file = yield self._get_lbry_file(FileID.SD_HASH, p['sd_hash'])
+        if not lbry_file:
+            raise Exception('Unable to find file for {}'.format(p['sd_hash']))
+
+        try:
+            file_utils.reveal(lbry_file['download_path'])
+        except IOError:
+            pass
+        defer.returnValue(True)
 
     def jsonrpc_get_peers_for_hash(self, p):
         """
