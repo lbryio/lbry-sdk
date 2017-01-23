@@ -71,7 +71,7 @@ class BlobManager(DHTHashSupplier):
 
     def _immediate_announce(self, blob_hashes):
         if self.hash_announcer:
-            return self.hash_announcer.immediate_announce(blob_hashes)
+            return self.hash_announcer.immediate_announce(blob_hashes, self)
 
 
 # TODO: Having different managers for different blobs breaks the
@@ -139,6 +139,13 @@ class DiskBlobManager(BlobManager):
     def hashes_to_announce(self):
         next_announce_time = time.time() + self.hash_reannounce_time
         return self._get_blobs_to_announce(next_announce_time)
+
+    @rerun_if_locked
+    def on_hash_announced(self, blob_hash):
+        self.db_conn.runQuery(
+            "insert into announcement (blob_hash, announce_time) values (?, ?)",
+            (blob_hash, time.time())
+        )
 
     def creator_finished(self, blob_creator):
         log.debug("blob_creator.blob_hash: %s", blob_creator.blob_hash)
@@ -257,6 +264,12 @@ class DiskBlobManager(BlobManager):
                                 "    host text, " +
                                 "    rate float, " +
                                 "    ts integer)")
+
+            # Table to track when blobs where announced to the dht
+            # - intended mostly for debugging
+            transaction.execute("create table if not exists announcement (" +
+                                "    blob_hash text, " +
+                                "    announce_time real)")
 
         return self.db_conn.runInteraction(create_tables)
 
@@ -427,7 +440,7 @@ class TempBlobManager(BlobManager):
 
     def immediate_announce_all_blobs(self):
         if self.hash_announcer:
-            return self.hash_announcer.immediate_announce(self.blobs.iterkeys())
+            return self.hash_announcer.immediate_announce(self.blobs.iterkeys(), self)
 
     def _manage(self):
         from twisted.internet import reactor

@@ -36,9 +36,9 @@ class DHTHashAnnouncer(object):
     def add_supplier(self, supplier):
         self.suppliers.append(supplier)
 
-    def immediate_announce(self, blob_hashes):
+    def immediate_announce(self, blob_hashes, supplier):
         if self.peer_port is not None:
-            return self._announce_hashes(blob_hashes)
+            return self._announce_hashes(blob_hashes, supplier)
         else:
             return defer.succeed(False)
 
@@ -47,12 +47,12 @@ class DHTHashAnnouncer(object):
         ds = []
         for supplier in self.suppliers:
             d = supplier.hashes_to_announce()
-            d.addCallback(self._announce_hashes)
+            d.addCallback(self._announce_hashes, supplier)
             ds.append(d)
         dl = defer.DeferredList(ds)
         return dl
 
-    def _announce_hashes(self, hashes):
+    def _announce_hashes(self, hashes, supplier):
         if not hashes:
             return
         log.debug('Announcing %s hashes', len(hashes))
@@ -71,6 +71,7 @@ class DHTHashAnnouncer(object):
                 h, announce_deferred = self.hash_queue.popleft()
                 log.debug('Announcing blob %s to dht', h)
                 d = self.dht_node.announceHaveBlob(binascii.unhexlify(h), self.peer_port)
+                d.addCallback(lambda _: supplier.on_hash_announced(h))
                 d.chainDeferred(announce_deferred)
                 d.addBoth(lambda _: reactor.callLater(0, announce))
             else:
