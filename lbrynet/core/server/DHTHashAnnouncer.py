@@ -9,6 +9,29 @@ from twisted.internet import defer, reactor
 log = logging.getLogger(__name__)
 
 
+class DequeSet(object):
+    def __init__(self):
+        self._queue = collections.deque()
+        self._items = set()
+
+    def append(self, item):
+        if item in self._items:
+            return
+        self._queue.append(item)
+        self._items.add(item)
+
+    def popleft(self):
+        item = self._queue.popleft()
+        self._items.remove(item)
+        return item
+
+    def __len__(self):
+        return len(self._queue)
+
+    def __nonzero__(self):
+        return self._queue.__nonzero__()
+
+
 class DHTHashAnnouncer(object):
     """This class announces to the DHT that this peer has certain blobs"""
     def __init__(self, dht_node, peer_port):
@@ -16,7 +39,7 @@ class DHTHashAnnouncer(object):
         self.peer_port = peer_port
         self.suppliers = []
         self.next_manage_call = None
-        self.hash_queue = collections.deque()
+        self.hash_queue = DequeSet()
         self._concurrent_announcers = 0
 
     def run_manage_loop(self):
@@ -67,7 +90,7 @@ class DHTHashAnnouncer(object):
         log.debug('There are now %s hashes remaining to be announced', len(self.hash_queue))
 
         def announce():
-            if len(self.hash_queue):
+            if self.hash_queue:
                 h, announce_deferred = self.hash_queue.popleft()
                 log.debug('Announcing blob %s to dht', h)
                 d = self.dht_node.announceHaveBlob(binascii.unhexlify(h), self.peer_port)
