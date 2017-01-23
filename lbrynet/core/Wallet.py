@@ -946,7 +946,13 @@ class LBRYumWallet(Wallet):
             wallet.create_main_account()
             wallet.synchronize()
         self.wallet = wallet
+        self._check_large_wallet()
         return defer.succeed(True)
+
+    def _check_large_wallet(self):
+        if len(self.wallet.addresses(include_change=False)) > 1000:
+            log.warning("Your wallet is excessively large, please follow instructions here: \
+https://github.com/lbryio/lbry/issues/437 to reduce your wallet size")
 
     def _load_blockchain(self):
         blockchain_caught_d = defer.Deferred()
