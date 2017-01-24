@@ -4,7 +4,7 @@ import logging
 from zope.interface import implements
 from lbrynet.interfaces import IPeerFinder
 from lbrynet import conf
-from lbrynet.core.Peer import Peer
+from lbrynet.core.Peer import Peer,PeerSet
 
 log = logging.getLogger(__name__)
 
@@ -40,16 +40,17 @@ class DHTPeerFinder(object):
 
         def filter_peers(peer_list):
             peers = set(peer_list)
-            good_peers = []
+            good_peers = PeerSet()
             for host, port in peers:
                 peer = self.peer_manager.get_peer(host, port)
                 if peer.is_available() is True:
-                    good_peers.append(peer)
+                    good_peers.add(peer)
             return good_peers
 
         def add_default_peers(peers):
             for host, port in conf.settings['known_blob_peers']:
-                peers.append(Peer(host, port))
+                peer = self.peer_manager.get_peer(host,port)
+                peers.add(peer)
             return peers
 
         d = self.dht_node.getPeersForBlob(bin_hash)
