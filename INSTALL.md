@@ -57,12 +57,11 @@ Currently, available binaries include:
 - requests
 - gmpy
 
-Install the each of the preceding binaries with `pip install *.whl`
+Install each of the preceding binaries with `pip install *.whl`
 
 Install pywin32 system files by run `python.exe Scripts\pywin32_postinstall.py -install` from an elevated command prompt.
 
-Finally, you'll need [miniupnpc](https://pypi.python.org/pypi/miniupnpc/1.9). Download the source and compile with MinGW by running `mingw32make.bat`.
-Then, install the module by running `python setupmingw32.py install`.
+Finally, you'll need [miniupnpc](https://pypi.python.org/pypi/miniupnpc/1.9). Download the source and compile with MinGW by running `mingw32make.bat`. Then install the module by running `python setupmingw32.py install`.
 
 ## Installation
 
@@ -76,12 +75,12 @@ To install:
  source lbry-venv/bin/activate
  
  pip install -r requirements.txt
- pip install .
+ pip install --editable .
  ```
 
 To start LBRY, run `lbrynet-daemon` in a terminal.
 
-To verify your install, `which lbrynet-daemon` should return a path inside of the `lbry-venv` folder created by the `virtual-env` command.
+To verify your install, `which lbrynet-daemon` should return a path inside of the `lbry-venv` folder created by the `virtualenv` command.
 
 ## Making a Change
 
@@ -94,7 +93,7 @@ source lbry-venv/bin/activate
 Then run:
 
 ```
-python setup.py install
+pip install --editable .
 ```
 
 This will update `lbrynet-daemon` and other executables.
