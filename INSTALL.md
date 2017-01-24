@@ -57,7 +57,7 @@ Currently, available binaries include:
 - requests
 - gmpy
 
-Install each of the preceding binaries with `pip install *.whl`
+Install the above binaries with `pip install *.whl`
 
 Install pywin32 system files by run `python.exe Scripts\pywin32_postinstall.py -install` from an elevated command prompt.
 
