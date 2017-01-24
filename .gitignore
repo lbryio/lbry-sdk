@@ -11,6 +11,7 @@
 /dist
 /lbrynet.egg-info
 /docs_build
+/lbry-venv
 
 .idea/.name
 .coverage
