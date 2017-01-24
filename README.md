@@ -11,7 +11,7 @@ We provide binaries for Windows, macOS, and Debian-based Linux.
 
 | Windows | macOS | Linux |
 | --- | --- | --- |
-| [Download MSI](https://lbry.io/get/lbry.msi) | [Download PKG](https://lbry.io/get/lbry.pkg) | [Download DEB](https://lbry.io/get/lbry.deb) |
+| [Download MSI](https://lbry.io/get/lbry.msi) | [Download DMG](https://lbry.io/get/lbry.dmg) | [Download DEB](https://lbry.io/get/lbry.deb) |
 
 Our [releases page](https://github.com/lbryio/lbry/releases/latest) also contains the latest release, pre-releases, and past builds.
 
