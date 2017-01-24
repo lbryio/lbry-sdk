@@ -392,16 +392,11 @@ class BlobFileCreator(HashBlobCreator):
     def _close(self):
         temp_file_name = self.out_file.name
         self.out_file.close()
-
-        def change_file_name():
-            shutil.move(temp_file_name, os.path.join(self.blob_dir, self.blob_hash))
-            return True
-
         if self.blob_hash is not None:
-            d = threads.deferToThread(change_file_name)
+            shutil.move(temp_file_name, os.path.join(self.blob_dir, self.blob_hash))
         else:
-            d = defer.succeed(True)
-        return d
+            os.remove(temp_file_name)
+        return defer.succeed(True)
 
     def _write(self, data):
         self.out_file.write(data)
