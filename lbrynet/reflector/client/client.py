@@ -238,7 +238,8 @@ class EncryptedFileReflectorClient(Protocol):
             d = self.blob_manager.get_blob(blob_hash, True)
             d.addCallback(self.open_blob_for_reading)
             # send the server the next blob hash + length
-            d.addCallbacks(lambda _: self.send_blob_info(), lambda err: self.skip_missing_blob(err, blob_hash))
+            d.addCallbacks(lambda _: self.send_blob_info(),
+                           lambda err: self.skip_missing_blob(err, blob_hash))
             return d
         else:
             # close connection
