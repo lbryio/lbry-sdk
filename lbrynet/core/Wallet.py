@@ -777,12 +777,14 @@ class Wallet(object):
                 if success is True:
                     if result is False:
                         if balance[4] <= 1:  # first or second strike, give them another chance
-                            new_expected_balance = (balance[0],
-                                                    balance[1],
-                                                    balance[2],
-                                                    datetime.datetime.now() + self.max_expected_payment_time,
-                                                    balance[4] + 1,
-                                                    balance[5])
+                            new_expected_balance = (
+                                balance[0],
+                                balance[1],
+                                balance[2],
+                                datetime.datetime.now() + self.max_expected_payment_time,
+                                balance[4] + 1,
+                                balance[5]
+                            )
                             self.expected_balance_at_time.append(new_expected_balance)
                             peer.update_score(-5.0)
                         else:
@@ -889,7 +891,8 @@ class LBRYumWallet(Wallet):
 
         def check_started():
             if self.network.is_connecting():
-                if not self.printed_retrieving_headers and self.network.blockchain.retrieving_headers:
+                if not self.printed_retrieving_headers and \
+                        self.network.blockchain.retrieving_headers:
                     alert.info("Running the wallet for the first time. This may take a moment.")
                     self.printed_retrieving_headers = True
                 return False
