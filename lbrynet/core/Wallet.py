@@ -1,5 +1,3 @@
-# pylint: disable=line-too-long
-# TODO: renable pylint check after lbrycrdd code is removed
 import datetime
 import logging
 import json
@@ -24,7 +22,6 @@ from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
 from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
 from lbrynet.metadata.Metadata import Metadata
-
 
 log = logging.getLogger(__name__)
 alert = logging.getLogger("lbryalert." + __name__)
@@ -55,6 +52,7 @@ class ClaimOutpoint(dict):
                 return (self['txid'], self['nout']) == (compare['txid'], compare['nout'])
         else:
             raise TypeError('cannot compare {}'.format(type(compare)))
+
     def __ne__(self, compare):
         return not self.__eq__(compare)
 
@@ -129,6 +127,7 @@ class SqliteStorage(MetaDataStorage):
                                 "    name text, " +
                                 "    txid text, " +
                                 "    n integer)")
+
         return self.db.runInteraction(create_tables)
 
     def clean_bad_records(self):
@@ -370,13 +369,13 @@ class Wallet(object):
         """
         rounded_amount = Decimal(str(round(amount, 8)))
         peer = reserved_points.identifier
-        assert(rounded_amount <= reserved_points.amount)
-        assert(peer in self.peer_addresses)
+        assert rounded_amount <= reserved_points.amount
+        assert peer in self.peer_addresses
         self.queued_payments[self.peer_addresses[peer]] += rounded_amount
         # make any unused points available
         self.total_reserved_points -= (reserved_points.amount - rounded_amount)
         log.debug("ordering that %s points be sent to %s", str(rounded_amount),
-                 str(self.peer_addresses[peer]))
+                  str(self.peer_addresses[peer]))
         peer.update_stats('points_sent', amount)
         return defer.succeed(True)
 
@@ -393,20 +392,20 @@ class Wallet(object):
         """
         rounded_amount = Decimal(str(round(amount, 8)))
         address = reserved_points.identifier
-        assert(rounded_amount <= reserved_points.amount)
+        assert rounded_amount <= reserved_points.amount
         self.queued_payments[address] += rounded_amount
         self.total_reserved_points -= (reserved_points.amount - rounded_amount)
         log.debug("Ordering that %s points be sent to %s", str(rounded_amount),
-                 str(address))
+                  str(address))
         return defer.succeed(True)
 
     def add_expected_payment(self, peer, amount):
         """Increase the number of points expected to be paid by a peer"""
         rounded_amount = Decimal(str(round(amount, 8)))
-        assert(peer in self.current_address_given_to_peer)
+        assert peer in self.current_address_given_to_peer
         address = self.current_address_given_to_peer[peer]
         log.debug("expecting a payment at address %s in the amount of %s",
-                 str(address), str(rounded_amount))
+                  str(address), str(rounded_amount))
         self.expected_balances[address] += rounded_amount
         expected_balance = self.expected_balances[address]
         expected_time = datetime.datetime.now() + self.max_expected_payment_time
@@ -421,6 +420,7 @@ class Wallet(object):
         def set_address_for_peer(address):
             self.current_address_given_to_peer[peer] = address
             return address
+
         d = self.get_new_address()
         d.addCallback(set_address_for_peer)
         return d
@@ -479,6 +479,7 @@ class Wallet(object):
         def _log_success(claim_id):
             log.debug("lbry://%s complies with %s, claimid: %s", name, metadata.version, claim_id)
             return defer.succeed(None)
+
         if 'error' in result:
             log.warning("Got an error looking up a name: %s", result['error'])
             return Failure(UnknownNameError(name))
@@ -516,6 +517,7 @@ class Wallet(object):
                     lambda claim: self._update_claimid(
                         claim['claimId'], name, ClaimOutpoint(txid, claim['nOut'])))
                 return d
+
         claim_outpoint = ClaimOutpoint(txid, nout)
         d = self._get_claimid_for_tx(name, claim_outpoint)
         d.addCallback(_get_id_for_return)
@@ -604,7 +606,6 @@ class Wallet(object):
             meta_for_return[k] = new_metadata[k]
         return defer.succeed(Metadata(meta_for_return))
 
-
     def _process_claim_out(self, claim_out):
         claim_out.pop('success')
         claim_out['fee'] = float(claim_out['fee'])
@@ -625,6 +626,7 @@ class Wallet(object):
         claim_id -  claim id of the claim
 
     """
+
     def claim_name(self, name, bid, m):
         def _save_metadata(claim_out, metadata):
             if not claim_out['success']:
@@ -798,7 +800,7 @@ class Wallet(object):
         dl.addCallback(handle_checks)
         return dl
 
-    ######### Must be overridden #########
+    # ======== Must be overridden ======== #
 
     def get_balance(self):
         return defer.fail(NotImplementedError())
@@ -1037,7 +1039,8 @@ https://github.com/lbryio/lbry/issues/437 to reduce your wallet size")
         accounts = None
         exclude_claimtrietx = True
         d = self._run_cmd_as_defer_succeed('getbalance', accounts, exclude_claimtrietx)
-        d.addCallback(lambda result: Decimal(result['confirmed']) + Decimal(result.get('unconfirmed', 0.0)))
+        d.addCallback(
+            lambda result: Decimal(result['confirmed']) + Decimal(result.get('unconfirmed', 0.0)))
         return d
 
     def get_new_address(self):
@@ -1080,17 +1083,18 @@ https://github.com/lbryio/lbry/issues/437 to reduce your wallet size")
     def _send_name_claim_update(self, name, claim_id, claim_outpoint, value, amount):
         metadata = json.dumps(value)
         log.debug("Update %s %d %f %s %s '%s'", claim_outpoint['txid'], claim_outpoint['nout'],
-                                                     amount, name, claim_id, metadata)
+                  amount, name, claim_id, metadata)
         broadcast = False
         d = self._run_cmd_as_defer_succeed('update', claim_outpoint['txid'], claim_outpoint['nout'],
-                                            name, claim_id, metadata, amount, broadcast)
+                                           name, claim_id, metadata, amount, broadcast)
         d.addCallback(lambda claim_out: self._broadcast_claim_transaction(claim_out))
         return d
 
     def _abandon_claim(self, claim_outpoint):
         log.debug("Abandon %s %s" % (claim_outpoint['txid'], claim_outpoint['nout']))
         broadcast = False
-        d = self._run_cmd_as_defer_succeed('abandon', claim_outpoint['txid'], claim_outpoint['nout'], broadcast)
+        d = self._run_cmd_as_defer_succeed('abandon', claim_outpoint['txid'],
+                                           claim_outpoint['nout'], broadcast)
         d.addCallback(lambda claim_out: self._broadcast_claim_transaction(claim_out))
         return d
 
@@ -1115,6 +1119,7 @@ https://github.com/lbryio/lbry/issues/437 to reduce your wallet size")
         def _log_tx(r):
             log.debug("Broadcast tx: %s", r)
             return r
+
         d = self._run_cmd_as_defer_to_thread('broadcast', raw_tx)
         d.addCallback(_log_tx)
         d.addCallback(
@@ -1126,6 +1131,7 @@ https://github.com/lbryio/lbry/issues/437 to reduce your wallet size")
             if 'hex' not in paytomany_out:
                 raise Exception('Unepxected paytomany output:{}'.format(paytomany_out))
             return self._broadcast_transaction(paytomany_out['hex'])
+
         log.debug("Doing send many. payments to send: %s", str(payments_to_send))
         d = self._run_cmd_as_defer_succeed('paytomany', payments_to_send.iteritems())
         d.addCallback(lambda out: broadcast_send_many(out))
@@ -1136,14 +1142,15 @@ https://github.com/lbryio/lbry/issues/437 to reduce your wallet size")
             self.network.get_local_height() - RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS + 1)
         block_hash = self.network.blockchain.hash_header(block_header)
         d = self._run_cmd_as_defer_to_thread('requestvalueforname', name, block_hash)
-        d.addCallback(lambda response: Commands._verify_proof(name, block_header['claim_trie_root'], response))
+        d.addCallback(lambda response: Commands._verify_proof(name, block_header['claim_trie_root'],
+                                                              response))
         return d
 
     def get_claims_from_tx(self, txid):
         return self._run_cmd_as_defer_to_thread('getclaimsfromtx', txid)
 
     def _get_balance_for_address(self, address):
-        return defer.succeed(Decimal(self.wallet.get_addr_received(address))/COIN)
+        return defer.succeed(Decimal(self.wallet.get_addr_received(address)) / COIN)
 
     def get_nametrie(self):
         return self._run_cmd_as_defer_to_thread('getclaimtrie')
@@ -1169,7 +1176,7 @@ class LBRYcrdAddressRequester(object):
         self.wallet = wallet
         self._protocols = []
 
-    ######### IRequestCreator #########
+    # ======== IRequestCreator ======== #
 
     def send_next_request(self, peer, protocol):
 
@@ -1183,7 +1190,7 @@ class LBRYcrdAddressRequester(object):
         else:
             return defer.succeed(False)
 
-    ######### internal calls #########
+    # ======== internal calls ======== #
 
     def _handle_address_response(self, response_dict, peer, request, protocol):
         assert request.response_identifier in response_dict, \
@@ -1205,7 +1212,7 @@ class LBRYcrdAddressQueryHandlerFactory(object):
     def __init__(self, wallet):
         self.wallet = wallet
 
-    ######### IQueryHandlerFactory #########
+    # ======== IQueryHandlerFactory ======== #
 
     def build_query_handler(self):
         q_h = LBRYcrdAddressQueryHandler(self.wallet)
@@ -1227,7 +1234,7 @@ class LBRYcrdAddressQueryHandler(object):
         self.address = None
         self.peer = None
 
-    ######### IQueryHandler #########
+    # ======== IQueryHandler ======== #
 
     def register_with_request_handler(self, request_handler, peer):
         self.peer = peer
@@ -1246,7 +1253,8 @@ class LBRYcrdAddressQueryHandler(object):
             return d
         if self.address is None:
             log.warning("Expected a request for an address, but did not receive one")
-            return defer.fail(Failure(ValueError("Expected but did not receive an address request")))
+            return defer.fail(
+                Failure(ValueError("Expected but did not receive an address request")))
         else:
             return defer.succeed({})
 
@@ -1254,4 +1262,4 @@ class LBRYcrdAddressQueryHandler(object):
 def make_config(config=None):
     if config is None:
         config = {}
-    return SimpleConfig(config) if type(config) == type({}) else config
+    return SimpleConfig(config) if isinstance(config, dict) else config
