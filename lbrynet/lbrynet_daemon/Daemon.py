@@ -1550,32 +1550,40 @@ class Daemon(AuthJSONRPCServer):
 
         download_id = utils.random_string()
         self.analytics_manager.send_download_started(download_id, name, stream_info)
-        try:
-            sd_hash, file_path = yield self._download_name(
-                name=params.name,
-                timeout=params.timeout,
-                download_directory=params.download_directory,
-                stream_info=params.stream_info,
-                file_name=params.file_name,
-                wait_for_write=params.wait_for_write
-            )
-        except Exception as e:
-            self.analytics_manager.send_download_errored(download_id, name, stream_info)
-            log.exception('Failed to get %s', params.name)
-            response = yield self._render_response(str(e))
-        else:
-            # TODO: should stream_hash key be changed to sd_hash?
-            message = {
-                'stream_hash': params.sd_hash if params.stream_info else sd_hash,
-                'path': file_path
-            }
-            stream = self.streams.get(name)
-            if stream:
-                stream.downloader.finished_deferred.addCallback(
-                    lambda _: self.analytics_manager.send_download_finished(
-                        download_id, name, stream_info)
+        tries = 1
+        max_tries = 3
+        while tries <= max_tries:
+            try:
+                log.info(
+                    'Making try %s / %s to start download of %s', tries, max_tries, params.name)
+                sd_hash, file_path = yield self._download_name(
+                    name=params.name,
+                    timeout=params.timeout,
+                    download_directory=params.download_directory,
+                    stream_info=params.stream_info,
+                    file_name=params.file_name,
+                    wait_for_write=params.wait_for_write
                 )
-            response = yield self._render_response(message)
+                break
+            except Exception as e:
+                log.exception('Failed to get %s', params.name)
+                if tries == max_tries:
+                    self.analytics_manager.send_download_errored(download_id, name, stream_info)
+                    response = yield self._render_response(str(e))
+                    defer.returnValue(response)
+                tries += 1
+        # TODO: should stream_hash key be changed to sd_hash?
+        message = {
+            'stream_hash': params.sd_hash if params.stream_info else sd_hash,
+            'path': file_path
+        }
+        stream = self.streams.get(name)
+        if stream:
+            stream.downloader.finished_deferred.addCallback(
+                lambda _: self.analytics_manager.send_download_finished(
+                    download_id, name, stream_info)
+            )
+        response = yield self._render_response(message)
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
