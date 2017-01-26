@@ -27,7 +27,7 @@ class ClientProtocol(Protocol):
     ######### Protocol #########
 
     def connectionMade(self):
-        log.debug("Connection made to %s", str(self.factory.peer))
+        log.debug("Connection made to %s", self.factory.peer)
         self._connection_manager = self.factory.connection_manager
         self._rate_limiter = self.factory.rate_limiter
         self.peer = self.factory.peer
@@ -44,7 +44,7 @@ class ClientProtocol(Protocol):
         self._ask_for_request()
 
     def dataReceived(self, data):
-        log.debug("Data receieved from %s", str(self.peer))
+        log.debug("Data receieved from %s", self.peer)
         self._rate_limiter.report_dl_bytes(len(data))
         if self._downloading_blob is True:
             self._blob_download_request.write(data)
@@ -52,7 +52,7 @@ class ClientProtocol(Protocol):
             self._response_buff += data
             if len(self._response_buff) > conf.settings['MAX_RESPONSE_INFO_SIZE']:
                 log.warning("Response is too large from %s. Size %s",
-                            str(self.peer), len(self._response_buff))
+                            self.peer, len(self._response_buff))
                 self.transport.loseConnection()
             response, extra_data = self._get_valid_response(self._response_buff)
             if response is not None:
@@ -62,7 +62,7 @@ class ClientProtocol(Protocol):
                     self._blob_download_request.write(extra_data)
 
     def connectionLost(self, reason):
-        log.debug("Connection lost to %s: %s", str(self.peer), reason)
+        log.debug("Connection lost to %s: %s", self.peer, reason)
         self.connection_closed = True
         if reason.check(error.ConnectionDone):
             err = failure.Failure(ConnectionClosedBeforeResponseError())
@@ -82,7 +82,7 @@ class ClientProtocol(Protocol):
             raise ValueError("There is already a request for that response active")
         self._next_request.update(request.request_dict)
         d = defer.Deferred()
-        log.debug("Adding a request for %s. Request: %s", str(self.peer), str(request.request_dict))
+        log.debug("Adding a request for %s. Request: %s", self.peer, request.request_dict)
         self._response_deferreds[request.response_identifier] = d
         return d
 
@@ -207,19 +207,19 @@ class ClientProtocol(Protocol):
                     if not isinstance(result.value, DownloadCanceledError):
                         log.info(result.value)
                         log.info("The connection to %s is closing due to an error: %s",
-                                 str(self.peer), result.getTraceback())
+                                 self.peer, result.getTraceback())
             if failed is False:
-                log.debug("Asking for another request from %s", str(self.peer))
+                log.debug("Asking for another request from %s", self.peer)
                 from twisted.internet import reactor
                 reactor.callLater(0, self._ask_for_request)
             else:
-                log.debug("Not asking for another request from %s", str(self.peer))
+                log.debug("Not asking for another request from %s", self.peer)
                 self.transport.loseConnection()
 
         dl.addCallback(get_next_request)
 
     def _downloading_finished(self, arg):
-        log.debug("The blob has finished downloading from %s", str(self.peer))
+        log.debug("The blob has finished downloading from %s", self.peer)
         self._blob_download_request = None
         self._downloading_blob = False
         return arg
@@ -231,7 +231,7 @@ class ClientProtocol(Protocol):
             # TODO: of telling the server it wants the download to stop. It would be great if the
             # TODO: protocol had such a mechanism.
             log.debug("Closing the connection to %s because the download of blob %s was canceled",
-                     str(self.peer), str(self._blob_download_request.blob))
+                     self.peer, self._blob_download_request.blob)
         return err
 
     ######### IRateLimited #########
@@ -259,7 +259,7 @@ class ClientProtocolFactory(ClientFactory):
         self.p = None
 
     def clientConnectionFailed(self, connector, reason):
-        log.debug("Connection failed to %s: %s", str(self.peer), reason)
+        log.debug("Connection failed to %s: %s", self.peer, reason)
         self.peer.report_down()
         self.connection_manager.protocol_disconnected(self.peer, connector)
 

@@ -199,7 +199,7 @@ class ConnectionManager(object):
         log.debug("%s Current connections: %s",
                     self._get_log_name(), self._peer_connections.keys())
         log.debug("%s List of connection states: %s", self._get_log_name(),
-                    str([p_c_h.connection.state for p_c_h in self._peer_connections.values()]))
+                    [p_c_h.connection.state for p_c_h in self._peer_connections.values()])
         if peers is None:
             return None
         for peer in peers:
