@@ -3,9 +3,10 @@ import requests
 from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 from tests import util
 from twisted.internet import defer
+from twisted.internet import reactor
 from twisted.trial import unittest
 from lbrynet.lbrynet_daemon import Daemon
-from lbrynet.core import Session, PaymentRateManager
+from lbrynet.core import Session, PaymentRateManager, Wallet
 from lbrynet.lbrynet_daemon.Daemon import Daemon as LBRYDaemon
 from lbrynet.lbrynet_daemon import ExchangeRateManager
 from lbrynet import conf
@@ -50,14 +51,15 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
         data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
 
     rates = {
-                'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
-                'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
-            }
+        'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
+        'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
+    }
     daemon = LBRYDaemon(None, None, upload_logs_on_shutdown=False)
     daemon.session = mock.Mock(spec=Session.Session)
     daemon.exchange_rate_manager = ExchangeRateManager.DummyExchangeRateManager(rates)
     base_prm = PaymentRateManager.BasePaymentRateManager(rate=data_rate)
-    prm = PaymentRateManager.NegotiatedPaymentRateManager(base_prm, DummyBlobAvailabilityTracker(), generous=generous)
+    prm = PaymentRateManager.NegotiatedPaymentRateManager(base_prm, DummyBlobAvailabilityTracker(),
+                                                          generous=generous)
     daemon.session.payment_rate_manager = prm
     metadata = {
         "author": "fake author",
@@ -74,7 +76,8 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
         "ver": "0.0.3"
     }
     if with_fee:
-        metadata.update({"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
+        metadata.update(
+            {"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
     daemon._resolve_name = lambda _: defer.succeed(metadata)
     return daemon
 
@@ -94,7 +97,7 @@ class TestCostEst(unittest.TestCase):
         size = 10000000
         fake_fee_amount = 4.5
         data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
-        correct_result = size / 10**6 * data_rate + fake_fee_amount
+        correct_result = size / 10 ** 6 * data_rate + fake_fee_amount
         daemon = get_test_daemon(generous=False, with_fee=True)
         self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
 
@@ -107,6 +110,24 @@ class TestCostEst(unittest.TestCase):
     def test_ungenerous_data_and_no_fee(self):
         size = 10000000
         data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
-        correct_result = size / 10**6 * data_rate
+        correct_result = size / 10 ** 6 * data_rate
         daemon = get_test_daemon(generous=False)
         self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
+
+
+class TestJsonRpc(unittest.TestCase):
+    def setUp(self):
+        mock_conf_settings(self)
+        util.resetTime(self)
+        self.test_daemon = get_test_daemon()
+        self.test_daemon.session.wallet = Wallet.LBRYumWallet(storage=Wallet.InMemoryStorage())
+        # self.test_daemon.session.wallet = FakeWallet()
+
+    def test_status(self):
+        d = defer.maybeDeferred(self.test_daemon.jsonrpc_status)
+        d.addCallback(lambda status: self.assertDictContainsSubset({'is_running': False}, status))
+
+    def test_help(self):
+        d = defer.maybeDeferred(self.test_daemon.jsonrpc_help, command='status')
+        d.addCallback(lambda result: self.assertSubstring('daemon status', result))
+        # self.assertSubstring('daemon status', d.result)
