@@ -1,7 +1,10 @@
+from decimal import Decimal
+from collections import defaultdict
 from twisted.trial import unittest
-
 from twisted.internet import threads, defer
-from lbrynet.core.Wallet import Wallet
+
+from lbrynet.core.Error import InsufficientFundsError
+from lbrynet.core.Wallet import Wallet, ReservedPoints
 
 test_metadata = {
 'license': 'NASA',
@@ -21,7 +24,9 @@ test_metadata = {
 
 class MocLbryumWallet(Wallet):
     def __init__(self):
-        pass
+        self.wallet_balance = Decimal(10.0)
+        self.total_reserved_points = Decimal(0.0)
+        self.queued_payments = defaultdict(Decimal)
     def get_name_claims(self):
         return threads.deferToThread(lambda: [])
 
@@ -128,3 +133,59 @@ class WalletTest(unittest.TestCase):
         d = wallet.abandon_claim("0578c161ad8d36a7580c557d7444f967ea7f988e194c20d0e3c42c3cabf110dd", 1)
         d.addCallback(lambda claim_out: check_out(claim_out))
         return d
+
+    def test_point_reservation_and_balance(self):
+        # check that point reservations and cancellation changes the balance
+        # properly
+        def update_balance():
+            return defer.succeed(5)
+        wallet = MocLbryumWallet()
+        wallet._update_balance = update_balance
+        d = wallet.update_balance()
+        # test point reservation
+        d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
+        d.addCallback(lambda _: wallet.reserve_points('testid',2))
+        d.addCallback(lambda _: self.assertEqual(3, wallet.get_balance()))
+        d.addCallback(lambda _: self.assertEqual(2, wallet.total_reserved_points))
+        # test reserved points cancellation
+        d.addCallback(lambda _: wallet.cancel_point_reservation(ReservedPoints('testid',2)))
+        d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
+        d.addCallback(lambda _: self.assertEqual(0, wallet.total_reserved_points))
+        # test point sending
+        d.addCallback(lambda _: wallet.reserve_points('testid',2))
+        d.addCallback(lambda reserve_points: wallet.send_points_to_address(reserve_points,1))
+        d.addCallback(lambda _: self.assertEqual(3, wallet.get_balance()))
+        # test failed point reservation
+        d.addCallback(lambda _: wallet.reserve_points('testid',4))
+        d.addCallback(lambda out: self.assertEqual(None,out))
+        return d
+
+    def test_point_reservation_and_claim(self):
+        # check that claims take into consideration point reservations
+        def update_balance():
+            return defer.succeed(5)
+        wallet = MocLbryumWallet()
+        wallet._update_balance = update_balance
+        d = wallet.update_balance()
+        d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
+        d.addCallback(lambda _: wallet.reserve_points('testid',2))
+        d.addCallback(lambda _: wallet.claim_name('test', 4, test_metadata))
+        self.assertFailure(d,InsufficientFundsError)
+        return d
+
+    def test_point_reservation_and_support(self):
+        # check that supports take into consideration point reservations
+        def update_balance():
+            return defer.succeed(5)
+        wallet = MocLbryumWallet()
+        wallet._update_balance = update_balance
+        d = wallet.update_balance()
+        d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
+        d.addCallback(lambda _: wallet.reserve_points('testid',2))
+        d.addCallback(lambda _: wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 4))
+        self.assertFailure(d,InsufficientFundsError)
+        return d
+
+
+
+
