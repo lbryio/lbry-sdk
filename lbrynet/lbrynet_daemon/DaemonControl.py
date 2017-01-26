@@ -114,7 +114,7 @@ def update_settings_from_args(args):
 
 
 @defer.inlineCallbacks
-def start_server_and_listen(launchui, use_auth, analytics_manager):
+def start_server_and_listen(launchui, use_auth, analytics_manager, max_tries=5):
     """The primary entry point for launching the daemon.
 
     Args:
@@ -124,13 +124,19 @@ def start_server_and_listen(launchui, use_auth, analytics_manager):
     """
     analytics_manager.send_server_startup()
     log_support.configure_analytics_handler(analytics_manager)
-    try:
-        daemon_server = DaemonServer(analytics_manager)
-        yield daemon_server.start(use_auth, launchui)
-        analytics_manager.send_server_startup_success()
-    except Exception as e:
-        log.exception('Failed to startup')
-        analytics_manager.send_server_startup_error(str(e))
+    tries = 1
+    while tries < max_tries:
+        log.info('Making attempt %s / %s to startup', tries, max_tries)
+        try:
+            daemon_server = DaemonServer(analytics_manager)
+            yield daemon_server.start(use_auth, launchui)
+            analytics_manager.send_server_startup_success()
+            break
+        except Exception as e:
+            log.exception('Failed to startup')
+            analytics_manager.send_server_startup_error(str(e))
+        tries += 1
+    else:
         reactor.callFromThread(reactor.stop)
 
 
