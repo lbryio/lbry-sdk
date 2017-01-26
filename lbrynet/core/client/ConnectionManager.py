@@ -32,8 +32,20 @@ class ConnectionManager(object):
         # a deferred that gets fired when a _manage call is set
         self._manage_deferred = None
         self.stopped = True
+        log.info("%s initialized", self._get_log_name())
+
+    # this identifies what the connection manager is for,
+    # used for logging purposes only
+    def _get_log_name(self):
+        out = 'Connection Manager Unknown'
+        if hasattr(self.downloader, 'stream_name'):
+            out = 'Connection Manager '+self.downloader.stream_name
+        elif hasattr(self.downloader, 'blob_hash'):
+            out = 'Connection Manager '+self.downloader.blob_hash
+        return out
 
     def start(self):
+        log.debug("%s starting", self._get_log_name())
         from twisted.internet import reactor
 
         self.stopped = False
@@ -45,6 +57,7 @@ class ConnectionManager(object):
 
     @defer.inlineCallbacks
     def stop(self):
+        log.debug("%s stopping", self._get_log_name())
         self.stopped = True
         # wait for the current manage call to finish
         if self._manage_deferred:
@@ -66,7 +79,8 @@ class ConnectionManager(object):
             return d
 
         def close_connection(p):
-            log.info("Abruptly closing a connection to %s due to downloading being paused", p)
+            log.debug("%s Abruptly closing a connection to %s due to downloading being paused",
+                        self._get_log_name(), p)
             if self._peer_connections[p].factory.p is not None:
                 d = self._peer_connections[p].factory.p.cancel_requests()
             else:
@@ -79,9 +93,10 @@ class ConnectionManager(object):
 
     @defer.inlineCallbacks
     def get_next_request(self, peer, protocol):
-        log.debug("Trying to get the next request for peer %s", peer)
+        log.debug("%s Trying to get the next request for peer %s", self._get_log_name(), peer)
         if not peer in self._peer_connections or self.stopped is True:
-            log.debug("The peer has already been told to shut down.")
+            log.debug("%s The peer %s has already been told to shut down.",
+                        self._get_log_name(), peer)
             defer.returnValue(False)
         requests = yield self._send_primary_requests(peer, protocol)
         have_request = any(r[1] for r in requests if r[0] is True)
@@ -90,7 +105,6 @@ class ConnectionManager(object):
         defer.returnValue(have_request)
 
     def _send_primary_requests(self, peer, protocol):
-
         def handle_error(err):
             err.trap(InsufficientFundsError)
             self.downloader.insufficient_funds(err)
@@ -124,6 +138,8 @@ class ConnectionManager(object):
         return defer.DeferredList(ds)
 
     def protocol_disconnected(self, peer, protocol):
+        log.debug("%s protocol %s disconnected for %s",
+                    self._get_log_name(), type(protocol).__name__, peer)
         if peer in self._peer_connections:
             del self._peer_connections[peer]
         if peer in self._connections_closing:
@@ -137,6 +153,9 @@ class ConnectionManager(object):
 
         from twisted.internet import reactor
         if len(self._peer_connections) < conf.settings['max_connections_per_stream']:
+            log.debug("%s have %d connections, looking for %d",
+                        self._get_log_name(), len(self._peer_connections),
+                        conf.settings['max_connections_per_stream'])
             try:
                 ordered_request_creators = self._rank_request_creator_connections()
                 peers = yield self._get_new_peers(ordered_request_creators)
@@ -164,10 +183,9 @@ class ConnectionManager(object):
 
     @defer.inlineCallbacks
     def _get_new_peers(self, request_creators):
-        log.debug("Trying to get a new peer to connect to")
+        log.debug("%s Trying to get a new peer to connect to", self._get_log_name())
         if not request_creators:
             defer.returnValue(None)
-        log.debug("Got a creator to check: %s", request_creators[0])
         new_peers = yield request_creators[0].get_new_peers()
         if not new_peers:
             new_peers = yield self._get_new_peers(request_creators[1:])
@@ -176,14 +194,19 @@ class ConnectionManager(object):
     def _pick_best_peer(self, peers):
         # TODO: Eventually rank them based on past performance/reputation. For now
         # TODO: just pick the first to which we don't have an open connection
-        log.debug("Got a list of peers to choose from: %s", peers)
+        log.debug("%s Got a list of peers to choose from: %s",
+                    self._get_log_name(), peers)
+        log.debug("%s Current connections: %s",
+                    self._get_log_name(), self._peer_connections.keys())
+        log.debug("%s List of connection states: %s", self._get_log_name(),
+                    [p_c_h.connection.state for p_c_h in self._peer_connections.values()])
         if peers is None:
             return None
         for peer in peers:
             if not peer in self._peer_connections:
-                log.debug("Got a good peer. Returning peer %s", peer)
+                log.debug("%s Got a good peer %s", self._get_log_name(), peer)
                 return peer
-        log.debug("Couldn't find a good peer to connect to")
+        log.debug("%s Couldn't find a good peer to connect to", self._get_log_name())
         return None
 
     def _connect_to_peer(self, peer):
@@ -192,7 +215,7 @@ class ConnectionManager(object):
 
         from twisted.internet import reactor
 
-        log.debug("Trying to connect to %s", peer)
+        log.debug("%s Trying to connect to %s", self._get_log_name(), peer)
         factory = ClientProtocolFactory(peer, self.rate_limiter, self)
         self._peer_connections[peer] = PeerConnectionHandler(self._primary_request_creators[:],
                                                              factory)
