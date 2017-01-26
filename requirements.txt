@@ -10,7 +10,6 @@ gmpy==1.17
 jsonrpc==1.2
 jsonrpclib==0.1.7
 jsonschema==2.5.1
-https://github.com/lbryio/lbryum/tarball/master/#egg=lbryum
 loggly-python-handler==1.0.0
 miniupnpc==1.9
 pbkdf2==1.3
