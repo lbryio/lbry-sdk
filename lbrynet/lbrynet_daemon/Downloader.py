@@ -72,7 +72,7 @@ class GetStream(object):
             self.finished.callback((True, self.sd_hash, self.download_path))
 
         elif self.timeout_counter >= self.timeout:
-            log.info("Timeout downloading lbry://%s" % self.resolved_name)
+            log.info("Timeout downloading lbry://%s", self.resolved_name)
             self.checker.stop()
             self._d.cancel()
             self.code = STREAM_STAGES[4]
@@ -86,6 +86,11 @@ class GetStream(object):
 
     def start(self, stream_info, name):
         def _cancel(err):
+            # this callback sequence gets cancelled in check_status if
+            # it takes too long when that happens, we want the logic
+            # to live in check_status
+            if err.check(defer.CancelledError):
+                return
             if self.checker:
                 self.checker.stop()
             self.finished.errback(err)
