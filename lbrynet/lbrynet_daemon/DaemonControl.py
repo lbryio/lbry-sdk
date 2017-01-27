@@ -103,7 +103,7 @@ def start_server_and_listen(launchui, use_auth, analytics_manager, max_tries=5):
     analytics_manager.send_server_startup()
     log_support.configure_analytics_handler(analytics_manager)
     tries = 1
-    while tries < max_tires:
+    while tries < max_tries:
         log.info('Making attempt %s / %s to startup', tries, max_tries)
         try:
             daemon_server = DaemonServer(analytics_manager)
