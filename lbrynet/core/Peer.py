@@ -2,13 +2,17 @@ import datetime
 from collections import defaultdict
 from lbrynet.core import utils
 
-
+# Do not create this object except through PeerManager
 class Peer(object):
     def __init__(self, host, port):
         self.host = host
         self.port = port
+        # If a peer is reported down, we wait till this time till reattempting connection
         self.attempt_connection_at = None
+        # Number of times this Peer has been reported to be down, resets to 0 when it is up
         self.down_count = 0
+        # Number of succesful connections (with full protocol completion) to this peer
+        self.success_count = 0
         self.score = 0
         self.stats = defaultdict(float)  # {string stat_type, float count}
 
@@ -20,6 +24,9 @@ class Peer(object):
     def report_up(self):
         self.down_count = 0
         self.attempt_connection_at = None
+
+    def report_success(self):
+        self.success_count += 1
 
     def report_down(self):
         self.down_count += 1
