@@ -1,5 +1,5 @@
 import logging
-from twisted.internet import defer
+from twisted.internet import defer, reactor
 from zope.interface import implements
 from lbrynet import interfaces
 from lbrynet import conf
@@ -19,6 +19,8 @@ class PeerConnectionHandler(object):
 
 class ConnectionManager(object):
     implements(interfaces.IConnectionManager)
+    callLater = reactor.callLater
+    MANAGE_CALL_INTERVAL_SEC = 1
 
     def __init__(self, downloader, rate_limiter,
                  primary_request_creators, secondary_request_creators):
@@ -44,16 +46,17 @@ class ConnectionManager(object):
             out = 'Connection Manager '+self.downloader.blob_hash
         return out
 
-    def start(self):
-        log.debug("%s starting", self._get_log_name())
-        from twisted.internet import reactor
-
+    def _start(self):
         self.stopped = False
-
         if self._next_manage_call is not None and self._next_manage_call.active() is True:
             self._next_manage_call.cancel()
-        self._next_manage_call = reactor.callLater(0, self._manage)
+
+    def start(self):
+        log.debug("%s starting", self._get_log_name())
+        self._start()
+        self._next_manage_call = self.callLater(0, self.manage)
         return defer.succeed(True)
+
 
     @defer.inlineCallbacks
     def stop(self):
@@ -68,8 +71,10 @@ class ConnectionManager(object):
         self._next_manage_call = None
         yield self._close_peers()
 
-    def _close_peers(self):
+    def num_peer_connections(self):
+        return len(self._peer_connections)
 
+    def _close_peers(self):
         def disconnect_peer(p):
             d = defer.Deferred()
             self._connections_closing[p] = d
@@ -147,27 +152,27 @@ class ConnectionManager(object):
             del self._connections_closing[peer]
             d.callback(True)
 
+    def manage(self):
+        self._manage_deferred = self._manage()
+        if not self.stopped:
+            self._next_manage_call = self.callLater(self.MANAGE_CALL_INTERVAL_SEC, self.manage)
+
+
     @defer.inlineCallbacks
     def _manage(self):
-        self._manage_deferred = defer.Deferred()
-
-        from twisted.internet import reactor
         if len(self._peer_connections) < conf.settings['max_connections_per_stream']:
             log.debug("%s have %d connections, looking for %d",
                         self._get_log_name(), len(self._peer_connections),
                         conf.settings['max_connections_per_stream'])
+            ordered_request_creators = self._rank_request_creator_connections()
+            peers = yield self._get_new_peers(ordered_request_creators)
+            peer = self._pick_best_peer(peers)
             try:
-                ordered_request_creators = self._rank_request_creator_connections()
-                peers = yield self._get_new_peers(ordered_request_creators)
-                peer = self._pick_best_peer(peers)
                 yield self._connect_to_peer(peer)
             except Exception:
                 # log this otherwise it will just end up as an unhandled error in deferred
-                log.exception('Something bad happened picking a peer')
-        self._manage_deferred.callback(None)
-        self._manage_deferred = None
-        if not self.stopped:
-            self._next_manage_call = reactor.callLater(1, self._manage)
+                # Can happen if connection fails with ConnectionRefusedError
+                log.exception('Something bad happened connecting to a peer')
 
     def _rank_request_creator_connections(self):
         """Returns an ordered list of our request creators, ranked according
@@ -213,11 +218,10 @@ class ConnectionManager(object):
         if peer is None or self.stopped:
             return
 
-        from twisted.internet import reactor
-
         log.debug("%s Trying to connect to %s", self._get_log_name(), peer)
         factory = ClientProtocolFactory(peer, self.rate_limiter, self)
         self._peer_connections[peer] = PeerConnectionHandler(self._primary_request_creators[:],
                                                              factory)
         connection = reactor.connectTCP(peer.host, peer.port, factory)
         self._peer_connections[peer].connection = connection
+        return factory.deferred

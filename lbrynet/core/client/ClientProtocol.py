@@ -23,7 +23,6 @@ def encode_decimal(obj):
 
 class ClientProtocol(Protocol):
     implements(IRequestSender, IRateLimited)
-
     ######### Protocol #########
 
     def connectionMade(self):
@@ -74,6 +73,7 @@ class ClientProtocol(Protocol):
         if self._blob_download_request is not None:
             self._blob_download_request.cancel(err)
         self._connection_manager.protocol_disconnected(self.peer, self)
+        self.factory.deferred.callback(True)
 
     ######### IRequestSender #########
 
@@ -132,8 +132,8 @@ class ClientProtocol(Protocol):
                 log.info(
                     "Closing the connection to %s due to having no further requests to send",
                     self.peer)
+                self.peer.report_success()
                 self.transport.loseConnection()
-
         d = self._connection_manager.get_next_request(self.peer, self)
         d.addCallback(send_request_or_close)
         d.addErrback(self._handle_request_error)
@@ -208,10 +208,11 @@ class ClientProtocol(Protocol):
                         log.info(result.value)
                         log.info("The connection to %s is closing due to an error: %s",
                                  self.peer, result.getTraceback())
+
+                        self.peer.report_down()
             if failed is False:
                 log.debug("Asking for another request from %s", self.peer)
-                from twisted.internet import reactor
-                reactor.callLater(0, self._ask_for_request)
+                self._ask_for_request()
             else:
                 log.debug("Not asking for another request from %s", self.peer)
                 self.transport.loseConnection()
@@ -257,11 +258,13 @@ class ClientProtocolFactory(ClientFactory):
         self.rate_limiter = rate_limiter
         self.connection_manager = connection_manager
         self.p = None
+        self.deferred = defer.Deferred()
 
     def clientConnectionFailed(self, connector, reason):
         log.debug("Connection failed to %s: %s", self.peer, reason)
         self.peer.report_down()
         self.connection_manager.protocol_disconnected(self.peer, connector)
+        self.deferred.errback(reason)
 
     def buildProtocol(self, addr):
         p = self.protocol()
