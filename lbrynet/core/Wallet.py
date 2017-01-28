@@ -895,14 +895,12 @@ class LBRYumWallet(Wallet):
 
     def _start(self):
         network_start_d = defer.Deferred()
+        self.config = make_config(self._config)
 
         def setup_network():
-            self.config = make_config(self._config)
             self.network = Network(self.config)
             log.info("Loading the wallet")
             return defer.succeed(self.network.start())
-
-        d = setup_network()
 
         def check_started():
             if self.network.is_connecting():
@@ -919,6 +917,7 @@ class LBRYumWallet(Wallet):
 
         self._start_check = task.LoopingCall(check_started)
 
+        d = setup_network()
         d.addCallback(lambda _: self._load_wallet())
         d.addCallback(self._save_wallet)
         d.addCallback(lambda _: self._start_check.start(.1))
