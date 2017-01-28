@@ -85,6 +85,7 @@ class Publisher(object):
                 'fee': self.fee,
             })
 
+    @defer.inlineCallbacks
     def start_reflector(self):
         # TODO: is self.reflector_server unused?
         reflector_server = random.choice(conf.settings['reflector_servers'])
@@ -95,10 +96,10 @@ class Publisher(object):
             self.lbry_file_manager.stream_info_manager,
             self.stream_hash
         )
-        d = reactor.resolve(reflector_address)
-        d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
-        d.addCallback(lambda _: factory.finished_deferred)
-        return d
+        ip = yield reactor.resolve(reflector_address)
+        yield reactor.connectTCP(ip, reflector_port, factory)
+        # wait for all of the blobs to be reflected
+        result = yield factory.finished_deferred
 
     def _check_file_path(self, file_path):
         def check_file_threaded():
