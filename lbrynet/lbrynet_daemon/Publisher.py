@@ -3,7 +3,7 @@ import mimetypes
 import os
 import random
 
-from twisted.internet import threads, defer, reactor
+from twisted.internet import defer, reactor
 
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
@@ -55,10 +55,10 @@ class Publisher(object):
             file_mode = 'r'
 
         try:
-            yield self._check_file_path(self.file_path)
-            # TODO: ensure that we aren't leaving this resource open
-            lbry_file = yield create_lbry_file(self.session, self.lbry_file_manager,
-                                               self.file_name, open(self.file_path, file_mode))
+            self.file_name = os.path.basename(self.file_path)
+            with open(self.file_path, file_mode) as fin:
+                lbry_file = yield create_lbry_file(
+                    self.session, self.lbry_file_manager, self.file_name, fin)
             yield self.add_to_lbry_files(lbry_file)
             yield self._create_sd_blob()
             yield self._claim_name()
@@ -100,14 +100,6 @@ class Publisher(object):
         yield reactor.connectTCP(ip, reflector_port, factory)
         # wait for all of the blobs to be reflected
         result = yield factory.finished_deferred
-
-    def _check_file_path(self, file_path):
-        def check_file_threaded():
-            f = open(file_path)
-            f.close()
-            self.file_name = os.path.basename(self.file_path)
-            return True
-        return threads.deferToThread(check_file_threaded)
 
     @defer.inlineCallbacks
     def add_to_lbry_files(self, stream_hash):
