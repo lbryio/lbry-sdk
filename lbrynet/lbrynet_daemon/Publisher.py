@@ -38,20 +38,9 @@ class Publisher(object):
         self.reflector_server, self.reflector_port = reflector_server[0], reflector_server[1]
         self.metadata = {}
 
+    @defer.inlineCallbacks
     def start(self, name, file_path, bid, metadata):
         log.info('Starting publish for %s', name)
-
-        def _show_result():
-            log.info(
-                "Success! Published %s --> lbry://%s txid: %s nout: %d",
-                self.file_name, self.publish_name, self.txid, self.nout
-            )
-            return defer.succeed({
-                'nout': self.nout,
-                'txid': self.txid,
-                'claim_id': self.claim_id,
-                'fee': self.fee,
-            })
 
         self.publish_name = name
         self.file_path = file_path
@@ -65,22 +54,36 @@ class Publisher(object):
         else:
             file_mode = 'r'
 
-        d = self._check_file_path(self.file_path)
-        # TODO: ensure that we aren't leaving this resource open
-        d.addCallback(lambda _: create_lbry_file(self.session, self.lbry_file_manager,
-                                                 self.file_name, open(self.file_path, file_mode)))
-        d.addCallback(self.add_to_lbry_files)
-        d.addCallback(lambda _: self._create_sd_blob())
-        d.addCallback(lambda _: self._claim_name())
-        d.addCallback(lambda _: self.set_status())
-        d.addCallback(lambda _: self.start_reflector())
-        d.addCallbacks(
-            lambda _: _show_result(),
-            errback=log.fail(self._throw_publish_error),
-            errbackArgs=(
+        try:
+            yield self._check_file_path(self.file_path)
+            # TODO: ensure that we aren't leaving this resource open
+            lbry_file = yield create_lbry_file(self.session, self.lbry_file_manager,
+                                               self.file_name, open(self.file_path, file_mode))
+            yield self.add_to_lbry_files(lbry_file)
+            yield self._create_sd_blob()
+            yield self._claim_name()
+            yield self.set_status()
+            yield self.start_reflector()
+        except Exception:
+            log.exception(
                 "An error occurred publishing %s to %s", self.file_name, self.publish_name)
-        )
-        return d
+            # TODO: I'm not a fan of the log and re-throw, especially when
+            #       the new exception is more generic. Look over this to
+            #       see if there is a reason not to remove the errback
+            #       handler and allow the original exception to move up
+            #       the stack.
+            raise Exception("Publish Failed")
+        else:
+            log.info(
+                "Success! Published %s --> lbry://%s txid: %s nout: %d",
+                self.file_name, self.publish_name, self.txid, self.nout
+            )
+            defer.returnValue({
+                'nout': self.nout,
+                'txid': self.txid,
+                'claim_id': self.claim_id,
+                'fee': self.fee,
+            })
 
     def start_reflector(self):
         # TODO: is self.reflector_server unused?
@@ -160,14 +163,6 @@ class Publisher(object):
         filename = os.path.join(self.lbry_file.download_directory, self.lbry_file.file_name)
         self.metadata['content_type'] = get_content_type(filename)
         self.metadata['ver'] = Metadata.current_version
-
-    def _throw_publish_error(self, err):
-        # TODO: I'm not a fan of the log and re-throw, especially when
-        #       the new exception is more generic. Look over this to
-        #       see if there is a reason not to remove the errback
-        #       handler and allow the original exception to move up
-        #       the stack.
-        raise Exception("Publish failed")
 
 
 def get_content_type(filename):
