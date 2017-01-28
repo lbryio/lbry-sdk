@@ -46,19 +46,10 @@ class Publisher(object):
         self.file_path = file_path
         self.bid_amount = bid
         self.metadata = metadata
-
-        # TODO: we cannot have this sort of code scattered throughout
-        #       our code base. Use polymorphism instead
-        if os.name == "nt":
-            file_mode = 'rb'
-        else:
-            file_mode = 'r'
+        self.file_name = os.path.basename(self.file_path)
 
         try:
-            self.file_name = os.path.basename(self.file_path)
-            with open(self.file_path, file_mode) as fin:
-                lbry_file = yield create_lbry_file(
-                    self.session, self.lbry_file_manager, self.file_name, fin)
+            lbry_file = yield self._create_lbry_file()
             yield self.add_to_lbry_files(lbry_file)
             yield self._create_sd_blob()
             yield self._claim_name()
@@ -84,6 +75,19 @@ class Publisher(object):
                 'claim_id': self.claim_id,
                 'fee': self.fee,
             })
+
+    @defer.inlineCallbacks
+    def create_lbry_file(self):
+        # TODO: we cannot have this sort of code scattered throughout
+        #       our code base. Use polymorphism instead
+        if os.name == "nt":
+            file_mode = 'rb'
+        else:
+            file_mode = 'r'
+        with open(self.file_path, file_mode) as fin:
+            lbry_file = yield create_lbry_file(
+                self.session, self.lbry_file_manager, self.file_name, fin)
+        defer.returnValue(lbry_file)
 
     @defer.inlineCallbacks
     def start_reflector(self):
