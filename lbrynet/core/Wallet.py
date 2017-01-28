@@ -889,6 +889,10 @@ class LBRYumWallet(Wallet):
         self.catchup_progress = 0
         self.max_behind = 0
 
+    def _is_first_run(self):
+        return (not self.printed_retrieving_headers and
+                self.network.blockchain.retrieving_headers)
+
     def _start(self):
         network_start_d = defer.Deferred()
 
@@ -902,8 +906,7 @@ class LBRYumWallet(Wallet):
 
         def check_started():
             if self.network.is_connecting():
-                if not self.printed_retrieving_headers and \
-                        self.network.blockchain.retrieving_headers:
+                if self._is_first_run():
                     log.info("Running the wallet for the first time. This may take a moment.")
                     self.printed_retrieving_headers = True
                 return False
@@ -967,8 +970,8 @@ class LBRYumWallet(Wallet):
 
     def _check_large_wallet(self):
         if len(self.wallet.addresses(include_change=False)) > 1000:
-            log.warning("Your wallet is excessively large, please follow instructions here: \
-https://github.com/lbryio/lbry/issues/437 to reduce your wallet size")
+            log.warning(("Your wallet is excessively large, please follow instructions here: ",
+                         "https://github.com/lbryio/lbry/issues/437 to reduce your wallet size"))
 
     def _load_blockchain(self):
         blockchain_caught_d = defer.Deferred()
@@ -1207,8 +1210,9 @@ class LBRYcrdAddressRequester(object):
     # ======== internal calls ======== #
 
     def _handle_address_response(self, response_dict, peer, request, protocol):
-        assert request.response_identifier in response_dict, \
-            "Expected %s in dict but did not get it" % request.response_identifier
+        if request.response_identifier not in response_dict:
+            raise ValueError(
+                "Expected {} in response but did not get it".format(request.response_identifier))
         assert protocol in self._protocols, "Responding protocol is not in our list of protocols"
         address = response_dict[request.response_identifier]
         self.wallet.update_peer_address(peer, address)
