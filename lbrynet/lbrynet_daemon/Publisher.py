@@ -62,7 +62,7 @@ class Publisher(object):
             yield self.add_to_lbry_files(lbry_file)
             yield self._create_sd_blob()
             yield self._claim_name()
-            yield self.set_status()
+            yield self.set_status_finished()
             yield self.start_reflector()
         except Exception:
             log.exception(
@@ -109,38 +109,29 @@ class Publisher(object):
             return True
         return threads.deferToThread(check_file_threaded)
 
-    def set_lbry_file(self, lbry_file_downloader):
-        self.lbry_file = lbry_file_downloader
-        return defer.succeed(None)
-
+    @defer.inlineCallbacks
     def add_to_lbry_files(self, stream_hash):
         self.stream_hash = stream_hash
         prm = self.session.payment_rate_manager
-        d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
-        d.addCallback(self.set_lbry_file)
-        return d
+        self.lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash, prm)
 
+    @defer.inlineCallbacks
     def _create_sd_blob(self):
         log.debug('Creating stream descriptor blob')
-        d = publish_sd_blob(self.lbry_file_manager.stream_info_manager,
-                            self.session.blob_manager,
-                            self.lbry_file.stream_hash)
+        sd_hash = yield publish_sd_blob(self.lbry_file_manager.stream_info_manager,
+                                        self.session.blob_manager,
+                                        self.lbry_file.stream_hash)
+        log.debug('stream descriptor hash: %s', sd_hash)
+        if 'sources' not in self.metadata:
+            self.metadata['sources'] = {}
+        self.metadata['sources']['lbry_sd_hash'] = sd_hash
 
-        def set_sd_hash(sd_hash):
-            log.debug('stream descriptor hash: %s', sd_hash)
-            if 'sources' not in self.metadata:
-                self.metadata['sources'] = {}
-            self.metadata['sources']['lbry_sd_hash'] = sd_hash
-
-        d.addCallback(set_sd_hash)
-        return d
-
-    def set_status(self):
+    @defer.inlineCallbacks
+    def set_status_finished(self):
         log.debug('Setting status')
-        d = self.lbry_file_manager.change_lbry_file_status(
+        yield self.lbry_file_manager.change_lbry_file_status(
             self.lbry_file, ManagedEncryptedFileDownloader.STATUS_FINISHED)
-        d.addCallback(lambda _: self.lbry_file.restore())
-        return d
+        yield self.lbry_file.restore()
 
     def _claim_name(self):
         log.debug('Claiming name')
