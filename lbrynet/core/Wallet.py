@@ -24,8 +24,8 @@ from lbrynet.core.Error import (UnknownNameError, InvalidStreamInfoError, Reques
 from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
 from lbrynet.metadata.Metadata import Metadata
 
+
 log = logging.getLogger(__name__)
-alert = logging.getLogger("lbryalert." + __name__)
 
 
 class ReservedPoints(object):
@@ -895,7 +895,7 @@ class LBRYumWallet(Wallet):
         def setup_network():
             self.config = make_config(self._config)
             self.network = Network(self.config)
-            alert.info("Loading the wallet")
+            log.info("Loading the wallet")
             return defer.succeed(self.network.start())
 
         d = setup_network()
@@ -904,7 +904,7 @@ class LBRYumWallet(Wallet):
             if self.network.is_connecting():
                 if not self.printed_retrieving_headers and \
                         self.network.blockchain.retrieving_headers:
-                    alert.info("Running the wallet for the first time. This may take a moment.")
+                    log.info("Running the wallet for the first time. This may take a moment.")
                     self.printed_retrieving_headers = True
                 return False
             self._start_check.stop()
@@ -988,7 +988,7 @@ https://github.com/lbryio/lbry/issues/437 to reduce your wallet size")
                 if self._caught_up_counter != 0:
                     msg += "All caught up. "
                 msg += "Wallet loaded."
-                alert.info(msg)
+                log.info(msg)
                 self._catch_up_check.stop()
                 self._catch_up_check = None
                 blockchain_caught_d.callback(True)
@@ -1010,9 +1010,9 @@ https://github.com/lbryio/lbry/issues/437 to reduce your wallet size")
                 self.max_behind = self.blocks_behind
             self.catchup_progress = int(100 * (self.blocks_behind / (5 + self.max_behind)))
             if self._caught_up_counter == 0:
-                alert.info('Catching up with the blockchain')
+                log.info('Catching up with the blockchain')
             if self._caught_up_counter % 30 == 0:
-                alert.info('Blocks left: %d', (remote_height - local_height))
+                log.info('Blocks left: %d', (remote_height - local_height))
 
             self._caught_up_counter += 1
 
