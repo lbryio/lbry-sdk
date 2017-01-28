@@ -138,18 +138,14 @@ class Publisher(object):
         self._update_metadata()
         m = Metadata(self.metadata)
 
-        def set_claim_out(claim_out):
-            log.debug('Name claimed using txid: %s, nout: %d, claim_id: %s, fee :%f',
-                        claim_out['txid'], claim_out['nout'],
-                        claim_out['claim_id'], claim_out['fee'])
-            self.txid = claim_out['txid']
-            self.nout = claim_out['nout']
-            self.claim_id = claim_out['claim_id']
-            self.fee = claim_out['fee']
-
-        d = self.wallet.claim_name(self.publish_name, self.bid_amount, m)
-        d.addCallback(set_claim_out)
-        return d
+        claim_out = yield self.wallet.claim_name(self.publish_name, self.bid_amount, m)
+        log.debug('Name claimed using txid: %s, nout: %d, claim_id: %s, fee :%f',
+                  claim_out['txid'], claim_out['nout'],
+                  claim_out['claim_id'], claim_out['fee'])
+        self.txid = claim_out['txid']
+        self.nout = claim_out['nout']
+        self.claim_id = claim_out['claim_id']
+        self.fee = claim_out['fee']
 
     def _update_metadata(self):
         filename = os.path.join(self.lbry_file.download_directory, self.lbry_file.file_name)
