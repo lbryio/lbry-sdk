@@ -2,7 +2,7 @@
 
 The recommended way to install LBRY is to use an installer. We provide installers for all major operating systems. See the [README](README.md).
 
-These instructions are for installing from source code, which is recommended if you are interested in doing development work or LBRY is not available on your operating system (good luck, TempleOS users).
+These instructions are for installing from source code, which is recommended if you are interested in doing development work or LBRY is not available on your operating system (godspeed, TempleOS users).
 
 ## Prerequisites
 
