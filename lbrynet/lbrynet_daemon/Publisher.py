@@ -52,9 +52,9 @@ class Publisher(object):
             lbry_file = yield self._create_lbry_file()
             yield self._add_to_lbry_files(lbry_file)
             yield self._create_sd_blob()
-            yield self._claim_name()
             yield self._set_file_status_finished()
             yield self._push_file_to_reflector()
+            yield self._claim_name()
         except Exception:
             log.exception(
                 "An error occurred publishing %s to %s", self.file_name, self.publish_name)
