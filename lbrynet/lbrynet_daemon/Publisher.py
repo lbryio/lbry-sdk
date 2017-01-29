@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 
 class Publisher(object):
-    def __init__(self, session, lbry_file_manager, wallet):
+    def __init__(self, session, lbry_file_manager, wallet, reflector_servers=None):
         self.session = session
         self.lbry_file_manager = lbry_file_manager
         self.wallet = wallet
@@ -33,9 +33,7 @@ class Publisher(object):
         self.claim_id = None
         self.fee = None
         self.stream_hash = None
-        # TODO: this needs to be passed into the constructor
-        reflector_server = random.choice(conf.settings['reflector_servers'])
-        self.reflector_server, self.reflector_port = reflector_server[0], reflector_server[1]
+        self.reflector_servers = reflector_servers or conf.settings['reflector_servers']
         self.metadata = {}
 
     @defer.inlineCallbacks
@@ -94,13 +92,11 @@ class Publisher(object):
         max_tries = 3
         tries = 1
         while tries <= max_tries:
+            reflector_server = random.choice(self.reflector_servers)
             log.info(
-                'Making attempt %s / %s to push published file %s to reflector server',
-                tries, max_tries, self.publish_name)
-            # TODO: is self.reflector_server unused?
-            reflector_server = random.choice(conf.settings['reflector_servers'])
-            reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-            log.info("Reflecting new publication")
+                'Making attempt %s / %s to push published file %s to reflector server %s',
+                tries, max_tries, self.publish_name, reflector_server)
+            reflector_address, reflector_port = reflector_server
             factory = reflector.ClientFactory(
                 self.session.blob_manager,
                 self.lbry_file_manager.stream_info_manager,
