@@ -105,10 +105,14 @@ class Publisher(object):
             ip = yield reactor.resolve(reflector_address)
             yield reactor.connectTCP(ip, reflector_port, factory)
             result = yield factory.finished_deferred
-            if result:
-                break
+            if result is True:
+                defer.returnValue(True)
             else:
                 tries += 1
+        else:
+            # TODO: surface this error to the UI
+            log.error('Failed to push file for %s to reflector', self.publish_name)
+            defer.returnValue(False)
 
     @defer.inlineCallbacks
     def _add_to_lbry_files(self, stream_hash):
