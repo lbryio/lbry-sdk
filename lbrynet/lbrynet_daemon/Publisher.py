@@ -50,11 +50,11 @@ class Publisher(object):
 
         try:
             lbry_file = yield self._create_lbry_file()
-            yield self.add_to_lbry_files(lbry_file)
+            yield self._add_to_lbry_files(lbry_file)
             yield self._create_sd_blob()
             yield self._claim_name()
-            yield self.set_status_finished()
-            yield self.start_reflector()
+            yield self._set_file_status_finished()
+            yield self._push_file_to_reflector()
         except Exception:
             log.exception(
                 "An error occurred publishing %s to %s", self.file_name, self.publish_name)
@@ -77,7 +77,7 @@ class Publisher(object):
             })
 
     @defer.inlineCallbacks
-    def create_lbry_file(self):
+    def _create_lbry_file(self):
         # TODO: we cannot have this sort of code scattered throughout
         #       our code base. Use polymorphism instead
         if os.name == "nt":
@@ -90,7 +90,7 @@ class Publisher(object):
         defer.returnValue(lbry_file)
 
     @defer.inlineCallbacks
-    def start_reflector(self):
+    def _push_file_to_reflector(self):
         max_tries = 3
         tries = 1
         while tries <= max_tries:
@@ -115,7 +115,7 @@ class Publisher(object):
                 tries += 1
 
     @defer.inlineCallbacks
-    def add_to_lbry_files(self, stream_hash):
+    def _add_to_lbry_files(self, stream_hash):
         self.stream_hash = stream_hash
         prm = self.session.payment_rate_manager
         self.lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash, prm)
@@ -127,22 +127,23 @@ class Publisher(object):
                                         self.session.blob_manager,
                                         self.lbry_file.stream_hash)
         log.debug('stream descriptor hash: %s', sd_hash)
+        self._set_sd_hash(sd_hash)
+
+    def _set_sd_hash(self, sd_hash):
         if 'sources' not in self.metadata:
             self.metadata['sources'] = {}
         self.metadata['sources']['lbry_sd_hash'] = sd_hash
 
     @defer.inlineCallbacks
-    def set_status_finished(self):
-        log.debug('Setting status')
+    def _set_file_status_finished(self):
         yield self.lbry_file_manager.change_lbry_file_status(
             self.lbry_file, ManagedEncryptedFileDownloader.STATUS_FINISHED)
         yield self.lbry_file.restore()
 
     def _claim_name(self):
-        log.debug('Claiming name')
+        log.debug('Claiming name: %s', self.published_name)
         self._update_metadata()
         m = Metadata(self.metadata)
-
         claim_out = yield self.wallet.claim_name(self.publish_name, self.bid_amount, m)
         log.debug('Name claimed using txid: %s, nout: %d, claim_id: %s, fee :%f',
                   claim_out['txid'], claim_out['nout'],
