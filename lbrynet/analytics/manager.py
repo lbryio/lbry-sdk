@@ -82,8 +82,8 @@ class Manager(object):
         event = self.events_generator.download_finished(id_, name, stream_info)
         self.analytics_api.track(event)
 
-    def send_error(self, message, sd_hash=None):
-        event = self.events_generator.error(message, sd_hash)
+    def send_error(self, message):
+        event = self.events_generator.error(message)
         self.analytics_api.track(event)
 
     def register_repeating_metric(self, event_name, value_generator, frequency=300):
