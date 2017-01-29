@@ -20,7 +20,7 @@ from lbrynet.core import log_support
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon import DaemonControl
 from lbrynet import conf
-from packaging.uri_handler.LBRYURIHandler import LBRYURIHandler
+from uri_handler.LBRYURIHandler import LBRYURIHandler
 
 
 log = logging.getLogger(__name__)
