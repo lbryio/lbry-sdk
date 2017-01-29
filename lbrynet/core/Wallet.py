@@ -887,7 +887,6 @@ class LBRYumWallet(Wallet):
         self._lag_counter = 0
         self.blocks_behind = 0
         self.catchup_progress = 0
-        self.max_behind = 0
 
     def _is_first_run(self):
         return (not self.printed_retrieving_headers and
@@ -975,57 +974,28 @@ class LBRYumWallet(Wallet):
     def _load_blockchain(self):
         blockchain_caught_d = defer.Deferred()
 
-        def check_caught_up():
-            local_height = self.network.get_catchup_progress()
+        def on_update_callback(event, *args):
+            # This callback is called by lbryum when something chain
+            # related has happened
+            local_height = self.network.get_local_height()
             remote_height = self.network.get_server_height()
+            updated_blocks_behind = self.network.get_blocks_behind()
+            log.info(
+                'Local Height: %s, remote height: %s, behind: %s',
+                local_height, remote_height, updated_blocks_behind)
 
-            if remote_height == 0:
+            self.blocks_behind = updated_blocks_behind
+            if local_height != remote_height:
                 return
 
-            height_diff = remote_height - local_height
+            assert self.blocks_behind == 0
+            self.network.unregister_callback(on_update_callback)
+            log.info("Wallet Loaded")
+            reactor.callFromThread(blockchain_caught_d.callback, True)
 
-            if height_diff <= 5:
-                self.blocks_behind = 0
-                msg = ""
-                if self._caught_up_counter != 0:
-                    msg += "All caught up. "
-                msg += "Wallet loaded."
-                log.info(msg)
-                self._catch_up_check.stop()
-                self._catch_up_check = None
-                blockchain_caught_d.callback(True)
-                return
+        self.network.register_callback(on_update_callback, ['updated'])
 
-            if height_diff < self.blocks_behind:
-                # We're making progress in catching up
-                self._lag_counter = 0
-                self.is_lagging = False
-            else:
-                # No progress. Might be lagging
-                self._lag_counter += 1
-                if self._lag_counter >= 900:
-                    self.is_lagging = True
-
-            self.blocks_behind = height_diff
-
-            if self.blocks_behind > self.max_behind:
-                self.max_behind = self.blocks_behind
-            self.catchup_progress = int(100 * (self.blocks_behind / (5 + self.max_behind)))
-            if self._caught_up_counter == 0:
-                log.info('Catching up with the blockchain')
-            if self._caught_up_counter % 30 == 0:
-                log.info('Blocks left: %d', (remote_height - local_height))
-
-            self._caught_up_counter += 1
-
-        def log_error(err):
-            log.warning(err.getErrorMessage())
-            return defer.fail(err)
-
-        self._catch_up_check = task.LoopingCall(check_caught_up)
         d = defer.succeed(self.wallet.start_threads(self.network))
-        d.addCallback(lambda _: self._catch_up_check.start(.1))
-        d.addErrback(log_error)
         d.addCallback(lambda _: blockchain_caught_d)
         return d
 
