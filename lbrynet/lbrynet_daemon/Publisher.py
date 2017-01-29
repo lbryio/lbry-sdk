@@ -91,19 +91,28 @@ class Publisher(object):
 
     @defer.inlineCallbacks
     def start_reflector(self):
-        # TODO: is self.reflector_server unused?
-        reflector_server = random.choice(conf.settings['reflector_servers'])
-        reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-        log.info("Reflecting new publication")
-        factory = reflector.ClientFactory(
-            self.session.blob_manager,
-            self.lbry_file_manager.stream_info_manager,
-            self.stream_hash
-        )
-        ip = yield reactor.resolve(reflector_address)
-        yield reactor.connectTCP(ip, reflector_port, factory)
-        # wait for all of the blobs to be reflected
-        result = yield factory.finished_deferred
+        max_tries = 3
+        tries = 1
+        while tries <= max_tries:
+            log.info(
+                'Making attempt %s / %s to push published file %s to reflector server',
+                tries, max_tries, self.publish_name)
+            # TODO: is self.reflector_server unused?
+            reflector_server = random.choice(conf.settings['reflector_servers'])
+            reflector_address, reflector_port = reflector_server[0], reflector_server[1]
+            log.info("Reflecting new publication")
+            factory = reflector.ClientFactory(
+                self.session.blob_manager,
+                self.lbry_file_manager.stream_info_manager,
+                self.stream_hash
+            )
+            ip = yield reactor.resolve(reflector_address)
+            yield reactor.connectTCP(ip, reflector_port, factory)
+            result = yield factory.finished_deferred
+            if result:
+                break
+            else:
+                tries += 1
 
     @defer.inlineCallbacks
     def add_to_lbry_files(self, stream_hash):
