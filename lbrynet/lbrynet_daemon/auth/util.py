@@ -5,6 +5,7 @@ import yaml
 import os
 import json
 import logging
+from txjsonrpc import jsonrpclib
 
 log = logging.getLogger(__name__)
 
@@ -21,6 +22,10 @@ def generate_key(x=None):
         return sha(os.urandom(256))
     else:
         return sha(x)
+
+
+def jsonrpc_dumps_pretty(obj, **kwargs):
+    return jsonrpclib.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
 
 
 class APIKey(object):

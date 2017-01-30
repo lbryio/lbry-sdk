@@ -12,7 +12,7 @@ from txjsonrpc import jsonrpclib
 from lbrynet import conf
 from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError
 from lbrynet.core import utils
-from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
+from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message, jsonrpc_dumps_pretty
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
 
 log = logging.getLogger(__name__)
@@ -32,7 +32,10 @@ class JSONRPCException(Exception):
 
     @property
     def faultString(self):
-        return self.err.getTraceback()
+        try:
+            return self.err.getTraceback()
+        except AttributeError:
+            return self.err
 
 
 class UnknownAPIMethodError(Exception):
@@ -123,8 +126,13 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _render_error(self, failure, request, id_,
                       version=jsonrpclib.VERSION_2, response_code=FAILURE):
-        err = JSONRPCException(Failure(failure), response_code)
-        fault = jsonrpclib.dumps(err, id=id_, version=version)
+        # TODO: is it necessary to wrap the failure in a Failure? if not, merge this with next fn
+        self._render_error_string(Failure(failure), request, id_, version, response_code)
+
+    def _render_error_string(self, error_string, request, id_, version=jsonrpclib.VERSION_2,
+                             response_code=FAILURE):
+        err = JSONRPCException(error_string, response_code)
+        fault = jsonrpc_dumps_pretty(err, id=id_, version=version)
         self._set_headers(request, fault)
         if response_code != AuthJSONRPCServer.FAILURE:
             request.setResponseCode(response_code)
@@ -163,13 +171,15 @@ class AuthJSONRPCServer(AuthorizedBase):
         content = request.content.read()
         try:
             parsed = jsonrpclib.loads(content)
-        except ValueError as err:
+        except ValueError:
             log.warning("Unable to decode request json")
-            self._render_error(err, request, None)
+            self._render_error_string('Invalid JSON', request, None)
             return server.NOT_DONE_YET
 
         function_name = parsed.get('method')
-        args = parsed.get('params')
+        args = parsed.get('params', None)
+        if args is None:
+            args = {}
         id_ = parsed.get('id')
         token = parsed.pop('hmac', None)
         version = self._get_jsonrpc_version(parsed.get('jsonrpc'), id_)
@@ -298,14 +308,14 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _update_session_secret(self, session_id):
         self.sessions.update({session_id: APIKey.new(name=session_id)})
 
-    def _get_jsonrpc_version(self, version=None, id=None):
+    @staticmethod
+    def _get_jsonrpc_version(version=None, id_=None):
         if version:
-            version_for_return = int(float(version))
-        elif id and not version:
-            version_for_return = jsonrpclib.VERSION_1
+            return int(float(version))
+        elif id_:
+            return jsonrpclib.VERSION_1
         else:
-            version_for_return = jsonrpclib.VERSION_PRE1
-        return version_for_return
+            return jsonrpclib.VERSION_PRE1
 
     def _callback_render(self, result, request, id_, version, auth_required=False):
         result_for_return = result
@@ -315,7 +325,7 @@ class AuthJSONRPCServer(AuthorizedBase):
                 result_for_return = (result_for_return,)
 
         try:
-            encoded_message = jsonrpclib.dumps(
+            encoded_message = jsonrpc_dumps_pretty(
                 result_for_return, id=id_, version=version, default=default_decimal)
             self._set_headers(request, encoded_message, auth_required)
             self._render_message(request, encoded_message)
@@ -323,5 +333,6 @@ class AuthJSONRPCServer(AuthorizedBase):
             log.exception("Failed to render API response: %s", result)
             self._render_error(err, request, id_, version)
 
-    def _render_response(self, result):
+    @staticmethod
+    def _render_response(result):
         return defer.succeed(result)
