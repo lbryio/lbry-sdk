@@ -48,13 +48,8 @@ def start():
     parser.add_argument("--http-auth", dest="useauth", action="store_true",
                         default=conf.settings['use_auth_http'])
     parser.add_argument(
-        '--log-to-console', dest='logtoconsole', action='store_true',
-        help=('Set to enable console logging. Set the --verbose flag '
-              ' to enable more detailed console logging'))
-    parser.add_argument(
         '--quiet', dest='quiet', action="store_true",
-        help=('If log-to-console is not set, setting this disables all console output. '
-              'If log-to-console is set, this argument is ignored'))
+        help='Disable all console output.')
     parser.add_argument(
         '--verbose', nargs="*",
         help=('Enable debug output. Optionally specify loggers for which debug output '
@@ -64,42 +59,25 @@ def start():
     update_settings_from_args(args)
 
     lbrynet_log = conf.settings.get_log_filename()
-    log_support.configure_logging(lbrynet_log, args.logtoconsole, args.verbose)
+    log_support.configure_logging(lbrynet_log, not args.quiet, args.verbose)
     log.debug('Final Settings: %s', conf.settings.get_current_settings_dict())
 
     try:
         log.debug('Checking for an existing lbrynet daemon instance')
         JSONRPCProxy.from_url(conf.settings.get_api_connection_string()).is_running()
         log.info("lbrynet-daemon is already running")
-        if not args.logtoconsole:
-            print "lbrynet-daemon is already running"
         return
     except Exception:
         log.debug('No lbrynet instance found, continuing to start')
-        pass
 
     log.info("Starting lbrynet-daemon from command line")
-
-    if not args.logtoconsole and not args.quiet:
-        print "Starting lbrynet-daemon from command line"
-        print "To view activity, view the log file here: " + lbrynet_log
-        print "Web UI is available at http://%s:%i" % (
-            conf.settings['api_host'], conf.settings['api_port'])
-        print "JSONRPC API is available at " + conf.settings.get_api_connection_string()
-        print "To quit press ctrl-c or call 'stop' via the API"
 
     if test_internet_connection():
         analytics_manager = analytics.Manager.new_instance()
         start_server_and_listen(args.launchui, args.useauth, analytics_manager)
         reactor.run()
-
-        if not args.logtoconsole and not args.quiet:
-            print "\nClosing lbrynet-daemon"
     else:
         log.info("Not connected to internet, unable to start")
-        if not args.logtoconsole:
-            print "Not connected to internet, unable to start"
-        return
 
 
 def update_settings_from_args(args):
