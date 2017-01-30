@@ -72,7 +72,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     Decorators:
 
-        @AuthJSONRPCServer.auth_required: this requires the client
+        @AuthJSONRPCServer.auth_required: this requires that the client
             include a valid hmac authentication token in their request
 
     Attributes:
@@ -195,10 +195,17 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._render_error(err, request, version)
             return server.NOT_DONE_YET
 
-        if args == EMPTY_PARAMS:
+        if args == EMPTY_PARAMS or args == []:
             d = defer.maybeDeferred(function)
+        elif isinstance(args, dict):
+            d = defer.maybeDeferred(function, **args)
+        elif len(args) == 1 and isinstance(args[0], dict):
+            # TODO: this is for backwards compatibility. Remove this once API and UI are updated
+            # TODO: also delete EMPTY_PARAMS then
+            d = defer.maybeDeferred(function, **args[0])
         else:
-            d = defer.maybeDeferred(function, *args)
+            # d = defer.maybeDeferred(function, *args)  # if we want to support positional args too
+            raise ValueError('Args must be a dict')
 
         # finished_deferred will callback when the request is finished
         # and errback if something went wrong. If the errback is

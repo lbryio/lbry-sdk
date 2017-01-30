@@ -25,6 +25,18 @@ class Wallet(object):
     def __init__(self):
         self.private_key = RSA.generate(1024)
         self.encoded_public_key = self.private_key.publickey().exportKey()
+        self._config = None
+        self.network = None
+        self.wallet = None
+        self.is_first_run = False
+        self.printed_retrieving_headers = False
+        self._start_check = None
+        self._catch_up_check = None
+        self._caught_up_counter = 0
+        self._lag_counter = 0
+        self.blocks_behind = 0
+        self.catchup_progress = 0
+        self.max_behind = 0
 
     def start(self):
         return defer.succeed(True)
