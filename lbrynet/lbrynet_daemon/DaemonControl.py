@@ -44,7 +44,7 @@ def start():
         "--branch",
         help='Branch of lbry-web-ui repo to use, defaults to {}'.format(conf.settings['ui_branch']),
         default=conf.settings['ui_branch'])
-    parser.add_argument('--no-launch', dest='launchui', action="store_false")
+    parser.add_argument('--launch-ui', dest='launchui', action="store_true")
     parser.add_argument("--http-auth", dest="useauth", action="store_true",
                         default=conf.settings['use_auth_http'])
     parser.add_argument(
