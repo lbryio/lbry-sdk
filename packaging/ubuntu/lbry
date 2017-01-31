@@ -28,7 +28,7 @@ DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 if [ -z "$(pgrep lbrynet-daemon)" ]; then
   echo "running lbrynet-daemon"
-  $DIR/lbrynet-daemon --no-launch &
+  $DIR/lbrynet-daemon &
   sleep 3 # let the daemon load before connecting
 fi
 
