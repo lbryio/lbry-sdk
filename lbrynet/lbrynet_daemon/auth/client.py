@@ -46,7 +46,7 @@ class AuthAPIClient(object):
         pre_auth_post_data = {
             'version': '1.1',
             'method': method,
-            'params': [params],
+            'params': params,
             'id': self.__id_count
         }
         to_auth = get_auth_message(pre_auth_post_data)
