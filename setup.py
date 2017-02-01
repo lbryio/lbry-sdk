@@ -43,7 +43,7 @@ requires = [
     'jsonrpc==1.2',
     'jsonrpclib==0.1.7',
     'jsonschema==2.5.1',
-    'lbryum',
+    'lbryum>=2.7.4',
     'loggly-python-handler==1.0.0',
     'miniupnpc==1.9',
     'pbkdf2==1.3',
