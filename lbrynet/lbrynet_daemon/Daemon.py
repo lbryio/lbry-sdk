@@ -82,13 +82,10 @@ STREAM_STAGES = [
 CONNECTION_STATUS_CONNECTED = 'connected'
 CONNECTION_STATUS_VERSION_CHECK = 'version_check'
 CONNECTION_STATUS_NETWORK = 'network_connection'
-CONNECTION_STATUS_WALLET = 'wallet_catchup_lag'
 CONNECTION_MESSAGES = {
     CONNECTION_STATUS_CONNECTED: 'No connection problems detected',
     CONNECTION_STATUS_VERSION_CHECK: "There was a problem checking for updates on github",
     CONNECTION_STATUS_NETWORK: "Your internet connection appears to have been interrupted",
-    CONNECTION_STATUS_WALLET: "Catching up with the blockchain is slow. " +
-                              "If this continues try restarting LBRY",
 }
 
 PENDING_ID = "not set"
@@ -386,9 +383,6 @@ class Daemon(AuthJSONRPCServer):
 
         if not self.git_lbrynet_version or not self.git_lbryum_version:
             self.connection_status_code = CONNECTION_STATUS_VERSION_CHECK
-
-        elif self.startup_status[0] == 'loading_wallet' and self.session.wallet.is_lagging:
-            self.connection_status_code = CONNECTION_STATUS_WALLET
 
         if not self.connected_to_internet:
             self.connection_status_code = CONNECTION_STATUS_NETWORK
@@ -1121,7 +1115,7 @@ class Daemon(AuthJSONRPCServer):
                 progress = 0
                 if status['blocks_behind'] > 0:
                     message += ' ' + str(status['blocks_behind']) + " blocks behind."
-                    progress = self.session.wallet.catchup_progress
+                    progress = status['blocks_behind']
 
             return {
                 'message': message,

@@ -24,8 +24,8 @@ from lbrynet.core.Error import (UnknownNameError, InvalidStreamInfoError, Reques
 from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
 from lbrynet.metadata.Metadata import Metadata
 
+
 log = logging.getLogger(__name__)
-alert = logging.getLogger("lbryalert." + __name__)
 
 
 class ReservedPoints(object):
@@ -198,8 +198,6 @@ class Wallet(object):
         self.expected_balance_at_time = deque()
         self.max_expected_payment_time = datetime.timedelta(minutes=3)
         self.stopped = True
-
-        self.is_lagging = None
 
         self.manage_running = False
         self._manage_count = 0
@@ -887,24 +885,24 @@ class LBRYumWallet(Wallet):
         self._lag_counter = 0
         self.blocks_behind = 0
         self.catchup_progress = 0
-        self.max_behind = 0
+
+    def _is_first_run(self):
+        return (not self.printed_retrieving_headers and
+                self.network.blockchain.retrieving_headers)
 
     def _start(self):
         network_start_d = defer.Deferred()
+        self.config = make_config(self._config)
 
         def setup_network():
-            self.config = make_config(self._config)
             self.network = Network(self.config)
-            alert.info("Loading the wallet")
+            log.info("Loading the wallet")
             return defer.succeed(self.network.start())
-
-        d = setup_network()
 
         def check_started():
             if self.network.is_connecting():
-                if not self.printed_retrieving_headers and \
-                        self.network.blockchain.retrieving_headers:
-                    alert.info("Running the wallet for the first time. This may take a moment.")
+                if self._is_first_run():
+                    log.info("Running the wallet for the first time. This may take a moment.")
                     self.printed_retrieving_headers = True
                 return False
             self._start_check.stop()
@@ -916,6 +914,7 @@ class LBRYumWallet(Wallet):
 
         self._start_check = task.LoopingCall(check_started)
 
+        d = setup_network()
         d.addCallback(lambda _: self._load_wallet())
         d.addCallback(self._save_wallet)
         d.addCallback(lambda _: self._start_check.start(.1))
@@ -967,63 +966,34 @@ class LBRYumWallet(Wallet):
 
     def _check_large_wallet(self):
         if len(self.wallet.addresses(include_change=False)) > 1000:
-            log.warning("Your wallet is excessively large, please follow instructions here: \
-https://github.com/lbryio/lbry/issues/437 to reduce your wallet size")
+            log.warning(("Your wallet is excessively large, please follow instructions here: ",
+                         "https://github.com/lbryio/lbry/issues/437 to reduce your wallet size"))
 
     def _load_blockchain(self):
         blockchain_caught_d = defer.Deferred()
 
-        def check_caught_up():
-            local_height = self.network.get_catchup_progress()
+        def on_update_callback(event, *args):
+            # This callback is called by lbryum when something chain
+            # related has happened
+            local_height = self.network.get_local_height()
             remote_height = self.network.get_server_height()
+            updated_blocks_behind = self.network.get_blocks_behind()
+            log.info(
+                'Local Height: %s, remote height: %s, behind: %s',
+                local_height, remote_height, updated_blocks_behind)
 
-            if remote_height == 0:
+            self.blocks_behind = updated_blocks_behind
+            if local_height != remote_height:
                 return
 
-            height_diff = remote_height - local_height
+            assert self.blocks_behind == 0
+            self.network.unregister_callback(on_update_callback)
+            log.info("Wallet Loaded")
+            reactor.callFromThread(blockchain_caught_d.callback, True)
 
-            if height_diff <= 5:
-                self.blocks_behind = 0
-                msg = ""
-                if self._caught_up_counter != 0:
-                    msg += "All caught up. "
-                msg += "Wallet loaded."
-                alert.info(msg)
-                self._catch_up_check.stop()
-                self._catch_up_check = None
-                blockchain_caught_d.callback(True)
-                return
+        self.network.register_callback(on_update_callback, ['updated'])
 
-            if height_diff < self.blocks_behind:
-                # We're making progress in catching up
-                self._lag_counter = 0
-                self.is_lagging = False
-            else:
-                # No progress. Might be lagging
-                self._lag_counter += 1
-                if self._lag_counter >= 900:
-                    self.is_lagging = True
-
-            self.blocks_behind = height_diff
-
-            if self.blocks_behind > self.max_behind:
-                self.max_behind = self.blocks_behind
-            self.catchup_progress = int(100 * (self.blocks_behind / (5 + self.max_behind)))
-            if self._caught_up_counter == 0:
-                alert.info('Catching up with the blockchain')
-            if self._caught_up_counter % 30 == 0:
-                alert.info('Blocks left: %d', (remote_height - local_height))
-
-            self._caught_up_counter += 1
-
-        def log_error(err):
-            log.warning(err.getErrorMessage())
-            return defer.fail(err)
-
-        self._catch_up_check = task.LoopingCall(check_caught_up)
         d = defer.succeed(self.wallet.start_threads(self.network))
-        d.addCallback(lambda _: self._catch_up_check.start(.1))
-        d.addErrback(log_error)
         d.addCallback(lambda _: blockchain_caught_d)
         return d
 
@@ -1207,8 +1177,9 @@ class LBRYcrdAddressRequester(object):
     # ======== internal calls ======== #
 
     def _handle_address_response(self, response_dict, peer, request, protocol):
-        assert request.response_identifier in response_dict, \
-            "Expected %s in dict but did not get it" % request.response_identifier
+        if request.response_identifier not in response_dict:
+            raise ValueError(
+                "Expected {} in response but did not get it".format(request.response_identifier))
         assert protocol in self._protocols, "Responding protocol is not in our list of protocols"
         address = response_dict[request.response_identifier]
         self.wallet.update_peer_address(peer, address)
