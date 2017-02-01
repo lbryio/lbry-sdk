@@ -199,8 +199,6 @@ class Wallet(object):
         self.max_expected_payment_time = datetime.timedelta(minutes=3)
         self.stopped = True
 
-        self.is_lagging = None
-
         self.manage_running = False
         self._manage_count = 0
         self._balance_refresh_time = 3
