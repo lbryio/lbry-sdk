@@ -761,14 +761,13 @@ class Daemon(AuthJSONRPCServer):
 
         def eb():
             if not r.called:
-                self.analytics_manager.send_error("sd blob download timed out", sd_hash)
+                log.error("sd blob download timed out: %s", sd_hash)
                 r.errback(Exception("sd timeout"))
 
         r = defer.Deferred(None)
         reactor.callLater(timeout, eb)
         d = download_sd_blob(self.session, sd_hash, self.session.payment_rate_manager)
-        d.addErrback(lambda err: self.analytics_manager.send_error(
-            "error downloading sd blob: " + err, sd_hash))
+        d.addErrback(log.fail(), "Error downloading sd blob: %s", sd_hash)
         d.addCallback(BlobStreamDescriptorReader)
         d.addCallback(lambda blob: blob.get_info())
         d.addCallback(cb)

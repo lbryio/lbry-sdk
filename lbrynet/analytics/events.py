@@ -60,10 +60,13 @@ class Events(object):
         properties = download_properties(*args, **kwargs)
         return self._event('Download Finished', properties)
 
-    def error(self, message, sd_hash=None):
+    def error(self, log_record):
+        """Record when a log message of ERROR or higher was emitted"""
         properties = {
-            'message': message,
-            'stream_info': sd_hash
+            'message': log_record.message,
+            'module': log_record.module,
+            'lineno': log_record.lineno,
+            'name': log_record.name,
         }
         return self._event('Error', properties)
 
