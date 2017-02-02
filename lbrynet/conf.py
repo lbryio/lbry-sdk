@@ -212,7 +212,7 @@ class Config(object):
     def __init__(self, fixed_defaults, adjustable_defaults, persisted_settings=None,
                  environment=None, cli_settings=None):
 
-        self._lbry_id = None
+        self._installation_id = None
         self._session_id = base58.b58encode(utils.generate_id())
 
         self._fixed_defaults = fixed_defaults
@@ -429,17 +429,17 @@ class Config(object):
         else:
             return yml_path
 
-    def get_lbry_id(self):
-        lbry_id_filename = os.path.join(self.ensure_data_dir(), 'lbryid')
-        if not self._lbry_id:
-            if os.path.isfile(lbry_id_filename):
-                with open(lbry_id_filename, 'r') as lbryid_file:
-                    self._lbry_id = base58.b58decode(lbryid_file.read())
-        if not self._lbry_id:
-            self._lbry_id = utils.generate_id()
-            with open(lbry_id_filename, 'w') as lbryid_file:
-                lbryid_file.write(base58.b58encode(self._lbry_id))
-        return self._lbry_id
+    def get_installation_id(self):
+        install_id_filename = os.path.join(self.ensure_data_dir(), "install_id")
+        if not self._installation_id:
+            if os.path.isfile(install_id_filename):
+                with open(install_id_filename, "r") as install_id_file:
+                    self._installation_id = install_id_file.read()
+        if not self._installation_id:
+            self._installation_id = base58.b58encode(utils.generate_id())
+            with open(install_id_filename, "w") as install_id_file:
+                install_id_file.write(self._installation_id)
+        return self._installation_id
 
     def get_session_id(self):
         return self._session_id
@@ -464,5 +464,7 @@ def initialize_settings(load_conf_file=True):
     if settings is None:
         settings = Config(FIXED_SETTINGS, ADJUSTABLE_SETTINGS,
                           environment=get_default_env())
+        settings.installation_id = settings.get_installation_id()
         if load_conf_file:
             settings.load_conf_file_settings()
+
