@@ -27,7 +27,6 @@ def _reflect_stream(lbry_file, reflector_server):
     )
     d = reactor.resolve(reflector_address)
     d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
-    d.addCallback(lambda _: log.info("Connected to %s", reflector_address))
     d.addCallback(lambda _: factory.finished_deferred)
     return d
 
@@ -41,11 +40,13 @@ def _reflect_if_unavailable(reflector_has_stream, lbry_file, reflector_server):
 
 
 def _catch_error(err, uri):
-    msg = "An error occurred while checking availability for lbry://%s: %s"
-    log.error(msg, uri, err.getTraceback())
+    log.error("An error occurred while checking availability for lbry://%s", uri)
+    log.debug("Traceback: %s", err.getTraceback())
 
 
 def check_and_restore_availability(lbry_file, reflector_server):
-    d = _reflect_stream(lbry_file, reflector_server)
-    d.addErrback(_catch_error, lbry_file.uri)
+    d = _check_if_reflector_has_stream(lbry_file, reflector_server)
+    d.addCallbacks(
+        lambda send_stream: _reflect_if_unavailable(send_stream, lbry_file, reflector_server),
+        lambda err: _catch_error(err, lbry_file.uri))
     return d
