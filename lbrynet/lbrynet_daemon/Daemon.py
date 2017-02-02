@@ -131,7 +131,7 @@ class CheckRemoteVersions(object):
     def __call__(self):
         d = threads.deferToThread(self._get_lbrynet_version)
         d.addErrback(self._trap_and_log_error, 'lbrynet')
-        d.addCallback(lambda _: self._get_lbryum_version())
+        d.addCallback(lambda _: threads.deferToThread(self._get_lbryum_version))
         d.addErrback(self._trap_and_log_error, 'lbryum')
         d.addErrback(log.fail(), 'Failure checking versions on github')
 
