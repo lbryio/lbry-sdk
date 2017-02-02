@@ -17,18 +17,18 @@ def get_sd_hash(stream_info):
 
 
 class Events(object):
-    def __init__(self, context, lbryid, session_id):
+    def __init__(self, context, installation_id, session_id):
         """Contains all of the analytics events that can be sent
 
         Attributes:
             context: usually the output of `make_context`
-            lbryid: id unique to this installation. Can be anything, but
+            installation_id: id unique to this installation. Can be anything, but
                generally should be base58 encoded.
             session_id: id for tracking events during this session. Can be
                anything, but generally should be base58 encoded.
         """
         self.context = context
-        self.lbryid = lbryid
+        self.installation_id = installation_id
         self.session_id = session_id
 
     def update_context(self, context):
@@ -88,7 +88,7 @@ class Events(object):
     def _properties(self, event_properties=None):
         event_properties = event_properties or {}
         properties = {
-            'lbry_id': self.lbryid,
+            'lbry_id': self.installation_id,
             'session_id': self.session_id,
         }
         properties.update(event_properties)

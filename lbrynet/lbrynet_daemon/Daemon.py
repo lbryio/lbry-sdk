@@ -251,7 +251,7 @@ class Daemon(AuthJSONRPCServer):
         self.log_uploader = log_support.LogUploader.load('lbrynet', self.log_file)
 
         self.analytics_manager = analytics_manager
-        self.lbryid = conf.settings.get_lbry_id()
+        self.lbryid = utils.generate_id()
 
         self.wallet_user = None
         self.wallet_password = None
@@ -343,20 +343,11 @@ class Daemon(AuthJSONRPCServer):
 
     def _load_caches(self):
         name_cache_filename = os.path.join(self.db_dir, "stream_info_cache.json")
-        lbryid_filename = os.path.join(self.db_dir, "lbryid")
 
         if os.path.isfile(name_cache_filename):
             with open(name_cache_filename, "r") as name_cache:
                 self.name_cache = json.loads(name_cache.read())
             log.info("Loaded claim info cache")
-
-        if os.path.isfile(lbryid_filename):
-            with open(lbryid_filename, "r") as lbryid_file:
-                self.lbryid = base58.b58decode(lbryid_file.read())
-        else:
-            with open(lbryid_filename, "w") as lbryid_file:
-                self.lbryid = utils.generate_id()
-                lbryid_file.write(base58.b58encode(self.lbryid))
 
     def _check_network_connection(self):
         self.connected_to_internet = utils.check_connection()
@@ -519,9 +510,10 @@ class Daemon(AuthJSONRPCServer):
 
     def _upload_log(self, log_type=None, exclude_previous=False, force=False):
         if self.upload_log or force:
-            lbryid = base58.b58encode(self.lbryid)[:SHORT_ID_LEN]
             try:
-                self.log_uploader.upload(exclude_previous, lbryid, log_type)
+                self.log_uploader.upload(exclude_previous,
+                                         conf.settings.installation_id[:SHORT_ID_LEN],
+                                         log_type)
             except requests.RequestException:
                 log.warning('Failed to upload log file')
         return defer.succeed(None)
@@ -658,7 +650,7 @@ class Daemon(AuthJSONRPCServer):
 
     def _modify_loggly_formatter(self):
         log_support.configure_loggly_handler(
-            lbry_id=base58.b58encode(self.lbryid),
+            installation_id=conf.settings.installation_id,
             session_id=self._session_id
         )
 
@@ -1039,6 +1031,7 @@ class Daemon(AuthJSONRPCServer):
         has_wallet = self.session and self.session.wallet
         response = {
             'lbry_id': base58.b58encode(self.lbryid)[:SHORT_ID_LEN],
+            'installation_id': conf.settings.get_installation_id()[:SHORT_ID_LEN],
             'is_running': self.announced_startup,
             'is_first_run': self.session.wallet.is_first_run if has_wallet  else None,
             'startup_status': {
@@ -1208,7 +1201,12 @@ class Daemon(AuthJSONRPCServer):
         """
 
         platform_name = self._get_platform()['platform']
-        report_bug_to_slack(message, self.lbryid, platform_name, lbrynet_version)
+        report_bug_to_slack(
+            message,
+            conf.settings.installation_id,
+            platform_name,
+            lbrynet_version
+        )
         return self._render_response(True)
 
     def jsonrpc_get_settings(self):
@@ -2674,13 +2672,12 @@ def loggly_time_string(dt):
     return urllib.quote_plus(formatted_dt + milliseconds + "Z")
 
 
-def get_loggly_query_string(lbry_id):
-    decoded_id = base58.b58encode(lbry_id)
+def get_loggly_query_string(installation_id):
     base_loggly_search_url = "https://lbry.loggly.com/search#"
     now = utils.now()
     yesterday = now - utils.timedelta(days=1)
     params = {
-        'terms': 'json.lbry_id:{}*'.format(decoded_id[:SHORT_ID_LEN]),
+        'terms': 'json.installation_id:{}*'.format(installation_id[:SHORT_ID_LEN]),
         'from': loggly_time_string(yesterday),
         'to': loggly_time_string(now)
     }
@@ -2688,13 +2685,13 @@ def get_loggly_query_string(lbry_id):
     return base_loggly_search_url + data
 
 
-def report_bug_to_slack(message, lbry_id, platform_name, app_version):
-    webhook = utils.deobfuscate(conf.settings['SLACK_WEBHOOK'])
+def report_bug_to_slack(message, installation_id, platform_name, app_version):
+    webhook = utils.deobfuscate(conf.settings.SLACK_WEBHOOK)
     payload_template = "os: %s\n version: %s\n<%s|loggly>\n%s"
     payload_params = (
         platform_name,
         app_version,
-        get_loggly_query_string(lbry_id),
+        get_loggly_query_string(installation_id),
         message
     )
     payload = {
