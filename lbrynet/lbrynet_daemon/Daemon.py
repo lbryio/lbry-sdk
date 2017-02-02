@@ -115,11 +115,6 @@ class NoValidSearch(Exception):
     pass
 
 
-class Parameters(object):
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-
 class CheckInternetConnection(object):
     def __init__(self, daemon):
         self.daemon = daemon
@@ -490,9 +485,9 @@ class Daemon(AuthJSONRPCServer):
     def _stop_server(self):
         try:
             if self.lbry_server_port is not None:
-                self.lbry_server_port, p = None, self.lbry_server_port
-                log.info('Stop listening to %s', p)
-                return defer.maybeDeferred(p.stopListening)
+                self.lbry_server_port, old_port = None, self.lbry_server_port
+                log.info('Stop listening to %s', old_port)
+                return defer.maybeDeferred(old_port.stopListening)
             else:
                 return defer.succeed(True)
         except AttributeError:
@@ -1471,62 +1466,40 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r))
         return d
 
-    def _process_get_parameters(self, p):
-        """Extract info from input parameters and fill in default values for `get` call."""
-        # TODO: this process can be abstracted s.t. each method
-        #       can spec what parameters it expects and how to set default values
-        timeout = p.get('timeout', self.download_timeout)
-        download_directory = p.get('download_directory', self.download_directory)
-        file_name = p.get(FileID.FILE_NAME)
-        stream_info = p.get('stream_info')
-        sd_hash = get_sd_hash(stream_info)
-        wait_for_write = p.get('wait_for_write', True)
-        name = p.get(FileID.NAME)
-        return Parameters(
-            timeout=timeout,
-            download_directory=download_directory,
-            file_name=file_name,
-            stream_info=stream_info,
-            sd_hash=sd_hash,
-            wait_for_write=wait_for_write,
-            name=name
-        )
-
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_get(self, **kwargs):
+    def jsonrpc_get(
+            self, name, file_name=None, stream_info=None, timeout=None,
+            download_directory=None, wait_for_write=True):
         """
         Download stream from a LBRY uri.
 
         Args:
             'name': name to download, string
-            'download_directory': optional, path to directory where file will be saved, string
             'file_name': optional, a user specified name for the downloaded file
             'stream_info': optional, specified stream info overrides name
             'timeout': optional
+            'download_directory': optional, path to directory where file will be saved, string
             'wait_for_write': optional, defaults to True. When set, waits for the file to
                 only start to be written before returning any results.
         Returns:
             'stream_hash': hex string
             'path': path of download
         """
-        params = self._process_get_parameters(kwargs)
-        if not params.name:
-            # TODO: return a useful error message here, like "name argument is required"
-            defer.returnValue(server.failure)
-        if params.name in self.waiting_on:
+        timeout = timeout if timeout is not None else self.download_timeout
+        download_directory = download_directory or self.download_directory
+        sd_hash = get_sd_hash(stream_info)
+        if name in self.waiting_on:
             # TODO: return a useful error message here, like "already
             # waiting for name to be resolved"
             defer.returnValue(server.failure)
-        name = params.name
-        stream_info = params.stream_info
 
         # first check if we already have this
         lbry_file = yield self._get_lbry_file(FileID.NAME, name, return_json=False)
         if lbry_file:
             log.info('Already have a file for %s', name)
             message = {
-                'stream_hash': params.sd_hash if params.stream_info else lbry_file.sd_hash,
+                'stream_hash': sd_hash if stream_info else lbry_file.sd_hash,
                 'path': os.path.join(lbry_file.download_directory, lbry_file.file_name)
             }
             response = yield self._render_response(message)
@@ -1539,18 +1512,18 @@ class Daemon(AuthJSONRPCServer):
         while tries <= max_tries:
             try:
                 log.info(
-                    'Making try %s / %s to start download of %s', tries, max_tries, params.name)
-                sd_hash, file_path = yield self._download_name(
-                    name=params.name,
-                    timeout=params.timeout,
-                    download_directory=params.download_directory,
-                    stream_info=params.stream_info,
-                    file_name=params.file_name,
-                    wait_for_write=params.wait_for_write
+                    'Making try %s / %s to start download of %s', tries, max_tries, name)
+                new_sd_hash, file_path = yield self._download_name(
+                    name=name,
+                    timeout=timeout,
+                    download_directory=download_directory,
+                    stream_info=stream_info,
+                    file_name=file_name,
+                    wait_for_write=wait_for_write
                 )
                 break
             except Exception as e:
-                log.exception('Failed to get %s', params.name)
+                log.exception('Failed to get %s', name)
                 if tries == max_tries:
                     self.analytics_manager.send_download_errored(download_id, name, stream_info)
                     response = yield self._render_response(str(e))
@@ -1558,7 +1531,7 @@ class Daemon(AuthJSONRPCServer):
                 tries += 1
         # TODO: should stream_hash key be changed to sd_hash?
         message = {
-            'stream_hash': params.sd_hash if params.stream_info else sd_hash,
+            'stream_hash': sd_hash if stream_info else new_sd_hash,
             'path': file_path
         }
         stream = self.streams.get(name)
@@ -1602,7 +1575,7 @@ class Daemon(AuthJSONRPCServer):
         if status not in ['start', 'stop']:
             raise Exception('Status must be "start" or "stop".')
 
-        search_type, value = get_lbry_file_search_value(**kwargs)
+        search_type, value = get_lbry_file_search_value(kwargs)
         lbry_file = yield self._get_lbry_file(search_type, value, return_json=False)
         if not lbry_file:
             raise Exception('Unable to find a file for {}:{}'.format(search_type, value))
@@ -1618,11 +1591,11 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
-    def jsonrpc_delete_lbry_file(self, p):
+    def jsonrpc_delete_lbry_file(self, **kwargs):
         """
         DEPRECATED. Use `file_delete` instead
         """
-        return self.jsonrpc_file_delete(p)
+        return self.jsonrpc_file_delete(**kwargs)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_file_delete(self, delete_target_file=True, **kwargs):
@@ -2730,12 +2703,12 @@ def report_bug_to_slack(message, lbry_id, platform_name, app_version):
     requests.post(webhook, json.dumps(payload))
 
 
-def get_lbry_file_search_value(p):
+def get_lbry_file_search_value(search_fields):
     for searchtype in (FileID.SD_HASH, FileID.NAME, FileID.FILE_NAME):
-        value = p.get(searchtype)
+        value = search_fields.get(searchtype)
         if value:
             return searchtype, value
-    raise NoValidSearch('{} is missing a valid search type'.format(p))
+    raise NoValidSearch('{} is missing a valid search type'.format(search_fields))
 
 
 def run_reflector_factory(factory):
