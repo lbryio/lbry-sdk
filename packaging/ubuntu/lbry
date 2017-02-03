@@ -41,7 +41,7 @@ else
   if [ -z "$NAME" -o "$NAME" == "lbry" ]; then
     URL=""
   else
-    URL="/?watch=$(urlencode "$NAME")"
+    URL="/?show=$(urlencode "$NAME")"
   fi
 fi
 

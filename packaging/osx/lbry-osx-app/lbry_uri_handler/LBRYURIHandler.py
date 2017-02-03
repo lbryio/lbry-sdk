@@ -26,7 +26,7 @@ class LBRYURIHandler(object):
         if lbry_name == "lbry" or lbry_name == "":
             webbrowser.open(UI_ADDRESS)
         else:
-            webbrowser.open(UI_ADDRESS + "/?watch=" + lbry_name)
+            webbrowser.open(UI_ADDRESS + "/?show=" + lbry_name)
 
     def handle_linux(self, lbry_name):
         try:
@@ -43,7 +43,7 @@ class LBRYURIHandler(object):
         if lbry_name == "lbry" or lbry_name == "":
             webbrowser.open(UI_ADDRESS)
         else:
-            webbrowser.open(UI_ADDRESS + "/?watch=" + lbry_name)
+            webbrowser.open(UI_ADDRESS + "/?show=" + lbry_name)
 
 
 def main(args):
