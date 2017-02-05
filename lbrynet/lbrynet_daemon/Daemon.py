@@ -285,6 +285,7 @@ class Daemon(AuthJSONRPCServer):
                 self.announced_startup = True
                 self.startup_status = STARTUP_STAGES[5]
                 log.info("Started lbrynet-daemon")
+                log.info("%i blobs in manager", len(self.session.blob_manager.blobs))
 
             if self.first_run:
                 d = self._upload_log(log_type="first_run")
@@ -292,7 +293,7 @@ class Daemon(AuthJSONRPCServer):
                 d = self._upload_log(exclude_previous=True, log_type="start")
             else:
                 d = defer.succeed(None)
-
+            d.addCallback(lambda _: self.session.blob_manager.get_all_verified_blobs())
             d.addCallback(lambda _: _announce())
             return d
 
