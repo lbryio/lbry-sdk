@@ -1,5 +1,6 @@
 import logging
-from twisted.internet import reactor, defer
+from twisted.internet import reactor
+from twisted.internet.error import ConnectionLost, ConnectionDone
 from lbrynet.reflector import BlobClientFactory, ClientFactory
 
 log = logging.getLogger(__name__)
@@ -27,17 +28,11 @@ def _reflect_stream(lbry_file, reflector_server):
     )
     d = reactor.resolve(reflector_address)
     d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
-    d.addCallback(lambda _: log.info("Connected to %s", reflector_address))
     d.addCallback(lambda _: factory.finished_deferred)
+    d.addCallback(lambda reflected_blobs: log.info("Reflected %i blobs for lbry://%s",
+                                                   len(reflected_blobs),
+                                                   lbry_file.uri))
     return d
-
-
-def _reflect_if_unavailable(reflector_has_stream, lbry_file, reflector_server):
-    if reflector_has_stream:
-        log.info("lbry://%s is available", lbry_file.uri)
-        return defer.succeed(False)
-    log.info("lbry://%s is unavailable, reflecting it", lbry_file.uri)
-    return _reflect_stream(lbry_file, reflector_server)
 
 
 def _catch_error(err, uri):
@@ -47,5 +42,6 @@ def _catch_error(err, uri):
 
 def check_and_restore_availability(lbry_file, reflector_server):
     d = _reflect_stream(lbry_file, reflector_server)
+    d.addErrback(lambda err: err.trap(ConnectionDone, ConnectionLost))
     d.addErrback(_catch_error, lbry_file.uri)
     return d
