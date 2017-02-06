@@ -5,7 +5,7 @@ from twisted.protocols.basic import FileSender
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.internet import defer, error
 
-from lbrynet.reflector.common import IncompleteResponse
+from lbrynet.reflector.common import IncompleteResponse, REFLECTOR_V2
 
 
 log = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class BlobReflectorClient(Protocol):
         self.next_blob_to_send = None
         self.blob_read_handle = None
         self.received_handshake_response = False
-        self.protocol_version = None
+        self.protocol_version = self.factory.protocol_version
         self.file_sender = None
         self.producer = None
         self.streaming = False
@@ -32,7 +32,7 @@ class BlobReflectorClient(Protocol):
             lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
 
     def dataReceived(self, data):
-        log.debug('Recieved %s', data)
+        log.debug('Received %s', data)
         self.response_buff += data
         try:
             msg = self.parse_response(self.response_buff)
@@ -74,7 +74,7 @@ class BlobReflectorClient(Protocol):
 
     def send_handshake(self):
         log.debug('Sending handshake')
-        self.write(json.dumps({'version': 0}))
+        self.write(json.dumps({'version': self.protocol_version}))
         return defer.succeed(None)
 
     def parse_response(self, buff):
@@ -102,7 +102,6 @@ class BlobReflectorClient(Protocol):
 
     def start_transfer(self):
         self.sent_blobs = True
-        self.write(json.dumps({}))
         assert self.read_handle is not None, \
             "self.read_handle was None when trying to start the transfer"
         d = self.file_sender.beginFileTransfer(self.read_handle, self)
@@ -111,8 +110,8 @@ class BlobReflectorClient(Protocol):
     def handle_handshake_response(self, response_dict):
         if 'version' not in response_dict:
             raise ValueError("Need protocol version number!")
-        self.protocol_version = int(response_dict['version'])
-        if self.protocol_version != 0:
+        server_version = int(response_dict['version'])
+        if self.protocol_version != server_version:
             raise ValueError("I can't handle protocol version {}!".format(self.protocol_version))
         self.received_handshake_response = True
         return defer.succeed(True)
@@ -184,6 +183,7 @@ class BlobReflectorClientFactory(ClientFactory):
     protocol = BlobReflectorClient
 
     def __init__(self, blob_manager, blobs):
+        self.protocol_version = REFLECTOR_V2
         self.blob_manager = blob_manager
         self.blobs = blobs
         self.p = None
