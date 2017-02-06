@@ -29,7 +29,6 @@ from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFa
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.lbrynet_daemon.UIManager import UIManager
@@ -266,9 +265,8 @@ class Daemon(AuthJSONRPCServer):
         }
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
         self.lbry_ui_manager = UIManager(root)
-        self.lbry_file_metadata_manager = None
         self.lbry_file_manager = None
 
     @defer.inlineCallbacks
@@ -653,12 +651,11 @@ class Daemon(AuthJSONRPCServer):
 
     def _setup_lbry_file_manager(self):
         self.startup_status = STARTUP_STAGES[3]
-        self.lbry_file_metadata_manager = DBEncryptedFileMetadataManager(self.db_dir)
-        d = self.lbry_file_metadata_manager.setup()
+        d = self.stream_info_manager.setup()
 
         def set_lbry_file_manager():
             self.lbry_file_manager = EncryptedFileManager(
-                self.session, self.lbry_file_metadata_manager,
+                self.session, self.stream_info_manager,
                 self.sd_identifier, download_directory=self.download_directory)
             return self.lbry_file_manager.setup()
 
