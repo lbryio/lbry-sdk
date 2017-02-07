@@ -128,7 +128,7 @@ class DiskBlobManager(BlobManager):
 
     def blob_completed(self, blob, next_announce_time=None):
         if next_announce_time is None:
-            next_announce_time = time.time() + self.hash_reannounce_time
+            next_announce_time = self.get_next_announce_time()
         d = self._add_completed_blob(blob.blob_hash, blob.length, next_announce_time)
         d.addCallback(lambda _: self._immediate_announce([blob.blob_hash]))
         return d
@@ -137,8 +137,7 @@ class DiskBlobManager(BlobManager):
         return self._completed_blobs(blobhashes_to_check)
 
     def hashes_to_announce(self):
-        next_announce_time = time.time() + self.hash_reannounce_time
-        return self._get_blobs_to_announce(next_announce_time)
+        return self._get_blobs_to_announce()
 
     def creator_finished(self, blob_creator):
         log.debug("blob_creator.blob_hash: %s", blob_creator.blob_hash)
@@ -148,7 +147,7 @@ class DiskBlobManager(BlobManager):
         new_blob = self.blob_type(self.blob_dir, blob_creator.blob_hash, True, blob_creator.length)
         self.blobs[blob_creator.blob_hash] = new_blob
         self._immediate_announce([blob_creator.blob_hash])
-        next_announce_time = time.time() + self.hash_reannounce_time
+        next_announce_time = self.get_next_announce_time()
         d = self.blob_completed(new_blob, next_announce_time)
         return d
 
@@ -283,7 +282,7 @@ class DiskBlobManager(BlobManager):
                                      (blob, timestamp))
 
     @rerun_if_locked
-    def _get_blobs_to_announce(self, next_announce_time):
+    def _get_blobs_to_announce(self):
 
         def get_and_update(transaction):
             timestamp = time.time()
@@ -291,9 +290,12 @@ class DiskBlobManager(BlobManager):
                                     "where next_announce_time < ? and blob_hash is not null",
                                     (timestamp,))
             blobs = [b for b, in r.fetchall()]
+            next_announce_time = self.get_next_announce_time(len(blobs))
             transaction.execute(
                 "update blobs set next_announce_time = ? where next_announce_time < ?",
                 (next_announce_time, timestamp))
+            log.debug("Got %s blobs to announce, next announce time is in %s seconds",
+                        len(blobs), next_announce_time-time.time())
             return blobs
 
         return self.db_conn.runInteraction(get_and_update)
@@ -398,7 +400,7 @@ class TempBlobManager(BlobManager):
             blob_hash for blob_hash, announce_time in self.blob_next_announces.iteritems()
             if announce_time < now
         ]
-        next_announce_time = now + self.hash_reannounce_time
+        next_announce_time = self.get_next_announce_time(len(blobs))
         for b in blobs:
             self.blob_next_announces[b] = next_announce_time
         return defer.succeed(blobs)
@@ -415,7 +417,7 @@ class TempBlobManager(BlobManager):
         new_blob._verified = True
         self.blobs[blob_creator.blob_hash] = new_blob
         self._immediate_announce([blob_creator.blob_hash])
-        next_announce_time = time.time() + self.hash_reannounce_time
+        next_announce_time = self.get_next_announce_time()
         d = self.blob_completed(new_blob, next_announce_time)
         d.addCallback(lambda _: new_blob)
         return d
