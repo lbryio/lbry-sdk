@@ -145,9 +145,11 @@ class EncryptedFileReflectorClient(Protocol):
 
     def set_not_uploading(self):
         if self.next_blob_to_send is not None:
+            log.debug("Close %s", self.next_blob_to_send)
             self.next_blob_to_send.close_read_handle(self.read_handle)
             self.read_handle = None
             self.next_blob_to_send = None
+        self.file_sender.stopProducing()
         self.file_sender = None
         return defer.succeed(None)
 
