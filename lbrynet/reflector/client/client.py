@@ -250,7 +250,7 @@ class EncryptedFileReflectorClient(Protocol):
     def skip_missing_blob(self, err, blob_hash):
         log.warning("Can't reflect blob %s", str(blob_hash)[:16])
         err.trap(ValueError)
-        return self.send_next_request()
+        self.blob_hashes_to_send.append(blob_hash)
 
     def send_next_request(self):
         if self.file_sender is not None:
@@ -260,7 +260,8 @@ class EncryptedFileReflectorClient(Protocol):
             # open the sd blob to send
             blob = self.stream_descriptor
             d = self.open_blob_for_reading(blob)
-            d.addCallback(lambda _: self.send_descriptor_info())
+            d.addCallbacks(lambda _: self.send_descriptor_info(),
+                           lambda err: self.skip_missing_blob(err, blob.blob_hash))
             return d
         elif self.blob_hashes_to_send:
             # open the next blob to send
