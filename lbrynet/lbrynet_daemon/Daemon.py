@@ -984,14 +984,13 @@ class Daemon(AuthJSONRPCServer):
     def _reflect(self, lbry_file):
         if not lbry_file:
             return defer.fail(Exception("no lbry file given to reflect"))
-        stream_hash = lbry_file.stream_hash
-        if stream_hash is None:
+        if lbry_file.stream_hash is None:
             return defer.fail(Exception("no stream hash"))
-        log.info("Reflecting stream: %s" % stream_hash)
         factory = reflector.ClientFactory(
             self.session.blob_manager,
             self.lbry_file_manager.stream_info_manager,
-            stream_hash
+            lbry_file.stream_hash,
+            lbry_file.uri
         )
         return run_reflector_factory(factory)
 

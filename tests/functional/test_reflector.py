@@ -173,7 +173,8 @@ class TestReflector(unittest.TestCase):
             factory = reflector.ClientFactory(
                 self.session.blob_manager,
                 self.stream_info_manager,
-                self.stream_hash
+                self.stream_hash,
+                "fake_uri"
             )
 
             from twisted.internet import reactor

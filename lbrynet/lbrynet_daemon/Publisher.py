@@ -90,7 +90,8 @@ class Publisher(object):
         factory = reflector.ClientFactory(
             self.session.blob_manager,
             self.lbry_file_manager.stream_info_manager,
-            self.stream_hash
+            self.stream_hash,
+            self.publish_name
         )
         d = reactor.resolve(reflector_address)
         d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
