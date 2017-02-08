@@ -31,7 +31,6 @@ from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_ide
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.lbrynet_daemon.UIManager import UIManager
 from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
@@ -266,7 +265,6 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
-        self.lbry_ui_manager = UIManager(root)
         self.lbry_file_manager = None
 
     @defer.inlineCallbacks
@@ -303,11 +301,6 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager.start(Checker.CONNECTION_STATUS, 30)
         self.exchange_rate_manager.start()
 
-        if conf.settings['host_ui']:
-            self.lbry_ui_manager.update_checker.start(1800, now=False)
-            yield self.lbry_ui_manager.setup()
-        if launch_ui:
-            self.lbry_ui_manager.launch()
         yield self._initial_setup()
         yield threads.deferToThread(self._setup_data_directory)
         yield self._check_db_migration()
@@ -325,7 +318,6 @@ class Daemon(AuthJSONRPCServer):
     def _get_platform(self):
         if self.platform is None:
             self.platform = system_info.get_platform()
-            self.platform["ui_version"] = self.lbry_ui_manager.loaded_git_version
         return self.platform
 
     def _initial_setup(self):
@@ -527,8 +519,6 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager.shutdown()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
-        if self.lbry_ui_manager.update_checker.running:
-            self.lbry_ui_manager.update_checker.stop()
 
         self._clean_up_temp_files()
 
@@ -2061,28 +2051,6 @@ class Daemon(AuthJSONRPCServer):
 
         d = self._upload_log(log_type=log_type, exclude_previous=exclude_previous, force=force)
         d.addCallback(lambda _: self._render_response(True))
-        return d
-
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_configure_ui(self, branch=None, path=None, check_requirements=True):
-        """
-        Configure the UI being hosted
-
-        Args, optional:
-            'branch': a branch name on lbryio/lbry-web-ui
-            'path': path to a ui folder
-        """
-
-        if path is not None:
-            d = self.lbry_ui_manager.setup(
-                user_specified=path, check_requirements=check_requirements)
-        elif branch is not None:
-            d = self.lbry_ui_manager.setup(branch=branch, check_requirements=check_requirements)
-        else:
-            d = self.lbry_ui_manager.setup(check_requirements=check_requirements)
-
-        d.addCallback(lambda r: self._render_response(r))
-
         return d
 
     @AuthJSONRPCServer.auth_required
