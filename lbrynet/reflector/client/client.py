@@ -20,6 +20,7 @@ class EncryptedFileReflectorClient(Protocol):
         self.response_buff = ''
         self.outgoing_buff = ''
         self.blob_hashes_to_send = []
+        self.failed_blob_hashes = []
         self.next_blob_to_send = None
         self.read_handle = None
         self.sent_stream_info = False
@@ -54,10 +55,17 @@ class EncryptedFileReflectorClient(Protocol):
 
     def connectionLost(self, reason):
         if reason.check(error.ConnectionDone):
-            log.debug('Finished sending data via reflector')
+            if not self.needed_blobs:
+                log.info("Reflector has all blobs for %s", self.lbry_uri)
+            elif not self.reflected_blobs:
+                log.info("No more completed blobs for %s to reflect, %i are still needed",
+                         self.lbry_uri, len(self.needed_blobs))
+            else:
+                log.info('Finished sending reflector %i blobs for %s',
+                     len(self.reflected_blobs), self.lbry_uri)
             self.factory.finished_deferred.callback(self.reflected_blobs)
         else:
-            log.debug('Reflector finished: %s', reason)
+            log.info('Reflector finished for %s: %s', self.lbry_uri, reason)
             self.factory.finished_deferred.callback(reason)
 
     #  IConsumer stuff
@@ -248,9 +256,15 @@ class EncryptedFileReflectorClient(Protocol):
         self.send_request(r)
 
     def skip_missing_blob(self, err, blob_hash):
-        log.warning("Can't reflect blob %s", str(blob_hash)[:16])
         err.trap(ValueError)
-        self.blob_hashes_to_send.append(blob_hash)
+        if blob_hash not in self.failed_blob_hashes:
+            log.warning("Failed to reflect blob %s for %s, reason: %s",
+                        str(blob_hash)[:16], self.lbry_uri, err.getTraceback())
+            self.blob_hashes_to_send.append(blob_hash)
+            self.failed_blob_hashes.append(blob_hash)
+        else:
+            log.warning("Failed second try reflecting blob %s for %s, giving up, reason: %s",
+                        str(blob_hash)[:16], self.lbry_uri, err.getTraceback())
 
     def send_next_request(self):
         if self.file_sender is not None:

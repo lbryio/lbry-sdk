@@ -19,13 +19,6 @@ def _check_if_reflector_has_stream(lbry_file, reflector_server):
     return d
 
 
-def log_result(result, uri):
-    if len(result) == 0:
-        log.info("Reflector has all blobs for lbry://%s", uri)
-    else:
-        log.info("Reflected %i blobs for lbry://%s", len(result), uri)
-
-
 def _reflect_stream(lbry_file, reflector_server):
     reflector_address, reflector_port = reflector_server[0], reflector_server[1]
     factory = ClientFactory(
@@ -37,7 +30,6 @@ def _reflect_stream(lbry_file, reflector_server):
     d = reactor.resolve(reflector_address)
     d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
     d.addCallback(lambda _: factory.finished_deferred)
-    d.addCallback(log_result, lbry_file.uri)
     return d
 
 
