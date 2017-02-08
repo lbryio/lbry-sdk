@@ -74,7 +74,7 @@ To install:
  virtualenv lbry-venv
  source lbry-venv/bin/activate
  
- pip install -r requirements.txt
+ pip install -U -r requirements.txt
  pip install --editable .
  ```
 
