@@ -80,19 +80,13 @@ def get_sd_info(stream_info_manager, stream_hash, include_blobs):
     return d
 
 
+@defer.inlineCallbacks
 def publish_sd_blob(stream_info_manager, blob_manager, stream_hash):
     descriptor_writer = BlobStreamDescriptorWriter(blob_manager)
-
-    d = get_sd_info(stream_info_manager, stream_hash, True)
-    d.addCallback(descriptor_writer.create_descriptor)
-
-    def add_sd_blob_to_stream(sd_blob_hash):
-        d = stream_info_manager.save_sd_blob_hash_to_stream(stream_hash, sd_blob_hash)
-        d.addCallback(lambda _: sd_blob_hash)
-        return d
-
-    d.addCallback(add_sd_blob_to_stream)
-    return d
+    sd_info = yield get_sd_info(stream_info_manager, stream_hash, True)
+    sd_blob_hash = yield descriptor_writer.create_descriptor(sd_info)
+    yield stream_info_manager.save_sd_blob_hash_to_stream(stream_hash, sd_blob_hash)
+    defer.returnValue(sd_blob_hash)
 
 
 def create_plain_sd(stream_info_manager, stream_hash, file_name, overwrite_existing=False):
