@@ -24,14 +24,12 @@ def _reflect_stream(lbry_file, reflector_server):
     factory = ClientFactory(
         lbry_file.blob_manager,
         lbry_file.stream_info_manager,
-        lbry_file.stream_hash
+        lbry_file.stream_hash,
+        lbry_file.uri
     )
     d = reactor.resolve(reflector_address)
     d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
     d.addCallback(lambda _: factory.finished_deferred)
-    d.addCallback(lambda reflected_blobs: log.info("Reflected %i blobs for lbry://%s",
-                                                   len(reflected_blobs),
-                                                   lbry_file.uri))
     return d
 
 

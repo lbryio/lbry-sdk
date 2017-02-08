@@ -8,6 +8,11 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+### Changed
+ * add uri to stream reflector to de-obfuscate reflector logs
+### Fixed
+ * fix recursion depth error upon failed blob
+ * call stopProducing in reflector client file_sender when uploading is done
 
 ## [0.8.1] - 2017-02-01
 ### Changed
