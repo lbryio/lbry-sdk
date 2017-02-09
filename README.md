@@ -40,18 +40,28 @@ know all of the necessary chunks.
 The bundled LBRY application uses the lbrynet JSONRPC api found in `lbrynet.lbrynet_daemon.LBRYDaemon`. This api allows for applications and web services like the lbry browser UI to interact with lbrynet. If you've installed lbrynet, you can run `lbrynet-daemon` without running the app. While the app or `lbrynet-daemon` is running, you can use the following to show the help for all the available commands:
 
 ```
-from jsonrpc.proxy import JSONRPCProxy
+import sys
 
 try:
-  from lbrynet.conf import API_CONNECTION_STRING
+    from lbrynet import conf
+    from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
+except ImportError:
+    print "You don't have lbrynet installed!"
+    sys.exit(0)
+
+conf.initialize_settings()
+api = LBRYAPIClient.get_client()
+
+try:
+    status = api.status()
 except:
-  print "You don't have lbrynet installed!"
-  API_CONNECTION_STRING = "http://localhost:5279/lbryapi"
-  
-api = JSONRPCProxy.from_url(API_CONNECTION_STRING)
-status = api.status()
+    print "lbrynet-daemon isn't running!"
+    sys.exit(0)
+
 if not status['is_running']:
-      print status
+    print "lbrynet-daemon hasn't finished starting up, here's the status message:"
+    print status
+    sys.exit(0)
 else:
     for cmd in api.commands():
         print "%s:\n%s" % (cmd, api.help({'command': cmd}))
