@@ -830,33 +830,24 @@ class Daemon(AuthJSONRPCServer):
         helper = _ResolveNameHelper(self, name, force_refresh)
         return helper.get_deferred()
 
+    @defer.inlineCallbacks
     def _delete_lbry_file(self, lbry_file, delete_file=True):
-        d = self.lbry_file_manager.delete_lbry_file(lbry_file)
+        stream_hash = lbry_file.stream_hash
+        filename = os.path.join(self.download_directory, lbry_file.file_name)
 
-        def finish_deletion(lbry_file):
-            d = lbry_file.delete_data()
-            d.addCallback(lambda _: _delete_stream_data(lbry_file))
-            return d
-
-        def _delete_stream_data(lbry_file):
-            s_h = lbry_file.stream_hash
-            d = self.lbry_file_manager.get_count_for_stream_hash(s_h)
-            # TODO: could possibly be a timing issue here
-            d.addCallback(lambda c: self.stream_info_manager.delete_stream(s_h) if c == 0 else True)
-            if delete_file:
-                def remove_if_file():
-                    filename = os.path.join(self.download_directory, lbry_file.file_name)
-                    if os.path.isfile(filename):
-                        os.remove(filename)
-                    else:
-                        return defer.succeed(None)
-
-                d.addCallback(lambda _: remove_if_file)
-            return d
-
-        d.addCallback(lambda _: finish_deletion(lbry_file))
-        d.addCallback(lambda _: log.info("Delete lbry file"))
-        return d
+        yield self.lbry_file_manager.delete_lbry_file(lbry_file)
+        yield lbry_file.delete_data()
+        stream_count = yield self.lbry_file_manager.get_count_for_stream_hash(stream_hash)
+        if stream_count == 0:
+            yield self.stream_info_manager.delete_stream(stream_hash)
+        else:
+            log.warning("Can't delete stream info for %s", stream_hash)
+        if delete_file:
+            if os.path.isfile(filename):
+                os.remove(filename)
+                log.info("Deleted file %s", filename)
+        log.info("Deleted stream %s", stream_hash)
+        defer.returnValue(True)
 
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
