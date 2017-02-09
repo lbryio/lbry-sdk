@@ -42,9 +42,16 @@ class DHTHashAnnouncerTest(unittest.TestCase):
 
     def test_basic(self):
         self.announcer._announce_available_hashes()
+        self.assertEqual(self.announcer.hash_queue_size(),self.announcer.CONCURRENT_ANNOUNCERS)
         self.clock.advance(1)
         self.assertEqual(self.dht_node.blobs_announced, self.num_blobs)
         self.assertEqual(self.announcer.hash_queue_size(), 0)
 
-
+    def test_immediate_announce(self):
+        # Test that immediate announce puts a hash at the front of the queue
+        self.announcer._announce_available_hashes()
+        blob_hash = binascii.b2a_hex(os.urandom(32))
+        self.announcer.immediate_announce([blob_hash])
+        self.assertEqual(self.announcer.hash_queue_size(),self.announcer.CONCURRENT_ANNOUNCERS+1)
+        self.assertEqual(blob_hash, self.announcer.hash_queue[0][0])
 

@@ -39,7 +39,7 @@ class DHTHashAnnouncer(object):
 
     def immediate_announce(self, blob_hashes):
         if self.peer_port is not None:
-            return self._announce_hashes(blob_hashes)
+            return self._announce_hashes(blob_hashes, immediate=True)
         else:
             return defer.succeed(False)
 
@@ -56,7 +56,7 @@ class DHTHashAnnouncer(object):
         dl = defer.DeferredList(ds)
         return dl
 
-    def _announce_hashes(self, hashes):
+    def _announce_hashes(self, hashes, immediate=False):
         if not hashes:
             return
         log.debug('Announcing %s hashes', len(hashes))
@@ -67,7 +67,10 @@ class DHTHashAnnouncer(object):
         for h in hashes:
             announce_deferred = defer.Deferred()
             ds.append(announce_deferred)
-            self.hash_queue.append((h, announce_deferred))
+            if immediate:
+                self.hash_queue.appendleft((h, announce_deferred))
+            else:
+                self.hash_queue.append((h, announce_deferred))
         log.debug('There are now %s hashes remaining to be announced', self.hash_queue_size())
 
         def announce():
