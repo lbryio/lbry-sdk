@@ -48,12 +48,13 @@ class ConnectionManager(object):
         log.debug("%s starting", self._get_log_name())
         from twisted.internet import reactor
 
-        self.stopped = False
-
         if self._next_manage_call is not None and self._next_manage_call.active() is True:
             self._next_manage_call.cancel()
         self._next_manage_call = reactor.callLater(0, self._manage)
         return defer.succeed(True)
+
+    def _start(self):
+        self.stopped = False
 
     @defer.inlineCallbacks
     def stop(self):
@@ -67,6 +68,9 @@ class ConnectionManager(object):
             self._next_manage_call.cancel()
         self._next_manage_call = None
         yield self._close_peers()
+
+    def num_connected_peers(self):
+        return len(self._peer_connections) 
 
     def _close_peers(self):
 
