@@ -612,64 +612,50 @@ class Wallet(object):
         claim_out['fee'] = float(claim_out['fee'])
         return claim_out
 
-    """
-    Claim a name, update if name already claimed by user
-    @param name: name to claim
+    @defer.inlineCallbacks
+    def claim_name(self, name, bid, metadata):
+        """
+        Claim a name, or update if name already claimed by user
 
-    @param bid: bid amount
+        @param name: str, name to claim
+        @param bid: float, bid amount
+        @param metadata: Metadata compliant dict
 
-    @param m: metadata
+        @return: Deferred which returns a dict containing below items
+            txid - txid of the resulting transaction
+            nout - nout of the resulting claim
+            fee - transaction fee paid to make claim
+            claim_id -  claim id of the claim
+        """
 
-    @return: Deferred which returns a dict containing below items
-        txid - txid of the resulting transaction
-        nout - nout of the resulting claim
-        fee - transaction fee paid to make claim
-        claim_id -  claim id of the claim
+        _metadata = Metadata(metadata)
+        my_claim = yield self.get_my_claim(name)
 
-    """
+        if my_claim:
+            log.info("Updating claim")
+            if self.get_balance() < bid - my_claim['amount']:
+                raise InsufficientFundsError()
+            new_metadata = yield self.update_metadata(_metadata, my_claim['value'])
+            old_claim_outpoint = ClaimOutpoint(my_claim['txid'], my_claim['nOut'])
+            claim = yield self._send_name_claim_update(name, my_claim['claim_id'],
+                                                       old_claim_outpoint, new_metadata, bid)
+            claim['claim_id'] = my_claim['claim_id']
+        else:
+            log.info("Making a new claim")
+            if self.get_balance() < bid:
+                raise InsufficientFundsError()
+            claim = yield self._send_name_claim(name, _metadata, bid)
 
-    def claim_name(self, name, bid, m):
+        if not claim['success']:
+            msg = 'Claim to name {} failed: {}'.format(name, claim['reason'])
+            raise Exception(msg)
 
-        def _save_metadata(claim_out, metadata):
-            if not claim_out['success']:
-                msg = 'Claim to name {} failed: {}'.format(name, claim_out['reason'])
-                raise Exception(msg)
-            claim_out = self._process_claim_out(claim_out)
-            claim_outpoint = ClaimOutpoint(claim_out['txid'], claim_out['nout'])
-            log.info("Saving metadata for claim %s %d",
-                     claim_outpoint['txid'], claim_outpoint['nout'])
-            d = self._save_name_metadata(name, claim_outpoint, metadata['sources']['lbry_sd_hash'])
-            d.addCallback(lambda _: claim_out)
-            return d
+        claim = self._process_claim_out(claim)
+        claim_outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
+        log.info("Saving metadata for claim %s %d", claim['txid'], claim['nout'])
 
-        def _add_claim_id(claim_out, claim):
-            claim_out.update({'claim_id': claim['claim_id']})
-            return claim_out
-
-        def _claim_or_update(claim, metadata, _bid):
-            if not claim:
-                log.debug("No own claim yet, making a new one")
-                if self.get_balance() < _bid:
-                    raise InsufficientFundsError()
-                return self._send_name_claim(name, metadata, _bid)
-            else:
-                log.debug("Updating over own claim")
-                if self.get_balance() < _bid - claim['amount']:
-                    raise InsufficientFundsError()
-                d = self.update_metadata(metadata, claim['value'])
-                claim_outpoint = ClaimOutpoint(claim['txid'], claim['nOut'])
-                d.addCallback(
-                    lambda new_metadata: self._send_name_claim_update(name, claim['claim_id'],
-                                                                      claim_outpoint,
-                                                                      new_metadata, _bid))
-                d.addCallback(_add_claim_id, claim)
-                return d
-
-        meta = Metadata(m)
-        d = self.get_my_claim(name)
-        d.addCallback(lambda claim: _claim_or_update(claim, meta, bid))
-        d.addCallback(lambda claim_out: _save_metadata(claim_out, meta))
-        return d
+        yield self._save_name_metadata(name, claim_outpoint, _metadata['sources']['lbry_sd_hash'])
+        defer.returnValue(claim)
 
     def abandon_claim(self, txid, nout):
         def _parse_abandon_claim_out(claim_out):
