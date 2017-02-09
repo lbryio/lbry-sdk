@@ -1,6 +1,8 @@
 import os
 import sys
 import subprocess
+from contextlib import contextmanager
+
 
 def start(path):
     """
@@ -35,6 +37,7 @@ def reveal(path):
         subprocess.Popen(['explorer', '/select', path])
 
 
+@contextmanager
 def get_read_handle(path):
     """
     Get os independent read handle for a file
@@ -44,4 +47,6 @@ def get_read_handle(path):
         file_mode = 'rb'
     else:
         file_mode = 'r'
-    return open(path, file_mode)
+    read_handle = open(path, file_mode)
+    yield read_handle
+    read_handle.close()
