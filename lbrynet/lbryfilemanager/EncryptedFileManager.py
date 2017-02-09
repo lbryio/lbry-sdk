@@ -10,7 +10,6 @@ from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
 
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
-from lbrynet.core.Error import MissingLBRYFile
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
@@ -40,11 +39,11 @@ class EncryptedFileManager(object):
             self.download_directory = os.getcwd()
         log.debug("Download directory for EncryptedFileManager: %s", str(self.download_directory))
 
+    @defer.inlineCallbacks
     def setup(self):
-        d = self._open_db()
-        d.addCallback(lambda _: self._add_to_sd_identifier())
-        d.addCallback(lambda _: self._start_lbry_files())
-        return d
+        yield self._open_db()
+        yield self._add_to_sd_identifier()
+        yield self._start_lbry_files()
 
     def get_lbry_file_status(self, lbry_file):
         return self._get_lbry_file_status(lbry_file.rowid)
@@ -75,44 +74,29 @@ class EncryptedFileManager(object):
         self.sd_identifier.add_stream_downloader_factory(
             EncryptedFileStreamType, downloader_factory)
 
+    @defer.inlineCallbacks
     def _check_stream_is_managed(self, stream_hash):
         # check that all the streams in the stream_info_manager are also
         # tracked by lbry_file_manager and fix any streams that aren't.
-        def _check_rowid_result(rowid):
-            if rowid is not None:
-                return defer.succeed(True)
-            raise MissingLBRYFile
+        rowid = yield self._get_rowid_for_stream_hash(stream_hash)
+        if rowid is not None:
+            defer.returnValue(True)
+        rate = self.session.base_payment_rate_manager.min_blob_data_payment_rate
+        key, stream_name, file_name = yield self.stream_info_manager.get_stream_info(stream_hash)
+        log.warning("Trying to fix missing lbry file for %s", stream_name.decode('hex'))
+        yield self._save_lbry_file(stream_hash, rate)
 
-        def _fix_missing_file(err):
-            if err.check(MissingLBRYFile):
-                rate = self.session.base_payment_rate_manager.min_blob_data_payment_rate
-                d = self.stream_info_manager.get_stream_info(stream_hash)
-                d.addCallback(lambda info: log.warning("Trying to fix missing lbry file for %s",
-                                                       info[1].decode('hex')))
-                d.addCallback(lambda _: self._save_lbry_file(stream_hash, rate))
-                return d
-
-        d = self._get_rowid_for_stream_hash(stream_hash)
-        d.addCallback(_check_rowid_result)
-        d.addErrback(_fix_missing_file)
-        return d
-
+    @defer.inlineCallbacks
     def _check_stream_info_manager(self):
         def _iter_streams(stream_hashes):
             for stream_hash in stream_hashes:
-                d = self._check_stream_is_managed(stream_hash)
-                yield d
+                yield self._check_stream_is_managed(stream_hash)
 
-        def check_streams(stream_hashes):
-            log.debug("Checking %s streams", len(stream_hashes))
-            dl = defer.DeferredList(list(_iter_streams(stream_hashes)))
-            dl.addCallback(lambda r: [x[1] for x in r if x[0]])
-            return dl
+        stream_hashes = yield self.stream_info_manager.get_all_streams()
+        log.debug("Checking %s streams", len(stream_hashes))
+        yield defer.DeferredList(list(_iter_streams(stream_hashes)))
 
-        d = self.stream_info_manager.get_all_streams()
-        d.addCallback(check_streams)
-        return d
-
+    @defer.inlineCallbacks
     def _start_lbry_files(self):
         def set_options_and_restore(rowid, stream_hash, options):
             b_prm = self.session.base_payment_rate_manager
@@ -136,10 +120,9 @@ class EncryptedFileManager(object):
             log.info("Started %i lbry files", len(self.lbry_files))
             return True
 
-        d = self._check_stream_info_manager()
-        d.addCallback(lambda _: self._get_all_lbry_files())
-        d.addCallback(start_lbry_files)
-        return d
+        yield self._check_stream_info_manager()
+        files_and_options = yield self._get_all_lbry_files()
+        yield start_lbry_files(files_and_options)
 
     def start_lbry_file(self, rowid, stream_hash,
                         payment_rate_manager, blob_data_rate=None, upload_allowed=True,
@@ -293,8 +276,7 @@ class EncryptedFileManager(object):
     def _get_lbry_file_status(self, rowid):
         d = self.sql_db.runQuery("select status from lbry_file_options where rowid = ?",
                                  (rowid,))
-        d.addCallback(lambda r: (
-            r[0][0] if len(r) else None))
+        d.addCallback(lambda r: (r[0][0] if len(r) else None))
         return d
 
     @rerun_if_locked

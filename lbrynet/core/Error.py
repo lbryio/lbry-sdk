@@ -98,9 +98,3 @@ class InvalidAuthenticationToken(Exception):
 
 class NegotiationError(Exception):
     pass
-
-
-class MissingLBRYFile(Exception):
-    """
-    Raised by lbry file manager if stream hash has no associated lbry file
-    """
