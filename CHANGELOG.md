@@ -11,11 +11,12 @@ at anytime.
 ### Changed
  * add uri to stream reflector to de-obfuscate reflector logs
 ### Fixed
- * fix recursion depth error upon failed blob
- * call stopProducing in reflector client file_sender when uploading is done
- * ensure streams in stream_info_manager are saved in lbry_file_manager
- * [#470](https://github.com/lbryio/lbry/issues/470)
+ * Fix recursion depth error upon failed blob
+ * Call stopProducing in reflector client file_sender when uploading is done
+ * Ensure streams in stream_info_manager are saved in lbry_file_manager
+ * Fixed file_delete not deleting data from stream_info_manager [#470](https://github.com/lbryio/lbry/issues/470)
  * Fixed upload of bug reports to Slack ([#472](https://github.com/lbryio/lbry/issues/472))
+ * Fixed claim updates [#473](https://github.com/lbryio/lbry/issues/473)
 
 ## [0.8.1] - 2017-02-01
 ### Changed
