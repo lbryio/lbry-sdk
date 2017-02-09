@@ -16,7 +16,6 @@ from twisted.web import server
 from twisted.internet import defer, threads, error, reactor, task
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
-from jsonschema import ValidationError
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION as lbryum_version
@@ -24,7 +23,7 @@ from lbrynet import __version__ as lbrynet_version
 from lbrynet import conf, reflector, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.metadata.Fee import FeeValidator
-from lbrynet.metadata.Metadata import Metadata, verify_name_characters
+from lbrynet.metadata.Metadata import verify_name_characters
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
@@ -369,7 +368,7 @@ class Daemon(AuthJSONRPCServer):
             self.connection_status_code = CONNECTION_STATUS_NETWORK
 
     # claim_out is dictionary containing 'txid' and 'nout'
-    def _add_to_pending_claims(self, name, claim_out):
+    def _add_to_pending_claims(self, claim_out, name):
         txid = claim_out['txid']
         nout = claim_out['nout']
         log.info("Adding lbry://%s to pending claims, txid %s nout %d" % (name, txid, nout))
@@ -397,7 +396,7 @@ class Daemon(AuthJSONRPCServer):
             log.warning("Re-add %s to pending claims", name)
             txid, nout = self.pending_claims.pop(name)
             claim_out = {'txid': txid, 'nout': nout}
-            self._add_to_pending_claims(name, claim_out)
+            self._add_to_pending_claims(claim_out, name)
 
         def _process_lbry_file(name, lbry_file):
             # lbry_file is an instance of ManagedEncryptedFileDownloader or None
@@ -773,6 +772,26 @@ class Daemon(AuthJSONRPCServer):
         lbry_file = yield helper.setup_stream(stream_info)
         sd_hash, file_path = yield helper.wait_or_get_stream(stream_info, lbry_file)
         defer.returnValue((sd_hash, file_path))
+
+    @defer.inlineCallbacks
+    def _publish_stream(self, name, bid, metadata, file_path=None, fee=None):
+        publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
+        verify_name_characters(name)
+        if bid <= 0.0:
+            raise Exception("Invalid bid")
+        if fee:
+            metadata = yield publisher.add_fee_to_metadata(metadata, fee)
+        if not file_path:
+            claim_out = yield publisher.update_stream(name, bid, metadata)
+        else:
+            claim_out = yield publisher.publish_stream(name, file_path, bid, metadata)
+            yield threads.deferToThread(self._reflect, publisher.lbry_file)
+
+        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
+                 claim_out['nout'])
+        yield self._add_to_pending_claims(claim_out, name)
+        self.looping_call_manager.start(Checker.PENDING_CLAIM, 30)
+        defer.returnValue(claim_out)
 
     def add_stream(self, name, timeout, download_directory, file_name, stream_info):
         """Makes, adds and starts a stream"""
@@ -1640,16 +1659,17 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @AuthJSONRPCServer.auth_required
-    def jsonrpc_publish(self, name, file_path, bid, metadata, fee=None):
+    def jsonrpc_publish(self, name, bid, metadata, file_path=None, fee=None):
         """
         Make a new name claim and publish associated data to lbrynet
 
         Args:
-            'name': name to be claimed, string
-            'file_path': path to file to be associated with name, string
-            'bid': amount of credits to commit in this claim, float
-            'metadata': metadata dictionary
-            optional 'fee'
+            'name': str, name to be claimed, string
+            'bid': float, amount of credits to commit in this claim,
+            'metadata': dict, Metadata compliant (can be missing sources if a file is provided)
+            'file_path' (optional): str, path to file to be associated with name, if not given
+                                    the stream from your existing claim for the name will be used
+            'fee' (optional): dict, FeeValidator compliant
         Returns:
             'success' : True if claim was succesful , False otherwise
             'reason' : if not succesful, give reason
@@ -1659,17 +1679,6 @@ class Daemon(AuthJSONRPCServer):
             'claim_id' : claim id of the resulting transaction
         """
 
-        def _set_address(address, currency, m):
-            log.info("Generated new address for key fee: " + str(address))
-            m['fee'][currency]['address'] = address
-            return m
-
-        def _reflect_if_possible(sd_hash, claim_out):
-            d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
-            d.addCallback(self._reflect)
-            d.addCallback(lambda _: claim_out)
-            return d
-
         log.info("Publish: %s", {
             'name': name,
             'file_path': file_path,
@@ -1677,49 +1686,9 @@ class Daemon(AuthJSONRPCServer):
             'metadata': metadata,
             'fee': fee,
         })
-        verify_name_characters(name)
 
-        if bid <= 0.0:
-            return defer.fail(Exception("Invalid bid"))
-
-        try:
-            metadata = Metadata(metadata)
-            make_lbry_file = False
-            sd_hash = metadata['sources']['lbry_sd_hash']
-            log.info("Update publish for %s using existing stream", name)
-        except ValidationError:
-            make_lbry_file = True
-            sd_hash = None
-            if not file_path:
-                raise Exception("No file given to publish")
-            if not os.path.isfile(file_path):
-                raise Exception("Specified file for publish doesnt exist: %s" % file_path)
-
-        self.looping_call_manager.start(Checker.PENDING_CLAIM, 30)
-
-        d = self._resolve_name(name, force_refresh=True)
-        d.addErrback(lambda _: None)
-
-        if fee is not None:
-            metadata['fee'] = fee
-            assert len(metadata['fee']) == 1, "Too many fees"
-            for c in metadata['fee']:
-                if 'address' not in metadata['fee'][c]:
-                    d.addCallback(lambda _: self.session.wallet.get_new_address())
-                    d.addCallback(lambda addr: _set_address(addr, c, metadata))
-        else:
-            d.addCallback(lambda _: metadata)
-        if make_lbry_file:
-            pub = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
-            d.addCallback(lambda meta: pub.start(name, file_path, bid, meta))
-        else:
-            d.addCallback(lambda meta: self.session.wallet.claim_name(name, bid, meta))
-            if sd_hash:
-                d.addCallback(lambda claim_out: _reflect_if_possible(sd_hash, claim_out))
-
-        d.addCallback(lambda claim_out: self._add_to_pending_claims(name, claim_out))
+        d = self._publish_stream(name, bid, metadata, file_path, fee)
         d.addCallback(lambda r: self._render_response(r))
-
         return d
 
     @AuthJSONRPCServer.auth_required
