@@ -13,6 +13,7 @@ at anytime.
 ### Fixed
  * fix recursion depth error upon failed blob
  * call stopProducing in reflector client file_sender when uploading is done
+ * ensure streams in stream_info_manager are saved in lbry_file_manager
 
 ## [0.8.1] - 2017-02-01
 ### Changed
