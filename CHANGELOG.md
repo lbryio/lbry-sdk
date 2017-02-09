@@ -9,7 +9,9 @@ at anytime.
 
 ## [Unreleased]
 ### Changed
- * add uri to stream reflector to de-obfuscate reflector logs
+ * Add uri to stream reflector to de-obfuscate reflector logs
+ * Simplify lbrynet.lbrynet_daemon.Publisher
+ 
 ### Fixed
  * Fix recursion depth error upon failed blob
  * Call stopProducing in reflector client file_sender when uploading is done
