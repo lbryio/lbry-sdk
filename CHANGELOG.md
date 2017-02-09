@@ -15,6 +15,7 @@ at anytime.
  * call stopProducing in reflector client file_sender when uploading is done
  * ensure streams in stream_info_manager are saved in lbry_file_manager
  * [#470](https://github.com/lbryio/lbry/issues/470)
+ * Fixed upload of bug reports to Slack ([#472](https://github.com/lbryio/lbry/issues/472))
 
 ## [0.8.1] - 2017-02-01
 ### Changed
