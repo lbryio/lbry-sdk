@@ -33,3 +33,15 @@ def reveal(path):
         subprocess.Popen(['xdg-open', os.path.dirname(path)])
     elif sys.platform == 'win32':
         subprocess.Popen(['explorer', '/select', path])
+
+
+def get_read_handle(path):
+    """
+    Get os independent read handle for a file
+    """
+
+    if os.name == "nt":
+        file_mode = 'rb'
+    else:
+        file_mode = 'r'
+    return open(path, file_mode)

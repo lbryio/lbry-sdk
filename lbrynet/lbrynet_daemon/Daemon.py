@@ -369,7 +369,7 @@ class Daemon(AuthJSONRPCServer):
             self.connection_status_code = CONNECTION_STATUS_NETWORK
 
     # claim_out is dictionary containing 'txid' and 'nout'
-    def _add_to_pending_claims(self, name, claim_out):
+    def _add_to_pending_claims(self, claim_out, name):
         txid = claim_out['txid']
         nout = claim_out['nout']
         log.info("Adding lbry://%s to pending claims, txid %s nout %d" % (name, txid, nout))
@@ -397,7 +397,7 @@ class Daemon(AuthJSONRPCServer):
             log.warning("Re-add %s to pending claims", name)
             txid, nout = self.pending_claims.pop(name)
             claim_out = {'txid': txid, 'nout': nout}
-            self._add_to_pending_claims(name, claim_out)
+            self._add_to_pending_claims(claim_out, name)
 
         def _process_lbry_file(name, lbry_file):
             # lbry_file is an instance of ManagedEncryptedFileDownloader or None
@@ -1717,7 +1717,7 @@ class Daemon(AuthJSONRPCServer):
             if sd_hash:
                 d.addCallback(lambda claim_out: _reflect_if_possible(sd_hash, claim_out))
 
-        d.addCallback(lambda claim_out: self._add_to_pending_claims(name, claim_out))
+        d.addCallback(self._add_to_pending_claims, name)
         d.addCallback(lambda r: self._render_response(r))
 
         return d
