@@ -281,8 +281,10 @@ class EncryptedFileManager(object):
 
     @rerun_if_locked
     def _get_count_for_stream_hash(self, stream_hash):
-        return self.sql_db.runQuery("select count(*) from lbry_file_options where stream_hash = ?",
+        d = self.sql_db.runQuery("select count(*) from lbry_file_options where stream_hash = ?",
                                      (stream_hash,))
+        d.addCallback(lambda r: (r[0][0] if r else 0))
+        return d
 
     @rerun_if_locked
     def _get_rowid_for_stream_hash(self, stream_hash):
