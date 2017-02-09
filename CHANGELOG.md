@@ -13,7 +13,13 @@ at anytime.
 
 ## [0.8.3rc0] - 2017-02-10
 ### Changed
- * add uri to stream reflector to de-obfuscate reflector logs
+ * Convert EncryptedFileDownloader to inlineCallbacks
+ * Convert EncryptedFileManager to use inlineCallbacks
+ * Convert Daemon._delete_lbry_file to inlineCallbacks
+ * Add uri to stream reflector to de-obfuscate reflector logs
+ * Simplify lbrynet.lbrynet_daemon.Publisher
+ * Reflect streams in file manager looping call rather than in each file
+ 
 ### Fixed
  * Fix recursion depth error upon failed blob
  * Call stopProducing in reflector client file_sender when uploading is done
@@ -21,6 +27,8 @@ at anytime.
  * Fixed file_delete not deleting data from stream_info_manager [#470](https://github.com/lbryio/lbry/issues/470)
  * Fixed upload of bug reports to Slack ([#472](https://github.com/lbryio/lbry/issues/472))
  * Fixed claim updates [#473](https://github.com/lbryio/lbry/issues/473)
+ * Handle ConnectionLost error in reflector client
+ * Fix updating a claim where the stream doesn't change
 
 ## [0.8.1] - 2017-02-01
 ### Changed
