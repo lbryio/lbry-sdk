@@ -482,7 +482,7 @@ class Wallet(object):
             return defer.succeed(None)
 
         if 'error' in result:
-            log.warning("Got an error looking up a name: %s", result['error'])
+            log.warning("Got an error looking up lbry://%s: %s", name, result['error'])
             return Failure(UnknownNameError(name))
         _check_result_fields(result)
         try:
