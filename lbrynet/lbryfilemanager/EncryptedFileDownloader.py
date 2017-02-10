@@ -1,7 +1,6 @@
 """
 Download LBRY Files from LBRYnet and save them to disk.
 """
-import random
 import logging
 
 from zope.interface import implements
@@ -14,8 +13,6 @@ from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileDownloa
 from lbrynet.lbryfilemanager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
-from lbrynet.reflector import reupload
-from lbrynet import conf
 
 log = logging.getLogger(__name__)
 
@@ -70,14 +67,6 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             defer.returnValue(True)
         else:
             raise Exception("Unknown status for stream %s: %s", self.stream_hash, status)
-
-    @defer.inlineCallbacks
-    def _reupload(self):
-        if not conf.settings['reflector_reupload']:
-            defer.returnValue(None)
-        else:
-            reflector_server = random.choice(conf.settings['reflector_servers'])
-            yield reupload.check_and_restore_availability(self, reflector_server)
 
     @defer.inlineCallbacks
     def stop(self, err=None, change_status=True):

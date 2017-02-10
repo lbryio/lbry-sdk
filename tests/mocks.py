@@ -10,6 +10,15 @@ from lbrynet import conf
 
 KB = 2**10
 
+
+class FakeLBRYFile(object):
+    def __init__(self, blob_manager, stream_info_manager, stream_hash, uri="fake_uri"):
+        self.blob_manager = blob_manager
+        self.stream_info_manager = stream_info_manager
+        self.stream_hash = stream_hash
+        self.uri = "fake_uri"
+
+
 class Node(object):
     def __init__(self, *args, **kwargs):
         pass

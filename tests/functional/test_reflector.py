@@ -170,12 +170,10 @@ class TestReflector(unittest.TestCase):
             return d
 
         def send_to_server():
-            factory = reflector.ClientFactory(
-                self.session.blob_manager,
-                self.stream_info_manager,
-                self.stream_hash,
-                "fake_uri"
-            )
+            fake_lbry_file = mocks.FakeLBRYFile(self.session.blob_manager,
+                                                self.stream_info_manager,
+                                                self.stream_hash)
+            factory = reflector.ClientFactory(fake_lbry_file)
 
             from twisted.internet import reactor
             reactor.connectTCP('localhost', self.port, factory)

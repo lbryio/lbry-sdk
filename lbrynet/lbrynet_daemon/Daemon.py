@@ -2,7 +2,6 @@ import binascii
 import logging.handlers
 import mimetypes
 import os
-import random
 import re
 import base58
 import requests
@@ -20,8 +19,10 @@ from twisted.python.failure import Failure
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 from lbrynet import __version__ as lbrynet_version
-from lbrynet import conf, reflector, analytics
+from lbrynet import conf, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
+from lbrynet.reflector import reupload
+from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.metadata.Fee import FeeValidator
 from lbrynet.metadata.Metadata import verify_name_characters
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
@@ -437,13 +438,13 @@ class Daemon(AuthJSONRPCServer):
         if self.run_reflector_server:
             log.info("Starting reflector server")
             if self.reflector_port is not None:
-                reflector_factory = reflector.ServerFactory(
+                reflector_factory = reflector_server_factory(
                     self.session.peer_manager,
                     self.session.blob_manager
                 )
                 try:
-                    self.reflector_server_port = reactor.listenTCP(
-                        self.reflector_port, reflector_factory)
+                    self.reflector_server_port = reactor.listenTCP(self.reflector_port,
+                                                                   reflector_factory)
                     log.info('Started reflector on port %s', self.reflector_port)
                 except error.CannotListenError as e:
                     log.exception("Couldn't bind reflector to port %d", self.reflector_port)
@@ -785,7 +786,7 @@ class Daemon(AuthJSONRPCServer):
             claim_out = yield publisher.update_stream(name, bid, metadata)
         else:
             claim_out = yield publisher.publish_stream(name, file_path, bid, metadata)
-            yield threads.deferToThread(self._reflect, publisher.lbry_file)
+            yield threads.deferToThread(reupload.reflect_stream, publisher.lbry_file)
 
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
@@ -990,29 +991,6 @@ class Daemon(AuthJSONRPCServer):
                                    for l in self.lbry_file_manager.lbry_files
                                    ])
         return d
-
-    def _reflect(self, lbry_file):
-        if not lbry_file:
-            return defer.fail(Exception("no lbry file given to reflect"))
-        if lbry_file.stream_hash is None:
-            return defer.fail(Exception("no stream hash"))
-        factory = reflector.ClientFactory(
-            self.session.blob_manager,
-            self.lbry_file_manager.stream_info_manager,
-            lbry_file.stream_hash,
-            lbry_file.uri
-        )
-        return run_reflector_factory(factory)
-
-    def _reflect_blobs(self, blob_hashes):
-        if not blob_hashes:
-            return defer.fail(Exception("no lbry file given to reflect"))
-        log.info("Reflecting %i blobs" % len(blob_hashes))
-        factory = reflector.BlobClientFactory(
-            self.session.blob_manager,
-            blob_hashes
-        )
-        return run_reflector_factory(factory)
 
     ############################################################################
     #                                                                          #
@@ -2239,7 +2217,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.blob_manager.get_all_verified_blobs()
-        d.addCallback(self._reflect_blobs)
+        d.addCallback(reupload.reflect_blob_hashes, self.session.blob_manager)
         d.addCallback(lambda r: self._render_response(r))
         return d
 
@@ -2659,13 +2637,3 @@ def get_lbry_file_search_value(search_fields):
         if value:
             return searchtype, value
     raise NoValidSearch('{} is missing a valid search type'.format(search_fields))
-
-
-def run_reflector_factory(factory):
-    reflector_server = random.choice(conf.settings['reflector_servers'])
-    reflector_address, reflector_port = reflector_server
-    log.info("Start reflector client")
-    d = reactor.resolve(reflector_address)
-    d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
-    d.addCallback(lambda _: factory.finished_deferred)
-    return d

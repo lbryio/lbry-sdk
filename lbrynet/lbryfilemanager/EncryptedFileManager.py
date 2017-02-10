@@ -9,6 +9,7 @@ from twisted.enterprise import adbapi
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
 
+from lbrynet.reflector.reupload import reflect_stream
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
@@ -19,6 +20,16 @@ from lbrynet.core.sqlite_helpers import rerun_if_locked
 
 
 log = logging.getLogger(__name__)
+
+
+def safe_start_looping_call(looping_call, seconds=3600):
+    if not looping_call.running:
+        looping_call.start(seconds)
+
+
+def safe_stop_looping_call(looping_call):
+    if looping_call.running:
+        looping_call.stop()
 
 
 class EncryptedFileManager(object):
@@ -37,6 +48,7 @@ class EncryptedFileManager(object):
             self.download_directory = download_directory
         else:
             self.download_directory = os.getcwd()
+        self.lbry_file_reflector = task.LoopingCall(self.reflect_lbry_files)
         log.debug("Download directory for EncryptedFileManager: %s", str(self.download_directory))
 
     @defer.inlineCallbacks
@@ -44,6 +56,7 @@ class EncryptedFileManager(object):
         yield self._open_db()
         yield self._add_to_sd_identifier()
         yield self._start_lbry_files()
+        safe_start_looping_call(self.lbry_file_reflector)
 
     def get_lbry_file_status(self, lbry_file):
         return self._get_lbry_file_status(lbry_file.rowid)
@@ -97,8 +110,7 @@ class EncryptedFileManager(object):
 
         stream_hashes = yield self.stream_info_manager.get_all_streams()
         log.debug("Checking %s streams", len(stream_hashes))
-        check_streams = yield defer.DeferredList(list(_iter_streams(stream_hashes)))
-        defer.returnValue(check_streams)
+        yield defer.DeferredList(list(_iter_streams(stream_hashes)))
 
     @defer.inlineCallbacks
     def _restore_lbry_file(self, lbry_file):
@@ -137,8 +149,8 @@ class EncryptedFileManager(object):
                                                    self, payment_rate_manager, self.session.wallet,
                                                    download_directory, upload_allowed,
                                                    file_name=file_name)
-        self.lbry_files.append(lbry_file)
         yield lbry_file.set_stream_info()
+        self.lbry_files.append(lbry_file)
         defer.returnValue(lbry_file)
 
     @defer.inlineCallbacks
@@ -207,8 +219,17 @@ class EncryptedFileManager(object):
         else:
             return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
+    def _reflect_lbry_files(self):
+        for lbry_file in self.lbry_files:
+            yield reflect_stream(lbry_file)
+
+    @defer.inlineCallbacks
+    def reflect_lbry_files(self):
+        yield defer.DeferredList(list(self._reflect_lbry_files()))
+
     @defer.inlineCallbacks
     def stop(self):
+        safe_stop_looping_call(self.lbry_file_reflector)
         yield defer.DeferredList(list(self._stop_lbry_files()))
         yield self.sql_db.close()
         self.sql_db = None
