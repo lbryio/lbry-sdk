@@ -8,6 +8,8 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+
+## [0.8.3rc0] - 2017-02-10
 ### Changed
  * add uri to stream reflector to de-obfuscate reflector logs
 ### Fixed
