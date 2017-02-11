@@ -254,11 +254,13 @@ class KademliaProtocol(protocol.DatagramProtocol):
         del self._call_later_list[key]
         if self.transport:
             try:
-                # i'm scared this may swallow important errors, but i get a million of these
-                # on Linux and it doesnt seem to affect anything  -grin
                 self.transport.write(txData, address)
             except socket.error as err:
-                if err.errno != errno.EWOULDBLOCK:
+                if err.errno == errno.EWOULDBLOCK:
+                    # i'm scared this may swallow important errors, but i get a million of these
+                    # on Linux and it doesnt seem to affect anything  -grin
+                    log.warning("Can't send data to dht: EWOULDBLOCK")
+                else:
                     raise err
 
     def _sendResponse(self, contact, rpcID, response):
