@@ -114,29 +114,28 @@ class EncryptedFileManager(object):
         yield defer.DeferredList(list(_iter_streams(stream_hashes)))
 
     @defer.inlineCallbacks
-    def _restore_lbry_file(self, lbry_file):
-        try:
-            yield lbry_file.restore()
-        except Exception as err:
-            log.error("Failed to start stream: %s, error: %s", lbry_file.stream_hash, err)
-            self.lbry_files.remove(lbry_file)
-            # TODO: delete stream without claim instead of just removing from manager?
-
-    @defer.inlineCallbacks
     def _start_lbry_files(self):
-        b_prm = self.session.base_payment_rate_manager
-        payment_rate_manager = NegotiatedPaymentRateManager(b_prm, self.session.blob_tracker)
         yield self._check_stream_info_manager()
-        lbry_files_and_options = yield self._get_all_lbry_files()
-        dl = []
-        for rowid, stream_hash, options in lbry_files_and_options:
-            lbry_file = yield self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
-                                                   blob_data_rate=options)
-            dl.append(self._restore_lbry_file(lbry_file))
-            log.debug("Started %s", lbry_file)
-        self.lbry_files_setup_deferred = defer.DeferredList(dl)
+        files_and_options = yield self._get_all_lbry_files()
+        yield defer.DeferredList([
+            self._set_options_and_restore(rowid, stream_hash, options)
+            for rowid, stream_hash, options in files_and_options
+        ])
         log.info("Started %i lbry files", len(self.lbry_files))
         defer.returnValue(True)
+
+    @defer.inlineCallbacks
+    def _set_options_and_restore(self, rowid, stream_hash, options):
+        try:
+            b_prm = self.session.base_payment_rate_manager
+            payment_rate_manager = NegotiatedPaymentRateManager(
+                b_prm, self.session.blob_tracker)
+            downloader = yield self.start_lbry_file(
+                rowid, stream_hash, payment_rate_manager, blob_data_rate=options)
+            yield downloader.restore()
+        except Exception:
+            log.exception('An error occurred while starting a lbry file (%s, %s, %s)',
+                          rowid, stream_hash, options)
 
     @defer.inlineCallbacks
     def start_lbry_file(self, rowid, stream_hash,
