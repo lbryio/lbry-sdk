@@ -11,6 +11,10 @@ at anytime.
 ### Changed
  * Remove unused upload_allowed option
 
+### Fixed
+ * add misssing traceback to logging
+
+
 ## [0.8.3] - 2017-02-15
 ### Fixed
  * Get lbry files with pending claims
