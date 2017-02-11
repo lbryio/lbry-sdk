@@ -144,16 +144,23 @@ class EncryptedFileManager(object):
         if not download_directory:
             download_directory = self.download_directory
         payment_rate_manager.min_blob_data_payment_rate = blob_data_rate
-        lbry_file = ManagedEncryptedFileDownloader(rowid, stream_hash, self.session.peer_finder,
-                                                   self.session.rate_limiter,
-                                                   self.session.blob_manager,
-                                                   self.stream_info_manager,
-                                                   self, payment_rate_manager, self.session.wallet,
-                                                   download_directory, upload_allowed,
-                                                   file_name=file_name)
-        yield lbry_file.set_stream_info()
-        self.lbry_files.append(lbry_file)
-        defer.returnValue(lbry_file)
+        lbry_file_downloader = ManagedEncryptedFileDownloader(
+            rowid,
+            stream_hash,
+            self.session.peer_finder,
+            self.session.rate_limiter,
+            self.session.blob_manager,
+            self.stream_info_manager,
+            self,
+            payment_rate_manager,
+            self.session.wallet,
+            download_directory,
+            upload_allowed,
+            file_name=file_name
+        )
+        yield lbry_file_downloader.set_stream_info()
+        self.lbry_files.append(lbry_file_downloader)
+        defer.returnValue(lbry_file_downloader)
 
     @defer.inlineCallbacks
     def _stop_lbry_file(self, lbry_file):
