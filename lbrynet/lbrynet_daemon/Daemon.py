@@ -45,7 +45,7 @@ from lbrynet.core.Wallet import LBRYumWallet, SqliteStorage
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.core.Error import InsufficientFundsError
+from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
 
 log = logging.getLogger(__name__)
 
@@ -938,14 +938,14 @@ class Daemon(AuthJSONRPCServer):
         fee_amount = 0.0 if fee is None else fee.amount
         return data_cost + fee_amount
 
+    @defer.inlineCallbacks
     def get_est_cost_from_name(self, name):
         """
         Resolve a name and return the estimated stream cost
         """
-
-        d = self._resolve_name(name)
-        d.addCallback(self._get_est_cost_from_metadata, name)
-        return d
+        metadata = yield self._resolve_name(name)
+        cost = yield self._get_est_cost_from_metadata(metadata, name)
+        defer.returnValue(cost)
 
     def get_est_cost(self, name, size=None):
         """Get a cost estimate for a lbry stream, if size is not provided the
@@ -1404,6 +1404,7 @@ class Daemon(AuthJSONRPCServer):
         else:
             return self._get_lbry_file(searchtype, value)
 
+    @defer.inlineCallbacks
     def jsonrpc_resolve_name(self, name, force=False):
         """
         Resolve stream info from a LBRY uri
@@ -1411,15 +1412,20 @@ class Daemon(AuthJSONRPCServer):
         Args:
             'name': name to look up, string, do not include lbry:// prefix
         Returns:
-            metadata from name claim
+            metadata from name claim or None if the name is not known
         """
 
         if not name:
-            return self._render_response(None)
+            # TODO: seems like we should raise an error here
+            defer.returnValue(None)
 
-        d = self._resolve_name(name, force_refresh=force)
-        d.addCallback(self._render_response)
-        return d
+        try:
+            metadata = yield self._resolve_name(name, force_refresh=force)
+        except UnknownNameError:
+            log.info('Name %s is not known', name)
+            defer.returnValue(None)
+        else:
+            defer.returnValue(metadata)
 
     def jsonrpc_get_claim_info(self, **kwargs):
         """
@@ -1619,6 +1625,7 @@ class Daemon(AuthJSONRPCServer):
         """
         return self.jsonrpc_stream_cost_estimate(**kwargs)
 
+    @defer.inlineCallbacks
     def jsonrpc_stream_cost_estimate(self, name, size=None):
         """
         Get estimated cost for a lbry stream
@@ -1629,10 +1636,8 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             estimated cost
         """
-
-        d = self.get_est_cost(name, size)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+        cost = yield self.get_est_cost(name, size)
+        defer.returnValue(cost)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_publish(self, name, bid, metadata, file_path=None, fee=None):
