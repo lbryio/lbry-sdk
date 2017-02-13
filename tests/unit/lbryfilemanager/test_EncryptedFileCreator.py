@@ -34,7 +34,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
 
     def create_file(self, filename):
         session = mock.Mock(spec=Session.Session)(None, None)
-        hash_announcer = mock.Mock(spec=DHTHashAnnouncer.DHTHashAnnouncer)(None, None)
+        hash_announcer = DHTHashAnnouncer.DHTHashAnnouncer(None, None)
         session.blob_manager = BlobManager.TempBlobManager(hash_announcer)
         session.db_dir = self.tmp_dir
         manager = mock.Mock(spec=EncryptedFileManager.EncryptedFileManager)()

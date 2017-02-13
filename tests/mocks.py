@@ -97,6 +97,9 @@ class Announcer(object):
     def __init__(self, *args):
         pass
 
+    def hash_queue_size(self):
+        return 0
+
     def add_supplier(self, supplier):
         pass
 
