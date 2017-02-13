@@ -23,6 +23,7 @@ notifications:
 branches:
   only: 
     - master
+    - /tags.*/
 
 cache:
   directories:
