@@ -9,6 +9,14 @@ def get_default_price_model(blob_tracker, base_price, **kwargs):
     return MeanAvailabilityWeightedPrice(blob_tracker, base_price, **kwargs)
 
 
+class ZeroPrice(object):
+    def __init__(self):
+        self.base_price = 0.0
+
+    def calculate_price(self, blob):
+        return 0.0
+
+
 class MeanAvailabilityWeightedPrice(object):
     """Calculate mean-blob-availability and stream-position weighted price for a blob
 
