@@ -1,7 +1,5 @@
 import logging
 import os
-
-from copy import deepcopy
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
@@ -15,7 +13,6 @@ INITIALIZING_CODE = 'initializing'
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'
 DOWNLOAD_TIMEOUT_CODE = 'timeout'
 DOWNLOAD_RUNNING_CODE = 'running'
-# TODO: is this ever used?
 DOWNLOAD_STOPPED_CODE = 'stopped'
 STREAM_STAGES = [
     (INITIALIZING_CODE, 'Initializing'),
@@ -29,144 +26,160 @@ STREAM_STAGES = [
 log = logging.getLogger(__name__)
 
 
+def safe_start(looping_call):
+    if not looping_call.running:
+        looping_call.start(1)
+
+
+def safe_stop(looping_call):
+    if looping_call.running:
+        looping_call.stop()
+
+
 class GetStream(object):
-    def __init__(self, sd_identifier, session, wallet,
-                 lbry_file_manager, exchange_rate_manager,
-                 max_key_fee, data_rate=0.5, timeout=None,
-                 download_directory=None, file_name=None):
-        if timeout is None:
-            timeout = conf.settings['download_timeout']
-        self.wallet = wallet
-        self.resolved_name = None
-        self.description = None
-        self.fee = None
-        self.data_rate = data_rate
+    def __init__(self, sd_identifier, session, wallet, lbry_file_manager, exchange_rate_manager,
+                 max_key_fee, data_rate=None, timeout=None, download_directory=None,
+                 file_name=None):
+        self.timeout = timeout or conf.settings['download_timeout']
+        self.data_rate = data_rate or conf.settings['data_rate']
+        self.max_key_fee = max_key_fee or conf.settings['max_key_fee'][1]
+        self.download_directory = download_directory or conf.settings['download_directory']
         self.file_name = file_name
+        self.timeout_counter = 0
+        self.code = None
+        self.sd_hash = None
+        self.wallet = wallet
         self.session = session
         self.exchange_rate_manager = exchange_rate_manager
         self.payment_rate_manager = self.session.payment_rate_manager
         self.lbry_file_manager = lbry_file_manager
         self.sd_identifier = sd_identifier
-        self.sd_hash = None
-        self.max_key_fee = max_key_fee
-        self.stream_info = None
-        self.stream_info_manager = None
-        self._d = defer.Deferred(None)
-        self.timeout = timeout
-        self.timeout_counter = 0
-        self.download_directory = download_directory
-        self.download_path = None
         self.downloader = None
-        # fired after the metadata has been downloaded and the
-        # actual file has been started
-        self.finished = defer.Deferred(None)
         self.checker = LoopingCall(self.check_status)
-        self.code = STREAM_STAGES[0]
+
+        # fired when the download is complete
+        self.finished_deferred = defer.Deferred(None)
+        # fired after the metadata and the first data blob have been downloaded
+        self.data_downloading_deferred = defer.Deferred(None)
+
+    @property
+    def download_path(self):
+        return os.path.join(self.download_directory, self.downloader.file_name)
+
+    def _check_status(self, status):
+        if status.num_completed and not self.data_downloading_deferred.called:
+            self.data_downloading_deferred.callback(True)
+        if self.data_downloading_deferred.called:
+            safe_stop(self.checker)
+        else:
+            log.info("Downloading stream data (%i seconds)", self.timeout_counter)
 
     def check_status(self):
+        """
+        Check if we've got the first data blob in the stream yet
+        """
+
         self.timeout_counter += 1
+        if self.timeout_counter >= self.timeout:
+            if not self.data_downloading_deferred.called:
+                self.data_downloading_deferred.errback(Exception("Timeout"))
+            safe_stop(self.checker)
+        elif self.downloader:
+            d = self.downloader.status()
+            d.addCallback(self._check_status)
+        else:
+            log.info("Downloading stream descriptor blob (%i seconds)", self.timeout_counter)
 
-        # download_path is set after the sd blob has been downloaded
-        if self.download_path:
-            self.checker.stop()
-            self.finished.callback((True, self.sd_hash, self.download_path))
-
-        elif self.timeout_counter >= self.timeout:
-            log.info("Timeout downloading lbry://%s", self.resolved_name)
-            self.checker.stop()
-            self._d.cancel()
-            self.code = STREAM_STAGES[4]
-            self.finished.callback((False, None, None))
-
-    def _convert_max_fee(self):
+    def convert_max_fee(self):
         max_fee = FeeValidator(self.max_key_fee)
         if max_fee.currency_symbol == "LBC":
             return max_fee.amount
         return self.exchange_rate_manager.to_lbc(self.max_key_fee).amount
 
+    def set_status(self, status, name):
+        log.info("Download lbry://%s status changed to %s" % (name, status))
+        self.code = next(s for s in STREAM_STAGES if s[0] == status)
+
+    def check_fee(self, fee):
+        validated_fee = FeeValidator(fee)
+        max_key_fee = self.convert_max_fee()
+        converted_fee = self.exchange_rate_manager.to_lbc(validated_fee).amount
+        if converted_fee > self.wallet.get_balance():
+            raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee)
+        if converted_fee > max_key_fee:
+            raise KeyFeeAboveMaxAllowed('Key fee %s above max allowed %s' % (converted_fee,
+                                                                             max_key_fee))
+        return validated_fee
+
+    def get_downloader_factory(self, factories):
+        for factory in factories:
+            if isinstance(factory, ManagedEncryptedFileDownloaderFactory):
+                return factory
+        raise Exception('No suitable factory was found in {}'.format(factories))
+
+    @defer.inlineCallbacks
+    def get_downloader(self, factory, stream_metadata):
+        downloader_options = [self.data_rate, True]
+        downloader = yield factory.make_downloader(stream_metadata, downloader_options,
+                                      self.payment_rate_manager,
+                                      download_directory=self.download_directory,
+                                      file_name=self.file_name)
+        defer.returnValue(downloader)
+
+    def _pay_key_fee(self, address, fee_lbc, name):
+        log.info("Pay key fee %f --> %s", fee_lbc, address)
+        reserved_points = self.wallet.reserve_points(address, fee_lbc)
+        if reserved_points is None:
+            raise InsufficientFundsError('Unable to pay the key fee of %s for %s' % (fee_lbc, name))
+        return self.wallet.send_points_to_address(reserved_points, fee_lbc)
+
+    @defer.inlineCallbacks
+    def pay_key_fee(self, fee, name):
+        if fee is not None:
+            fee_lbc = self.exchange_rate_manager.to_lbc(fee).amount
+            yield self._pay_key_fee(fee.address, fee_lbc, name)
+        else:
+            defer.returnValue(None)
+
+    @defer.inlineCallbacks
+    def finish(self, results, name):
+        self.set_status(DOWNLOAD_STOPPED_CODE, name)
+        log.info("Finished downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6],
+                 self.download_path)
+        safe_stop(self.checker)
+        status = yield self.downloader.status()
+        self._check_status(status)
+        defer.returnValue(self.download_path)
+
+    @defer.inlineCallbacks
+    def download(self, stream_info, name):
+        self.set_status(INITIALIZING_CODE, name)
+        self.sd_hash = stream_info['sources']['lbry_sd_hash']
+        if 'fee' in stream_info:
+            fee = self.check_fee(stream_info['fee'])
+        else:
+            fee = None
+
+        self.set_status(DOWNLOAD_METADATA_CODE, name)
+        sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager)
+        stream_metadata = yield self.sd_identifier.get_metadata_for_sd_blob(sd_blob)
+        factory = self.get_downloader_factory(stream_metadata.factories)
+        self.downloader = yield self.get_downloader(factory, stream_metadata)
+
+        self.set_status(DOWNLOAD_RUNNING_CODE, name)
+        if fee:
+            yield self.pay_key_fee(fee, name)
+        log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
+        self.finished_deferred = self.downloader.start()
+        self.finished_deferred.addCallback(self.finish, name)
+        yield self.data_downloading_deferred
+
+    @defer.inlineCallbacks
     def start(self, stream_info, name):
-        def _cancel(err):
-            # this callback sequence gets cancelled in check_status if
-            # it takes too long when that happens, we want the logic
-            # to live in check_status
-            if err.check(defer.CancelledError):
-                return
-            if self.checker:
-                self.checker.stop()
-            self.finished.errback(err)
-
-        def _set_status(x, status):
-            log.info("Download lbry://%s status changed to %s" % (self.resolved_name, status))
-            self.code = next(s for s in STREAM_STAGES if s[0] == status)
-            return x
-
-        def get_downloader_factory(metadata):
-            for factory in metadata.factories:
-                if isinstance(factory, ManagedEncryptedFileDownloaderFactory):
-                    return factory, metadata
-            raise Exception('No suitable factory was found in {}'.format(metadata.factories))
-
-        def make_downloader(args):
-            factory, metadata = args
-            return factory.make_downloader(metadata,
-                                           [self.data_rate, True],
-                                           self.payment_rate_manager,
-                                           download_directory=self.download_directory,
-                                           file_name=self.file_name)
-
-        self.resolved_name = name
-        self.stream_info = deepcopy(stream_info)
-        self.description = self.stream_info['description']
-        self.sd_hash = self.stream_info['sources']['lbry_sd_hash']
-
-        if 'fee' in self.stream_info:
-            self.fee = FeeValidator(self.stream_info['fee'])
-            max_key_fee = self._convert_max_fee()
-            converted_fee = self.exchange_rate_manager.to_lbc(self.fee).amount
-            if converted_fee > self.wallet.get_balance():
-                msg = "Insufficient funds to download lbry://{}. Need {:0.2f}, have {:0.2f}".format(
-                    self.resolved_name, converted_fee, self.wallet.get_balance())
-                raise InsufficientFundsError(msg)
-            if converted_fee > max_key_fee:
-                msg = "Key fee {:0.2f} above limit of {:0.2f} didn't download lbry://{}".format(
-                    converted_fee, max_key_fee, self.resolved_name)
-                raise KeyFeeAboveMaxAllowed(msg)
-            log.info(
-                "Key fee %f below limit of %f, downloading lbry://%s",
-                converted_fee, max_key_fee, self.resolved_name)
-
-        self.checker.start(1)
-
-        self._d.addCallback(lambda _: _set_status(None, DOWNLOAD_METADATA_CODE))
-        self._d.addCallback(lambda _: download_sd_blob(
-            self.session, self.sd_hash, self.payment_rate_manager))
-        self._d.addCallback(self.sd_identifier.get_metadata_for_sd_blob)
-        self._d.addCallback(lambda r: _set_status(r, DOWNLOAD_RUNNING_CODE))
-        self._d.addCallback(get_downloader_factory)
-        self._d.addCallback(make_downloader)
-        self._d.addCallbacks(self._start_download, _cancel)
-        self._d.callback(None)
-
-        return self.finished
-
-    def _start_download(self, downloader):
-        log.info('Starting download for %s', self.resolved_name)
-        self.downloader = downloader
-        self.download_path = os.path.join(downloader.download_directory, downloader.file_name)
-
-        d = self._pay_key_fee()
-        d.addCallback(lambda _: log.info(
-            "Downloading %s --> %s", self.sd_hash, self.downloader.file_name))
-        d.addCallback(lambda _: self.downloader.start())
-
-    def _pay_key_fee(self):
-        if self.fee is not None:
-            fee_lbc = self.exchange_rate_manager.to_lbc(self.fee).amount
-            reserved_points = self.wallet.reserve_points(self.fee.address, fee_lbc)
-            if reserved_points is None:
-                log.warning('Unable to pay the key fee of %s for %s', fee_lbc, self.resolved_name)
-                # TODO: If we get here, nobody will know that there was an error
-                #       as nobody actually cares about self._d
-                return defer.fail(InsufficientFundsError())
-            return self.wallet.send_points_to_address(reserved_points, fee_lbc)
-        return defer.succeed(None)
+        try:
+            safe_start(self.checker)
+            yield self.download(stream_info, name)
+            defer.returnValue(self.download_path)
+        except Exception as err:
+            safe_stop(self.checker)
+            raise err

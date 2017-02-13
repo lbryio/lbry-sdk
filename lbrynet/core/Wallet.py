@@ -482,7 +482,7 @@ class Wallet(object):
             return defer.succeed(None)
 
         if 'error' in result:
-            log.warning("Got an error looking up a name: %s", result['error'])
+            log.warning("Got an error looking up lbry://%s: %s", name, result['error'])
             return Failure(UnknownNameError(name))
         _check_result_fields(result)
         try:
@@ -657,18 +657,20 @@ class Wallet(object):
         yield self._save_name_metadata(name, claim_outpoint, _metadata['sources']['lbry_sd_hash'])
         defer.returnValue(claim)
 
+    @defer.inlineCallbacks
     def abandon_claim(self, txid, nout):
         def _parse_abandon_claim_out(claim_out):
             if not claim_out['success']:
-                msg = 'Abandon of {}:{} failed: {}'.format(txid, nout, claim_out['resason'])
+                msg = 'Abandon of {}:{} failed: {}'.format(txid, nout, claim_out['reason'])
                 raise Exception(msg)
             claim_out = self._process_claim_out(claim_out)
+            log.info("Abandoned claim tx %s (n: %i) --> %s", txid, nout, claim_out)
             return defer.succeed(claim_out)
 
         claim_outpoint = ClaimOutpoint(txid, nout)
-        d = self._abandon_claim(claim_outpoint)
-        d.addCallback(lambda claim_out: _parse_abandon_claim_out(claim_out))
-        return d
+        claim_out = yield self._abandon_claim(claim_outpoint)
+        result = yield _parse_abandon_claim_out(claim_out)
+        defer.returnValue(result)
 
     def support_claim(self, name, claim_id, amount):
         def _parse_support_claim_out(claim_out):

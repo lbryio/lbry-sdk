@@ -1,45 +1,33 @@
-import logging
-from twisted.internet import reactor
-from twisted.internet.error import ConnectionLost, ConnectionDone
-from lbrynet.reflector import BlobClientFactory, ClientFactory
+import random
 
-log = logging.getLogger(__name__)
-
-
-def _check_if_reflector_has_stream(lbry_file, reflector_server):
-    reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-    factory = BlobClientFactory(
-        lbry_file.blob_manager,
-        [lbry_file.sd_hash]
-    )
-    d = reactor.resolve(reflector_address)
-    d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
-    d.addCallback(lambda _: factory.finished_deferred)
-    d.addCallback(lambda _: not factory.sent_blobs)
-    return d
+from twisted.internet import reactor, defer
+from lbrynet import conf
+from lbrynet.reflector import ClientFactory, BlobClientFactory
 
 
+@defer.inlineCallbacks
 def _reflect_stream(lbry_file, reflector_server):
     reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-    factory = ClientFactory(
-        lbry_file.blob_manager,
-        lbry_file.stream_info_manager,
-        lbry_file.stream_hash,
-        lbry_file.uri
-    )
-    d = reactor.resolve(reflector_address)
-    d.addCallback(lambda ip: reactor.connectTCP(ip, reflector_port, factory))
-    d.addCallback(lambda _: factory.finished_deferred)
-    return d
+    factory = ClientFactory(lbry_file)
+    ip = yield reactor.resolve(reflector_address)
+    yield reactor.connectTCP(ip, reflector_port, factory)
+    yield factory.finished_deferred
 
 
-def _catch_error(err, uri):
-    msg = "An error occurred while checking availability for lbry://%s: %s"
-    log.error(msg, uri, err.getTraceback())
+@defer.inlineCallbacks
+def _reflect_blobs(blob_manager, blob_hashes, reflector_server):
+    reflector_address, reflector_port = reflector_server[0], reflector_server[1]
+    factory = BlobClientFactory(blob_manager, blob_hashes)
+    ip = yield reactor.resolve(reflector_address)
+    yield reactor.connectTCP(ip, reflector_port, factory)
+    yield factory.finished_deferred
 
 
-def check_and_restore_availability(lbry_file, reflector_server):
-    d = _reflect_stream(lbry_file, reflector_server)
-    d.addErrback(lambda err: err.trap(ConnectionDone, ConnectionLost))
-    d.addErrback(_catch_error, lbry_file.uri)
-    return d
+def reflect_stream(lbry_file):
+    reflector_server = random.choice(conf.settings['reflector_servers'])
+    return _reflect_stream(lbry_file, reflector_server)
+
+
+def reflect_blob_hashes(blob_hashes, blob_manager):
+    reflector_server = random.choice(conf.settings['reflector_servers'])
+    return _reflect_blobs(blob_manager, blob_hashes, reflector_server)
