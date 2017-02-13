@@ -19,6 +19,9 @@ at anytime.
  * Add uri to stream reflector to de-obfuscate reflector logs
  * Simplify lbrynet.lbrynet_daemon.Publisher
  * Reflect streams in file manager looping call rather than in each file
+ * Convert GetStream to inclineCallbacks
+ * Change callback condition in GetStream to the first data blob completing
+ * Add local and remote heights to blockchain status
  
 ### Fixed
  * Fix recursion depth error upon failed blob
@@ -29,6 +32,8 @@ at anytime.
  * Fixed claim updates [#473](https://github.com/lbryio/lbry/issues/473)
  * Handle ConnectionLost error in reflector client
  * Fix updating a claim where the stream doesn't change
+ * Fix claim_abandon
+
 
 ## [0.8.1] - 2017-02-01
 ### Changed
