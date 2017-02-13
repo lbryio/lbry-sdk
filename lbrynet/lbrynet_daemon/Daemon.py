@@ -1672,6 +1672,7 @@ class Daemon(AuthJSONRPCServer):
         return self.jsonrpc_claim_abandon(**kwargs)
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_claim_abandon(self, txid, nout):
         """
         Abandon a name and reclaim credits from the claim
@@ -1683,15 +1684,14 @@ class Daemon(AuthJSONRPCServer):
             txid : txid of resulting transaction if succesful
             fee : fee paid for the transaction if succesful
         """
-        def _disp(x):
-            log.info("Abandoned name claim tx " + str(x))
-            return self._render_response(x)
 
-        d = defer.Deferred()
-        d.addCallback(lambda _: self.session.wallet.abandon_claim(txid, nout))
-        d.addCallback(_disp)
-        d.callback(None)  # TODO: is this line necessary???
-        return d
+        try:
+            abandon_claim_tx = yield self.session.wallet.abandon_claim(txid, nout)
+            response = yield self._render_response(abandon_claim_tx)
+        except Exception as err:
+            log.warning(err)
+            response = yield self._render_response(err)
+        defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_abandon_name(self, **kwargs):
