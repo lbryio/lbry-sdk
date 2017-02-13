@@ -8,8 +8,11 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+### Changed
+ * make connection manager unit testeable
 ### Fixed
  * Change EWOULDBLOCK error in DHT to warning. #481
+ * mark peers as down if it fails download protocol
 
 ## [0.8.3rc0] - 2017-02-10
 ### Changed
