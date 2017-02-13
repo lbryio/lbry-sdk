@@ -43,6 +43,7 @@ class EncryptedFileManager(object):
         self.stream_info_manager = stream_info_manager
         self.sd_identifier = sd_identifier
         self.lbry_files = []
+        self.lbry_files_setup_deferred = None
         self.sql_db = None
         if download_directory:
             self.download_directory = download_directory
@@ -127,11 +128,13 @@ class EncryptedFileManager(object):
         payment_rate_manager = NegotiatedPaymentRateManager(b_prm, self.session.blob_tracker)
         yield self._check_stream_info_manager()
         lbry_files_and_options = yield self._get_all_lbry_files()
+        dl = []
         for rowid, stream_hash, options in lbry_files_and_options:
             lbry_file = yield self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
                                                    blob_data_rate=options)
-            d = self._restore_lbry_file(lbry_file)
+            dl.append(self._restore_lbry_file(lbry_file))
             log.debug("Started %s", lbry_file)
+        self.lbry_files_setup_deferred = defer.DeferredList(dl)
         log.info("Started %i lbry files", len(self.lbry_files))
         defer.returnValue(True)
 

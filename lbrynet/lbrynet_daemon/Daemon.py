@@ -790,7 +790,9 @@ class Daemon(AuthJSONRPCServer):
             claim_out = yield publisher.update_stream(name, bid, metadata)
         else:
             claim_out = yield publisher.publish_stream(name, file_path, bid, metadata)
-            yield threads.deferToThread(reupload.reflect_stream, publisher.lbry_file)
+            d = reupload.reflect_stream(publisher.lbry_file)
+            d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
+                           log.exception)
 
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
