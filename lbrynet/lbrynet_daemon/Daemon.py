@@ -1019,7 +1019,7 @@ class Daemon(AuthJSONRPCServer):
             'lbry_id': base58.b58encode(self.lbryid)[:SHORT_ID_LEN],
             'installation_id': conf.settings.get_installation_id()[:SHORT_ID_LEN],
             'is_running': self.announced_startup,
-            'is_first_run': self.session.wallet.is_first_run if has_wallet  else None,
+            'is_first_run': self.session.wallet.is_first_run if has_wallet else None,
             'startup_status': {
                 'code': self.startup_status[0],
                 'message': self.startup_status[1],
@@ -1049,6 +1049,8 @@ class Daemon(AuthJSONRPCServer):
             local_height = self.session.wallet.network.get_local_height()
             remote_height = self.session.wallet.network.get_server_height()
             response['blocks_behind'] = remote_height - local_height
+            response['local_height'] = local_height
+            response['remote_height'] = remote_height
             best_hash = yield self.session.wallet.get_best_blockhash()
             response['blockchain_status'] = {'best_blockhash': best_hash}
         defer.returnValue(response)
