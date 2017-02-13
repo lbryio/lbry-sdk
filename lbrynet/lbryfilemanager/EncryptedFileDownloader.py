@@ -47,7 +47,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
     @defer.inlineCallbacks
     def restore(self):
-        sd_hash = yield self.stream_info_manager._get_sd_blob_hashes_for_stream(self.stream_hash)
+        sd_hash = yield self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
         if sd_hash:
             self.sd_hash = sd_hash[0]
         else:

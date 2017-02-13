@@ -763,8 +763,12 @@ class Daemon(AuthJSONRPCServer):
         """
         timeout = timeout if timeout is not None else conf.settings['download_timeout']
 
-        helper = _DownloadNameHelper(
-            self, name, timeout, download_directory, file_name, wait_for_write)
+        try:
+            helper = _DownloadNameHelper(self, name, timeout, download_directory, file_name,
+                                         wait_for_write)
+        except Exception as err:
+            log.exception(err)
+            raise err
 
         if not stream_info:
             self.waiting_on[name] = True
@@ -806,8 +810,7 @@ class Daemon(AuthJSONRPCServer):
                                        timeout=timeout,
                                        download_directory=download_directory,
                                        file_name=file_name)
-        d = self.streams[name].start(stream_info, name)
-        return d
+        return self.streams[name].start(stream_info, name)
 
     def _get_long_count_timestamp(self):
         dt = utils.utcnow() - utils.datetime_obj(year=2012, month=12, day=21)
@@ -842,7 +845,7 @@ class Daemon(AuthJSONRPCServer):
         if stream_count == 0:
             yield self.stream_info_manager.delete_stream(stream_hash)
         else:
-            log.warning("Can't delete stream info for %s", stream_hash)
+            log.warning("Can't delete stream info for %s, count is %i", stream_hash, stream_count)
         if delete_file:
             if os.path.isfile(filename):
                 os.remove(filename)
@@ -1490,8 +1493,7 @@ class Daemon(AuthJSONRPCServer):
         max_tries = 3
         while tries <= max_tries:
             try:
-                log.info(
-                    'Making try %s / %s to start download of %s', tries, max_tries, name)
+                log.info('Making try %s / %s to start download of %s', tries, max_tries, name)
                 new_sd_hash, file_path = yield self._download_name(
                     name=name,
                     timeout=timeout,
@@ -1502,10 +1504,10 @@ class Daemon(AuthJSONRPCServer):
                 )
                 break
             except Exception as e:
-                log.exception('Failed to get %s', name)
+                log.warning('Failed to get %s', name)
                 if tries == max_tries:
                     self.analytics_manager.send_download_errored(download_id, name, stream_info)
-                    response = yield self._render_response(str(e))
+                    response = yield self._render_response(e.message)
                     defer.returnValue(response)
                 tries += 1
         # TODO: should stream_hash key be changed to sd_hash?
@@ -1515,7 +1517,7 @@ class Daemon(AuthJSONRPCServer):
         }
         stream = self.streams.get(name)
         if stream:
-            stream.downloader.finished_deferred.addCallback(
+            stream.finished_deferred.addCallback(
                 lambda _: self.analytics_manager.send_download_finished(
                     download_id, name, stream_info)
             )
@@ -2326,9 +2328,7 @@ def get_sd_hash(stream_info):
 
 
 class _DownloadNameHelper(object):
-    def __init__(self, daemon, name,
-                 timeout=None,
-                 download_directory=None, file_name=None,
+    def __init__(self, daemon, name, timeout=None, download_directory=None, file_name=None,
                  wait_for_write=True):
         self.daemon = daemon
         self.name = name
@@ -2378,16 +2378,24 @@ class _DownloadNameHelper(object):
 
     @defer.inlineCallbacks
     def _get_stream(self, stream_info):
-        was_successful, sd_hash, download_path = yield self.daemon.add_stream(
-            self.name, self.timeout, self.download_directory, self.file_name, stream_info)
-        if not was_successful:
-            log.warning("lbry://%s timed out, removing from streams", self.name)
+        try:
+            download_path = yield self.daemon.add_stream(
+                self.name, self.timeout, self.download_directory, self.file_name, stream_info)
+        except (InsufficientFundsError, Exception) as err:
+            if Failure(err).check(InsufficientFundsError):
+                log.warning("Insufficient funds to download lbry://%s", self.name)
+                self.remove_from_wait("Insufficient funds")
+            else:
+                log.warning("lbry://%s timed out, removing from streams", self.name)
+                self.remove_from_wait("Timed out")
+            if self.daemon.streams[self.name].downloader is not None:
+                yield self.daemon._delete_lbry_file(self.daemon.streams[self.name].downloader)
             del self.daemon.streams[self.name]
-            self.remove_from_wait("Timed out")
-            raise Exception("Timed out")
+            raise err
+
         if self.wait_for_write:
             yield self._wait_for_write()
-        defer.returnValue((sd_hash, download_path))
+        defer.returnValue((self.daemon.streams[self.name].sd_hash, download_path))
 
     def _wait_for_write(self):
         d = defer.succeed(None)
