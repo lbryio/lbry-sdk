@@ -219,7 +219,7 @@ class EncryptedFileReflectorClient(Protocol):
             else:
                 if response_dict['received_blob']:
                     self.reflected_blobs.append(self.next_blob_to_send.blob_hash)
-                    log.info("Sent reflector blob %s for %s", self.next_blob_to_send,
+                    log.debug("Sent reflector blob %s for %s", self.next_blob_to_send,
                              self.lbry_uri)
                 else:
                     log.warning("Reflector failed to receive blob %s for %s",
