@@ -59,7 +59,10 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.claim_id = yield self.wallet.get_claimid(self.uri, self.txid, self.nout)
         status = yield self.lbry_file_manager.get_lbry_file_status(self)
         if status == ManagedEncryptedFileDownloader.STATUS_RUNNING:
-            yield self.start()
+            # start returns self.finished_deferred
+            # which fires when we've finished downloading the file
+            # and we don't want to wait for the entire download
+            self.start()
         elif status == ManagedEncryptedFileDownloader.STATUS_STOPPED:
             defer.returnValue(False)
         elif status == ManagedEncryptedFileDownloader.STATUS_FINISHED:
