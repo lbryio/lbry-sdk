@@ -43,7 +43,6 @@ class EncryptedFileManager(object):
         self.stream_info_manager = stream_info_manager
         self.sd_identifier = sd_identifier
         self.lbry_files = []
-        self.lbry_files_setup_deferred = None
         self.sql_db = None
         if download_directory:
             self.download_directory = download_directory
@@ -122,7 +121,6 @@ class EncryptedFileManager(object):
             for rowid, stream_hash, options in files_and_options
         ])
         log.info("Started %i lbry files", len(self.lbry_files))
-        defer.returnValue(True)
 
     @defer.inlineCallbacks
     def _set_options_and_restore(self, rowid, stream_hash, options):
