@@ -139,8 +139,8 @@ class EncryptedFileDownloaderFactory(object):
     def can_download(self, sd_validator):
         return True
 
-    def make_downloader(self, metadata, options, payment_rate_manager, **kwargs):
-        payment_rate_manager.min_blob_data_payment_rate = options[0]
+    def make_downloader(self, metadata, data_rate, payment_rate_manager, **kwargs):
+        payment_rate_manager.min_blob_data_payment_rate = data_rate
 
         def save_source_if_blob(stream_hash):
             if metadata.metadata_source == StreamMetadata.FROM_BLOB:

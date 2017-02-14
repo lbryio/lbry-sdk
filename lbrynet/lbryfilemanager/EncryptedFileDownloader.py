@@ -149,10 +149,8 @@ class ManagedEncryptedFileDownloaderFactory(object):
         return True
 
     @defer.inlineCallbacks
-    def make_downloader(self, metadata, options, payment_rate_manager, download_directory=None,
+    def make_downloader(self, metadata, data_rate, payment_rate_manager, download_directory=None,
                         file_name=None):
-        # TODO: change options argument to only be data_rate
-        data_rate = options[0]
         stream_hash = yield save_sd_info(self.lbry_file_manager.stream_info_manager,
                                          metadata.validator.raw_info)
         if metadata.metadata_source == StreamMetadata.FROM_BLOB:

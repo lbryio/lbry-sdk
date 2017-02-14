@@ -141,7 +141,7 @@ class FullLiveStreamDownloaderFactory(object):
     def can_download(self, sd_validator):
         return True
 
-    def make_downloader(self, metadata, options, payment_rate_manager):
+    def make_downloader(self, metadata, data_rate, payment_rate_manager):
         # TODO: check options for payment rate manager parameters
         prm = LiveStreamPaymentRateManager(self.default_payment_rate_manager,
                                                             payment_rate_manager)

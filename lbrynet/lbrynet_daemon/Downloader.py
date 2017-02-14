@@ -119,11 +119,13 @@ class GetStream(object):
 
     @defer.inlineCallbacks
     def get_downloader(self, factory, stream_metadata):
-        downloader_options = [self.data_rate, True]
-        downloader = yield factory.make_downloader(stream_metadata, downloader_options,
-                                      self.payment_rate_manager,
-                                      download_directory=self.download_directory,
-                                      file_name=self.file_name)
+        downloader = yield factory.make_downloader(
+            stream_metadata,
+            self.data_rate,
+            self.payment_rate_manager,
+            download_directory=self.download_directory,
+            file_name=self.file_name
+        )
         defer.returnValue(downloader)
 
     def _pay_key_fee(self, address, fee_lbc, name):
