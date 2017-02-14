@@ -51,7 +51,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         if sd_hash:
             self.sd_hash = sd_hash[0]
         else:
-            raise Exception("No sd hash for stream hash %s", self.stream_hash)
+            raise Exception("No sd hash for stream hash %s" % self.stream_hash)
         claim_metadata = yield self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
         if claim_metadata is None:
             raise Exception("A claim doesn't exist for sd %s" % self.sd_hash)
