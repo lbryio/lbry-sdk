@@ -8,6 +8,8 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+
+## [0.8.3rc1] - 2017-02-13
 ### Changed
  * make connection manager unit testeable
 ### Fixed
