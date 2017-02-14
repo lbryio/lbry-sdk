@@ -160,7 +160,7 @@ class FullLiveStreamDownloaderFactory(object):
         def create_downloader(stream_hash):
             stream_downloader = FullLiveStreamDownloader(stream_hash, self.peer_finder, self.rate_limiter,
                                                          self.blob_manager, self.stream_info_manager,
-                                                         prm, self.wallet, True)
+                                                         prm, self.wallet)
             d = stream_downloader.set_stream_info()
             d.addCallback(lambda _: stream_downloader)
             return d
