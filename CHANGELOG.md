@@ -8,6 +8,9 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+### Changed
+ * Remove unused upload_allowed option
+
 ### Fixed
  * Add better logging to help track down [#478](https://github.com/lbryio/lbry/issues/478)
 
