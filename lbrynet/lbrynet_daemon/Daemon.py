@@ -176,7 +176,7 @@ class AlwaysSend(object):
 @defer.inlineCallbacks
 def calculate_available_blob_size(blob_manager):
     blob_hashes = yield blob_manager.get_all_verified_blobs()
-    blobs = yield defer.DeferredList([blob_manager.get_blob(b, True) for b in blob_hashes])
+    blobs = yield defer.DeferredList([blob_manager.get_blob(b) for b in blob_hashes])
     defer.returnValue(sum(b.length for success, b in blobs if success and b.length))
 
 

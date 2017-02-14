@@ -111,6 +111,7 @@ class DiskBlobManager(BlobManager):
         """Return a blob identified by blob_hash, which may be a new blob or a
         blob that is already on the hard disk
         """
+        assert length is None or isinstance(length, int)
         if blob_hash in self.blobs:
             return defer.succeed(self.blobs[blob_hash])
         return self._make_new_blob(blob_hash, length)
@@ -216,7 +217,7 @@ class DiskBlobManager(BlobManager):
         for blob_hash, being_deleted in self.blob_hashes_to_delete.items():
             if being_deleted is False:
                 self.blob_hashes_to_delete[blob_hash] = True
-                d = self.get_blob(blob_hash, True)
+                d = self.get_blob(blob_hash)
                 d.addCallbacks(
                     delete, set_not_deleting,
                     callbackArgs=(blob_hash,), errbackArgs=(blob_hash,))
@@ -270,7 +271,7 @@ class DiskBlobManager(BlobManager):
     @defer.inlineCallbacks
     def _completed_blobs(self, blobhashes_to_check):
         """Returns of the blobhashes_to_check, which are valid"""
-        blobs = yield defer.DeferredList([self.get_blob(b, True) for b in blobhashes_to_check])
+        blobs = yield defer.DeferredList([self.get_blob(b) for b in blobhashes_to_check])
         blob_hashes = [b.blob_hash for success, b in blobs if success and b.verified]
         defer.returnValue(blob_hashes)
 

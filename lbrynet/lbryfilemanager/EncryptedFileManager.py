@@ -269,9 +269,9 @@ class EncryptedFileManager(object):
     @rerun_if_locked
     def _save_lbry_file(self, stream_hash, data_payment_rate):
         def do_save(db_transaction):
-            db_transaction.execute("insert into lbry_file_options values (?, ?, ?)",
-                                  (data_payment_rate, ManagedEncryptedFileDownloader.STATUS_STOPPED,
-                                   stream_hash))
+            row = (data_payment_rate, ManagedEncryptedFileDownloader.STATUS_STOPPED, stream_hash)
+            log.debug('Saving %s to db', row)
+            db_transaction.execute("insert into lbry_file_options values (?, ?, ?)", row)
             return db_transaction.lastrowid
         return self.sql_db.runInteraction(do_save)
 

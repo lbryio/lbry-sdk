@@ -737,7 +737,7 @@ class TestTransfer(TestCase):
             factories = metadata.factories
             chosen_options = [
                 o.default_value for o in options.get_downloader_options(info_validator, prm)]
-            return factories[0].make_downloader(metadata, chosen_options, prm)
+            return factories[0].make_downloader(metadata, choosen_options, prm)
 
         def start_lbry_file(lbry_file):
             lbry_file = lbry_file

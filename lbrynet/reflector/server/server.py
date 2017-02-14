@@ -222,7 +222,7 @@ class ReflectorServer(Protocol):
         sd_blob_size = request_dict[SD_BLOB_SIZE]
 
         if self.blob_write is None:
-            d = self.blob_manager.get_blob(sd_blob_hash, True, sd_blob_size)
+            d = self.blob_manager.get_blob(sd_blob_hash, sd_blob_size)
             d.addCallback(self.get_descriptor_response)
             d.addCallback(self.send_response)
         else:
@@ -266,7 +266,7 @@ class ReflectorServer(Protocol):
         for blob in sd_blob['blobs']:
             if 'blob_hash' in blob and 'length' in blob:
                 blob_hash, blob_len = blob['blob_hash'], blob['length']
-                d = self.blob_manager.get_blob(blob_hash, True, blob_len)
+                d = self.blob_manager.get_blob(blob_hash, blob_len)
                 d.addCallback(lambda blob: blob_hash if not blob.is_validated() else None)
                 yield d
 

@@ -113,7 +113,7 @@ class EncryptedFileReflectorClient(Protocol):
         def get_blobs(blobs):
             for (blob, _, _, blob_len) in blobs:
                 if blob:
-                    yield self.blob_manager.get_blob(blob, True, blob_len)
+                    yield self.blob_manager.get_blob(blob, blob_len)
 
         dl = defer.DeferredList(list(get_blobs(blobs_in_stream)), consumeErrors=True)
         dl.addCallback(lambda blobs: [blob for r, blob in blobs if r and blob.is_validated()])
@@ -155,7 +155,7 @@ class EncryptedFileReflectorClient(Protocol):
             self.stream_descriptor = sd_blob
 
         d = self.factory.stream_info_manager.get_sd_blob_hashes_for_stream(self.factory.stream_hash)
-        d.addCallback(lambda sd: self.factory.blob_manager.get_blob(sd[0], True))
+        d.addCallback(lambda sd: self.factory.blob_manager.get_blob(sd[0]))
         d.addCallback(_save_descriptor_blob)
         return d
 

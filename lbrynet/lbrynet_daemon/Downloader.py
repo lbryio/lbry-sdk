@@ -119,9 +119,11 @@ class GetStream(object):
 
     @defer.inlineCallbacks
     def get_downloader(self, factory, stream_metadata):
+        # TODO: we should use stream_metadata.options.get_downloader_options
+        #       instead of hard-coding the options to be [self.data_rate]
         downloader = yield factory.make_downloader(
             stream_metadata,
-            self.data_rate,
+            [self.data_rate],
             self.payment_rate_manager,
             download_directory=self.download_directory,
             file_name=self.file_name
