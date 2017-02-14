@@ -99,6 +99,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
     @defer.inlineCallbacks
     def _start(self):
+        log.info('Starting Downloader for %s', self.stream_hash)
         yield EncryptedFileSaver._start(self)
         sd_hash = yield self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
         if len(sd_hash):
@@ -110,6 +111,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
                 self.txid = txid
                 self.nout = nout
         status = yield self._save_status()
+        log.info('Set Downloader status for %s to %s', self.stream_hash, status)
         defer.returnValue(status)
 
     def _get_finished_deferred_callback_value(self):
