@@ -298,7 +298,7 @@ class ReflectorServer(Protocol):
             d = self.blob_manager.get_blob(blob_hash, blob_size)
             d.addCallback(self.get_blob_response)
             d.addCallback(self.send_response)
-      else:
+        else:
             log.debug('blob is already open')
             self.receiving_blob = True
             d = self.blob_finished_d
