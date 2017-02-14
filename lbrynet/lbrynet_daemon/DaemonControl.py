@@ -31,7 +31,6 @@ def stop():
 
 
 def start():
-    utils.setup_certs_for_windows()
     conf.initialize_settings()
 
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
