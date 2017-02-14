@@ -649,18 +649,19 @@ class Daemon(AuthJSONRPCServer):
             session_id=self._session_id
         )
 
+    @defer.inlineCallbacks
     def _setup_lbry_file_manager(self):
+        log.info('Starting to setup up file manager')
         self.startup_status = STARTUP_STAGES[3]
-        d = self.stream_info_manager.setup()
-
-        def set_lbry_file_manager():
-            self.lbry_file_manager = EncryptedFileManager(
-                self.session, self.stream_info_manager,
-                self.sd_identifier, download_directory=self.download_directory)
-            return self.lbry_file_manager.setup()
-
-        d.addCallback(lambda _: set_lbry_file_manager())
-        return d
+        yield self.stream_info_manager.setup()
+        self.lbry_file_manager = EncryptedFileManager(
+            self.session,
+            self.stream_info_manager,
+            self.sd_identifier,
+            download_directory=self.download_directory
+        )
+        yield self.lbry_file_manager.setup()
+        log.info('Done setting up file manager')
 
     def _get_analytics(self):
         if not self.analytics_manager.is_started:

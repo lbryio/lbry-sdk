@@ -8,6 +8,9 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+### Fixed
+ * Add better logging to help track down [#478](https://github.com/lbryio/lbry/issues/478)
+
 
 ## [0.8.3rc3] - 2017-02-14
 
@@ -16,6 +19,7 @@ at anytime.
 ## [0.8.3rc1] - 2017-02-13
 ### Changed
  * make connection manager unit testeable
+
 ### Fixed
  * Change EWOULDBLOCK error in DHT to warning. #481
  * mark peers as down if it fails download protocol
@@ -32,7 +36,7 @@ at anytime.
  * Convert GetStream to inclineCallbacks
  * Change callback condition in GetStream to the first data blob completing
  * Add local and remote heights to blockchain status
- 
+
 ### Fixed
  * Fix recursion depth error upon failed blob
  * Call stopProducing in reflector client file_sender when uploading is done
@@ -44,12 +48,12 @@ at anytime.
  * Fix updating a claim where the stream doesn't change
  * Fix claim_abandon
 
-
 ## [0.8.1] - 2017-02-01
 ### Changed
  * reflect all the blobs in a stream
  * change command line flags so that the more common usage is the default
  * change daemon function signatures to include names arguments
+
 ### Fixed
  * disable verbose twisted logs
  * improved wallet balance calculations
@@ -61,6 +65,7 @@ at anytime.
  * improved command line user experience
  * integrate twisted logging with python logging
  * Updated READMEs
+
 ### Fixed
  * Fixed bug where ConnectionManager wasn't being stopped
  * Fixed: #343

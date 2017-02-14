@@ -51,7 +51,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         if sd_hash:
             self.sd_hash = sd_hash[0]
         else:
-            raise Exception("No sd hash for stream hash %s", self.stream_hash)
+            raise Exception("No sd hash for stream hash %s" % self.stream_hash)
         claim_metadata = yield self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
         if claim_metadata is None:
             raise Exception("A claim doesn't exist for sd %s" % self.sd_hash)
@@ -59,7 +59,10 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.claim_id = yield self.wallet.get_claimid(self.uri, self.txid, self.nout)
         status = yield self.lbry_file_manager.get_lbry_file_status(self)
         if status == ManagedEncryptedFileDownloader.STATUS_RUNNING:
-            yield self.start()
+            # start returns self.finished_deferred
+            # which fires when we've finished downloading the file
+            # and we don't want to wait for the entire download
+            self.start()
         elif status == ManagedEncryptedFileDownloader.STATUS_STOPPED:
             defer.returnValue(False)
         elif status == ManagedEncryptedFileDownloader.STATUS_FINISHED:
@@ -96,6 +99,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
     @defer.inlineCallbacks
     def _start(self):
+        log.info('Starting Downloader for %s', self.stream_hash)
         yield EncryptedFileSaver._start(self)
         sd_hash = yield self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
         if len(sd_hash):
@@ -107,6 +111,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
                 self.txid = txid
                 self.nout = nout
         status = yield self._save_status()
+        log.info('Set Downloader status for %s to %s', self.stream_hash, status)
         defer.returnValue(status)
 
     def _get_finished_deferred_callback_value(self):
