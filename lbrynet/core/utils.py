@@ -97,11 +97,5 @@ def check_connection(server="www.lbry.io", port=80):
         return False
 
 
-def setup_certs_for_windows():
-    if getattr(sys, 'frozen', False) and os.name == "nt":
-        cert_path = os.path.join(os.path.dirname(sys.executable), "cacert.pem")
-        os.environ["REQUESTS_CA_BUNDLE"] = cert_path
-
-
 def random_string(length=10, chars=string.ascii_lowercase):
     return ''.join([random.choice(chars) for _ in range(length)])
