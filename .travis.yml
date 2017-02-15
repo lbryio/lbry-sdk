@@ -1,23 +1,26 @@
-matrix:
-    include:
-        - os: linux
-          sudo: required
-          dist: trusty
-          # dh-virtualenv requires that we use the same python interpreter
-          # that comes with the system, so we don't want to use anything that
-          # travis would try to set-up for us in python
-          language: generic
+os: linux
+dist: trusty
+language: python
+python: 2.7
 
 notifications:
   slack:
     secure: "Am13HPtpgCMljh0MDVuoFHvQXB8yhf4Kvf/qAeSp5N0vsHGL70CSF9Ahccw8dVPE6mbuak1OGtSUb6/UaErLHkpz3ztaRLkDa9x7CmBB3Kynnh8oO2VbB7b/2ROULqkhF4VZmAnNfwrQrbC3gs8Sybp261Nyc7y4ww15xDYBrk2fyq4ds2DCaJdRxfJUJFonrZ6KXr3fVaXosO6cjuyS8eRodcmrqsT4cCtinjNTD1hGWoH107E4ObSmpVelxQO193KhNJMRiLlEcVkvYUOqIWBtwdGHbNE/6Yeuq1TXgKJ0KeJWAmW3wTfUYNngGXNAsyCnrhul5TKNevNzfIAQZHvRsczYiWPJV6LtohHT0CcUiCXJtvEPOyahEBfwK3etY/xxFqny7N9OEmpdW2sgsEPNPX2LJynJti2rQA9SuAD1ogR3ZpDy/NXoaAZf8PTdPcuNUMULV9PGG7tVrLBecO/W1qO6hdFxwlLdgqGLxAENZgGp++v/DhPk/WvtmHj7iTbRq0nxaTWyX5uKOn2ADH+k/yfutjv6BsQU9xNyPeZEEtuEpc6X6waiYn/8G9vl9PecvKC5H0MgsZ6asAxmg7mZ3VSMFG7mo8ENeOhSZ0Oz6ZTBILL3wFccZA9uJIq7NWmqC9dRiGiuKXBB62No7sINoHg3114e2xYa9qvNmGg="
-
 
 cache:
   directories:
     - $HOME/.cache/pip
     - $HOME/Library/Caches/pip
     - $TRAVIS_BUILD_DIR/cache/wheel
+
+addons:
+  apt:
+    packages:
+    - libgmp3-dev
+    - build-essential
+    - git
+    - libssl-dev
+    - libffi-dev
   
 before_install:
   - virtualenv venv
