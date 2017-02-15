@@ -37,4 +37,4 @@ script:
   - pip install mock pylint unqlite
   - ./run_pylint.sh
   - ./run_tests.sh
-  - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger; fi
+  - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
