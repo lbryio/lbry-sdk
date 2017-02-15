@@ -10,7 +10,7 @@ at anytime.
 ## [Unreleased]
 ### Fixed
  * Add better logging to help track down [#478](https://github.com/lbryio/lbry/issues/478)
-
+ * Catch UnknownNameErrors when resolving a name. [#479](https://github.com/lbryio/lbry/issues/479)
 
 ## [0.8.3rc3] - 2017-02-14
 
@@ -24,6 +24,7 @@ at anytime.
  * Change EWOULDBLOCK error in DHT to warning. #481
  * mark peers as down if it fails download protocol
  * Made hash reannounce time to be adjustable to fix [#432](https://github.com/lbryio/lbry/issues/432)
+
 
 ## [0.8.3rc0] - 2017-02-10
 ### Changed
