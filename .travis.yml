@@ -29,6 +29,7 @@ before_install:
 install:
   - pip install -U pip
   - pip install -r requirements.txt
+  - pip install git+https://github.com/lbryio/lbryum.git
   - pip install .
 
 script:
