@@ -8,6 +8,8 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+
+## [0.8.3] - 2017-02-15
 ### Fixed
  * Add better logging to help track down [#478](https://github.com/lbryio/lbry/issues/478)
  * Catch UnknownNameErrors when resolving a name. [#479](https://github.com/lbryio/lbry/issues/479)
