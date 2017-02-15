@@ -9,6 +9,5 @@ notifications:
 
 clone_folder: c:\projects\lbry
 
-
-install:
-- echo "Not currently building on appveyor"
+build_script:
+  - echo "Not currently building on appveyor"
