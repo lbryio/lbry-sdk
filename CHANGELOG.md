@@ -8,6 +8,9 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+### Changed
+ * Remove code related to packaging as that step is now done in the electron client
+
 ### Fixed
  * Add better logging to help track down [#478](https://github.com/lbryio/lbry/issues/478)
 
