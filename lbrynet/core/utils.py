@@ -2,10 +2,8 @@ import base64
 import datetime
 import logging
 import random
-import os
 import socket
 import string
-import sys
 
 import pkg_resources
 

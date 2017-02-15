@@ -10,7 +10,7 @@ from twisted.internet.error import ConnectionDone, ConnectionLost
 from txjsonrpc import jsonrpclib
 
 from lbrynet import conf
-from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError
+from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message, jsonrpc_dumps_pretty
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
