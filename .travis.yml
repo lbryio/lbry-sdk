@@ -7,12 +7,6 @@ matrix:
           # that comes with the system, so we don't want to use anything that
           # travis would try to set-up for us in python
           language: generic
-        - os: osx
-          # Use generic language for osx
-          # python 2.7 is broken on osx on travis, so follow we have to specify the installation ourselves
-          # https://github.com/travis-ci/travis-ci/issues/2312#issuecomment-195620855
-          language: generic
-          osx_image: xcode7.3
 
 notifications:
   slack:
@@ -24,70 +18,13 @@ cache:
     - $HOME/.cache/pip
     - $HOME/Library/Caches/pip
     - $TRAVIS_BUILD_DIR/cache/wheel
-
-before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" && "$TRAVIS_PULL_REQUEST" == "false" ]]; then ./packaging/travis/setup_osx.sh; fi
-  - mkdir -p lbrynet/resources/ui
-  - ./packaging/travis/setup_build.sh
   
 install:
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./packaging/travis/install_dependencies_and_run_tests.sh; fi
-
-before_script:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" && "$TRAVIS_PULL_REQUEST" == "false" ]]; then openssl aes-256-cbc -k "$ENCRYPTION_SECRET" -in packaging/osx/certs/dist.cer.enc -d -a -out packaging/osx/certs/dist.cer; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" && "$TRAVIS_PULL_REQUEST" == "false" ]]; then openssl aes-256-cbc -k "$ENCRYPTION_SECRET" -in packaging/osx/certs/dist.p12.enc -d -a -out packaging/osx/certs/dist.p12; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" && "$TRAVIS_PULL_REQUEST" == "false" ]]; then ./packaging/osx/add-key.sh; fi
+  - pip install -U pip
+  - pip install -r requirements.txt
+  - pip install .
 
 script:
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then bash packaging/ubuntu/ubuntu_package_setup.sh -t; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" && "$TRAVIS_PULL_REQUEST" == "false" ]]; then cd packaging/osx/lbry-osx-app && ./setup_app.sh && cd $TRAVIS_BUILD_DIR; fi
-  # fail the build if this is a build for a tag and we don't have the versions matching; allow tags that start with 'test' to pass
-  - if [[ -n "${TRAVIS_TAG}" ]]; then if [[ "${TRAVIS_TAG}" == test* ]] || [[ "v`python setup.py -V`" = "${TRAVIS_TAG}" ]]; then true; else false; fi; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger; fi
-
-before_deploy:
-  # s3 release can only upload a folder so move the package into an upload folder
-  - mkdir "${TRAVIS_BUILD_DIR}/upload"
-  - if [[ "$TRAVIS_OS_NAME" == "osx" && "$TRAVIS_PULL_REQUEST" == "false" ]]; then mv "${TRAVIS_BUILD_DIR}/packaging/osx/lbry-osx-app/`python setup.py --name`.`python setup.py -V`.dmg" "${TRAVIS_BUILD_DIR}/upload"; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then mv "${TRAVIS_BUILD_DIR}/`python setup.py --name`_`python setup.py -V`_amd64.deb" "${TRAVIS_BUILD_DIR}/upload"; fi
-
-deploy:
-  - provider: releases
-    file: "${TRAVIS_BUILD_DIR}/upload/`python setup.py --name`_`python setup.py -V`_amd64.deb"
-    skip_cleanup: true
-    prerelease: true
-    on:
-      tags: true
-      condition: "$TRAVIS_OS_NAME = linux"
-      # this is the oauth token for the lbry-ci user
-    api_key:
-      secure: nKdWGROnLNodx9k9nWvq2wezkPvSVL8zF63qjPXjhdOe9kCUbcLp7WnFDYpn9EJj4Pofq/ejeCHwjA+5x7JUP3Szk7SlJV61B4c/5hl64rl7oSKOoKskjdE2jaOG3CJuOUrh0yQ59U3vMMABcsnw/wJaCIuu/erdPIm8g8R+stu1YHOGtl5Y9WiW+zLJn2vc3GooV1TWtki9EnrmFfw0Vrqc4RMVMFB1ojE7ggrK1LIwcmGSbLIYzker1ZRz8SCy+84sGk4//V+2i2NNiz5AkPuG7BBGrU2twE9nD23IlruJAdVdi71P3ytAmi0kKyvxIU4VeNaqyTk9zeL5IB9J5IIgvekHgKcsKhFUZ6QcXT1Xfxl4ELftvWCTHWiewnXFdqLcG9GZiUaE6+7wdalwDAP3tqS2emiibetlBZERHR+RMR00ej+1MBYWGMlTse/0Tglndv0a2qqgAJYLKPRT02hTRYGxZ1MrJe+WGnChRmzwgLVTIgZuiDciFOahN0TYGSORk6OpnZBsxvpzSqDw5UDJx0BmbJ1xMNDFbOs8ubZ9yIpB9yNMGw66FPacOF61XNYnmA68ILC28UtOFKuuHLrUPbM5JmQkDVhtTfFbBnyHefyCLAL4MHvJJKGi1oaOXjYaJ/J095h636/kQ0cHHuVMgoWUQZOQ44xRAz7tMuc=
-  - provider: releases
-    file: "${TRAVIS_BUILD_DIR}/upload/`python setup.py --name`.`python setup.py -V`.dmg"
-    skip_cleanup: true
-    prerelease: true
-    on:
-      tags: true
-      condition: "$TRAVIS_OS_NAME = osx"
-    # this is the oauth token for the lbry-ci user
-    api_key:
-      secure: nKdWGROnLNodx9k9nWvq2wezkPvSVL8zF63qjPXjhdOe9kCUbcLp7WnFDYpn9EJj4Pofq/ejeCHwjA+5x7JUP3Szk7SlJV61B4c/5hl64rl7oSKOoKskjdE2jaOG3CJuOUrh0yQ59U3vMMABcsnw/wJaCIuu/erdPIm8g8R+stu1YHOGtl5Y9WiW+zLJn2vc3GooV1TWtki9EnrmFfw0Vrqc4RMVMFB1ojE7ggrK1LIwcmGSbLIYzker1ZRz8SCy+84sGk4//V+2i2NNiz5AkPuG7BBGrU2twE9nD23IlruJAdVdi71P3ytAmi0kKyvxIU4VeNaqyTk9zeL5IB9J5IIgvekHgKcsKhFUZ6QcXT1Xfxl4ELftvWCTHWiewnXFdqLcG9GZiUaE6+7wdalwDAP3tqS2emiibetlBZERHR+RMR00ej+1MBYWGMlTse/0Tglndv0a2qqgAJYLKPRT02hTRYGxZ1MrJe+WGnChRmzwgLVTIgZuiDciFOahN0TYGSORk6OpnZBsxvpzSqDw5UDJx0BmbJ1xMNDFbOs8ubZ9yIpB9yNMGw66FPacOF61XNYnmA68ILC28UtOFKuuHLrUPbM5JmQkDVhtTfFbBnyHefyCLAL4MHvJJKGi1oaOXjYaJ/J095h636/kQ0cHHuVMgoWUQZOQ44xRAz7tMuc=
-  - provider: s3
-    access_key_id:
-      secure: "gmJNW8bda2snpA2F+0gucjgO/orvZL0a348QmiffYdtXleIseyY+C4ZI9llWm+s8n2TxiqBYpc/A3Bv7JM0yIccjF0CWQb8pu4HkVT2xLT/1p28EdfxKhR0H5sLtkxOCvLIuf3ppZWac8IzRWvh9TDER1TVxbIGvbOJCtKJ+sUKGCWVkxJY6lzAy7+YHwY9sLV6GvarbkfcnbwNh0qPEROcc6JXUQRKCjWOoZLSZHx4dwxlDiXaG1GyUSm2bwtB11VbMZqaP5eO2zypcUr24J0WkzuAOFIUMDERQnY6eSR62T88BjVjL+07kQufSTtnHC49uHsylyQLwkphkwi2Ei3c/fJ5XI1gY0Med/WOHuy99LAaaHQvHxVa9Zxvrgivvu1oa2QdLir05asMCB0G6Yjgz38Fl8jzdKN/PLHs/lhgBGOJfMN+0UR7hOrLeXdJcMriVfwzYrCl6KkFgTe50rcMx8vv6SH15AqZ5sceksy+maA4O8Mxq1hEe2qJABgRdRZK3FnFKNnQOxfrlU6N9zMNsicVcRwH6WNBtoL4BK3KeMproWnorh9rXmdoSG2Fh5X636cudYhLrAbO5yaoZAXFxHqOV1n63v3tgv4MKrB999OF9V9HyYXv3ro9WZTTsH7LskLA7YmTvXtpMVgBK8SfnvqCjLim5qpVvIVPQIOY="
-    secret_access_key:
-      secure: "pS28jMSNV8HUSa8P8pReXgBtHW0OSWDZMAlZhBrtUI05goUnK6buXadvzCynZWgDiXPHuEuLZOLDVj5yL8N3eCa+sG1tEDcCjPxrBFxHisng8atgn3FaL15MBOdXn0qOBUr+vQ4jbUozsBYGqmoZQV0/Af53tU55KK5HJrotkd++SNTEQrFbWZavM+Wvhw4yJN2hmRer9II72DCZkayUjpvBq+irnGeU0g9SrX8VULCg+sqcnbqdLWd+VALHzQr+O74MaWE8mu2PA8A1GKWZZ/a+LoTh1T2bArpX94q0ueea1eEcUA154vC1azkKK5vy9hzENt5qiiEleBDE31DhbGaeEoakEXvHWrdI3DYiakD6prj0necD8aAK6VhPtqwiTtTf7E4BE9hxY4nJRDuZckvFI4LYFMvHlbdqBieeZPflStkws7VgsfrGV7EberYIbSEohUGGUBg3rdaCIPsn8W4nQAixq39Dcfm0orGo4BgargT6FFtAeDzsfYdbKBk/F8BOPMDJz9P1utAZ/ZeBexic16aeIbk7+wtaQUd0Hswm+2QUHddshvp9IzNniFb1BLvRR/lOVl0HdUkJj/haR2M8XhwcRFIKpL2oMZHwRmLW4c1kkEx+KSfAB77arjgrCzq3y5MlKUSliL5qZZMIJX0ReRQ2dcy3DCY0Fxdj014="
-    bucket: lbrynet-master
-    skip_cleanup: true
-    local_dir: "${TRAVIS_BUILD_DIR}/upload"
-    region: us-west-2
-    on:
-      branch: master
-
-
-env:
-  global:
-    # needed to unlock the identity file when its on the keychain
-    - secure: "aqgVNHfeh6JUqTTWG5+W+tTsIJkePS6HyLkcZlq6ODYrfdGKa90EeV4q4wdGfP5IkrBbf+WBFACDGVp574E7vfMLMNKUDuUtgnGVPwqOIhjG82ud8Xa7qF7lsw50QOnRYYVd2GLlCIzk8sffT5ncjSPN2ClNVM5iTwCkC8TNSAVnEJxu6bG6hcaT4uCWWjs0m+39O1xJwxJ4vTjpE/gy+j2FTSaUR5cNavOVCyJqpeKlga9aoBVsQHWvxlYurdWbwRLwVIV7bDE+sYPnwn1nMFQpx5RZ1AX1Z2UxNFKcYzLJgcWe85OjxLyT4udX+XZ9SLsdOjm1n201OLEKsmTxmHS8yqpbu6+pKQ1rLMEVpgPGfS8DdtqZyb3z0u6q4jztpm+uBe8hnFgwQFGXO63nOQsI0n1PMR3evAnVx7jYt7y/UALs2A9yjosMwDqgql1FMhyd0OJGo8Ky8YpDsr2J5zGVvIqt2/N+lP+SOe2D1J/5EhGlY0o4tqIAFskh3q8/GR6UGm70KT2l4LJqrU1WGrGxPJ+HoOEmvG6eqLesk03fAX3v5+DgXZWErnzXMIOGDPaFVpmx+G9VZTIlmf+3Wbu9TnZE5PRwFTdP1rqjGpjUhHeF0VTc2qgNq1OfL98CBO1wLgA195+em58cELalnwDMWUTmY1Jt1kUuAtCc11U="
-    # used to decypt the aes decrypt the certificate and identity files
-    - secure: "FzftiEBFMngQIci5KZ+tpKs/BubalhWXJ9f8yogGNVa3XplLheUXYgcsNU8sYT2MJaKAHN9fSjHWb67UtKT7yXddXxeOPnW6wJ3ua/FXnpynsmeGKTfh3stvgjpzdXous67uHmCWMMklfb6z7UuDohjUMAe5n5HKw5tq1RzTKpc2kJacOC6qUT5laUOvULyCaO9E9HmbHeR5ZeXAC6pnzX2ccsSrcXvPozHzBIZ9RyothKs+CZw8PEuJo07RRL8meboegqYOUrOYuz6A2gS2mZJoy59ivZKOFxS5shEuv2Jt80RyfyxBoUpKFq8OG3Am5nAEzDiTIGzmIoKDEGKeTagk/sEtSZXiMDkzDT4GX/j1rUNLCBU87bXEFS2zfRsrfg8c1XZPIzDYBT1PY2QtLBdddF5zzDoKdPLJ3sjN+fZFE5RlnwfwnMHriVRZZlzjcdk0Z06gKTBCxUg5BZamnOOK+K8qunMJXVS+Vmi5u4RoTZZiCosUlYKnSKJ8suO9C0+znxoViusPqP4ONprNHgDoZw+UKio84QW3PrZv9h4zH/D+msDgJRZ0ceqDD+6Wz1J8Mm5ptW1GOLh/IU12TPXjxteqh0Um2vv5eIPmjK9uEK666kK7PqtPDkYhAfWvF+nmOOyPMJfbP4MW/i9WHNF4ghsIMbPKfqNhgSmfrYw="
+  - ./run_pylint.sh
+  - pip install mock trial
+  - ./run_tests.sh
