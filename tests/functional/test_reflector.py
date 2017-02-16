@@ -165,7 +165,7 @@ class TestReflector(unittest.TestCase):
             return defer.DeferredList(check_blob_ds)
 
         def verify_have_blob(blob_hash, blob_size):
-            d = self.server_blob_manager.get_blob(blob_hash, True)
+            d = self.server_blob_manager.get_blob(blob_hash)
             d.addCallback(lambda blob: verify_blob_completed(blob, blob_size))
             return d
 
@@ -196,7 +196,7 @@ class TestReflector(unittest.TestCase):
             return defer.DeferredList(check_blob_ds)
 
         def verify_have_blob(blob_hash, blob_size):
-            d = self.server_blob_manager.get_blob(blob_hash, True)
+            d = self.server_blob_manager.get_blob(blob_hash)
             d.addCallback(lambda blob: verify_blob_completed(blob, blob_size))
             return d
 
@@ -226,7 +226,7 @@ class TestReflector(unittest.TestCase):
             return defer.DeferredList(check_blob_ds)
 
         def verify_have_blob(blob_hash, blob_size):
-            d = self.server_blob_manager.get_blob(blob_hash, True)
+            d = self.server_blob_manager.get_blob(blob_hash)
             d.addCallback(lambda blob: verify_blob_completed(blob, blob_size))
             return d
 

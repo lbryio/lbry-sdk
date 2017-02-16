@@ -25,13 +25,13 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     def __init__(self, rowid, stream_hash, peer_finder, rate_limiter,
                  blob_manager, stream_info_manager, lbry_file_manager,
                  payment_rate_manager, wallet, download_directory,
-                 upload_allowed, file_name=None):
+                 file_name=None):
         EncryptedFileSaver.__init__(self, stream_hash, peer_finder,
                                     rate_limiter, blob_manager,
                                     stream_info_manager,
                                     payment_rate_manager, wallet,
                                     download_directory,
-                                    upload_allowed, file_name)
+                                    file_name)
         self.sd_hash = None
         self.txid = None
         self.nout = None
@@ -151,15 +151,15 @@ class ManagedEncryptedFileDownloaderFactory(object):
     @defer.inlineCallbacks
     def make_downloader(self, metadata, options, payment_rate_manager, download_directory=None,
                         file_name=None):
+        assert len(options) == 1
         data_rate = options[0]
-        upload_allowed = options[1]
         stream_hash = yield save_sd_info(self.lbry_file_manager.stream_info_manager,
                                          metadata.validator.raw_info)
         if metadata.metadata_source == StreamMetadata.FROM_BLOB:
             yield self.lbry_file_manager.save_sd_blob_hash_to_stream(stream_hash,
                                                                      metadata.source_blob_hash)
         lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash, payment_rate_manager,
-                                                               data_rate, upload_allowed,
+                                                               data_rate,
                                                                download_directory, file_name)
         defer.returnValue(lbry_file)
 

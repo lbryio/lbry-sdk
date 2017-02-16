@@ -43,17 +43,5 @@ class EncryptedFileOptions(object):
                 prm.base.min_blob_data_payment_rate,
                 get_default_data_rate_description()
             ),
-            DownloadOption(
-                [
-                    DownloadOptionChoice(bool,
-                                         None,
-                                         None,
-                                         bool_options_description=("Allow", "Disallow")),
-                ],
-                "Allow reuploading data downloaded for this file",
-                "allow upload",
-                True,
-                "Allow"
-            ),
         ]
         return options

@@ -138,7 +138,7 @@ class BlobRequestHandler(object):
             return self._send_blob(response, query)
 
     def _send_blob(self, response, query):
-        d = self.blob_manager.get_blob(query, True)
+        d = self.blob_manager.get_blob(query)
         d.addCallback(self.open_blob_for_reading, response)
         return d
 
@@ -177,7 +177,7 @@ class BlobRequestHandler(object):
             return defer.succeed(response)
         else:
             log.debug("Requested blob: %s", str(incoming))
-            d = self.blob_manager.get_blob(incoming, True)
+            d = self.blob_manager.get_blob(incoming)
             d.addCallback(lambda blob: self.open_blob_for_reading(blob, response))
             return d
 

@@ -137,7 +137,7 @@ class EncryptedFileManager(object):
 
     @defer.inlineCallbacks
     def start_lbry_file(self, rowid, stream_hash,
-                        payment_rate_manager, blob_data_rate=None, upload_allowed=True,
+                        payment_rate_manager, blob_data_rate=None,
                         download_directory=None, file_name=None):
         if not download_directory:
             download_directory = self.download_directory
@@ -153,7 +153,6 @@ class EncryptedFileManager(object):
             payment_rate_manager,
             self.session.wallet,
             download_directory,
-            upload_allowed,
             file_name=file_name
         )
         yield lbry_file_downloader.set_stream_info()
@@ -183,10 +182,10 @@ class EncryptedFileManager(object):
 
     @defer.inlineCallbacks
     def add_lbry_file(self, stream_hash, payment_rate_manager, blob_data_rate=None,
-                      upload_allowed=True, download_directory=None, file_name=None):
+                      download_directory=None, file_name=None):
         rowid = yield self._save_lbry_file(stream_hash, blob_data_rate)
         lbry_file = yield self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
-                                               blob_data_rate, upload_allowed, download_directory,
+                                               blob_data_rate, download_directory,
                                                file_name)
         defer.returnValue(lbry_file)
 
@@ -270,9 +269,8 @@ class EncryptedFileManager(object):
     @rerun_if_locked
     def _save_lbry_file(self, stream_hash, data_payment_rate):
         def do_save(db_transaction):
-            db_transaction.execute("insert into lbry_file_options values (?, ?, ?)",
-                                  (data_payment_rate, ManagedEncryptedFileDownloader.STATUS_STOPPED,
-                                   stream_hash))
+            row = (data_payment_rate, ManagedEncryptedFileDownloader.STATUS_STOPPED, stream_hash)
+            db_transaction.execute("insert into lbry_file_options values (?, ?, ?)", row)
             return db_transaction.lastrowid
         return self.sql_db.runInteraction(do_save)
 

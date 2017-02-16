@@ -11,9 +11,8 @@ log = logging.getLogger(__name__)
 class DownloadManager(object):
     implements(interfaces.IDownloadManager)
 
-    def __init__(self, blob_manager, upload_allowed):
+    def __init__(self, blob_manager):
         self.blob_manager = blob_manager
-        self.upload_allowed = upload_allowed
         self.blob_info_finder = None
         self.progress_manager = None
         self.blob_handler = None
@@ -82,8 +81,7 @@ class DownloadManager(object):
                 self.blob_infos[blob_info.blob_num] = blob_info
                 log.debug(
                     "Trying to get the blob associated with blob hash %s", blob_info.blob_hash)
-                d = self.blob_manager.get_blob(
-                    blob_info.blob_hash, self.upload_allowed, blob_info.length)
+                d = self.blob_manager.get_blob(blob_info.blob_hash, blob_info.length)
                 d.addCallback(add_blob_to_list, blob_info.blob_num)
                 d.addErrback(error_during_add)
                 ds.append(d)

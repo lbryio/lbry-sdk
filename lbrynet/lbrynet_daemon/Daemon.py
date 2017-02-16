@@ -176,7 +176,7 @@ class AlwaysSend(object):
 @defer.inlineCallbacks
 def calculate_available_blob_size(blob_manager):
     blob_hashes = yield blob_manager.get_all_verified_blobs()
-    blobs = yield defer.DeferredList([blob_manager.get_blob(b, True) for b in blob_hashes])
+    blobs = yield defer.DeferredList([blob_manager.get_blob(b) for b in blob_hashes])
     defer.returnValue(sum(b.length for success, b in blobs if success and b.length))
 
 
@@ -858,7 +858,7 @@ class Daemon(AuthJSONRPCServer):
 
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
-            return self.session.blob_manager.get_blob(blob[0], True)
+            return self.session.blob_manager.get_blob(blob[0])
 
         def _check_est(downloader):
             if downloader.result is not None:
@@ -1357,7 +1357,6 @@ class Daemon(AuthJSONRPCServer):
             'stream_hash': base 58 string
             'stream_name': string
             'suggested_file_name': string
-            'upload_allowed': bool
             'sd_hash': string
         """
 
@@ -1389,7 +1388,6 @@ class Daemon(AuthJSONRPCServer):
             'stream_hash': base 58 string
             'stream_name': string
             'suggested_file_name': string
-            'upload_allowed': bool
             'sd_hash': string
         """
         d = self._get_deferred_for_lbry_file(kwargs)
@@ -2588,7 +2586,6 @@ class _GetFileHelper(object):
             'stream_hash': lbry_file.stream_hash,
             'stream_name': lbry_file.stream_name,
             'suggested_file_name': lbry_file.suggested_file_name,
-            'upload_allowed': lbry_file.upload_allowed,
             'sd_hash': lbry_file.sd_hash,
             'lbry_uri': lbry_file.uri,
             'txid': lbry_file.txid,
