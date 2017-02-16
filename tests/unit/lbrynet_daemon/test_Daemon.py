@@ -14,7 +14,7 @@ from tests.mocks import mock_conf_settings
 
 
 class MiscTests(unittest.TestCase):
-    def test_get_lbrynet_version_from_github(self):
+    def test_get_lbry_electron_client_version_from_github(self):
         response = mock.create_autospec(requests.Response)
         # don't need to mock out the entire response from the api
         # but at least need 'tag_name'
@@ -28,7 +28,7 @@ class MiscTests(unittest.TestCase):
         }
         with mock.patch('lbrynet.lbrynet_daemon.Daemon.requests') as req:
             req.get.return_value = response
-            self.assertEqual('0.3.8', Daemon.get_lbrynet_version_from_github())
+            self.assertEqual('0.3.8', Daemon.get_lbry_electron_client_version_from_github())
 
     def test_error_is_thrown_if_prerelease(self):
         response = mock.create_autospec(requests.Response)

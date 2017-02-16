@@ -18,8 +18,8 @@ from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
-from lbryum.version import LBRYUM_VERSION as lbryum_version
-from lbrynet import __version__ as lbrynet_version
+from lbryum.version import LBRYUM_VERSION
+from lbrynet import __version__ as LBRYNET_VERSION
 from lbrynet import conf, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
@@ -130,23 +130,24 @@ class CheckRemoteVersions(object):
         self.daemon = daemon
 
     def __call__(self):
-        d = threads.deferToThread(self._get_lbrynet_version)
-        d.addErrback(self._trap_and_log_error, 'lbrynet')
+        d = threads.deferToThread(self._get_lbry_electron_client_version)
+        d.addErrback(self._trap_and_log_error, 'lbry-electron')
         d.addErrback(log.fail(), 'Failure checking versions on github')
 
     def _trap_and_log_error(self, err, module_checked):
         # KeyError is thrown by get_version_from_github
         # It'd be better to catch the error before trying to parse the response
         err.trap(requests_exceptions.RequestException, KeyError)
-        if err.check(requests_exceptions.RequestException, KeyError):
-            log.warning("Failed to check latest %s version from github", module_checked)
+        log.warning("Failed to check latest %s version from github", module_checked)
 
-    def _get_lbrynet_version(self):
-        self.daemon.git_lbrynet_version = get_lbrynet_version_from_github()
+    def _get_lbry_electron_client_version(self):
+        # We'll need to enusre the lbry-electron version is in sync
+        # with the lbrynet-daemon version
+        self.daemon.git_lbrynet_version = get_lbry_electron_client_version_from_github()
         log.info(
             "remote lbrynet %s > local lbrynet %s = %s",
-            self.daemon.git_lbrynet_version, lbrynet_version,
-            utils.version_is_greater_than(self.daemon.git_lbrynet_version, lbryum_version)
+            self.daemon.git_lbrynet_version, LBRYNET_VERSION,
+            utils.version_is_greater_than(self.daemon.git_lbrynet_version, LBRYNET_VERSION)
         )
 
 
@@ -188,7 +189,7 @@ class Daemon(AuthJSONRPCServer):
             'is_running', 'is_first_run', 'get_time_behind_blockchain', 'daemon_status',
             'get_start_notice',
         ]
-        last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
+        last_version = {'last_version': {'lbrynet': LBRYNET_VERSION, 'lbryum': LBRYUM_VERSION}}
         conf.settings.update(last_version)
         self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
@@ -1228,15 +1229,15 @@ class Daemon(AuthJSONRPCServer):
         platform_info = self._get_platform()
         try:
             lbrynet_update_available = utils.version_is_greater_than(
-                self.git_lbrynet_version, lbrynet_version)
+                self.git_lbrynet_version, LBRYNET_VERSION)
         except TypeError:
             lbrynet_update_available = False
         msg = {
             'platform': platform_info['platform'],
             'os_release': platform_info['os_release'],
             'os_system': platform_info['os_system'],
-            'lbrynet_version': lbrynet_version,
-            'lbryum_version': lbryum_version,
+            'lbrynet_version': LBRYNET_VERSION,
+            'lbryum_version': LBRYUM_VERSION,
             'ui_version': platform_info['ui_version'],
             'remote_lbrynet': self.git_lbrynet_version,
             'lbrynet_update_available': lbrynet_update_available,
@@ -1260,7 +1261,7 @@ class Daemon(AuthJSONRPCServer):
             message,
             conf.settings.installation_id,
             platform_name,
-            lbrynet_version
+            LBRYNET_VERSION
         )
         return self._render_response(True)
 
@@ -2470,8 +2471,9 @@ class Daemon(AuthJSONRPCServer):
         return d
 
 
-def get_lbrynet_version_from_github():
-    return get_version_from_github('https://api.github.com/repos/lbryio/lbry/releases/latest')
+def get_lbry_electron_client_version_from_github():
+    return get_version_from_github(
+        'https://api.github.com/repos/lbryio/lbry-electron/releases/latest')
 
 
 def get_version_from_github(url):
