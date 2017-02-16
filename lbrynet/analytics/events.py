@@ -67,6 +67,7 @@ class Events(object):
             'module': log_record.module,
             'lineno': log_record.lineno,
             'name': log_record.name,
+            'traceback': log_record.exc_text,
         }
         return self._event('Error', properties)
 
