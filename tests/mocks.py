@@ -80,6 +80,9 @@ class Wallet(object):
     def get_claim_metadata_for_sd_hash(self, sd_hash):
         return "fakeuri", "faketxid", "fakenout"
 
+    def get_claimid(self, name, txid=None, nout=None):
+        return "fake claimid"
+
 
 class PeerFinder(object):
     def __init__(self, start_port, peer_manager, num_peers):
