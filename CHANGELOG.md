@@ -55,6 +55,7 @@ at anytime.
  * Remove lbryum version check; use lbry-electron as version source
  * Include download url in version check
  * Refactor EncryptedFileMetadataManager and convert to inlineCallbacks
+ * Refactor EncryptedFileManager
 
 ### Fixed
  * add misssing traceback to logging
@@ -65,6 +66,7 @@ at anytime.
  * Add better logging to help track down [#478](https://github.com/lbryio/lbry/issues/478)
  * Catch UnknownNameErrors when resolving a name. [#479](https://github.com/lbryio/lbry/issues/479)
 
+ * Remove unused upload_allowed option
 ### Changed
  * Add blob_get, descriptor_get, and blob_delete
  * Add filter keyword args to blob_list

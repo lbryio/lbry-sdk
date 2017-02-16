@@ -77,7 +77,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             self.completed = True
             defer.returnValue(True)
         else:
-            raise Exception("Unknown status for stream %s: %s", self.stream_hash, status)
+            raise Exception("Unknown status for stream %s: %s" % (self.stream_hash, status))
 
     @defer.inlineCallbacks
     def stop(self, err=None, change_status=True):
