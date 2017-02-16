@@ -129,8 +129,6 @@ class CheckRemoteVersions(object):
     def __call__(self):
         d = threads.deferToThread(self._get_lbrynet_version)
         d.addErrback(self._trap_and_log_error, 'lbrynet')
-        d.addCallback(lambda _: threads.deferToThread(self._get_lbryum_version))
-        d.addErrback(self._trap_and_log_error, 'lbryum')
         d.addErrback(log.fail(), 'Failure checking versions on github')
 
     def _trap_and_log_error(self, err, module_checked):
@@ -139,14 +137,6 @@ class CheckRemoteVersions(object):
         err.trap(requests_exceptions.RequestException, KeyError)
         if err.check(requests_exceptions.RequestException, KeyError):
             log.warning("Failed to check latest %s version from github", module_checked)
-
-    def _get_lbryum_version(self):
-        self.daemon.git_lbryum_version = get_lbryum_version_from_github()
-        log.info(
-            "remote lbryum %s > local lbryum %s = %s",
-            self.daemon.git_lbryum_version, lbryum_version,
-            utils.version_is_greater_than(self.daemon.git_lbryum_version, lbryum_version)
-        )
 
     def _get_lbrynet_version(self):
         self.daemon.git_lbrynet_version = get_lbrynet_version_from_github()
@@ -231,7 +221,6 @@ class Daemon(AuthJSONRPCServer):
         self.connected_to_internet = True
         self.connection_status_code = None
         self.git_lbrynet_version = None
-        self.git_lbryum_version = None
         self.platform = None
         self.first_run = None
         self.log_file = conf.settings.get_log_filename()
@@ -354,7 +343,7 @@ class Daemon(AuthJSONRPCServer):
     def _update_connection_status(self):
         self.connection_status_code = CONNECTION_STATUS_CONNECTED
 
-        if not self.git_lbrynet_version or not self.git_lbryum_version:
+        if not self.git_lbrynet_version:
             self.connection_status_code = CONNECTION_STATUS_VERSION_CHECK
 
         if not self.connected_to_internet:
@@ -1148,11 +1137,6 @@ class Daemon(AuthJSONRPCServer):
                 self.git_lbrynet_version, lbrynet_version)
         except TypeError:
             lbrynet_update_available = False
-        try:
-            lbryum_update_available = utils.version_is_greater_than(
-                self.git_lbryum_version, lbryum_version)
-        except TypeError:
-            lbryum_update_available = False
         msg = {
             'platform': platform_info['platform'],
             'os_release': platform_info['os_release'],
@@ -1161,9 +1145,7 @@ class Daemon(AuthJSONRPCServer):
             'lbryum_version': lbryum_version,
             'ui_version': platform_info['ui_version'],
             'remote_lbrynet': self.git_lbrynet_version,
-            'remote_lbryum': self.git_lbryum_version,
             'lbrynet_update_available': lbrynet_update_available,
-            'lbryum_update_available': lbryum_update_available
         }
 
         log.info("Get version info: " + json.dumps(msg))
@@ -2262,10 +2244,6 @@ class Daemon(AuthJSONRPCServer):
         d = self.jsonrpc_status()
         d.addCallback(_get_startup_message)
         return d
-
-
-def get_lbryum_version_from_github():
-    return get_version_from_github('https://api.github.com/repos/lbryio/lbryum/releases/latest')
 
 
 def get_lbrynet_version_from_github():
