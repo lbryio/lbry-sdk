@@ -8,23 +8,16 @@ import sys
 import random
 import unittest
 
-from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.Hash import MD5
 from lbrynet import conf
-from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
-from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
-from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager, \
-    DBEncryptedFileMetadataManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import EncryptedFileMetadataManager
 from lbrynet import analytics
 from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.core.PTCWallet import PointTraderKeyQueryHandlerFactory, PointTraderKeyExchanger
 from lbrynet.core.Session import Session
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
@@ -122,7 +115,7 @@ class LbryUploader(object):
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
             dht_node_class=Node, is_generous=self.is_generous)
-        stream_info_manager = TempEncryptedFileMetadataManager()
+        stream_info_manager = EncryptedFileMetadataManager()
         self.lbry_file_manager = EncryptedFileManager(
             self.session, stream_info_manager, self.sd_identifier)
         if self.ul_rate_limit is not None:
@@ -142,6 +135,7 @@ class LbryUploader(object):
 
         def print_error(err):
             logging.critical("Server error: %s", err.getErrorMessage())
+            logging.critical(err.getTraceback())
 
         d.addErrback(print_error)
         return d
@@ -228,7 +222,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                       blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-    stream_info_manager = TempEncryptedFileMetadataManager()
+    stream_info_manager = EncryptedFileMetadataManager()
 
     lbry_file_manager = EncryptedFileManager(session, stream_info_manager, sd_identifier)
 
@@ -645,7 +639,7 @@ class TestTransfer(TestCase):
             blob_tracker_class=DummyBlobAvailabilityTracker,
             dht_node_class=Node, is_generous=self.is_generous)
 
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = EncryptedFileMetadataManager()
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
@@ -1034,7 +1028,7 @@ class TestTransfer(TestCase):
                                wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker,
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = EncryptedFileMetadataManager()
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)

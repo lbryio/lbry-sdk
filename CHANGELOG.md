@@ -54,6 +54,7 @@ at anytime.
  * Remove code related to packaging as that step is now done in the electron client
  * Remove lbryum version check; use lbry-electron as version source
  * Include download url in version check
+ * Refactor EncryptedFileMetadataManager and convert to inlineCallbacks
 
 ### Fixed
  * add misssing traceback to logging

@@ -2,197 +2,281 @@ import logging
 import sqlite3
 import os
 from twisted.internet import defer
-from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
-from lbrynet.core.Error import DuplicateStreamHashError, NoSuchStreamHash, NoSuchSDHash
+from zope.interface import implements
+from lbrynet.interfaces import IEncryptedFileMetadataManager
+from lbrynet.core.Error import DuplicateStreamHashError, NoSuchStreamHash
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
 
 log = logging.getLogger(__name__)
 
 
-class DBEncryptedFileMetadataManager(object):
+class EncryptedFileMetadataManager(object):
+    implements(IEncryptedFileMetadataManager)
+
+    def __init__(self):
+        self.streams = {}
+        self.stream_blobs = {}
+        self.sd_files = {}
+
+    @defer.inlineCallbacks
+    def setup(self):
+        yield self._setup()
+
+    @defer.inlineCallbacks
+    def stop(self):
+        yield self._stop()
+        log.info("Stopped %s", self)
+
+    @defer.inlineCallbacks
+    def get_all_streams(self):
+        stream_hashes = yield self._get_all_streams()
+        defer.returnValue(stream_hashes)
+
+    @defer.inlineCallbacks
+    def save_stream(self, stream_hash, file_name, key, suggested_file_name, blobs):
+        yield self._store_stream(stream_hash, file_name, key, suggested_file_name)
+        yield self.add_blobs_to_stream(stream_hash, blobs)
+
+    @defer.inlineCallbacks
+    def get_stream_info(self, stream_hash):
+        stream_info = yield self._get_stream_info(stream_hash)
+        defer.returnValue(stream_info)
+
+    @defer.inlineCallbacks
+    def check_if_stream_exists(self, stream_hash):
+        stream_exists = yield self._check_if_stream_exists(stream_hash)
+        defer.returnValue(stream_exists)
+
+    @defer.inlineCallbacks
+    def delete_stream(self, stream_hash):
+        yield self._delete_stream(stream_hash)
+
+    @defer.inlineCallbacks
+    def add_blobs_to_stream(self, stream_hash, blobs):
+        yield self._add_blobs_to_stream(stream_hash, blobs, ignore_duplicate_error=True)
+
+    @defer.inlineCallbacks
+    def get_blobs_for_stream(self, stream_hash, start_blob=None,
+                             end_blob=None, count=None, reverse=False):
+        log.debug("Getting blobs for stream %s. Count is %s", stream_hash, count)
+        if start_blob is not None:
+            start_blob = yield self._get_blob_num_by_hash(stream_hash, start_blob)
+        if end_blob is not None:
+            end_blob = yield self._get_blob_num_by_hash(stream_hash, end_blob)
+        blob_infos = yield self._get_further_blob_infos(stream_hash, start_blob,
+                                                        end_blob, count, reverse)
+        defer.returnValue(blob_infos)
+
+    @defer.inlineCallbacks
+    def get_stream_of_blob(self, blob_hash):
+        stream_hash = yield self._get_stream_of_blobhash(blob_hash)
+        defer.returnValue(stream_hash)
+
+    @defer.inlineCallbacks
+    def save_sd_blob_hash_to_stream(self, stream_hash, sd_blob_hash):
+        yield self._save_sd_blob_hash_to_stream(stream_hash, sd_blob_hash)
+
+    @defer.inlineCallbacks
+    def get_sd_blob_hashes_for_stream(self, stream_hash):
+        sd_hashes = yield self._get_sd_blob_hashes_for_stream(stream_hash)
+        defer.returnValue(sd_hashes)
+
+    # # # # # # # # # # # # # # # #
+    # functions to be overridden  #
+    # # # # # # # # # # # # # # # #
+
+    def _delete_stream(self, stream_hash):
+        if stream_hash in self.streams:
+            del self.streams[stream_hash]
+            for (s_h, b_h) in self.stream_blobs.keys():
+                if s_h == stream_hash:
+                    del self.stream_blobs[(s_h, b_h)]
+
+    def _store_stream(self, stream_hash, name, key, suggested_file_name):
+        self.streams[stream_hash] = {
+            'suggested_file_name': suggested_file_name,
+            'stream_name': name,
+            'key': key
+        }
+
+    def _get_all_streams(self):
+        return self.streams.keys()
+
+    def _get_stream_info(self, stream_hash):
+        if stream_hash in self.streams:
+            stream_info = self.streams[stream_hash]
+            return [stream_info['key'],
+                      stream_info['stream_name'],
+                      stream_info['suggested_file_name']]
+
+    def _check_if_stream_exists(self, stream_hash):
+        return stream_hash in self.streams
+
+    def _get_blob_num_by_hash(self, stream_hash, blob_hash):
+        if (stream_hash, blob_hash) in self.stream_blobs:
+            return self.stream_blobs[(stream_hash, blob_hash)]['blob_num']
+
+    def _get_further_blob_infos(self, stream_hash, start_num, end_num, count=None, reverse=False):
+        blob_infos = []
+        for (s_h, b_h), info in self.stream_blobs.iteritems():
+            if stream_hash == s_h:
+                position = info['blob_num']
+                length = info['length']
+                iv = info['iv']
+                if (start_num is None) or (position > start_num):
+                    if (end_num is None) or (position < end_num):
+                        blob_infos.append((b_h, position, iv, length))
+        blob_infos.sort(key=lambda i: i[1], reverse=reverse)
+        if count is not None:
+            blob_infos = blob_infos[:count]
+        return blob_infos
+
+    def _add_blobs_to_stream(self, stream_hash, blob_infos, ignore_duplicate_error=False):
+        assert stream_hash in self.streams, "Can't add blobs to a stream that isn't known"
+        for blob in blob_infos:
+            info = {}
+            info['blob_num'] = blob.blob_num
+            info['length'] = blob.length
+            info['iv'] = blob.iv
+            self.stream_blobs[(stream_hash, blob.blob_hash)] = info
+
+    def _get_stream_of_blobhash(self, blob_hash):
+        for (stream_hash, stream_blob_hash) in self.stream_blobs.iterkeys():
+            if stream_blob_hash == blob_hash:
+                return stream_hash
+
+    def _save_sd_blob_hash_to_stream(self, stream_hash, sd_blob_hash):
+        self.sd_files[sd_blob_hash] = stream_hash
+
+    def _get_sd_blob_hashes_for_stream(self, stream_hash):
+        return [sd_hash for sd_hash, s_h in self.sd_files.iteritems() if stream_hash == s_h]
+
+    def _setup(self):
+        return True
+
+    def _stop(self):
+        return True
+
+
+class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
     """Store and provide access to LBRY file metadata using sqlite"""
 
     def __init__(self, db_dir):
+        EncryptedFileMetadataManager.__init__(self)
         self.db_dir = db_dir
+        self.db_path = os.path.join(self.db_dir, "lbryfile_info.db")
+        self.db_conn = None
         self.stream_info_db = None
         self.stream_blob_db = None
         self.stream_desc_db = None
 
-    def setup(self):
-        return self._open_db()
-
-    def stop(self):
+    @defer.inlineCallbacks
+    def _stop(self):
+        if self.db_conn:
+            yield self.db_conn.close()
         self.db_conn = None
-        return defer.succeed(True)
+        defer.returnValue(True)
 
-    def get_all_streams(self):
-        return self._get_all_streams()
-
-    def save_stream(self, stream_hash, file_name, key, suggested_file_name, blobs):
-        d = self._store_stream(stream_hash, file_name, key, suggested_file_name)
-        d.addCallback(lambda _: self.add_blobs_to_stream(stream_hash, blobs))
-        return d
-
-    def get_stream_info(self, stream_hash):
-        return self._get_stream_info(stream_hash)
-
-    def check_if_stream_exists(self, stream_hash):
-        return self._check_if_stream_exists(stream_hash)
-
-    def delete_stream(self, stream_hash):
-        return self._delete_stream(stream_hash)
-
-    def add_blobs_to_stream(self, stream_hash, blobs):
-        return self._add_blobs_to_stream(stream_hash, blobs, ignore_duplicate_error=True)
-
-    def get_blobs_for_stream(self, stream_hash, start_blob=None,
-                             end_blob=None, count=None, reverse=False):
-        log.debug("Getting blobs for stream %s. Count is %s", stream_hash, count)
-
-        def get_positions_of_start_and_end():
-            if start_blob is not None:
-                d1 = self._get_blob_num_by_hash(stream_hash, start_blob)
-            else:
-                d1 = defer.succeed(None)
-            if end_blob is not None:
-                d2 = self._get_blob_num_by_hash(stream_hash, end_blob)
-            else:
-                d2 = defer.succeed(None)
-
-            dl = defer.DeferredList([d1, d2])
-
-            def get_positions(results):
-                start_num = None
-                end_num = None
-                if results[0][0] is True:
-                    start_num = results[0][1]
-                if results[1][0] is True:
-                    end_num = results[1][1]
-                return start_num, end_num
-
-            dl.addCallback(get_positions)
-            return dl
-
-        def get_blob_infos(nums):
-            start_num, end_num = nums
-            return self._get_further_blob_infos(stream_hash, start_num, end_num,
-                                                count, reverse)
-
-        d = get_positions_of_start_and_end()
-        d.addCallback(get_blob_infos)
-        return d
-
-    def get_stream_of_blob(self, blob_hash):
-        return self._get_stream_of_blobhash(blob_hash)
-
-    def save_sd_blob_hash_to_stream(self, stream_hash, sd_blob_hash):
-        return self._save_sd_blob_hash_to_stream(stream_hash, sd_blob_hash)
-
-    def get_sd_blob_hashes_for_stream(self, stream_hash):
-        return self._get_sd_blob_hashes_for_stream(stream_hash)
-
-    def get_stream_hash_for_sd_hash(self, sd_hash):
-        return self._get_stream_hash_for_sd_blob_hash(sd_hash)
-
-    def _open_db(self):
+    @defer.inlineCallbacks
+    def _setup(self):
         # check_same_thread=False is solely to quiet a spurious error that appears to be due
         # to a bug in twisted, where the connection is closed by a different thread than the
         # one that opened it. The individual connections in the pool are not used in multiple
         # threads.
-        self.db_conn = adbapi.ConnectionPool(
-            "sqlite3",
-            (os.path.join(self.db_dir, "lbryfile_info.db")),
-            check_same_thread=False)
+        self.db_conn = adbapi.ConnectionPool("sqlite3", self.db_path, check_same_thread=False)
 
-        def create_tables(transaction):
-            transaction.execute("create table if not exists lbry_files (" +
-                                "    stream_hash text primary key, " +
-                                "    key text, " +
-                                "    stream_name text, " +
-                                "    suggested_file_name text" +
-                                ")")
-            transaction.execute("create table if not exists lbry_file_blobs (" +
-                                "    blob_hash text, " +
-                                "    stream_hash text, " +
-                                "    position integer, " +
-                                "    iv text, " +
-                                "    length integer, " +
-                                "    foreign key(stream_hash) references lbry_files(stream_hash)" +
-                                ")")
-            transaction.execute("create table if not exists lbry_file_descriptors (" +
-                                "    sd_blob_hash TEXT PRIMARY KEY, " +
-                                "    stream_hash TEXT, " +
-                                "    foreign key(stream_hash) references lbry_files(stream_hash)" +
-                                ")")
+        create_tables_queries = [
+            "create table if not exists lbry_files (" +
+            "    stream_hash text primary key, " +
+            "    key text, " +
+            "    stream_name text, " +
+            "    suggested_file_name text" +
+            ")",
+            "create table if not exists lbry_file_blobs (" +
+            "    blob_hash text, " +
+            "    stream_hash text, " +
+            "    position integer, " +
+            "    iv text, " +
+            "    length integer, " +
+            "    foreign key(stream_hash) references lbry_files(stream_hash)" +
+            ")",
+            "create table if not exists lbry_file_descriptors (" +
+            "    sd_blob_hash TEXT PRIMARY KEY, " +
+            "    stream_hash TEXT, " +
+            "    foreign key(stream_hash) references lbry_files(stream_hash)" +
+            ")"
+        ]
 
-        return self.db_conn.runInteraction(create_tables)
+        for create_table_query in create_tables_queries:
+            yield self.db_conn.runQuery(create_table_query)
+        defer.returnValue(None)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _delete_stream(self, stream_hash):
-        d = self.db_conn.runQuery(
-            "select stream_hash from lbry_files where stream_hash = ?", (stream_hash,))
-        d.addCallback(
-            lambda result: result[0][0] if result else Failure(NoSuchStreamHash(stream_hash)))
-
-        def do_delete(transaction, s_h):
-            transaction.execute("delete from lbry_files where stream_hash = ?", (s_h,))
-            transaction.execute("delete from lbry_file_blobs where stream_hash = ?", (s_h,))
-            transaction.execute("delete from lbry_file_descriptors where stream_hash = ?", (s_h,))
-
-        d.addCallback(lambda s_h: self.db_conn.runInteraction(do_delete, s_h))
-        return d
+        select_stream_hash_query = "select stream_hash from lbry_files where stream_hash = ?"
+        result = yield self.db_conn.runQuery(select_stream_hash_query, (stream_hash,))
+        if result:
+            yield self.db_conn.runQuery("delete from lbry_files where stream_hash = ?",
+                                        (stream_hash,))
+            yield self.db_conn.runQuery("delete from lbry_files where stream_hash = ?",
+                                        (stream_hash,))
+            yield self.db_conn.runQuery("delete from lbry_file_descriptors where stream_hash = ?",
+                                        (stream_hash,))
+        else:
+            raise NoSuchStreamHash(stream_hash)
+        defer.returnValue(None)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _store_stream(self, stream_hash, name, key, suggested_file_name):
-        d = self.db_conn.runQuery("insert into lbry_files values (?, ?, ?, ?)",
+        try:
+            yield self.db_conn.runQuery("insert into lbry_files values (?, ?, ?, ?)",
                                   (stream_hash, key, name, suggested_file_name))
-
-        def check_duplicate(err):
-            if err.check(sqlite3.IntegrityError):
-                raise DuplicateStreamHashError(stream_hash)
-            return err
-
-        d.addErrback(check_duplicate)
-        return d
+        except sqlite3.IntegrityError:
+            raise DuplicateStreamHashError(stream_hash)
+        defer.returnValue(None)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _get_all_streams(self):
-        d = self.db_conn.runQuery("select stream_hash from lbry_files")
-        d.addCallback(lambda results: [r[0] for r in results])
-        return d
+        results = yield self.db_conn.runQuery("select stream_hash from lbry_files")
+        defer.returnValue([r[0] for r in results])
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _get_stream_info(self, stream_hash):
-        def get_result(res):
-            if res:
-                return res[0]
-            else:
-                raise NoSuchStreamHash(stream_hash)
-
-        d = self.db_conn.runQuery(
-            "select key, stream_name, suggested_file_name from lbry_files where stream_hash = ?",
-            (stream_hash,))
-        d.addCallback(get_result)
-        return d
+        query = "select key, stream_name, suggested_file_name from lbry_files where stream_hash = ?"
+        result = yield self.db_conn.runQuery(query, (stream_hash,))
+        if result:
+            defer.returnValue(result[0])
+        else:
+            raise NoSuchStreamHash(stream_hash)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _check_if_stream_exists(self, stream_hash):
-        d = self.db_conn.runQuery(
-            "select stream_hash from lbry_files where stream_hash = ?", (stream_hash,))
-        d.addCallback(lambda r: True if len(r) else False)
-        return d
+        query = "select stream_hash from lbry_files where stream_hash = ?"
+        results = yield self.db_conn.runQuery(query, (stream_hash,))
+        if results:
+            defer.returnValue(True)
+        else:
+            defer.returnValue(False)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _get_blob_num_by_hash(self, stream_hash, blob_hash):
-        d = self.db_conn.runQuery(
-            "select position from lbry_file_blobs where stream_hash = ? and blob_hash = ?",
-            (stream_hash, blob_hash))
-        d.addCallback(lambda r: r[0][0] if len(r) else None)
-        return d
+        query = "select position from lbry_file_blobs where stream_hash = ? and blob_hash = ?"
+        results = yield self.db_conn.runQuery(query, (stream_hash, blob_hash))
+        result = None
+        if results:
+            result = results[0][0]
+        defer.returnValue(result)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _get_further_blob_infos(self, stream_hash, start_num, end_num, count=None, reverse=False):
         params = []
         q_string = "select * from ("
@@ -214,9 +298,11 @@ class DBEncryptedFileMetadataManager(object):
         q_string += ") order by position"
         # Order by position is done twice so that it always returns them from lowest position to
         # greatest, but the limit by clause can select the 'count' greatest or 'count' least
-        return self.db_conn.runQuery(q_string, tuple(params))
+        result = yield self.db_conn.runQuery(q_string, tuple(params))
+        defer.returnValue(result)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _add_blobs_to_stream(self, stream_hash, blob_infos, ignore_duplicate_error=False):
 
         def add_blobs(transaction):
@@ -229,142 +315,32 @@ class DBEncryptedFileMetadataManager(object):
                     if ignore_duplicate_error is False:
                         raise
 
-        return self.db_conn.runInteraction(add_blobs)
+        result = yield self.db_conn.runInteraction(add_blobs)
+        defer.returnValue(result)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _get_stream_of_blobhash(self, blob_hash):
-        d = self.db_conn.runQuery("select stream_hash from lbry_file_blobs where blob_hash = ?",
-                                  (blob_hash,))
-        d.addCallback(lambda r: r[0][0] if len(r) else None)
-        return d
+        query = "select stream_hash from lbry_file_blobs where blob_hash = ?"
+        results = yield self.db_conn.runQuery(query, (blob_hash,))
+        result = None
+        if results:
+            result = results[0][0]
+        defer.returnValue(result)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _save_sd_blob_hash_to_stream(self, stream_hash, sd_blob_hash):
-        log.info("Saving sd blob hash %s to stream hash %s", str(sd_blob_hash), str(stream_hash))
-        d = self.db_conn.runQuery("insert into lbry_file_descriptors values (?, ?)",
+        try:
+            yield self.db_conn.runQuery("insert into lbry_file_descriptors values (?, ?)",
                                   (sd_blob_hash, stream_hash))
-
-        def ignore_duplicate(err):
-            err.trap(sqlite3.IntegrityError)
-            log.info("sd blob hash already known")
-
-        d.addErrback(ignore_duplicate)
-        return d
+        except sqlite3.IntegrityError:
+            log.warning("sd blob hash already known")
+        defer.returnValue(None)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _get_sd_blob_hashes_for_stream(self, stream_hash):
-        log.debug("Looking up sd blob hashes for stream hash %s", str(stream_hash))
-        d = self.db_conn.runQuery(
-            "select sd_blob_hash from lbry_file_descriptors where stream_hash = ?",
-            (stream_hash,))
-        d.addCallback(lambda results: [r[0] for r in results])
-        return d
-
-    @rerun_if_locked
-    def _get_stream_hash_for_sd_blob_hash(self, sd_blob_hash):
-        def _handle_result(result):
-            if not result:
-                raise NoSuchSDHash(sd_blob_hash)
-            return result[0][0]
-
-        log.debug("Looking up sd blob hashes for sd blob hash %s", str(sd_blob_hash))
-        d = self.db_conn.runQuery(
-            "select stream_hash from lbry_file_descriptors where sd_blob_hash = ?",
-            (sd_blob_hash,))
-        d.addCallback(_handle_result)
-        return d
-
-
-class TempEncryptedFileMetadataManager(object):
-    def __init__(self):
-        self.streams = {}
-        self.stream_blobs = {}
-        self.sd_files = {}
-
-    def setup(self):
-        return defer.succeed(True)
-
-    def stop(self):
-        return defer.succeed(True)
-
-    def get_all_streams(self):
-        return defer.succeed(self.streams.keys())
-
-    def save_stream(self, stream_hash, file_name, key, suggested_file_name, blobs):
-        self.streams[stream_hash] = {'suggested_file_name': suggested_file_name,
-                                     'stream_name': file_name,
-                                     'key': key}
-        d = self.add_blobs_to_stream(stream_hash, blobs)
-        d.addCallback(lambda _: stream_hash)
-        return d
-
-    def get_stream_info(self, stream_hash):
-        if stream_hash in self.streams:
-            stream_info = self.streams[stream_hash]
-            return defer.succeed([stream_info['key'], stream_info['stream_name'],
-                                  stream_info['suggested_file_name']])
-        return defer.succeed(None)
-
-    def delete_stream(self, stream_hash):
-        if stream_hash in self.streams:
-            del self.streams[stream_hash]
-            for (s_h, b_h) in self.stream_blobs.keys():
-                if s_h == stream_hash:
-                    del self.stream_blobs[(s_h, b_h)]
-        return defer.succeed(True)
-
-    def add_blobs_to_stream(self, stream_hash, blobs):
-        assert stream_hash in self.streams, "Can't add blobs to a stream that isn't known"
-        for blob in blobs:
-            info = {}
-            info['blob_num'] = blob.blob_num
-            info['length'] = blob.length
-            info['iv'] = blob.iv
-            self.stream_blobs[(stream_hash, blob.blob_hash)] = info
-        return defer.succeed(True)
-
-    def get_blobs_for_stream(self, stream_hash, start_blob=None,
-                             end_blob=None, count=None, reverse=False):
-
-        if start_blob is not None:
-            start_num = self._get_blob_num_by_hash(stream_hash, start_blob)
-        else:
-            start_num = None
-        if end_blob is not None:
-            end_num = self._get_blob_num_by_hash(stream_hash, end_blob)
-        else:
-            end_num = None
-        return self._get_further_blob_infos(stream_hash, start_num, end_num, count, reverse)
-
-    def get_stream_of_blob(self, blob_hash):
-        for (s_h, b_h) in self.stream_blobs.iterkeys():
-            if b_h == blob_hash:
-                return defer.succeed(s_h)
-        return defer.succeed(None)
-
-    def _get_further_blob_infos(self, stream_hash, start_num, end_num, count=None, reverse=False):
-        blob_infos = []
-        for (s_h, b_h), info in self.stream_blobs.iteritems():
-            if stream_hash == s_h:
-                position = info['blob_num']
-                length = info['length']
-                iv = info['iv']
-                if (start_num is None) or (position > start_num):
-                    if (end_num is None) or (position < end_num):
-                        blob_infos.append((b_h, position, iv, length))
-        blob_infos.sort(key=lambda i: i[1], reverse=reverse)
-        if count is not None:
-            blob_infos = blob_infos[:count]
-        return defer.succeed(blob_infos)
-
-    def _get_blob_num_by_hash(self, stream_hash, blob_hash):
-        if (stream_hash, blob_hash) in self.stream_blobs:
-            return defer.succeed(self.stream_blobs[(stream_hash, blob_hash)]['blob_num'])
-
-    def save_sd_blob_hash_to_stream(self, stream_hash, sd_blob_hash):
-        self.sd_files[sd_blob_hash] = stream_hash
-        return defer.succeed(True)
-
-    def get_sd_blob_hashes_for_stream(self, stream_hash):
-        return defer.succeed(
-            [sd_hash for sd_hash, s_h in self.sd_files.iteritems() if stream_hash == s_h])
+        query = "select sd_blob_hash from lbry_file_descriptors where stream_hash = ?"
+        results = yield self.db_conn.runQuery(query, (stream_hash,))
+        defer.returnValue([r[0] for r in results])

@@ -474,6 +474,11 @@ class Daemon(AuthJSONRPCServer):
             self.lbry_file_manager.stop()
         return defer.succeed(True)
 
+    def _stop_metadata_manager(self):
+        if self.stream_info_manager:
+            return self.stream_info_manager.stop()
+        return defer.succeed(True)
+
     def _stop_server(self):
         try:
             if self.lbry_server_port is not None:
@@ -549,6 +554,8 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: self._stop_server())
         d.addErrback(log.fail(), 'Failure while shutting down')
         d.addCallback(lambda _: self._stop_reflector())
+        d.addErrback(log.fail(), 'Failure while shutting down')
+        d.addCallback(lambda _: self._stop_metadata_manager())
         d.addErrback(log.fail(), 'Failure while shutting down')
         d.addCallback(lambda _: self._stop_file_manager())
         d.addErrback(log.fail(), 'Failure while shutting down')
