@@ -10,6 +10,7 @@ at anytime.
 ## [Unreleased]
 ### Changed
  * Remove code related to packaging as that step is now done in the electron client
+ * Remove lbryum version check; use lbry-electron as version source
 
 ### Fixed
  * Add better logging to help track down [#478](https://github.com/lbryio/lbry/issues/478)
