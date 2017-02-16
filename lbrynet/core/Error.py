@@ -80,7 +80,7 @@ class NoSuchBlobError(Exception):
     pass
 
 
-class NoSuchStreamHashError(Exception):
+class NoSuchStreamHash(Exception):
     pass
 
 
