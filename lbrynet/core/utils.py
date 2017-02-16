@@ -105,3 +105,7 @@ def setup_certs_for_windows():
 
 def random_string(length=10, chars=string.ascii_lowercase):
     return ''.join([random.choice(chars) for _ in range(length)])
+
+
+def short_hash(hash_str):
+    return hash_str[:6]

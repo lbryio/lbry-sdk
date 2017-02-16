@@ -84,6 +84,12 @@ class NoSuchStreamHashError(Exception):
     pass
 
 
+class NoSuchSDHash(Exception):
+    """
+    Raised if sd hash is not known
+    """
+
+
 class InvalidBlobHashError(Exception):
     pass
 
