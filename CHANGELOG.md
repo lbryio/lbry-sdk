@@ -16,6 +16,12 @@ at anytime.
  * Get lbry files with pending claims
  * Add better logging to help track down [#478](https://github.com/lbryio/lbry/issues/478)
  * Catch UnknownNameErrors when resolving a name. [#479](https://github.com/lbryio/lbry/issues/479)
+### Changed
+ * Add blob_get, descriptor_get, and blob_delete
+ * Add filter keyword args to blob_list
+ * Refactor get_availability
+ * Add optional peer search timeout, add peer_search_timeout setting
+
 
 ## [0.8.3rc3] - 2017-02-14
 

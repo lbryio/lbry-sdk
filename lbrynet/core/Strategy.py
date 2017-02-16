@@ -3,7 +3,7 @@ from decimal import Decimal
 from lbrynet import conf
 from lbrynet.interfaces import INegotiationStrategy
 from lbrynet.core.Offer import Offer
-from lbrynet.core.PriceModel import MeanAvailabilityWeightedPrice
+from lbrynet.core.PriceModel import MeanAvailabilityWeightedPrice, ZeroPrice
 
 
 def get_default_strategy(blob_tracker, **kwargs):
@@ -134,3 +134,19 @@ class BasicAvailabilityWeightedStrategy(Strategy):
         with_premium = self._premium(rate, offer_count)
         rounded_price = round(with_premium, 5)
         return self._bounded_price(rounded_price)
+
+
+class OnlyFreeStrategy(Strategy):
+    implementer(INegotiationStrategy)
+    def __init__(self, *args, **kwargs):
+        price_model = ZeroPrice()
+        Strategy.__init__(self, price_model, 0.0, 0.0, True)
+
+    def _get_mean_rate(self, rates):
+        return 0.0
+
+    def _get_response_rate(self, rates, offer_count):
+        return 0.0
+
+    def _make_rate_offer(self, rates, offer_count):
+        return 0.0

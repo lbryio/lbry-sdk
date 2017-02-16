@@ -4,7 +4,7 @@ import os
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
-from lbrynet.core.Error import DuplicateStreamHashError, NoSuchStreamHashError
+from lbrynet.core.Error import DuplicateStreamHashError, NoSuchStreamHash, NoSuchSDHash
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
 
@@ -93,6 +93,9 @@ class DBEncryptedFileMetadataManager(object):
     def get_sd_blob_hashes_for_stream(self, stream_hash):
         return self._get_sd_blob_hashes_for_stream(stream_hash)
 
+    def get_stream_hash_for_sd_hash(self, sd_hash):
+        return self._get_stream_hash_for_sd_blob_hash(sd_hash)
+
     def _open_db(self):
         # check_same_thread=False is solely to quiet a spurious error that appears to be due
         # to a bug in twisted, where the connection is closed by a different thread than the
@@ -131,7 +134,7 @@ class DBEncryptedFileMetadataManager(object):
         d = self.db_conn.runQuery(
             "select stream_hash from lbry_files where stream_hash = ?", (stream_hash,))
         d.addCallback(
-            lambda result: result[0][0] if result else Failure(NoSuchStreamHashError(stream_hash)))
+            lambda result: result[0][0] if result else Failure(NoSuchStreamHash(stream_hash)))
 
         def do_delete(transaction, s_h):
             transaction.execute("delete from lbry_files where stream_hash = ?", (s_h,))
@@ -166,7 +169,7 @@ class DBEncryptedFileMetadataManager(object):
             if res:
                 return res[0]
             else:
-                raise NoSuchStreamHashError(stream_hash)
+                raise NoSuchStreamHash(stream_hash)
 
         d = self.db_conn.runQuery(
             "select key, stream_name, suggested_file_name from lbry_files where stream_hash = ?",
@@ -255,6 +258,20 @@ class DBEncryptedFileMetadataManager(object):
             "select sd_blob_hash from lbry_file_descriptors where stream_hash = ?",
             (stream_hash,))
         d.addCallback(lambda results: [r[0] for r in results])
+        return d
+
+    @rerun_if_locked
+    def _get_stream_hash_for_sd_blob_hash(self, sd_blob_hash):
+        def _handle_result(result):
+            if not result:
+                raise NoSuchSDHash(sd_blob_hash)
+            return result[0][0]
+
+        log.debug("Looking up sd blob hashes for sd blob hash %s", str(sd_blob_hash))
+        d = self.db_conn.runQuery(
+            "select stream_hash from lbry_file_descriptors where sd_blob_hash = ?",
+            (sd_blob_hash,))
+        d.addCallback(_handle_result)
         return d
 
 

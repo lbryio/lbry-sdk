@@ -7,7 +7,7 @@ import sqlite3
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
-from lbrynet.core.Error import DuplicateStreamHashError, NoSuchStreamHashError
+from lbrynet.core.Error import DuplicateStreamHashError, NoSuchStreamHash
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
 
@@ -150,7 +150,7 @@ class DBLiveStreamMetadataManager(DHTHashSupplier):
     def _delete_stream(self, stream_hash):
 
         d = self.db_conn.runQuery("select stream_hash from live_streams where stream_hash = ?", (stream_hash,))
-        d.addCallback(lambda result: result[0][0] if len(result) else Failure(NoSuchStreamHashError(stream_hash)))
+        d.addCallback(lambda result: result[0][0] if len(result) else Failure(NoSuchStreamHash(stream_hash)))
 
         def do_delete(transaction, s_h):
             transaction.execute("delete from live_streams where stream_hash = ?", (s_h,))
@@ -183,7 +183,7 @@ class DBLiveStreamMetadataManager(DHTHashSupplier):
     def _get_stream_info(self, stream_hash):
         d = self.db_conn.runQuery("select public_key, key, stream_name from live_streams where stream_hash = ?",
                                   (stream_hash,))
-        d.addCallback(lambda result: result[0] if len(result) else Failure(NoSuchStreamHashError(stream_hash)))
+        d.addCallback(lambda result: result[0] if len(result) else Failure(NoSuchStreamHash(stream_hash)))
         return d
 
     @rerun_if_locked

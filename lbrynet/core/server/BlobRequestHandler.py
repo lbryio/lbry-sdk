@@ -150,7 +150,7 @@ class BlobRequestHandler(object):
             if read_handle is not None:
                 self.currently_uploading = blob
                 self.read_handle = read_handle
-                log.info("Sending %s to client", str(blob))
+                log.info("Sending %s to %s", str(blob), self.peer)
                 response_fields['blob_hash'] = blob.blob_hash
                 response_fields['length'] = blob.length
                 response['incoming_blob'] = response_fields

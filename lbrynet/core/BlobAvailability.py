@@ -38,17 +38,17 @@ class BlobAvailabilityTracker(object):
         if self._check_mine.running:
             self._check_mine.stop()
 
-    def get_blob_availability(self, blob):
+    def get_blob_availability(self, blob, timeout=None):
         def _get_peer_count(peers):
             have_blob = sum(1 for peer in peers if peer.is_available())
             return {blob: have_blob}
 
-        d = self._peer_finder.find_peers_for_blob(blob)
+        d = self._peer_finder.find_peers_for_blob(blob, timeout)
         d.addCallback(_get_peer_count)
         return d
 
-    def get_availability_for_blobs(self, blobs):
-        dl = [self.get_blob_availability(blob) for blob in blobs if blob]
+    def get_availability_for_blobs(self, blobs, timeout=None):
+        dl = [self.get_blob_availability(blob, timeout) for blob in blobs if blob]
         d = defer.DeferredList(dl)
         d.addCallback(lambda results: [val for success, val in results if success])
         return d
@@ -56,7 +56,6 @@ class BlobAvailabilityTracker(object):
     @property
     def last_mean_availability(self):
         return max(Decimal(0.01), self._last_mean_availability)
-
 
     def _update_peers_for_blob(self, blob):
         def _save_peer_info(blob_hash, peers):

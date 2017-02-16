@@ -2,7 +2,9 @@ import binascii
 import logging
 
 from zope.interface import implements
+from twisted.internet import defer, reactor
 from lbrynet.interfaces import IPeerFinder
+from lbrynet.core.utils import short_hash
 
 
 log = logging.getLogger(__name__)
@@ -34,21 +36,29 @@ class DHTPeerFinder(object):
     def _manage_peers(self):
         pass
 
-    def find_peers_for_blob(self, blob_hash):
+    @defer.inlineCallbacks
+    def find_peers_for_blob(self, blob_hash, timeout=None):
+        def _trigger_timeout():
+            if not finished_deferred.called:
+                log.warning("Peer search for %s timed out", short_hash(blob_hash))
+                finished_deferred.cancel()
+
         bin_hash = binascii.unhexlify(blob_hash)
+        finished_deferred = self.dht_node.getPeersForBlob(bin_hash)
 
-        def filter_peers(peer_list):
-            peers = set(peer_list)
-            good_peers = []
-            for host, port in peers:
-                peer = self.peer_manager.get_peer(host, port)
-                if peer.is_available() is True:
-                    good_peers.append(peer)
-            return good_peers
+        if timeout is not None:
+            reactor.callLater(timeout, _trigger_timeout)
 
-        d = self.dht_node.getPeersForBlob(bin_hash)
-        d.addCallback(filter_peers)
-        return d
+        peer_list = yield finished_deferred
+
+        peers = set(peer_list)
+        good_peers = []
+        for host, port in peers:
+            peer = self.peer_manager.get_peer(host, port)
+            if peer.is_available() is True:
+                good_peers.append(peer)
+
+        defer.returnValue(good_peers)
 
     def get_most_popular_hashes(self, num_to_return):
         return self.dht_node.get_most_popular_hashes(num_to_return)

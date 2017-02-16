@@ -7,7 +7,7 @@ from zope.interface import implements
 from twisted.internet import defer
 
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
-from lbrynet.core.Error import NoSuchSDHash, NoSuchStreamHashError
+from lbrynet.core.Error import NoSuchSDHash, NoSuchStreamHash
 from lbrynet.core.utils import short_hash
 from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaver
@@ -111,7 +111,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         if sd_hash:
             self.sd_hash = sd_hash[0]
         else:
-            raise NoSuchStreamHashError(self.stream_hash)
+            raise NoSuchStreamHash(self.stream_hash)
         stream_metadata = yield self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
         if stream_metadata:
             name, txid, nout = stream_metadata

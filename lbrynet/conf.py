@@ -197,6 +197,7 @@ ADJUSTABLE_SETTINGS = {
     'run_on_startup': (bool, False),
     'run_reflector_server': (bool, False),
     'sd_download_timeout': (int, 3),
+    'peer_search_timeout': (int, 3),
     'search_servers': (list, ['lighthouse1.lbry.io:50005']),
     'search_timeout': (float, 5.0),
     'startup_scripts': (list, []),
