@@ -1,5 +1,6 @@
 import os
 import shutil
+import logging
 
 from twisted.internet import defer, threads, error
 from twisted.trial import unittest
@@ -19,6 +20,9 @@ from lbrynet.lbryfilemanager import EncryptedFileCreator
 from lbrynet.lbryfilemanager import EncryptedFileManager
 
 from tests import mocks
+
+
+logging.getLogger("lbrynet").setLevel(logging.CRITICAL)
 
 
 class TestReflector(unittest.TestCase):

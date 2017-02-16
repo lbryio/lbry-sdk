@@ -55,6 +55,7 @@ DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 log_format = "%(funcName)s(): %(message)s"
 logging.basicConfig(level=logging.WARNING, format=log_format)
+logging.getLogger("lbrynet").setLevel(logging.CRITICAL)
 
 
 def require_system(system):

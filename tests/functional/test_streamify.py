@@ -21,6 +21,7 @@ from lbrynet.core.RateLimiter import DummyRateLimiter, RateLimiter
 
 from tests import mocks
 
+logging.getLogger("lbrynet").setLevel(logging.CRITICAL)
 
 FakeNode = mocks.Node
 FakeWallet = mocks.Wallet
