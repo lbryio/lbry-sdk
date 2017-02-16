@@ -51,3 +51,16 @@ class AuthJSONRPCServerTest(unittest.TestCase):
         request.getHeader = mock.Mock(return_value='http://the_api:1111?settings')
         self.assertTrue(self.server._check_header_source(request, 'Referer'))
         request.getHeader.assert_called_with('Referer')
+
+    def test_request_is_allowed_when_matching_allowed_origin_setting(self):
+        mock_conf_settings(self, {'allowed_origin': 'http://example.com:1234'})
+        request = mock.Mock(['getHeader'])
+        request.getHeader = mock.Mock(return_value='http://example.com:1234')
+        self.assertTrue(self.server._check_header_source(request, 'Origin'))
+
+    def test_request_is_rejected_when_not_matching_allowed_origin_setting(self):
+        mock_conf_settings(self, {'allowed_origin': 'http://example.com:1234'})
+        request = mock.Mock(['getHeader'])
+        # note the ports don't match
+        request.getHeader = mock.Mock(return_value='http://example.com:1235')
+        self.assertFalse(self.server._check_header_source(request, 'Origin'))
