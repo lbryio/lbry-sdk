@@ -13,6 +13,7 @@ at anytime.
 
 ## [0.8.3] - 2017-02-15
 ### Fixed
+ * Get lbry files with pending claims
  * Add better logging to help track down [#478](https://github.com/lbryio/lbry/issues/478)
  * Catch UnknownNameErrors when resolving a name. [#479](https://github.com/lbryio/lbry/issues/479)
 

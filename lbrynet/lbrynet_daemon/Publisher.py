@@ -48,6 +48,9 @@ class Publisher(object):
         metadata['content_type'] = get_content_type(file_path)
         metadata['ver'] = Metadata.current_version
         claim_out = yield self.make_claim(name, bid, metadata)
+        self.lbry_file.completed = True
+        yield self.lbry_file.load_file_attributes()
+        yield self.lbry_file.save_status()
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks

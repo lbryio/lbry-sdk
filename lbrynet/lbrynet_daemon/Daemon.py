@@ -45,7 +45,7 @@ from lbrynet.core.Wallet import LBRYumWallet, SqliteStorage
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
+from lbrynet.core.Error import InsufficientFundsError, UnknownNameError, NoSuchSDHash
 
 log = logging.getLogger(__name__)
 
@@ -794,7 +794,6 @@ class Daemon(AuthJSONRPCServer):
             d = reupload.reflect_stream(publisher.lbry_file)
             d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                            log.exception)
-
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
         yield self._add_to_pending_claims(claim_out, name)
@@ -957,34 +956,53 @@ class Daemon(AuthJSONRPCServer):
             return self.get_est_cost_using_known_size(name, size)
         return self.get_est_cost_from_name(name)
 
+    def _find_lbry_file_by_uri(self, uri):
+        for lbry_file in self.lbry_file_manager.lbry_files:
+            if uri == lbry_file.uri:
+                return lbry_file
+        raise UnknownNameError(uri)
+
+    def _find_lbry_file_by_sd_hash(self, sd_hash):
+        for lbry_file in self.lbry_file_manager.lbry_files:
+            if lbry_file.sd_hash == sd_hash:
+                return lbry_file
+        raise NoSuchSDHash(sd_hash)
+
+    def _find_lbry_file_by_file_name(self, file_name):
+        for lbry_file in self.lbry_file_manager.lbry_files:
+            if lbry_file.file_name == file_name:
+                return lbry_file
+        raise Exception("File %s not found" % file_name)
+
+    @defer.inlineCallbacks
     def _get_lbry_file_by_uri(self, name):
-        def _get_file(stream_info):
-            sd = stream_info['sources']['lbry_sd_hash']
+        try:
+            stream_info = yield self._resolve_name(name)
+            sd_hash = stream_info['sources']['lbry_sd_hash']
+            lbry_file = yield self._get_lbry_file_by_sd_hash(sd_hash)
+        except (UnknownNameError, NoSuchSDHash):
+            lbry_file = yield self._find_lbry_file_by_uri(name)
+        defer.returnValue(lbry_file)
 
-            for l in self.lbry_file_manager.lbry_files:
-                if l.sd_hash == sd:
-                    return defer.succeed(l)
-            return defer.succeed(None)
-
-        d = self._resolve_name(name)
-        d.addCallback(_get_file)
-
-        return d
-
+    @defer.inlineCallbacks
     def _get_lbry_file_by_sd_hash(self, sd_hash):
-        for l in self.lbry_file_manager.lbry_files:
-            if l.sd_hash == sd_hash:
-                return defer.succeed(l)
-        return defer.succeed(None)
+        lbry_file = yield self._find_lbry_file_by_sd_hash(sd_hash)
+        defer.returnValue(lbry_file)
 
+    @defer.inlineCallbacks
     def _get_lbry_file_by_file_name(self, file_name):
-        for l in self.lbry_file_manager.lbry_files:
-            if l.file_name == file_name:
-                return defer.succeed(l)
-        return defer.succeed(None)
+        lbry_file = yield self._get_lbry_file_by_file_name(file_name)
+        defer.returnValue(lbry_file)
 
+    @defer.inlineCallbacks
     def _get_lbry_file(self, search_by, val, return_json=True):
-        return _GetFileHelper(self, search_by, val, return_json).retrieve_file()
+        helper = _GetFileHelper(self, search_by, val, return_json)
+        try:
+            lbry_file = yield helper.retrieve_file()
+            defer.returnValue(lbry_file)
+        except Exception as err:
+            # TODO: do something with the error, don't return None when a file isn't found
+            defer.returnValue(None)
 
     def _get_lbry_files(self):
         def safe_get(sd_hash):

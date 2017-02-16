@@ -12,6 +12,7 @@ from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadat
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.Session import Session
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
+from lbrynet.lbryfile import publish_sd_blob
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
@@ -158,11 +159,13 @@ class TestStreamify(TestCase):
             d.addCallback(lambda _: check_md5_sum())
             return d
 
+        @defer.inlineCallbacks
         def create_stream():
             test_file = GenFile(53209343, b''.join([chr(i + 5) for i in xrange(0, 64, 6)]))
-            return create_lbry_file(
-                self.session, self.lbry_file_manager, "test_file", test_file,
-                suggested_file_name="test_file")
+            stream_hash = yield create_lbry_file(self.session, self.lbry_file_manager, "test_file",
+                                             test_file, suggested_file_name="test_file")
+            yield publish_sd_blob(self.stream_info_manager, self.session.blob_manager, stream_hash)
+            defer.returnValue(stream_hash)
 
         d = self.session.setup()
         d.addCallback(lambda _: self.stream_info_manager.setup())
