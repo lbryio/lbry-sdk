@@ -10,6 +10,7 @@ import simplejson as json
 import textwrap
 from requests import exceptions as requests_exceptions
 from decimal import Decimal
+import random
 
 from twisted.web import server
 from twisted.internet import defer, threads, error, reactor, task
@@ -2157,17 +2158,20 @@ class Daemon(AuthJSONRPCServer):
         """
         return self.jsonrpc_peer_list(blob_hash)
 
-    def jsonrpc_peer_list(self, blob_hash):
+    def jsonrpc_peer_list(self, blob_hash, timeout=None):
         """
         Get peers for blob hash
 
         Args:
             'blob_hash': blob hash
+            'timeout' (int, optional): peer search timeout
         Returns:
             List of contacts
         """
 
-        d = self.session.peer_finder.find_peers_for_blob(blob_hash)
+        timeout = timeout or conf.settings['peer_search_timeout']
+
+        d = self.session.peer_finder.find_peers_for_blob(blob_hash, timeout=timeout)
         d.addCallback(lambda r: [[c.host, c.port, c.is_available()] for c in r])
         d.addCallback(lambda r: self._render_response(r))
         return d
@@ -2263,12 +2267,15 @@ class Daemon(AuthJSONRPCServer):
         d = self._render_response(self.session.blob_tracker.last_mean_availability)
         return d
 
-    def jsonrpc_get_availability(self, name):
+    @defer.inlineCallbacks
+    def jsonrpc_get_availability(self, name, sd_timeout=None, peer_timeout=None):
         """
         Get stream availability for a winning claim
 
         Arg:
             name (str): lbry uri
+            sd_timeout (int, optional): sd blob download timeout
+            peer_timeout (int, optional): how long to look for peers
 
         Returns:
              peers per blob / total blobs
@@ -2284,17 +2291,37 @@ class Daemon(AuthJSONRPCServer):
             else:
                 return 0.0
 
-        d = self._resolve_name(name, force_refresh=True)
-        d.addCallback(get_sd_hash)
-        d.addCallback(self._download_sd_blob)
-        d.addCallbacks(
-            lambda descriptor: [blob.get('blob_hash') for blob in descriptor['blobs']],
-            lambda _: [])
-        d.addCallback(self.session.blob_tracker.get_availability_for_blobs)
-        d.addCallback(_get_mean)
-        d.addCallback(lambda result: self._render_response(result))
+        def read_sd_blob(sd_blob):
+            sd_blob_file = sd_blob.open_for_reading()
+            decoded_sd_blob = json.loads(sd_blob_file.read())
+            sd_blob.close_read_handle(sd_blob_file)
 
-        return d
+        metadata = yield self._resolve_name(name)
+        sd_hash = get_sd_hash(metadata)
+        sd_timeout = sd_timeout or conf.settings['sd_download_timeout']
+        peer_timeout = peer_timeout or conf.settings['peer_search_timeout']
+        blobs = []
+        try:
+            blobs = yield self.get_blobs_for_sd_hash(sd_hash)
+            need_sd_blob = False
+            log.info("Already have sd blob")
+        except NoSuchSDHash:
+            need_sd_blob = True
+            log.info("Need sd blob")
+        blob_hashes = [blob.blob_hash for blob in blobs]
+        if need_sd_blob:
+            # we don't want to use self._download_descriptor here because it would create a stream
+            sd_blob = yield self._download_blob(sd_hash, timeout=sd_timeout)
+            decoded = read_sd_blob(sd_blob)
+            blob_hashes = [blob.get("blob_hash") for blob in decoded['blobs']
+                           if blob.get("blob_hash")]
+        sample = random.sample(blob_hashes, min(len(blob_hashes), 5))
+        log.info("check peers for %i of %i blobs in stream", len(sample), len(blob_hashes))
+        availabilities = yield self.session.blob_tracker.get_availability_for_blobs(sample,
+                                                                                    peer_timeout)
+        mean_availability = _get_mean(availabilities)
+        response = yield self._render_response(mean_availability)
+        defer.returnValue(response)
 
     def jsonrpc_get_start_notice(self):
         """
