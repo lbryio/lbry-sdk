@@ -5,7 +5,7 @@ from lbrynet import interfaces
 from lbrynet import conf
 from lbrynet.core.client.ClientProtocol import ClientProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError
-
+from lbrynet.core import utils
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +19,6 @@ class PeerConnectionHandler(object):
 
 class ConnectionManager(object):
     implements(interfaces.IConnectionManager)
-    callLater = reactor.callLater
     MANAGE_CALL_INTERVAL_SEC = 1
 
     def __init__(self, downloader, rate_limiter,
@@ -54,7 +53,7 @@ class ConnectionManager(object):
     def start(self):
         log.debug("%s starting", self._get_log_name())
         self._start()
-        self._next_manage_call = self.callLater(0, self.manage)
+        self._next_manage_call = utils.call_later(0, self.manage)
         return defer.succeed(True)
 
 
@@ -156,7 +155,7 @@ class ConnectionManager(object):
         self._manage_deferred.callback(None)
         self._manage_deferred = None
         if not self.stopped and schedule_next_call:
-            self._next_manage_call = self.callLater(self.MANAGE_CALL_INTERVAL_SEC, self.manage)
+            self._next_manage_call = utils.call_later(self.MANAGE_CALL_INTERVAL_SEC, self.manage)
 
     def _rank_request_creator_connections(self):
         """Returns an ordered list of our request creators, ranked according
