@@ -250,7 +250,7 @@ class Daemon(AuthJSONRPCServer):
         self.platform = None
         self.first_run = None
         self.log_file = conf.settings.get_log_filename()
-        self.current_db_revision = 2
+        self.current_db_revision = 3
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self.uploaded_temp_files = []
@@ -634,7 +634,7 @@ class Daemon(AuthJSONRPCServer):
             self._write_db_revision_file(old_revision)
 
     def _check_db_migration(self):
-        old_revision = 1
+        old_revision = 2
         if os.path.exists(self.db_revision_file):
             old_revision = int(open(self.db_revision_file).read().strip())
 
