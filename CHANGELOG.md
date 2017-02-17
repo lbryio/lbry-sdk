@@ -12,6 +12,7 @@ at anytime.
  * Remove unused upload_allowed option
  * Remove code related to packaging as that step is now done in the electron client
  * Remove lbryum version check; use lbry-electron as version source
+ * Include download url in version check
 
 ## [0.8.3] - 2017-02-15
 ### Fixed

@@ -2,6 +2,7 @@ import binascii
 import logging.handlers
 import mimetypes
 import os
+import platform
 import re
 import base58
 import requests
@@ -82,11 +83,9 @@ STREAM_STAGES = [
 ]
 
 CONNECTION_STATUS_CONNECTED = 'connected'
-CONNECTION_STATUS_VERSION_CHECK = 'version_check'
 CONNECTION_STATUS_NETWORK = 'network_connection'
 CONNECTION_MESSAGES = {
     CONNECTION_STATUS_CONNECTED: 'No connection problems detected',
-    CONNECTION_STATUS_VERSION_CHECK: "There was a problem checking for updates on github",
     CONNECTION_STATUS_NETWORK: "Your internet connection appears to have been interrupted",
 }
 
@@ -125,9 +124,11 @@ class CheckInternetConnection(object):
         self.daemon.connected_to_internet = utils.check_connection()
 
 
-class CheckRemoteVersions(object):
-    def __init__(self, daemon):
-        self.daemon = daemon
+class CheckRemoteVersion(object):
+    URL = 'https://api.github.com/repos/lbryio/lbry-electron/releases/latest'
+    def __init__(self):
+        self.version = None
+        self.update_url = None
 
     def __call__(self):
         d = threads.deferToThread(self._get_lbry_electron_client_version)
@@ -141,14 +142,70 @@ class CheckRemoteVersions(object):
         log.warning("Failed to check latest %s version from github", module_checked)
 
     def _get_lbry_electron_client_version(self):
-        # We'll need to enusre the lbry-electron version is in sync
+        # We'll need to ensure the lbry-electron version is in sync
         # with the lbrynet-daemon version
-        self.daemon.git_lbrynet_version = get_lbry_electron_client_version_from_github()
+        self._set_data_from_github()
         log.info(
             "remote lbrynet %s > local lbrynet %s = %s",
-            self.daemon.git_lbrynet_version, LBRYNET_VERSION,
-            utils.version_is_greater_than(self.daemon.git_lbrynet_version, LBRYNET_VERSION)
+            self.version, LBRYNET_VERSION,
+            utils.version_is_greater_than(self.version, LBRYNET_VERSION)
         )
+
+    def _set_data_from_github(self):
+        release = self._get_release_data()
+        # githubs documentation claims this should never happen, but we'll check just in case
+        if release['prerelease']:
+            raise Exception('Release {} is a pre-release'.format(tag))
+        self.version = self._get_version_from_release(release)
+        self.update_url = self._get_update_url_from_release(release)
+
+    def _get_release_data(self):
+        response = requests.get(self.URL, timeout=20)
+        release = response.json()
+        return release
+
+    def _get_version_from_release(self, release):
+        """Return the latest released version from github."""
+        tag = release['tag_name']
+        return self._get_version_from_tag(tag)
+
+    def _get_update_url_from_release(self, release):
+        # go through the assets and pick the one that looks like it
+        # best matches the system we're on
+        target_ext = self._extension_for_platform()
+        print
+        print target_ext
+        print
+        for asset in release['assets']:
+            url = asset['browser_download_url']
+            print
+            print url
+            print
+            if os.path.splitext(url)[1] == target_ext:
+                return url
+        return None
+
+    def _extension_for_platform(self):
+        system = platform.system()
+        if system == 'Darwin':
+            return ".dmg"
+        elif system == 'Linux':
+            return ".deb"
+        else:
+            return ".zip"
+
+    def _get_version_from_tag(self, tag):
+        match = re.match('v([\d.]+)', tag)
+        if match:
+            return match.group(1)
+        else:
+            raise Exception('Failed to parse version from tag {}'.format(tag))
+
+    def is_update_available(self):
+        try:
+            return utils.version_is_greater_than(self.version, LBRYNET_VERSION)
+        except TypeError:
+            return False
 
 
 class AlwaysSend(object):
@@ -224,7 +281,6 @@ class Daemon(AuthJSONRPCServer):
         self.startup_status = STARTUP_STAGES[0]
         self.connected_to_internet = True
         self.connection_status_code = None
-        self.git_lbrynet_version = None
         self.platform = None
         self.first_run = None
         self.log_file = conf.settings.get_log_filename()
@@ -249,9 +305,10 @@ class Daemon(AuthJSONRPCServer):
         self.pending_claims = {}
         self.name_cache = {}
         self.exchange_rate_manager = ExchangeRateManager()
+        self._remote_version = CheckRemoteVersion()
         calls = {
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
-            Checker.VERSION: LoopingCall(CheckRemoteVersions(self)),
+            Checker.VERSION: LoopingCall(self._remote_version),
             Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
             Checker.PENDING_CLAIM: LoopingCall(self._check_pending_claims),
         }
@@ -347,9 +404,6 @@ class Daemon(AuthJSONRPCServer):
 
     def _update_connection_status(self):
         self.connection_status_code = CONNECTION_STATUS_CONNECTED
-
-        if not self.git_lbrynet_version:
-            self.connection_status_code = CONNECTION_STATUS_VERSION_CHECK
 
         if not self.connected_to_internet:
             self.connection_status_code = CONNECTION_STATUS_NETWORK
@@ -1227,11 +1281,6 @@ class Daemon(AuthJSONRPCServer):
         """
 
         platform_info = self._get_platform()
-        try:
-            lbrynet_update_available = utils.version_is_greater_than(
-                self.git_lbrynet_version, LBRYNET_VERSION)
-        except TypeError:
-            lbrynet_update_available = False
         msg = {
             'platform': platform_info['platform'],
             'os_release': platform_info['os_release'],
@@ -1239,8 +1288,9 @@ class Daemon(AuthJSONRPCServer):
             'lbrynet_version': LBRYNET_VERSION,
             'lbryum_version': LBRYUM_VERSION,
             'ui_version': platform_info['ui_version'],
-            'remote_lbrynet': self.git_lbrynet_version,
-            'lbrynet_update_available': lbrynet_update_available,
+            'remote_lbrynet': self._remote_version.version,
+            'lbrynet_update_available': self._remote_version.is_update_available(),
+            'lbrynet_update_url': self._remote_version.update_url
         }
 
         log.info("Get version info: " + json.dumps(msg))
@@ -2469,30 +2519,6 @@ class Daemon(AuthJSONRPCServer):
         d = self.jsonrpc_status()
         d.addCallback(_get_startup_message)
         return d
-
-
-def get_lbry_electron_client_version_from_github():
-    return get_version_from_github(
-        'https://api.github.com/repos/lbryio/lbry-electron/releases/latest')
-
-
-def get_version_from_github(url):
-    """Return the latest released version from github."""
-    response = requests.get(url, timeout=20)
-    release = response.json()
-    tag = release['tag_name']
-    # githubs documentation claims this should never happen, but we'll check just in case
-    if release['prerelease']:
-        raise Exception('Release {} is a pre-release'.format(tag))
-    return get_version_from_tag(tag)
-
-
-def get_version_from_tag(tag):
-    match = re.match('v([\d.]+)', tag)
-    if match:
-        return match.group(1)
-    else:
-        raise Exception('Failed to parse version from tag {}'.format(tag))
 
 
 def get_sd_hash(stream_info):
