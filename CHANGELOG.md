@@ -8,6 +8,8 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+
+## [0.8.4rc0] - 2017-02-17
 ### Changed
  * Remove unused upload_allowed option
 
