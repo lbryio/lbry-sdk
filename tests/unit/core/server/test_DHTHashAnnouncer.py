@@ -1,9 +1,10 @@
-import os
-import binascii
 from twisted.trial import unittest
 from twisted.internet import defer,task
-from lbrynet.core import log_support, utils
 
+from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer,DHTHashSupplier
+from lbrynet.core.utils import random_string
+from lbrynet.core import log_support, utils
+from tests.util import random_lbry_hash
 
 class MocDHTNode(object):
     def __init__(self):
@@ -30,7 +31,7 @@ class DHTHashAnnouncerTest(unittest.TestCase):
         self.num_blobs = 10
         self.blobs_to_announce = []
         for i in range(0, self.num_blobs):
-            self.blobs_to_announce.append(binascii.b2a_hex(os.urandom(32)))
+            self.blobs_to_announce.append(random_lbry_hash())
         self.clock = task.Clock()
         self.dht_node = MocDHTNode()
         utils.call_later = self.clock.callLater
@@ -49,7 +50,7 @@ class DHTHashAnnouncerTest(unittest.TestCase):
     def test_immediate_announce(self):
         # Test that immediate announce puts a hash at the front of the queue
         self.announcer._announce_available_hashes()
-        blob_hash = binascii.b2a_hex(os.urandom(32))
+        blob_hash = random_lbry_hash()
         self.announcer.immediate_announce([blob_hash])
         self.assertEqual(self.announcer.hash_queue_size(),self.announcer.CONCURRENT_ANNOUNCERS+1)
         self.assertEqual(blob_hash, self.announcer.hash_queue[0][0])
