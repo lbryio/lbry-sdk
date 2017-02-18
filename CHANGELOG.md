@@ -8,6 +8,7 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+\#\# [0.8.5] - 2017-02-18
 \#\# [0.8.5rc0] - 2017-02-18
 ### Fixed
  * Fix result expected by ui from file_get for missing files
