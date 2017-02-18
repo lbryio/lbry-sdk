@@ -1058,7 +1058,7 @@ class Daemon(AuthJSONRPCServer):
             defer.returnValue(lbry_file)
         except Exception as err:
             # TODO: do something with the error, don't return None when a file isn't found
-            defer.returnValue(None)
+            defer.returnValue(False)
 
     def _get_lbry_files(self):
         def safe_get(sd_hash):
@@ -1466,22 +1466,34 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_file_get(self, **kwargs):
         """
-        Get a file
+        Get a file, if no matching file exists returns False
 
         Args:
             'name': get file by lbry uri,
             'sd_hash': get file by the hash in the name claim,
             'file_name': get file by its name in the downloads folder,
         Returns:
-            'completed': bool
-            'file_name': string
-            'key': hex string
-            'points_paid': float
-            'stopped': bool
-            'stream_hash': base 58 string
-            'stream_name': string
-            'suggested_file_name': string
-            'sd_hash': string
+            'completed': bool,
+            'file_name': str,
+            'download_directory': str,
+            'points_paid': float,
+            'stopped': bool,
+            'stream_hash': str (hex),
+            'stream_name': str,
+            'suggested_file_name': str,
+            'sd_hash': str (hex),
+            'lbry_uri': str,
+            'txid': str (b58),
+            'claim_id': str (b58),
+            'download_path': str,
+            'mime_type': str,
+            'key': str (hex),
+            'total_bytes': int,
+            'written_bytes': int,
+            'code': str,
+            'message': str
+            'metadata': Metadata dict if claim is valid, otherwise status str
+        }
         """
         d = self._get_deferred_for_lbry_file(kwargs)
         d.addCallback(lambda r: self._render_response(r))
