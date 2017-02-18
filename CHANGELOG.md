@@ -8,6 +8,8 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+### Fixed
+ * Fix result expected by ui from file_get for missing files
 
 ## [0.8.4] - 2017-02-17
 
