@@ -34,7 +34,7 @@ C:\Python27\Scripts\pip.exe install six==1.9.0
 
 C:\Python27\Scripts\pip.exe install requests==2.9.1
 
-C:\Python27\Scripts\pip.exe install zope.interface==4.1.3
+C:\Python27\Scripts\pip.exe install zope.interface==4.3.3
 
 # this is a patched to allow version numbers with non-integer values
 # and it is branched off of 4.3.3
@@ -42,7 +42,7 @@ C:\Python27\Scripts\pip.exe install https://bitbucket.org/jobevers/cx_freeze/get
 
 C:\Python27\Scripts\pip.exe install cython==0.24.1
 
-C:\Python27\Scripts\pip.exe install Twisted==16.0.0
+C:\Python27\Scripts\pip.exe install Twisted==16.6.0
 
 C:\Python27\Scripts\pip.exe install Yapsy==1.11.223
 
