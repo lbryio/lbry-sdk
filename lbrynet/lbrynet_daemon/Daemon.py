@@ -125,10 +125,8 @@ class CheckInternetConnection(object):
 
 
 class CheckRemoteVersion(object):
-    URL = 'https://api.github.com/repos/lbryio/lbry-electron/releases/latest'
     def __init__(self):
         self.version = None
-        self.update_url = None
 
     def __call__(self):
         d = threads.deferToThread(self._get_lbry_electron_client_version)
@@ -157,7 +155,6 @@ class CheckRemoteVersion(object):
         if release['prerelease']:
             raise Exception('Release {} is a pre-release'.format(tag))
         self.version = self._get_version_from_release(release)
-        self.update_url = self._get_update_url_from_release(release)
 
     def _get_release_data(self):
         response = requests.get(self.URL, timeout=20)
@@ -168,31 +165,6 @@ class CheckRemoteVersion(object):
         """Return the latest released version from github."""
         tag = release['tag_name']
         return self._get_version_from_tag(tag)
-
-    def _get_update_url_from_release(self, release):
-        # go through the assets and pick the one that looks like it
-        # best matches the system we're on
-        target_ext = self._extension_for_platform()
-        print
-        print target_ext
-        print
-        for asset in release['assets']:
-            url = asset['browser_download_url']
-            print
-            print url
-            print
-            if os.path.splitext(url)[1] == target_ext:
-                return url
-        return None
-
-    def _extension_for_platform(self):
-        system = platform.system()
-        if system == 'Darwin':
-            return ".dmg"
-        elif system == 'Linux':
-            return ".deb"
-        else:
-            return ".zip"
 
     def _get_version_from_tag(self, tag):
         match = re.match('v([\d.]+)', tag)
@@ -1290,7 +1262,6 @@ class Daemon(AuthJSONRPCServer):
             'ui_version': platform_info['ui_version'],
             'remote_lbrynet': self._remote_version.version,
             'lbrynet_update_available': self._remote_version.is_update_available(),
-            'lbrynet_update_url': self._remote_version.update_url
         }
 
         log.info("Get version info: " + json.dumps(msg))
