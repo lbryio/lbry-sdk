@@ -1397,7 +1397,10 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             list
         """
-        return self._render_response(sorted(self.callable_methods.keys()))
+        return self._render_response(sorted(
+            [command for command in self.callable_methods.keys()
+             if 'DEPRECATED' not in getattr(self, "jsonrpc_" + command).__doc__]
+        ))
 
     def jsonrpc_get_balance(self):
         """
