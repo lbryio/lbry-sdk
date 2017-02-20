@@ -8,10 +8,19 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+### Changed
+ * Add `file_get` by stream hash
+###
+ * Fix unhandled error in `get`
+ * Fix sd blob timeout handling in `get_availability`, return 0.0
+ 
+ 
 ## [0.8.5] - 2017-02-18
+
 ## [0.8.5rc0] - 2017-02-18
 ### Fixed
  * Fix result expected by ui from file_get for missing files
+
 
 ## [0.8.4] - 2017-02-17
 
