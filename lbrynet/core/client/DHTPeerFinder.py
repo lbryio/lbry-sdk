@@ -40,7 +40,7 @@ class DHTPeerFinder(object):
     def find_peers_for_blob(self, blob_hash, timeout=None):
         def _trigger_timeout():
             if not finished_deferred.called:
-                log.warning("Peer search for %s timed out", short_hash(blob_hash))
+                log.debug("Peer search for %s timed out", short_hash(blob_hash))
                 finished_deferred.cancel()
 
         bin_hash = binascii.unhexlify(blob_hash)
