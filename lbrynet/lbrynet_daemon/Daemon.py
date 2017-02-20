@@ -820,17 +820,13 @@ class Daemon(AuthJSONRPCServer):
         """
         timeout = timeout if timeout is not None else conf.settings['download_timeout']
 
-        try:
-            helper = _DownloadNameHelper(self, name, timeout, download_directory, file_name,
-                                         wait_for_write)
-        except Exception as err:
-            log.exception(err)
-            raise err
 
+        helper = _DownloadNameHelper(self, name, timeout, download_directory, file_name,
+                                         wait_for_write)
         if not stream_info:
             self.waiting_on[name] = True
             stream_info = yield self._resolve_name(name)
-            del self.waiting_on[name]
+
         lbry_file = yield helper.setup_stream(stream_info)
         sd_hash, file_path = yield helper.wait_or_get_stream(stream_info, lbry_file)
         defer.returnValue((sd_hash, file_path))
@@ -2562,10 +2558,7 @@ def get_version_from_tag(tag):
 def get_sd_hash(stream_info):
     if not stream_info:
         return None
-    try:
-        return stream_info['sources']['lbry_sd_hash']
-    except KeyError:
-        return stream_info.get('stream_hash')
+    return stream_info['sources']['lbry_sd_hash']
 
 
 class _DownloadNameHelper(object):
@@ -2584,7 +2577,7 @@ class _DownloadNameHelper(object):
     @defer.inlineCallbacks
     def setup_stream(self, stream_info):
         sd_hash = get_sd_hash(stream_info)
-        lbry_file = yield self.daemon._get_lbry_file_by_sd_hash(sd_hash)
+        lbry_file = yield self.daemon._get_lbry_file(FileID.SD_HASH, sd_hash)
         if self._does_lbry_file_exists(lbry_file):
             defer.returnValue(lbry_file)
         else:
