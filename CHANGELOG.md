@@ -8,6 +8,7 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+\#\# [0.8.6rc0] - 2017-02-19
 ### Changed
  * Add `file_get` by stream hash
 ###
