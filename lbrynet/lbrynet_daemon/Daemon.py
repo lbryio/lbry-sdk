@@ -108,6 +108,7 @@ class FileID:
     NAME = 'name'
     SD_HASH = 'sd_hash'
     FILE_NAME = 'file_name'
+    STREAM_HASH = 'stream_hash'
 
 
 # TODO add login credentials in a conf file
@@ -1026,6 +1027,12 @@ class Daemon(AuthJSONRPCServer):
                 return lbry_file
         raise Exception("File %s not found" % file_name)
 
+    def _find_lbry_file_by_stream_hash(self, stream_hash):
+        for lbry_file in self.lbry_file_manager.lbry_files:
+            if lbry_file.stream_hash == stream_hash:
+                return lbry_file
+        raise NoSuchStreamHash(stream_hash)
+
     @defer.inlineCallbacks
     def _get_lbry_file_by_uri(self, name):
         try:
@@ -1044,6 +1051,11 @@ class Daemon(AuthJSONRPCServer):
     @defer.inlineCallbacks
     def _get_lbry_file_by_file_name(self, file_name):
         lbry_file = yield self._get_lbry_file_by_file_name(file_name)
+        defer.returnValue(lbry_file)
+
+    @defer.inlineCallbacks
+    def _get_lbry_file_by_stream_hash(self, stream_hash):
+        lbry_file = yield self._find_lbry_file_by_stream_hash(stream_hash)
         defer.returnValue(lbry_file)
 
     @defer.inlineCallbacks
@@ -1468,6 +1480,7 @@ class Daemon(AuthJSONRPCServer):
             'name': get file by lbry uri,
             'sd_hash': get file by the hash in the name claim,
             'file_name': get file by its name in the downloads folder,
+            'stream_hash': get file by its stream hash
         Returns:
             'completed': bool,
             'file_name': str,
@@ -1578,6 +1591,7 @@ class Daemon(AuthJSONRPCServer):
             'stream_hash': hex string
             'path': path of download
         """
+
         timeout = timeout if timeout is not None else self.download_timeout
         download_directory = download_directory or self.download_directory
         sd_hash = get_sd_hash(stream_info)
@@ -2740,6 +2754,8 @@ class _GetFileHelper(object):
             return self.daemon._get_lbry_file_by_sd_hash(self.val)
         elif self.search_by == FileID.FILE_NAME:
             return self.daemon._get_lbry_file_by_file_name(self.val)
+        elif self.search_by == FileID.STREAM_HASH:
+            return self.daemon._get_lbry_file_by_stream_hash(self.val)
         raise Exception('{} is not a valid search operation'.format(self.search_by))
 
     def _get_json(self, lbry_file):
@@ -2873,7 +2889,7 @@ def report_bug_to_slack(message, installation_id, platform_name, app_version):
 
 
 def get_lbry_file_search_value(search_fields):
-    for searchtype in (FileID.SD_HASH, FileID.NAME, FileID.FILE_NAME):
+    for searchtype in (FileID.SD_HASH, FileID.NAME, FileID.FILE_NAME, FileID.STREAM_HASH):
         value = search_fields.get(searchtype)
         if value:
             return searchtype, value
