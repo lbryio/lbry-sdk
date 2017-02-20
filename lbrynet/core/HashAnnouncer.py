@@ -11,5 +11,8 @@ class DummyHashAnnouncer(object):
     def add_supplier(self, *args):
         pass
 
+    def hash_queue_size(self):
+        return 0
+
     def immediate_announce(self, *args):
         pass
