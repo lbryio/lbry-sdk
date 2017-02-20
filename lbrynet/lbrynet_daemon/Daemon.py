@@ -2508,7 +2508,11 @@ class Daemon(AuthJSONRPCServer):
         blob_hashes = [blob.blob_hash for blob in blobs]
         if need_sd_blob:
             # we don't want to use self._download_descriptor here because it would create a stream
-            sd_blob = yield self._download_blob(sd_hash, timeout=sd_timeout)
+            try:
+                sd_blob = yield self._download_blob(sd_hash, timeout=sd_timeout)
+            except Exception as err:
+                response = yield self._render_response(0.0)
+                defer.returnValue(response)
             decoded = read_sd_blob(sd_blob)
             blob_hashes = [blob.get("blob_hash") for blob in decoded['blobs']
                            if blob.get("blob_hash")]
