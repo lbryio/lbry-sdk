@@ -77,6 +77,12 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
         return d
 
 
+# TODO: this should be run its own thread. Encrypting a large file can
+#       be very cpu intensive and there is no need to run that on the
+#       main reactor thread. The FileSender mechanism that is used is
+#       great when sending over the network, but this is all local so
+#       we can simply read the file from the disk without needing to
+#       involve reactor.
 def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=None,
                      iv_generator=None, suggested_file_name=None):
     """Turn a plain file into an LBRY File.
@@ -146,6 +152,10 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
         suggested_file_name)
 
     def start_stream():
+        # TODO: Using FileSender isn't necessary, we can just read
+        #       straight from the disk. The stream creation process
+        #       should be in its own thread anyway so we don't need to
+        #       worry about interacting with the twisted reactor
         file_sender = FileSender()
         d = file_sender.beginFileTransfer(file_handle, lbry_file_creator)
         d.addCallback(lambda _: stop_file(lbry_file_creator))

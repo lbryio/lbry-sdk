@@ -8,22 +8,25 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
-\#\# [0.8.6] - 2017-02-19
-\#\# [0.8.6rc0] - 2017-02-19
+
+## [0.8.7] - 2017-02-21
+
+## [0.8.6] - 2017-02-19
+
+## [0.8.6rc0] - 2017-02-19
 ### Changed
  * Add `file_get` by stream hash
  * Add utils.call_later to replace reactor.callLater
-###
+
+### Fixed
  * Fix unhandled error in `get`
  * Fix sd blob timeout handling in `get_availability`, return 0.0
- 
- 
+
 ## [0.8.5] - 2017-02-18
 
 ## [0.8.5rc0] - 2017-02-18
 ### Fixed
  * Fix result expected by ui from file_get for missing files
-
 
 ## [0.8.4] - 2017-02-17
 
@@ -37,18 +40,17 @@ at anytime.
 ### Fixed
  * add misssing traceback to logging
 
-
 ## [0.8.3] - 2017-02-15
 ### Fixed
  * Get lbry files with pending claims
  * Add better logging to help track down [#478](https://github.com/lbryio/lbry/issues/478)
  * Catch UnknownNameErrors when resolving a name. [#479](https://github.com/lbryio/lbry/issues/479)
+
 ### Changed
  * Add blob_get, descriptor_get, and blob_delete
  * Add filter keyword args to blob_list
  * Refactor get_availability
  * Add optional peer search timeout, add peer_search_timeout setting
-
 
 ## [0.8.3rc3] - 2017-02-14
 

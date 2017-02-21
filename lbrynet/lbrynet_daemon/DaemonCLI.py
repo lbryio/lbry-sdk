@@ -35,9 +35,9 @@ def main():
         if message:
             if (
                 status['startup_status']['code'] == LOADING_WALLET_CODE
-                and status['blocks_behind'] > 0
+                and status['blockchain_status']['blocks_behind'] > 0
             ):
-                message += '. Blocks left: ' + str(status['blocks_behind'])
+                message += '. Blocks left: ' + str(status['blockchain_status']['blocks_behind'])
             print "  Status: " + message
         return 1
 

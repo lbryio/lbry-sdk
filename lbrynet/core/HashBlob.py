@@ -242,6 +242,7 @@ class BlobFile(HashBlob):
                 self.readers += 1
                 return file_handle
             except IOError:
+                log.exception('Failed to open %s', self.file_path)
                 self.close_read_handle(file_handle)
         return None
 

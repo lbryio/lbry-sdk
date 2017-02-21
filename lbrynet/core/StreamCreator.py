@@ -64,6 +64,8 @@ class StreamCreator(object):
     def _finished(self):
         pass
 
+    # TODO: move the stream creation process to its own thread and
+    #       remove the reactor from this process.
     def write(self, data):
         from twisted.internet import reactor
         self._write(data)

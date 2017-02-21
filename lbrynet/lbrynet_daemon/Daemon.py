@@ -1106,7 +1106,7 @@ class Daemon(AuthJSONRPCServer):
     ############################################################################
 
     @defer.inlineCallbacks
-    def jsonrpc_status(self, session_status=False, blockchain_status=False):
+    def jsonrpc_status(self, session_status=False):
         """
         Return daemon status
 
@@ -1117,6 +1117,10 @@ class Daemon(AuthJSONRPCServer):
             daemon status
         """
         has_wallet = self.session and self.session.wallet
+        local_height = self.session.wallet.network.get_local_height() if has_wallet else 0
+        remote_height = self.session.wallet.network.get_server_height() if has_wallet else 0
+        best_hash = (yield self.session.wallet.get_best_blockhash()) if has_wallet else None
+
         response = {
             'lbry_id': base58.b58encode(self.lbryid)[:SHORT_ID_LEN],
             'installation_id': conf.settings.get_installation_id()[:SHORT_ID_LEN],
@@ -1134,11 +1138,12 @@ class Daemon(AuthJSONRPCServer):
                     else ''
                 ),
             },
-            'blocks_behind': (
-                self.session.wallet.blocks_behind
-                if has_wallet and self.wallet_type == LBRYUM_WALLET
-                else 'unknown'
-            ),
+            'blocks_behind': remote_height - local_height,  # deprecated. remove from UI, then here
+            'blockchain_status': {
+                'blocks': local_height,
+                'blocks_behind': remote_height - local_height,
+                'best_blockhash': best_hash,
+            }
         }
         if session_status:
             blobs = yield self.session.blob_manager.get_all_verified_blobs()
@@ -1146,22 +1151,14 @@ class Daemon(AuthJSONRPCServer):
                 'managed_blobs': len(blobs),
                 'managed_streams': len(self.lbry_file_manager.lbry_files),
             }
-        if blockchain_status and has_wallet:
-            # calculate blocks_behind more accurately
-            local_height = self.session.wallet.network.get_local_height()
-            remote_height = self.session.wallet.network.get_server_height()
-            response['blocks_behind'] = remote_height - local_height
-            response['local_height'] = local_height
-            response['remote_height'] = remote_height
-            best_hash = yield self.session.wallet.get_best_blockhash()
-            response['blockchain_status'] = {'best_blockhash': best_hash}
+
         defer.returnValue(response)
 
     def jsonrpc_get_best_blockhash(self):
         """
         DEPRECATED. Use `status blockchain_status=True` instead
         """
-        d = self.jsonrpc_status(blockchain_status=True)
+        d = self.jsonrpc_status()
         d.addCallback(lambda x: self._render_response(
             x['blockchain_status']['best_blockhash']))
         return d
@@ -1190,9 +1187,11 @@ class Daemon(AuthJSONRPCServer):
             elif status['startup_status']['code'] == LOADING_WALLET_CODE:
                 message = "Catching up with the blockchain."
                 progress = 0
-                if status['blocks_behind'] > 0:
-                    message += ' ' + str(status['blocks_behind']) + " blocks behind."
-                    progress = status['blocks_behind']
+                if status['blockchain_status']['blocks_behind'] > 0:
+                    message += (
+                        ' ' + str(status['blockchain_status']['blocks_behind']) + " blocks behind."
+                    )
+                    progress = status['blockchain_status']['blocks_behind']
 
             return {
                 'message': message,
@@ -1211,7 +1210,7 @@ class Daemon(AuthJSONRPCServer):
         """
         DEPRECATED. Use `status` instead
         """
-        d = self.jsonrpc_status(blockchain_status=True)
+        d = self.jsonrpc_status()
         d.addCallback(lambda x: self._render_response(x['is_first_run']))
         return d
 
@@ -1232,8 +1231,8 @@ class Daemon(AuthJSONRPCServer):
         """
         DEPRECATED. Use `status` instead
         """
-        d = self.jsonrpc_status(blockchain_status=True)
-        d.addCallback(lambda x: self._render_response(x['blocks_behind']))
+        d = self.jsonrpc_status()
+        d.addCallback(lambda x: self._render_response(x['blockchain_status']['blocks_behind']))
         return d
 
     def jsonrpc_version(self):
