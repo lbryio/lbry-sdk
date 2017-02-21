@@ -10,7 +10,7 @@ from twisted.internet.error import ConnectionDone, ConnectionLost
 from txjsonrpc import jsonrpclib
 
 from lbrynet import conf
-from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError
+from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message, jsonrpc_dumps_pretty
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
@@ -145,7 +145,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def render(self, request):
         time_in = utils.now()
-        assert self._check_headers(request), InvalidHeaderError
+        # assert self._check_headers(request), InvalidHeaderError
         session = request.getSession()
         session_id = session.uid
         finished_deferred = request.notifyFinish()

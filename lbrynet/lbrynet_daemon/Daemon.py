@@ -18,8 +18,8 @@ from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
-from lbryum.version import LBRYUM_VERSION as lbryum_version
-from lbrynet import __version__ as lbrynet_version
+from lbryum.version import LBRYUM_VERSION
+from lbrynet import __version__ as LBRYNET_VERSION
 from lbrynet import conf, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
@@ -33,7 +33,6 @@ from lbrynet.lbryfile.StreamDescriptor import save_sd_info
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.lbrynet_daemon.UIManager import UIManager
 from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
@@ -83,11 +82,9 @@ STREAM_STAGES = [
 ]
 
 CONNECTION_STATUS_CONNECTED = 'connected'
-CONNECTION_STATUS_VERSION_CHECK = 'version_check'
 CONNECTION_STATUS_NETWORK = 'network_connection'
 CONNECTION_MESSAGES = {
     CONNECTION_STATUS_CONNECTED: 'No connection problems detected',
-    CONNECTION_STATUS_VERSION_CHECK: "There was a problem checking for updates on github",
     CONNECTION_STATUS_NETWORK: "Your internet connection appears to have been interrupted",
 }
 
@@ -127,39 +124,54 @@ class CheckInternetConnection(object):
         self.daemon.connected_to_internet = utils.check_connection()
 
 
-class CheckRemoteVersions(object):
-    def __init__(self, daemon):
-        self.daemon = daemon
+class CheckRemoteVersion(object):
+    URL = 'https://api.github.com/repos/lbryio/lbry-electron/releases/latest'
+    def __init__(self):
+        self.version = None
 
     def __call__(self):
-        d = threads.deferToThread(self._get_lbrynet_version)
-        d.addErrback(self._trap_and_log_error, 'lbrynet')
-        d.addCallback(lambda _: threads.deferToThread(self._get_lbryum_version))
-        d.addErrback(self._trap_and_log_error, 'lbryum')
+        d = threads.deferToThread(self._get_lbry_electron_client_version)
+        d.addErrback(self._trap_and_log_error, 'lbry-electron')
         d.addErrback(log.fail(), 'Failure checking versions on github')
 
     def _trap_and_log_error(self, err, module_checked):
         # KeyError is thrown by get_version_from_github
         # It'd be better to catch the error before trying to parse the response
         err.trap(requests_exceptions.RequestException, KeyError)
-        if err.check(requests_exceptions.RequestException, KeyError):
-            log.warning("Failed to check latest %s version from github", module_checked)
+        log.warning("Failed to check latest %s version from github", module_checked)
 
-    def _get_lbryum_version(self):
-        self.daemon.git_lbryum_version = get_lbryum_version_from_github()
-        log.info(
-            "remote lbryum %s > local lbryum %s = %s",
-            self.daemon.git_lbryum_version, lbryum_version,
-            utils.version_is_greater_than(self.daemon.git_lbryum_version, lbryum_version)
-        )
-
-    def _get_lbrynet_version(self):
-        self.daemon.git_lbrynet_version = get_lbrynet_version_from_github()
+    def _get_lbry_electron_client_version(self):
+        # We'll need to ensure the lbry-electron version is in sync
+        # with the lbrynet-daemon version
+        self._set_data_from_github()
         log.info(
             "remote lbrynet %s > local lbrynet %s = %s",
-            self.daemon.git_lbrynet_version, lbrynet_version,
-            utils.version_is_greater_than(self.daemon.git_lbrynet_version, lbryum_version)
+            self.version, LBRYNET_VERSION,
+            utils.version_is_greater_than(self.version, LBRYNET_VERSION)
         )
+
+    def _set_data_from_github(self):
+        release = self._get_release_data()
+        # githubs documentation claims this should never happen, but we'll check just in case
+        if release['prerelease']:
+            raise Exception('Release {} is a pre-release'.format(release['tag_name']))
+        self.version = self._get_version_from_release(release)
+
+    def _get_release_data(self):
+        response = requests.get(self.URL, timeout=20)
+        release = response.json()
+        return release
+
+    def _get_version_from_release(self, release):
+        """Return the latest released version from github."""
+        tag = release['tag_name']
+        return get_version_from_tag(tag)
+
+    def is_update_available(self):
+        try:
+            return utils.version_is_greater_than(self.version, LBRYNET_VERSION)
+        except TypeError:
+            return False
 
 
 class AlwaysSend(object):
@@ -200,7 +212,7 @@ class Daemon(AuthJSONRPCServer):
             'is_running', 'is_first_run', 'get_time_behind_blockchain', 'daemon_status',
             'get_start_notice',
         ]
-        last_version = {'last_version': {'lbrynet': lbrynet_version, 'lbryum': lbryum_version}}
+        last_version = {'last_version': {'lbrynet': LBRYNET_VERSION, 'lbryum': LBRYUM_VERSION}}
         conf.settings.update(last_version)
         self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
@@ -235,8 +247,6 @@ class Daemon(AuthJSONRPCServer):
         self.startup_status = STARTUP_STAGES[0]
         self.connected_to_internet = True
         self.connection_status_code = None
-        self.git_lbrynet_version = None
-        self.git_lbryum_version = None
         self.platform = None
         self.first_run = None
         self.log_file = conf.settings.get_log_filename()
@@ -261,16 +271,16 @@ class Daemon(AuthJSONRPCServer):
         self.pending_claims = {}
         self.name_cache = {}
         self.exchange_rate_manager = ExchangeRateManager()
+        self._remote_version = CheckRemoteVersion()
         calls = {
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
-            Checker.VERSION: LoopingCall(CheckRemoteVersions(self)),
+            Checker.VERSION: LoopingCall(self._remote_version),
             Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
             Checker.PENDING_CLAIM: LoopingCall(self._check_pending_claims),
         }
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
-        self.lbry_ui_manager = UIManager(root)
         self.lbry_file_manager = None
 
     @defer.inlineCallbacks
@@ -308,11 +318,6 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager.start(Checker.CONNECTION_STATUS, 30)
         self.exchange_rate_manager.start()
 
-        if conf.settings['host_ui']:
-            self.lbry_ui_manager.update_checker.start(1800, now=False)
-            yield self.lbry_ui_manager.setup()
-        if launch_ui:
-            self.lbry_ui_manager.launch()
         yield self._initial_setup()
         yield threads.deferToThread(self._setup_data_directory)
         yield self._check_db_migration()
@@ -330,7 +335,6 @@ class Daemon(AuthJSONRPCServer):
     def _get_platform(self):
         if self.platform is None:
             self.platform = system_info.get_platform()
-            self.platform["ui_version"] = self.lbry_ui_manager.loaded_git_version
         return self.platform
 
     def _initial_setup(self):
@@ -366,9 +370,6 @@ class Daemon(AuthJSONRPCServer):
 
     def _update_connection_status(self):
         self.connection_status_code = CONNECTION_STATUS_CONNECTED
-
-        if not self.git_lbrynet_version or not self.git_lbryum_version:
-            self.connection_status_code = CONNECTION_STATUS_VERSION_CHECK
 
         if not self.connected_to_internet:
             self.connection_status_code = CONNECTION_STATUS_NETWORK
@@ -532,8 +533,6 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager.shutdown()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
-        if self.lbry_ui_manager.update_checker.running:
-            self.lbry_ui_manager.update_checker.stop()
 
         self._clean_up_temp_files()
 
@@ -1254,27 +1253,15 @@ class Daemon(AuthJSONRPCServer):
         """
 
         platform_info = self._get_platform()
-        try:
-            lbrynet_update_available = utils.version_is_greater_than(
-                self.git_lbrynet_version, lbrynet_version)
-        except TypeError:
-            lbrynet_update_available = False
-        try:
-            lbryum_update_available = utils.version_is_greater_than(
-                self.git_lbryum_version, lbryum_version)
-        except TypeError:
-            lbryum_update_available = False
         msg = {
             'platform': platform_info['platform'],
             'os_release': platform_info['os_release'],
             'os_system': platform_info['os_system'],
-            'lbrynet_version': lbrynet_version,
-            'lbryum_version': lbryum_version,
+            'lbrynet_version': LBRYNET_VERSION,
+            'lbryum_version': LBRYUM_VERSION,
             'ui_version': platform_info['ui_version'],
-            'remote_lbrynet': self.git_lbrynet_version,
-            'remote_lbryum': self.git_lbryum_version,
-            'lbrynet_update_available': lbrynet_update_available,
-            'lbryum_update_available': lbryum_update_available
+            'remote_lbrynet': self._remote_version.version,
+            'lbrynet_update_available': self._remote_version.is_update_available(),
         }
 
         log.info("Get version info: " + json.dumps(msg))
@@ -1295,7 +1282,7 @@ class Daemon(AuthJSONRPCServer):
             message,
             conf.settings.installation_id,
             platform_name,
-            lbrynet_version
+            LBRYNET_VERSION
         )
         return self._render_response(True)
 
@@ -2250,28 +2237,6 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @AuthJSONRPCServer.auth_required
-    def jsonrpc_configure_ui(self, branch=None, path=None, check_requirements=True):
-        """
-        Configure the UI being hosted
-
-        Args, optional:
-            'branch': a branch name on lbryio/lbry-web-ui
-            'path': path to a ui folder
-        """
-
-        if path is not None:
-            d = self.lbry_ui_manager.setup(
-                user_specified=path, check_requirements=check_requirements)
-        elif branch is not None:
-            d = self.lbry_ui_manager.setup(branch=branch, check_requirements=check_requirements)
-        else:
-            d = self.lbry_ui_manager.setup(check_requirements=check_requirements)
-
-        d.addCallback(lambda r: self._render_response(r))
-
-        return d
-
-    @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     def jsonrpc_open(self, sd_hash):
         """
@@ -2546,33 +2511,6 @@ class Daemon(AuthJSONRPCServer):
         d = self.jsonrpc_status()
         d.addCallback(_get_startup_message)
         return d
-
-
-def get_lbryum_version_from_github():
-    return get_version_from_github('https://api.github.com/repos/lbryio/lbryum/releases/latest')
-
-
-def get_lbrynet_version_from_github():
-    return get_version_from_github('https://api.github.com/repos/lbryio/lbry/releases/latest')
-
-
-def get_version_from_github(url):
-    """Return the latest released version from github."""
-    response = requests.get(url, timeout=20)
-    release = response.json()
-    tag = release['tag_name']
-    # githubs documentation claims this should never happen, but we'll check just in case
-    if release['prerelease']:
-        raise Exception('Release {} is a pre-release'.format(tag))
-    return get_version_from_tag(tag)
-
-
-def get_version_from_tag(tag):
-    match = re.match('v([\d.]+)', tag)
-    if match:
-        return match.group(1)
-    else:
-        raise Exception('Failed to parse version from tag {}'.format(tag))
 
 
 def get_sd_hash(stream_info):
@@ -2911,3 +2849,11 @@ def get_blob_payment_rate_manager(session, payment_rate_manager=None):
             payment_rate_manager = rate_managers[payment_rate_manager]
             log.info("Downloading blob with rate manager: %s", payment_rate_manager)
     return payment_rate_manager or session.payment_rate_manager
+
+
+def get_version_from_tag(tag):
+    match = re.match('v([\d.]+)', tag)
+    if match:
+        return match.group(1)
+    else:
+        raise Exception('Failed to parse version from tag {}'.format(tag))

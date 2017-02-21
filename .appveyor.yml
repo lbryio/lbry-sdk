@@ -1,11 +1,5 @@
 version: 1.0.{build}
 
-environment:
-  key_pass:
-    secure: u6DydPcdrUJlxGL9uc7yQRYG8+5rY6aAEE9nfCSzFyNzZlX9NniOp8Uh5ZKQqX7bGEngLI6ipbLfiJvn0XFnhbn2iTkOuMqOXVJVOehvwlQ=
-  pfx_key:
-    secure: 1mwqyRy7hDqDjDK+TIAoaXyXzpNgwruFNA6TPkinUcVM7A+NLD33RQLnfnwVy+R5ovD2pUfhQ6+N0Fqebv6tZh436LIEsock+6IOdpgFwrg=
-
 
 notifications:
   - provider: Slack
@@ -15,51 +9,5 @@ notifications:
 
 clone_folder: c:\projects\lbry
 
-
-
-install:
-- cmd: dir C:\projects\lbry\packaging\windows\
-- ps: .\packaging\windows\init.ps1
-- nuget install secure-file -ExcludeVersion
-- secure-file\tools\secure-file -decrypt packaging\windows\certs\lbry2.pfx.enc -secret %pfx_key%
-- ps: .\packaging\windows\install.ps1
-
-
 build_script:
-- ps: .\packaging\windows\build.ps1
-
-
-test_script:
-- ps: .\packaging\windows\test.ps1
-
-
-artifacts:
-- path: dist/*.msi
-  name: msi
-- path: build/exe.win32-2.7/
-  name: lbry-portable
-- path: packaging/windows/lbry-win32-app/LBRY-URI.reg
-  name: LBRY-URI
-
-
-deploy:
-  - provider: GitHub
-    release: $(APPVEYOR_REPO_TAG_NAME)
-    description: 'Release'
-    auth_token:
-      secure: 28gMVxQkXr2iXP4F+5kVwefUtKCfS1ePZ97PVfaSR8UDupjAvKhSJx862TnEjukb
-    artifact: /.*\.msi/
-    draft: false
-    prerelease: true
-    on:
-      appveyor_repo_tag: true        # deploy on tag push only
-  - provider: S3
-    access_key_id:
-      secure: E25iHvmHiJP56GWFTe14L3pS8QKb5ZcyWZLY0zqh6BA=
-    secret_access_key:
-      secure: YwZe6fCv29akFYjMCCBJBF7LtI6mxPrxbq7SSoAbn1BPdqjATFegeteGAsqHur/C
-    bucket: lbrynet-master
-    region: us-west-2
-    artifact: /.*\.msi/
-    on:
-      branch: master
+  - echo "Not currently building on appveyor"
