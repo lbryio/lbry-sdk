@@ -8,6 +8,8 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+### Changed
+ * Add blockchain status to jsonrpc_status
 
 ## [0.8.7] - 2017-02-21
 

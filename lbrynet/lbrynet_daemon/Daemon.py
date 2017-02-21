@@ -1116,7 +1116,8 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             daemon status
         """
-        has_wallet = self.session and self.session.wallet
+        # on startup, the wallet or network won't be available but we still need this call to work
+        has_wallet = self.session and self.session.wallet and self.session.wallet.network
         local_height = self.session.wallet.network.get_local_height() if has_wallet else 0
         remote_height = self.session.wallet.network.get_server_height() if has_wallet else 0
         best_hash = (yield self.session.wallet.get_best_blockhash()) if has_wallet else None
