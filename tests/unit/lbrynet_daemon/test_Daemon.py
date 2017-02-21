@@ -28,7 +28,9 @@ class MiscTests(unittest.TestCase):
         }
         with mock.patch('lbrynet.lbrynet_daemon.Daemon.requests') as req:
             req.get.return_value = response
-            self.assertEqual('0.3.8', Daemon.get_lbry_electron_client_version_from_github())
+            rv = Daemon.CheckRemoteVersion()
+            rv._get_lbry_electron_client_version()
+            self.assertEqual('0.3.8', rv.version)
 
     def test_error_is_thrown_if_prerelease(self):
         response = mock.create_autospec(requests.Response)
@@ -38,8 +40,9 @@ class MiscTests(unittest.TestCase):
         }
         with mock.patch('lbrynet.lbrynet_daemon.Daemon.requests') as req:
             req.get.return_value = response
+            rv = Daemon.CheckRemoteVersion()
             with self.assertRaises(Exception):
-                Daemon.get_lbrynet_version_from_github()
+                rv._get_lbry_electron_client_version()
 
     def test_error_is_thrown_when_version_cant_be_parsed(self):
         with self.assertRaises(Exception):

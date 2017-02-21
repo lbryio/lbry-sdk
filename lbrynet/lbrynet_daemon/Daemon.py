@@ -124,6 +124,7 @@ class CheckInternetConnection(object):
 
 
 class CheckRemoteVersion(object):
+    URL = 'https://api.github.com/repos/lbryio/lbry-electron/releases/latest'
     def __init__(self):
         self.version = None
 
@@ -163,14 +164,7 @@ class CheckRemoteVersion(object):
     def _get_version_from_release(self, release):
         """Return the latest released version from github."""
         tag = release['tag_name']
-        return self._get_version_from_tag(tag)
-
-    def _get_version_from_tag(self, tag):
-        match = re.match('v([\d.]+)', tag)
-        if match:
-            return match.group(1)
-        else:
-            raise Exception('Failed to parse version from tag {}'.format(tag))
+        return get_version_from_tag(tag)
 
     def is_update_available(self):
         try:
@@ -2828,3 +2822,11 @@ def get_blob_payment_rate_manager(session, payment_rate_manager=None):
             payment_rate_manager = rate_managers[payment_rate_manager]
             log.info("Downloading blob with rate manager: %s", payment_rate_manager)
     return payment_rate_manager or session.payment_rate_manager
+
+
+def get_version_from_tag(tag):
+    match = re.match('v([\d.]+)', tag)
+    if match:
+        return match.group(1)
+    else:
+        raise Exception('Failed to parse version from tag {}'.format(tag))
