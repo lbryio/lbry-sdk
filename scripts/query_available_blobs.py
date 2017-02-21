@@ -22,7 +22,6 @@ from lbrynet import conf
 from lbrynet.core import Error
 from lbrynet.core import Wallet
 from lbrynet.core import BlobAvailability
-from lbrynet.core import BlobManager
 from lbrynet.core import HashAnnouncer
 from lbrynet.core import PeerManager
 from lbrynet.core import Session
