@@ -2,7 +2,6 @@ import binascii
 import logging.handlers
 import mimetypes
 import os
-import platform
 import re
 import base58
 import requests
@@ -153,7 +152,7 @@ class CheckRemoteVersion(object):
         release = self._get_release_data()
         # githubs documentation claims this should never happen, but we'll check just in case
         if release['prerelease']:
-            raise Exception('Release {} is a pre-release'.format(tag))
+            raise Exception('Release {} is a pre-release'.format(release['tag_name']))
         self.version = self._get_version_from_release(release)
 
     def _get_release_data(self):
