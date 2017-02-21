@@ -12,6 +12,7 @@ at anytime.
 \#\# [0.8.6rc0] - 2017-02-19
 ### Changed
  * Add `file_get` by stream hash
+ * Add utils.call_later to replace reactor.callLater
 ###
  * Fix unhandled error in `get`
  * Fix sd blob timeout handling in `get_availability`, return 0.0
