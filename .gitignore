@@ -6,6 +6,7 @@
 *.log
 *.pem
 *.decTest
+.#*
 
 /build
 /dist
