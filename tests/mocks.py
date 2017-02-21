@@ -30,6 +30,16 @@ class Node(object):
         pass
 
 
+class FakeNetwork(object):
+    @staticmethod
+    def get_local_height():
+        return 1
+
+    @staticmethod
+    def get_server_height():
+        return 1
+
+
 class Wallet(object):
     def __init__(self):
         self.private_key = RSA.generate(1024)

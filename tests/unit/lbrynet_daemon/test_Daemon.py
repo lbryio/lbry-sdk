@@ -10,7 +10,7 @@ from lbrynet.core import Session, PaymentRateManager, Wallet
 from lbrynet.lbrynet_daemon.Daemon import Daemon as LBRYDaemon
 from lbrynet.lbrynet_daemon import ExchangeRateManager
 from lbrynet import conf
-from tests.mocks import mock_conf_settings
+from tests.mocks import mock_conf_settings, FakeNetwork
 
 
 class MiscTests(unittest.TestCase):
@@ -117,11 +117,15 @@ class TestCostEst(unittest.TestCase):
 
 class TestJsonRpc(unittest.TestCase):
     def setUp(self):
+        def noop():
+            return None
+
         mock_conf_settings(self)
         util.resetTime(self)
         self.test_daemon = get_test_daemon()
         self.test_daemon.session.wallet = Wallet.LBRYumWallet(storage=Wallet.InMemoryStorage())
-        # self.test_daemon.session.wallet = FakeWallet()
+        self.test_daemon.session.wallet.network = FakeNetwork()
+        self.test_daemon.session.wallet.get_best_blockhash = noop
 
     def test_status(self):
         d = defer.maybeDeferred(self.test_daemon.jsonrpc_status)
