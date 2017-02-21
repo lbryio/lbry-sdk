@@ -8,6 +8,8 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+
+## [0.9.0rc7] - 2017-02-20
 ### Changed
  * Remove unused upload_allowed option
  * Remove code related to packaging as that step is now done in the electron client
