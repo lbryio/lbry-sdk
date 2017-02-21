@@ -8,4 +8,7 @@ class Handler(logging.Handler):
         logging.Handler.__init__(self, level)
 
     def emit(self, record):
+        # We need to call format to ensure that record.message and
+        # record.exc_text attributes are populated
+        self.format(record)
         self.manager.send_error(record)

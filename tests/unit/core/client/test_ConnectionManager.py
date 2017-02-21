@@ -3,7 +3,7 @@ import time
 import logging
 
 from lbrynet.core import log_support
-from lbrynet.core.client.ConnectionManager import ConnectionManager
+#from lbrynet.core.client.ConnectionManager import ConnectionManager
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.server.ServerProtocol import ServerProtocol
 from lbrynet.core.RateLimiter import RateLimiter
@@ -16,6 +16,7 @@ from twisted.internet import defer, reactor, task
 from twisted.internet.task import deferLater
 from twisted.internet.protocol import Protocol, ServerFactory
 from lbrynet import conf
+from lbrynet.core import utils
 from lbrynet.interfaces  import IQueryHandlerFactory, IQueryHandler, IRequestCreator
 
 from zope.interface import implements
@@ -122,11 +123,12 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.downloader = MocDownloader()
         self.rate_limiter = RateLimiter()
         self.primary_request_creator = MocRequestCreator([self.TEST_PEER])
+        self.clock = task.Clock()
+        utils.call_later = self.clock.callLater
+        from lbrynet.core.client.ConnectionManager import ConnectionManager
         self.connection_manager = ConnectionManager(self.downloader, self.rate_limiter,
                                                     [self.primary_request_creator], [])
 
-        self.clock = task.Clock()
-        self.connection_manager.callLater = self.clock.callLater
         self.connection_manager._start()
         self.server_port = None
 

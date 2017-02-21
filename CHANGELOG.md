@@ -8,11 +8,35 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+\#\# [0.8.6] - 2017-02-19
+\#\# [0.8.6rc0] - 2017-02-19
+### Changed
+ * Add `file_get` by stream hash
+ * Add utils.call_later to replace reactor.callLater
+###
+ * Fix unhandled error in `get`
+ * Fix sd blob timeout handling in `get_availability`, return 0.0
+ 
+ 
+## [0.8.5] - 2017-02-18
+
+## [0.8.5rc0] - 2017-02-18
+### Fixed
+ * Fix result expected by ui from file_get for missing files
+
+
+## [0.8.4] - 2017-02-17
+
+## [0.8.4rc0] - 2017-02-17
 ### Changed
  * Remove unused upload_allowed option
  * Remove code related to packaging as that step is now done in the electron client
  * Remove lbryum version check; use lbry-electron as version source
  * Include download url in version check
+
+### Fixed
+ * add misssing traceback to logging
+
 
 ## [0.8.3] - 2017-02-15
 ### Fixed

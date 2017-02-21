@@ -43,6 +43,13 @@ def datetime_obj(*args, **kwargs):
     return datetime.datetime(*args, **kwargs)
 
 
+def call_later(delay, func, *args, **kwargs):
+    # Import here to ensure that it gets called after installing a reator
+    # see: http://twistedmatrix.com/documents/current/core/howto/choosing-reactor.html
+    from twisted.internet import reactor
+    return reactor.callLater(delay, func, *args, **kwargs)
+
+
 def generate_id(num=None):
     h = get_lbry_hash_obj()
     if num is not None:

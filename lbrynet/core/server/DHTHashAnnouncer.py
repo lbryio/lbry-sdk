@@ -3,14 +3,13 @@ import collections
 import logging
 import time
 
-from twisted.internet import defer, reactor
-
+from twisted.internet import defer
+from lbrynet.core import utils
 
 log = logging.getLogger(__name__)
 
 
 class DHTHashAnnouncer(object):
-    callLater = reactor.callLater
     ANNOUNCE_CHECK_INTERVAL = 60
     CONCURRENT_ANNOUNCERS = 5
 
@@ -26,7 +25,7 @@ class DHTHashAnnouncer(object):
     def run_manage_loop(self):
         if self.peer_port is not None:
             self._announce_available_hashes()
-        self.next_manage_call = self.callLater(self.ANNOUNCE_CHECK_INTERVAL, self.run_manage_loop)
+        self.next_manage_call = utils.call_later(self.ANNOUNCE_CHECK_INTERVAL, self.run_manage_loop)
 
     def stop(self):
         log.info("Stopping %s", self)
@@ -79,7 +78,7 @@ class DHTHashAnnouncer(object):
                 log.debug('Announcing blob %s to dht', h)
                 d = self.dht_node.announceHaveBlob(binascii.unhexlify(h), self.peer_port)
                 d.chainDeferred(announce_deferred)
-                d.addBoth(lambda _: self.callLater(0, announce))
+                d.addBoth(lambda _: utils.call_later(0, announce))
             else:
                 self._concurrent_announcers -= 1
 

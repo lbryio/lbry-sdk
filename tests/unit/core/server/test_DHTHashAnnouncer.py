@@ -2,9 +2,7 @@ import os
 import binascii
 from twisted.trial import unittest
 from twisted.internet import defer,task
-from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer,DHTHashSupplier
-from lbrynet.core.utils import random_string
-from lbrynet.core import log_support
+from lbrynet.core import log_support, utils
 
 
 class MocDHTNode(object):
@@ -35,8 +33,9 @@ class DHTHashAnnouncerTest(unittest.TestCase):
             self.blobs_to_announce.append(binascii.b2a_hex(os.urandom(32)))
         self.clock = task.Clock()
         self.dht_node = MocDHTNode()
+        utils.call_later = self.clock.callLater
+        from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer,DHTHashSupplier
         self.announcer = DHTHashAnnouncer(self.dht_node, peer_port=3333)
-        self.announcer.callLater = self.clock.callLater
         self.supplier = MocSupplier(self.blobs_to_announce)
         self.announcer.add_supplier(self.supplier)
 
