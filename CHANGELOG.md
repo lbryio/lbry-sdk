@@ -8,23 +8,23 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
-## Added
+### Added
   *
   *
   *
 
-## Changed
+### Changed
   *
   *
   *
 
-## Fixed
+### Fixed
   *
   *
   *
 
 ## [0.9.0rc9] - 2017-02-22
-## Changed
+### Changed
  * Add blockchain status to jsonrpc_status
 
 ## [0.8.7] - 2017-02-21
