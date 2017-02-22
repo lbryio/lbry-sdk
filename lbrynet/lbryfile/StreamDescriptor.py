@@ -7,15 +7,12 @@ from lbrynet.core.Error import DuplicateStreamHashError, InvalidStreamDescriptor
 from lbrynet.core.StreamDescriptor import PlainStreamDescriptorWriter, BlobStreamDescriptorWriter
 import os
 
-
 log = logging.getLogger(__name__)
-
-
 EncryptedFileStreamType = "lbryfile"
 
 
 def save_sd_info(stream_info_manager, sd_info, ignore_duplicate=False):
-    log.debug("Saving info for %s", str(sd_info['stream_name']))
+    log.info("Saving info for %s", str(sd_info['stream_name']))
     hex_stream_name = sd_info['stream_name']
     key = sd_info['key']
     stream_hash = sd_info['stream_hash']
@@ -31,7 +28,7 @@ def save_sd_info(stream_info_manager, sd_info, ignore_duplicate=False):
         blob_num = blob['blob_num']
         iv = blob['iv']
         crypt_blobs.append(CryptBlobInfo(blob_hash, blob_num, length, iv))
-    log.debug("Trying to save stream info for %s", str(hex_stream_name))
+    log.info("Trying to save stream info for %s (%i blobs)", str(hex_stream_name), len(crypt_blobs))
     d = stream_info_manager.save_stream(stream_hash, hex_stream_name, key,
                                         suggested_file_name, crypt_blobs)
 
@@ -40,44 +37,35 @@ def save_sd_info(stream_info_manager, sd_info, ignore_duplicate=False):
             err.trap(DuplicateStreamHashError)
 
     d.addErrback(check_if_duplicate)
-
     d.addCallback(lambda _: stream_hash)
     return d
 
 
+@defer.inlineCallbacks
 def get_sd_info(stream_info_manager, stream_hash, include_blobs):
-    d = stream_info_manager.get_stream_info(stream_hash)
+    stream_info = yield stream_info_manager.get_stream_info(stream_hash)
+    fields = {}
+    fields['stream_type'] = EncryptedFileStreamType
+    fields['stream_name'] = stream_info[1]
+    fields['key'] = stream_info[0]
+    fields['suggested_file_name'] = stream_info[2]
+    fields['stream_hash'] = stream_hash
+    if include_blobs is True:
+        blobs = yield stream_info_manager.get_blobs_for_stream(stream_hash)
+    else:
+        blobs = []
 
-    def format_info(stream_info):
-        fields = {}
-        fields['stream_type'] = EncryptedFileStreamType
-        fields['stream_name'] = stream_info[1]
-        fields['key'] = stream_info[0]
-        fields['suggested_file_name'] = stream_info[2]
-        fields['stream_hash'] = stream_hash
-
-        def format_blobs(blobs):
-            formatted_blobs = []
-            for blob_hash, blob_num, iv, length in blobs:
-                blob = {}
-                if length != 0:
-                    blob['blob_hash'] = blob_hash
-                blob['blob_num'] = blob_num
-                blob['iv'] = iv
-                blob['length'] = length
-                formatted_blobs.append(blob)
-            fields['blobs'] = formatted_blobs
-            return fields
-
-        if include_blobs is True:
-            d = stream_info_manager.get_blobs_for_stream(stream_hash)
-        else:
-            d = defer.succeed([])
-        d.addCallback(format_blobs)
-        return d
-
-    d.addCallback(format_info)
-    return d
+    formatted_blobs = []
+    for blob_hash, blob_num, iv, length in blobs:
+        blob = {}
+        if blob_hash is not None:
+            blob['blob_hash'] = blob_hash
+        blob['blob_num'] = blob_num
+        blob['iv'] = iv
+        blob['length'] = length
+        formatted_blobs.append(blob)
+    fields['blobs'] = formatted_blobs
+    defer.returnValue(fields)
 
 
 @defer.inlineCallbacks
