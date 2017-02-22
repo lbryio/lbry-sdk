@@ -11,7 +11,6 @@ import unittest
 from Crypto import Random
 from Crypto.Hash import MD5
 from lbrynet import conf
-from lbrynet.lbryfile.EncryptedFileMetadataManager import EncryptedFileMetadataManager
 from lbrynet import analytics
 from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
@@ -27,6 +26,7 @@ from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
+from lbrynet.lbryfile import publish_sd_blob
 from twisted.internet import defer, threads, task
 from twisted.trial.unittest import TestCase
 from twisted.python.failure import Failure
@@ -53,9 +53,6 @@ test_create_stream_sd_file = mocks.create_stream_sd_file
 DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 
-log_format = "%(funcName)s(): %(message)s"
-logging.basicConfig(level=logging.WARNING, format=log_format)
-logging.getLogger("lbrynet").setLevel(logging.CRITICAL)
 
 
 def require_system(system):
@@ -116,7 +113,7 @@ class LbryUploader(object):
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
             dht_node_class=Node, is_generous=self.is_generous)
-        stream_info_manager = EncryptedFileMetadataManager()
+        stream_info_manager = DBEncryptedFileMetadataManager(self.session.storage)
         self.lbry_file_manager = EncryptedFileManager(
             self.session, stream_info_manager, self.sd_identifier)
         if self.ul_rate_limit is not None:
@@ -182,14 +179,13 @@ class LbryUploader(object):
         d = create_lbry_file(self.session, self.lbry_file_manager, "test_file", test_file)
         return d
 
+    @defer.inlineCallbacks
     def create_stream_descriptor(self, stream_hash):
-        descriptor_writer = BlobStreamDescriptorWriter(self.session.blob_manager)
-        d = get_sd_info(self.lbry_file_manager.stream_info_manager, stream_hash, True)
-        d.addCallback(descriptor_writer.create_descriptor)
-        return d
-
-    def put_sd_hash_on_queue(self, sd_hash):
+        sd_hash = yield publish_sd_blob(self.lbry_file_manager.stream_info_manager,
+                                        self.session.blob_manager,
+                                        stream_hash)
         self.sd_hash_queue.put(sd_hash)
+        defer.returnValue(None)
 
 
 def start_lbry_reuploader(sd_hash, kill_event, dead_event,
@@ -223,7 +219,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                       blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-    stream_info_manager = EncryptedFileMetadataManager()
+    stream_info_manager = DBEncryptedFileMetadataManager(session.storage)
 
     lbry_file_manager = EncryptedFileManager(session, stream_info_manager, sd_identifier)
 
@@ -640,7 +636,7 @@ class TestTransfer(TestCase):
             blob_tracker_class=DummyBlobAvailabilityTracker,
             dht_node_class=Node, is_generous=self.is_generous)
 
-        self.stream_info_manager = EncryptedFileMetadataManager()
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.storage)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
@@ -908,7 +904,7 @@ class TestTransfer(TestCase):
                                blob_tracker_class=DummyBlobAvailabilityTracker,
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.storage)
         self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         @defer.inlineCallbacks
@@ -1029,7 +1025,7 @@ class TestTransfer(TestCase):
                                wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker,
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-        self.stream_info_manager = EncryptedFileMetadataManager()
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.storage)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)

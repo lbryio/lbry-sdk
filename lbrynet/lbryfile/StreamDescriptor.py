@@ -129,13 +129,13 @@ class EncryptedFileStreamDescriptorValidator(object):
         def get_blob_hashsum(b):
             length = b['length']
             if length != 0:
-                blob_hash = b['blob_hash']
+                blob_hash = b.get('blob_hash', None)
             else:
                 blob_hash = None
             blob_num = b['blob_num']
             iv = b['iv']
             blob_hashsum = get_lbry_hash_obj()
-            if length != 0:
+            if blob_hash is not None:
                 blob_hashsum.update(blob_hash)
             blob_hashsum.update(str(blob_num))
             blob_hashsum.update(iv)

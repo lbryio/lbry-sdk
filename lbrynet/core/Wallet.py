@@ -1,11 +1,9 @@
 import datetime
 import logging
 import json
-import os
 
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
-from twisted.enterprise import adbapi
 from collections import defaultdict, deque
 from zope.interface import implements
 from jsonschema import ValidationError
@@ -108,31 +106,15 @@ class InMemoryStorage(MetaDataStorage):
 
 
 class SqliteStorage(MetaDataStorage):
-    def __init__(self, db_dir):
-        self.db_dir = db_dir
-        self.db = None
+    def __init__(self, database):
+        self.db = database
         MetaDataStorage.__init__(self)
 
     def load(self):
-        self.db = adbapi.ConnectionPool('sqlite3', os.path.join(self.db_dir, "blockchainname.db"),
-                                        check_same_thread=False)
-
-        def create_tables(transaction):
-            transaction.execute("create table if not exists name_metadata (" +
-                                "    name text, " +
-                                "    txid text, " +
-                                "    n integer, " +
-                                "    sd_hash text)")
-            transaction.execute("create table if not exists claim_ids (" +
-                                "    claimId text, " +
-                                "    name text, " +
-                                "    txid text, " +
-                                "    n integer)")
-
-        return self.db.runInteraction(create_tables)
+        return self.db.open()
 
     def clean_bad_records(self):
-        d = self.db.runQuery("delete from name_metadata where length(txid) > 64 or txid is null")
+        d = self.db.query("delete from name_metadata where length(txid) > 64 or txid is null")
         return d
 
     def save_name_metadata(self, name, claim_outpoint, sd_hash):

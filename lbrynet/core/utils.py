@@ -108,3 +108,56 @@ def random_string(length=10, chars=string.ascii_lowercase):
 
 def short_hash(hash_str):
     return hash_str[:6]
+
+
+def rerun_callback_on(f, *exceptions):
+    from twisted.internet import reactor, task, defer
+
+    @defer.inlineCallbacks
+    def wrapper(*args, **kwargs):
+        try:
+            result = yield f(*args, **kwargs)
+        except exceptions as err:
+            log.error("Caught %s, rerunning %s", err, f)
+            yield wrapper(*args, **kwargs)
+        defer.returnValue(result)
+
+    return wrapper
+
+
+def trap_errback(f, *exceptions):
+    def trap(err):
+        if err.check(*exceptions):
+            log.warning("Trapped %s in %s", err, f)
+        raise err
+
+    def wrapper(*args, **kwargs):
+        d = f(*args, **kwargs)
+        d.addErrback(trap)
+        yield d
+
+    return wrapper
+
+
+def InlineCallbackRerunOn(*rerun_on):
+    from twisted.internet import defer
+
+    def _rerun_cb(f):
+        if not rerun_on:
+            return defer.inlineCallbacks(f)
+        else:
+            return rerun_callback_on(defer.inlineCallbacks(f), *rerun_on)
+
+    return _rerun_cb
+
+
+def InlineCallbackCatch(*catch):
+    from twisted.internet import defer
+
+    def _trap_eb(f):
+        if not catch:
+            return defer.inlineCallbacks(f)
+        else:
+            return trap_errback(defer.inlineCallbacks(f), *catch)
+
+    return _trap_eb

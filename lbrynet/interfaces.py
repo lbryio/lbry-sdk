@@ -762,3 +762,66 @@ class IEncryptedFileMetadataManager(Interface):
 
     def get_sd_blob_hashes_for_stream(self, stream_hash):
         pass
+
+
+class IBlobManager(Interface):
+    """
+    This class stores blobs and manages their announcement
+    """
+
+    def setup(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def get_blob(self, blob_hash, length=None):
+        """
+        Return a blob identified by blob_hash, which may be a new blob or a
+        blob that is already on the hard disk
+
+        @param blob_hash: blob hash
+        @type: str
+
+        @param length: blob length
+        @type: int
+
+        @return: existing or new blob
+        @rtype: HashBlob
+        """
+
+    def get_blob_creator(self):
+        pass
+
+    def blob_completed(self, blob, next_announce_time=None):
+        pass
+
+    def completed_blobs(self, blob_hashes_to_check):
+        """
+        Get completed blobs out of the blob hashes to check
+        """
+
+
+    def get_all_verified_blobs(self):
+        pass
+
+    def hashes_to_announce(self):
+        pass
+
+    def creator_finished(self, blob_creator):
+        pass
+
+    def delete_blob(self, blob_hash):
+        pass
+
+    def delete_blobs(self, blob_hashes):
+        pass
+
+    def add_blob_to_download_history(self, blob_hash, host, rate):
+        pass
+
+    def add_blob_to_upload_history(self, blob_hash, host, rate):
+        pass
+
+    def immediate_announce_all_blobs(self, blob_hashes):
+        pass

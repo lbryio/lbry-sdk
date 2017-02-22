@@ -1,7 +1,6 @@
 import logging
 import os
 
-from twisted.enterprise import adbapi
 from twisted.internet import defer, task, reactor
 
 from lbrynet.reflector.reupload import reflect_stream
@@ -49,13 +48,12 @@ class EncryptedFileManager(object):
         """
 
         self.session = session
+        self.storage = stream_info_manager.storage
         self.stream_info_manager = stream_info_manager
         # TODO: why is sd_identifier part of the file manager?
         self.sd_identifier = sd_identifier
         self.lbry_files = []
         self.download_directory = download_directory or os.getcwd()
-        self.sql_db = None
-        self.db_path = os.path.join(self.session.db_dir, "lbryfile_info.db")
         self.lbry_file_reflector = task.LoopingCall(self.reflect_lbry_files)
         log.debug("Download directory for EncryptedFileManager: %s", str(self.download_directory))
 
@@ -86,8 +84,9 @@ class EncryptedFileManager(object):
 
     @defer.inlineCallbacks
     def change_lbry_file_status(self, lbry_file, status):
-        log.debug("Changing status of %s to %s", lbry_file.stream_hash, status)
-        yield self._change_file_status(lbry_file.rowid, status)
+        log.info("Changing status of %i (%s) to %s", lbry_file.rowid, lbry_file.stream_hash, status)
+        result = yield self._change_file_status(lbry_file.rowid, status)
+        defer.returnValue(result)
 
     @defer.inlineCallbacks
     def get_lbry_file_status_reports(self):
@@ -140,11 +139,6 @@ class EncryptedFileManager(object):
         yield defer.DeferredList(dl)
 
     @defer.inlineCallbacks
-    def get_count_for_stream_hash(self, stream_hash):
-        stream_count = yield self._get_count_for_stream_hash(stream_hash)
-        defer.returnValue(stream_count)
-
-    @defer.inlineCallbacks
     def check_stream_is_managed(self, stream_hash):
         rowid = yield self._get_rowid_for_stream_hash(stream_hash)
         if rowid is not None:
@@ -162,7 +156,6 @@ class EncryptedFileManager(object):
         """
 
         stream_hashes = yield self.stream_info_manager.get_all_streams()
-        log.debug("Checking %s streams", len(stream_hashes))
         dl = []
         for stream_hash in stream_hashes:
             dl.append(self.check_stream_is_managed(stream_hash))
@@ -207,6 +200,7 @@ class EncryptedFileManager(object):
 
     @defer.inlineCallbacks
     def start_lbry_files(self):
+        log.info("Start files")
         yield self.check_streams_are_managed()
         files_and_options = yield self._get_all_lbry_files()
         dl = []
@@ -239,82 +233,77 @@ class EncryptedFileManager(object):
     # database functions  #
     # # # # # # # # # # # #
 
-    @defer.inlineCallbacks
-    def _setup(self):
-        # check_same_thread=False is solely to quiet a spurious error that appears to be due
-        # to a bug in twisted, where the connection is closed by a different thread than the
-        # one that opened it. The individual connections in the pool are not used in multiple
-        # threads.
-        self.sql_db = adbapi.ConnectionPool("sqlite3", self.db_path, check_same_thread=False)
-        create_tables_query = (
-            "create table if not exists lbry_file_options ("
-            "    blob_data_rate real, "
-            "    status text,"
-            "    stream_hash text,"
-            "    foreign key(stream_hash) references lbry_files(stream_hash)"
-            ")")
-        yield self.sql_db.runQuery(create_tables_query)
-        defer.returnValue(None)
+    # files (id, status, blob_data_rate, stream_hash, sd_hash, decryption_key, published_file_name,
+    #        claim_id)
+    # blobs (id, blob_hash)
+    # managed_blobs (id, blob_id, file_id, position, iv, length, last_verified_time,
+    #                last_announce_time, next_announce_time)
+
 
     @defer.inlineCallbacks
     def _stop(self):
-        yield self.sql_db.close()
-        self.sql_db = None
+        yield self.storage.close()
+
+    @defer.inlineCallbacks
+    def _setup(self):
+        yield self.storage.open()
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _save_lbry_file(self, stream_hash, data_payment_rate):
-        def do_save(db_transaction):
-            row = (data_payment_rate, ManagedEncryptedFileDownloader.STATUS_STOPPED, stream_hash)
-            db_transaction.execute("insert into lbry_file_options values (?, ?, ?)", row)
-            return db_transaction.lastrowid
-        return self.sql_db.runInteraction(do_save)
+        rowid = yield self.storage.query("SELECT id FROM files WHERE stream_hash=?",
+                                         (stream_hash,))
+        if data_payment_rate is None:
+            data_payment_rate = 0.0
+        if not rowid:
+            yield self.storage.query("INSERT INTO files VALUES "
+                                     "(NULL, ?, ?, ?, NULL, NULL, NULL, NULL)",
+                                     (ManagedEncryptedFileDownloader.STATUS_STREAM_PENDING,
+                                      data_payment_rate, stream_hash))
+            rowid = yield self.storage.query("SELECT id FROM files WHERE stream_hash=?",
+                                             (stream_hash,))
+            file_id = rowid[0][0]
+        else:
+            query = ("UPDATE files SET blob_data_rate=?, status=? WHERE id=?")
+            file_id = rowid[0][0]
+        yield self.storage.query(query, (data_payment_rate,
+                                          ManagedEncryptedFileDownloader.STATUS_STREAM_PENDING,
+                                          file_id))
+        defer.returnValue(file_id)
 
     @rerun_if_locked
     def _delete_lbry_file_options(self, rowid):
-        return self.sql_db.runQuery("delete from lbry_file_options where rowid = ?",
-                                    (rowid,))
+        return self.storage.query("DELETE FROM files WHERE id=?", (rowid,))
 
     @rerun_if_locked
     def _set_lbry_file_payment_rate(self, rowid, new_rate):
-        return self.sql_db.runQuery(
-            "update lbry_file_options set blob_data_rate = ? where rowid = ?",
-            (new_rate, rowid))
+        return self.storage.query("UPDATE files SET blob_data_rate=? where id=?",
+                                  (new_rate, rowid))
 
     @rerun_if_locked
     def _get_all_lbry_files(self):
-        d = self.sql_db.runQuery("select rowid, stream_hash, blob_data_rate from lbry_file_options")
-        return d
+        return self.storage.query("SELECT id, stream_hash, blob_data_rate FROM files")
 
     @rerun_if_locked
+    @defer.inlineCallbacks
     def _change_file_status(self, rowid, new_status):
-        return self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
-                                    (new_status, rowid))
+        yield self.storage.query("UPDATE files SET status=? WHERE id=?", (new_status, rowid))
+        status = yield self.storage.query("SELECT status FROM files WHERE id=?", (rowid, ))
+        defer.returnValue(status[0][0])
 
     @rerun_if_locked
     @defer.inlineCallbacks
     def _get_lbry_file_status(self, rowid):
-        query_string = "select status from lbry_file_options where rowid = ?"
-        query_results = yield self.sql_db.runQuery(query_string, (rowid,))
-        status = None
-        if query_results:
-            status = query_results[0][0]
+        query_string = "SELECT status FROM files WHERE id=?"
+        query_results = yield self.storage.query(query_string, (rowid,))
+        status = query_results[0][0]
         defer.returnValue(status)
 
     @rerun_if_locked
     @defer.inlineCallbacks
-    def _get_count_for_stream_hash(self, stream_hash):
-        query_string = "select count(*) from lbry_file_options where stream_hash = ?"
-        query_results = yield self.sql_db.runQuery(query_string, (stream_hash,))
-        result = 0
-        if query_results:
-            result = query_results[0][0]
-        defer.returnValue(result)
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
     def _get_rowid_for_stream_hash(self, stream_hash):
-        query_string = "select rowid from lbry_file_options where stream_hash = ?"
-        query_results = yield self.sql_db.runQuery(query_string, (stream_hash,))
+        query_string = "SELECT id FROM files WHERE stream_hash=?"
+        query_results = yield self.storage.query(query_string, (stream_hash,))
         result = None
         if query_results:
             result = query_results[0][0]
