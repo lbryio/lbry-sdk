@@ -18,39 +18,31 @@ keywords = "LBRY"
 
 
 # TODO: find a way to keep this in sync with requirements.txt
+#
+# Note though that this list is intentionally less restrictive than
+# requirements.txt. This is only the libraries that are direct
+# dependencies of the lbrynet library.  requirements.txt includes
+# dependencies of dependencies and specific versions that we know
+# all work together.
+# See https://packaging.python.org/requirements/ for more details.
 requires = [
     'Twisted',
     'appdirs',
-    'argparse',
-    'colorama',
-    'dnspython',
-    'ecdsa',
+    'base58',
     'envparse',
-    'gmpy',
+    'googlefinance',
     'jsonrpc',
-    'jsonrpclib',
     'jsonschema',
-    'lbryum',
-    'loggly-python-handler',
+    'lbryum>=2.7.6',
     'miniupnpc',
-    'pbkdf2',
-    'protobuf',
     'pycrypto',
-    'qrcode',
+    'pyyaml',
     'requests',
     'requests_futures',
     'seccure',
     'simplejson',
-    'six',
-    'slowaes',
     'txJSON-RPC',
-    'wsgiref',
     'zope.interface',
-    'base58',
-    'googlefinance',
-    'pyyaml',
-    'service_identity',
-    'ndg-httpsclient',
 ]
 
 
