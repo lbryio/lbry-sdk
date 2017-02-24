@@ -38,7 +38,7 @@ from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.core.Storage import SqliteStorage
+from lbrynet.core.Storage import FileStorage
 from lbrynet.core import log_support, utils, file_utils
 from lbrynet.core import system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
@@ -254,6 +254,7 @@ class Daemon(AuthJSONRPCServer):
         self.current_db_revision = 3
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
+        self.lbry_file_manager = None
         self.uploaded_temp_files = []
         self._session_id = conf.settings.get_session_id()
         # TODO: this should probably be passed into the daemon, or
@@ -282,11 +283,9 @@ class Daemon(AuthJSONRPCServer):
         }
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
-        self.lbry_file_manager = None
-        self.storage = SqliteStorage(self.db_dir)
+        self.storage = FileStorage(self.db_dir)
+
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.storage)
-        self.lbry_file_manager = None
 
         if self.wallet_type == LBRYCRD_WALLET:
             log.warning('LBRYcrd Wallet is no longer supported, switching to lbryum')

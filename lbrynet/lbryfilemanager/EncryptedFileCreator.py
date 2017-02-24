@@ -137,8 +137,9 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
         descriptor_file_path = os.path.join(
             session.db_dir, file_name + conf.settings['CRYPTSD_FILE_EXTENSION'])
         descriptor_writer = PlainStreamDescriptorWriter(descriptor_file_path)
-
+        log.debug("got descriptor writer")
         sd_info = yield get_sd_info(lbry_file_manager.stream_info_manager, stream_hash, True)
+        log.debug("sd info: %s", sd_info)
         yield descriptor_writer.create_descriptor(sd_info)
 
     base_file_name = os.path.basename(file_name)

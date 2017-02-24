@@ -1,21 +1,19 @@
 import os
 import logging
-
+import sqlite3
 from twisted.internet import defer
 from twisted.enterprise import adbapi
+from lbrynet.core import utils
 from lbrynet import conf
 
 log = logging.getLogger(__name__)
 
 
-class Storage(object):
-    def __init__(self, db_dir=None):
-        self.db_dir = db_dir
+class MemoryStorage(object):
+    def __init__(self):
+        self.db_path = ":MEMORY:"
+        self.sqlite_db = None
         self._is_open = False
-
-    @property
-    def db_path(self):
-        return os.path.join(self.db_dir, "lbry.sqlite")
 
     @property
     def is_open(self):
@@ -36,37 +34,22 @@ class Storage(object):
 
     @defer.inlineCallbacks
     def query(self, query, args=None):
+        if not self.is_open:
+            yield self.open()
         result = yield self._query(query, args)
         defer.returnValue(result)
 
-    def _query(self, query, args=None):
-        return None
-
-    def _open(self):
-        return True
-
-    def _close(self):
-        return True
-
-
-class SqliteStorage(Storage):
-    def __init__(self, db_dir=conf.default_data_dir):
-        Storage.__init__(self, db_dir)
-        self.sqlite_db = None
-
-    @defer.inlineCallbacks
+    @utils.InlineCallbackCatch(sqlite3.IntegrityError,)
     def _query(self, query, args=None):
         query_str = query.replace("?", "%s")
         if args:
             query_str %= args
-        try:
-            if args:
-                results = yield self.sqlite_db.runQuery(query, args)
-            else:
-                results = yield self.sqlite_db.runQuery(query)
-        except Exception as err:
-            err_msg = "%s - %s\n%s" % (err.__class__.__name__, err.message, query_str)
-            raise Exception(err_msg)
+        log.debug(query_str)
+        if args:
+            results = yield self.sqlite_db.runQuery(query, args)
+        else:
+            results = yield self.sqlite_db.runQuery(query)
+
         defer.returnValue(results)
 
     @defer.inlineCallbacks
@@ -80,7 +63,19 @@ class SqliteStorage(Storage):
              "status TEXT NOT NULL,"
              "txid TEXT NOT NULL, "
              "nout INTEGER, "
-             "claim_transaction_id TEXT NOT NULL"
+             "claim_transaction_id TEXT NOT NULL, "
+             "claim_hash TEXT NOT NULL UNIQUE, "
+             "sd_hash TEXT, "
+             "is_mine BOOLEAN "
+             ")"),
+
+            ("CREATE TABLE IF NOT EXISTS winning_claims ("
+             "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+             "name TEXT NOT NULL UNIQUE, "
+             "claim_id INTEGER NOT NULL UNIQUE, "
+             "last_checked INTEGER, "
+             "FOREIGN KEY(claim_id) REFERENCES claims(id) "
+             "ON DELETE CASCADE ON UPDATE CASCADE "
              ")"),
 
             ("CREATE TABLE IF NOT EXISTS metadata ("
@@ -143,5 +138,15 @@ class SqliteStorage(Storage):
         self._is_open = True
         defer.returnValue(None)
 
+    @defer.inlineCallbacks
     def _close(self):
+        # db, self.sqlite_db = self.sqlite_db, None
         yield self.sqlite_db.close()
+        self._is_open = False
+        defer.returnValue(None)
+
+
+class FileStorage(MemoryStorage):
+    def __init__(self, db_dir=None):
+        MemoryStorage.__init__(self)
+        self.db_path = os.path.join(db_dir or conf.default_data_dir, "lbry.sqlite")

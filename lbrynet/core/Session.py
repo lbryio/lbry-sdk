@@ -2,7 +2,7 @@ import logging
 import miniupnpc
 from lbrynet.core.BlobManager import DiskBlobManager, TempBlobManager
 from lbrynet.dht import node
-from lbrynet.core.Storage import SqliteStorage
+from lbrynet.core.Storage import FileStorage, MemoryStorage
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.client.DHTPeerFinder import DHTPeerFinder
@@ -101,7 +101,10 @@ class Session(object):
         """
 
         self.db_dir = db_dir
-        self.storage = storage or SqliteStorage(self.db_dir)
+        if not db_dir:
+            self.storage = MemoryStorage()
+        else:
+            self.storage = storage or FileStorage(self.db_dir)
         self.lbryid = lbryid
 
         self.peer_manager = peer_manager
@@ -135,6 +138,8 @@ class Session(object):
 
         log.debug("Setting up the lbry session")
 
+        yield self.storage.open()
+
         if self.lbryid is None:
             self.lbryid = generate_id()
 
@@ -144,8 +149,6 @@ class Session(object):
 
         if self.peer_manager is None:
             self.peer_manager = PeerManager()
-
-        yield self.storage.open()
 
         if self.use_upnp is True:
             yield self._try_upnp()

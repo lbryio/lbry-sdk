@@ -44,17 +44,15 @@ def save_sd_info(stream_info_manager, sd_info, ignore_duplicate=False):
 @defer.inlineCallbacks
 def get_sd_info(stream_info_manager, stream_hash, include_blobs):
     stream_info = yield stream_info_manager.get_stream_info(stream_hash)
+    log.info("Stream info: %s", stream_info)
     fields = {}
     fields['stream_type'] = EncryptedFileStreamType
-    fields['stream_name'] = stream_info[1]
-    fields['key'] = stream_info[0]
-    fields['suggested_file_name'] = stream_info[2]
+    fields['key'], fields['stream_name'], fields['suggested_file_name'] = stream_info
     fields['stream_hash'] = stream_hash
     if include_blobs is True:
         blobs = yield stream_info_manager.get_blobs_for_stream(stream_hash)
     else:
         blobs = []
-
     formatted_blobs = []
     for blob_hash, blob_num, iv, length in blobs:
         blob = {}

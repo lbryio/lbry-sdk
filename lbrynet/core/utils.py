@@ -4,7 +4,8 @@ import logging
 import random
 import socket
 import string
-
+import json
+import base58
 import pkg_resources
 
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
@@ -110,17 +111,45 @@ def short_hash(hash_str):
     return hash_str[:6]
 
 
-def rerun_callback_on(f, *exceptions):
-    from twisted.internet import reactor, task, defer
+def get_sd_hash(metadata_dict):
+    sd_hash = metadata_dict['sources']['lbry_sd_hash']
+    return sd_hash
 
-    @defer.inlineCallbacks
+
+def claim_hash(txid, nout):
+    digest = get_lbry_hash_obj()
+    decoded_txid = txid.decode('hex')
+    digest.update(decoded_txid)
+    digest.update(chr(int(nout)))
+    return digest.hexdigest()
+
+
+def metadata_to_b58(metadata):
+    if isinstance(metadata, str):
+        metadata_str = metadata
+    elif isinstance(metadata, dict):
+        metadata_str = json.dumps(metadata)
+    else:
+        raise Exception("Can't encode metadata type %s" % str(type(metadata)))
+    return base58.b58encode(metadata_str)
+
+
+def decode_b58_metadata(encoded_metadata):
+    decoded = base58.b58decode(encoded_metadata)
+    metadata = json.loads(decoded)
+    return metadata
+
+
+def rerun_callback_on(f, *exceptions):
+    def rerun_on(err, *args, **kwargs):
+        if err.check(*exceptions):
+            log.warning("Caught %s, rerunning %s", err, f)
+            return wrapper(*args, **kwargs)
+
     def wrapper(*args, **kwargs):
-        try:
-            result = yield f(*args, **kwargs)
-        except exceptions as err:
-            log.error("Caught %s, rerunning %s", err, f)
-            yield wrapper(*args, **kwargs)
-        defer.returnValue(result)
+        d = f(*args, **kwargs)
+        d.addErrback(lambda err: rerun_on(err, *args, **kwargs))
+        return d
 
     return wrapper
 
@@ -129,12 +158,11 @@ def trap_errback(f, *exceptions):
     def trap(err):
         if err.check(*exceptions):
             log.warning("Trapped %s in %s", err, f)
-        raise err
 
     def wrapper(*args, **kwargs):
         d = f(*args, **kwargs)
         d.addErrback(trap)
-        yield d
+        return d
 
     return wrapper
 

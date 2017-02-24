@@ -1,4 +1,3 @@
-import io
 import logging
 from multiprocessing import Process, Event, Queue
 import os
@@ -18,14 +17,13 @@ from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataMan
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.Session import Session
+from lbrynet.core import BlobManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
-from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
-from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbryfile.StreamDescriptor import get_sd_info
+from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier, EncryptedFileOptions
 from lbrynet.lbryfile import publish_sd_blob
 from twisted.internet import defer, threads, task
 from twisted.trial.unittest import TestCase
@@ -36,6 +34,7 @@ from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter, RateLimiter
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
+from lbrynet.core import Storage
 
 from lbrynet.lbrylive.server.LiveBlobInfoQueryHandler import CryptBlobInfoQueryHandlerFactory
 from lbrynet.lbrylive.client.LiveStreamOptions import add_live_stream_to_sd_identifier
@@ -107,11 +106,12 @@ class LbryUploader(object):
         self.sd_identifier = StreamDescriptorIdentifier()
         db_dir = "server"
         os.mkdir(db_dir)
+        storage = Storage.FileStorage(db_dir)
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-            blob_tracker_class=DummyBlobAvailabilityTracker,
+            blob_tracker_class=DummyBlobAvailabilityTracker, storage=storage,
             dht_node_class=Node, is_generous=self.is_generous)
         stream_info_manager = DBEncryptedFileMetadataManager(self.session.storage)
         self.lbry_file_manager = EncryptedFileManager(
@@ -882,8 +882,8 @@ class TestTransfer(TestCase):
         self.server_processes.append(uploader)
 
         logging.debug("Testing double download")
-
         wallet = FakeWallet()
+
         peer_manager = PeerManager()
         peer_finder = FakePeerFinder(5553, peer_manager, 1)
         hash_announcer = FakeAnnouncer()
@@ -897,7 +897,9 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
+        storage = Storage.FileStorage(db_dir)
+
+        self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, storage=storage,
                                lbryid="abcd", peer_finder=peer_finder,
                                hash_announcer=hash_announcer, blob_dir=blob_dir, peer_port=5553,
                                use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
@@ -916,11 +918,8 @@ class TestTransfer(TestCase):
                 o.default_value for o in options.get_downloader_options(info_validator, prm)
             ]
             downloader = yield factories[0].make_downloader(metadata, chosen_options, prm)
-            defer.returnValue(downloader)
-
-        def append_downloader(downloader):
             downloaders.append(downloader)
-            return downloader
+            defer.returnValue(downloader)
 
         @defer.inlineCallbacks
         def download_file(sd_hash):
@@ -928,7 +927,6 @@ class TestTransfer(TestCase):
             sd_blob = yield download_sd_blob(self.session, sd_hash, prm)
             metadata = yield sd_identifier.get_metadata_for_sd_blob(sd_blob)
             downloader = yield make_downloader(metadata, prm)
-            downloaders.append(downloader)
             finished_value = yield downloader.start()
             defer.returnValue(finished_value)
 
@@ -969,6 +967,7 @@ class TestTransfer(TestCase):
             yield download_file(sd_hash)
             yield delete_lbry_file()
             yield check_lbry_file()
+            defer.returnValue(None)
 
         def stop(arg):
             if isinstance(arg, Failure):

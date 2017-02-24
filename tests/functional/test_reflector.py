@@ -72,8 +72,8 @@ class TestReflector(unittest.TestCase):
         server_db_dir = "server"
         os.mkdir(server_db_dir)
 
-        client_storage = Storage.SqliteStorage(client_db_dir)
-        server_storage = Storage.SqliteStorage(server_db_dir)
+        client_storage = Storage.FileStorage(client_db_dir)
+        server_storage = Storage.FileStorage(server_db_dir)
 
         client_blob_manager = BlobManager.DiskBlobManager(client_hash_announcer,
                                                           client_db_dir,
@@ -177,12 +177,14 @@ class TestReflector(unittest.TestCase):
 
     def take_down_env(self):
         d = defer.succeed(True)
+
         if self.client_lbry_file_manager is not None:
             d.addCallback(lambda _: self.client_lbry_file_manager.stop())
         if self.client_session is not None:
             d.addCallback(lambda _: self.client_session.shut_down())
         if self.client_stream_info_manager is not None:
             d.addCallback(lambda _: self.client_stream_info_manager.stop())
+
         if self.server_lbry_file_manager is not None:
             d.addCallback(lambda _: self.server_lbry_file_manager.stop())
         if self.server_session is not None:

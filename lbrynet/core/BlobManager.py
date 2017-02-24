@@ -252,19 +252,19 @@ class DiskBlobManager(TempBlobManager):
         add_managed_blob_query = ("INSERT INTO managed_blobs VALUES "
                                   "(NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL)")
         result = yield self.storage.query(get_id_query, (blob_hash, ))
-        if len(result):
+        if result:
             blob_id = result[0][0]
         else:
             try:
                 yield self.storage.query(add_blob_query, (blob_hash,))
             except sqlite3.IntegrityError:
-                raise
+                pass
             result = yield self.storage.query(get_id_query, (blob_hash,))
             blob_id = result[0][0]
             try:
                 yield self.storage.query(add_managed_blob_query, (blob_id,))
             except sqlite3.DatabaseError:
-                raise
+                pass
         defer.returnValue(blob_id)
 
     @rerun_if_locked

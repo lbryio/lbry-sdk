@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import logging
+import hashlib
 
 log = logging.getLogger(__name__)
 
@@ -16,12 +17,12 @@ def get_blob_dict(blob_hash, stream_hash=None, position=None, iv=None, length=No
     assert blob_hash is not None and blob_hash is not False
     return {
         blob_hash: {
-        'stream_hash': stream_hash,
-        'position': position,
-        'iv': iv,
-        'length': length,
-        'last_verified': last_verified,
-        'next_announce_time': next_announce_time
+            'stream_hash': stream_hash,
+            'position': position,
+            'iv': iv,
+            'length': length,
+            'last_verified': last_verified,
+            'next_announce_time': next_announce_time
         }
     }
 
@@ -65,65 +66,77 @@ def migrate_dbs(db_dir):
 
     # make the new tables
     lbry_cursor.execute("CREATE TABLE IF NOT EXISTS claims ("
-                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                       "name TEXT NOT NULL, "
-                       "status TEXT NOT NULL,"
-                       "txid TEXT NOT NULL, "
-                       "nout INTEGER, "
-                       "claim_transaction_id TEXT NOT NULL"
-                       ")")
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "name TEXT NOT NULL, "
+                        "status TEXT NOT NULL,"
+                        "txid TEXT NOT NULL, "
+                        "nout INTEGER, "
+                        "claim_transaction_id TEXT NOT NULL, "
+                        "claim_hash TEXT NOT NULL UNIQUE, "
+                        "sd_hash TEXT, "
+                        "is_mine BOOLEAN"
+                        ")")
+
+    lbry_cursor.execute("CREATE TABLE IF NOT EXISTS winning_claims ("
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "name TEXT NOT NULL UNIQUE, "
+                        "claim_id INTEGER NOT NULL UNIQUE, "
+                        "last_checked INTEGER, "
+                        "FOREIGN KEY(claim_id) REFERENCES claims(id) "
+                        "ON DELETE CASCADE ON UPDATE CASCADE "
+                        ")")
 
     lbry_cursor.execute("CREATE TABLE IF NOT EXISTS metadata ("
-                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                       "value BLOB,"
-                       "FOREIGN KEY(id) REFERENCES claims(id) "
-                       "ON DELETE CASCADE ON UPDATE CASCADE "
-                       ")")
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "value BLOB,"
+                        "FOREIGN KEY(id) REFERENCES claims(id) "
+                        "ON DELETE CASCADE ON UPDATE CASCADE "
+                        ")")
 
     lbry_cursor.execute("CREATE TABLE IF NOT EXISTS files ("
-                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                       "status TEXT NOT NULL,"
-                       "blob_data_rate REAL, "
-                       "stream_hash TEXT, "
-                       "sd_hash TEXT, "
-                       "decryption_key TEXT, "
-                       "published_file_name TEXT, "
-                       "claim_id INTEGER, "
-                       "FOREIGN KEY(claim_id) REFERENCES claims(id) "
-                       "ON DELETE SET NULL ON UPDATE CASCADE "
-                       ")")
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "status TEXT NOT NULL,"
+                        "blob_data_rate REAL, "
+                        "stream_hash TEXT, "
+                        "sd_hash TEXT, "
+                        "decryption_key TEXT, "
+                        "published_file_name TEXT, "
+                        "claim_id INTEGER, "
+                        "FOREIGN KEY(claim_id) REFERENCES claims(id) "
+                        "ON DELETE SET NULL ON UPDATE CASCADE "
+                        ")")
 
     lbry_cursor.execute("CREATE TABLE IF NOT EXISTS blobs ("
-                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                       "blob_hash TEXT UNIQUE NOT NULL"
-                       ")")
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "blob_hash TEXT UNIQUE NOT NULL"
+                        ")")
 
     lbry_cursor.execute("CREATE TABLE IF NOT EXISTS managed_blobs ("
-                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                       "blob_id INTEGER NOT NULL, "
-                       "file_id INTEGER, "
-                       "stream_position INTEGER, "
-                       "iv TEXT, "
-                       "blob_length INTEGER, "
-                       "last_verified_time INTEGER, "
-                       "last_announced_time INTEGER, "
-                       "next_announce_time INTEGER, "
-                       "FOREIGN KEY(file_id) REFERENCES files(id) "
-                       "ON DELETE set NULL ON UPDATE CASCADE,"
-                       "FOREIGN KEY(blob_id) REFERENCES blobs(id) "
-                       "ON DELETE CASCADE ON UPDATE CASCADE"
-                       ")")
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "blob_id INTEGER NOT NULL, "
+                        "file_id INTEGER, "
+                        "stream_position INTEGER, "
+                        "iv TEXT, "
+                        "blob_length INTEGER, "
+                        "last_verified_time INTEGER, "
+                        "last_announced_time INTEGER, "
+                        "next_announce_time INTEGER, "
+                        "FOREIGN KEY(file_id) REFERENCES files(id) "
+                        "ON DELETE set NULL ON UPDATE CASCADE,"
+                        "FOREIGN KEY(blob_id) REFERENCES blobs(id) "
+                        "ON DELETE CASCADE ON UPDATE CASCADE"
+                        ")")
 
     lbry_cursor.execute("CREATE TABLE IF NOT EXISTS blob_transfer_history ("
-                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                       "blob_id INTEGER NOT NULL, "
-                       "peer_ip TEXT NOT NULL, "
-                       "downloaded boolean, "
-                       "rate REAL NOT NULL,"
-                       "time INTEGER NOT NULL,"
-                       "FOREIGN KEY(blob_id) REFERENCES blobs(id) "
-                       "ON DELETE SET NULL ON UPDATE CASCADE"
-                       ")")
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "blob_id INTEGER NOT NULL, "
+                        "peer_ip TEXT NOT NULL, "
+                        "downloaded boolean, "
+                        "rate REAL NOT NULL,"
+                        "time INTEGER NOT NULL,"
+                        "FOREIGN KEY(blob_id) REFERENCES blobs(id) "
+                        "ON DELETE SET NULL ON UPDATE CASCADE"
+                        ")")
 
     lbry_db.commit()
 
@@ -177,6 +190,11 @@ def migrate_dbs(db_dir):
             lbry_files[stream_hash]['name'] = name
             lbry_files[stream_hash]['txid'] = txid
             lbry_files[stream_hash]['nout'] = nout
+            claim_sha = hashlib.sha256()
+            claim_sha.update(txid.decode('hex'))
+            claim_sha.update(chr(int(nout)))
+            claim_hash = claim_sha.hexdigest()
+            lbry_files[stream_hash]['claim_hash'] = claim_hash
             lbry_files[stream_hash]['sd_hash'] = sd_hash
             claim_ids_needed.update({(txid, nout): stream_hash})
 
@@ -186,12 +204,14 @@ def migrate_dbs(db_dir):
             lbry_files[stream_hash]['claim_transaction_id'] = claim_id
 
     for stream_hash in lbry_files:
-        lbry_cursor.execute("INSERT INTO claims VALUES (NULL, ?, ?, ?, ?, ?)",
+        lbry_cursor.execute("INSERT INTO claims VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, NULL)",
                             (lbry_files[stream_hash]['name'],
-                             "pending",
+                             "MISSING_METADATA",
                              lbry_files[stream_hash]['txid'],
                              lbry_files[stream_hash]['nout'],
-                             lbry_files[stream_hash]['claim_transaction_id']))
+                             lbry_files[stream_hash]['claim_transaction_id'],
+                             lbry_files[stream_hash]['claim_hash'],
+                             lbry_files[stream_hash]['sd_hash']))
         claim_row_id = lbry_cursor.lastrowid
         lbry_cursor.execute("INSERT INTO files VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)",
                             (lbry_files[stream_hash]['status'],
@@ -213,9 +233,9 @@ def migrate_dbs(db_dir):
             file_id = None
 
         lbry_cursor.execute("INSERT INTO managed_blobs VALUES (NULL, ?, ?, ?, ?, ?, ?, NULL, ?)",
-                        (blob_id, file_id, blobs[blob_hash]['position'], blobs[blob_hash]['iv'],
-                         blobs[blob_hash]['length'], blobs[blob_hash]['last_verified'],
-                         blobs[blob_hash]['next_announce_time']))
+                            (blob_id, file_id, blobs[blob_hash]['position'], blobs[blob_hash]['iv'],
+                             blobs[blob_hash]['length'], blobs[blob_hash]['last_verified'],
+                             blobs[blob_hash]['next_announce_time']))
 
     lbry_db.commit()
     lbry_db.close()
@@ -225,3 +245,12 @@ def migrate_dbs(db_dir):
     log.info("It is safe to delete %s", blob_db_path)
     log.info("It is safe to delete %s", blockchainname_path)
     log.info("It is safe to delete %s", lbryfile_info_path)
+
+
+def main():
+    from lbrynet import conf
+    do_migration(conf.default_data_dir)
+
+
+if __name__ == "__main__":
+    main()

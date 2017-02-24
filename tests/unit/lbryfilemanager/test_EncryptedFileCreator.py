@@ -8,6 +8,9 @@ from twisted.trial import unittest
 
 from lbrynet.core import BlobManager
 from lbrynet.core import Session
+from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
+from lbrynet.core import StreamDescriptor
+from lbrynet.core import Storage
 from lbrynet.core.server import DHTHashAnnouncer
 from lbrynet.lbryfilemanager import EncryptedFileCreator
 from lbrynet.lbryfilemanager import EncryptedFileManager
@@ -25,6 +28,7 @@ def iv_generator():
 
 class CreateEncryptedFileTest(unittest.TestCase):
     timeout = 5
+
     def setUp(self):
         mocks.mock_conf_settings(self)
         self.tmp_dir = tempfile.mkdtemp()
@@ -33,11 +37,15 @@ class CreateEncryptedFileTest(unittest.TestCase):
         shutil.rmtree(self.tmp_dir)
 
     def create_file(self, filename):
+        storage = Storage.FileStorage(self.tmp_dir)
         session = mock.Mock(spec=Session.Session)(None, None)
+        session.storage = storage
         hash_announcer = DHTHashAnnouncer.DHTHashAnnouncer(None, None)
-        session.blob_manager = BlobManager.TempBlobManager(hash_announcer)
         session.db_dir = self.tmp_dir
-        manager = mock.Mock(spec=EncryptedFileManager.EncryptedFileManager)()
+        session.blob_manager = BlobManager.DiskBlobManager(hash_announcer, self.tmp_dir, session.storage)
+        stream_info_manager = DBEncryptedFileMetadataManager(session.storage)
+        sd_identifier = StreamDescriptor.StreamDescriptorIdentifier()
+        manager = EncryptedFileManager.EncryptedFileManager(session, stream_info_manager, sd_identifier)
         handle = mocks.GenFile(3*MB, '1')
         key = '2'*AES.block_size
         return EncryptedFileCreator.create_lbry_file(

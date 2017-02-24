@@ -6,7 +6,7 @@ from lbrynet.interfaces import IEncryptedFileMetadataManager
 from lbrynet.core.Error import DuplicateStreamHashError, NoSuchStreamHash
 from lbrynet.core import utils
 from lbrynet.core.sqlite_helpers import rerun_if_locked
-from lbrynet.core.Storage import Storage
+from lbrynet.core.Storage import MemoryStorage
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 
 
@@ -20,7 +20,7 @@ class EncryptedFileMetadataManager(object):
         self.streams = {}
         self.stream_blobs = {}
         self.sd_files = {}
-        self._database = Storage()
+        self._database = MemoryStorage()
 
     @property
     def storage(self):
@@ -197,13 +197,11 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
     def _setup(self):
         yield self.storage.open()
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _delete_stream(self, stream_hash):
         query = "DELETE FROM files WHERE stream_hash=?"
         yield self.storage.query(query, (stream_hash))
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _store_stream(self, stream_hash, file_name, decryption_key, published_file_name):
         query = ("INSERT INTO files VALUES (NULL, ?, NULL, ?, NULL, ?, ?, NULL)")
@@ -216,14 +214,12 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
             raise DuplicateStreamHashError(stream_hash)
         defer.returnValue(None)
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _get_all_streams(self):
         results = yield self.storage.query("SELECT stream_hash FROM files "
                                                 "WHERE stream_hash IS NOT NULL")
         defer.returnValue([r[0] for r in results])
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _get_stream_info(self, stream_hash):
         query = ("SELECT decryption_key, published_file_name, published_file_name FROM files "
@@ -234,7 +230,6 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
         else:
             raise NoSuchStreamHash(stream_hash)
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _check_if_stream_exists(self, stream_hash):
         query = "SELECT stream_hash FROM files WHERE stream_hash=?"
@@ -244,7 +239,6 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
         else:
             defer.returnValue(False)
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _get_blob_num_by_hash(self, stream_hash, blob_hash):
         query = ("SELECT b.position FROM blobs b "
@@ -256,7 +250,6 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
             result = results[0][0]
         defer.returnValue(result)
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _get_count_for_stream(self, stream_hash):
         query = ("SELECT count(*) FROM managed_blobs "
@@ -268,7 +261,6 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
             result = 0
         defer.returnValue(result)
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _get_further_blob_infos(self, stream_hash, start_num, end_num, count=None, reverse=False):
         if count is None:
@@ -299,7 +291,6 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
             results.append((blob_hash, stream_position, iv, blob_length))
         defer.returnValue(results)
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _add_empty_blob(self, stream_hash, blob_hash, stream_position, iv, length=0):
         file_id_result = yield self.storage.query("SELECT id FROM files WHERE stream_hash=?",
@@ -320,7 +311,6 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
             yield self.storage.query(empty_blob_query, args)
         defer.returnValue(None)
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _add_blobs_to_stream(self, stream_hash, blobs, ignore_duplicate_error=False):
         add_blob_info_query = ("UPDATE managed_blobs SET "
@@ -343,7 +333,6 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
 
         defer.returnValue(True)
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _get_stream_of_blobhash(self, blob_hash):
         query = ("SELECT f.stream_hash FROM files f "
@@ -356,7 +345,6 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
             result = results[0]
         defer.returnValue(result)
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _save_sd_blob_hash_to_stream(self, stream_hash, sd_blob_hash):
         query = ("UPDATE files SET "
@@ -369,7 +357,6 @@ class DBEncryptedFileMetadataManager(EncryptedFileMetadataManager):
         yield self.storage.query(query, (stream_hash, sd_blob_hash))
         defer.returnValue(None)
 
-    @rerun_if_locked
     @defer.inlineCallbacks
     def _get_sd_blob_hashes_for_stream(self, stream_hash):
         query = ("SELECT blob_hash FROM blobs WHERE "
