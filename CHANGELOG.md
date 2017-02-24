@@ -20,6 +20,7 @@ at anytime.
 
 ### Fixed
   * Added timeout to ClientProtocol
+  * Add check for when local height of wallet is less than zero
   *
   *
 

@@ -1031,11 +1031,16 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_to_thread('getblock', blockhash)
 
     def get_most_recent_blocktime(self):
+        height = self.network.get_local_height()
+        if height < 0:
+            return defer.succeed(None)
         header = self.network.get_header(self.network.get_local_height())
         return defer.succeed(header['timestamp'])
 
     def get_best_blockhash(self):
         height = self.network.get_local_height()
+        if height < 0:
+            return defer.succeed(None)
         header = self.network.blockchain.read_header(height)
         return defer.succeed(self.network.blockchain.hash_header(header))
 
@@ -1114,8 +1119,11 @@ class LBRYumWallet(Wallet):
         return d
 
     def _get_value_for_name(self, name):
-        block_header = self.network.blockchain.read_header(
-            self.network.get_local_height() - RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS + 1)
+        height_to_check = self.network.get_local_height() - RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS + 1
+        if height_to_check < 0:
+            msg = "Height to check is less than 0, blockchain headers are likely not initialized"
+            raise Exception(msg)
+        block_header = self.network.blockchain.read_header(height_to_check)
         block_hash = self.network.blockchain.hash_header(block_header)
         d = self._run_cmd_as_defer_to_thread('requestvalueforname', name, block_hash)
         d.addCallback(lambda response: Commands._verify_proof(name, block_header['claim_trie_root'],
