@@ -3,8 +3,10 @@ import logging
 from decimal import Decimal
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ClientFactory
+from twisted.protocols.policies import TimeoutMixin
 from twisted.python import failure
 from lbrynet import conf
+from lbrynet.core import utils
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError, NoResponseError
 from lbrynet.core.Error import DownloadCanceledError, MisbehavingPeerError
 from lbrynet.core.Error import RequestCanceledError
@@ -21,9 +23,10 @@ def encode_decimal(obj):
     raise TypeError(repr(obj) + " is not JSON serializable")
 
 
-class ClientProtocol(Protocol):
+class ClientProtocol(Protocol, TimeoutMixin):
     implements(IRequestSender, IRateLimited)
     ######### Protocol #########
+    PROTOCOL_TIMEOUT = 30
 
     def connectionMade(self):
         log.debug("Connection made to %s", self.factory.peer)
@@ -37,13 +40,15 @@ class ClientProtocol(Protocol):
         self._next_request = {}
         self.connection_closed = False
         self.connection_closing = False
-
+        # This needs to be set for TimeoutMixin
+        self.callLater = utils.call_later
         self.peer.report_up()
 
         self._ask_for_request()
 
     def dataReceived(self, data):
         log.debug("Data receieved from %s", self.peer)
+        self.setTimeout(None)
         self._rate_limiter.report_dl_bytes(len(data))
         if self._downloading_blob is True:
             self._blob_download_request.write(data)
@@ -60,8 +65,14 @@ class ClientProtocol(Protocol):
                 if self._downloading_blob is True and len(extra_data) != 0:
                     self._blob_download_request.write(extra_data)
 
+    def timeoutConnection(self):
+        log.info("Connection timed out to %s", self.peer)
+        self.peer.report_down()
+        self.transport.abortConnection()
+
     def connectionLost(self, reason):
         log.debug("Connection lost to %s: %s", self.peer, reason)
+        self.setTimeout(None)
         self.connection_closed = True
         if reason.check(error.ConnectionDone):
             err = failure.Failure(ConnectionClosedBeforeResponseError())
@@ -138,6 +149,7 @@ class ClientProtocol(Protocol):
         d.addErrback(self._handle_request_error)
 
     def _send_request_message(self, request_msg):
+        self.setTimeout(self.PROTOCOL_TIMEOUT)
         # TODO: compare this message to the last one. If they're the same,
         # TODO: incrementally delay this message.
         m = json.dumps(request_msg, default=encode_decimal)

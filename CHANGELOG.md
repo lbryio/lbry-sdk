@@ -19,7 +19,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Added timeout to ClientProtocol
   *
   *
 

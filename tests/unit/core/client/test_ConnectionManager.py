@@ -3,9 +3,9 @@ import time
 import logging
 
 from lbrynet.core import log_support
-#from lbrynet.core.client.ConnectionManager import ConnectionManager
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.server.ServerProtocol import ServerProtocol
+from lbrynet.core.client.ClientProtocol import ClientProtocol
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.Peer import Peer
 from lbrynet.core.PeerManager import PeerManager
@@ -71,8 +71,9 @@ class MocFunctionalQueryHandler(object):
     def handle_queries(self, queries):
         if self.query_identifiers[0] in queries:
             if self.is_delayed:
-                out = deferLater(self.clock, 10, lambda: {'moc_request':0})
-                self.clock.advance(10)
+                delay = ClientProtocol.PROTOCOL_TIMEOUT+1
+                out = deferLater(self.clock, delay, lambda: {'moc_request':0})
+                self.clock.advance(delay)
                 return out
             if self.is_good:
                 return defer.succeed({'moc_request':0})
@@ -113,7 +114,6 @@ class MocServerProtocolFactory(ServerFactory):
             self.query_handler_factories = {}
         self.peer_manager = PeerManager()
 
-
 class TestIntegrationConnectionManager(unittest.TestCase):
     def setUp(self):
 
@@ -152,9 +152,7 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.assertEqual(0, self.TEST_PEER.down_count)
 
     @defer.inlineCallbacks
-    def test_bad_server(self):
-        # test to see that if we setup a server that returns an improper reply
-        # we don't get a connection
+    def test_server_with_improper_reply(self):
         self.server = MocServerProtocolFactory(self.clock, is_good=False)
         self.server_port = reactor.listenTCP(PEER_PORT, self.server, interface=LOCAL_HOST)
         yield self.connection_manager.manage(schedule_next_call=False)
@@ -212,5 +210,18 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.assertEqual(1, self.TEST_PEER.down_count)
         self.assertEqual(0, self.connection_manager.num_peer_connections())
         self.assertEqual(None, self.connection_manager._next_manage_call)
+
+    @defer.inlineCallbacks
+    def test_closed_connection_when_server_is_slow(self):
+        self.server = MocServerProtocolFactory(self.clock, has_moc_query_handler=True,is_delayed=True)
+        self.server_port = reactor.listenTCP(PEER_PORT, self.server, interface=LOCAL_HOST)
+
+        yield self.connection_manager.manage(schedule_next_call=False)
+        self.assertEqual(1, self.connection_manager.num_peer_connections())
+        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].factory.connection_was_made_deferred
+        self.assertEqual(0, self.connection_manager.num_peer_connections())
+        self.assertEqual(True, connection_made)
+        self.assertEqual(0, self.TEST_PEER.success_count)
+        self.assertEqual(1, self.TEST_PEER.down_count)
 
 
