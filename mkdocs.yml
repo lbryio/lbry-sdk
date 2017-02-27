@@ -1,7 +1,21 @@
 site_name: LBRY
 repo_url: https://github.com/lbryio/lbry
 pages:
-  - Home: index.md
-  - "JSON-RPC API": api.md
-#theme: readthedocs
+  - "API": index.md
+theme: material 
 site_dir: docs_build
+google_analytics:
+  - 'UA-60403362-1'
+  - 'auto'
+extra:
+  palette:
+    primary: 'teal'
+    accent: 'green'
+  logo: 'images/lbry-white.svg'
+  social:
+    - type: 'github'
+      link: 'https://github.com/lbryio'
+    - type: 'twitter'
+      link: 'https://twitter.com/lbryio'
+    - type: 'facebook'
+      link: 'https://facebook.com/lbryio'
