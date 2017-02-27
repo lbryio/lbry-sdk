@@ -19,10 +19,14 @@ at anytime.
   *
 
 ### Fixed
-  * Added timeout to ClientProtocol
-  * Add check for when local height of wallet is less than zero
   *
   *
+  *
+
+## [0.9.0rc11] - 2017-02-27
+### Fixed
+ * Added timeout to ClientProtocol
+ * Add check for when local height of wallet is less than zero
 
 ## [0.9.0rc9] - 2017-02-22
 ### Changed
