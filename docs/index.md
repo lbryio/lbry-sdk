@@ -1,16 +1,5 @@
 # LBRY JSON-RPC API Documentation
 
-## abandon_name
-
-```text
-DEPRECIATED, use abandon_claim
-
-Args:
-    'txid': txid of claim, string
-Return:
-    txid
-```
-
 ## blob_announce_all
 
 ```text
@@ -21,24 +10,49 @@ Args:
 Returns:
 ```
 
+## blob_delete
+
+```text
+Delete a blob
+
+Args:
+    blob_hash
+Returns:
+    Success/fail message
+```
+
 ## blob_get
 
 ```text
-Download and return a sd blob
+Download and return a blob
 
 Args:
-    sd_hash
+    blob_hash
+    timeout (optional)
+    encoding (optional): by default no attempt at decoding is made
+                         can be set to one of the following decoders:
+                         json
+    payment_rate_manager (optional): if not given the default payment rate manager
+                                     will be used. supported alternative rate managers:
+                                     only-free
+
 Returns
-    sd blob, dict
+    Success/Fail message or decoded data
 ```
 
 ## blob_list
 
 ```text
-Returns all blob hashes
+Returns blob hashes, if not given filters returns all blobs known by the blob manager
 
 Args:
-    None
+    uri (str, optional): filter by blobs in stream for winning claim
+    stream_hash (str, optional): filter by blobs in given stream hash
+    sd_hash (str, optional): filter by blobs in given sd hash
+    needed (bool, optional): only return needed blobs
+    finished (bool, optional): only return finished blobs
+    page_size (int, optional): limit number of results returned
+    page (int, optional): filter to page x of [page_size] results
 Returns:
     list of blob hashes
 ```
@@ -139,16 +153,6 @@ Returns:
     list
 ```
 
-## configure_ui
-
-```text
-Configure the UI being hosted
-
-Args, optional:
-    'branch': a branch name on lbryio/lbry-web-ui
-    'path': path to a ui folder
-```
-
 ## daemon_stop
 
 ```text
@@ -156,6 +160,22 @@ Stop lbrynet-daemon
 
 Returns:
     shutdown message
+```
+
+## descriptor_get
+
+```text
+Download and return a sd blob
+
+Args:
+    sd_hash
+    timeout (optional)
+    payment_rate_manager (optional): if not given the default payment rate manager
+                                     will be used. supported alternative rate managers:
+                                     only-free
+
+Returns
+    Success/Fail message or decoded data
 ```
 
 ## file_delete
@@ -172,23 +192,35 @@ Returns:
 ## file_get
 
 ```text
-Get a file
+Get a file, if no matching file exists returns False
 
 Args:
     'name': get file by lbry uri,
     'sd_hash': get file by the hash in the name claim,
     'file_name': get file by its name in the downloads folder,
+    'stream_hash': get file by its stream hash
 Returns:
-    'completed': bool
-    'file_name': string
-    'key': hex string
-    'points_paid': float
-    'stopped': bool
-    'stream_hash': base 58 string
-    'stream_name': string
-    'suggested_file_name': string
-    'upload_allowed': bool
-    'sd_hash': string
+    'completed': bool,
+    'file_name': str,
+    'download_directory': str,
+    'points_paid': float,
+    'stopped': bool,
+    'stream_hash': str (hex),
+    'stream_name': str,
+    'suggested_file_name': str,
+    'sd_hash': str (hex),
+    'lbry_uri': str,
+    'txid': str (b58),
+    'claim_id': str (b58),
+    'download_path': str,
+    'mime_type': str,
+    'key': str (hex),
+    'total_bytes': int,
+    'written_bytes': int,
+    'code': str,
+    'message': str
+    'metadata': Metadata dict if claim is valid, otherwise status str
+}
 ```
 
 ## file_list
@@ -208,7 +240,6 @@ Returns:
     'stream_hash': base 58 string
     'stream_name': string
     'suggested_file_name': string
-    'upload_allowed': bool
     'sd_hash': string
 ```
 
@@ -233,10 +264,10 @@ Download stream from a LBRY uri.
 
 Args:
     'name': name to download, string
-    'download_directory': optional, path to directory where file will be saved, string
     'file_name': optional, a user specified name for the downloaded file
     'stream_info': optional, specified stream info overrides name
     'timeout': optional
+    'download_directory': optional, path to directory where file will be saved, string
     'wait_for_write': optional, defaults to True. When set, waits for the file to
         only start to be written before returning any results.
 Returns:
@@ -251,6 +282,8 @@ Get stream availability for a winning claim
 
 Arg:
     name (str): lbry uri
+    sd_timeout (int, optional): sd blob download timeout
+    peer_timeout (int, optional): how long to look for peers
 
 Returns:
      peers per blob / total blobs
@@ -290,6 +323,17 @@ Returns:
     otherwise returns general help message
 ```
 
+## open
+
+```text
+Instruct the OS to open a file with its default program.
+
+Args:
+    'sd_hash': SD hash of file to be opened
+Returns:
+    True, opens file
+```
+
 ## peer_list
 
 ```text
@@ -297,6 +341,7 @@ Get peers for blob hash
 
 Args:
     'blob_hash': blob hash
+    'timeout' (int, optional): peer search timeout
 Returns:
     List of contacts
 ```
@@ -307,18 +352,19 @@ Returns:
 Make a new name claim and publish associated data to lbrynet
 
 Args:
-    'name': name to be claimed, string
-    'file_path': path to file to be associated with name, string
-    'bid': amount of credits to commit in this claim, float
-    'metadata': metadata dictionary
-    optional 'fee'
+    'name': str, name to be claimed, string
+    'bid': float, amount of credits to commit in this claim,
+    'metadata': dict, Metadata compliant (can be missing sources if a file is provided)
+    'file_path' (optional): str, path to file to be associated with name, if not given
+                            the stream from your existing claim for the name will be used
+    'fee' (optional): dict, FeeValidator compliant
 Returns:
     'success' : True if claim was succesful , False otherwise
     'reason' : if not succesful, give reason
     'txid' : txid of resulting transaction if succesful
     'nout' : nout of the resulting support claim if succesful
     'fee' : fee paid for the claim transaction if succesful
-    'claimid' : claimid of the resulting transaction
+    'claim_id' : claim id of the resulting transaction
 ```
 
 ## reflect
@@ -351,7 +397,7 @@ Resolve stream info from a LBRY uri
 Args:
     'name': name to look up, string, do not include lbry:// prefix
 Returns:
-    metadata from name claim
+    metadata from name claim or None if the name is not known
 ```
 
 ## reveal
@@ -360,7 +406,7 @@ Returns:
 Reveal a file or directory in file browser
 
 Args:
-    'path': path to be selected in file browser
+    'path': path to be revealed in file browser
 Returns:
     True, opens file browser
 ```
@@ -380,10 +426,8 @@ Returns:
 ## settings_get
 
 ```text
-Get lbrynet daemon settings
+Get daemon settings
 
-Args:
-    None
 Returns:
     'run_on_startup': bool,
     'data_rate': float,
@@ -405,7 +449,7 @@ Returns:
 ## settings_set
 
 ```text
-Set lbrynet daemon settings
+Set daemon settings
 
 Args:
     'run_on_startup': bool,

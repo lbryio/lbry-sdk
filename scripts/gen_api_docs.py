@@ -84,7 +84,7 @@ def _link(name, anchor=None):
 
 def main():
     curdir = op.dirname(op.realpath(__file__))
-    path = op.realpath(op.join(curdir, '..', 'docs', 'api.md'))
+    path = op.realpath(op.join(curdir, '..', 'docs', 'index.md'))
 
     klass = Daemon
 
