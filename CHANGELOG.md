@@ -19,7 +19,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed ExchangeRateManager freezing the app
   *
   *
 

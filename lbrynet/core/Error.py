@@ -26,6 +26,13 @@ class KeyFeeAboveMaxAllowed(Exception):
     pass
 
 
+class InvalidExchangeRateResponse(Exception):
+    def __init__(self, source, reason):
+        Exception.__init__(self, 'Failed to get exchange rate from {}:{}'.format(source, reason))
+        self.source = source
+        self.reason = reason
+
+
 class UnknownNameError(Exception):
     def __init__(self, name):
         Exception.__init__(self, 'Name {} is unknown'.format(name))
