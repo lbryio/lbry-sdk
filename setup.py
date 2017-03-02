@@ -70,7 +70,7 @@ setup(name=package_name,
       url=url,
       author=author,
       keywords=keywords,
-      packages=find_packages(base_dir),
+      packages=find_packages(base_dir, exclude=['tests']),
       install_requires=requires,
       entry_points={'console_scripts': console_scripts},
       package_data={
