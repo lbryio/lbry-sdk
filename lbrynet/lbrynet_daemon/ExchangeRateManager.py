@@ -2,13 +2,12 @@ import time
 import requests
 import logging
 import json
-import googlefinance
-from twisted.internet import defer, reactor
+from twisted.internet import defer, threads, reactor
 from twisted.internet.task import LoopingCall
 
 from lbrynet import conf
 from lbrynet.metadata.Fee import FeeValidator
-
+from lbrynet.core.Error import InvalidExchangeRateResponse
 
 log = logging.getLogger(__name__)
 
@@ -24,11 +23,18 @@ class ExchangeRate(object):
         self.spot = spot
         self.ts = ts
 
+    def __repr__(self):
+        out = "Currency pair:{}, spot:{}, ts:{}".format(
+            self.currency_pair, self.spot, self.ts)
+        return out
+
     def as_dict(self):
         return {'spot': self.spot, 'ts': self.ts}
 
 
 class MarketFeed(object):
+    REQUESTS_TIMEOUT = 20
+    EXCHANGE_RATE_UPDATE_RATE_SEC = 300
     def __init__(self, market, name, url, params, fee):
         self.market = market
         self.name = name
@@ -38,13 +44,13 @@ class MarketFeed(object):
         self.rate = None
         self._updater = LoopingCall(self._update_price)
 
+    @property
+    def rate_is_initialized(self):
+        return self.rate is not None
+
     def _make_request(self):
-        try:
-            r = requests.get(self.url, self.params)
-            return defer.succeed(r.text)
-        except Exception as err:
-            log.error(err)
-            return defer.fail(err)
+        r = requests.get(self.url, self.params, timeout=self.REQUESTS_TIMEOUT)
+        return r.text
 
     def _handle_response(self, response):
         return NotImplementedError
@@ -64,15 +70,16 @@ class MarketFeed(object):
             self.market, self.name)
 
     def _update_price(self):
-        d = self._make_request()
+        d = threads.deferToThread(self._make_request)
         d.addCallback(self._handle_response)
         d.addCallback(self._subtract_fee)
         d.addCallback(self._save_price)
         d.addErrback(self._log_error)
+        return d
 
     def start(self):
         if not self._updater.running:
-            self._updater.start(300)
+            self._updater.start(self.EXCHANGE_RATE_UPDATE_RATE_SEC)
 
     def stop(self):
         if self._updater.running:
@@ -91,8 +98,17 @@ class BittrexFeed(MarketFeed):
         )
 
     def _handle_response(self, response):
-        trades = json.loads(response)['result']
-        vwap = sum([i['Total'] for i in trades]) / sum([i['Quantity'] for i in trades])
+        json_response = json.loads(response)
+        if 'result' not in json_response:
+            raise InvalidExchangeRateResponse(self.name, 'result not found')
+        trades = json_response['result']
+        if len(trades) == 0:
+            raise InvalidExchangeRateResponse(self.market, 'trades not found')
+        totals = sum([i['Total'] for i in trades])
+        qtys = sum([i['Quantity'] for i in trades])
+        if totals <= 0 or qtys <= 0:
+            raise InvalidExchangeRateResponse(self.market, 'quantities were not positive')
+        vwap = totals/qtys
         return defer.succeed(float(1.0 / vwap))
 
 
@@ -102,20 +118,20 @@ class GoogleBTCFeed(MarketFeed):
             self,
             "USDBTC",
             "Coinbase via Google finance",
-            None,
-            None,
+            'http://finance.google.com/finance/info',
+            {'client':'ig', 'q':'CURRENCY:USDBTC'},
             COINBASE_FEE
         )
 
-    def _make_request(self):
-        try:
-            r = googlefinance.getQuotes('CURRENCY:USDBTC')[0]
-            return defer.succeed(r)
-        except Exception as err:
-            return defer.fail(err)
-
     def _handle_response(self, response):
-        return float(response['LastTradePrice'])
+        response = response[3:] # response starts with "// "
+        json_response = json.loads(response)[0]
+        if 'l' not in json_response:
+            raise InvalidExchangeRateResponse(self.name, 'last trade not found')
+        last_trade_price = float(json_response['l'])
+        if last_trade_price <= 0:
+            raise InvalidExchangeRateResponse(self.name, 'trade price was not positive')
+        return defer.succeed(last_trade_price)
 
 
 def get_default_market_feed(currency_pair):
@@ -149,14 +165,17 @@ class ExchangeRateManager(object):
             source.stop()
 
     def convert_currency(self, from_currency, to_currency, amount):
-        log.info("Converting %f %s to %s" % (amount, from_currency, to_currency))
+        rates = [market.rate for market in self.market_feeds]
+        log.info("Converting %f %s to %s, rates: %s" % (amount, from_currency, to_currency, rates))
         if from_currency == to_currency:
             return amount
         for market in self.market_feeds:
-            if market.rate.currency_pair == (from_currency, to_currency):
+            if (market.rate_is_initialized and
+                market.rate.currency_pair == (from_currency, to_currency)):
                 return amount * market.rate.spot
         for market in self.market_feeds:
-            if market.rate.currency_pair[0] == from_currency:
+            if (market.rate_is_initialized and
+                market.rate.currency_pair[0] == from_currency):
                 return self.convert_currency(
                     market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
         raise Exception(
@@ -215,10 +234,12 @@ class DummyExchangeRateManager(object):
     def convert_currency(self, from_currency, to_currency, amount):
         log.debug("Converting %f %s to %s" % (amount, from_currency, to_currency))
         for market in self.market_feeds:
-            if market.rate.currency_pair == (from_currency, to_currency):
+            if (market.rate_is_initialized and
+                market.rate.currency_pair == (from_currency, to_currency)):
                 return amount * market.rate.spot
         for market in self.market_feeds:
-            if market.rate.currency_pair[0] == from_currency:
+            if (market.rate_is_initialized and
+                market.rate.currency_pair[0] == from_currency):
                 return self.convert_currency(
                     market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
 

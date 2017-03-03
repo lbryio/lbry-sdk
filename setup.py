@@ -30,7 +30,6 @@ requires = [
     'appdirs',
     'base58',
     'envparse',
-    'googlefinance',
     'jsonrpc',
     'jsonschema',
     'lbryum>=2.7.6',
