@@ -176,13 +176,13 @@ class GetStream(object):
         log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
         self.finished_deferred = self.downloader.start()
         self.finished_deferred.addCallback(self.finish, name)
-        yield self.data_downloading_deferred
 
     @defer.inlineCallbacks
     def start(self, stream_info, name):
         try:
             safe_start(self.checker)
-            yield self.download(stream_info, name)
+            self.download(stream_info, name)
+            yield self.data_downloading_deferred
             defer.returnValue(self.download_path)
         except Exception as err:
             safe_stop(self.checker)

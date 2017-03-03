@@ -20,6 +20,7 @@ at anytime.
 
 ### Fixed
   * Fixed ExchangeRateManager freezing the app
+  * Fixed download not timing out properly when downloading sd blob
   *
   *
 
