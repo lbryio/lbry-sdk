@@ -81,6 +81,7 @@ class CryptStreamDownloader(object):
         else:
             return self.stop()
 
+    @defer.inlineCallbacks
     def start(self):
         if self.starting is True:
             raise CurrentlyStartingError()
@@ -94,7 +95,7 @@ class CryptStreamDownloader(object):
         self.finished_deferred = defer.Deferred()
         d = self._start()
         d.addCallback(lambda _: self.finished_deferred)
-        return d
+        yield self.finished_deferred
 
     @defer.inlineCallbacks
     def stop(self, err=None):
@@ -127,21 +128,18 @@ class CryptStreamDownloader(object):
         d.addCallback(lambda _: Failure(StartFailedError()))
         return d
 
+    @defer.inlineCallbacks
     def _start(self):
-
-        def check_start_succeeded(success):
-            if success:
-                self.starting = False
-                self.stopped = False
-                self.completed = False
-                return True
-            else:
-                return self._start_failed()
-
         self.download_manager = self._get_download_manager()
-        d = self.download_manager.start_downloading()
-        d.addCallbacks(check_start_succeeded)
-        return d
+        start_success = yield self.download_manager.start_downloading()
+        if start_success:
+            self.starting = False
+            self.stopped = False
+            self.completed = False
+            log.info("Started")
+            defer.returnValue(True)
+        else:
+            yield self._start_failed()
 
     def _get_download_manager(self):
         assert self.blob_requester is None

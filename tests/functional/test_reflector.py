@@ -10,10 +10,11 @@ from lbrynet import reflector
 from lbrynet.core import BlobManager
 from lbrynet.core import PeerManager
 from lbrynet.core import RateLimiter
+from lbrynet.core import Storage
 from lbrynet.core import Session
 from lbrynet.core import StreamDescriptor
 from lbrynet.dht.node import Node
-from lbrynet.lbryfile import EncryptedFileMetadataManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfile.client import EncryptedFileOptions
 from lbrynet.lbryfilemanager import EncryptedFileCreator
 from lbrynet.lbryfilemanager import EncryptedFileManager
@@ -24,19 +25,28 @@ from tests import mocks
 class TestReflector(unittest.TestCase):
     def setUp(self):
         mocks.mock_conf_settings(self)
-        self.session = None
+        self.server_session = None
+        self.client_session = None
         self.stream_info_manager = None
         self.lbry_file_manager = None
+        self.server_blob_storage = None
         self.server_blob_manager = None
         self.reflector_port = None
         self.port = None
         self.addCleanup(self.take_down_env)
-        wallet = mocks.Wallet()
-        peer_manager = PeerManager.PeerManager()
-        peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
-        hash_announcer = mocks.Announcer()
-        rate_limiter = RateLimiter.DummyRateLimiter()
-        sd_identifier = StreamDescriptor.StreamDescriptorIdentifier()
+        client_wallet = mocks.Wallet()
+        client_peer_manager = PeerManager.PeerManager()
+        client_peer_finder = mocks.PeerFinder(5553, client_peer_manager, 2)
+        client_hash_announcer = mocks.Announcer()
+        client_rate_limiter = RateLimiter.DummyRateLimiter()
+        client_sd_identifier = StreamDescriptor.StreamDescriptorIdentifier()
+
+        server_wallet = mocks.Wallet()
+        server_peer_manager = PeerManager.PeerManager()
+        server_peer_finder = mocks.PeerFinder(5553, server_peer_manager, 2)
+        server_hash_announcer = mocks.Announcer()
+        server_rate_limiter = RateLimiter.DummyRateLimiter()
+        server_sd_identifier = StreamDescriptor.StreamDescriptorIdentifier()
 
         self.expected_blobs = [
             (
@@ -56,36 +66,70 @@ class TestReflector(unittest.TestCase):
             ),
         ]
 
-        db_dir = "client"
-        os.mkdir(db_dir)
+        client_db_dir = "client"
+        os.mkdir(client_db_dir)
 
-        self.session = Session.Session(
+        server_db_dir = "server"
+        os.mkdir(server_db_dir)
+
+        client_storage = Storage.FileStorage(client_db_dir)
+        server_storage = Storage.FileStorage(server_db_dir)
+
+        client_blob_manager = BlobManager.DiskBlobManager(client_hash_announcer,
+                                                          client_db_dir,
+                                                          client_storage)
+        server_blob_manager = BlobManager.DiskBlobManager(server_hash_announcer,
+                                                          server_db_dir,
+                                                          server_storage)
+
+        self.client_session = Session.Session(
             conf.settings['data_rate'],
-            db_dir=db_dir,
+            db_dir=client_db_dir,
             lbryid="abcd",
-            peer_finder=peer_finder,
-            hash_announcer=hash_announcer,
+            peer_finder=client_peer_finder,
+            hash_announcer=client_hash_announcer,
             blob_dir=None,
             peer_port=5553,
             use_upnp=False,
-            rate_limiter=rate_limiter,
-            wallet=wallet,
+            rate_limiter=client_rate_limiter,
+            wallet=client_wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
-            dht_node_class=Node
+            dht_node_class=Node,
+            blob_manager=client_blob_manager
         )
 
-        self.stream_info_manager = EncryptedFileMetadataManager.DBEncryptedFileMetadataManager(db_dir)
+        self.server_session = Session.Session(
+            conf.settings['data_rate'],
+            db_dir=server_db_dir,
+            lbryid="efgh",
+            peer_finder=server_peer_finder,
+            hash_announcer=server_hash_announcer,
+            blob_dir=None,
+            peer_port=5553,
+            use_upnp=False,
+            rate_limiter=server_rate_limiter,
+            wallet=server_wallet,
+            blob_tracker_class=mocks.BlobAvailabilityTracker,
+            dht_node_class=Node,
+            blob_manager=server_blob_manager
+        )
 
-        self.lbry_file_manager = EncryptedFileManager.EncryptedFileManager(
-            self.session, self.stream_info_manager, sd_identifier)
+        self.client_stream_info_manager = DBEncryptedFileMetadataManager(self.client_session.storage)
+        self.client_lbry_file_manager = EncryptedFileManager.EncryptedFileManager(
+            self.client_session, self.client_stream_info_manager, client_sd_identifier)
 
-        self.server_blob_manager = BlobManager.TempBlobManager(hash_announcer)
+        self.server_stream_info_manager = DBEncryptedFileMetadataManager(self.server_session.storage)
+        self.server_lbry_file_manager = EncryptedFileManager.EncryptedFileManager(
+            self.server_session, self.server_stream_info_manager, server_sd_identifier)
 
-        d = self.session.setup()
-        d.addCallback(lambda _: self.stream_info_manager.setup())
-        d.addCallback(lambda _: EncryptedFileOptions.add_lbry_file_to_sd_identifier(sd_identifier))
-        d.addCallback(lambda _: self.lbry_file_manager.setup())
-        d.addCallback(lambda _: self.server_blob_manager.setup())
+        d = self.client_session.setup()
+        d.addCallback(lambda _: self.client_stream_info_manager.setup())
+        d.addCallback(lambda _: EncryptedFileOptions.add_lbry_file_to_sd_identifier(client_sd_identifier))
+        d.addCallback(lambda _: self.client_lbry_file_manager.setup())
+        d.addCallback(lambda _: self.server_session.setup())
+        d.addCallback(lambda _: self.server_stream_info_manager.setup())
+        d.addCallback(lambda _: EncryptedFileOptions.add_lbry_file_to_sd_identifier(server_sd_identifier))
+        d.addCallback(lambda _: self.server_lbry_file_manager.setup())
 
         def verify_equal(sd_info):
             self.assertEqual(mocks.create_stream_sd_file, sd_info)
@@ -93,33 +137,31 @@ class TestReflector(unittest.TestCase):
         def save_sd_blob_hash(sd_hash):
             self.expected_blobs.append((sd_hash, 923))
 
-        def verify_stream_descriptor_file(stream_hash):
-            self.stream_hash = stream_hash
-            d = lbryfile.get_sd_info(self.lbry_file_manager.stream_info_manager, stream_hash, True)
-            d.addCallback(verify_equal)
-            d.addCallback(
-                lambda _: lbryfile.publish_sd_blob(
-                    self.lbry_file_manager.stream_info_manager,
-                    self.session.blob_manager, stream_hash
-                )
-            )
-            d.addCallback(save_sd_blob_hash)
-            return d
-
+        @defer.inlineCallbacks
         def create_stream():
             test_file = mocks.GenFile(5209343, b''.join([chr(i + 3) for i in xrange(0, 64, 6)]))
-            d = EncryptedFileCreator.create_lbry_file(
-                self.session,
-                self.lbry_file_manager,
+            self.stream_hash = yield EncryptedFileCreator.create_lbry_file(
+                self.client_session,
+                self.client_lbry_file_manager,
                 "test_file",
                 test_file,
                 key="0123456701234567",
                 iv_generator=iv_generator()
             )
-            return d
+
+            sd_hash = yield lbryfile.publish_sd_blob(
+                self.client_lbry_file_manager.stream_info_manager,
+                self.client_session.blob_manager, self.stream_hash
+            )
+            prm = self.client_session.payment_rate_manager
+            yield self.client_lbry_file_manager.add_lbry_file(self.stream_hash, prm)
+            sd_info = yield lbryfile.get_sd_info(self.client_stream_info_manager, self.stream_hash, True)
+            yield verify_equal(sd_info)
+            save_sd_blob_hash(sd_hash)
+            defer.returnValue(self.stream_hash)
 
         def start_server():
-            server_factory = reflector.ServerFactory(peer_manager, self.server_blob_manager)
+            server_factory = reflector.ServerFactory(server_peer_manager, self.server_session.blob_manager)
             from twisted.internet import reactor
             port = 8943
             while self.reflector_port is None:
@@ -130,26 +172,33 @@ class TestReflector(unittest.TestCase):
                     port += 1
 
         d.addCallback(lambda _: create_stream())
-        d.addCallback(verify_stream_descriptor_file)
         d.addCallback(lambda _: start_server())
         return d
 
     def take_down_env(self):
         d = defer.succeed(True)
-        if self.lbry_file_manager is not None:
-            d.addCallback(lambda _: self.lbry_file_manager.stop())
-        if self.session is not None:
-            d.addCallback(lambda _: self.session.shut_down())
-        if self.stream_info_manager is not None:
-            d.addCallback(lambda _: self.stream_info_manager.stop())
-        if self.server_blob_manager is not None:
-            d.addCallback(lambda _: self.server_blob_manager.stop())
+
+        if self.client_lbry_file_manager is not None:
+            d.addCallback(lambda _: self.client_lbry_file_manager.stop())
+        if self.client_session is not None:
+            d.addCallback(lambda _: self.client_session.shut_down())
+        if self.client_stream_info_manager is not None:
+            d.addCallback(lambda _: self.client_stream_info_manager.stop())
+
+        if self.server_lbry_file_manager is not None:
+            d.addCallback(lambda _: self.server_lbry_file_manager.stop())
+        if self.server_session is not None:
+            d.addCallback(lambda _: self.server_session.shut_down())
+        if self.server_stream_info_manager is not None:
+            d.addCallback(lambda _: self.server_stream_info_manager.stop())
+
         if self.reflector_port is not None:
             d.addCallback(lambda _: self.reflector_port.stopListening())
 
         def delete_test_env():
             try:
                 shutil.rmtree('client')
+                shutil.rmtree('server')
             except:
                 raise unittest.SkipTest("TODO: fix this for windows")
 
@@ -165,13 +214,13 @@ class TestReflector(unittest.TestCase):
             return defer.DeferredList(check_blob_ds)
 
         def verify_have_blob(blob_hash, blob_size):
-            d = self.server_blob_manager.get_blob(blob_hash)
+            d = self.server_session.blob_manager.get_blob(blob_hash)
             d.addCallback(lambda blob: verify_blob_completed(blob, blob_size))
             return d
 
         def send_to_server():
-            fake_lbry_file = mocks.FakeLBRYFile(self.session.blob_manager,
-                                                self.stream_info_manager,
+            fake_lbry_file = mocks.FakeLBRYFile(self.client_session.blob_manager,
+                                                self.client_stream_info_manager,
                                                 self.stream_hash)
             factory = reflector.ClientFactory(fake_lbry_file)
 
@@ -196,13 +245,13 @@ class TestReflector(unittest.TestCase):
             return defer.DeferredList(check_blob_ds)
 
         def verify_have_blob(blob_hash, blob_size):
-            d = self.server_blob_manager.get_blob(blob_hash)
+            d = self.server_session.blob_manager.get_blob(blob_hash)
             d.addCallback(lambda blob: verify_blob_completed(blob, blob_size))
             return d
 
         def send_to_server(blob_hashes_to_send):
             factory = reflector.BlobClientFactory(
-                self.session.blob_manager,
+                self.client_session.blob_manager,
                 blob_hashes_to_send
             )
 
@@ -226,13 +275,13 @@ class TestReflector(unittest.TestCase):
             return defer.DeferredList(check_blob_ds)
 
         def verify_have_blob(blob_hash, blob_size):
-            d = self.server_blob_manager.get_blob(blob_hash)
+            d = self.server_session.blob_manager.get_blob(blob_hash)
             d.addCallback(lambda blob: verify_blob_completed(blob, blob_size))
             return d
 
         def send_to_server(blob_hashes_to_send):
             factory = reflector.BlobClientFactory(
-                self.session.blob_manager,
+                self.client_session.blob_manager,
                 blob_hashes_to_send
             )
             factory.protocol_version = 0

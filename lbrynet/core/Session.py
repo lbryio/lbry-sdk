@@ -2,6 +2,7 @@ import logging
 import miniupnpc
 from lbrynet.core.BlobManager import DiskBlobManager, TempBlobManager
 from lbrynet.dht import node
+from lbrynet.core.Storage import FileStorage, MemoryStorage
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.client.DHTPeerFinder import DHTPeerFinder
@@ -36,17 +37,16 @@ class Session(object):
     upnp, which opens holes in compatible firewalls so that remote
     peers can connect to this peer.
     """
-    def __init__(self, blob_data_payment_rate, db_dir=None,
-                 lbryid=None, peer_manager=None, dht_node_port=None,
-                 known_dht_nodes=None, peer_finder=None,
-                 hash_announcer=None, blob_dir=None,
-                 blob_manager=None, peer_port=None, use_upnp=True,
-                 rate_limiter=None, wallet=None,
-                 dht_node_class=node.Node, blob_tracker_class=None,
-                 payment_rate_manager_class=None, is_generous=True):
+    def __init__(self, blob_data_payment_rate, db_dir=None, storage=None, lbryid=None,
+                 peer_manager=None, dht_node_port=None, known_dht_nodes=None, peer_finder=None,
+                 hash_announcer=None, blob_dir=None, blob_manager=None, peer_port=None,
+                 use_upnp=True, rate_limiter=None, wallet=None, dht_node_class=node.Node,
+                 blob_tracker_class=None, payment_rate_manager_class=None, is_generous=True):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
-        @param db_dir: The directory in which levelDB files should be stored
+        @param db_dir: The directory in which SQLite files should be stored
+
+        @param storage: An optional instance of an already running database interface
 
         @param lbryid: The unique ID of this node
 
@@ -99,8 +99,12 @@ class Session(object):
             which is meant for testing only
 
         """
-        self.db_dir = db_dir
 
+        self.db_dir = db_dir
+        if not db_dir:
+            self.storage = MemoryStorage()
+        else:
+            self.storage = storage or FileStorage(self.db_dir)
         self.lbryid = lbryid
 
         self.peer_manager = peer_manager
@@ -111,36 +115,30 @@ class Session(object):
             self.known_dht_nodes = []
         self.peer_finder = peer_finder
         self.hash_announcer = hash_announcer
-
         self.blob_dir = blob_dir
         self.blob_manager = blob_manager
-
         self.blob_tracker = None
         self.blob_tracker_class = blob_tracker_class or BlobAvailabilityTracker
-
         self.peer_port = peer_port
-
         self.use_upnp = use_upnp
-
         self.rate_limiter = rate_limiter
-
         self.external_ip = '127.0.0.1'
-
         self.upnp_redirects = []
-
         self.wallet = wallet
         self.dht_node_class = dht_node_class
         self.dht_node = None
-
-        self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
         self.payment_rate_manager = None
+        self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
         self.payment_rate_manager_class = payment_rate_manager_class or NegotiatedPaymentRateManager
         self.is_generous = is_generous
 
+    @defer.inlineCallbacks
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
 
         log.debug("Setting up the lbry session")
+
+        yield self.storage.open()
 
         if self.lbryid is None:
             self.lbryid = generate_id()
@@ -153,41 +151,39 @@ class Session(object):
             self.peer_manager = PeerManager()
 
         if self.use_upnp is True:
-            d = self._try_upnp()
-        else:
-            d = defer.succeed(True)
+            yield self._try_upnp()
 
         if self.peer_finder is None:
-            d.addCallback(lambda _: self._setup_dht())
-        else:
-            if self.hash_announcer is None and self.peer_port is not None:
-                log.warning("The server has no way to advertise its available blobs.")
-                self.hash_announcer = DummyHashAnnouncer()
+            yield self._setup_dht()
 
-        d.addCallback(lambda _: self._setup_other_components())
-        return d
+        if self.hash_announcer is None and self.peer_port is not None:
+            log.warning("The server has no way to advertise its available blobs.")
+            self.hash_announcer = DummyHashAnnouncer()
 
+        yield self._setup_other_components()
+
+    @defer.inlineCallbacks
     def shut_down(self):
         """Stop all services"""
         log.info('Shutting down %s', self)
-        ds = []
+        yield self.storage.close()
         if self.blob_manager is not None:
-            ds.append(defer.maybeDeferred(self.blob_tracker.stop))
+            yield defer.maybeDeferred(self.blob_tracker.stop)
         if self.dht_node is not None:
-            ds.append(defer.maybeDeferred(self.dht_node.stop))
+            yield defer.maybeDeferred(self.dht_node.stop)
         if self.rate_limiter is not None:
-            ds.append(defer.maybeDeferred(self.rate_limiter.stop))
+            yield defer.maybeDeferred(self.rate_limiter.stop)
         if self.peer_finder is not None:
-            ds.append(defer.maybeDeferred(self.peer_finder.stop))
+            yield defer.maybeDeferred(self.peer_finder.stop)
         if self.hash_announcer is not None:
-            ds.append(defer.maybeDeferred(self.hash_announcer.stop))
+            yield defer.maybeDeferred(self.hash_announcer.stop)
         if self.wallet is not None:
-            ds.append(defer.maybeDeferred(self.wallet.stop))
+            yield defer.maybeDeferred(self.wallet.stop)
         if self.blob_manager is not None:
-            ds.append(defer.maybeDeferred(self.blob_manager.stop))
+            yield defer.maybeDeferred(self.blob_manager.stop)
         if self.use_upnp is True:
-            ds.append(defer.maybeDeferred(self._unset_upnp))
-        return defer.DeferredList(ds)
+            yield defer.maybeDeferred(self._unset_upnp)
+        defer.returnValue(None)
 
     def _try_upnp(self):
 
@@ -301,7 +297,7 @@ class Session(object):
             else:
                 self.blob_manager = DiskBlobManager(self.hash_announcer,
                                                     self.blob_dir,
-                                                    self.db_dir)
+                                                    self.storage)
 
         if self.blob_tracker is None:
             self.blob_tracker = self.blob_tracker_class(self.blob_manager,

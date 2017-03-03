@@ -3,350 +3,22 @@ import os
 import time
 import sqlite3
 
-from twisted.internet import threads, defer
-from twisted.python.failure import Failure
-from twisted.enterprise import adbapi
+from twisted.internet import defer
+from zope.interface import implements
+from lbrynet.interfaces import IBlobManager
 from lbrynet.core.HashBlob import BlobFile, TempBlob, BlobFileCreator, TempBlobCreator
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
 from lbrynet.core.Error import NoSuchBlobError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
-
 log = logging.getLogger(__name__)
 
 
-class BlobManager(DHTHashSupplier):
-    """This class is subclassed by classes which keep track of which blobs are available
-       and which give access to new/existing blobs"""
+class TempBlobManager(DHTHashSupplier):
+    implements(IBlobManager)
+
     def __init__(self, hash_announcer):
         DHTHashSupplier.__init__(self, hash_announcer)
-
-    def setup(self):
-        pass
-
-    def get_blob(self, blob_hash, length=None):
-        pass
-
-    def get_blob_creator(self):
-        pass
-
-    def _make_new_blob(self, blob_hash, length):
-        pass
-
-    def blob_completed(self, blob, next_announce_time=None):
-        pass
-
-    def completed_blobs(self, blobhashes_to_check):
-        pass
-
-    def hashes_to_announce(self):
-        pass
-
-    def creator_finished(self, blob_creator):
-        pass
-
-    def delete_blob(self, blob_hash):
-        pass
-
-    def blob_requested(self, blob_hash):
-        pass
-
-    def blob_downloaded(self, blob_hash):
-        pass
-
-    def blob_searched_on(self, blob_hash):
-        pass
-
-    def blob_paid_for(self, blob_hash, amount):
-        pass
-
-    def get_all_verified_blobs(self):
-        pass
-
-    def add_blob_to_download_history(self, blob_hash, host, rate):
-        pass
-
-    def add_blob_to_upload_history(self, blob_hash, host, rate):
-        pass
-
-    def _immediate_announce(self, blob_hashes):
-        if self.hash_announcer:
-            return self.hash_announcer.immediate_announce(blob_hashes)
-
-
-# TODO: Having different managers for different blobs breaks the
-#       abstraction of a HashBlob. Why should the management of blobs
-#       care what kind of Blob it has?
-class DiskBlobManager(BlobManager):
-    """This class stores blobs on the hard disk"""
-    def __init__(self, hash_announcer, blob_dir, db_dir):
-        BlobManager.__init__(self, hash_announcer)
-        self.blob_dir = blob_dir
-        self.db_file = os.path.join(db_dir, "blobs.db")
-        self.db_conn = None
-        self.blob_type = BlobFile
-        self.blob_creator_type = BlobFileCreator
-        # TODO: consider using an LRU for blobs as there could potentially
-        #       be thousands of blobs loaded up, many stale
-        self.blobs = {}
-        self.blob_hashes_to_delete = {} # {blob_hash: being_deleted (True/False)}
-        self._next_manage_call = None
-
-    def setup(self):
-        log.info("Setting up the DiskBlobManager. blob_dir: %s, db_file: %s", str(self.blob_dir),
-                 str(self.db_file))
-        d = self._open_db()
-        d.addCallback(lambda _: self._manage())
-        return d
-
-    def stop(self):
-        log.info("Stopping the DiskBlobManager")
-        if self._next_manage_call is not None and self._next_manage_call.active():
-            self._next_manage_call.cancel()
-            self._next_manage_call = None
-        self.db_conn = None
-        return defer.succeed(True)
-
-    def get_blob(self, blob_hash, length=None):
-        """Return a blob identified by blob_hash, which may be a new blob or a
-        blob that is already on the hard disk
-        """
-        assert length is None or isinstance(length, int)
-        if blob_hash in self.blobs:
-            return defer.succeed(self.blobs[blob_hash])
-        return self._make_new_blob(blob_hash, length)
-
-    def get_blob_creator(self):
-        return self.blob_creator_type(self, self.blob_dir)
-
-    def _make_new_blob(self, blob_hash, length=None):
-        log.debug('Making a new blob for %s', blob_hash)
-        blob = self.blob_type(self.blob_dir, blob_hash, length)
-        self.blobs[blob_hash] = blob
-        return defer.succeed(blob)
-
-    def blob_completed(self, blob, next_announce_time=None):
-        if next_announce_time is None:
-            next_announce_time = self.get_next_announce_time()
-        d = self._add_completed_blob(blob.blob_hash, blob.length, next_announce_time)
-        d.addCallback(lambda _: self._immediate_announce([blob.blob_hash]))
-        return d
-
-    def completed_blobs(self, blobhashes_to_check):
-        return self._completed_blobs(blobhashes_to_check)
-
-    def hashes_to_announce(self):
-        return self._get_blobs_to_announce()
-
-    def creator_finished(self, blob_creator):
-        log.debug("blob_creator.blob_hash: %s", blob_creator.blob_hash)
-        assert blob_creator.blob_hash is not None
-        assert blob_creator.blob_hash not in self.blobs
-        assert blob_creator.length is not None
-        new_blob = self.blob_type(self.blob_dir, blob_creator.blob_hash, blob_creator.length)
-        self.blobs[blob_creator.blob_hash] = new_blob
-        self._immediate_announce([blob_creator.blob_hash])
-        next_announce_time = self.get_next_announce_time()
-        d = self.blob_completed(new_blob, next_announce_time)
-        return d
-
-    def delete_blobs(self, blob_hashes):
-        for blob_hash in blob_hashes:
-            if not blob_hash in self.blob_hashes_to_delete:
-                self.blob_hashes_to_delete[blob_hash] = False
-
-    def immediate_announce_all_blobs(self):
-        d = self._get_all_verified_blob_hashes()
-        d.addCallback(self._immediate_announce)
-        return d
-
-    def get_all_verified_blobs(self):
-        d = self._get_all_verified_blob_hashes()
-        d.addCallback(self.completed_blobs)
-        return d
-
-    def add_blob_to_download_history(self, blob_hash, host, rate):
-        d = self._add_blob_to_download_history(blob_hash, host, rate)
-        return d
-
-    def add_blob_to_upload_history(self, blob_hash, host, rate):
-        d = self._add_blob_to_upload_history(blob_hash, host, rate)
-        return d
-
-    def _manage(self):
-        from twisted.internet import reactor
-
-        d = self._delete_blobs_marked_for_deletion()
-
-        def set_next_manage_call():
-            self._next_manage_call = reactor.callLater(1, self._manage)
-
-        d.addCallback(lambda _: set_next_manage_call())
-
-    def _delete_blobs_marked_for_deletion(self):
-
-        def remove_from_list(b_h):
-            del self.blob_hashes_to_delete[b_h]
-            return b_h
-
-        def set_not_deleting(err, b_h):
-            log.warning("Failed to delete blob %s. Reason: %s", str(b_h), err.getErrorMessage())
-            self.blob_hashes_to_delete[b_h] = False
-            return err
-
-        def delete_from_db(result):
-            b_hs = [r[1] for r in result if r[0] is True]
-            if b_hs:
-                d = self._delete_blobs_from_db(b_hs)
-            else:
-                d = defer.succeed(True)
-
-            def log_error(err):
-                log.warning(
-                    "Failed to delete completed blobs from the db: %s", err.getErrorMessage())
-
-            d.addErrback(log_error)
-            return d
-
-        def delete(blob, b_h):
-            d = blob.delete()
-            d.addCallbacks(lambda _: remove_from_list(b_h), set_not_deleting, errbackArgs=(b_h,))
-            return d
-
-        ds = []
-        for blob_hash, being_deleted in self.blob_hashes_to_delete.items():
-            if being_deleted is False:
-                self.blob_hashes_to_delete[blob_hash] = True
-                d = self.get_blob(blob_hash)
-                d.addCallbacks(
-                    delete, set_not_deleting,
-                    callbackArgs=(blob_hash,), errbackArgs=(blob_hash,))
-                ds.append(d)
-        dl = defer.DeferredList(ds, consumeErrors=True)
-        dl.addCallback(delete_from_db)
-        return defer.DeferredList(ds)
-
-    ######### database calls #########
-
-    def _open_db(self):
-        # check_same_thread=False is solely to quiet a spurious error that appears to be due
-        # to a bug in twisted, where the connection is closed by a different thread than the
-        # one that opened it. The individual connections in the pool are not used in multiple
-        # threads.
-        self.db_conn = adbapi.ConnectionPool('sqlite3', self.db_file, check_same_thread=False)
-
-        def create_tables(transaction):
-            transaction.execute("create table if not exists blobs (" +
-                                "    blob_hash text primary key, " +
-                                "    blob_length integer, " +
-                                "    last_verified_time real, " +
-                                "    next_announce_time real)")
-
-            transaction.execute("create table if not exists download (" +
-                                "    id integer primary key autoincrement, " +
-                                "    blob text, " +
-                                "    host text, " +
-                                "    rate float, " +
-                                "    ts integer)")
-
-            transaction.execute("create table if not exists upload (" +
-                                "    id integer primary key autoincrement, " +
-                                "    blob text, " +
-                                "    host text, " +
-                                "    rate float, " +
-                                "    ts integer)")
-
-        return self.db_conn.runInteraction(create_tables)
-
-    @rerun_if_locked
-    def _add_completed_blob(self, blob_hash, length, next_announce_time):
-        log.debug("Adding a completed blob. blob_hash=%s, length=%s", blob_hash, str(length))
-        d = self.db_conn.runQuery(
-            "insert into blobs (blob_hash, blob_length, next_announce_time) values (?, ?, ?)",
-            (blob_hash, length, next_announce_time)
-        )
-        d.addErrback(lambda err: err.trap(sqlite3.IntegrityError))
-        return d
-
-    @defer.inlineCallbacks
-    def _completed_blobs(self, blobhashes_to_check):
-        """Returns of the blobhashes_to_check, which are valid"""
-        blobs = yield defer.DeferredList([self.get_blob(b) for b in blobhashes_to_check])
-        blob_hashes = [b.blob_hash for success, b in blobs if success and b.verified]
-        defer.returnValue(blob_hashes)
-
-    @rerun_if_locked
-    def _update_blob_verified_timestamp(self, blob, timestamp):
-        return self.db_conn.runQuery("update blobs set last_verified_time = ? where blob_hash = ?",
-                                     (blob, timestamp))
-
-    @rerun_if_locked
-    def _get_blobs_to_announce(self):
-
-        def get_and_update(transaction):
-            timestamp = time.time()
-            r = transaction.execute("select blob_hash from blobs " +
-                                    "where next_announce_time < ? and blob_hash is not null",
-                                    (timestamp,))
-            blobs = [b for b, in r.fetchall()]
-            next_announce_time = self.get_next_announce_time(len(blobs))
-            transaction.execute(
-                "update blobs set next_announce_time = ? where next_announce_time < ?",
-                (next_announce_time, timestamp))
-            log.debug("Got %s blobs to announce, next announce time is in %s seconds",
-                        len(blobs), next_announce_time-time.time())
-            return blobs
-
-        return self.db_conn.runInteraction(get_and_update)
-
-    @rerun_if_locked
-    def _delete_blobs_from_db(self, blob_hashes):
-
-        def delete_blobs(transaction):
-            for b in blob_hashes:
-                transaction.execute("delete from blobs where blob_hash = ?", (b,))
-
-        return self.db_conn.runInteraction(delete_blobs)
-
-    @rerun_if_locked
-    def _get_all_verified_blob_hashes(self):
-        d = self.db_conn.runQuery("select blob_hash from blobs")
-
-        def get_verified_blobs(blobs):
-            verified_blobs = []
-            for blob_hash, in blobs:
-                file_path = os.path.join(self.blob_dir, blob_hash)
-                if os.path.isfile(file_path):
-                    verified_blobs.append(blob_hash)
-            return verified_blobs
-
-        d.addCallback(lambda blobs: threads.deferToThread(get_verified_blobs, blobs))
-        return d
-
-    @rerun_if_locked
-    def _add_blob_to_download_history(self, blob_hash, host, rate):
-        ts = int(time.time())
-        d = self.db_conn.runQuery(
-            "insert into download values (null, ?, ?, ?, ?) ",
-            (blob_hash, str(host), float(rate), ts))
-        return d
-
-    @rerun_if_locked
-    def _add_blob_to_upload_history(self, blob_hash, host, rate):
-        ts = int(time.time())
-        d = self.db_conn.runQuery(
-            "insert into upload values (null, ?, ?, ?, ?) ",
-            (blob_hash, str(host), float(rate), ts))
-        return d
-
-
-# TODO: Having different managers for different blobs breaks the
-#       abstraction of a HashBlob. Why should the management of blobs
-#       care what kind of Blob it has?
-class TempBlobManager(BlobManager):
-    """This class stores blobs in memory"""
-    def __init__(self, hash_announcer):
-        BlobManager.__init__(self, hash_announcer)
         self.blob_type = TempBlob
         self.blob_creator_type = TempBlobCreator
         self.blobs = {}
@@ -354,120 +26,314 @@ class TempBlobManager(BlobManager):
         self.blob_hashes_to_delete = {}  # {blob_hash: being_deleted (True/False)}
         self._next_manage_call = None
 
+    @defer.inlineCallbacks
     def setup(self):
-        self._manage()
-        return defer.succeed(True)
+        yield self._setup()
+        yield self._manage()
 
     def stop(self):
         if self._next_manage_call is not None and self._next_manage_call.active():
             self._next_manage_call.cancel()
             self._next_manage_call = None
+        return self._stop()
 
     def get_blob(self, blob_hash, length=None):
-        if blob_hash in self.blobs:
-            return defer.succeed(self.blobs[blob_hash])
-        return self._make_new_blob(blob_hash, length)
+        assert length is None or isinstance(length, int)
+        blob = self.blobs.get(blob_hash, False)
+        if blob:
+            return defer.succeed(blob)
+        creator = self.get_blob_creator()
+        self._make_new_blob(creator, blob_hash, length)
+        return defer.succeed(self.blobs[blob_hash])
 
     def get_blob_creator(self):
+        return self._get_blob_creator()
+
+    @defer.inlineCallbacks
+    def blob_completed(self, blob, next_announce_time=None):
+        log.info("Blob %s completed", blob)
+        if next_announce_time is None:
+            next_announce_time = self.get_next_announce_time()
+        yield self._add_completed_blob(blob.blob_hash, blob.length, next_announce_time)
+        self.blobs[blob.blob_hash]._verified = True
+        defer.returnValue(True)
+
+    @defer.inlineCallbacks
+    def completed_blobs(self, blob_hashes_to_check):
+        blobs = yield defer.DeferredList([self.get_blob(b) for b in blob_hashes_to_check])
+        blob_hashes = [b.blob_hash for success, b in blobs if success and b.verified]
+        defer.returnValue(blob_hashes)
+
+    @defer.inlineCallbacks
+    def hashes_to_announce(self):
+        hashes_to_announce = yield self._get_blobs_to_announce()
+        defer.returnValue(hashes_to_announce)
+
+    @defer.inlineCallbacks
+    def creator_finished(self, blob_creator):
+        log.info("%s finished", blob_creator)
+        assert blob_creator.blob_hash is not None
+        assert blob_creator.blob_hash not in self.blobs
+        assert blob_creator.length is not None
+        self._make_new_blob(blob_creator, blob_creator.blob_hash,
+                                          blob_creator.length)
+        self._immediate_announce([blob_creator.blob_hash])
+        next_announce_time = self.get_next_announce_time()
+        yield self.blob_completed(self.blobs[blob_creator.blob_hash], next_announce_time)
+        defer.returnValue(None)
+
+    @defer.inlineCallbacks
+    def delete_blob(self, blob_hash):
+        if not blob_hash in self.blob_hashes_to_delete:
+            self.blob_hashes_to_delete[blob_hash] = False
+
+    @defer.inlineCallbacks
+    def delete_blobs(self, blob_hashes):
+        dl = [self.delete_blob(blob_hash for blob_hash in blob_hashes)]
+        yield defer.DeferredList(dl)
+
+    @defer.inlineCallbacks
+    def get_all_verified_blobs(self):
+        blob_hashes = yield self._get_all_verified_blob_hashes()
+        yield self.completed_blobs(blob_hashes)
+
+    @defer.inlineCallbacks
+    def add_blob_to_download_history(self, blob_hash, host, rate):
+        yield self._add_blob_to_download_history(blob_hash, host, rate)
+        defer.returnValue(True)
+
+    @defer.inlineCallbacks
+    def add_blob_to_upload_history(self, blob_hash, host, rate):
+        yield self._add_blob_to_upload_history(blob_hash, host, rate)
+        defer.returnValue(True)
+
+    @defer.inlineCallbacks
+    def immediate_announce_all_blobs(self):
+        verified_hashes = yield self._get_all_verified_blob_hashes()
+        yield self._immediate_announce(verified_hashes)
+
+    # # # # # # # # # # # #
+    # Internal functions  #
+    # # # # # # # # # # # #
+
+    @defer.inlineCallbacks
+    def _manage(self):
+        from twisted.internet import reactor
+        yield self._delete_blobs_marked_for_deletion()
+        log.debug("Setting the next manage call in %s", str(self))
+        self._next_manage_call = reactor.callLater(1, self._manage)
+        defer.returnValue(None)
+
+    @defer.inlineCallbacks
+    def _immediate_announce(self, blob_hashes):
+        if self.hash_announcer:
+            yield self.hash_announcer.immediate_announce(blob_hashes)
+        defer.returnValue(None)
+
+    @defer.inlineCallbacks
+    def _delete_blob(self, blob_hash):
+        if blob_hash in self.blobs:
+            self.blob_hashes_to_delete[blob_hash] = True
+            log.debug("Found a blob marked for deletion: %s", blob_hash)
+            blob = self.blobs[blob_hash]
+        else:
+            log.warning("Blob %s cannot be deleted because it is unknown", blob_hash)
+            raise NoSuchBlobError(blob_hash)
+        try:
+            yield blob.delete()
+            del self.blob_hashes_to_delete[blob_hash]
+            yield self._delete_blob_from_storage(blob_hash)
+            log.info("Deleted blob %s", blob_hash)
+        except Exception as err:
+            log.warning("Failed to delete blob %s. Reason: %s",
+                        str(blob_hash), str(type(err)))
+            self.blob_hashes_to_delete[blob_hash] = False
+
+    @defer.inlineCallbacks
+    def _delete_blobs_marked_for_deletion(self):
+        dl = []
+        for blob_hash, being_deleted in self.blob_hashes_to_delete.items():
+            if being_deleted is False:
+                dl.append(self._delete_blob(blob_hash))
+        yield defer.DeferredList(dl, consumeErrors=True)
+
+    def _make_new_blob(self, creator, blob_hash, length=None):
+        log.info("Make new blob: %s %s", blob_hash, length)
+        assert blob_hash not in self.blobs
+        blob = self._new_blob(creator, blob_hash, length)
+        self.blobs[blob_hash] = blob
+
+    # # # # # # # # # # # # # # # # # #
+    # Overridden functions start here #
+    # # # # # # # # # # # # # # # # # #
+
+    def _setup(self):
+        return defer.succeed(None)
+
+    def _stop(self):
+        return defer.succeed(None)
+
+    # TODO: change this; its breaks the encapsulation of the
+    #       blob. Maybe better would be to have the blob_creator
+    #       produce a blob.
+
+    def _new_blob(self, creator, blob_hash, length=None):
+        new_blob = self.blob_type(blob_hash, length)
+        new_blob.data_buffer = creator.data_buffer
+        return new_blob
+
+    def _get_blob_creator(self):
         return self.blob_creator_type(self)
 
-    def _make_new_blob(self, blob_hash, length=None):
-        blob = self.blob_type(blob_hash, length)
-        self.blobs[blob_hash] = blob
-        return defer.succeed(blob)
-
-    def blob_completed(self, blob, next_announce_time=None):
+    def _add_completed_blob(self, blob_hash, length, next_announce_time=None):
         if next_announce_time is None:
             next_announce_time = time.time()
-        self.blob_next_announces[blob.blob_hash] = next_announce_time
-        return defer.succeed(True)
+        self.blob_next_announces[blob_hash] = next_announce_time
+        return defer.succeed(None)
 
-    def completed_blobs(self, blobhashes_to_check):
-        blobs = [
-            b.blob_hash for b in self.blobs.itervalues()
-            if b.blob_hash in blobhashes_to_check and b.is_validated()
-        ]
-        return defer.succeed(blobs)
-
-    def get_all_verified_blobs(self):
-        d = self.completed_blobs(self.blobs)
-        return d
-
-    def hashes_to_announce(self):
+    def _get_blobs_to_announce(self):
         now = time.time()
         blobs = [
             blob_hash for blob_hash, announce_time in self.blob_next_announces.iteritems()
             if announce_time < now
-        ]
+            ]
         next_announce_time = self.get_next_announce_time(len(blobs))
         for b in blobs:
             self.blob_next_announces[b] = next_announce_time
         return defer.succeed(blobs)
 
-    def creator_finished(self, blob_creator):
-        assert blob_creator.blob_hash is not None
-        assert blob_creator.blob_hash not in self.blobs
-        assert blob_creator.length is not None
-        new_blob = self.blob_type(blob_creator.blob_hash, blob_creator.length)
-        # TODO: change this; its breaks the encapsulation of the
-        #       blob. Maybe better would be to have the blob_creator
-        #       produce a blob.
-        new_blob.data_buffer = blob_creator.data_buffer
-        new_blob._verified = True
-        self.blobs[blob_creator.blob_hash] = new_blob
-        self._immediate_announce([blob_creator.blob_hash])
-        next_announce_time = self.get_next_announce_time()
-        d = self.blob_completed(new_blob, next_announce_time)
-        d.addCallback(lambda _: new_blob)
-        return d
+    def _delete_blob_from_storage(self, blob_hash):
+        assert blob_hash in self.blobs, NoSuchBlobError(blob_hash)
+        del self.blobs[blob_hash]
+        return defer.succeed(None)
 
-    def delete_blobs(self, blob_hashes):
+    @defer.inlineCallbacks
+    def _get_all_verified_blob_hashes(self):
+        blobs = yield self.completed_blobs(self.blobs)
+        blob_hashes = [blob.blob_hash for blob in blobs]
+        defer.returnValue(blob_hashes)
+
+    def _add_blob_to_download_history(self, blob_hash, host, rate):
+        return defer.succeed(None)
+
+    def _add_blob_to_upload_history(self, blob_hash, host, rate):
+        return defer.succeed(None)
+
+
+class DiskBlobManager(TempBlobManager):
+    """This class stores blobs on the hard disk"""
+    def __init__(self, hash_announcer, blob_dir, storage):
+        TempBlobManager.__init__(self, hash_announcer)
+        self.blob_dir = blob_dir
+        self.storage = storage
+        self.blob_type = BlobFile
+        self.blob_creator_type = BlobFileCreator
+
+    def _get_blob_creator(self):
+        return self.blob_creator_type(self, self.blob_dir)
+
+    def _new_blob(self, creator, blob_hash, length=None):
+        new_blob = self.blob_type(self.blob_dir, blob_hash, length)
+        return new_blob
+
+    @defer.inlineCallbacks
+    def _stop(self):
+        yield self.storage.close()
+
+    @defer.inlineCallbacks
+    def _setup(self):
+        yield self.storage.open()
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _get_blob_id(self, blob_hash):
+        get_id_query = "SELECT id FROM blobs WHERE blob_hash=?"
+        add_blob_query = "INSERT INTO blobs VALUES (NULL, ?)"
+        add_managed_blob_query = ("INSERT INTO managed_blobs VALUES "
+                                  "(NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL)")
+        result = yield self.storage.query(get_id_query, (blob_hash, ))
+        if result:
+            blob_id = result[0][0]
+        else:
+            try:
+                yield self.storage.query(add_blob_query, (blob_hash,))
+            except sqlite3.IntegrityError:
+                pass
+            result = yield self.storage.query(get_id_query, (blob_hash,))
+            blob_id = result[0][0]
+            try:
+                yield self.storage.query(add_managed_blob_query, (blob_id,))
+            except sqlite3.DatabaseError:
+                pass
+        defer.returnValue(blob_id)
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _add_completed_blob(self, blob_hash, length, next_announce_time):
+        blob_id = yield self._get_blob_id(blob_hash)
+        query = "UPDATE managed_blobs SET blob_length=?, next_announce_time=? WHERE blob_id=?"
+        try:
+            yield self.storage.query(query, (length, next_announce_time, blob_id))
+        except sqlite3.IntegrityError:
+            pass
+        yield self._update_blob_verified_timestamp(blob_hash, time.time())
+        defer.returnValue(None)
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _update_blob_verified_timestamp(self, blob_hash, timestamp):
+        blob_id = yield self._get_blob_id(blob_hash)
+        query = "UPDATE managed_blobs set last_verified_time=? where blob_id=?"
+        yield self.storage.query(query, (timestamp, blob_id))
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _get_blobs_to_announce(self):
+        timestamp = int(time.time())
+        query = ("SELECT blob_hash FROM blobs "
+                     "INNER JOIN managed_blobs mb "
+                         "ON mb.blob_id=blobs.id AND "
+                             "mb.next_announce_time<? AND "
+                             "blobs.blob_hash IS NOT NULL")
+        blob_hashes = yield self.storage.query(query, (timestamp, ))
+        blob_hashes = [r[0] for r in blob_hashes]
+        next_announce_time = self.get_next_announce_time(len(blob_hashes))
+        update_query = ("UPDATE managed_blobs SET next_announce_time=? where next_announce_time<?")
+        yield self.storage.query(update_query, (next_announce_time, timestamp))
+        defer.returnValue(blob_hashes)
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _delete_blobs_from_db(self, blob_hashes):
+        dl = []
         for blob_hash in blob_hashes:
-            if not blob_hash in self.blob_hashes_to_delete:
-                self.blob_hashes_to_delete[blob_hash] = False
+            blob_id = self._get_blob_id(blob_hash)
+            dl.append(self.storage.query("DELETE FROM blobs where blob_id=?", (blob_id,)))
+        yield defer.DeferredList(dl)
 
-    def immediate_announce_all_blobs(self):
-        if self.hash_announcer:
-            return self.hash_announcer.immediate_announce(self.blobs.iterkeys())
+    @rerun_if_locked
+    def _get_all_verified_blob_hashes(self):
+        blob_hashes = yield self.storage.query("SELECT blob_hash FROM blobs")
+        verified_blobs = []
+        for blob_hash, in blob_hashes:
+            file_path = os.path.join(self.blob_dir, blob_hash)
+            if os.path.isfile(file_path):
+                verified_blobs.append(blob_hash)
+            yield self._update_blob_verified_timestamp(blob_hash, time.time())
+        defer.returnValue(verified_blobs)
 
-    def _manage(self):
-        from twisted.internet import reactor
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _add_blob_to_download_history(self, blob_hash, host, rate):
+        ts = int(time.time())
+        blob_id = yield self._get_blob_id(blob_hash)
+        query = "INSERT INTO blob_transfer_history VALUES (NULL, ?, ?, ?, ?, ?) "
+        yield self.storage.query(query, (blob_id, str(host), True, float(rate), ts))
 
-        d = self._delete_blobs_marked_for_deletion()
-
-        def set_next_manage_call():
-            log.info("Setting the next manage call in %s", str(self))
-            self._next_manage_call = reactor.callLater(1, self._manage)
-
-        d.addCallback(lambda _: set_next_manage_call())
-
-    def _delete_blobs_marked_for_deletion(self):
-        def remove_from_list(b_h):
-            del self.blob_hashes_to_delete[b_h]
-            log.info("Deleted blob %s", blob_hash)
-            return b_h
-
-        def set_not_deleting(err, b_h):
-            log.warning("Failed to delete blob %s. Reason: %s", str(b_h), err.getErrorMessage())
-            self.blob_hashes_to_delete[b_h] = False
-            return b_h
-
-        ds = []
-        for blob_hash, being_deleted in self.blob_hashes_to_delete.items():
-            if being_deleted is False:
-                if blob_hash in self.blobs:
-                    self.blob_hashes_to_delete[blob_hash] = True
-                    log.info("Found a blob marked for deletion: %s", blob_hash)
-                    blob = self.blobs[blob_hash]
-                    d = blob.delete()
-
-                    d.addCallbacks(lambda _: remove_from_list(blob_hash), set_not_deleting,
-                                   errbackArgs=(blob_hash,))
-
-                    ds.append(d)
-                else:
-                    remove_from_list(blob_hash)
-                    d = defer.fail(Failure(NoSuchBlobError(blob_hash)))
-                    log.warning("Blob %s cannot be deleted because it is unknown")
-                    ds.append(d)
-        return defer.DeferredList(ds)
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _add_blob_to_upload_history(self, blob_hash, host, rate):
+        ts = int(time.time())
+        blob_id = yield self._get_blob_id(blob_hash)
+        query = "INSERT INTO blob_transfer_history VALUES (NULL, ?, ?, ?, ?, ?) "
+        yield self.storage.query(query, (blob_id, str(host), False, float(rate), ts))

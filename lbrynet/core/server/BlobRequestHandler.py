@@ -164,7 +164,7 @@ class BlobRequestHandler(object):
 
     def record_transaction(self, blob):
         d = self.blob_manager.add_blob_to_upload_history(
-            str(blob), self.peer.host, self.blob_data_payment_rate)
+            blob.blob_hash, self.peer.host, self.blob_data_payment_rate)
         return d
 
     def _reply_to_send_request(self, response, incoming):

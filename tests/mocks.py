@@ -88,7 +88,7 @@ class Wallet(object):
         pass
 
     def get_claim_metadata_for_sd_hash(self, sd_hash):
-        return "fakeuri", "faketxid", "fakenout"
+        return "fakeuri", "faketxid", 99
 
     def get_claimid(self, name, txid=None, nout=None):
         return "fake claimid"
@@ -211,7 +211,6 @@ class BlobAvailabilityTracker(BlobAvailability.BlobAvailabilityTracker):
 
     def stop(self):
         pass
-
 
 
 create_stream_sd_file = {

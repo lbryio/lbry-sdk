@@ -1,4 +1,3 @@
-import io
 import logging
 from multiprocessing import Process, Event, Queue
 import os
@@ -8,32 +7,24 @@ import sys
 import random
 import unittest
 
-from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.Hash import MD5
 from lbrynet import conf
-from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
-from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
-from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager, \
-    DBEncryptedFileMetadataManager
 from lbrynet import analytics
 from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.core.PTCWallet import PointTraderKeyQueryHandlerFactory, PointTraderKeyExchanger
 from lbrynet.core.Session import Session
+from lbrynet.core import BlobManager
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
-from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
-from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbryfile.StreamDescriptor import get_sd_info
+from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier, EncryptedFileOptions
+from lbrynet.lbryfile import publish_sd_blob
 from twisted.internet import defer, threads, task
 from twisted.trial.unittest import TestCase
 from twisted.python.failure import Failure
@@ -43,6 +34,7 @@ from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter, RateLimiter
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
+from lbrynet.core import Storage
 
 from lbrynet.lbrylive.server.LiveBlobInfoQueryHandler import CryptBlobInfoQueryHandlerFactory
 from lbrynet.lbrylive.client.LiveStreamOptions import add_live_stream_to_sd_identifier
@@ -60,8 +52,6 @@ test_create_stream_sd_file = mocks.create_stream_sd_file
 DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 
-log_format = "%(funcName)s(): %(message)s"
-logging.basicConfig(level=logging.WARNING, format=log_format)
 
 
 def require_system(system):
@@ -116,13 +106,14 @@ class LbryUploader(object):
         self.sd_identifier = StreamDescriptorIdentifier()
         db_dir = "server"
         os.mkdir(db_dir)
+        storage = Storage.FileStorage(db_dir)
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-            blob_tracker_class=DummyBlobAvailabilityTracker,
+            blob_tracker_class=DummyBlobAvailabilityTracker, storage=storage,
             dht_node_class=Node, is_generous=self.is_generous)
-        stream_info_manager = TempEncryptedFileMetadataManager()
+        stream_info_manager = DBEncryptedFileMetadataManager(self.session.storage)
         self.lbry_file_manager = EncryptedFileManager(
             self.session, stream_info_manager, self.sd_identifier)
         if self.ul_rate_limit is not None:
@@ -142,6 +133,7 @@ class LbryUploader(object):
 
         def print_error(err):
             logging.critical("Server error: %s", err.getErrorMessage())
+            logging.critical(err.getTraceback())
 
         d.addErrback(print_error)
         return d
@@ -187,14 +179,13 @@ class LbryUploader(object):
         d = create_lbry_file(self.session, self.lbry_file_manager, "test_file", test_file)
         return d
 
+    @defer.inlineCallbacks
     def create_stream_descriptor(self, stream_hash):
-        descriptor_writer = BlobStreamDescriptorWriter(self.session.blob_manager)
-        d = get_sd_info(self.lbry_file_manager.stream_info_manager, stream_hash, True)
-        d.addCallback(descriptor_writer.create_descriptor)
-        return d
-
-    def put_sd_hash_on_queue(self, sd_hash):
+        sd_hash = yield publish_sd_blob(self.lbry_file_manager.stream_info_manager,
+                                        self.session.blob_manager,
+                                        stream_hash)
         self.sd_hash_queue.put(sd_hash)
+        defer.returnValue(None)
 
 
 def start_lbry_reuploader(sd_hash, kill_event, dead_event,
@@ -228,7 +219,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                       blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-    stream_info_manager = TempEncryptedFileMetadataManager()
+    stream_info_manager = DBEncryptedFileMetadataManager(session.storage)
 
     lbry_file_manager = EncryptedFileManager(session, stream_info_manager, sd_identifier)
 
@@ -645,7 +636,7 @@ class TestTransfer(TestCase):
             blob_tracker_class=DummyBlobAvailabilityTracker,
             dht_node_class=Node, is_generous=self.is_generous)
 
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.storage)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
@@ -891,8 +882,8 @@ class TestTransfer(TestCase):
         self.server_processes.append(uploader)
 
         logging.debug("Testing double download")
-
         wallet = FakeWallet()
+
         peer_manager = PeerManager()
         peer_finder = FakePeerFinder(5553, peer_manager, 1)
         hash_announcer = FakeAnnouncer()
@@ -906,14 +897,16 @@ class TestTransfer(TestCase):
         os.mkdir(db_dir)
         os.mkdir(blob_dir)
 
-        self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
+        storage = Storage.FileStorage(db_dir)
+
+        self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, storage=storage,
                                lbryid="abcd", peer_finder=peer_finder,
                                hash_announcer=hash_announcer, blob_dir=blob_dir, peer_port=5553,
                                use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                                blob_tracker_class=DummyBlobAvailabilityTracker,
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.storage)
         self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         @defer.inlineCallbacks
@@ -925,11 +918,8 @@ class TestTransfer(TestCase):
                 o.default_value for o in options.get_downloader_options(info_validator, prm)
             ]
             downloader = yield factories[0].make_downloader(metadata, chosen_options, prm)
-            defer.returnValue(downloader)
-
-        def append_downloader(downloader):
             downloaders.append(downloader)
-            return downloader
+            defer.returnValue(downloader)
 
         @defer.inlineCallbacks
         def download_file(sd_hash):
@@ -937,7 +927,6 @@ class TestTransfer(TestCase):
             sd_blob = yield download_sd_blob(self.session, sd_hash, prm)
             metadata = yield sd_identifier.get_metadata_for_sd_blob(sd_blob)
             downloader = yield make_downloader(metadata, prm)
-            downloaders.append(downloader)
             finished_value = yield downloader.start()
             defer.returnValue(finished_value)
 
@@ -978,6 +967,7 @@ class TestTransfer(TestCase):
             yield download_file(sd_hash)
             yield delete_lbry_file()
             yield check_lbry_file()
+            defer.returnValue(None)
 
         def stop(arg):
             if isinstance(arg, Failure):
@@ -1034,7 +1024,7 @@ class TestTransfer(TestCase):
                                wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker,
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.storage)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)

@@ -222,7 +222,7 @@ class ReflectorServer(Protocol):
         sd_blob_size = request_dict[SD_BLOB_SIZE]
 
         if self.blob_write is None:
-            d = self.blob_manager.get_blob(sd_blob_hash, sd_blob_size)
+            d = self.blob_manager.get_blob(sd_blob_hash, length=sd_blob_size)
             d.addCallback(self.get_descriptor_response)
             d.addCallback(self.send_response)
         else:

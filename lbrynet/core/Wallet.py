@@ -1,21 +1,20 @@
 import datetime
 import logging
 import json
-import os
+import hashlib
 
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
-from twisted.enterprise import adbapi
 from collections import defaultdict, deque
 from zope.interface import implements
 from jsonschema import ValidationError
 from decimal import Decimal
-
+from lbrynet.core.Storage import MemoryStorage
 from lbryum import SimpleConfig, Network
 from lbryum.lbrycrd import COIN, RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS
 import lbryum.wallet
 from lbryum.commands import known_commands, Commands
-
+from lbrynet.core import utils
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
@@ -26,6 +25,20 @@ from lbrynet.metadata.Metadata import Metadata
 
 
 log = logging.getLogger(__name__)
+
+STATUS_INIT = "INIT"
+STATUS_PENDING = "PENDING"
+STATUS_ACTIVE = "ACTIVE"
+STATUS_INACTIVE = "INACTIVE"
+STATUS_INVALID_METADATA = "INVALID_METADATA"
+
+CLAIM_STATUS = [
+    STATUS_INIT,
+    STATUS_PENDING,
+    STATUS_ACTIVE,
+    STATUS_INACTIVE,
+    STATUS_INVALID_METADATA
+]
 
 
 class ReservedPoints(object):
@@ -58,124 +71,175 @@ class ClaimOutpoint(dict):
         return not self.__eq__(compare)
 
 
-class MetaDataStorage(object):
-    def load(self):
-        return defer.succeed(True)
+# class MetaDataStorage(object):
+#     def __init__(self, storage):
+#         self.storage = storage
+#
+#     def load(self):
+#         return defer.succeed(True)
+#
+#     def clean_bad_records(self):
+#         return defer.succeed(True)
+#
+#     def save_name_metadata(self, name, claim_outpoint, sd_hash):
+#         return defer.succeed(True)
+#
+#     def get_claim_metadata_for_sd_hash(self, sd_hash):
+#         return defer.succeed(True)
+#
+#     def update_claimid(self, claim_id, name, claim_outpoint):
+#         return defer.succeed(True)
+#
+#     def get_claimid_for_tx(self, name, claim_outpoint):
+#         return defer.succeed(True)
 
-    def clean_bad_records(self):
-        return defer.succeed(True)
 
-    def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        return defer.succeed(True)
+# class InMemoryMetadataStorage(MetaDataStorage):
+#     def __init__(self):
+#         self.metadata = {}
+#         self.claimids = {}
+#         MetaDataStorage.__init__(self)
+#
+#     def save_name_metadata(self, name, claim_outpoint, sd_hash):
+#         self.metadata[sd_hash] = (name, claim_outpoint)
+#         return defer.succeed(True)
+#
+#     def get_claim_metadata_for_sd_hash(self, sd_hash):
+#         try:
+#             name, claim_outpoint = self.metadata[sd_hash]
+#             return defer.succeed((name, claim_outpoint['txid'], claim_outpoint['nout']))
+#         except KeyError:
+#             return defer.succeed(None)
+#
+#     def update_claimid(self, claim_id, name, claim_outpoint):
+#         self.claimids[(name, claim_outpoint['txid'], claim_outpoint['nout'])] = claim_id
+#         return defer.succeed(True)
+#
+#     def get_claimid_for_tx(self, name, claim_outpoint):
+#         try:
+#             return defer.succeed(
+#                 self.claimids[(name, claim_outpoint['txid'], claim_outpoint['nout'])])
+#         except KeyError:
+#             return defer.succeed(None)
 
-    def get_claim_metadata_for_sd_hash(self, sd_hash):
-        return defer.succeed(True)
 
-    def update_claimid(self, claim_id, name, claim_outpoint):
-        return defer.succeed(True)
+class MetadataStorage(object):
+    def __init__(self, db):
+        self.db = db
 
-    def get_claimid_for_tx(self, name, claim_outpoint):
-        return defer.succeed(True)
+    def get_claim_hash(self, claim_outpoint):
+        return utils.claim_hash(claim_outpoint['txid'], claim_outpoint['nout'])
 
+    @defer.inlineCallbacks
+    def _get_claim_row_id(self, claim_hash):
+        query_result = yield self.db.query("SELECT id FROM claims WHERE claim_hash=?",
+                                           (claim_hash,))
+        row_id = False
+        if query_result:
+            row_id = query_result[0][0]
+        defer.returnValue(row_id)
 
-class InMemoryStorage(MetaDataStorage):
-    def __init__(self):
-        self.metadata = {}
-        self.claimids = {}
-        MetaDataStorage.__init__(self)
+    @defer.inlineCallbacks
+    def _add_claim(self, name, txid, nout, claim_id, is_mine=False):
+        claim_hash = utils.claim_hash(txid, nout)
+        claim_row_id = yield self._get_claim_row_id(claim_hash)
+        assert not claim_row_id, Exception("Claim already known")
+        query = "INSERT INTO claims VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, NULL)"
+        yield self.db.query(query, (name, STATUS_INIT, txid, nout, claim_id, claim_hash, is_mine))
+        defer.returnValue(True)
 
-    def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        self.metadata[sd_hash] = (name, claim_outpoint)
-        return defer.succeed(True)
-
-    def get_claim_metadata_for_sd_hash(self, sd_hash):
+    @defer.inlineCallbacks
+    def _add_metadata_to_claim(self, claim_hash, metadata):
+        sd_hash = utils.get_sd_hash(metadata)
+        claim_row_id = yield self._get_claim_row_id(claim_hash)
         try:
-            name, claim_outpoint = self.metadata[sd_hash]
-            return defer.succeed((name, claim_outpoint['txid'], claim_outpoint['nout']))
-        except KeyError:
-            return defer.succeed(None)
+            add_sd_hash_query = "UPDATE claims SET sd_hash=? WHERE id=?"
+            yield self.db.query(add_sd_hash_query, (sd_hash, claim_row_id))
 
-    def update_claimid(self, claim_id, name, claim_outpoint):
-        self.claimids[(name, claim_outpoint['txid'], claim_outpoint['nout'])] = claim_id
-        return defer.succeed(True)
+            add_metadata_query = "INSERT INTO metadata VALUES (?, ?)"
+            yield self.db.query(add_metadata_query, (claim_row_id, utils.metadata_to_b58(metadata)))
+            status_code = STATUS_PENDING
+        except Exception as err:
+            status_code = STATUS_INVALID_METADATA
+            log.warning(err)
+        yield self._update_claim_status(claim_hash, status_code)
+        defer.returnValue(status_code)
 
-    def get_claimid_for_tx(self, name, claim_outpoint):
-        try:
-            return defer.succeed(
-                self.claimids[(name, claim_outpoint['txid'], claim_outpoint['nout'])])
-        except KeyError:
-            return defer.succeed(None)
+    @defer.inlineCallbacks
+    def _update_claim_status(self, claim_hash, status):
+        assert status in CLAIM_STATUS, Exception("Unknown status: %s" % status)
+        row_id = yield self._get_claim_row_id(claim_hash)
+        assert row_id is not False, Exception("No claim to update")
+        query = "UPDATE claims SET status=? WHERE id=?"
+        yield self.db.query(query, (status, row_id))
+        defer.returnValue(True)
 
+    @defer.inlineCallbacks
+    def _get_claim_status(self, claim_hash):
+        status = None
+        row_id = yield self._get_claim_row_id(claim_hash)
+        if row_id is not False:
+            query = "SELECT status FROM claims WHERE id=?"
+            query_result = yield self.db.query(query, (row_id, ))
+            status = query_result[0][0]
+        defer.returnValue(status)
 
-class SqliteStorage(MetaDataStorage):
-    def __init__(self, db_dir):
-        self.db_dir = db_dir
-        self.db = None
-        MetaDataStorage.__init__(self)
+    @defer.inlineCallbacks
+    def _get_metadata_for_claim(self, claim_hash):
+        row_id = yield self._get_claim_row_id(claim_hash)
+        metadata = None
+        if row_id is not False:
+            query = "SELECT value FROM metadata WHERE id=?"
+            blob = yield self.db.query(query, (row_id, ))
+            encoded_metadata = blob[0][0]
+            metadata = utils.decode_b58_metadata(encoded_metadata)
+        defer.returnValue(metadata)
 
+    @defer.inlineCallbacks
     def load(self):
-        self.db = adbapi.ConnectionPool('sqlite3', os.path.join(self.db_dir, "blockchainname.db"),
-                                        check_same_thread=False)
+        yield self.db.open()
 
-        def create_tables(transaction):
-            transaction.execute("create table if not exists name_metadata (" +
-                                "    name text, " +
-                                "    txid text, " +
-                                "    n integer, " +
-                                "    sd_hash text)")
-            transaction.execute("create table if not exists claim_ids (" +
-                                "    claimId text, " +
-                                "    name text, " +
-                                "    txid text, " +
-                                "    n integer)")
-
-        return self.db.runInteraction(create_tables)
-
+    @defer.inlineCallbacks
     def clean_bad_records(self):
-        d = self.db.runQuery("delete from name_metadata where length(txid) > 64 or txid is null")
-        return d
+        yield self.db.query("DELETE FROM claims WHERE LENGTH(txid) > 64 OR txid IS NULL")
+        defer.returnValue(None)
 
-    def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        d = self.db.runQuery(
-            "delete from name_metadata where name=? and txid=? and n=? and sd_hash=?",
-            (name, claim_outpoint['txid'], claim_outpoint['nout'], sd_hash))
-        d.addCallback(
-            lambda _: self.db.runQuery(
-                "delete from name_metadata where name=? and txid=? and n=? and sd_hash=?",
-                (name, claim_outpoint['txid'], UNSET_NOUT, sd_hash)))
-        d.addCallback(
-            lambda _: self.db.runQuery(
-                "insert into name_metadata values (?, ?, ?, ?)",
-                (name, claim_outpoint['txid'], claim_outpoint['nout'], sd_hash)))
-        return d
+    @defer.inlineCallbacks
+    def save_name_metadata(self, claim_outpoint, metadata):
+        claim_hash = self.get_claim_hash(claim_outpoint)
+        status = yield self._get_claim_status(claim_hash)
 
-    @rerun_if_locked
-    def get_claim_metadata_for_sd_hash(self, sd_hash):
-        d = self.db.runQuery("select name, txid, n from name_metadata where sd_hash=?", (sd_hash,))
-        d.addCallback(lambda r: r[0] if r else None)
-        return d
+        if not status:
+            raise Exception("No such claim")
+        if status == STATUS_INIT:
+            yield self._add_metadata_to_claim(claim_hash, metadata)
+        defer.returnValue(True)
 
     def update_claimid(self, claim_id, name, claim_outpoint):
-        d = self.db.runQuery(
-            "delete from claim_ids where claimId=? and name=? and txid=? and n=?",
-            (claim_id, name, claim_outpoint['txid'], claim_outpoint['nout']))
-        d.addCallback(
-            lambda _: self.db.runQuery(
-                "delete from claim_ids where claimId=? and name=? and txid=? and n=?",
-                (claim_id, name, claim_outpoint['txid'], UNSET_NOUT)))
-        d.addCallback(
-            lambda r: self.db.runQuery(
-                "insert into claim_ids values (?, ?, ?, ?)",
-                (claim_id, name, claim_outpoint['txid'], claim_outpoint['nout'])))
-        d.addCallback(lambda _: claim_id)
-        return d
+        pass
+        # d = self.db.runQuery(
+        #     "delete from claim_ids where claimId=? and name=? and txid=? and n=?",
+        #     (claim_id, name, claim_outpoint['txid'], claim_outpoint['nout']))
+        # d.addCallback(
+        #     lambda _: self.db.runQuery(
+        #         "delete from claim_ids where claimId=? and name=? and txid=? and n=?",
+        #         (claim_id, name, claim_outpoint['txid'], UNSET_NOUT)))
+        # d.addCallback(
+        #     lambda r: self.db.runQuery(
+        #         "insert into claim_ids values (?, ?, ?, ?)",
+        #         (claim_id, name, claim_outpoint['txid'], claim_outpoint['nout'])))
+        # d.addCallback(lambda _: claim_id)
+        # return d
 
+    @defer.inlineCallbacks
     def get_claimid_for_tx(self, name, claim_outpoint):
-        d = self.db.runQuery(
-            "select claimId from claim_ids where name=? and txid=? and n=?",
-            (name, claim_outpoint['txid'], claim_outpoint['nout']))
-        d.addCallback(lambda r: r[0][0] if r else None)
-        return d
+        query = "SELECT claim_transaction_id FROM claims WHERE txid=? and nout=?"
+        query_result = yield self.db.query(query, (claim_outpoint['txid'],
+                                                   claim_outpoint['nout']))
+        claim_id = None
+        if query_result:
+            claim_id = query_result[0][0]
+        defer.returnValue(claim_id)
 
 
 class Wallet(object):
@@ -183,9 +247,10 @@ class Wallet(object):
     implements(IWallet)
 
     def __init__(self, storage):
-        if not isinstance(storage, MetaDataStorage):
-            raise ValueError('storage must be an instance of MetaDataStorage')
-        self._storage = storage
+        if not isinstance(storage, MemoryStorage):
+            raise ValueError('storage must be an instance of MemoryStorage')
+
+        self._storage = MetadataStorage(storage)
         self.next_manage_call = None
         self.wallet_balance = Decimal(0.0)
         self.total_reserved_points = Decimal(0.0)
