@@ -2156,67 +2156,6 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response("Deleted %s" % blob_hash)
         defer.returnValue(response)
 
-    def jsonrpc_get_nametrie(self):
-        """
-            Get the nametrie
-
-            Args:
-                None
-            Returns:
-                Name claim trie
-        """
-
-        d = self.session.wallet.get_nametrie()
-        d.addCallback(lambda r: [i for i in r if 'txid' in i.keys()])
-        d.addCallback(lambda r: self._render_response(r))
-        return d
-
-    def jsonrpc_log(self, message):
-        """
-        DEPRECATED. This method will be removed in a future release.
-
-        Log message
-
-        Args:
-            'message': message to be logged
-        Returns:
-             True
-        """
-
-        log.info("API client log request: %s" % message)
-        return self._render_response(True)
-
-    def jsonrpc_upload_log(self, name_prefix=None, log_type=None, exclude_previous=True,
-                           message=None, force=False):
-        """
-        DEPRECATED. This method will be removed in a future release.
-
-        Upload log
-
-        Args, optional:
-            'name_prefix': prefix to indicate what is requesting the log upload
-            'exclude_previous': true/false, whether or not to exclude
-                previous sessions from upload, defaults on true
-
-        Returns:
-            True
-
-        """
-
-        if name_prefix is not None:
-            log_type = name_prefix + '_api'
-        elif log_type is not None:
-            log_type += '_api'
-        else:
-            log_type = 'api'
-
-        if message is not None:
-            log.info("Upload log message: " + str(message))
-
-        d = self._upload_log(log_type=log_type, exclude_previous=exclude_previous, force=force)
-        d.addCallback(lambda _: self._render_response(True))
-        return d
-
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     def jsonrpc_open(self, sd_hash):
@@ -2396,19 +2335,6 @@ class Daemon(AuthJSONRPCServer):
         d = self.session.blob_manager.get_all_verified_blobs()
         d.addCallback(reupload.reflect_blob_hashes, self.session.blob_manager)
         d.addCallback(lambda r: self._render_response(r))
-        return d
-
-    def jsonrpc_get_mean_availability(self):
-        """
-        Get mean blob availability
-
-        Args:
-            None
-        Returns:
-            Mean peers for a blob
-        """
-
-        d = self._render_response(self.session.blob_tracker.last_mean_availability)
         return d
 
     @defer.inlineCallbacks
