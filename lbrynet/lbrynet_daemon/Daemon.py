@@ -1553,64 +1553,65 @@ class Daemon(AuthJSONRPCServer):
             'wait_for_write': optional, defaults to True. When set, waits for the file to
                 only start to be written before returning any results.
         Returns:
-            'stream_hash': hex string
-            'path': path of download
+            {
+                'completed': bool,
+                'file_name': str,
+                'download_directory': str,
+                'points_paid': float,
+                'stopped': bool,
+                'stream_hash': str (hex),
+                'stream_name': str,
+                'suggested_file_name': str,
+                'sd_hash': str (hex),
+                'name': str,
+                'outpoint': str, (txid:nout)
+                'claim_id': str (hex),
+                'download_path': str,
+                'mime_type': str,
+                'key': str (hex),
+                'total_bytes': int
+                'written_bytes': int,
+                'message': str
+                'metadata': Metadata dict
+            }
         """
 
         timeout = timeout if timeout is not None else self.download_timeout
         download_directory = download_directory or self.download_directory
-        sd_hash = get_sd_hash(stream_info)
         if name in self.waiting_on:
-            # TODO: return a useful error message here, like "already
-            # waiting for name to be resolved"
-            defer.returnValue(server.failure)
+            log.info("Already waiting on lbry://%s to start downloading", name)
+            yield self.streams[name].data_downloading_deferred
 
-        # first check if we already have this
         lbry_file = yield self._get_lbry_file(FileID.NAME, name, return_json=False)
-        if lbry_file:
-            log.info('Already have a file for %s', name)
-            message = {
-                'stream_hash': sd_hash if stream_info else lbry_file.sd_hash,
-                'path': os.path.join(lbry_file.download_directory, lbry_file.file_name)
-            }
-            response = yield self._render_response(message)
-            defer.returnValue(response)
 
-        download_id = utils.random_string()
-        self.analytics_manager.send_download_started(download_id, name, stream_info)
-        tries = 1
-        max_tries = 3
-        while tries <= max_tries:
+        if lbry_file:
+            if not os.path.isfile(os.path.join(lbry_file.download_directory, lbry_file.file_name)):
+                log.info("Already have lbry file but missing file in %s, rebuilding it",
+                         lbry_file.download_directory)
+                yield lbry_file.start()
+            else:
+                log.info('Already have a file for %s', name)
+            result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
+        else:
+            download_id = utils.random_string()
+            self.analytics_manager.send_download_started(download_id, name, stream_info)
             try:
-                log.info('Making try %s / %s to start download of %s', tries, max_tries, name)
-                new_sd_hash, file_path = yield self._download_name(
-                    name=name,
-                    timeout=timeout,
-                    download_directory=download_directory,
-                    stream_info=stream_info,
-                    file_name=file_name,
-                    wait_for_write=wait_for_write
+                yield self._download_name(name=name, timeout=timeout,
+                                          download_directory=download_directory,
+                                          stream_info=stream_info, file_name=file_name,
+                                          wait_for_write=wait_for_write)
+                stream = self.streams[name]
+                stream.finished_deferred.addCallback(
+                    lambda _: self.analytics_manager.send_download_finished(
+                        download_id, name, stream_info)
                 )
-                break
+                result = yield self._get_lbry_file_dict(self.streams[name].downloader,
+                                                          full_status=True)
             except Exception as e:
                 log.warning('Failed to get %s', name)
-                if tries == max_tries:
-                    self.analytics_manager.send_download_errored(download_id, name, stream_info)
-                    response = yield self._render_response(e.message)
-                    defer.returnValue(response)
-                tries += 1
-        # TODO: should stream_hash key be changed to sd_hash?
-        message = {
-            'stream_hash': sd_hash if stream_info else new_sd_hash,
-            'path': file_path
-        }
-        stream = self.streams.get(name)
-        if stream:
-            stream.finished_deferred.addCallback(
-                lambda _: self.analytics_manager.send_download_finished(
-                    download_id, name, stream_info)
-            )
-        response = yield self._render_response(message)
+                self.analytics_manager.send_download_errored(download_id, name, stream_info)
+                result = e.message
+        response = yield self._render_response(result)
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
@@ -1635,7 +1636,7 @@ class Daemon(AuthJSONRPCServer):
 
         Args:
             'status': "start" or "stop"
-            'name': start file by lbry uri,
+            'name': start file by lbry name,
             'sd_hash': start file by the hash in the name claim,
             'file_name': start file by its name in the downloads folder,
         Returns:
