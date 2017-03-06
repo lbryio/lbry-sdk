@@ -14,7 +14,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Track threaded calls to lbryum, cancel pending calls upon wallet shutdown
   *
   *
 
