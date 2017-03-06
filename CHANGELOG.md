@@ -9,14 +9,14 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Add file filters: `claim_id`, `outpoint`, and `rowid`
   *
   *
 
 ### Changed
-  *
-  *
-  *
+  * Change file filter `uri` to `name` and return field `lbry_uri` to `name`
+  * Refactor file_list, add `full_status` argument to populate resource intensive fields
+  * Remove deprecated file commands: `get_lbry_files`, `get_lbry_file`, and `file_get`
 
 ### Fixed
   *
