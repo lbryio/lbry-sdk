@@ -19,7 +19,7 @@ from lbrynet.lbryfile.StreamDescriptor import save_sd_info
 log = logging.getLogger(__name__)
 
 
-def log_status(uri, sd_hash, status):
+def log_status(name, sd_hash, status):
     if status == ManagedEncryptedFileDownloader.STATUS_RUNNING:
         status_string = "running"
     elif status == ManagedEncryptedFileDownloader.STATUS_STOPPED:
@@ -28,7 +28,7 @@ def log_status(uri, sd_hash, status):
         status_string = "finished"
     else:
         status_string = "unknown"
-    log.info("lbry://%s (%s) is %s", uri, short_hash(sd_hash), status_string)
+    log.info("lbry://%s (%s) is %s", name, short_hash(sd_hash), status_string)
 
 
 class ManagedEncryptedFileDownloader(EncryptedFileSaver):
@@ -49,7 +49,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.sd_hash = None
         self.txid = None
         self.nout = None
-        self.uri = None
+        self.name = None
         self.claim_id = None
         self.rowid = rowid
         self.lbry_file_manager = lbry_file_manager
@@ -64,7 +64,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         yield self.load_file_attributes()
 
         status = yield self.lbry_file_manager.get_lbry_file_status(self)
-        log_status(self.uri, self.sd_hash, status)
+        log_status(self.name, self.sd_hash, status)
 
         if status == ManagedEncryptedFileDownloader.STATUS_RUNNING:
             # start returns self.finished_deferred
@@ -115,12 +115,12 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         stream_metadata = yield self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
         if stream_metadata:
             name, txid, nout = stream_metadata
-            self.uri = name
+            self.name = name
             self.txid = txid
             self.nout = nout
         else:
             raise NoSuchSDHash(self.sd_hash)
-        self.claim_id = yield self.wallet.get_claimid(self.uri, self.txid, self.nout)
+        self.claim_id = yield self.wallet.get_claimid(self.name, self.txid, self.nout)
         defer.returnValue(None)
 
     @defer.inlineCallbacks
@@ -128,7 +128,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         yield EncryptedFileSaver._start(self)
         yield self.load_file_attributes()
         status = yield self._save_status()
-        log_status(self.uri, self.sd_hash, status)
+        log_status(self.name, self.sd_hash, status)
         defer.returnValue(status)
 
     def _get_finished_deferred_callback_value(self):

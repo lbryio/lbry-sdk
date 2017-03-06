@@ -16,7 +16,7 @@ class FakeLBRYFile(object):
         self.blob_manager = blob_manager
         self.stream_info_manager = stream_info_manager
         self.stream_hash = stream_hash
-        self.uri = "fake_uri"
+        self.name = "fake_uri"
 
 
 class Node(object):
