@@ -19,10 +19,14 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed ExchangeRateManager freezing the app
-  * Fixed download not timing out properly when downloading sd blob
   *
   *
+  *
+
+## [0.9.0rc12] - 2017-03-06
+### Fixed
+ * Fixed ExchangeRateManager freezing the app
+ * Fixed download not timing out properly when downloading sd blob
 
 ## [0.9.0rc11] - 2017-02-27
 ### Fixed
