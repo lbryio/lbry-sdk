@@ -907,25 +907,6 @@ class Daemon(AuthJSONRPCServer):
         helper = _ResolveNameHelper(self, name, force_refresh)
         return helper.get_deferred()
 
-    @defer.inlineCallbacks
-    def _delete_lbry_file(self, lbry_file, delete_file=True):
-        stream_hash = lbry_file.stream_hash
-        filename = os.path.join(self.download_directory, lbry_file.file_name)
-
-        yield self.lbry_file_manager.delete_lbry_file(lbry_file)
-        yield lbry_file.delete_data()
-        stream_count = yield self.lbry_file_manager.get_count_for_stream_hash(stream_hash)
-        if stream_count == 0:
-            yield self.stream_info_manager.delete_stream(stream_hash)
-        else:
-            log.warning("Can't delete stream info for %s, count is %i", stream_hash, stream_count)
-        if delete_file:
-            if os.path.isfile(filename):
-                os.remove(filename)
-                log.info("Deleted file %s", filename)
-        log.info("Deleted stream %s", stream_hash)
-        defer.returnValue(True)
-
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
             return self.session.blob_manager.get_blob(blob[0])
@@ -1680,41 +1661,40 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
-    def jsonrpc_delete_lbry_file(self, **kwargs):
-        """
-        DEPRECATED. Use `file_delete` instead
-        """
-        return self.jsonrpc_file_delete(**kwargs)
-
-    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_file_delete(self, delete_target_file=True, **kwargs):
         """
         Delete a lbry file
 
         Args:
-            'file_name': downloaded file name, string
+            'name' (optional): delete files by lbry name,
+            'sd_hash' (optional): delete files by sd hash,
+            'file_name' (optional): delete files by the name in the downloads folder,
+            'stream_hash' (optional): delete files by stream hash,
+            'claim_id' (optional): delete files by claim id,
+            'outpoint' (optional): delete files by claim outpoint,
+            'rowid': (optional): delete file by rowid in the file manager
+            'delete_target_file' (optional): delete file from downloads folder, defaults to True
+                                             if False only the blobs and db entries will be deleted
         Returns:
-            confirmation message
+            True if deletion was successful, otherwise False
         """
 
-        def _delete_file(f):
-            if not f:
-                return False
-            file_name = f.file_name
-            d = self._delete_lbry_file(f, delete_file=delete_target_file)
-            d.addCallback(lambda _: "Deleted file: " + file_name)
-            return d
-
-        try:
-            searchtype, value = get_lbry_file_search_value(kwargs)
-        except NoValidSearch:
-            d = defer.fail()
+        searchtype, value = get_lbry_file_search_value(kwargs)
+        lbry_file = yield self._get_lbry_file(searchtype, value, return_json=False)
+        if not lbry_file:
+            log.warning("There is no file to delete for '%s'", value)
+            result = False
         else:
-            d = self._get_lbry_file(searchtype, value, return_json=False)
-            d.addCallback(_delete_file)
-
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+            file_name, stream_hash = lbry_file.file_name, lbry_file.stream_hash
+            if lbry_file.claim_id in self.streams:
+                del self.streams[lbry_file.claim_id]
+            yield self.lbry_file_manager.delete_lbry_file(lbry_file,
+                                                          delete_file=delete_target_file)
+            log.info("Deleted %s (%s)", file_name, utils.short_hash(stream_hash))
+            result = True
+        response = yield self._render_response(result)
+        defer.returnValue(response)
 
     def jsonrpc_get_est_cost(self, **kwargs):
         """
@@ -2577,7 +2557,8 @@ class _DownloadNameHelper(object):
                 log.warning("lbry://%s timed out, removing from streams", self.name)
                 self.remove_from_wait("Timed out")
             if self.daemon.streams[self.name].downloader is not None:
-                yield self.daemon._delete_lbry_file(self.daemon.streams[self.name].downloader)
+                yield self.daemon.lbry_file_manager.delete_lbry_file(
+                    self.daemon.streams[self.name].downloader)
             del self.daemon.streams[self.name]
             raise err
 
