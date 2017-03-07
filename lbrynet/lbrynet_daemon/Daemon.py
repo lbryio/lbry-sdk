@@ -1682,11 +1682,16 @@ class Daemon(AuthJSONRPCServer):
         """
 
         searchtype, value = get_lbry_file_search_value(kwargs)
-        lbry_file = yield self._get_lbry_file(searchtype, value, return_json=False)
-        if not lbry_file:
+        lbry_files = yield self._get_lbry_files(searchtype, value, return_json=False)
+        if len(lbry_files) > 1:
+            log.warning("There are %i files to delete, use narrower filters to select one",
+                        len(lbry_files))
+            result = False
+        elif not lbry_files:
             log.warning("There is no file to delete for '%s'", value)
             result = False
         else:
+            lbry_file = lbry_files[0]
             file_name, stream_hash = lbry_file.file_name, lbry_file.stream_hash
             if lbry_file.claim_id in self.streams:
                 del self.streams[lbry_file.claim_id]
