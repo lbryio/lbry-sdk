@@ -19,7 +19,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Added string comparison to ClaimOutpoint (needed to look things up by outpoint)
   *
   *
 
