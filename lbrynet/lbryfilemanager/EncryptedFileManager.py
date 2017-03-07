@@ -213,12 +213,19 @@ class EncryptedFileManager(object):
         yield self._delete_lbry_file_options(lbry_file.rowid)
 
         yield lbry_file.delete_data()
+
+        # TODO: delete this
+        # get count for stream hash returns the count of the lbry files with the stream hash
+        # in the lbry_file_options table, which will soon be removed.
+
         stream_count = yield self.get_count_for_stream_hash(lbry_file.stream_hash)
         if stream_count == 0:
             yield self.stream_info_manager.delete_stream(lbry_file.stream_hash)
         else:
-            log.warning("Can't delete stream info for %s, count is %i", lbry_file.stream_hash,
-                        stream_count)
+            msg = ("Can't delete stream info for %s, count is %i\n"
+                   "The call that resulted in this warning will\n"
+                   "be removed in the database refactor")
+            log.warning(msg, lbry_file.stream_hash, stream_count)
 
         if delete_file and os.path.isfile(full_path):
             os.remove(full_path)
