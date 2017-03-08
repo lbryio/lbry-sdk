@@ -38,7 +38,7 @@ from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.core import log_support, utils, file_utils
+from lbrynet.core import log_support, utils
 from lbrynet.core import system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import Session
