@@ -179,9 +179,9 @@ class ReflectorServer(Protocol):
         if int(request_dict[VERSION]) not in [REFLECTOR_V1, REFLECTOR_V2]:
             raise ReflectorClientVersionError("Unknown version: %i" % int(request_dict[VERSION]))
 
-        log.debug('Handling handshake for client version %i', self.peer_version)
 
         self.peer_version = int(request_dict[VERSION])
+        log.debug('Handling handshake for client version %i', self.peer_version)
         self.received_handshake = True
         return self.send_handshake_response()
 
