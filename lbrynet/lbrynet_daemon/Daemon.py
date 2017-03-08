@@ -145,6 +145,7 @@ class CheckInternetConnection(object):
 
 class CheckRemoteVersion(object):
     URL = 'https://api.github.com/repos/lbryio/lbry-electron/releases/latest'
+
     def __init__(self):
         self.version = None
 
@@ -801,9 +802,8 @@ class Daemon(AuthJSONRPCServer):
         """
         timeout = timeout if timeout is not None else conf.settings['download_timeout']
 
-
         helper = _DownloadNameHelper(self, name, timeout, download_directory, file_name,
-                                         wait_for_write)
+                                     wait_for_write)
         if not stream_info:
             self.waiting_on[name] = True
             stream_info = yield self._resolve_name(name)
@@ -1326,6 +1326,7 @@ class Daemon(AuthJSONRPCServer):
 
         return d
 
+    @defer.inlineCallbacks
     def jsonrpc_help(self, command=None):
         """
         Return a useful message for an API command
@@ -1338,14 +1339,25 @@ class Daemon(AuthJSONRPCServer):
         """
 
         if command is None:
-            return self._render_response(textwrap.dedent(self.jsonrpc_help.__doc__))
+            yield {
+                'about': 'This is the LBRY JSON-RPC API',
+                'command_help': 'Pass a `command` parameter to this method to see ' +
+                                'help for that command (e.g. `help command=resolve_name`)',
+                'command_list': 'Get a full list of commands using the `commands` method',
+                'more_info': 'Visit https://lbry.io/api for more info',
+            }
+            return
 
         fn = self.callable_methods.get(command)
         if fn is None:
-            return self._render_response(
+            yield Exception(
                 "No help available for '{}'. It is not a valid command.".format(command)
             )
-        return self._render_response(textwrap.dedent(fn.__doc__))
+            return
+
+        yield {
+            'help': fn.__doc__
+        }
 
     def jsonrpc_commands(self):
         """
@@ -1566,7 +1578,7 @@ class Daemon(AuthJSONRPCServer):
                         download_id, name, stream_info)
                 )
                 result = yield self._get_lbry_file_dict(self.streams[name].downloader,
-                                                          full_status=True)
+                                                        full_status=True)
             except Exception as e:
                 log.warning('Failed to get %s', name)
                 self.analytics_manager.send_download_errored(download_id, name, stream_info)
@@ -1745,7 +1757,7 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     def jsonrpc_abandon_name(self, **kwargs):
         """
-        DEPRECIATED, use abandon_claim
+        DEPRECATED, use abandon_claim
 
         Args:
             'txid': txid of claim, string
