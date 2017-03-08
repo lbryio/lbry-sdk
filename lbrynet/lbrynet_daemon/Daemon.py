@@ -1641,14 +1641,13 @@ class Daemon(AuthJSONRPCServer):
             True if deletion was successful, otherwise False
         """
 
-        searchtype, value = get_lbry_file_search_value(kwargs)
-        lbry_files = yield self._get_lbry_files(searchtype, value, return_json=False)
+        lbry_files = yield self._get_lbry_files(return_json=False, **kwargs)
         if len(lbry_files) > 1:
             log.warning("There are %i files to delete, use narrower filters to select one",
                         len(lbry_files))
             result = False
         elif not lbry_files:
-            log.warning("There is no file to delete for '%s'", value)
+            log.warning("There is no file to delete")
             result = False
         else:
             lbry_file = lbry_files[0]
