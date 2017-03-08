@@ -1,5 +1,7 @@
 import datetime
 import time
+import binascii
+import os 
 
 import mock
 
@@ -7,6 +9,9 @@ import mock
 DEFAULT_TIMESTAMP = datetime.datetime(2016, 1, 1)
 DEFAULT_ISO_TIME = time.mktime(DEFAULT_TIMESTAMP.timetuple())
 
+
+def random_lbry_hash():
+    return binascii.b2a_hex(os.urandom(48))
 
 def resetTime(test_case, timestamp=DEFAULT_TIMESTAMP):
     iso_time = time.mktime(timestamp.timetuple())
