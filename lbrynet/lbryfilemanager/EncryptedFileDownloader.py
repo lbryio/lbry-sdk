@@ -15,6 +15,7 @@ from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileDownloa
 from lbrynet.lbryfilemanager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
+from lbrynet.core.Wallet import ClaimOutpoint
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.sd_hash = None
         self.txid = None
         self.nout = None
+        self.outpoint = None
         self.name = None
         self.claim_id = None
         self.rowid = rowid
@@ -118,6 +120,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             self.name = name
             self.txid = txid
             self.nout = nout
+            self.outpoint = ClaimOutpoint(self.txid, self.nout)
         else:
             raise NoSuchSDHash(self.sd_hash)
         self.claim_id = yield self.wallet.get_claimid(self.name, self.txid, self.nout)
