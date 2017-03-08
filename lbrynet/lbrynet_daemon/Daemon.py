@@ -423,7 +423,7 @@ class Daemon(AuthJSONRPCServer):
         for name in self.pending_claims:
             log.info("Checking if new claim for lbry://%s is confirmed" % name)
             d = self._resolve_name(name, force_refresh=True)
-            d.addCallback(lambda _: self._get_lbry_file(FileID.NAME, name))
+            d.addCallback(lambda _: self._get_lbry_file(FileID.NAME, name, return_json=False))
             d.addCallbacks(
                 lambda lbry_file: _process_lbry_file(name, lbry_file),
                 lambda _: re_add_to_pending_claims(name)
@@ -1025,7 +1025,7 @@ class Daemon(AuthJSONRPCServer):
         })
 
     @defer.inlineCallbacks
-    def _get_lbry_file(self, search_by, val, return_json=True, full_status=False):
+    def _get_lbry_file(self, search_by, val, return_json=False, full_status=False):
         lbry_file = None
         if search_by in FileID:
             for l_f in self.lbry_file_manager.lbry_files:
@@ -2357,7 +2357,7 @@ class _DownloadNameHelper(object):
     @defer.inlineCallbacks
     def setup_stream(self, stream_info):
         sd_hash = get_sd_hash(stream_info)
-        lbry_file = yield self.daemon._get_lbry_file(FileID.SD_HASH, sd_hash)
+        lbry_file = yield self.daemon._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
         if self._does_lbry_file_exists(lbry_file):
             defer.returnValue(lbry_file)
         else:
