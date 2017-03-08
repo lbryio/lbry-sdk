@@ -10,7 +10,7 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Add file filters: `claim_id`, `outpoint`, and `rowid`
-  *
+  * Make loggly logs less verbose
   *
 
 ### Changed

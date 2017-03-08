@@ -1,21 +1,15 @@
-import datetime
 import inspect
 import json
 import logging
 import logging.handlers
 import os
-import platform
 import sys
 import traceback
 
-import requests
 from requests_futures.sessions import FuturesSession
 import twisted.python.log
 
-import lbrynet
-from lbrynet import analytics
-from lbrynet import build_type
-from lbrynet import conf
+from lbrynet import __version__ as lbrynet_version, analytics, build_type, conf
 from lbrynet.core import utils
 
 ####
@@ -25,7 +19,7 @@ from lbrynet.core import utils
 # _srcfile is used when walking the stack to check when we've got the first
 # caller stack frame.
 #
-if hasattr(sys, 'frozen'): #support for py2exe
+if hasattr(sys, 'frozen'):  # support for py2exe
     _srcfile = "logging%s__init__%s" % (os.sep, __file__[-4:])
 elif __file__[-4:].lower() in ['.pyc', '.pyo']:
     _srcfile = __file__[:-4] + '.py'
@@ -86,6 +80,7 @@ def _log_decorator(fn):
     handler has its log-level set and is attached to the specified
     logger or the root logger.
     """
+
     def helper(*args, **kwargs):
         log = kwargs.pop('log', logging.getLogger())
         level = kwargs.pop('level', logging.INFO)
@@ -96,6 +91,7 @@ def _log_decorator(fn):
         handler = fn(*args, **kwargs)
         configure_handler(handler, log, level)
         return handler
+
     return helper
 
 
@@ -146,14 +142,15 @@ def configure_analytics_handler(analytics_manager):
 
 def get_loggly_url(token=None, version=None):
     token = token or utils.deobfuscate(conf.settings['LOGGLY_TOKEN'])
-    version = version or lbrynet.__version__
+    version = version or lbrynet_version
     return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
 
 
 def configure_loggly_handler(*args, **kwargs):
     if build_type.BUILD == 'dev':
         return
-    _configure_loggly_handler(*args, **kwargs)
+    level = kwargs.pop('level', logging.WARNING)
+    _configure_loggly_handler(*args, level=level, **kwargs)
 
 
 @_log_decorator
@@ -168,6 +165,7 @@ def _configure_loggly_handler(url=None, **kwargs):
 
 class JsonFormatter(logging.Formatter):
     """Format log records using json serialization"""
+
     def __init__(self, **kwargs):
         self.attributes = kwargs
 
@@ -187,6 +185,7 @@ class JsonFormatter(logging.Formatter):
             data['exc_info'] = self.formatException(record.exc_info)
         return json.dumps(data)
 
+
 ####
 # This code is copied from logging/__init__.py in the python source code
 ####
@@ -194,8 +193,8 @@ def findCaller(srcfile=None):
     """Returns the filename, line number and function name of the caller"""
     srcfile = srcfile or _srcfile
     f = inspect.currentframe()
-    #On some versions of IronPython, currentframe() returns None if
-    #IronPython isn't run with -X:Frames.
+    # On some versions of IronPython, currentframe() returns None if
+    # IronPython isn't run with -X:Frames.
     if f is not None:
         f = f.f_back
     rv = "(unknown file)", 0, "(unknown function)"
@@ -209,6 +208,8 @@ def findCaller(srcfile=None):
         rv = (filename, f.f_lineno, co.co_name)
         break
     return rv
+
+
 ###
 
 
@@ -296,6 +297,7 @@ class LoggerNameFilter(object):
     Debug records pass if the log record name (or a parent) match
     the input list of logger names.
     """
+
     def __init__(self, logger_names):
         self.logger_names = logger_names
 
@@ -318,52 +320,9 @@ def get_parent(logger_name):
     return '.'.join(names)
 
 
-class LogUploader(object):
-    def __init__(self, log_name, log_file, log_size):
-        self.log_name = log_name
-        self.log_file = log_file
-        self.log_size = log_size
-
-    def upload(self, exclude_previous, id_hash, log_type):
-        if not os.path.isfile(self.log_file):
-            return
-        log_contents = self.log_contents(exclude_previous)
-        params = {
-            'date': datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
-            'hash': id_hash,
-            'sys': platform.system(),
-            'type': self.get_type(log_type),
-            'log': log_contents
-        }
-        requests.post(conf.settings['LOG_POST_URL'], params)
-
-    def log_contents(self, exclude_previous):
-        with open(self.log_file) as f:
-            if exclude_previous:
-                f.seek(self.log_size)
-                log_contents = f.read()
-            else:
-                log_contents = f.read()
-        return log_contents
-
-    def get_type(self, log_type):
-        if log_type:
-            return "%s-%s" % (self.log_name, log_type)
-        else:
-            return self.log_name
-
-    @classmethod
-    def load(cls, log_name, log_file):
-        if os.path.isfile(log_file):
-            with open(log_file, 'r') as f:
-                log_size = len(f.read())
-        else:
-            log_size = 0
-        return cls(log_name, log_file, log_size)
-
-
 class Logger(logging.Logger):
     """A logger that has an extra `fail` method useful for handling twisted failures."""
+
     def fail(self, callback=None, *args, **kwargs):
         """Returns a function to log a failure from an errback.
 
@@ -391,6 +350,7 @@ class Logger(logging.Logger):
                 keywoards are treated as normal log kwargs.
         """
         fn, lno, func = findCaller()
+
         def _fail(err, msg, *msg_args, **msg_kwargs):
             level = msg_kwargs.pop('level', logging.ERROR)
             msg += ": %s"
@@ -410,6 +370,7 @@ class Logger(logging.Logger):
                     # never do and then we end up with an unhandled
                     # error that will get swallowed by twisted
                     self.exception('Failed to run callback')
+
         return _fail
 
     def trace(self, msg, *args, **kwargs):

@@ -220,11 +220,10 @@ class Daemon(AuthJSONRPCServer):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
-    def __init__(self, root, analytics_manager, upload_logs_on_shutdown=True):
+    def __init__(self, root, analytics_manager):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
-        self.upload_logs_on_shutdown = upload_logs_on_shutdown
         self.allowed_during_startup = [
             'stop', 'status', 'version',
             # delete these once they are fully removed:
@@ -250,7 +249,6 @@ class Daemon(AuthJSONRPCServer):
         self.max_key_fee = conf.settings['max_key_fee']
         self.max_upload = conf.settings['max_upload']
         self.max_download = conf.settings['max_download']
-        self.upload_log = conf.settings['upload_log']
         self.search_timeout = conf.settings['search_timeout']
         self.download_timeout = conf.settings['download_timeout']
         self.max_search_results = conf.settings['max_search_results']
@@ -277,7 +275,6 @@ class Daemon(AuthJSONRPCServer):
         # TODO: this should probably be passed into the daemon, or
         # possibly have the entire log upload functionality taken out
         # of the daemon, but I don't want to deal with that now
-        self.log_uploader = log_support.LogUploader.load('lbrynet', self.log_file)
 
         self.analytics_manager = analytics_manager
         self.lbryid = utils.generate_id()
@@ -306,29 +303,16 @@ class Daemon(AuthJSONRPCServer):
     def setup(self, launch_ui):
         self._modify_loggly_formatter()
 
+        @defer.inlineCallbacks
         def _announce_startup():
-            def _wait_for_credits():
-                if float(self.session.wallet.get_balance()) == 0.0:
-                    self.startup_status = STARTUP_STAGES[6]
-                    return reactor.callLater(1, _wait_for_credits)
-                else:
-                    return _announce()
-
             def _announce():
                 self.announced_startup = True
                 self.startup_status = STARTUP_STAGES[5]
                 log.info("Started lbrynet-daemon")
                 log.info("%i blobs in manager", len(self.session.blob_manager.blobs))
 
-            if self.first_run:
-                d = self._upload_log(log_type="first_run")
-            elif self.upload_log:
-                d = self._upload_log(exclude_previous=True, log_type="start")
-            else:
-                d = defer.succeed(None)
-            d.addCallback(lambda _: self.session.blob_manager.get_all_verified_blobs())
-            d.addCallback(lambda _: _announce())
-            return d
+            yield self.session.blob_manager.get_all_verified_blobs()
+            yield _announce()
 
         log.info("Starting lbrynet-daemon")
 
@@ -528,16 +512,6 @@ class Daemon(AuthJSONRPCServer):
             self.query_handlers[query_id] = handler
         return defer.succeed(None)
 
-    def _upload_log(self, log_type=None, exclude_previous=False, force=False):
-        if self.upload_log or force:
-            try:
-                self.log_uploader.upload(exclude_previous,
-                                         conf.settings.installation_id[:SHORT_ID_LEN],
-                                         log_type)
-            except requests.RequestException:
-                log.warning('Failed to upload log file')
-        return defer.succeed(None)
-
     def _clean_up_temp_files(self):
         for path in self.uploaded_temp_files:
             try:
@@ -555,17 +529,7 @@ class Daemon(AuthJSONRPCServer):
 
         self._clean_up_temp_files()
 
-        if self.upload_logs_on_shutdown:
-            try:
-                d = self._upload_log(
-                    log_type="close", exclude_previous=False if self.first_run else True)
-            except Exception:
-                log.warn('Failed to upload log', exc_info=True)
-                d = defer.succeed(None)
-        else:
-            d = defer.succeed(None)
-
-        d.addCallback(lambda _: self._stop_server())
+        d = self._stop_server()
         d.addErrback(log.fail(), 'Failure while shutting down')
         d.addCallback(lambda _: self._stop_reflector())
         d.addErrback(log.fail(), 'Failure while shutting down')
@@ -584,7 +548,6 @@ class Daemon(AuthJSONRPCServer):
             'download_directory': str,
             'max_upload': float,
             'max_download': float,
-            'upload_log': bool,
             'download_timeout': int,
             'search_timeout': float,
             'cache_time': int
@@ -620,7 +583,6 @@ class Daemon(AuthJSONRPCServer):
         self.download_directory = conf.settings['download_directory']
         self.max_upload = conf.settings['max_upload']
         self.max_download = conf.settings['max_download']
-        self.upload_log = conf.settings['upload_log']
         self.download_timeout = conf.settings['download_timeout']
         self.search_timeout = conf.settings['search_timeout']
         self.cache_time = conf.settings['cache_time']
@@ -1314,7 +1276,6 @@ class Daemon(AuthJSONRPCServer):
             'download_directory': string,
             'max_upload': float, 0.0 for unlimited
             'max_download': float, 0.0 for unlimited
-            'upload_log': bool,
             'search_timeout': float,
             'download_timeout': int
             'max_search_results': int,
@@ -1347,7 +1308,6 @@ class Daemon(AuthJSONRPCServer):
             'download_directory': string,
             'max_upload': float, 0.0 for unlimited
             'max_download': float, 0.0 for unlimited
-            'upload_log': bool,
             'download_timeout': int
         Returns:
             settings dict
