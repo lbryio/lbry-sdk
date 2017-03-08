@@ -1350,10 +1350,9 @@ class Daemon(AuthJSONRPCServer):
 
         fn = self.callable_methods.get(command)
         if fn is None:
-            yield Exception(
+            raise Exception(
                 "No help available for '{}'. It is not a valid command.".format(command)
             )
-            return
 
         yield {
             'help': fn.__doc__
