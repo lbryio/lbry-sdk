@@ -57,7 +57,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
         'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
         'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
     }
-    daemon = LBRYDaemon(None, None, upload_logs_on_shutdown=False)
+    daemon = LBRYDaemon(None, None)
     daemon.session = mock.Mock(spec=Session.Session)
     daemon.exchange_rate_manager = ExchangeRateManager.DummyExchangeRateManager(rates)
     base_prm = PaymentRateManager.BasePaymentRateManager(rate=data_rate)
