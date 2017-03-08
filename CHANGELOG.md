@@ -9,15 +9,17 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Add file filters: `claim_id`, `outpoint`, and `rowid`
   *
   *
 
 ### Changed
-  *
-  *
-  *
-
+  * Change file filter `uri` to `name` and return field `lbry_uri` to `name`
+  * Refactor file_list, add `full_status` argument to populate resource intensive fields
+  * Remove deprecated file commands: `get_lbry_files`, `get_lbry_file`, and `file_get`
+  * Remove deprecated `delete_lbry_file` command
+  * Return standard file json from `get`
+  
 ### Fixed
   * Added string comparison to ClaimOutpoint (needed to look things up by outpoint)
   *
@@ -27,6 +29,10 @@ at anytime.
 ### Fixed
  * Fixed ExchangeRateManager freezing the app
  * Fixed download not timing out properly when downloading sd blob
+  * Fixed ExchangeRateManager freezing the app
+  * Fixed download not timing out properly when downloading sd blob
+  * Fixed get not reassembling an already downloaded file that was deleted from download directory
+  * 
 
 ## [0.9.0rc11] - 2017-02-27
 ### Fixed

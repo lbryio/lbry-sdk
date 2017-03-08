@@ -146,7 +146,7 @@ class FullStreamProgressManager(StreamProgressManager):
         current_blob_num = self.last_blob_outputted + 1
 
         if current_blob_num in blobs and blobs[current_blob_num].is_validated():
-            log.info("Outputting blob %s", str(self.last_blob_outputted + 1))
+            log.debug("Outputting blob %s", str(self.last_blob_outputted + 1))
             self.provided_blob_nums.append(self.last_blob_outputted + 1)
             d = self.download_manager.handle_blob(self.last_blob_outputted + 1)
             d.addCallback(lambda _: finished_outputting_blob())

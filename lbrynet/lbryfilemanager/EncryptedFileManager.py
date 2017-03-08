@@ -190,13 +190,10 @@ class EncryptedFileManager(object):
                                                file_name)
         defer.returnValue(lbry_file)
 
-    def delete_lbry_file(self, lbry_file):
-        for l in self.lbry_files:
-            if l == lbry_file:
-                lbry_file = l
-                break
-        else:
-            return defer.fail(Failure(ValueError("Could not find that LBRY file")))
+    @defer.inlineCallbacks
+    def delete_lbry_file(self, lbry_file, delete_file=False):
+        if lbry_file not in self.lbry_files:
+            raise ValueError("Could not find that LBRY file")
 
         def wait_for_finished(count=2):
             if count <= 0 or lbry_file.saving_status is False:
@@ -204,19 +201,36 @@ class EncryptedFileManager(object):
             else:
                 return task.deferLater(reactor, 1, wait_for_finished, count=count - 1)
 
-        def ignore_stopped(err):
-            err.trap(AlreadyStoppedError, CurrentlyStoppingError)
-            return wait_for_finished()
+        full_path = os.path.join(lbry_file.download_directory, lbry_file.file_name)
 
-        d = lbry_file.stop()
-        d.addErrback(ignore_stopped)
+        try:
+            yield lbry_file.stop()
+        except (AlreadyStoppedError, CurrentlyStoppingError):
+            yield wait_for_finished()
 
-        def remove_from_list():
-            self.lbry_files.remove(lbry_file)
+        self.lbry_files.remove(lbry_file)
 
-        d.addCallback(lambda _: remove_from_list())
-        d.addCallback(lambda _: self._delete_lbry_file_options(lbry_file.rowid))
-        return d
+        yield self._delete_lbry_file_options(lbry_file.rowid)
+
+        yield lbry_file.delete_data()
+
+        # TODO: delete this
+        # get count for stream hash returns the count of the lbry files with the stream hash
+        # in the lbry_file_options table, which will soon be removed.
+
+        stream_count = yield self.get_count_for_stream_hash(lbry_file.stream_hash)
+        if stream_count == 0:
+            yield self.stream_info_manager.delete_stream(lbry_file.stream_hash)
+        else:
+            msg = ("Can't delete stream info for %s, count is %i\n"
+                   "The call that resulted in this warning will\n"
+                   "be removed in the database refactor")
+            log.warning(msg, lbry_file.stream_hash, stream_count)
+
+        if delete_file and os.path.isfile(full_path):
+            os.remove(full_path)
+
+        defer.returnValue(True)
 
     def toggle_lbry_file_running(self, lbry_file):
         """Toggle whether a stream reader is currently running"""
@@ -238,7 +252,8 @@ class EncryptedFileManager(object):
     def stop(self):
         safe_stop_looping_call(self.lbry_file_reflector)
         yield defer.DeferredList(list(self._stop_lbry_files()))
-        yield self.sql_db.close()
+        if self.sql_db:
+            yield self.sql_db.close()
         self.sql_db = None
         log.info("Stopped %s", self)
         defer.returnValue(True)

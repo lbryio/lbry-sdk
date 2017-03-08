@@ -464,7 +464,7 @@ class DownloadRequest(RequestHelper):
             blob_details.cancel_func,
             blob
         )
-        log.info("Requesting blob %s from %s", blob.blob_hash, self.peer)
+        log.debug("Requesting blob %s from %s", blob.blob_hash, self.peer)
         return request
 
     def _handle_download_request(self, client_blob_request):
