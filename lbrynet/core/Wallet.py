@@ -51,6 +51,8 @@ class ClaimOutpoint(dict):
                 return (self['txid'], self['nout']) == (compare['txid'], compare['nOut'])
             elif 'nout' in compare:
                 return (self['txid'], self['nout']) == (compare['txid'], compare['nout'])
+        elif type(compare) in [str, unicode]:
+            return compare == self.__repr__()
         else:
             raise TypeError('cannot compare {}'.format(type(compare)))
 
