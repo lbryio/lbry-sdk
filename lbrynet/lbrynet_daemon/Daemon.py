@@ -2156,50 +2156,6 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response("Deleted %s" % blob_hash)
         defer.returnValue(response)
 
-    @AuthJSONRPCServer.auth_required
-    @defer.inlineCallbacks
-    def jsonrpc_open(self, sd_hash):
-        """
-        Instruct the OS to open a file with its default program.
-
-        Args:
-            'sd_hash': SD hash of file to be opened
-        Returns:
-            True, opens file
-        """
-
-        lbry_file = yield self._get_lbry_file(FileID.SD_HASH, sd_hash)
-        if not lbry_file:
-            raise Exception('Unable to find file for {}'.format(sd_hash))
-
-        try:
-            file_utils.start(lbry_file['download_path'])
-        except IOError:
-            pass
-        defer.returnValue(True)
-
-    @defer.inlineCallbacks
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_reveal(self, sd_hash):
-        """
-        Reveal a file or directory in file browser
-
-        Args:
-            'path': path to be revealed in file browser
-        Returns:
-            True, opens file browser
-        """
-
-        lbry_file = yield self._get_lbry_file(FileID.SD_HASH, sd_hash)
-        if not lbry_file:
-            raise Exception('Unable to find file for {}'.format(sd_hash))
-
-        try:
-            file_utils.reveal(lbry_file['download_path'])
-        except IOError:
-            pass
-        defer.returnValue(True)
-
     def jsonrpc_get_peers_for_hash(self, blob_hash):
         """
         DEPRECATED. Use `peer_list` instead
