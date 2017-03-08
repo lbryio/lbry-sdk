@@ -202,7 +202,6 @@ ADJUSTABLE_SETTINGS = {
     'search_timeout': (float, 5.0),
     'startup_scripts': (list, []),
     'ui_branch': (str, 'master'),
-    'upload_log': (bool, True),
     'use_auth_http': (bool, False),
     'use_upnp': (bool, True),
     'wallet': (str, LBRYUM_WALLET),

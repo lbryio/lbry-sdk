@@ -435,7 +435,6 @@ Returns:
     'download_directory': string,
     'max_upload': float, 0.0 for unlimited
     'max_download': float, 0.0 for unlimited
-    'upload_log': bool,
     'search_timeout': float,
     'download_timeout': int
     'max_search_results': int,
@@ -458,7 +457,6 @@ Args:
     'download_directory': string,
     'max_upload': float, 0.0 for unlimited
     'max_download': float, 0.0 for unlimited
-    'upload_log': bool,
     'download_timeout': int
 Returns:
     settings dict
