@@ -88,10 +88,10 @@ class Wallet(object):
         pass
 
     def get_claim_metadata_for_sd_hash(self, sd_hash):
-        return "fakeuri", "faketxid", "fakenout"
+        return "fakeuri", "aa04a949348f9f094d503e5816f0cfb57ee68a22f6d08d149217d071243e0377", 1
 
     def get_claimid(self, name, txid=None, nout=None):
-        return "fake claimid"
+        return "aa04a949348f9f094d503e5816f0cfb57ee68a22f6d08d149217d071243e0378"
 
 
 class PeerFinder(object):
