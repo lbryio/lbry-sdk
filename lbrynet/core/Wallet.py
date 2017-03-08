@@ -544,7 +544,7 @@ class Wallet(object):
                     return claim
             return False
 
-        d = self.get_name_claims()
+        d = self.get_my_name_claims()
         d.addCallback(_get_my_unspent_claim)
         d.addCallback(_get_claim_for_return)
         return d
@@ -822,7 +822,7 @@ class Wallet(object):
     def get_best_blockhash(self):
         return defer.fail(NotImplementedError())
 
-    def get_name_claims(self):
+    def get_my_name_claims(self):
         return defer.fail(NotImplementedError())
 
     def _get_claims_for_name(self, name):
@@ -1050,7 +1050,7 @@ class LBRYumWallet(Wallet):
         header = self.network.blockchain.read_header(height)
         return defer.succeed(self.network.blockchain.hash_header(header))
 
-    def get_name_claims(self):
+    def get_my_name_claims(self):
         return self._run_cmd_as_defer_succeed('getnameclaims')
 
     def _get_claims_for_name(self, name):

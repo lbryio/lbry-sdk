@@ -1825,7 +1825,7 @@ class Daemon(AuthJSONRPCServer):
                         c[k] = float(c[k])
             return defer.succeed(claims)
 
-        d = self.session.wallet.get_name_claims()
+        d = self.session.wallet.get_my_name_claims()
         d.addCallback(_clean)
         d.addCallback(lambda claims: self._render_response(claims))
         return d

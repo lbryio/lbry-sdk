@@ -27,7 +27,7 @@ class MocLbryumWallet(Wallet):
         self.wallet_balance = Decimal(10.0)
         self.total_reserved_points = Decimal(0.0)
         self.queued_payments = defaultdict(Decimal)
-    def get_name_claims(self):
+    def get_my_name_claims(self):
         return threads.deferToThread(lambda: [])
 
     def _save_name_metadata(self, name, claim_outpoint, sd_hash):
