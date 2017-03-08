@@ -1735,11 +1735,10 @@ class Daemon(AuthJSONRPCServer):
                                     the stream from your existing claim for the name will be used
             'fee' (optional): dict, FeeValidator compliant
         Returns:
-            'success' : True if claim was succesful , False otherwise
-            'reason' : if not succesful, give reason
-            'txid' : txid of resulting transaction if succesful
-            'nout' : nout of the resulting support claim if succesful
-            'fee' : fee paid for the claim transaction if succesful
+            'tx' : hex encoded transaction
+            'txid' : txid of resulting transaction
+            'nout' : nout of the resulting support claim
+            'fee' : fee paid for the claim transaction
             'claim_id' : claim id of the resulting transaction
         """
 
