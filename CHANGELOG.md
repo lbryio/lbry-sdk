@@ -22,6 +22,7 @@ at anytime.
   
 ### Fixed
   * Added string comparison to ClaimOutpoint (needed to look things up by outpoint)
+  * Remove unused API commands from daemon
   *
   *
 
