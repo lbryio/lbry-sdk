@@ -708,54 +708,8 @@ class Wallet(object):
     def get_claim_metadata_for_sd_hash(self, sd_hash):
         return self._get_claim_metadata_for_sd_hash(sd_hash)
 
-    def get_name_and_validity_for_sd_hash(self, sd_hash):
-        def _get_status_of_claim(name_txid, sd_hash):
-            if name_txid:
-                claim_outpoint = ClaimOutpoint(name_txid[1], name_txid[2])
-                name = name_txid[0]
-                return self._get_status_of_claim(claim_outpoint, name, sd_hash)
-            else:
-                return None
-
-        d = self._get_claim_metadata_for_sd_hash(sd_hash)
-        d.addCallback(lambda name_txid: _get_status_of_claim(name_txid, sd_hash))
-        return d
-
     def get_balance(self):
         return self.wallet_balance - self.total_reserved_points - sum(self.queued_payments.values())
-
-    def _get_status_of_claim(self, claim_outpoint, name, sd_hash):
-        d = self.get_claims_from_tx(claim_outpoint['txid'])
-
-        def get_status(claims):
-            if claims is None:
-                claims = []
-            for claim in claims:
-                if 'in claim trie' in claim:
-                    name_is_equal = 'name' in claim and str(claim['name']) == name
-                    nout_is_equal = 'nOut' in claim and claim['nOut'] == claim_outpoint['nout']
-                    if name_is_equal and nout_is_equal and 'value' in claim:
-                        try:
-                            value_dict = json.loads(claim['value'])
-                        except (ValueError, TypeError):
-                            return None
-                        claim_sd_hash = None
-                        if 'stream_hash' in value_dict:
-                            claim_sd_hash = str(value_dict['stream_hash'])
-                        if 'sources' in value_dict and 'lbrynet_sd_hash' in value_dict['sources']:
-                            claim_sd_hash = str(value_dict['sources']['lbry_sd_hash'])
-                        if claim_sd_hash is not None and claim_sd_hash == sd_hash:
-                            if 'is controlling' in claim and claim['is controlling']:
-                                return name, "valid"
-                            if claim['in claim trie']:
-                                return name, "invalid"
-                            if 'in queue' in claim and claim['in queue']:
-                                return name, "pending"
-                            return name, "unconfirmed"
-            return None
-
-        d.addCallback(get_status)
-        return d
 
     def _check_expected_balances(self):
         now = datetime.datetime.now()
