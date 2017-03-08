@@ -1850,24 +1850,17 @@ class Daemon(AuthJSONRPCServer):
         """
         return self.jsonrpc_claim_list(**kwargs)
 
-    def jsonrpc_claim_list(self, name=None, txid=None):
+    def jsonrpc_claim_list(self, name):
         """
         Get claims for a name
 
         Args:
-            name: file name
-            txid: transaction id of a name claim transaction
+            name: search for claims on this name
         Returns
             list of name claims
         """
 
-        if name is not None:
-            d = self.session.wallet.get_claims_for_name(name)
-        elif txid is not None:
-            d = self.session.wallet.get_claims_from_tx(txid)
-        else:
-            return server.failure
-
+        d = self.session.wallet.get_claims_for_name(name)
         d.addCallback(lambda r: self._render_response(r))
         return d
 
