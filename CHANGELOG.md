@@ -9,22 +9,34 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  * Add file filters: `claim_id`, `outpoint`, and `rowid`
-  * Make loggly logs less verbose
+  *
+  *
   *
 
 ### Changed
-  * Change file filter `uri` to `name` and return field `lbry_uri` to `name`
-  * Refactor file_list, add `full_status` argument to populate resource intensive fields
-  * Remove deprecated file commands: `get_lbry_files`, `get_lbry_file`, and `file_get`
-  * Remove deprecated `delete_lbry_file` command
-  * Return standard file json from `get`
-  
-### Fixed
-  * Added string comparison to ClaimOutpoint (needed to look things up by outpoint)
-  * Remove unused API commands from daemon
-  * Fix file filter `outpoint`
   *
+  *
+  *
+
+### Fixed
+  *
+  *
+  *
+
+## [0.9.0rc15] - 2017-03-09
+### Added
+ * Add file filters: `claim_id`, `outpoint`, and `rowid`
+ * Make loggly logs less verbose
+### Changed
+ * Change file filter `uri` to `name` and return field `lbry_uri` to `name`
+ * Refactor file_list, add `full_status` argument to populate resource intensive fields
+ * Remove deprecated file commands: `get_lbry_files`, `get_lbry_file`, and `file_get`
+ * Remove deprecated `delete_lbry_file` command
+ * Return standard file json from `get`
+### Fixed
+ * Added string comparison to ClaimOutpoint (needed to look things up by outpoint)
+ * Remove unused API commands from daemon
+ * Fix file filter `outpoint`
 
 ## [0.9.0rc12] - 2017-03-06
 ### Fixed
