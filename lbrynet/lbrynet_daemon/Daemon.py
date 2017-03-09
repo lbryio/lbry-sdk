@@ -7,7 +7,6 @@ import base58
 import requests
 import urllib
 import simplejson as json
-import textwrap
 from requests import exceptions as requests_exceptions
 from decimal import Decimal
 import random
@@ -1326,7 +1325,6 @@ class Daemon(AuthJSONRPCServer):
 
         return d
 
-    @defer.inlineCallbacks
     def jsonrpc_help(self, command=None):
         """
         Return a useful message for an API command
@@ -1339,14 +1337,13 @@ class Daemon(AuthJSONRPCServer):
         """
 
         if command is None:
-            yield {
+            return self._render_response({
                 'about': 'This is the LBRY JSON-RPC API',
                 'command_help': 'Pass a `command` parameter to this method to see ' +
                                 'help for that command (e.g. `help command=resolve_name`)',
                 'command_list': 'Get a full list of commands using the `commands` method',
                 'more_info': 'Visit https://lbry.io/api for more info',
-            }
-            return
+            })
 
         fn = self.callable_methods.get(command)
         if fn is None:
@@ -1354,9 +1351,9 @@ class Daemon(AuthJSONRPCServer):
                 "No help available for '{}'. It is not a valid command.".format(command)
             )
 
-        yield {
+        return self._render_response({
             'help': fn.__doc__
-        }
+        })
 
     def jsonrpc_commands(self):
         """

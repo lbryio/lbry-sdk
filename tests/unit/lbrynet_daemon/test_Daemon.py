@@ -136,5 +136,5 @@ class TestJsonRpc(unittest.TestCase):
 
     def test_help(self):
         d = defer.maybeDeferred(self.test_daemon.jsonrpc_help, command='status')
-        d.addCallback(lambda result: self.assertSubstring('daemon status', result))
+        d.addCallback(lambda result: self.assertSubstring('daemon status', result['help']))
         # self.assertSubstring('daemon status', d.result)
