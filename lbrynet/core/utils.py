@@ -108,3 +108,9 @@ def random_string(length=10, chars=string.ascii_lowercase):
 
 def short_hash(hash_str):
     return hash_str[:6]
+
+
+def get_sd_hash(stream_info):
+    if not stream_info:
+        return None
+    return stream_info['sources']['lbry_sd_hash']

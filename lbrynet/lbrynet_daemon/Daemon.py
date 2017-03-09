@@ -2342,12 +2342,6 @@ class Daemon(AuthJSONRPCServer):
         return d
 
 
-def get_sd_hash(stream_info):
-    if not stream_info:
-        return None
-    return stream_info['sources']['lbry_sd_hash']
-
-
 class _DownloadNameHelper(object):
     def __init__(self, daemon, name, timeout=None, download_directory=None, file_name=None,
                  wait_for_write=True):
@@ -2363,7 +2357,7 @@ class _DownloadNameHelper(object):
 
     @defer.inlineCallbacks
     def setup_stream(self, stream_info):
-        sd_hash = get_sd_hash(stream_info)
+        sd_hash = utils.get_sd_hash(stream_info)
         lbry_file = yield self.daemon._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
         if self._does_lbry_file_exists(lbry_file):
             defer.returnValue(lbry_file)
