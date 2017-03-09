@@ -635,7 +635,7 @@ class Wallet(object):
 
         if my_claim:
             log.info("Updating claim")
-            if self.get_balance() < bid - my_claim['amount']:
+            if self.get_balance() < bid - Decimal(my_claim['amount']):
                 raise InsufficientFundsError()
             new_metadata = yield self.update_metadata(_metadata, my_claim['value'])
             old_claim_outpoint = ClaimOutpoint(my_claim['txid'], my_claim['nout'])
