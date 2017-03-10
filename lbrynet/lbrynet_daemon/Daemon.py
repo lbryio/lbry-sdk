@@ -1013,7 +1013,7 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def get_blobs_for_sd_hash(self, sd_hash):
-        d = self.stream_info_manager.get_stream_hash_for_sd_hash(sd_hash)
+        d = self.stream_info_manager.get_stream_of_blob(sd_hash)
         d.addCallback(self.get_blobs_for_stream_hash)
         return d
 
@@ -2120,11 +2120,6 @@ class Daemon(AuthJSONRPCServer):
         if blob_hash not in self.session.blob_manager.blobs:
             response = yield self._render_response("Don't have that blob")
             defer.returnValue(response)
-        try:
-            stream_hash = yield self.stream_info_manager.get_stream_hash_for_sd_hash(blob_hash)
-            yield self.stream_info_manager.delete_stream(stream_hash)
-        except Exception as err:
-            pass
         yield self.session.blob_manager.delete_blobs([blob_hash])
         response = yield self._render_response("Deleted %s" % blob_hash)
         defer.returnValue(response)
