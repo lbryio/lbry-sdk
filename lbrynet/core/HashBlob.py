@@ -403,7 +403,7 @@ class BlobFileCreator(HashBlobCreator):
 
 
 class TempBlobCreator(HashBlobCreator):
-    def __init__(self, blob_manager):
+    def __init__(self, blob_manager, blob_dir=None):
         HashBlobCreator.__init__(self, blob_manager)
         # TODO: use StringIO
         self.data_buffer = ''
