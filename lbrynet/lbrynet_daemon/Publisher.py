@@ -22,7 +22,6 @@ class Publisher(object):
 
     @defer.inlineCallbacks
     def add_fee_to_metadata(self, metadata, fee):
-        metadata['fee'] = FeeValidator(fee)
         assert len(fee) == 1, "Too many fees"
         for currency in fee:
             if 'address' not in fee[currency]:
