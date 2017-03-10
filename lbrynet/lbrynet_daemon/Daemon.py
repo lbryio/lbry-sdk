@@ -1355,6 +1355,7 @@ class Daemon(AuthJSONRPCServer):
         List files limited by optional filters
 
         Args:
+            'full_status' (optional): bool, defaults to False
             'name' (optional): filter files by lbry name,
             'sd_hash' (optional): filter files by sd hash,
             'file_name' (optional): filter files by the name in the downloads folder,
