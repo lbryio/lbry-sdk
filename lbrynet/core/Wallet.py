@@ -1,31 +1,41 @@
 import datetime
 import logging
 import json
-import os
 
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
-from twisted.enterprise import adbapi
 from collections import defaultdict, deque
 from zope.interface import implements
 from jsonschema import ValidationError
 from decimal import Decimal
 
-from lbryum import SimpleConfig, Network
+from lbryum import SimpleConfig, Network, wallet as lbryum_wallet
 from lbryum.lbrycrd import COIN, RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS
-import lbryum.wallet
 from lbryum.commands import known_commands, Commands
 
-from lbrynet.core.sqlite_helpers import rerun_if_locked
-from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
+from lbrynet import conf
+from lbrynet.core import utils
 from lbrynet.core.client.ClientRequest import ClientRequest
-from lbrynet.core.Error import (UnknownNameError, InvalidStreamInfoError, RequestCanceledError,
-                            InsufficientFundsError)
-from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
+from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
+from lbrynet.core.Error import InsufficientFundsError
+from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.metadata.Metadata import Metadata
 
-
 log = logging.getLogger(__name__)
+
+STATUS_INIT = "INIT"
+STATUS_PENDING = "PENDING"
+STATUS_ACTIVE = "ACTIVE"
+STATUS_INACTIVE = "INACTIVE"
+STATUS_INVALID_METADATA = "INVALID_METADATA"
+
+CLAIM_STATUS = [
+    STATUS_INIT,
+    STATUS_PENDING,
+    STATUS_ACTIVE,
+    STATUS_INACTIVE,
+    STATUS_INVALID_METADATA
+]
 
 
 class ReservedPoints(object):
@@ -59,125 +69,14 @@ class ClaimOutpoint(dict):
     def __ne__(self, compare):
         return not self.__eq__(compare)
 
+    @classmethod
+    def from_string(cls, outpoint_string):
+        txid, nout = outpoint_string.split(":")
+        return cls(txid, nout)
 
-class MetaDataStorage(object):
-    def load(self):
-        return defer.succeed(True)
-
-    def clean_bad_records(self):
-        return defer.succeed(True)
-
-    def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        return defer.succeed(True)
-
-    def get_claim_metadata_for_sd_hash(self, sd_hash):
-        return defer.succeed(True)
-
-    def update_claimid(self, claim_id, name, claim_outpoint):
-        return defer.succeed(True)
-
-    def get_claimid_for_tx(self, name, claim_outpoint):
-        return defer.succeed(True)
-
-
-class InMemoryStorage(MetaDataStorage):
-    def __init__(self):
-        self.metadata = {}
-        self.claimids = {}
-        MetaDataStorage.__init__(self)
-
-    def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        self.metadata[sd_hash] = (name, claim_outpoint)
-        return defer.succeed(True)
-
-    def get_claim_metadata_for_sd_hash(self, sd_hash):
-        try:
-            name, claim_outpoint = self.metadata[sd_hash]
-            return defer.succeed((name, claim_outpoint['txid'], claim_outpoint['nout']))
-        except KeyError:
-            return defer.succeed(None)
-
-    def update_claimid(self, claim_id, name, claim_outpoint):
-        self.claimids[(name, claim_outpoint['txid'], claim_outpoint['nout'])] = claim_id
-        return defer.succeed(True)
-
-    def get_claimid_for_tx(self, name, claim_outpoint):
-        try:
-            return defer.succeed(
-                self.claimids[(name, claim_outpoint['txid'], claim_outpoint['nout'])])
-        except KeyError:
-            return defer.succeed(None)
-
-
-class SqliteStorage(MetaDataStorage):
-    def __init__(self, db_dir):
-        self.db_dir = db_dir
-        self.db = None
-        MetaDataStorage.__init__(self)
-
-    def load(self):
-        self.db = adbapi.ConnectionPool('sqlite3', os.path.join(self.db_dir, "blockchainname.db"),
-                                        check_same_thread=False)
-
-        def create_tables(transaction):
-            transaction.execute("create table if not exists name_metadata (" +
-                                "    name text, " +
-                                "    txid text, " +
-                                "    n integer, " +
-                                "    sd_hash text)")
-            transaction.execute("create table if not exists claim_ids (" +
-                                "    claimId text, " +
-                                "    name text, " +
-                                "    txid text, " +
-                                "    n integer)")
-
-        return self.db.runInteraction(create_tables)
-
-    def clean_bad_records(self):
-        d = self.db.runQuery("delete from name_metadata where length(txid) > 64 or txid is null")
-        return d
-
-    def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        d = self.db.runQuery(
-            "delete from name_metadata where name=? and txid=? and n=? and sd_hash=?",
-            (name, claim_outpoint['txid'], claim_outpoint['nout'], sd_hash))
-        d.addCallback(
-            lambda _: self.db.runQuery(
-                "delete from name_metadata where name=? and txid=? and n=? and sd_hash=?",
-                (name, claim_outpoint['txid'], UNSET_NOUT, sd_hash)))
-        d.addCallback(
-            lambda _: self.db.runQuery(
-                "insert into name_metadata values (?, ?, ?, ?)",
-                (name, claim_outpoint['txid'], claim_outpoint['nout'], sd_hash)))
-        return d
-
-    @rerun_if_locked
-    def get_claim_metadata_for_sd_hash(self, sd_hash):
-        d = self.db.runQuery("select name, txid, n from name_metadata where sd_hash=?", (sd_hash,))
-        d.addCallback(lambda r: r[0] if r else None)
-        return d
-
-    def update_claimid(self, claim_id, name, claim_outpoint):
-        d = self.db.runQuery(
-            "delete from claim_ids where claimId=? and name=? and txid=? and n=?",
-            (claim_id, name, claim_outpoint['txid'], claim_outpoint['nout']))
-        d.addCallback(
-            lambda _: self.db.runQuery(
-                "delete from claim_ids where claimId=? and name=? and txid=? and n=?",
-                (claim_id, name, claim_outpoint['txid'], UNSET_NOUT)))
-        d.addCallback(
-            lambda r: self.db.runQuery(
-                "insert into claim_ids values (?, ?, ?, ?)",
-                (claim_id, name, claim_outpoint['txid'], claim_outpoint['nout'])))
-        d.addCallback(lambda _: claim_id)
-        return d
-
-    def get_claimid_for_tx(self, name, claim_outpoint):
-        d = self.db.runQuery(
-            "select claimId from claim_ids where name=? and txid=? and n=?",
-            (name, claim_outpoint['txid'], claim_outpoint['nout']))
-        d.addCallback(lambda r: r[0][0] if r else None)
-        return d
+    @property
+    def as_tuple(self):
+        return (self['txid'], self['nout'])
 
 
 class Wallet(object):
@@ -185,8 +84,6 @@ class Wallet(object):
     implements(IWallet)
 
     def __init__(self, storage):
-        if not isinstance(storage, MetaDataStorage):
-            raise ValueError('storage must be an instance of MetaDataStorage')
         self._storage = storage
         self.next_manage_call = None
         self.wallet_balance = Decimal(0.0)
@@ -199,7 +96,6 @@ class Wallet(object):
         # incremental_amount(float))
         self.expected_balance_at_time = deque()
         self.max_expected_payment_time = datetime.timedelta(minutes=3)
-        self.stopped = True
 
         self.manage_running = False
         self._manage_count = 0
@@ -212,26 +108,28 @@ class Wallet(object):
             self.manage()
             return True
 
-        d = self._storage.load()
-        d.addCallback(lambda _: self._clean_bad_records())
-        d.addCallback(lambda _: self._start())
+        d = self._start()
         d.addCallback(lambda _: start_manage())
+        d.addCallback(lambda _: self.initialize_claims())
         return d
 
     def _clean_bad_records(self):
         self._storage.clean_bad_records()
 
-    def _save_name_metadata(self, name, claim_outpoint, sd_hash):
-        return self._storage.save_name_metadata(name, claim_outpoint, sd_hash)
+    def _save_name_metadata(self, name, claim_outpoint, claim_id, metadata, amount, height,
+                            is_mine=False, update=False):
+        return self._storage.save_name_metadata(name, claim_outpoint, claim_id,
+                                                metadata, amount, height, is_mine, update)
 
+    # TODO: use file ids
     def _get_claim_metadata_for_sd_hash(self, sd_hash):
         return self._storage.get_claim_metadata_for_sd_hash(sd_hash)
 
-    def _update_claimid(self, claim_id, name, claim_outpoint):
-        return self._storage.update_claimid(claim_id, name, claim_outpoint)
+    def _update_claimid(self, claim_id, claim_outpoint):
+        return self._storage.update_claimid(claim_id, claim_outpoint)
 
-    def _get_claimid_for_tx(self, name, claim_outpoint):
-        return self._storage.get_claimid_for_tx(name, claim_outpoint)
+    def _get_claimid_for_tx(self, claim_outpoint):
+        return self._storage.get_claimid_for_tx(claim_outpoint)
 
     @staticmethod
     def log_stop_error(err):
@@ -316,6 +214,48 @@ class Wallet(object):
 
         d.addBoth(set_manage_not_running)
         return d
+
+    @defer.inlineCallbacks
+    def initialize_claims(self):
+        outpoints_missing_sd_info = yield self._storage.claims_missing_sd_info()
+        if outpoints_missing_sd_info:
+            for outpoint in outpoints_missing_sd_info:
+                claim = yield self.get_claim_from_outpoint(outpoint['txid'], outpoint['nout'])
+                if claim is not None:
+                    yield self._storage.add_metadata_to_claim(outpoint, claim['value'])
+                else:
+                    log.warning("Unable to get sd info for claim %s", outpoint)
+            yield self._storage.repair_claims()
+
+        my_claims = yield self.get_name_claims()
+        for claim in my_claims:
+            if not claim.get('supported_claimid', False):
+                is_spent = claim['is spent']
+                confirmations = claim['confirmations']
+                name = claim['name']
+                try:
+                    claim['value'] = json.loads(claim['value'])
+                    valid_metadata = True
+                except Exception as err:
+                    claim['value'] = ""
+                    valid_metadata = False
+                outpoint = ClaimOutpoint(claim['txid'], claim['nOut'])
+                yield self._save_name_metadata(name, outpoint,
+                                               claim['claim_id'],
+                                               claim['value'],
+                                               int(claim['amount'] * COIN),
+                                               claim['height'],
+                                               is_mine=True,
+                                               update=True)
+                if is_spent:
+                    yield self._storage.update_claim_status(outpoint, STATUS_INACTIVE)
+                elif confirmations < RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS:
+                    yield self._storage.update_claim_status(outpoint, STATUS_PENDING)
+                elif not valid_metadata:
+                    yield self._storage.update_claim_status(outpoint, STATUS_INVALID_METADATA)
+                else:
+                    yield self._storage.update_claim_status(outpoint, STATUS_ACTIVE)
+        defer.returnValue(True)
 
     @defer.inlineCallbacks
     def update_balance(self):
@@ -436,23 +376,37 @@ class Wallet(object):
                 payments_to_send[address] = points
                 self.total_reserved_points -= points
             else:
-                log.info("Skipping dust")
+                log.debug("Skipping dust")
 
             del self.queued_payments[address]
 
         if payments_to_send:
             log.debug("Creating a transaction with outputs %s", str(payments_to_send))
             d = self._do_send_many(payments_to_send)
-            d.addCallback(lambda txid: log.debug("Sent transaction %s", txid))
+            d.addCallback(lambda txid: log.info("Sent transaction %s", txid))
             return d
 
         log.debug("There were no payments to send")
         return defer.succeed(True)
 
-    def get_stream_info_for_name(self, name):
+    def refresh_stream_info_for_name(self, name):
+        log.info("Resolving stream info for lbry://%s", name)
         d = self._get_value_for_name(name)
         d.addCallback(self._get_stream_info_from_value, name)
         return d
+
+    @defer.inlineCallbacks
+    def get_stream_info_for_name(self, name, force_refresh=True):
+        if force_refresh:
+            result = yield self.refresh_stream_info_for_name(name)
+        else:
+            last_checked = yield self._storage.last_checked_winning_name(name)
+            if not last_checked or (utils.time() - last_checked) >= conf.settings['cache_time']:
+                result = yield self.refresh_stream_info_for_name(name)
+            else:
+                log.debug("Using cached stream info for lbry://%s", name)
+                result = yield self._storage.get_winning_metadata(name)
+        defer.returnValue(result)
 
     def get_txid_for_name(self, name):
         d = self._get_value_for_name(name)
@@ -474,6 +428,23 @@ class Wallet(object):
         d.addCallback(self._get_stream_info_from_value, name)
         return d
 
+    @defer.inlineCallbacks
+    def get_claim_from_outpoint(self, txid, nout):
+        claim_out = {}
+        claims_in_tx = yield self.get_claims_from_tx(txid)
+        result = None
+        if claims_in_tx is not None:
+            for claim in claims_in_tx:
+                if nout == claim['nOut']:
+                    claim_out['value'] = json.loads(claim['value'])
+                    claim_out['nout'] = claim['nOut']
+                    claim_out['txid'] = txid
+                    claim_out['name'] = claim['name']
+                    claim_out['claim_id'] = claim['claimId']
+                    result = claim_out
+                    break
+        defer.returnValue(result)
+
     def _get_stream_info_from_value(self, result, name):
         def _check_result_fields(r):
             for k in ['value', 'txid', 'nout', 'height', 'amount']:
@@ -481,7 +452,6 @@ class Wallet(object):
 
         def _log_success(claim_id):
             log.debug("lbry://%s complies with %s, claimid: %s", name, metadata.version, claim_id)
-            return defer.succeed(None)
 
         if 'error' in result:
             log.warning("Got an error looking up lbry://%s: %s", name, result['error'])
@@ -491,11 +461,9 @@ class Wallet(object):
             metadata = Metadata(json.loads(result['value']))
         except (TypeError, ValueError, ValidationError):
             return Failure(InvalidStreamInfoError(name, result['value']))
-        sd_hash = metadata['sources']['lbry_sd_hash']
-        claim_outpoint = ClaimOutpoint(result['txid'], result['nout'])
-        d = self._save_name_metadata(name, claim_outpoint, sd_hash)
-        d.addCallback(lambda _: self.get_claimid(name, result['txid'], result['nout']))
-        d.addCallback(lambda cid: _log_success(cid))
+
+        d = self.get_claimid(name, result['txid'], result['nout'])
+        d.addCallback(_log_success)
         d.addCallback(lambda _: metadata)
         return d
 
@@ -506,57 +474,60 @@ class Wallet(object):
                 claim for claim in claims['claims'] if claim['claim_id'] == claim_id))
         return d
 
+    @defer.inlineCallbacks
     def get_claimid(self, name, txid, nout):
-        def _get_id_for_return(claim_id):
-            if claim_id:
-                return defer.succeed(claim_id)
-            else:
-                d = self.get_claims_from_tx(txid)
-                d.addCallback(
-                    lambda claims: next(
-                        c for c in claims if c['name'] == name and
-                        c['nout'] == claim_outpoint['nout']))
-                d.addCallback(
-                    lambda claim: self._update_claimid(
-                        claim['claim_id'], name, ClaimOutpoint(txid, claim['nout'])))
-                return d
-
         claim_outpoint = ClaimOutpoint(txid, nout)
-        d = self._get_claimid_for_tx(name, claim_outpoint)
-        d.addCallback(_get_id_for_return)
-        return d
-
-    def get_my_claim(self, name):
-        def _get_claim_for_return(claim):
-            if not claim:
-                return False
-            claim['value'] = json.loads(claim['value'])
-            return claim
-
-        def _get_my_unspent_claim(claims):
+        claim_id = yield self._storage.get_claimid_for_tx(claim_outpoint)
+        if not claim_id:
+            claims = yield self.get_claims_from_tx(txid)
             for claim in claims:
-                is_unspent = (
-                    claim['name'] == name and
-                    not claim['is_spent'] and
-                    not claim.get('supported_claimid', False)
-                )
-                if is_unspent:
-                    return claim
-            return False
+                if claim['name'] == name and claim['nout'] == nout:
+                    claim_id = claim['claim_id']
+                    yield self._update_claimid(claim_id, claim_outpoint)
+                    break
+        defer.returnValue(claim_id)
 
-        d = self.get_name_claims()
-        d.addCallback(_get_my_unspent_claim)
-        d.addCallback(_get_claim_for_return)
-        return d
+    @defer.inlineCallbacks
+    def get_my_claim(self, name):
+        my_claims = yield self.get_name_claims()
+        my_unspent_claim = False
+        for claim in my_claims:
+            is_unspent = (
+                claim['name'] == name and
+                not claim['is_spent'] and
+                not claim.get('supported_claimid', False)
+            )
+            if is_unspent:
+                my_unspent_claim = claim
+                my_unspent_claim['value'] = json.loads(claim['value'])
+                outpoint = ClaimOutpoint(my_unspent_claim['txid'], my_unspent_claim['nout'])
+                yield self._save_name_metadata(name, outpoint,
+                                               my_unspent_claim['claim_id'],
+                                               my_unspent_claim['value'],
+                                               my_unspent_claim['amount'],
+                                               my_unspent_claim['height'],
+                                               is_mine=True,
+                                               update=True)
+        defer.returnValue(my_unspent_claim)
 
+    @defer.inlineCallbacks
     def get_claim_info(self, name, txid=None, nout=None):
         if txid is None or nout is None:
-            d = self._get_value_for_name(name)
-            d.addCallback(lambda r: self._get_claim_info(name, ClaimOutpoint(r['txid'], r['nout'])))
+            last_checked = yield self._storage.last_checked_winning_name(name)
         else:
-            d = self._get_claim_info(name, ClaimOutpoint(txid, nout))
-        d.addErrback(lambda _: False)
-        return d
+            last_checked = False
+
+        if not last_checked or (utils.time() - last_checked) >= 30:
+            claim = yield self._get_value_for_name(name)
+            outpoint = ClaimOutpoint(claim['txid'], claim['n'])
+            # TODO: include claim id in the return from getvalueforname to make the
+            #       getclaimsforname call unnecessary
+            result = yield self._get_claim_info(name, outpoint)
+        else:
+            log.info("Using cached stream info for lbry://%s", name)
+            cache_id = yield self._storage.get_winning_claim_row_id(name)
+            result = yield self._storage.get_claim(cache_id)
+        defer.returnValue(result)
 
     def _format_claim_for_return(self, name, claim, metadata=None, meta_version=None):
         result = {}
@@ -573,31 +544,24 @@ class Wallet(object):
             meta_version if meta_version else result['value'].get('ver', '0.0.1'))
         return result
 
+    @defer.inlineCallbacks
     def _get_claim_info(self, name, claim_outpoint):
-        def _build_response(claim):
-            try:
-                metadata = Metadata(json.loads(claim['value']))
-                meta_ver = metadata.version
-                sd_hash = metadata['sources']['lbry_sd_hash']
-                d = self._save_name_metadata(name, claim_outpoint, sd_hash)
-            except (TypeError, ValueError, ValidationError):
-                metadata = claim['value']
-                meta_ver = "Non-compliant"
-                d = defer.succeed(None)
-
-            d.addCallback(lambda _: self._format_claim_for_return(name,
-                                                                  claim,
-                                                                  metadata=metadata,
-                                                                  meta_version=meta_ver))
-            log.info(
-                "get claim info lbry://%s metadata: %s, claimid: %s",
-                name, meta_ver, claim['claim_id'])
-            return d
-
-        d = self.get_claimid(name, claim_outpoint['txid'], claim_outpoint['nout'])
-        d.addCallback(lambda claim_id: self.get_claim(name, claim_id))
-        d.addCallback(_build_response)
-        return d
+        claim_id = yield self.get_claimid(name, claim_outpoint['txid'], claim_outpoint['nout'])
+        claim = yield self.get_claim(name, claim_id)
+        try:
+            metadata = Metadata(json.loads(claim['value']))
+            meta_ver = metadata.version
+        except (TypeError, ValueError, ValidationError):
+            metadata = claim['value']
+            meta_ver = "Non-compliant"
+        result = self._format_claim_for_return(name, claim,
+                                               metadata=metadata,
+                                               meta_version=meta_ver)
+        yield self._save_name_metadata(name, claim_outpoint, claim['claim_id'],
+                                       metadata, result['amount'], result['height'])
+        log.debug("get claim info lbry://%s metadata: %s, claimid: %s", name, meta_ver,
+                 claim['claimId'])
+        defer.returnValue(result)
 
     def get_claims_for_name(self, name):
         d = self._get_claims_for_name(name)
@@ -634,6 +598,7 @@ class Wallet(object):
         my_claim = yield self.get_my_claim(name)
 
         if my_claim:
+            is_new_claim = False
             log.info("Updating claim")
             if self.get_balance() < Decimal(bid) - Decimal(my_claim['amount']):
                 raise InsufficientFundsError()
@@ -643,6 +608,7 @@ class Wallet(object):
                                                        old_claim_outpoint, new_metadata, bid)
             claim['claim_id'] = my_claim['claim_id']
         else:
+            is_new_claim = True
             log.info("Making a new claim")
             if self.get_balance() < bid:
                 raise InsufficientFundsError()
@@ -654,9 +620,15 @@ class Wallet(object):
 
         claim = self._process_claim_out(claim)
         claim_outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
-        log.info("Saving metadata for claim %s %d", claim['txid'], claim['nout'])
-
-        yield self._save_name_metadata(name, claim_outpoint, _metadata['sources']['lbry_sd_hash'])
+        if is_new_claim:
+            claim_id = utils.generate_claimid(claim_outpoint)
+        else:
+            claim_id = claim['claim_id']
+        log.info("Saving metadata for lbry://%s (id %s) %s:%i",
+                 name, utils.short_hash(claim_id), claim['txid'], claim['nout'])
+        yield self._save_name_metadata(name, claim_outpoint, claim_id,
+                                       _metadata, int(bid * COIN), self.blockchain_height,
+                                       is_mine=True, update=True)
         defer.returnValue(claim)
 
     @defer.inlineCallbacks
@@ -761,6 +733,10 @@ class Wallet(object):
 
     # ======== Must be overridden ======== #
 
+    @property
+    def blockchain_height(self):
+        return 0
+
     def _update_balance(self):
         return defer.fail(NotImplementedError())
 
@@ -834,6 +810,13 @@ class LBRYumWallet(Wallet):
         self.blocks_behind = 0
         self.catchup_progress = 0
 
+    @property
+    def blockchain_height(self):
+        server_height = self.network.get_server_height()
+        local_height = self.network.get_local_height()
+        assert server_height == local_height, Exception("Not caught up with blockchain yet")
+        return local_height
+
     def _is_first_run(self):
         return (not self.printed_retrieving_headers and
                 self.network.blockchain.retrieving_headers)
@@ -899,8 +882,8 @@ class LBRYumWallet(Wallet):
 
     def _load_wallet(self):
         path = self.config.get_wallet_path()
-        storage = lbryum.wallet.WalletStorage(path)
-        wallet = lbryum.wallet.Wallet(storage)
+        storage = lbryum_wallet.WalletStorage(path)
+        wallet = lbryum_wallet.Wallet(storage)
         if not storage.file_exists:
             self.is_first_run = True
             seed = wallet.make_seed()
@@ -959,8 +942,6 @@ class LBRYumWallet(Wallet):
 
     # run commands as a deferToThread,  lbryum commands that only make
     # queries to lbryum server should be run this way
-    # TODO: keep track of running threads and cancel them on `stop`
-    #       otherwise the application will hang, waiting for threads to complete
     def _run_cmd_as_defer_to_thread(self, command_name, *args):
         cmd_runner = self._get_cmd_runner()
         cmd = known_commands[command_name]
@@ -1066,7 +1047,7 @@ class LBRYumWallet(Wallet):
     def _do_send_many(self, payments_to_send):
         def broadcast_send_many(paytomany_out):
             if 'hex' not in paytomany_out:
-                raise Exception('Unepxected paytomany output:{}'.format(paytomany_out))
+                raise Exception('Unexpected paytomany output:{}'.format(paytomany_out))
             return self._broadcast_transaction(paytomany_out['hex'])
 
         log.debug("Doing send many. payments to send: %s", str(payments_to_send))
@@ -1074,6 +1055,7 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda out: broadcast_send_many(out))
         return d
 
+    @defer.inlineCallbacks
     def _get_value_for_name(self, name):
         height_to_check = self.network.get_local_height() - RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS + 1
         if height_to_check < 0:
@@ -1081,10 +1063,26 @@ class LBRYumWallet(Wallet):
             raise Exception(msg)
         block_header = self.network.blockchain.read_header(height_to_check)
         block_hash = self.network.blockchain.hash_header(block_header)
-        d = self._run_cmd_as_defer_to_thread('requestvalueforname', name, block_hash)
-        d.addCallback(lambda response: Commands._verify_proof(name, block_header['claim_trie_root'],
-                                                              response))
-        return d
+
+        proof = yield self._run_cmd_as_defer_to_thread('requestvalueforname', name, block_hash)
+        result = Commands._verify_proof(name, block_header['claim_trie_root'], proof)
+        if not result.get('error', False):
+            try:
+                metadata = Metadata(json.loads(result['value']))
+            except (KeyError, TypeError, ValueError, ValidationError):
+                metadata = None
+            txid = result['txid']
+            n = result['n']
+            amount = result['amount']
+            height = result['height']
+            claim_outpoint = ClaimOutpoint(txid, n)
+            claim_id = yield self.get_claimid(name, txid, n)
+            yield self._save_name_metadata(name, claim_outpoint, claim_id, metadata, amount, height)
+            yield self._storage.set_winning_claim(name, claim_outpoint)
+        else:
+            log.warning("Failed to get value for lbry://%s : %s", name, result['error'])
+            raise Exception(result['error'])
+        defer.returnValue(result)
 
     def get_claims_from_tx(self, txid):
         return self._run_cmd_as_defer_to_thread('getclaimsfromtx', txid)
