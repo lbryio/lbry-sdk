@@ -8,7 +8,6 @@ import requests
 import urllib
 import simplejson as json
 from requests import exceptions as requests_exceptions
-from decimal import Decimal
 import random
 
 from twisted.web import server
@@ -1492,15 +1491,8 @@ class Daemon(AuthJSONRPCServer):
                 txid, amount, value, n, height
         """
 
-        def _convert_amount_to_float(r):
-            if not r:
-                return False
-            else:
-                r['amount'] = float(r['amount']) / 10 ** 8
-                return r
-
         d = self.session.wallet.get_claim_info(name, txid, nout)
-        d.addCallback(_convert_amount_to_float)
+        d.addCallback(format_json_out_amount_as_float)
         d.addCallback(lambda r: self._render_response(r))
         return d
 
@@ -1826,15 +1818,8 @@ class Daemon(AuthJSONRPCServer):
             list of name claims
         """
 
-        def _clean(claims):
-            for c in claims:
-                for k in c.keys():
-                    if isinstance(c[k], Decimal):
-                        c[k] = float(c[k])
-            return defer.succeed(claims)
-
         d = self.session.wallet.get_name_claims()
-        d.addCallback(_clean)
+        d.addCallback(format_json_out_amount_as_float)
         d.addCallback(lambda claims: self._render_response(claims))
         return d
 
@@ -1861,6 +1846,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_claims_for_name(name)
+        d.addCallback(format_json_out_amount_as_float)
         d.addCallback(lambda r: self._render_response(r))
         return d
 
@@ -2562,3 +2548,22 @@ def get_version_from_tag(tag):
         return match.group(1)
     else:
         raise Exception('Failed to parse version from tag {}'.format(tag))
+
+
+# lbryum returns json loadeable object with amounts as decimal encoded string,
+# convert them into floats for the daemon
+# TODO: daemon should also use decimal encoded string
+def format_json_out_amount_as_float(obj):
+    if isinstance(obj, dict):
+        for k, v in obj.iteritems():
+            if k == 'amount' or k == 'effective_amount':
+                obj[k] = float(obj[k])
+            if isinstance(v, dict) or isinstance(v, list):
+                obj[k] = format_json_out_amount_as_float(v)
+
+    elif isinstance(obj, list):
+        obj = [format_json_out_amount_as_float(o) for o in obj]
+    return obj
+
+
+
