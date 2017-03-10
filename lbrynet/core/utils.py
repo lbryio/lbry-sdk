@@ -7,6 +7,7 @@ import string
 
 import pkg_resources
 
+from time import time as timestamp
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 
@@ -24,6 +25,10 @@ def now():
 
 def utcnow():
     return datetime.datetime.utcnow()
+
+
+def time():
+    return timestamp()
 
 
 def isonow():
