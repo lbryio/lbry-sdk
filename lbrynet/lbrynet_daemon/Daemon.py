@@ -1692,7 +1692,7 @@ class Daemon(AuthJSONRPCServer):
             'metadata': dict, Metadata compliant (can be missing sources if a file is provided)
             'file_path' (optional): str, path to file to be associated with name, if not given
                                     the stream from your existing claim for the name will be used
-            'fee' (optional): dict, FeeValidator compliant
+            'fee' (optional): dict, FeeValidator compliant (i.e. {'LBC':{'amount':10}} )
         Returns:
             'tx' : hex encoded transaction
             'txid' : txid of resulting transaction
