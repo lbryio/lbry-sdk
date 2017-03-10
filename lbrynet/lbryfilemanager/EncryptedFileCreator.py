@@ -11,6 +11,7 @@ from lbrynet import conf
 from lbrynet.lbryfile.StreamDescriptor import get_sd_info
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from twisted.protocols.basic import FileSender
+from twisted.internet import defer
 
 
 log = logging.getLogger(__name__)
@@ -83,6 +84,8 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
 #       great when sending over the network, but this is all local so
 #       we can simply read the file from the disk without needing to
 #       involve reactor.
+
+@defer.inlineCallbacks
 def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=None,
                      iv_generator=None, suggested_file_name=None):
     """Turn a plain file into an LBRY File.
@@ -126,22 +129,6 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
     @rtype: Deferred which fires with hex-encoded string
     """
 
-    def stop_file(creator):
-        log.debug("the file sender has triggered its deferred. stopping the stream writer")
-        return creator.stop()
-
-    def make_stream_desc_file(stream_hash):
-        log.debug("creating the stream descriptor file")
-        descriptor_file_path = os.path.join(
-            session.db_dir, file_name + conf.settings['CRYPTSD_FILE_EXTENSION'])
-        descriptor_writer = PlainStreamDescriptorWriter(descriptor_file_path)
-
-        d = get_sd_info(lbry_file_manager.stream_info_manager, stream_hash, True)
-
-        d.addCallback(descriptor_writer.create_descriptor)
-
-        return d
-
     base_file_name = os.path.basename(file_name)
 
     lbry_file_creator = EncryptedFileStreamCreator(
@@ -151,21 +138,23 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
         iv_generator,
         suggested_file_name)
 
-    def start_stream():
-        # TODO: Using FileSender isn't necessary, we can just read
-        #       straight from the disk. The stream creation process
-        #       should be in its own thread anyway so we don't need to
-        #       worry about interacting with the twisted reactor
-        file_sender = FileSender()
-        d = file_sender.beginFileTransfer(file_handle, lbry_file_creator)
-        d.addCallback(lambda _: stop_file(lbry_file_creator))
-        d.addCallback(lambda _: make_stream_desc_file(lbry_file_creator.stream_hash))
-        d.addCallback(lambda _: lbry_file_creator.stream_hash)
-        return d
-
-    d = lbry_file_creator.setup()
-    d.addCallback(lambda _: start_stream())
-    return d
+    yield lbry_file_creator.setup()
+    # TODO: Using FileSender isn't necessary, we can just read
+    #       straight from the disk. The stream creation process
+    #       should be in its own thread anyway so we don't need to
+    #       worry about interacting with the twisted reactor
+    file_sender = FileSender()
+    yield file_sender.beginFileTransfer(file_handle, lbry_file_creator)
+    log.debug("the file sender has triggered its deferred. stopping the stream writer")
+    yield lbry_file_creator.stop()
+    log.debug("creating the stream descriptor file")
+    descriptor_file_path = os.path.join(
+        session.db_dir, file_name + conf.settings['CRYPTSD_FILE_EXTENSION'])
+    descriptor_writer = PlainStreamDescriptorWriter(descriptor_file_path)
+    sd_info = yield get_sd_info(lbry_file_manager.stream_info_manager,
+                                lbry_file_creator.stream_hash, True)
+    yield descriptor_writer.create_descriptor(sd_info)
+    defer.returnValue(lbry_file_creator.stream_hash)
 
 
 def hexlify(str_or_unicode):
