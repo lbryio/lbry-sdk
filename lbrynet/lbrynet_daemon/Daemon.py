@@ -11,7 +11,7 @@ from requests import exceptions as requests_exceptions
 import random
 
 from twisted.web import server
-from twisted.internet import defer, threads, error, reactor, task
+from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
@@ -28,7 +28,7 @@ from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFa
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
-from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import EncryptedFileMetadataManager
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.lbrynet_daemon.Downloader import GetStream
@@ -36,11 +36,12 @@ from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.core import log_support, utils
+from lbrynet.core.Storage import FileStorage
+from lbrynet.core import log_support, utils, file_utils
 from lbrynet.core import system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import Session
-from lbrynet.core.Wallet import LBRYumWallet, SqliteStorage, ClaimOutpoint
+from lbrynet.core.Wallet import LBRYumWallet, ClaimOutpoint
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
@@ -108,7 +109,6 @@ class Checker:
     INTERNET_CONNECTION = 'internet_connection_checker'
     VERSION = 'version_checker'
     CONNECTION_STATUS = 'connection_status_checker'
-    PENDING_CLAIM = 'pending_claim_checker'
 
 
 class _FileID(IterableContainer):
@@ -266,9 +266,10 @@ class Daemon(AuthJSONRPCServer):
         self.platform = None
         self.first_run = None
         self.log_file = conf.settings.get_log_filename()
-        self.current_db_revision = 2
+        self.current_db_revision = 3
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
+        self.lbry_file_manager = None
         self.uploaded_temp_files = []
         self._session_id = conf.settings.get_session_id()
         # TODO: this should probably be passed into the daemon, or
@@ -281,154 +282,122 @@ class Daemon(AuthJSONRPCServer):
         self.wallet_user = None
         self.wallet_password = None
         self.query_handlers = {}
-        self.waiting_on = {}
+        self.waiting_on = []
         self.streams = {}
-        self.pending_claims = {}
-        self.name_cache = {}
         self.exchange_rate_manager = ExchangeRateManager()
+
         self._remote_version = CheckRemoteVersion()
         calls = {
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
             Checker.VERSION: LoopingCall(self._remote_version),
             Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
-            Checker.PENDING_CLAIM: LoopingCall(self._check_pending_claims),
         }
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
-        self.lbry_file_manager = None
+        self.storage = FileStorage(self.db_dir)
+
+        self.stream_info_manager = EncryptedFileMetadataManager(self.storage)
+
+        if self.wallet_type == LBRYCRD_WALLET:
+            log.warning('LBRYcrd Wallet is no longer supported, switching to lbryum')
+            self.wallet_type = LBRYUM_WALLET
+        if self.wallet_type == LBRYUM_WALLET:
+            log.info("Using lbryum wallet")
+            config = {'auto_connect': True}
+            if conf.settings['lbryum_wallet_dir']:
+                config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
+            wallet = LBRYumWallet(self.storage, config)
+        elif self.wallet_type == PTC_WALLET:
+            log.info("Using PTC wallet")
+            from lbrynet.core.PTCWallet import PTCWallet
+            wallet = PTCWallet(self.storage)
+        else:
+            raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
+
+        self.session = Session(
+            conf.settings['data_rate'],
+            db_dir=self.db_dir,
+            storage=self.storage,
+            lbryid=self.lbryid,
+            blob_dir=self.blobfile_dir,
+            dht_node_port=self.dht_node_port,
+            known_dht_nodes=conf.settings['known_dht_nodes'],
+            peer_port=self.peer_port,
+            use_upnp=self.use_upnp,
+            wallet=wallet,
+            is_generous=conf.settings['is_generous_host']
+        )
+        self.lbry_file_manager = EncryptedFileManager(
+            self.session,
+            self.stream_info_manager,
+            self.sd_identifier,
+            download_directory=self.download_directory
+        )
 
     @defer.inlineCallbacks
     def setup(self, launch_ui):
         self._modify_loggly_formatter()
-
-        @defer.inlineCallbacks
-        def _announce_startup():
-            def _announce():
-                self.announced_startup = True
-                self.startup_status = STARTUP_STAGES[5]
-                log.info("Started lbrynet-daemon")
-                log.info("%i blobs in manager", len(self.session.blob_manager.blobs))
-
-            yield self.session.blob_manager.get_all_verified_blobs()
-            yield _announce()
-
         log.info("Starting lbrynet-daemon")
+        log.info("Platform: %s", json.dumps(self._get_platform()))
 
+        # start looping calls
         self.looping_call_manager.start(Checker.INTERNET_CONNECTION, 3600)
         self.looping_call_manager.start(Checker.VERSION, 1800)
         self.looping_call_manager.start(Checker.CONNECTION_STATUS, 30)
         self.exchange_rate_manager.start()
 
-        yield self._initial_setup()
-        yield threads.deferToThread(self._setup_data_directory)
+        yield self._setup_data_directory()
         yield self._check_db_migration()
-        yield self._load_caches()
-        yield self._get_session()
+
+        # set up lbrynet session
+        yield self.session.setup()
         yield self._get_analytics()
+
+        # set up stream identifier
         yield add_lbry_file_to_sd_identifier(self.sd_identifier)
-        yield self._setup_stream_identifier()
-        yield self._setup_lbry_file_manager()
-        yield self._setup_query_handlers()
-        yield self._setup_server()
-        log.info("Starting balance: " + str(self.session.wallet.get_balance()))
-        yield _announce_startup()
+        file_saver_factory = EncryptedFileSaverFactory(
+            self.session.peer_finder,
+            self.session.rate_limiter,
+            self.session.blob_manager,
+            self.stream_info_manager,
+            self.session.wallet,
+            self.download_directory
+        )
+        self.sd_identifier.add_stream_downloader_factory(
+            EncryptedFileStreamType, file_saver_factory)
+        file_opener_factory = EncryptedFileOpenerFactory(
+            self.session.peer_finder,
+            self.session.rate_limiter,
+            self.session.blob_manager,
+            self.stream_info_manager,
+            self.session.wallet
+        )
+        self.sd_identifier.add_stream_downloader_factory(
+            EncryptedFileStreamType, file_opener_factory)
 
-    def _get_platform(self):
-        if self.platform is None:
-            self.platform = system_info.get_platform()
-        return self.platform
+        # set up file manager
+        self.startup_status = STARTUP_STAGES[2]
+        yield self.stream_info_manager.setup()
+        yield self.lbry_file_manager.setup()
+        self.startup_status = STARTUP_STAGES[3]
 
-    def _initial_setup(self):
-        def _log_platform():
-            log.info("Platform: %s", json.dumps(self._get_platform()))
-            return defer.succeed(None)
+        # set up query handlers
+        handlers = [
+            BlobRequestHandlerFactory(
+                self.session.blob_manager,
+                self.session.wallet,
+                self.session.payment_rate_manager,
+                self.analytics_manager.track
+            ),
+            self.session.wallet.get_wallet_info_query_handler_factory(),
+        ]
 
-        d = _log_platform()
-        return d
+        for handler in handlers:
+            query_id = handler.get_primary_query_identifier()
+            self.query_handlers[query_id] = handler
 
-    def _load_caches(self):
-        name_cache_filename = os.path.join(self.db_dir, "stream_info_cache.json")
-
-        if os.path.isfile(name_cache_filename):
-            with open(name_cache_filename, "r") as name_cache:
-                self.name_cache = json.loads(name_cache.read())
-            log.info("Loaded claim info cache")
-
-    def _check_network_connection(self):
-        self.connected_to_internet = utils.check_connection()
-
-    def _check_lbrynet_connection(self):
-        def _log_success():
-            log.info("lbrynet connectivity test passed")
-
-        def _log_failure():
-            log.info("lbrynet connectivity test failed")
-
-        wonderfullife_sh = ("6f3af0fa3924be98a54766aa2715d22c6c1509c3f7fa32566df4899"
-                            "a41f3530a9f97b2ecb817fa1dcbf1b30553aefaa7")
-        d = download_sd_blob(self.session, wonderfullife_sh, self.session.base_payment_rate_manager)
-        d.addCallbacks(lambda _: _log_success, lambda _: _log_failure)
-
-    def _update_connection_status(self):
-        self.connection_status_code = CONNECTION_STATUS_CONNECTED
-
-        if not self.connected_to_internet:
-            self.connection_status_code = CONNECTION_STATUS_NETWORK
-
-    # claim_out is dictionary containing 'txid' and 'nout'
-    def _add_to_pending_claims(self, claim_out, name):
-        txid = claim_out['txid']
-        nout = claim_out['nout']
-        log.info("Adding lbry://%s to pending claims, txid %s nout %d" % (name, txid, nout))
-        self.pending_claims[name] = (txid, nout)
-        return claim_out
-
-    def _check_pending_claims(self):
-        # TODO: this was blatantly copied from jsonrpc_start_lbry_file. Be DRY.
-        def _start_file(f):
-            d = self.lbry_file_manager.toggle_lbry_file_running(f)
-            return defer.succeed("Started LBRY file")
-
-        def _get_and_start_file(name):
-            def start_stopped_file(l):
-                if l.stopped:
-                    return _start_file(l)
-                else:
-                    return "LBRY file was already running"
-
-            d = defer.succeed(self.pending_claims.pop(name))
-            d.addCallback(lambda _: self._get_lbry_file(FileID.NAME, name, return_json=False))
-            d.addCallback(start_stopped_file)
-
-        def re_add_to_pending_claims(name):
-            log.warning("Re-add %s to pending claims", name)
-            txid, nout = self.pending_claims.pop(name)
-            claim_out = {'txid': txid, 'nout': nout}
-            self._add_to_pending_claims(claim_out, name)
-
-        def _process_lbry_file(name, lbry_file):
-            # lbry_file is an instance of ManagedEncryptedFileDownloader or None
-            # TODO: check for sd_hash in addition to txid
-            ready_to_start = (
-                lbry_file and
-                self.pending_claims[name] == (lbry_file.txid, lbry_file.nout)
-            )
-            if ready_to_start:
-                _get_and_start_file(name)
-            else:
-                re_add_to_pending_claims(name)
-
-        for name in self.pending_claims:
-            log.info("Checking if new claim for lbry://%s is confirmed" % name)
-            d = self._resolve_name(name, force_refresh=True)
-            d.addCallback(lambda _: self._get_lbry_file(FileID.NAME, name, return_json=False))
-            d.addCallbacks(
-                lambda lbry_file: _process_lbry_file(name, lbry_file),
-                lambda _: re_add_to_pending_claims(name)
-            )
-
-    def _start_server(self):
+        # set up server
+        self.startup_status = STARTUP_STAGES[4]
         if self.peer_port is not None:
             server_factory = ServerProtocolFactory(self.session.rate_limiter,
                                                    self.query_handlers,
@@ -440,25 +409,53 @@ class Daemon(AuthJSONRPCServer):
                 import traceback
                 log.error("Couldn't bind to port %d. %s", self.peer_port, traceback.format_exc())
                 raise ValueError("%s lbrynet may already be running on your computer.", str(e))
-        return defer.succeed(True)
+
+        # start reflector server if configured to do so
+        if self.run_reflector_server:
+            yield self._start_reflector()
+
+        log.info("Starting balance: " + str(self.session.wallet.get_balance()))
+
+        if self.first_run:
+            yield self._upload_log(log_type="first_run")
+        elif self.upload_log:
+            yield self._upload_log(exclude_previous=True, log_type="start")
+
+        yield self.session.blob_manager.get_all_verified_blobs()
+        self.announced_startup = True
+        self.startup_status = STARTUP_STAGES[5]
+        log.info("Started lbrynet-daemon")
+        log.info("%i blobs in manager", len(self.session.blob_manager.blobs))
 
     def _start_reflector(self):
-        if self.run_reflector_server:
-            log.info("Starting reflector server")
-            if self.reflector_port is not None:
-                reflector_factory = reflector_server_factory(
-                    self.session.peer_manager,
-                    self.session.blob_manager
-                )
-                try:
-                    self.reflector_server_port = reactor.listenTCP(self.reflector_port,
-                                                                   reflector_factory)
-                    log.info('Started reflector on port %s', self.reflector_port)
-                except error.CannotListenError as e:
-                    log.exception("Couldn't bind reflector to port %d", self.reflector_port)
-                    raise ValueError(
-                        "{} lbrynet may already be running on your computer.".format(e))
+        log.info("Starting reflector server")
+        if self.reflector_port is not None:
+            reflector_factory = reflector_server_factory(
+                self.session.peer_manager,
+                self.session.blob_manager
+            )
+            try:
+                self.reflector_server_port = reactor.listenTCP(self.reflector_port,
+                                                                reflector_factory)
+                log.info('Started reflector on port %s', self.reflector_port)
+            except error.CannotListenError as e:
+                log.exception("Couldn't bind reflector to port %d", self.reflector_port)
+                raise ValueError("{} lbrynet may already be running on your computer.".format(e))
         return defer.succeed(True)
+
+    def _get_platform(self):
+        if self.platform is None:
+            self.platform = system_info.get_platform()
+        return self.platform
+
+    def _check_network_connection(self):
+        self.connected_to_internet = utils.check_connection()
+
+    def _update_connection_status(self):
+        self.connection_status_code = CONNECTION_STATUS_CONNECTED
+
+        if not self.connected_to_internet:
+            self.connection_status_code = CONNECTION_STATUS_NETWORK
 
     def _stop_reflector(self):
         if self.run_reflector_server:
@@ -476,6 +473,11 @@ class Daemon(AuthJSONRPCServer):
             self.lbry_file_manager.stop()
         return defer.succeed(True)
 
+    def _stop_metadata_manager(self):
+        if self.stream_info_manager:
+            return self.stream_info_manager.stop()
+        return defer.succeed(True)
+
     def _stop_server(self):
         try:
             if self.lbry_server_port is not None:
@@ -487,28 +489,14 @@ class Daemon(AuthJSONRPCServer):
         except AttributeError:
             return defer.succeed(True)
 
-    def _setup_server(self):
-        self.startup_status = STARTUP_STAGES[4]
-        d = self._start_server()
-        d.addCallback(lambda _: self._start_reflector())
-        return d
-
-    def _setup_query_handlers(self):
-        handlers = [
-            BlobRequestHandlerFactory(
-                self.session.blob_manager,
-                self.session.wallet,
-                self.session.payment_rate_manager,
-                self.analytics_manager.track
-            ),
-            self.session.wallet.get_wallet_info_query_handler_factory(),
-        ]
-        return self._add_query_handlers(handlers)
-
-    def _add_query_handlers(self, query_handlers):
-        for handler in query_handlers:
-            query_id = handler.get_primary_query_identifier()
-            self.query_handlers[query_id] = handler
+    def _upload_log(self, log_type=None, exclude_previous=False, force=False):
+        if self.upload_log or force:
+            try:
+                self.log_uploader.upload(exclude_previous,
+                                         conf.settings.installation_id[:SHORT_ID_LEN],
+                                         log_type)
+            except requests.RequestException:
+                log.warning('Failed to upload log file')
         return defer.succeed(None)
 
     def _clean_up_temp_files(self):
@@ -531,6 +519,8 @@ class Daemon(AuthJSONRPCServer):
         d = self._stop_server()
         d.addErrback(log.fail(), 'Failure while shutting down')
         d.addCallback(lambda _: self._stop_reflector())
+        d.addErrback(log.fail(), 'Failure while shutting down')
+        d.addCallback(lambda _: self._stop_metadata_manager())
         d.addErrback(log.fail(), 'Failure while shutting down')
         d.addCallback(lambda _: self._stop_file_manager())
         d.addErrback(log.fail(), 'Failure while shutting down')
@@ -605,9 +595,10 @@ class Daemon(AuthJSONRPCServer):
         if not os.path.exists(self.db_revision_file):
             log.warning("db_revision file not found. Creating it")
             self._write_db_revision_file(old_revision)
+        return defer.succeed(None)
 
     def _check_db_migration(self):
-        old_revision = 1
+        old_revision = 2
         if os.path.exists(self.db_revision_file):
             old_revision = int(open(self.db_revision_file).read().strip())
 
@@ -633,20 +624,6 @@ class Daemon(AuthJSONRPCServer):
             session_id=self._session_id
         )
 
-    @defer.inlineCallbacks
-    def _setup_lbry_file_manager(self):
-        log.info('Starting to setup up file manager')
-        self.startup_status = STARTUP_STAGES[3]
-        yield self.stream_info_manager.setup()
-        self.lbry_file_manager = EncryptedFileManager(
-            self.session,
-            self.stream_info_manager,
-            self.sd_identifier,
-            download_directory=self.download_directory
-        )
-        yield self.lbry_file_manager.setup()
-        log.info('Done setting up file manager')
-
     def _get_analytics(self):
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
@@ -655,68 +632,6 @@ class Daemon(AuthJSONRPCServer):
                 AlwaysSend(calculate_available_blob_size, self.session.blob_manager),
                 frequency=300
             )
-
-    def _get_session(self):
-        def get_wallet():
-            if self.wallet_type == LBRYCRD_WALLET:
-                raise ValueError('LBRYcrd Wallet is no longer supported')
-            elif self.wallet_type == LBRYUM_WALLET:
-                log.info("Using lbryum wallet")
-                config = {'auto_connect': True}
-                if conf.settings['lbryum_wallet_dir']:
-                    config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
-                storage = SqliteStorage(self.db_dir)
-                wallet = LBRYumWallet(storage, config)
-                return defer.succeed(wallet)
-            elif self.wallet_type == PTC_WALLET:
-                log.info("Using PTC wallet")
-                from lbrynet.core.PTCWallet import PTCWallet
-                return defer.succeed(PTCWallet(self.db_dir))
-            else:
-                raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
-
-        d = get_wallet()
-
-        def create_session(wallet):
-            self.session = Session(
-                conf.settings['data_rate'],
-                db_dir=self.db_dir,
-                lbryid=self.lbryid,
-                blob_dir=self.blobfile_dir,
-                dht_node_port=self.dht_node_port,
-                known_dht_nodes=conf.settings['known_dht_nodes'],
-                peer_port=self.peer_port,
-                use_upnp=self.use_upnp,
-                wallet=wallet,
-                is_generous=conf.settings['is_generous_host']
-            )
-            self.startup_status = STARTUP_STAGES[2]
-
-        d.addCallback(create_session)
-        d.addCallback(lambda _: self.session.setup())
-        return d
-
-    def _setup_stream_identifier(self):
-        file_saver_factory = EncryptedFileSaverFactory(
-            self.session.peer_finder,
-            self.session.rate_limiter,
-            self.session.blob_manager,
-            self.stream_info_manager,
-            self.session.wallet,
-            self.download_directory
-        )
-        self.sd_identifier.add_stream_downloader_factory(
-            EncryptedFileStreamType, file_saver_factory)
-        file_opener_factory = EncryptedFileOpenerFactory(
-            self.session.peer_finder,
-            self.session.rate_limiter,
-            self.session.blob_manager,
-            self.stream_info_manager,
-            self.session.wallet
-        )
-        self.sd_identifier.add_stream_downloader_factory(
-            EncryptedFileStreamType, file_opener_factory)
-        return defer.succeed(None)
 
     def _download_sd_blob(self, sd_blob_hash, rate_manager=None, timeout=None):
         """
