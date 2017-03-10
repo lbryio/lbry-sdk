@@ -5,7 +5,7 @@ from twisted.internet import threads, defer
 
 from lbrynet.core.Error import InsufficientFundsError
 from lbrynet.core.Wallet import Wallet, ReservedPoints
-
+from lbrynet.core.Storage import MemoryStorage
 test_metadata = {
 'license': 'NASA',
 'fee': {'USD': {'amount': 0.01, 'address': 'baBYSK7CqGSn5KrEmNmmQwAhBSFgo6v47z'}},
@@ -22,16 +22,24 @@ test_metadata = {
 }
 
 
+class MocNetwork(object):
+    def local_height(self):
+        return 1
+
+    def server_height(self):
+        return 1
+
+
 class MocLbryumWallet(Wallet):
     def __init__(self):
+        self._storage = MemoryStorage()
         self.wallet_balance = Decimal(10.0)
         self.total_reserved_points = Decimal(0.0)
         self.queued_payments = defaultdict(Decimal)
+        self.network = MocNetwork()
+
     def get_name_claims(self):
         return threads.deferToThread(lambda: [])
-
-    def _save_name_metadata(self, name, claim_outpoint, sd_hash):
-        return defer.succeed(True)
 
 
 class WalletTest(unittest.TestCase):

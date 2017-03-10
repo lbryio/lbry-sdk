@@ -8,23 +8,15 @@ import sys
 import random
 import unittest
 
-from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.Hash import MD5
 from lbrynet import conf
-from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
-from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
-from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager, \
-    DBEncryptedFileMetadataManager
 from lbrynet import analytics
 from lbrynet.lbrylive.LiveStreamCreator import FileLiveStreamCreator
 from lbrynet.lbrylive.LiveStreamMetadataManager import DBLiveStreamMetadataManager
 from lbrynet.lbrylive.LiveStreamMetadataManager import TempLiveStreamMetadataManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.core.PTCWallet import PointTraderKeyQueryHandlerFactory, PointTraderKeyExchanger
+from lbrynet.lbryfile.EncryptedFileMetadataManager import EncryptedFileMetadataManager
 from lbrynet.core.Session import Session
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
@@ -115,14 +107,16 @@ class LbryUploader(object):
         rate_limiter = RateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
         db_dir = "server"
+        blob_dir = os.path.join(db_dir, "blobfiles")
         os.mkdir(db_dir)
+        os.mkdir(blob_dir)
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
-            use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
+            use_upnp=False, rate_limiter=rate_limiter, wallet=wallet, blob_dir=blob_dir,
             blob_tracker_class=DummyBlobAvailabilityTracker,
             dht_node_class=Node, is_generous=self.is_generous)
-        stream_info_manager = TempEncryptedFileMetadataManager()
+        stream_info_manager = EncryptedFileMetadataManager(self.session.storage)
         self.lbry_file_manager = EncryptedFileManager(
             self.session, stream_info_manager, self.sd_identifier)
         if self.ul_rate_limit is not None:
@@ -224,11 +218,11 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
 
     session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd" + str(n),
                       peer_finder=peer_finder, hash_announcer=hash_announcer,
-                      blob_dir=None, peer_port=peer_port,
+                      blob_dir=blob_dir, peer_port=peer_port,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                       blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-    stream_info_manager = TempEncryptedFileMetadataManager()
+    stream_info_manager = EncryptedFileMetadataManager(session.storage)
 
     lbry_file_manager = EncryptedFileManager(session, stream_info_manager, sd_identifier)
 
@@ -645,7 +639,7 @@ class TestTransfer(TestCase):
             blob_tracker_class=DummyBlobAvailabilityTracker,
             dht_node_class=Node, is_generous=self.is_generous)
 
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = EncryptedFileMetadataManager(self.session.storage)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
@@ -680,7 +674,7 @@ class TestTransfer(TestCase):
             yield add_lbry_file_to_sd_identifier(sd_identifier)
             yield self.lbry_file_manager.setup()
             yield download_file(sd_hash)
-            yield check_md5_sum()
+            check_md5_sum()
 
         def stop(arg):
             if isinstance(arg, Failure):
@@ -725,9 +719,12 @@ class TestTransfer(TestCase):
         db_dir = "client"
         os.mkdir(db_dir)
 
+        blob_dir = os.path.join(db_dir, "blobfiles")
+        os.mkdir(blob_dir)
+
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
-            peer_finder=peer_finder, hash_announcer=hash_announcer, blob_dir=None,
+            peer_finder=peer_finder, hash_announcer=hash_announcer, blob_dir=blob_dir,
             peer_port=5553, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker, dht_node_class=Node
         )
@@ -913,7 +910,7 @@ class TestTransfer(TestCase):
                                blob_tracker_class=DummyBlobAvailabilityTracker,
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
+        self.stream_info_manager = EncryptedFileMetadataManager(self.session.storage)
         self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
 
         @defer.inlineCallbacks
@@ -927,10 +924,6 @@ class TestTransfer(TestCase):
             downloader = yield factories[0].make_downloader(metadata, chosen_options, prm)
             defer.returnValue(downloader)
 
-        def append_downloader(downloader):
-            downloaders.append(downloader)
-            return downloader
-
         @defer.inlineCallbacks
         def download_file(sd_hash):
             prm = self.session.payment_rate_manager
@@ -938,8 +931,7 @@ class TestTransfer(TestCase):
             metadata = yield sd_identifier.get_metadata_for_sd_blob(sd_blob)
             downloader = yield make_downloader(metadata, prm)
             downloaders.append(downloader)
-            finished_value = yield downloader.start()
-            defer.returnValue(finished_value)
+            yield downloader.start()
 
         def check_md5_sum():
             f = open('test_file')
@@ -947,24 +939,25 @@ class TestTransfer(TestCase):
             hashsum.update(f.read())
             self.assertEqual(hashsum.hexdigest(), "4ca2aafb4101c1e42235aad24fbb83be")
 
+        @defer.inlineCallbacks
         def delete_lbry_file():
             logging.debug("deleting the file")
-            d = self.lbry_file_manager.delete_lbry_file(downloaders[0])
-            d.addCallback(lambda _: self.lbry_file_manager.get_count_for_stream_hash(downloaders[0].stream_hash))
-            d.addCallback(
-                lambda c: self.stream_info_manager.delete_stream(downloaders[1].stream_hash) if c == 0 else True)
-            return d
+            yield self.lbry_file_manager.delete_lbry_file(downloaders[0])
+            blob_count = yield self.stream_info_manager.get_count_for_stream(downloaders[0].stream_hash)
+            self.assertEquals(blob_count, 0)
+            defer.returnValue(None)
 
-        def check_lbry_file():
-            d = downloaders[1].status()
-            d.addCallback(lambda _: downloaders[1].status())
+        @defer.inlineCallbacks
+        def check_lbry_file_is_done():
+            status_report = yield downloaders[1].status()
+            self.assertEqual(status_report.num_known, status_report.num_completed)
+            self.assertEqual(status_report.num_known, 3)
 
-            def check_status_report(status_report):
-                self.assertEqual(status_report.num_known, status_report.num_completed)
-                self.assertEqual(status_report.num_known, 3)
-
-            d.addCallback(check_status_report)
-            return d
+        @defer.inlineCallbacks
+        def check_second_lbry_file_is_deleted():
+            status_report = yield downloaders[1].status()
+            self.assertEqual(status_report.num_known, status_report.num_completed)
+            self.assertEqual(status_report.num_known, 0)
 
         @defer.inlineCallbacks
         def start_transfer(sd_hash):
@@ -974,10 +967,12 @@ class TestTransfer(TestCase):
             yield add_lbry_file_to_sd_identifier(sd_identifier)
             yield self.lbry_file_manager.setup()
             yield download_file(sd_hash)
-            yield check_md5_sum()
+            check_md5_sum()
             yield download_file(sd_hash)
+            self.assertEquals(len(self.lbry_file_manager.lbry_files), 1)
+            yield check_lbry_file_is_done()
             yield delete_lbry_file()
-            yield check_lbry_file()
+            yield check_second_lbry_file_is_deleted()
 
         def stop(arg):
             if isinstance(arg, Failure):
@@ -1029,12 +1024,12 @@ class TestTransfer(TestCase):
 
         self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
                                lbryid="abcd", peer_finder=peer_finder,
-                               hash_announcer=hash_announcer, blob_dir=None,
+                               hash_announcer=hash_announcer, blob_dir=blob_dir,
                                peer_port=5553, use_upnp=False, rate_limiter=rate_limiter,
                                wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker,
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = EncryptedFileMetadataManager(self.session.storage)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)

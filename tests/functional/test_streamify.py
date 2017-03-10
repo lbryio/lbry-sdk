@@ -7,8 +7,7 @@ from twisted.trial.unittest import TestCase
 from twisted.internet import defer, threads
 
 from lbrynet import conf
-from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
-from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
+from lbrynet.lbryfile.EncryptedFileMetadataManager import EncryptedFileMetadataManager
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.Session import Session
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
@@ -80,7 +79,7 @@ class TestStreamify(TestCase):
             is_generous=self.is_generous
         )
 
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = EncryptedFileMetadataManager(self.session.storage)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
@@ -135,7 +134,7 @@ class TestStreamify(TestCase):
             blob_tracker_class=DummyBlobAvailabilityTracker
         )
 
-        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
+        self.stream_info_manager = EncryptedFileMetadataManager(self.session.storage)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
