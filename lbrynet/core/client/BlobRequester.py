@@ -497,7 +497,7 @@ class DownloadRequest(RequestHelper):
         if self._can_pay_peer(blob, arg):
             self._pay_peer(blob.length, reserved_points)
             d = self.requestor.blob_manager.add_blob_to_download_history(
-                str(blob), str(self.peer.host), float(self.protocol_prices[self.protocol]))
+                blob.blob_hash, self.peer.host, self.protocol_prices[self.protocol])
         else:
             self._cancel_points(reserved_points)
         return arg

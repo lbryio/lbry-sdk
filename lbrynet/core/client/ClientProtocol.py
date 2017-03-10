@@ -179,7 +179,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
         expected_errors = (MisbehavingPeerError, ConnectionClosedBeforeResponseError,
                            DownloadCanceledError, RequestCanceledError)
         if not err.check(expected_errors):
-            log.error("The connection to %s is closing due to an unexpected error: %s",
+            log.debug("The connection to %s is closing due to an unexpected error: %s",
                       self.peer, err.getErrorMessage())
         if not err.check(RequestCanceledError):
             # The connection manager is closing the connection, so

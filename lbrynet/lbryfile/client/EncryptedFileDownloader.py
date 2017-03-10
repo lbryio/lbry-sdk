@@ -63,8 +63,8 @@ class EncryptedFileDownloader(CryptStreamDownloader):
             return blob_hashes
 
         def delete_blobs(blob_hashes):
-            self.blob_manager.delete_blobs(blob_hashes)
-            return True
+            log.info("Delete %i blobs for %s", len(blob_hashes), self)
+            return self.blob_manager.delete_blobs(blob_hashes)
 
         dl = defer.DeferredList([d1, d2], fireOnOneErrback=True)
         dl.addCallback(combine_blob_hashes)
