@@ -98,10 +98,25 @@ Return:
 Get claims for a name
 
 Args:
-    name: file name
-    txid: transaction id of a name claim transaction
+    name: search for claims on this name
 Returns
-    list of name claims
+    {
+        'claims': list of claims for the name
+        [
+            {
+            'amount': amount assigned to the claim, not including supports
+            'effective_amount': total amount assigned to the claim, including supports
+            'claim_id': claim ID of the claim
+            'height': height of block containing the claim
+            'txid': txid of the claim
+            'nout': nout of the claim
+            'supports': a list of supports attached to the claim
+            'value': the value of the claim
+            },
+        ]
+        'supports_without_claims': list of supports without any claims attached to them
+        'last_takeover_height': the height when the last takeover for the name happened
+    }
 ```
 
 ## claim_list_mine
@@ -112,7 +127,25 @@ List my name claims
 Args:
     None
 Returns
-    list of name claims
+    list of name claims owned by user
+    [
+        {
+            'address': address that owns the claim
+            'amount': amount assigned to the claim
+            'blocks_to_expiration': number of blocks until it expires
+            'category': "claim", "update" , or "support"
+            'claim_id': claim ID of the claim
+            'confirmations': number of blocks of confirmations for the claim
+            'expiration_height': the block height which the claim will expire
+            'expired': True if expired, False otherwise
+            'height': height of the block containing the claim
+            'is_spent': True if claim is abandoned, False otherwise
+            'name': name of the claim
+            'txid': txid of the cliam
+            'nout': nout of the claim
+            'value': value of the claim
+        },
+   ]
 ```
 
 ## claim_new_support
@@ -133,7 +166,7 @@ Return:
 ## claim_show
 
 ```text
-Resolve claim info from a LBRY uri
+Resolve claim info from a LBRY name
 
 Args:
     'name': name to look up, string, do not include lbry:// prefix
@@ -141,7 +174,15 @@ Args:
     'nout': optional, if specified, look for claim with this nout
 
 Returns:
-    txid, amount, value, n, height
+    false if name is not claimed , else return dictionary containing
+
+    'txid': txid of claim
+    'nout': nout of claim
+    'amount': amount of claim
+    'value': value of claim
+    'height' : height of claim
+    'claim_id': claim ID of claim
+    'supports': supports associated with claim
 ```
 
 ## commands
@@ -184,63 +225,58 @@ Returns
 Delete a lbry file
 
 Args:
-    'file_name': downloaded file name, string
+    'name' (optional): delete files by lbry name,
+    'sd_hash' (optional): delete files by sd hash,
+    'file_name' (optional): delete files by the name in the downloads folder,
+    'stream_hash' (optional): delete files by stream hash,
+    'claim_id' (optional): delete files by claim id,
+    'outpoint' (optional): delete files by claim outpoint,
+    'rowid': (optional): delete file by rowid in the file manager
+    'delete_target_file' (optional): delete file from downloads folder, defaults to True
+                                     if False only the blobs and db entries will be deleted
 Returns:
-    confirmation message
-```
-
-## file_get
-
-```text
-Get a file, if no matching file exists returns False
-
-Args:
-    'name': get file by lbry uri,
-    'sd_hash': get file by the hash in the name claim,
-    'file_name': get file by its name in the downloads folder,
-    'stream_hash': get file by its stream hash
-Returns:
-    'completed': bool,
-    'file_name': str,
-    'download_directory': str,
-    'points_paid': float,
-    'stopped': bool,
-    'stream_hash': str (hex),
-    'stream_name': str,
-    'suggested_file_name': str,
-    'sd_hash': str (hex),
-    'lbry_uri': str,
-    'txid': str (b58),
-    'claim_id': str (b58),
-    'download_path': str,
-    'mime_type': str,
-    'key': str (hex),
-    'total_bytes': int,
-    'written_bytes': int,
-    'code': str,
-    'message': str
-    'metadata': Metadata dict if claim is valid, otherwise status str
-}
+    True if deletion was successful, otherwise False
 ```
 
 ## file_list
 
 ```text
-List files
+List files limited by optional filters
 
 Args:
-    None
+    'name' (optional): filter files by lbry name,
+    'sd_hash' (optional): filter files by sd hash,
+    'file_name' (optional): filter files by the name in the downloads folder,
+    'stream_hash' (optional): filter files by stream hash,
+    'claim_id' (optional): filter files by claim id,
+    'outpoint' (optional): filter files by claim outpoint,
+    'rowid' (optional): filter files by internal row id,
+    'full_status': (optional): bool, if true populate the 'message' and 'size' fields
+
 Returns:
-    List of files, with the following keys:
-    'completed': bool
-    'file_name': string
-    'key': hex string
-    'points_paid': float
-    'stopped': bool
-    'stream_hash': base 58 string
-    'stream_name': string
-    'suggested_file_name': string
-    'sd_hash': string
+    [
+        {
+            'completed': bool,
+            'file_name': str,
+            'download_directory': str,
+            'points_paid': float,
+            'stopped': bool,
+            'stream_hash': str (hex),
+            'stream_name': str,
+            'suggested_file_name': str,
+            'sd_hash': str (hex),
+            'name': str,
+            'outpoint': str, (txid:nout)
+            'claim_id': str (hex),
+            'download_path': str,
+            'mime_type': str,
+            'key': str (hex),
+            'total_bytes': int, None if full_status is False
+            'written_bytes': int,
+            'message': str, None if full_status is False
+            'metadata': Metadata dict
+        }
+    ]
 ```
 
 ## file_seed
@@ -250,7 +286,7 @@ Start or stop seeding a file
 
 Args:
     'status': "start" or "stop"
-    'name': start file by lbry uri,
+    'name': start file by lbry name,
     'sd_hash': start file by the hash in the name claim,
     'file_name': start file by its name in the downloads folder,
 Returns:
@@ -260,7 +296,7 @@ Returns:
 ## get
 
 ```text
-Download stream from a LBRY uri.
+Download stream from a LBRY name.
 
 Args:
     'name': name to download, string
@@ -271,8 +307,27 @@ Args:
     'wait_for_write': optional, defaults to True. When set, waits for the file to
         only start to be written before returning any results.
 Returns:
-    'stream_hash': hex string
-    'path': path of download
+    {
+        'completed': bool,
+        'file_name': str,
+        'download_directory': str,
+        'points_paid': float,
+        'stopped': bool,
+        'stream_hash': str (hex),
+        'stream_name': str,
+        'suggested_file_name': str,
+        'sd_hash': str (hex),
+        'name': str,
+        'outpoint': str, (txid:nout)
+        'claim_id': str (hex),
+        'download_path': str,
+        'mime_type': str,
+        'key': str (hex),
+        'total_bytes': int
+        'written_bytes': int,
+        'message': str
+        'metadata': Metadata dict
+    }
 ```
 
 ## get_availability
@@ -281,34 +336,12 @@ Returns:
 Get stream availability for a winning claim
 
 Arg:
-    name (str): lbry uri
+    name (str): lbry name
     sd_timeout (int, optional): sd blob download timeout
     peer_timeout (int, optional): how long to look for peers
 
 Returns:
      peers per blob / total blobs
-```
-
-## get_mean_availability
-
-```text
-Get mean blob availability
-
-Args:
-    None
-Returns:
-    Mean peers for a blob
-```
-
-## get_nametrie
-
-```text
-Get the nametrie
-
-Args:
-    None
-Returns:
-    Name claim trie
 ```
 
 ## help
@@ -321,17 +354,6 @@ Args:
 Returns:
     if given a command, returns documentation about that command
     otherwise returns general help message
-```
-
-## open
-
-```text
-Instruct the OS to open a file with its default program.
-
-Args:
-    'sd_hash': SD hash of file to be opened
-Returns:
-    True, opens file
 ```
 
 ## peer_list
@@ -359,11 +381,10 @@ Args:
                             the stream from your existing claim for the name will be used
     'fee' (optional): dict, FeeValidator compliant
 Returns:
-    'success' : True if claim was succesful , False otherwise
-    'reason' : if not succesful, give reason
-    'txid' : txid of resulting transaction if succesful
-    'nout' : nout of the resulting support claim if succesful
-    'fee' : fee paid for the claim transaction if succesful
+    'tx' : hex encoded transaction
+    'txid' : txid of resulting transaction
+    'nout' : nout of the resulting support claim
+    'fee' : fee paid for the claim transaction
     'claim_id' : claim id of the resulting transaction
 ```
 
@@ -392,23 +413,12 @@ Returns:
 ## resolve_name
 
 ```text
-Resolve stream info from a LBRY uri
+Resolve stream info from a LBRY name
 
 Args:
     'name': name to look up, string, do not include lbry:// prefix
 Returns:
-    metadata from name claim or None if the name is not known
-```
-
-## reveal
-
-```text
-Reveal a file or directory in file browser
-
-Args:
-    'path': path to be revealed in file browser
-Returns:
-    True, opens file browser
+    metadata dictionary from name claim or None if the name is not known
 ```
 
 ## send_amount_to_address
@@ -469,7 +479,6 @@ Return daemon status
 
 Args:
     session_status: bool
-    blockchain_status: bool
 Returns:
     daemon status
 ```
@@ -480,7 +489,7 @@ Returns:
 Get estimated cost for a lbry stream
 
 Args:
-    'name': lbry uri
+    'name': lbry name
     'size': stream size, in bytes. if provided an sd blob won't be downloaded.
 Returns:
     estimated cost
