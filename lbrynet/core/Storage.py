@@ -59,7 +59,6 @@ class MemoryStorage(object):
     @rerun_if_locked
     @defer.inlineCallbacks
     def query(self, query, args=None, ignore_duplicate=True):
-
         if not self.is_open:
             yield self.open()
         query_str = query.replace("?", "%s")
@@ -411,7 +410,6 @@ class MemoryStorage(object):
                 blob_id = yield self.get_blob_row_id(blob.blob_hash)
                 yield self.query(update_blob_query, (file_id, blob.blob_num, blob.iv, blob.length,
                                                      blob_id))
-
         defer.returnValue(True)
 
     @defer.inlineCallbacks

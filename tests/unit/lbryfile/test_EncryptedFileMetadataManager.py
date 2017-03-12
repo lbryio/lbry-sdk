@@ -2,16 +2,17 @@ import tempfile
 import shutil
 from twisted.trial import unittest
 from twisted.internet import defer
-from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
-from lbrynet.core import utils
+from lbrynet.lbryfile.EncryptedFileMetadataManager import EncryptedFileMetadataManager
+from lbrynet.core import Storage
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 from lbrynet.core.Error import NoSuchStreamHash
 from tests.util import random_lbry_hash
 
-class DBEncryptedFileMetadataManagerTest(unittest.TestCase):
+
+class EncryptedFileMetadataManagerTest(unittest.TestCase):
     def setUp(self):
         self.db_dir = tempfile.mkdtemp()
-        self.manager = DBEncryptedFileMetadataManager(self.db_dir)
+        self.manager = EncryptedFileMetadataManager(Storage.FileStorage(self.db_dir))
 
     def tearDown(self):
         shutil.rmtree(self.db_dir)
@@ -22,21 +23,20 @@ class DBEncryptedFileMetadataManagerTest(unittest.TestCase):
         out = yield self.manager.get_all_streams()
         self.assertEqual(len(out),0)
 
-        stream_hash =  random_lbry_hash()
+        stream_hash = random_lbry_hash()
         file_name = 'file_name'
         key = 'key'
-        suggested_file_name = 'sug_file_name'
-        blob1 = CryptBlobInfo(random_lbry_hash(),0,10,1)
-        blob2 = CryptBlobInfo(random_lbry_hash(),0,10,1)
+        blob1 = CryptBlobInfo(random_lbry_hash(), 0, 10, 1)
+        blob2 = CryptBlobInfo(random_lbry_hash(), 0, 10, 1)
         blobs=[blob1,blob2]
 
         # save stream
-        yield self.manager.save_stream(stream_hash, file_name, key, suggested_file_name, blobs)
+        yield self.manager.save_stream(stream_hash, file_name, key, blobs)
 
         out = yield self.manager.get_stream_info(stream_hash)
+        print out
         self.assertEqual(key, out[0])
         self.assertEqual(file_name, out[1])
-        self.assertEqual(suggested_file_name, out[2])
 
         out = yield self.manager.check_if_stream_exists(stream_hash)
         self.assertTrue(out)
@@ -66,15 +66,9 @@ class DBEncryptedFileMetadataManagerTest(unittest.TestCase):
         yield self.manager.save_sd_blob_hash_to_stream(stream_hash, sd_blob_hash)
         out = yield self.manager.get_sd_blob_hashes_for_stream(stream_hash)
         self.assertEqual(1, len(out))
-        self.assertEqual(sd_blob_hash,out[0])
-
-        out = yield self.manager.get_stream_hash_for_sd_hash(sd_blob_hash)
-        self.assertEqual(stream_hash, out)
+        self.assertEqual(sd_blob_hash, out[0])
 
         # delete stream
         yield self.manager.delete_stream(stream_hash)
         out = yield self.manager.check_if_stream_exists(stream_hash)
         self.assertFalse(out)
-
- 
-
