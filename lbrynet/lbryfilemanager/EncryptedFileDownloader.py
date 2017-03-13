@@ -14,7 +14,6 @@ from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileDownloa
 from lbrynet.lbryfilemanager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbryfile.StreamDescriptor import save_sd_info
-from lbrynet.core.Wallet import ClaimOutpoint
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +38,10 @@ def log_status(name, sd_hash, status):
         status_string = "pending"
     else:
         status_string = "unknown"
-    log.info("lbry://%s (%s) is %s", name, short_hash(sd_hash), status_string)
+    log.info("lbry://%s (%s) is %s",
+             name,
+             "unknown sd hash" if not sd_hash else short_hash(sd_hash),
+             status_string)
 
 
 class ManagedEncryptedFileDownloader(EncryptedFileSaver):

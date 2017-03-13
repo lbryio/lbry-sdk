@@ -259,14 +259,29 @@ class MemoryStorage(object):
 
     @defer.inlineCallbacks
     def claims_missing_sd_info(self):
-        query = ("SELECT txid, nout FROM claims WHERE sd_blob_id IS NULL "
+        query = ("SELECT name, txid, nout FROM claims WHERE sd_blob_id IS NULL "
                  "AND txid IS NOT NULL AND nout IS NOT NULL")
         query_result = yield self.query(query)
         to_repair = []
-        for (txid, nout) in query_result:
+        for (name, txid, nout) in query_result:
             try:
                 outpoint = ClaimOutpoint(txid, nout)
-                to_repair.append(outpoint)
+                to_repair.append((name, outpoint))
+            except TypeError:
+                pass
+
+        defer.returnValue(to_repair)
+
+    @defer.inlineCallbacks
+    def claims_missing_amount_and_height(self):
+        query = ("SELECT name, txid, nout FROM claims WHERE amount IS NULL AND height IS NULL "
+                 "AND txid IS NOT NULL AND nout IS NOT NULL")
+        query_result = yield self.query(query)
+        to_repair = []
+        for (name, txid, nout) in query_result:
+            try:
+                outpoint = ClaimOutpoint(txid, nout)
+                to_repair.append((name, outpoint))
             except TypeError:
                 pass
 
@@ -616,7 +631,7 @@ class MemoryStorage(object):
     def last_checked_winning_name(self, name):
         results = yield self.query("SELECT last_checked FROM winning_claims WHERE name=?",
                                    (name, ))
-        last_checked = None
+        last_checked = False
         if results:
             last_checked = results[0][0]
         defer.returnValue(last_checked)
@@ -679,13 +694,17 @@ class MemoryStorage(object):
         if not status:
             yield self.add_claim(name, outpoint, amount, height, claim_id=claim_tx_id,
                                  is_mine=is_mine)
-        if not status or status == CLAIM_STATUS.INIT and metadata is not None:
+
+        row_id = yield self.get_claim_row_id(outpoint)
+        has_metadata = yield self.query("SELECT * FROM winning_claims WHERE claim_id=?",
+                                        (row_id, ))
+        if not has_metadata and metadata is not None:
             yield self.add_metadata_to_claim(outpoint, metadata)
         if update and outpoint is not False:
             update_query = ("UPDATE claims SET "
                             "claim_transaction_id=?, amount=?, height=?, is_mine=? "
                             "WHERE id=?")
-            row_id = yield self.get_claim_row_id(outpoint)
+
             yield self.query(update_query, (claim_tx_id, amount, height, is_mine, row_id))
 
         defer.returnValue(True)

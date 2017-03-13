@@ -116,11 +116,6 @@ class Wallet(object):
     def _clean_bad_records(self):
         self._storage.clean_bad_records()
 
-    def _save_name_metadata(self, name, claim_outpoint, claim_id, metadata, amount, height,
-                            is_mine=False, update=False):
-        return self._storage.save_name_metadata(name, claim_outpoint, claim_id,
-                                                metadata, amount, height, is_mine, update)
-
     # TODO: use file ids
     def _get_claim_metadata_for_sd_hash(self, sd_hash):
         return self._storage.get_claim_metadata_for_sd_hash(sd_hash)
@@ -216,45 +211,59 @@ class Wallet(object):
         return d
 
     @defer.inlineCallbacks
+    def save_claim(self, claim_dict, is_mine=False):
+        if not claim_dict.get('supported_claimid', False):
+            height = claim_dict['height']
+            name = claim_dict['name']
+            claim_id = claim_dict['claim_id']
+            outpoint = ClaimOutpoint(claim_dict['txid'], claim_dict['nout'])
+            amount = claim_dict['amount']
+            try:
+                metadata = Metadata(json.loads(claim_dict['value']))
+                valid_metadata = True
+            except Exception as err:
+                metadata = None
+                valid_metadata = False
+            yield self._storage.save_name_metadata(name, outpoint,
+                                                   claim_id,
+                                                   metadata,
+                                                   amount,
+                                                   height,
+                                                   is_mine=is_mine,
+                                                   update=True)
+            if not valid_metadata:
+                yield self._storage.update_claim_status(outpoint, STATUS_INVALID_METADATA)
+            else:
+                yield self._storage.update_claim_status(outpoint, STATUS_ACTIVE)
+        defer.returnValue(True)
+
+    @defer.inlineCallbacks
     def initialize_claims(self):
         outpoints_missing_sd_info = yield self._storage.claims_missing_sd_info()
         if outpoints_missing_sd_info:
-            for outpoint in outpoints_missing_sd_info:
-                claim = yield self.get_claim_from_outpoint(outpoint['txid'], outpoint['nout'])
-                if claim is not None:
-                    yield self._storage.add_metadata_to_claim(outpoint, claim['value'])
-                else:
-                    log.warning("Unable to get sd info for claim %s", outpoint)
+            log.info("Fetching missing sd for %i claims", len(outpoints_missing_sd_info))
+            for name, outpoint in outpoints_missing_sd_info:
+                try:
+                    yield self.get_claim_from_outpoint(name, outpoint)
+                except UnknownNameError:
+                    yield self._storage.update_claim_status(outpoint, STATUS_INACTIVE)
             yield self._storage.repair_claims()
 
-        my_claims = yield self.get_name_claims()
-        for claim in my_claims:
-            if not claim.get('supported_claimid', False):
-                is_spent = claim['is spent']
-                confirmations = claim['confirmations']
-                name = claim['name']
+        claims_missing_height_and_amount = yield self._storage.claims_missing_amount_and_height()
+        if claims_missing_height_and_amount:
+            log.warning("%i claims missing amount and height",
+                        len(claims_missing_height_and_amount))
+            for name, outpoint in claims_missing_height_and_amount:
                 try:
-                    claim['value'] = json.loads(claim['value'])
-                    valid_metadata = True
-                except Exception as err:
-                    claim['value'] = ""
-                    valid_metadata = False
-                outpoint = ClaimOutpoint(claim['txid'], claim['nOut'])
-                yield self._save_name_metadata(name, outpoint,
-                                               claim['claim_id'],
-                                               claim['value'],
-                                               int(claim['amount'] * COIN),
-                                               claim['height'],
-                                               is_mine=True,
-                                               update=True)
-                if is_spent:
+                    yield self.get_claim_from_outpoint(name, outpoint)
+                except UnknownNameError:
                     yield self._storage.update_claim_status(outpoint, STATUS_INACTIVE)
-                elif confirmations < RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS:
-                    yield self._storage.update_claim_status(outpoint, STATUS_PENDING)
-                elif not valid_metadata:
-                    yield self._storage.update_claim_status(outpoint, STATUS_INVALID_METADATA)
-                else:
-                    yield self._storage.update_claim_status(outpoint, STATUS_ACTIVE)
+
+        my_claims = yield self.get_name_claims()
+        if my_claims:
+            log.info("Checking status of my claims (%i claims)", len(my_claims))
+            for claim in my_claims:
+                yield self.save_claim(claim, is_mine=True)
         defer.returnValue(True)
 
     @defer.inlineCallbacks
@@ -413,37 +422,18 @@ class Wallet(object):
         d.addCallback(lambda r: None if 'txid' not in r else r['txid'])
         return d
 
-    def get_stream_info_from_claim_outpoint(self, name, txid, nout):
-        claim_outpoint = ClaimOutpoint(txid, nout)
-        d = self.get_claims_from_tx(claim_outpoint['txid'])
-
-        def get_claim_for_name(claims):
-            for claim in claims:
-                if claim_outpoint == claim:
-                    claim['txid'] = txid
-                    return claim
-            return Failure(UnknownNameError(name))
-
-        d.addCallback(get_claim_for_name)
-        d.addCallback(self._get_stream_info_from_value, name)
-        return d
-
     @defer.inlineCallbacks
-    def get_claim_from_outpoint(self, txid, nout):
-        claim_out = {}
-        claims_in_tx = yield self.get_claims_from_tx(txid)
-        result = None
-        if claims_in_tx is not None:
-            for claim in claims_in_tx:
-                if nout == claim['nOut']:
-                    claim_out['value'] = json.loads(claim['value'])
-                    claim_out['nout'] = claim['nOut']
-                    claim_out['txid'] = txid
-                    claim_out['name'] = claim['name']
-                    claim_out['claim_id'] = claim['claimId']
-                    result = claim_out
-                    break
-        defer.returnValue(result)
+    def get_claim_from_outpoint(self, name, outpoint):
+        claims = yield self.get_claims_for_name(name)
+
+        for claim in claims['claims']:
+            outpoint_to_check = ClaimOutpoint(claim['txid'], claim['nout'])
+            if outpoint == outpoint_to_check:
+                claim['name'] = name
+                yield self.save_claim(claim)
+                defer.returnValue(claim)
+
+        raise UnknownNameError(name)
 
     def _get_stream_info_from_value(self, result, name):
         def _check_result_fields(r):
@@ -501,7 +491,7 @@ class Wallet(object):
                 my_unspent_claim = claim
                 my_unspent_claim['value'] = json.loads(claim['value'])
                 outpoint = ClaimOutpoint(my_unspent_claim['txid'], my_unspent_claim['nout'])
-                yield self._save_name_metadata(name, outpoint,
+                yield self._storage.save_name_metadata(name, outpoint,
                                                my_unspent_claim['claim_id'],
                                                my_unspent_claim['value'],
                                                my_unspent_claim['amount'],
@@ -512,22 +502,32 @@ class Wallet(object):
 
     @defer.inlineCallbacks
     def get_claim_info(self, name, txid=None, nout=None):
-        if txid is None or nout is None:
-            last_checked = yield self._storage.last_checked_winning_name(name)
-        else:
-            last_checked = False
+        need_claim = True
+        last_checked = yield self._storage.last_checked_winning_name(name)
+        if last_checked is not False:
+            if txid is not None and nout is not None:
+                outpoint = ClaimOutpoint(txid, nout)
+                claim_row = yield self._storage.get_claim_row_id(outpoint)
+                if claim_row is not False:
+                    log.debug("Using cached claim info for %s", name)
+                    claim = yield self._storage.get_claim(claim_row)
+                else:
+                    log.info("Storing claim for %s (%s)", name, outpoint)
+                    claim = yield self._get_claim_info(name, outpoint)
+                need_claim = False
 
-        if not last_checked or (utils.time() - last_checked) >= 30:
-            claim = yield self._get_value_for_name(name)
-            outpoint = ClaimOutpoint(claim['txid'], claim['n'])
-            # TODO: include claim id in the return from getvalueforname to make the
-            #       getclaimsforname call unnecessary
-            result = yield self._get_claim_info(name, outpoint)
-        else:
-            log.info("Using cached stream info for lbry://%s", name)
-            cache_id = yield self._storage.get_winning_claim_row_id(name)
-            result = yield self._storage.get_claim(cache_id)
-        defer.returnValue(result)
+        if need_claim:
+            winning_claim = yield self._get_value_for_name(name)
+            winning_outpoint = ClaimOutpoint(winning_claim['txid'], winning_claim['nout'])
+            yield self._storage.set_winning_claim(name, winning_outpoint)
+            log.info("Refreshed winning claim for lbry://%s (%s)", name, winning_outpoint)
+            if txid is None or nout is None:
+                outpoint = winning_outpoint
+            else:
+                outpoint = ClaimOutpoint(txid, nout)
+            claim = yield self._get_claim_info(name, outpoint)
+
+        defer.returnValue(claim)
 
     def _format_claim_for_return(self, name, claim, metadata=None, meta_version=None):
         result = {}
@@ -557,10 +557,8 @@ class Wallet(object):
         result = self._format_claim_for_return(name, claim,
                                                metadata=metadata,
                                                meta_version=meta_ver)
-        yield self._save_name_metadata(name, claim_outpoint, claim['claim_id'],
+        yield self._storage.save_name_metadata(name, claim_outpoint, claim['claim_id'],
                                        metadata, result['amount'], result['height'])
-        log.debug("get claim info lbry://%s metadata: %s, claimid: %s", name, meta_ver,
-                 claim['claimId'])
         defer.returnValue(result)
 
     def get_claims_for_name(self, name):
@@ -626,7 +624,7 @@ class Wallet(object):
             claim_id = claim['claim_id']
         log.info("Saving metadata for lbry://%s (id %s) %s:%i",
                  name, utils.short_hash(claim_id), claim['txid'], claim['nout'])
-        yield self._save_name_metadata(name, claim_outpoint, claim_id,
+        yield self._storage.save_name_metadata(name, claim_outpoint, claim_id,
                                        _metadata, int(bid * COIN), self.blockchain_height,
                                        is_mine=True, update=True)
         defer.returnValue(claim)
@@ -1072,12 +1070,13 @@ class LBRYumWallet(Wallet):
             except (KeyError, TypeError, ValueError, ValidationError):
                 metadata = None
             txid = result['txid']
-            n = result['n']
+            n = result['nout']
             amount = result['amount']
             height = result['height']
             claim_outpoint = ClaimOutpoint(txid, n)
             claim_id = yield self.get_claimid(name, txid, n)
-            yield self._save_name_metadata(name, claim_outpoint, claim_id, metadata, amount, height)
+            yield self._storage.save_name_metadata(name, claim_outpoint, claim_id, metadata,
+                                                   amount, height)
             yield self._storage.set_winning_claim(name, claim_outpoint)
         else:
             log.warning("Failed to get value for lbry://%s : %s", name, result['error'])

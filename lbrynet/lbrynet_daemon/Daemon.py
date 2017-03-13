@@ -37,7 +37,7 @@ from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core.Storage import FileStorage
-from lbrynet.core import log_support, utils, file_utils
+from lbrynet.core import log_support, utils
 from lbrynet.core import system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import Session
@@ -735,8 +735,9 @@ class Daemon(AuthJSONRPCServer):
             try:
                 if claim_id not in self.waiting_on:
                     self.waiting_on.append(claim_id)
-                lbry_file = yield self.add_stream(name, timeout, download_directory,
+                yield self.add_stream(name, timeout, download_directory,
                                                   file_name, metadata, txid, nout, claim_id)
+                lbry_file = self.streams[claim_id].downloader
                 self.analytics_manager.send_download_finished(download_id, name, metadata)
                 _remove_from_wait(claim_id)
             except (InsufficientFundsError, Exception) as err:
