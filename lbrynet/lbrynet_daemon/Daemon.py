@@ -416,11 +416,6 @@ class Daemon(AuthJSONRPCServer):
 
         log.info("Starting balance: " + str(self.session.wallet.get_balance()))
 
-        if self.first_run:
-            yield self._upload_log(log_type="first_run")
-        elif self.upload_log:
-            yield self._upload_log(exclude_previous=True, log_type="start")
-
         yield self.session.blob_manager.get_all_verified_blobs()
         self.announced_startup = True
         self.startup_status = STARTUP_STAGES[5]
@@ -488,16 +483,6 @@ class Daemon(AuthJSONRPCServer):
                 return defer.succeed(True)
         except AttributeError:
             return defer.succeed(True)
-
-    def _upload_log(self, log_type=None, exclude_previous=False, force=False):
-        if self.upload_log or force:
-            try:
-                self.log_uploader.upload(exclude_previous,
-                                         conf.settings.installation_id[:SHORT_ID_LEN],
-                                         log_type)
-            except requests.RequestException:
-                log.warning('Failed to upload log file')
-        return defer.succeed(None)
 
     def _clean_up_temp_files(self):
         for path in self.uploaded_temp_files:
