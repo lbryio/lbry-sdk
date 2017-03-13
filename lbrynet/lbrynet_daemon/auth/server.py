@@ -114,7 +114,8 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _set_headers(self, request, data, update_secret=False):
         if conf.settings['allowed_origin']:
             request.setHeader("Access-Control-Allow-Origin", conf.settings['allowed_origin'])
-        request.setHeader("Content-Type", "text/json")
+        request.setHeader("Content-Type", "application/json")
+        request.setHeader("Accept", "application/json-rpc")
         request.setHeader("Content-Length", str(len(data)))
         if update_secret:
             session_id = request.getSession().uid
