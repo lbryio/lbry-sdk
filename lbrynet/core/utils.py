@@ -4,8 +4,10 @@ import logging
 import random
 import socket
 import string
-
+import hashlib
 import pkg_resources
+import struct
+import json
 
 from time import time as timestamp
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
@@ -119,3 +121,32 @@ def get_sd_hash(stream_info):
     if not stream_info:
         return None
     return stream_info['sources']['lbry_sd_hash']
+
+
+def sha256(x):
+    return hashlib.sha256(x).digest()
+
+
+def ripemd160(x):
+    md = hashlib.new('ripemd160')
+    md.update(x)
+    return md.digest()
+
+
+def hash_160(x):
+    return ripemd160(sha256(x))
+
+
+def generate_claimid(outpoint):
+    return hash_160(outpoint['txid'] + struct.pack('>I', outpoint['nout'])).encode('hex')
+
+
+def metadata_to_b64(metadata):
+    if not isinstance(metadata, str) or isinstance(metadata, unicode):
+        metadata = json.dumps(metadata)
+    return base64.b64encode(metadata)
+
+
+def decode_b64_metadata(encoded_metadata):
+    decoded = base64.b64decode(encoded_metadata)
+    return json.loads(decoded)

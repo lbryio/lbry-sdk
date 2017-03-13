@@ -630,7 +630,7 @@ class MemoryStorage(object):
             add_sd_hash_query = "UPDATE claims SET sd_blob_id=? WHERE id=?"
             yield self.query(add_sd_hash_query, (sd_blob_id, claim_row_id))
             add_metadata_query = "INSERT INTO metadata VALUES (?, ?)"
-            yield self.query(add_metadata_query, (claim_row_id, utils.metadata_to_b58(metadata)))
+            yield self.query(add_metadata_query, (claim_row_id, utils.metadata_to_b64(metadata)))
             status_code = CLAIM_STATUS.ACTIVE
         except Exception as err:
             log.exception(err)
@@ -664,7 +664,7 @@ class MemoryStorage(object):
             query = "SELECT value FROM metadata WHERE id=?"
             blob = yield self.query(query, (row_id, ))
             encoded_metadata = blob[0][0]
-            metadata = utils.decode_b58_metadata(encoded_metadata)
+            metadata = utils.decode_b64_metadata(encoded_metadata)
         defer.returnValue(metadata)
 
     @defer.inlineCallbacks
@@ -736,7 +736,7 @@ class MemoryStorage(object):
         result = yield self.query("SELECT value FROM metadata WHERE id=?", winning_id[0])
         if result:
             encoded_metadata = result[0][0]
-            metadata = utils.decode_b58_metadata(encoded_metadata)
+            metadata = utils.decode_b64_metadata(encoded_metadata)
         defer.returnValue(metadata)
 
     @defer.inlineCallbacks
