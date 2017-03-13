@@ -1,21 +1,8 @@
 #!/usr/bin/env python
 
-import sys
 import os
-import site
 from lbrynet import __version__
-
-
-base_dir = os.path.abspath(os.path.dirname(__file__))
-package_name = "lbrynet"
-dist_name = "LBRY"
-description = "A decentralized media library and marketplace"
-author = "LBRY, Inc"
-url = "lbry.io"
-maintainer = "Jack Robison"
-maintainer_email = "jack@lbry.io"
-keywords = "LBRY"
-
+from setuptools import setup, find_packages
 
 # TODO: find a way to keep this in sync with requirements.txt
 #
@@ -44,7 +31,6 @@ requires = [
     'zope.interface',
 ]
 
-
 console_scripts = [
     'lbrynet-daemon = lbrynet.lbrynet_daemon.DaemonControl:start',
     'stop-lbrynet-daemon = lbrynet.lbrynet_daemon.DaemonControl:stop',
@@ -58,22 +44,28 @@ def package_files(directory):
             yield os.path.join('..', path, filename)
 
 
-from setuptools import setup, find_packages
+package_name = "lbrynet"
+base_dir = os.path.abspath(os.path.dirname(__file__))
+# Get the long description from the README file
+with open(os.path.join(base_dir, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
+setup(
+    name=package_name,
+    version=__version__,
+    author="LBRY Inc.",
+    author_email="hello@lbry.io",
+    url="https://lbry.io",
+    description="A decentralized media library and marketplace",
+    long_description=long_description,
+    keywords="lbry protocol media",
+    license='MIT',
 
-setup(name=package_name,
-      description=description,
-      version=__version__,
-      maintainer=maintainer,
-      maintainer_email=maintainer_email,
-      url=url,
-      author=author,
-      keywords=keywords,
-      packages=find_packages(base_dir, exclude=['tests']),
-      install_requires=requires,
-      entry_points={'console_scripts': console_scripts},
-      package_data={
-          package_name: list(package_files('lbrynet/resources/ui'))
-      },
-      zip_safe=False,
+    packages=find_packages(base_dir, exclude=['tests']),
+    install_requires=requires,
+    entry_points={'console_scripts': console_scripts},
+    package_data={
+        package_name: list(package_files('lbrynet/resources/ui'))
+    },
+    zip_safe=False,
 )
