@@ -102,6 +102,7 @@ def migrate_dbs(db_dir):
          "sd_blob_id INTEGER, "
          "decryption_key TEXT, "
          "published_file_name TEXT, "
+         "suggested_file_name TEXT, "
          "claim_id INTEGER, "
          "FOREIGN KEY(claim_id) REFERENCES claims(id) "
          "ON DELETE SET NULL ON UPDATE CASCADE "
@@ -190,6 +191,7 @@ def migrate_dbs(db_dir):
     for stream_hash, decryption_key, stream_name, suggested_file_name in _lbry_files:
         lbry_files[stream_hash]['decryption_key'] = decryption_key
         lbry_files[stream_hash]['published_file_name'] = stream_name
+        lbry_files[stream_hash]['suggested_file_name'] = suggested_file_name
 
     for sd_hash, stream_hash in _stream_descriptors:
         lbry_files[stream_hash]['sd_hash'] = sd_hash
@@ -220,13 +222,14 @@ def migrate_dbs(db_dir):
                              lbry_files[stream_hash]['claim_transaction_id']))
 
         claim_row_id = lbry_cursor.lastrowid
-        lbry_cursor.execute("INSERT INTO files VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)",
+        lbry_cursor.execute("INSERT INTO files VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)",
                             (lbry_files[stream_hash]['status'],
                              lbry_files[stream_hash]['blob_data_rate'],
                              stream_hash,
                              None,
                              lbry_files[stream_hash]['decryption_key'],
                              lbry_files[stream_hash]['published_file_name'],
+                             lbry_files[stream_hash]['suggested_file_name'],
                              claim_row_id))
 
     for blob_hash in blobs:

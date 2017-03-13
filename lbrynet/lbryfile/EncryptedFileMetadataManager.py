@@ -67,6 +67,9 @@ class EncryptedFileMetadataManager(object):
             blob_infos = []
         defer.returnValue(blob_infos)
 
+    def add_blobs_to_stream(self, stream_hash, blobs):
+        return self.storage.add_blobs_to_stream(stream_hash, blobs)
+
     @defer.inlineCallbacks
     def get_stream_of_blob(self, blob_hash):
         stream_hash = yield self.storage.get_stream_of_blobhash(blob_hash)

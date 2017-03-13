@@ -21,20 +21,21 @@ class EncryptedFileMetadataManagerTest(unittest.TestCase):
     def test_basic(self):
         yield self.manager.setup()
         out = yield self.manager.get_all_streams()
-        self.assertEqual(len(out),0)
+        self.assertEqual(len(out), 0)
 
         stream_hash = random_lbry_hash()
         file_name = 'file_name'
+        suggested_name = 'suggested_name'
         key = 'key'
         blob1 = CryptBlobInfo(random_lbry_hash(), 0, 10, 1)
-        blob2 = CryptBlobInfo(random_lbry_hash(), 0, 10, 1)
-        blobs=[blob1,blob2]
+        blob2 = CryptBlobInfo(random_lbry_hash(), 1, 10, 1)
+        blobs = [blob1, blob2]
 
         # save stream
-        yield self.manager.save_stream(stream_hash, file_name, key, blobs)
+        yield self.manager.save_stream(stream_hash, file_name, key, suggested_name, blobs)
 
         out = yield self.manager.get_stream_info(stream_hash)
-        print out
+
         self.assertEqual(key, out[0])
         self.assertEqual(file_name, out[1])
 
@@ -48,9 +49,9 @@ class EncryptedFileMetadataManagerTest(unittest.TestCase):
         self.assertEqual(1, len(out))
 
         # add a blob to stream
-        blob3 = CryptBlobInfo(random_lbry_hash(),0,10,1)
+        blob3 = CryptBlobInfo(random_lbry_hash(), 2, 10, 1)
         blobs = [blob3]
-        out = yield self.manager.add_blobs_to_stream(stream_hash,blobs)
+        out = yield self.manager.add_blobs_to_stream(stream_hash, blobs)
         out = yield self.manager.get_blobs_for_stream(stream_hash)
         self.assertEqual(3, len(out))
 

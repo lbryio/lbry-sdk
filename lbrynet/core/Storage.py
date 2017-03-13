@@ -125,6 +125,7 @@ class MemoryStorage(object):
              "sd_blob_id INTEGER, "
              "decryption_key TEXT, "
              "published_file_name TEXT, "
+             "suggested_file_name TEXT, "
              "claim_id INTEGER, "
              "FOREIGN KEY(claim_id) REFERENCES claims(id) "
              "ON DELETE SET NULL ON UPDATE CASCADE "
@@ -244,13 +245,14 @@ class MemoryStorage(object):
             yield self.query("DELETE FROM files WHERE id=?", (file_id, ))
 
     @defer.inlineCallbacks
-    def store_stream(self, stream_hash, file_name, decryption_key, published_file_name):
-        query = ("INSERT INTO files VALUES (NULL, ?, NULL, ?, NULL, ?, ?, NULL)")
+    def store_stream(self, stream_hash, published_file_name, decryption_key, suggested_file_name):
+        query = ("INSERT INTO files VALUES (NULL, ?, NULL, ?, NULL, ?, ?, ?, NULL)")
         try:
             yield self.query(query, (STREAM_STATUS.PENDING,
-                                             stream_hash,
-                                             decryption_key,
-                                             published_file_name))
+                                     stream_hash,
+                                     decryption_key,
+                                     published_file_name,
+                                     suggested_file_name))
         except sqlite3.IntegrityError:
             raise Error.DuplicateStreamHashError(stream_hash)
         defer.returnValue(None)
@@ -478,7 +480,7 @@ class MemoryStorage(object):
             data_payment_rate = 0.0
         if rowid is False:
             yield self.query("INSERT INTO files VALUES "
-                                     "(NULL, ?, ?, ?, NULL, NULL, NULL, NULL)",
+                                     "(NULL, ?, ?, ?, NULL, NULL, NULL, NULL, NULL)",
                                      (STREAM_STATUS.PENDING,
                                       data_payment_rate, stream_hash))
             rowid = yield self.get_file_row_id(stream_hash)
