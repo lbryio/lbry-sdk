@@ -1083,9 +1083,10 @@ class Daemon(AuthJSONRPCServer):
         Return daemon status
 
         Args:
-            session_status: bool
+            'session_status' (optional): (bool) true to return session status,
+                default is false
         Returns:
-            daemon status
+            (dict) Daemon status dictionary
         """
         # on startup, the wallet or network won't be available but we still need this call to work
         has_wallet = self.session and self.session.wallet and self.session.wallet.network
@@ -1213,14 +1214,17 @@ class Daemon(AuthJSONRPCServer):
         Args:
             None
         Returns:
-            "platform": platform string
-            "os_release": os release string
-            "os_system": os name
-            "lbrynet_version: ": lbrynet_version,
-            "lbryum_version: ": lbryum_version,
-            "ui_version": commit hash of ui version being used
-            "remote_lbrynet": most recent lbrynet version available from github
-            "remote_lbryum": most recent lbryum version available from github
+            (dict) Dictionary of lbry version information
+            {
+                'platform': (str) platform string
+                'os_release': (str) os release string
+                'os_system': (str) os name
+                'lbrynet_version': (str) lbrynet_version,
+                'lbryum_version': (str) lbryum_version,
+                'ui_version': (str) commit hash of ui version being used
+                'remote_lbrynet': (str) most recent lbrynet version available from github
+                'remote_lbryum': (str) most recent lbryum version available from github
+            }
         """
 
         platform_info = self._get_platform()
@@ -1243,9 +1247,9 @@ class Daemon(AuthJSONRPCServer):
         Report a bug to slack
 
         Args:
-            'message': string, message to send
+            'message': (str) message to send
         Returns:
-            True if successful
+            (bool) true if successful
         """
 
         platform_name = self._get_platform()['platform']
@@ -1267,21 +1271,25 @@ class Daemon(AuthJSONRPCServer):
         """
         Get daemon settings
 
+        Args:
+            None
         Returns:
-            'run_on_startup': bool,
-            'data_rate': float,
-            'max_key_fee': float,
-            'download_directory': string,
-            'max_upload': float, 0.0 for unlimited
-            'max_download': float, 0.0 for unlimited
-            'search_timeout': float,
-            'download_timeout': int
-            'max_search_results': int,
-            'wallet_type': string,
-            'delete_blobs_on_remove': bool,
-            'peer_port': int,
-            'dht_node_port': int,
-            'use_upnp': bool,
+            (dict) Dictionary of daemon settings
+            {
+                'run_on_startup': (bool) currently not supported
+                'data_rate': (float) data rate
+                'max_key_fee': (float) maximum key fee
+                'download_directory': (str) path of where files are downloaded
+                'max_upload': (float), currently not supported
+                'max_download': (float), currently not supported
+                'download_timeout': (int) download timeout in seconds
+                'max_search_results': (int) max search results
+                'wallet_type': (str) wallet type
+                'delete_blobs_on_remove': (bool) delete blobs on removal
+                'peer_port': (int) peer port
+                'dht_node_port': (int) dht node port
+                'use_upnp': (bool) use upnp if true
+            }
         """
 
         log.info("Get daemon settings")
@@ -1300,15 +1308,15 @@ class Daemon(AuthJSONRPCServer):
         Set daemon settings
 
         Args:
-            'run_on_startup': bool,
-            'data_rate': float,
-            'max_key_fee': float,
-            'download_directory': string,
-            'max_upload': float, 0.0 for unlimited
-            'max_download': float, 0.0 for unlimited
-            'download_timeout': int
+            'run_on_startup': (bool) currently not supported
+            'data_rate': (float) data rate,
+            'max_key_fee': (float) maximum key fee,
+            'download_directory': (str) path of where files are downloaded,
+            'max_upload': (float), currently not supported
+            'max_download': (float), currently not supported
+            'download_timeout': (int) download timeout in seconds
         Returns:
-            settings dict
+            (dict) settings dict
         """
 
         def _log_settings_change():
@@ -1329,9 +1337,9 @@ class Daemon(AuthJSONRPCServer):
         Return a useful message for an API command
 
         Args:
-            'command': optional, command to retrieve documentation for
+            'command'(optional): (str) command to retrieve documentation for
         Returns:
-            if given a command, returns documentation about that command
+            (str) if given a command, returns documentation about that command
             otherwise returns general help message
         """
 
@@ -1359,7 +1367,7 @@ class Daemon(AuthJSONRPCServer):
         Return a list of available commands
 
         Returns:
-            list
+            (list) list of available commands
         """
         return self._render_response(sorted(
             [command for command in self.callable_methods.keys()
@@ -1377,7 +1385,7 @@ class Daemon(AuthJSONRPCServer):
         Return the balance of the wallet
 
         Returns:
-            balance, float
+            (float) amount of lbry credits in wallet
         """
         return self._render_response(float(self.session.wallet.get_balance()))
 
@@ -1392,7 +1400,7 @@ class Daemon(AuthJSONRPCServer):
         Stop lbrynet-daemon
 
         Returns:
-            shutdown message
+            (string) Shutdown message
         """
 
         def _display_shutdown_message():
@@ -1409,38 +1417,40 @@ class Daemon(AuthJSONRPCServer):
         List files limited by optional filters
 
         Args:
-            'name' (optional): filter files by lbry name,
-            'sd_hash' (optional): filter files by sd hash,
-            'file_name' (optional): filter files by the name in the downloads folder,
-            'stream_hash' (optional): filter files by stream hash,
-            'claim_id' (optional): filter files by claim id,
-            'outpoint' (optional): filter files by claim outpoint,
-            'rowid' (optional): filter files by internal row id,
-            'full_status': (optional): bool, if true populate the 'message' and 'size' fields
+            'name' (optional): (str) filter files by lbry name,
+            'sd_hash' (optional): (str) filter files by sd hash,
+            'file_name' (optional): (str) filter files by the name in the downloads folder,
+            'stream_hash' (optional): (str) filter files by stream hash,
+            'claim_id' (optional): (str) filter files by claim id,
+            'outpoint' (optional): (str) filter files by claim outpoint,
+            'rowid' (optional): (int) filter files by internal row id,
+            'full_status': (optional): (bool) if true populate the 'message' and 'size' fields
 
         Returns:
+            (list) List of files
+
             [
                 {
-                    'completed': bool,
-                    'file_name': str,
-                    'download_directory': str,
-                    'points_paid': float,
-                    'stopped': bool,
-                    'stream_hash': str (hex),
-                    'stream_name': str,
-                    'suggested_file_name': str,
-                    'sd_hash': str (hex),
-                    'name': str,
-                    'outpoint': str, (txid:nout)
-                    'claim_id': str (hex),
-                    'download_path': str,
-                    'mime_type': str,
-                    'key': str (hex),
-                    'total_bytes': int, None if full_status is False
-                    'written_bytes': int,
-                    'message': str, None if full_status is False
-                    'metadata': Metadata dict
-                }
+                    'completed': (bool) true if download is completed,
+                    'file_name': (str) name of file,
+                    'download_directory': (str) download directory,
+                    'points_paid': (float) credit paid to download file,
+                    'stopped': (bool) true if download is stopped,
+                    'stream_hash': (str) stream hash of file,
+                    'stream_name': (str) stream name ,
+                    'suggested_file_name': (str) suggested file name,
+                    'sd_hash': (str) sd hash of file,
+                    'name': (str) name claim attached to file
+                    'outpoint': (str) claim outpoint attached to file
+                    'claim_id': (str) claim ID attached to file,
+                    'download_path': (str) download path of file,
+                    'mime_type': (str) mime type of file,
+                    'key': (str) key attached to file,
+                    'total_bytes': (int) file size in bytes, None if full_status is false
+                    'written_bytes': (int) written size in bytes
+                    'message': (str), None if full_status is false
+                    'metadata': (dict) Metadata dictionary
+                },
             ]
         """
 
@@ -1454,9 +1464,10 @@ class Daemon(AuthJSONRPCServer):
         Resolve stream info from a LBRY name
 
         Args:
-            'name': name to look up, string, do not include lbry:// prefix
+            'name': (str) name to look up, do not include lbry:// prefix
         Returns:
-            metadata dictionary from name claim or None if the name is not known
+            (dict) Metadata dictionary from name claim, None if the name is not
+                    resolvable
         """
 
         if not name:
@@ -1480,23 +1491,25 @@ class Daemon(AuthJSONRPCServer):
     def jsonrpc_claim_show(self, name, txid=None, nout=None):
 
         """
-            Resolve claim info from a LBRY name
+        Resolve claim info from a LBRY name
 
-            Args:
-                'name': name to look up, string, do not include lbry:// prefix
-                'txid': optional, if specified, look for claim with this txid
-                'nout': optional, if specified, look for claim with this nout
+        Args:
+            'name': (str) name to look up, do not include lbry:// prefix
+            'txid'(optional): (str) if specified, look for claim with this txid
+            'nout'(optional): (int) if specified, look for claim with this nout
+        Returns:
+            (dict) Dictionary contaning claim info, (bool) false if claim is not
+                resolvable
 
-            Returns:
-                false if name is not claimed , else return dictionary containing
-
-                'txid': txid of claim
-                'nout': nout of claim
-                'amount': amount of claim
-                'value': value of claim
-                'height' : height of claim
-                'claim_id': claim ID of claim
-                'supports': supports associated with claim
+            {
+                'txid': (str) txid of claim
+                'nout': (int) nout of claim
+                'amount': (float) amount of claim
+                'value': (str) value of claim
+                'height' : (int) height of claim takeover
+                'claim_id': (str) claim ID of claim
+                'supports': (list) list of supports associated with claim
+            }
         """
 
         d = self.session.wallet.get_claim_info(name, txid, nout)
@@ -1513,35 +1526,38 @@ class Daemon(AuthJSONRPCServer):
         Download stream from a LBRY name.
 
         Args:
-            'name': name to download, string
-            'file_name': optional, a user specified name for the downloaded file
-            'stream_info': optional, specified stream info overrides name
-            'timeout': optional
-            'download_directory': optional, path to directory where file will be saved, string
-            'wait_for_write': optional, defaults to True. When set, waits for the file to
+            'name': (str) name to download
+            'file_name'(optional): (str) a user specified name for the downloaded file
+            'stream_info'(optional): (str) specified stream info overrides name
+            'timeout'(optional): (int) download timeout in number of seconds
+            'download_directory'(optional): (str) path to directory where file will be saved
+            'wait_for_write'(optional): (bool)  defaults to True. When set, waits for the file to
                 only start to be written before returning any results.
         Returns:
+            (dict) Dictionary contaning information about the stream
+
             {
-                'completed': bool,
-                'file_name': str,
-                'download_directory': str,
-                'points_paid': float,
-                'stopped': bool,
-                'stream_hash': str (hex),
-                'stream_name': str,
-                'suggested_file_name': str,
-                'sd_hash': str (hex),
-                'name': str,
-                'outpoint': str, (txid:nout)
-                'claim_id': str (hex),
-                'download_path': str,
-                'mime_type': str,
-                'key': str (hex),
-                'total_bytes': int
-                'written_bytes': int,
-                'message': str
-                'metadata': Metadata dict
+                'completed': (bool) true if download is completed,
+                'file_name': (str) name of file,
+                'download_directory': (str) download directory,
+                'points_paid': (float) credit paid to download file,
+                'stopped': (bool) true if download is stopped,
+                'stream_hash': (str) stream hash of file,
+                'stream_name': (str) stream name ,
+                'suggested_file_name': (str) suggested file name,
+                'sd_hash': (str) sd hash of file,
+                'name': (str) name claim attached to file
+                'outpoint': (str) claim outpoint attached to file
+                'claim_id': (str) claim ID attached to file,
+                'download_path': (str) download path of file,
+                'mime_type': (str) mime type of file,
+                'key': (str) key attached to file,
+                'total_bytes': (int) file size in bytes, None if full_status is false
+                'written_bytes': (int) written size in bytes
+                'message': (str), None if full_status is false
+                'metadata': (dict) Metadata dictionary
             }
+
         """
 
         timeout = timeout if timeout is not None else self.download_timeout
@@ -1603,12 +1619,12 @@ class Daemon(AuthJSONRPCServer):
         Start or stop seeding a file
 
         Args:
-            'status': "start" or "stop"
-            'name': start file by lbry name,
-            'sd_hash': start file by the hash in the name claim,
-            'file_name': start file by its name in the downloads folder,
+            'status': (str) "start" or "stop"
+            'name' (optional): (str) start file by lbry name,
+            'sd_hash' (optional): (str) start file by the hash in the name claim,
+            'file_name' (optional): (str) start file by its name in the downloads folder,
         Returns:
-            confirmation message
+            (str) Confirmation message
         """
 
         if status not in ['start', 'stop']:
@@ -1636,17 +1652,18 @@ class Daemon(AuthJSONRPCServer):
         Delete a lbry file
 
         Args:
-            'name' (optional): delete files by lbry name,
-            'sd_hash' (optional): delete files by sd hash,
-            'file_name' (optional): delete files by the name in the downloads folder,
-            'stream_hash' (optional): delete files by stream hash,
-            'claim_id' (optional): delete files by claim id,
-            'outpoint' (optional): delete files by claim outpoint,
-            'rowid': (optional): delete file by rowid in the file manager
-            'delete_target_file' (optional): delete file from downloads folder, defaults to True
-                                             if False only the blobs and db entries will be deleted
+            'name' (optional): (str) delete file by lbry name,
+            'sd_hash' (optional): (str) delete file by sd hash,
+            'file_name' (optional): (str) delete file by the name in the downloads folder,
+            'stream_hash' (optional): (str) delete file by stream hash,
+            'claim_id' (optional): (str) delete file by claim ID,
+            'outpoint' (optional): (str) delete file by claim outpoint,
+            'rowid': (optional): (int) delete file by rowid in the file manager
+            'delete_target_file' (optional): (bool) delete file from downloads folder,
+                                            defaults to true if false only the blobs and
+                                            db entries will be deleted
         Returns:
-            True if deletion was successful, otherwise False
+            (bool) true if deletion was successful
         """
 
         lbry_files = yield self._get_lbry_files(return_json=False, **kwargs)
@@ -1681,10 +1698,11 @@ class Daemon(AuthJSONRPCServer):
         Get estimated cost for a lbry stream
 
         Args:
-            'name': lbry name
-            'size': stream size, in bytes. if provided an sd blob won't be downloaded.
+            'name': (str) lbry name
+            'size' (optional): (int) stream size, in bytes. if provided an sd blob
+                                won't be downloaded.
         Returns:
-            estimated cost
+            (float) Estimated cost in lbry credits
         """
         cost = yield self.get_est_cost(name, size)
         defer.returnValue(cost)
@@ -1695,18 +1713,21 @@ class Daemon(AuthJSONRPCServer):
         Make a new name claim and publish associated data to lbrynet
 
         Args:
-            'name': str, name to be claimed, string
-            'bid': float, amount of credits to commit in this claim,
-            'metadata': dict, Metadata compliant (can be missing sources if a file is provided)
-            'file_path' (optional): str, path to file to be associated with name, if not given
+            'name': (str) name to be claimed, string
+            'bid': (float) amount of credits to commit in this claim,
+            'metadata': (dict) Metadata compliant (can be missing sources if a file is provided)
+            'file_path' (optional): (str) path to file to be associated with name, if not given
                                     the stream from your existing claim for the name will be used
-            'fee' (optional): dict, FeeValidator compliant (i.e. {'LBC':{'amount':10}} )
+            'fee' (optional): (dict) FeeValidator compliant (i.e. {'LBC':{'amount':10}} )
         Returns:
-            'tx' : hex encoded transaction
-            'txid' : txid of resulting transaction
-            'nout' : nout of the resulting support claim
-            'fee' : fee paid for the claim transaction
-            'claim_id' : claim id of the resulting transaction
+            (dict) Dictionary containing result of the claim
+            {
+                'tx' : (str) hex encoded transaction
+                'txid' : (str) txid of resulting claim
+                'nout' : (int) nout of the resulting claim
+                'fee' : (float) fee paid for the claim transaction
+                'claim_id' : (str) claim ID of the resulting claim
+            }
         """
 
         log.info("Publish: %s", {
@@ -1735,11 +1756,14 @@ class Daemon(AuthJSONRPCServer):
         Abandon a name and reclaim credits from the claim
 
         Args:
-            'txid': txid of claim, string
-            'nout': nout of claim, integer
+            'txid': (str) txid of claim
+            'nout': (int) nout of claim
         Return:
-            txid : txid of resulting transaction if succesful
-            fee : fee paid for the transaction if succesful
+            (dict) Dictionary containing result of the claim
+            {
+                txid : (str) txid of resulting transaction
+                fee : (float) fee paid for the transaction
+            }
         """
 
         try:
@@ -1754,11 +1778,6 @@ class Daemon(AuthJSONRPCServer):
     def jsonrpc_abandon_name(self, **kwargs):
         """
         DEPRECATED, use abandon_claim
-
-        Args:
-            'txid': txid of claim, string
-        Return:
-            txid
         """
 
         return self.jsonrpc_abandon_claim(**kwargs)
@@ -1776,13 +1795,16 @@ class Daemon(AuthJSONRPCServer):
         Support a name claim
 
         Args:
-            'name': name
-            'claim_id': claim id of claim to support
-            'amount': amount to support by
+            'name': (str) name
+            'claim_id': (str) claim ID of claim to support
+            'amount': (float) amount to support by
         Return:
-            txid : txid of resulting transaction if succesful
-            nout : nout of the resulting support claim if succesful
-            fee : fee paid for the transaction if succesful
+            (dict) Dictionary containing result of the claim
+            {
+                txid : (str) txid of resulting support claim
+                nout : (int) nout of the resulting support claim
+                fee : (float) fee paid for the transaction
+            }
         """
 
         d = self.session.wallet.support_claim(name, claim_id, amount)
@@ -1800,7 +1822,7 @@ class Daemon(AuthJSONRPCServer):
         Args:
             'name': name to look up
         Returns:
-            claim info, False if no such claim exists
+            claim info, false if no such claim exists
         """
 
         d = self.session.wallet.get_my_claim(name)
@@ -1823,23 +1845,23 @@ class Daemon(AuthJSONRPCServer):
         Args:
             None
         Returns
-            list of name claims owned by user
+            (list) List of name claims owned by user
             [
                 {
-                    'address': address that owns the claim
-                    'amount': amount assigned to the claim
-                    'blocks_to_expiration': number of blocks until it expires
-                    'category': "claim", "update" , or "support"
-                    'claim_id': claim ID of the claim
-                    'confirmations': number of blocks of confirmations for the claim
-                    'expiration_height': the block height which the claim will expire
-                    'expired': True if expired, False otherwise
-                    'height': height of the block containing the claim
-                    'is_spent': True if claim is abandoned, False otherwise
-                    'name': name of the claim
-                    'txid': txid of the cliam
-                    'nout': nout of the claim
-                    'value': value of the claim
+                    'address': (str) address that owns the claim
+                    'amount': (float) amount assigned to the claim
+                    'blocks_to_expiration': (int) number of blocks until it expires
+                    'category': (str) "claim", "update" , or "support"
+                    'claim_id': (str) claim ID of the claim
+                    'confirmations': (int) number of blocks of confirmations for the claim
+                    'expiration_height': (int) the block height which the claim will expire
+                    'expired': (bool) true if expired, false otherwise
+                    'height': (int) height of the block containing the claim
+                    'is_spent': (bool) true if claim is abandoned, false otherwise
+                    'name': (str) name of the claim
+                    'txid': (str) txid of the cliam
+                    'nout': (int) nout of the claim
+                    'value': (str) value of the claim
                 },
            ]
         """
@@ -1866,24 +1888,26 @@ class Daemon(AuthJSONRPCServer):
         Get claims for a name
 
         Args:
-            name: search for claims on this name
+            'name': (str) search for claims on this name
         Returns
+            (dict) State of claims assigned for the name
             {
-                'claims': list of claims for the name
+                'claims': (list) list of claims for the name
                 [
                     {
-                    'amount': amount assigned to the claim, not including supports
-                    'effective_amount': total amount assigned to the claim, including supports
-                    'claim_id': claim ID of the claim
-                    'height': height of block containing the claim
-                    'txid': txid of the claim
-                    'nout': nout of the claim
-                    'supports': a list of supports attached to the claim
-                    'value': the value of the claim
+                    'amount': (float) amount assigned to the claim
+                    'effective_amount': (float) total amount assigned to the claim,
+                                        including supports
+                    'claim_id': (str) claim ID of the claim
+                    'height': (int) height of block containing the claim
+                    'txid': (str) txid of the claim
+                    'nout': (int) nout of the claim
+                    'supports': (list) a list of supports attached to the claim
+                    'value': (str) the value of the claim
                     },
                 ]
-                'supports_without_claims': list of supports without any claims attached to them
-                'last_takeover_height': the height when the last takeover for the name happened
+                'supports_without_claims': (list) supports without any claims attached to them
+                'last_takeover_height': (int) the height of last takeover for the name
             }
         """
 
@@ -1902,12 +1926,12 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     def jsonrpc_transaction_list(self):
         """
-        List transactions
+        List transactions belonging to wallet
 
         Args:
             None
         Returns:
-            list of transactions
+            (list) List of transactions
         """
 
         d = self.session.wallet.get_history()
@@ -1925,9 +1949,9 @@ class Daemon(AuthJSONRPCServer):
         Get a decoded transaction from a txid
 
         Args:
-            txid: txid hex string
+            'txid': (str) txid of transaction
         Returns:
-            JSON formatted transaction
+            (dict) JSON formatted transaction
         """
 
         d = self.session.wallet.get_transaction(txid)
@@ -1947,9 +1971,9 @@ class Daemon(AuthJSONRPCServer):
         Checks if an address is associated with the current wallet.
 
         Args:
-            address: string
+            'address': (str) address to check in base58
         Returns:
-            is_mine: bool
+            (bool) true, if address is associated with current wallet
         """
 
         d = self.session.wallet.address_is_mine(address)
@@ -1969,9 +1993,9 @@ class Daemon(AuthJSONRPCServer):
         Get public key from wallet address
 
         Args:
-            wallet: wallet address, base58
+            'wallet': (str) wallet address in base58
         Returns:
-            public key
+            (str) Public key in hex encoding
         """
 
         d = self.session.wallet.get_pub_keys(wallet)
@@ -1992,7 +2016,7 @@ class Daemon(AuthJSONRPCServer):
         Args:
             None
         Returns:
-            new wallet address, base 58 string
+            (str) New wallet address in base58
         """
 
         def _disp(address):
@@ -2007,13 +2031,13 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     def jsonrpc_send_amount_to_address(self, amount, address):
         """
-            Send credits to an address
+        Send credits to an address
 
-            Args:
-                amount: the amount to send
-                address: the address of the recipient
-            Returns:
-                True if payment successfully scheduled
+        Args:
+            'amount': (float) the amount to send
+            'address': (str) the address of the recipient in base58
+        Returns:
+            (bool) true if payment successfully scheduled
         """
 
         reserved_points = self.session.wallet.reserve_points(address, amount)
@@ -2031,12 +2055,12 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_block_show(self, blockhash=None, height=None):
         """
-            Get contents of a block
+        Get contents of a block
 
-            Args:
-                blockhash: hash of the block to look up
-            Returns:
-                requested block
+        Args:
+            'blockhash': (str) hash of the block to look up
+        Returns:
+            (dict) Requested block
         """
 
         if blockhash is not None:
@@ -2065,14 +2089,14 @@ class Daemon(AuthJSONRPCServer):
         Download and return a sd blob
 
         Args:
-            sd_hash
-            timeout (optional)
-            payment_rate_manager (optional): if not given the default payment rate manager
+            'sd_hash': (str) hash of sd blob
+            'timeout'(optional): (int) timeout in number of seconds
+            'payment_rate_manager'(optional): (str) if not given the default payment rate manager
                                              will be used. supported alternative rate managers:
                                              only-free
 
         Returns
-            Success/Fail message or decoded data
+            (str) Success/Fail message or (dict) decoded data
         """
 
         payment_rate_manager = get_blob_payment_rate_manager(self.session, payment_rate_manager)
@@ -2088,17 +2112,17 @@ class Daemon(AuthJSONRPCServer):
         Download and return a blob
 
         Args:
-            blob_hash
-            timeout (optional)
-            encoding (optional): by default no attempt at decoding is made
+            'blob_hash': (str) blob hash of blob to get
+            'timeout'(optional): (int) timeout in number of seconds
+            'encoding'(optional): (str) by default no attempt at decoding is made,
                                  can be set to one of the following decoders:
-                                 json
-            payment_rate_manager (optional): if not given the default payment rate manager
+                                 'json'
+            'payment_rate_manager'(optional): if not given the default payment rate manager
                                              will be used. supported alternative rate managers:
-                                             only-free
+                                             'only-free'
 
         Returns
-            Success/Fail message or decoded data
+            (str) Success/Fail message or (dict) decoded data
         """
 
         decoders = {
@@ -2126,9 +2150,9 @@ class Daemon(AuthJSONRPCServer):
         Delete a blob
 
         Args:
-            blob_hash
+            'blob_hash': (str) hash of blob to get
         Returns:
-            Success/fail message
+            (str) Success/fail message
         """
 
         if blob_hash not in self.session.blob_manager.blobs:
@@ -2154,10 +2178,10 @@ class Daemon(AuthJSONRPCServer):
         Get peers for blob hash
 
         Args:
-            'blob_hash': blob hash
-            'timeout' (int, optional): peer search timeout
+            'blob_hash': (str) blob hash
+            'timeout'(optional): (int) peer search timeout in seconds
         Returns:
-            List of contacts
+            (list) List of contacts
         """
 
         timeout = timeout or conf.settings['peer_search_timeout']
@@ -2180,7 +2204,7 @@ class Daemon(AuthJSONRPCServer):
         Args:
             None
         Returns:
-
+            (str) Success/fail message
         """
 
         d = self.session.blob_manager.immediate_announce_all_blobs()
@@ -2192,9 +2216,9 @@ class Daemon(AuthJSONRPCServer):
         Reflect a stream
 
         Args:
-            sd_hash: sd_hash of lbry file
+            'sd_hash': (str) sd_hash of lbry file
         Returns:
-            True or traceback
+            (bool) true if successful
         """
 
         d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
@@ -2214,18 +2238,18 @@ class Daemon(AuthJSONRPCServer):
     def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
                           finished=None, page_size=None, page=None):
         """
-        Returns blob hashes, if not given filters returns all blobs known by the blob manager
+        Returns blob hashes. If not given filters, returns all blobs known by the blob manager
 
         Args:
-            uri (str, optional): filter by blobs in stream for winning claim
-            stream_hash (str, optional): filter by blobs in given stream hash
-            sd_hash (str, optional): filter by blobs in given sd hash
-            needed (bool, optional): only return needed blobs
-            finished (bool, optional): only return finished blobs
-            page_size (int, optional): limit number of results returned
-            page (int, optional): filter to page x of [page_size] results
+            'uri' (optional): (str) filter by blobs in stream for winning claim
+            'stream_hash' (optional): (str) filter by blobs in given stream hash
+            'sd_hash' (optional): (str) filter by blobs in given sd hash
+            'needed' (optional): (bool) only return needed blobs
+            'finished' (optional): (bool) only return finished blobs
+            'page_size' (optional): (int) limit number of results returned
+            'page' (optional): (int) filter to page x of [page_size] results
         Returns:
-            list of blob hashes
+            (list) List of blob hashes
         """
 
         if uri:
@@ -2272,7 +2296,7 @@ class Daemon(AuthJSONRPCServer):
         Args:
             None
         Returns:
-            True
+            (bool) true if successful
         """
 
         d = self.session.blob_manager.get_all_verified_blobs()
@@ -2285,13 +2309,13 @@ class Daemon(AuthJSONRPCServer):
         """
         Get stream availability for a winning claim
 
-        Arg:
-            name (str): lbry name
-            sd_timeout (int, optional): sd blob download timeout
-            peer_timeout (int, optional): how long to look for peers
+        Args:
+            'name' : (str) lbry name
+            'sd_timeout' (optional): (int) sd blob download timeout
+            'peer_timeout' (optional): (int) how long to look for peers
 
         Returns:
-             peers per blob / total blobs
+            (float) Peers per blob / total blobs
         """
 
         def _get_mean(blob_availabilities):
@@ -2349,7 +2373,7 @@ class Daemon(AuthJSONRPCServer):
         Args:
             None
         Returns:
-            Startup message, such as first run notification
+            (str) Startup message, such as first run notification
         """
 
         def _get_startup_message(status):
