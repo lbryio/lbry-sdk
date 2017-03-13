@@ -1456,7 +1456,7 @@ class Daemon(AuthJSONRPCServer):
         Args:
             'name': name to look up, string, do not include lbry:// prefix
         Returns:
-            metadata from name claim or None if the name is not known
+            metadata dictionary from name claim or None if the name is not known
         """
 
         if not name:
@@ -1488,7 +1488,15 @@ class Daemon(AuthJSONRPCServer):
                 'nout': optional, if specified, look for claim with this nout
 
             Returns:
-                txid, amount, value, n, height
+                false if name is not claimed , else return dictionary containing
+
+                'txid': txid of claim
+                'nout': nout of claim
+                'amount': amount of claim
+                'value': value of claim
+                'height' : height of claim
+                'claim_id': claim ID of claim
+                'supports': supports associated with claim
         """
 
         d = self.session.wallet.get_claim_info(name, txid, nout)
@@ -1815,7 +1823,25 @@ class Daemon(AuthJSONRPCServer):
         Args:
             None
         Returns
-            list of name claims
+            list of name claims owned by user
+            [
+                {
+                    'address': address that owns the claim
+                    'amount': amount assigned to the claim
+                    'blocks_to_expiration': number of blocks until it expires
+                    'category': "claim", "update" , or "support"
+                    'claim_id': claim ID of the claim
+                    'confirmations': number of blocks of confirmations for the claim
+                    'expiration_height': the block height which the claim will expire
+                    'expired': True if expired, False otherwise
+                    'height': height of the block containing the claim
+                    'is_spent': True if claim is abandoned, False otherwise
+                    'name': name of the claim
+                    'txid': txid of the cliam
+                    'nout': nout of the claim
+                    'value': value of the claim
+                },
+           ]
         """
 
         d = self.session.wallet.get_name_claims()
@@ -1842,7 +1868,23 @@ class Daemon(AuthJSONRPCServer):
         Args:
             name: search for claims on this name
         Returns
-            list of name claims
+            {
+                'claims': list of claims for the name
+                [
+                    {
+                    'amount': amount assigned to the claim, not including supports
+                    'effective_amount': total amount assigned to the claim, including supports
+                    'claim_id': claim ID of the claim
+                    'height': height of block containing the claim
+                    'txid': txid of the claim
+                    'nout': nout of the claim
+                    'supports': a list of supports attached to the claim
+                    'value': the value of the claim
+                    },
+                ]
+                'supports_without_claims': list of supports without any claims attached to them
+                'last_takeover_height': the height when the last takeover for the name happened
+            }
         """
 
         d = self.session.wallet.get_claims_for_name(name)
