@@ -17,9 +17,17 @@ Our [releases page](https://github.com/lbryio/lbry-app/releases/latest) contains
 
 Installing from source is also relatively painless, full instructions are in [INSTALL.md](INSTALL.md)
 
-## Using the LBRY daemon
+## Running
 
-See our quickstart guide at http://lbry.io/quickstart for details on how to install and use the `lbrynet-daemon`.
+Run `lbrynet-daemon` to launch the daemon.
+
+## Using
+
+By default, `lbrynet-daemon` will provide a JSON-RPC server at `http://localhost:5279`. It is easy to interact with via cURL or sane programming languages.
+
+Our [quickstart guide](http://lbry.io/quickstart) provides clear sample usages and free credits for learning.
+
+The full API is documented [here](https://lbry.io/api).
 
 ## What is LBRY?
 
