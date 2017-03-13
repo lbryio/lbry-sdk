@@ -3,30 +3,23 @@
 
 # LBRY
 
-LBRY is a fully decentralized, open-source protocol facilitating the
-discovery, access, and (sometimes) purchase of data.
+LBRY is an open-source protocol providing distribution, discovery, and purchase of digital content (data) via a decentralized network.
 
-This repo is a reference implementation of the LBRY protocol and
-provides daemon that can interact with the network via a json-rpc
-interface.
+This repo is a reference implementation of the [LBRY API](https://lbry.io/api). 
 
-## Installing the LBRY App
+It provides a daemon that can interact with the network via a json-rpc interface over HTTP.
 
-The LBRY App is a decentralized content marketplace built on top of
-the LBRY protocol. We provide binaries for Windows, macOS, and
-Debian-based Linux.
+## Installing
 
-| Windows | macOS | Linux |
-| --- | --- | --- |
-| [Download](https://lbry.io/get/lbry.msi) | [Download](https://lbry.io/get/lbry.dmg) | [Download](https://lbry.io/get/lbry.deb) |
+**Note**: This project no longer directly bundles a graphic interface (browser). If you want to use LBRY via a browser, [use the LBRY App](https://github.com/lbryio/lbry-app).
 
-Our [releases page](https://github.com/lbryio/lbry-app/releases/latest) also contains the latest release, pre-releases, and past builds.
+Our [releases page](https://github.com/lbryio/lbry-app/releases/latest) contains pre-built binaries of the latest release, pre-releases, and past releases, for macOS, Debian-based Linux, and Windows.
 
+Installing from source is also relatively painless, full instructions are in [INSTALL.md](INSTALL.md)
 
 ## Using the LBRY daemon
 
 See our quickstart guide at http://lbry.io/quickstart for details on how to install and use the `lbrynet-daemon`.
-
 
 ## What is LBRY?
 
@@ -52,7 +45,7 @@ which do know all of the necessary chunks.
 
 ## Contributions
 
-To contribute, [join us on Slack](https://lbry-slackin.herokuapp.com/) or contact jeremy@lbry.io. Pull requests are also welcome.
+To contribute, [join us on Slack](https://slack.lbry.io/) or contact jeremy@lbry.io. Pull requests are also welcome.
 
 ## Support
 
