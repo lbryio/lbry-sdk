@@ -213,7 +213,6 @@ class BlobAvailabilityTracker(BlobAvailability.BlobAvailabilityTracker):
         pass
 
 
-
 create_stream_sd_file = {
     'stream_name': '746573745f66696c65',
     'blobs': [

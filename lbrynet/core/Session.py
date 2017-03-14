@@ -1,7 +1,8 @@
 import logging
 import miniupnpc
-from lbrynet.core.BlobManager import DiskBlobManager, TempBlobManager
+from lbrynet.core.BlobManager import BlobManager
 from lbrynet.dht import node
+from lbrynet.core.Storage import FileStorage, MemoryStorage
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.client.DHTPeerFinder import DHTPeerFinder
@@ -36,17 +37,16 @@ class Session(object):
     upnp, which opens holes in compatible firewalls so that remote
     peers can connect to this peer.
     """
-    def __init__(self, blob_data_payment_rate, db_dir=None,
-                 lbryid=None, peer_manager=None, dht_node_port=None,
-                 known_dht_nodes=None, peer_finder=None,
-                 hash_announcer=None, blob_dir=None,
-                 blob_manager=None, peer_port=None, use_upnp=True,
-                 rate_limiter=None, wallet=None,
-                 dht_node_class=node.Node, blob_tracker_class=None,
-                 payment_rate_manager_class=None, is_generous=True):
+    def __init__(self, blob_data_payment_rate, db_dir=None, storage=None, lbryid=None,
+                 peer_manager=None, dht_node_port=None, known_dht_nodes=None, peer_finder=None,
+                 hash_announcer=None, blob_dir=None, blob_manager=None, peer_port=None,
+                 use_upnp=True, rate_limiter=None, wallet=None, dht_node_class=node.Node,
+                 blob_tracker_class=None, payment_rate_manager_class=None, is_generous=True):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
-        @param db_dir: The directory in which levelDB files should be stored
+        @param db_dir: The directory in which SQLite files should be stored
+
+        @param storage: An optional instance of an already running database interface
 
         @param lbryid: The unique ID of this node
 
@@ -77,10 +77,8 @@ class Session(object):
 
         @param blob_manager: An object which keeps track of downloaded
             blobs and provides access to them. If None, and blob_dir
-            is not None, a DiskBlobManager will be used, with the
-            given blob_dir.  If None and blob_dir is None, a
-            TempBlobManager will be used, which stores blobs in memory
-            only.
+            is not None, a BlobManager will be used, with the
+            given blob_dir.
 
         @param peer_port: The port on which other peers should connect
             to this peer
@@ -99,8 +97,12 @@ class Session(object):
             which is meant for testing only
 
         """
-        self.db_dir = db_dir
 
+        self.db_dir = db_dir
+        if not db_dir:
+            self.storage = MemoryStorage()
+        else:
+            self.storage = storage or FileStorage(self.db_dir)
         self.lbryid = lbryid
 
         self.peer_manager = peer_manager
@@ -296,12 +298,9 @@ class Session(object):
             self.rate_limiter = RateLimiter()
 
         if self.blob_manager is None:
-            if self.blob_dir is None:
-                self.blob_manager = TempBlobManager(self.hash_announcer)
-            else:
-                self.blob_manager = DiskBlobManager(self.hash_announcer,
-                                                    self.blob_dir,
-                                                    self.db_dir)
+            self.blob_manager = BlobManager(self.hash_announcer,
+                                            blob_dir=self.blob_dir,
+                                            storage=self.storage)
 
         if self.blob_tracker is None:
             self.blob_tracker = self.blob_tracker_class(self.blob_manager,

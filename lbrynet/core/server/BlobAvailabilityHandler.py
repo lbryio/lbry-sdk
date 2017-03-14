@@ -40,13 +40,13 @@ class BlobAvailabilityHandler(object):
 
     def handle_queries(self, queries):
         if self.query_identifiers[0] in queries:
-            log.info("Received the client's list of requested blobs")
+            log.info("Received the client's list of (%i) requested blobs",
+                     len(queries[self.query_identifiers[0]]))
             d = self._get_available_blobs(queries[self.query_identifiers[0]])
 
             def set_field(available_blobs):
                 log.debug("available blobs: %s", str(available_blobs))
                 return {'available_blobs': available_blobs}
-
             d.addCallback(set_field)
             return d
         return defer.succeed({})

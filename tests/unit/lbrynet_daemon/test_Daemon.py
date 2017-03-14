@@ -126,7 +126,7 @@ class TestJsonRpc(unittest.TestCase):
         mock_conf_settings(self)
         util.resetTime(self)
         self.test_daemon = get_test_daemon()
-        self.test_daemon.session.wallet = Wallet.LBRYumWallet(storage=Wallet.InMemoryStorage())
+        self.test_daemon.session.wallet = Wallet.LBRYumWallet(storage=self.test_daemon.storage)
         self.test_daemon.session.wallet.network = FakeNetwork()
         self.test_daemon.session.wallet.get_best_blockhash = noop
 

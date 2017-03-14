@@ -60,7 +60,7 @@ def main(args=None):
     safe_makedirs(blob_dir)
     # Don't set a hash_announcer, we have no need to tell anyone we
     # have these blobs
-    blob_manager = BlobManager.DiskBlobManager(None, blob_dir, db_dir)
+    blob_manager = BlobManager.BlobManager(None, blob_dir, db_dir)
     # TODO: make it so that I can disable the BlobAvailabilityTracker
     #       or, in general, make the session more reusable for users
     #       that only want part of the functionality

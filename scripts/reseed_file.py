@@ -53,7 +53,7 @@ def reseed_file(input_file, sd_blob):
     db_dir = conf.settings['data_dir']
     blobfile_dir = os.path.join(db_dir, "blobfiles")
     announcer = HashAnnouncer.DummyHashAnnouncer()
-    blob_manager = BlobManager.DiskBlobManager(announcer, blobfile_dir, db_dir)
+    blob_manager = BlobManager.BlobManager(announcer, blobfile_dir, db_dir)
     yield blob_manager.setup()
     creator = CryptStreamCreator.CryptStreamCreator(
         blob_manager, None, sd_blob.key(), sd_blob.iv_generator())
