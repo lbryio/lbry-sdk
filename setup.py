@@ -26,7 +26,6 @@ requires = [
     'requests',
     'requests_futures',
     'seccure',
-    'simplejson',
     'txJSON-RPC',
     'zope.interface',
 ]

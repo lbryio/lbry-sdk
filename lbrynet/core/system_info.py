@@ -1,5 +1,5 @@
 import platform
-import simplejson as json
+import json
 
 from urllib2 import urlopen
 
@@ -8,7 +8,7 @@ from lbrynet import build_type
 from lbryum.version import LBRYUM_VERSION as lbryum_version
 
 
-def get_platform():
+def get_platform(get_ip=True):
     p = {
         "processor": platform.processor(),
         "python_version": platform.python_version(),
@@ -17,13 +17,13 @@ def get_platform():
         "os_system": platform.system(),
         "lbrynet_version": lbrynet_version,
         "lbryum_version": lbryum_version,
-        "ui_version": "not loaded yet",
         "build": build_type.BUILD,  # travis sets this during build step
     }
 
-    try:
-        p['ip'] = json.load(urlopen('http://jsonip.com'))['ip']
-    except:
-        p['ip'] = "Could not determine IP"
+    if get_ip:
+        try:
+            p['ip'] = json.load(urlopen('http://jsonip.com'))['ip']
+        except:
+            p['ip'] = "Could not determine IP"
 
     return p

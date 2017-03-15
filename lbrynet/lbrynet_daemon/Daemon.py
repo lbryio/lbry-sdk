@@ -6,7 +6,7 @@ import re
 import base58
 import requests
 import urllib
-import simplejson as json
+import json
 from requests import exceptions as requests_exceptions
 import random
 
@@ -36,8 +36,7 @@ from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.core import log_support, utils
-from lbrynet.core import system_info
+from lbrynet.core import log_support, utils, system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import Session
 from lbrynet.core.Wallet import LBRYumWallet, SqliteStorage, ClaimOutpoint
@@ -142,14 +141,14 @@ class CheckInternetConnection(object):
 
 
 class CheckRemoteVersion(object):
-    URL = 'https://api.github.com/repos/lbryio/lbry-electron/releases/latest'
+    URL = 'https://api.github.com/repos/lbryio/lbry-app/releases/latest'
 
     def __init__(self):
         self.version = None
 
     def __call__(self):
         d = threads.deferToThread(self._get_lbry_electron_client_version)
-        d.addErrback(self._trap_and_log_error, 'lbry-electron')
+        d.addErrback(self._trap_and_log_error, 'lbry-app')
         d.addErrback(log.fail(), 'Failure checking versions on github')
 
     def _trap_and_log_error(self, err, module_checked):
@@ -159,8 +158,7 @@ class CheckRemoteVersion(object):
         log.warning("Failed to check latest %s version from github", module_checked)
 
     def _get_lbry_electron_client_version(self):
-        # We'll need to ensure the lbry-electron version is in sync
-        # with the lbrynet-daemon version
+        # We'll need to ensure the lbry-app version is in sync with the lbrynet-daemon version
         self._set_data_from_github()
         log.info(
             "remote lbrynet %s > local lbrynet %s = %s",
@@ -180,7 +178,8 @@ class CheckRemoteVersion(object):
         release = response.json()
         return release
 
-    def _get_version_from_release(self, release):
+    @staticmethod
+    def _get_version_from_release(release):
         """Return the latest released version from github."""
         tag = release['tag_name']
         return get_version_from_tag(tag)
@@ -1228,19 +1227,10 @@ class Daemon(AuthJSONRPCServer):
         """
 
         platform_info = self._get_platform()
-        msg = {
-            'platform': platform_info['platform'],
-            'os_release': platform_info['os_release'],
-            'os_system': platform_info['os_system'],
-            'lbrynet_version': LBRYNET_VERSION,
-            'lbryum_version': LBRYUM_VERSION,
-            'ui_version': platform_info['ui_version'],
-            'remote_lbrynet': self._remote_version.version,
-            'lbrynet_update_available': self._remote_version.is_update_available(),
-        }
-
-        log.info("Get version info: " + json.dumps(msg))
-        return self._render_response(msg)
+        platform_info['remote_lbrynet'] = self._remote_version.version
+        platform_info['lbrynet_update_available'] = self._remote_version.is_update_available()
+        log.info("Get version info: " + json.dumps(platform_info))
+        return self._render_response(platform_info)
 
     def jsonrpc_report_bug(self, message=None):
         """

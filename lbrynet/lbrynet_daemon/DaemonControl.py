@@ -8,7 +8,7 @@ from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet import analytics
 from lbrynet import conf
-from lbrynet.core import utils
+from lbrynet.core import utils, system_info
 from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
 from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
 
@@ -34,28 +34,48 @@ def start():
     conf.initialize_settings()
 
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
-    parser.add_argument("--wallet",
-                        help="lbryum or ptc for testing, default lbryum",
-                        type=str,
-                        default=conf.settings['wallet'])
-    parser.add_argument("--ui", help="path to custom UI folder", default=None)
+    parser.add_argument(
+        "--wallet",
+        help="lbryum or ptc for testing, default lbryum",
+        type=str,
+        default=conf.settings['wallet']
+    )
+    parser.add_argument(
+        "--ui", help="path to custom UI folder", default=None
+    )
     parser.add_argument(
         "--branch",
         help='Branch of lbry-web-ui repo to use, defaults to {}'.format(conf.settings['ui_branch']),
-        default=conf.settings['ui_branch'])
-    parser.add_argument('--launch-ui', dest='launchui', action="store_true")
-    parser.add_argument("--http-auth", dest="useauth", action="store_true",
-                        default=conf.settings['use_auth_http'])
+        default=conf.settings['ui_branch']
+    )
+    parser.add_argument(
+        '--launch-ui', dest='launchui', action="store_true"
+    )
+    parser.add_argument(
+        "--http-auth", dest="useauth", action="store_true", default=conf.settings['use_auth_http']
+    )
     parser.add_argument(
         '--quiet', dest='quiet', action="store_true",
-        help='Disable all console output.')
+        help='Disable all console output.'
+    )
     parser.add_argument(
         '--verbose', nargs="*",
         help=('Enable debug output. Optionally specify loggers for which debug output '
-              'should selectively be applied.'))
+              'should selectively be applied.')
+    )
+    parser.add_argument(
+        '--version', action="store_true",
+        help='Show daemon version and quit'
+    )
 
     args = parser.parse_args()
     update_settings_from_args(args)
+
+    if args.version:
+        version = system_info.get_platform(get_ip=False)
+        version['installation_id'] = conf.settings.installation_id
+        print utils.json_dumps_pretty(version)
+        return
 
     lbrynet_log = conf.settings.get_log_filename()
     log_support.configure_logging(lbrynet_log, not args.quiet, args.verbose)

@@ -9,12 +9,12 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Added `--version` flag
   *
   *
 
 ### Changed
-  *
+  * Removed `simplejson` dependency in favor of bulitin `json`
   *
   *
 

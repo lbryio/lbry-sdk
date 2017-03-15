@@ -4,15 +4,14 @@ import logging
 import random
 import socket
 import string
+import json
 
 import pkg_resources
 
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
-
 # digest_size is in bytes, and blob hashes are hex encoded
 blobhash_length = get_lbry_hash_obj().digest_size * 2
-
 
 log = logging.getLogger(__name__)
 
@@ -114,3 +113,7 @@ def get_sd_hash(stream_info):
     if not stream_info:
         return None
     return stream_info['sources']['lbry_sd_hash']
+
+
+def json_dumps_pretty(obj, **kwargs):
+    return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)

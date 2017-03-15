@@ -4,6 +4,7 @@ import os
 import sys
 
 from lbrynet import conf
+from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.auth.client import JSONRPCException, LBRYAPIClient
 from lbrynet.lbrynet_daemon.Daemon import LOADING_WALLET_CODE
 from jsonrpc.common import RPCError
@@ -75,7 +76,7 @@ def main():
                 # printing the undumped string is prettier
                 print result
             else:
-                print json.dumps(result, sort_keys=True, indent=2, separators=(',', ': '))
+                print utils.json_dumps_pretty(result)
         except (RPCError, KeyError, JSONRPCException) as err:
             # TODO: The api should return proper error codes
             # and messages so that they can be passed along to the user

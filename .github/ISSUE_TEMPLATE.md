@@ -32,7 +32,7 @@ Tell us what happens instead
 
 <!-- For the daemon, run:
      curl 'http://localhost:5279/lbryapi' --data '{"method":"version"}'
-     and include the output -->
+     and include the full output -->
 
 - LBRY Daemon version:
 - LBRY App version:
