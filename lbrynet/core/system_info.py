@@ -17,7 +17,7 @@ def get_platform(get_ip=True):
         "os_system": platform.system(),
         "lbrynet_version": lbrynet_version,
         "lbryum_version": lbryum_version,
-        "build": build_type.BUILD,  # travis sets this during build step
+        "build": build_type.BUILD,  # CI server sets this during build step
     }
 
     if get_ip:
