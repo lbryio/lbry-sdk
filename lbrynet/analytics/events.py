@@ -101,7 +101,6 @@ def make_context(platform, wallet):
         'app': {
             'name': 'lbrynet',
             'version': platform['lbrynet_version'],
-            'ui_version': platform['ui_version'],
             'python_version': platform['python_version'],
             'build': platform['build'],
             'wallet': {
