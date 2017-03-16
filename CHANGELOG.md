@@ -9,8 +9,7 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  * publish API command can take metadata fields as arguments
-  * Added `reflect_uploads` config to disable reflecting on upload
+  *
   *
   *
 
@@ -20,9 +19,17 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed jsonrpc_reflect()
-  * Fixed api help return
   *
+  *
+  *
+
+## [0.9.1rc5] - 2017-03-16
+### Added
+ * publish API command can take metadata fields as arguments
+ * Added `reflect_uploads` config to disable reflecting on upload
+### Fixed
+ * Fixed jsonrpc_reflect()
+ * Fixed api help return
 
 ## [0.9.1rc2] - 2017-03-15
 ### Added
