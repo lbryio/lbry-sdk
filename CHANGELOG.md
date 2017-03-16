@@ -19,8 +19,8 @@ at anytime.
   *
 
 ### Fixed
-  *
-  *
+  * Fixed jsonrpc_reflect()
+  * Fixed api help return
   *
 
 ## [0.9.1rc2] - 2017-03-15

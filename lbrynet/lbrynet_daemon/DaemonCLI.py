@@ -64,7 +64,8 @@ def main():
                     os.path.basename(sys.argv[0]))
             )
         else:
-            print api.call('help', params).strip()
+            help_response = api.call('help', params)
+            print help_response['help'] if 'help' in help_response else help_response
 
     elif method not in api.commands():
         print_error("'" + method + "' is not a valid command.")

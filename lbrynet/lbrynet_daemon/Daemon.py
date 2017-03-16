@@ -7,6 +7,7 @@ import base58
 import requests
 import urllib
 import json
+import textwrap
 from requests import exceptions as requests_exceptions
 import random
 
@@ -1352,7 +1353,7 @@ class Daemon(AuthJSONRPCServer):
             )
 
         return self._render_response({
-            'help': fn.__doc__
+            'help': textwrap.dedent(fn.__doc__)
         })
 
     def jsonrpc_commands(self):
@@ -2204,6 +2205,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: self._render_response("Announced"))
         return d
 
+    @defer.inlineCallbacks
     def jsonrpc_reflect(self, sd_hash):
         """
         Reflect a stream
@@ -2214,12 +2216,11 @@ class Daemon(AuthJSONRPCServer):
             (bool) true if successful
         """
 
-        d = self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
-        d.addCallback(self._reflect)
-        d.addCallbacks(
-            lambda _: self._render_response(True),
-            lambda err: self._render_response(err.getTraceback()))
-        return d
+        lbry_file = yield self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
+        if lbry_file is None:
+            raise Exception('No file found for give sd hash')
+        yield reupload.reflect_stream(lbry_file)
+        defer.returnValue("Reflect success")
 
     def jsonrpc_get_blob_hashes(self):
         """
