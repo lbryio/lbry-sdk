@@ -810,13 +810,11 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue((sd_hash, file_path))
 
     @defer.inlineCallbacks
-    def _publish_stream(self, name, bid, metadata, file_path=None, fee=None):
+    def _publish_stream(self, name, bid, metadata, file_path=None):
         publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
         verify_name_characters(name)
         if bid <= 0.0:
             raise Exception("Invalid bid")
-        if fee:
-            metadata = yield publisher.add_fee_to_metadata(metadata, fee)
         if not file_path:
             claim_out = yield publisher.update_stream(name, bid, metadata)
         else:
@@ -1700,18 +1698,52 @@ class Daemon(AuthJSONRPCServer):
         cost = yield self.get_est_cost(name, size)
         defer.returnValue(cost)
 
+
+
     @AuthJSONRPCServer.auth_required
-    def jsonrpc_publish(self, name, bid, metadata, file_path=None, fee=None):
+    @defer.inlineCallbacks
+    def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
+                        description=None, author=None, language=None, license=None,
+                        license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None):
         """
         Make a new name claim and publish associated data to lbrynet
 
+        Fields required in the final Metadata are:
+            'title'
+            'description'
+            'author'
+            'language'
+            'license',
+            'nsfw'
+
+        Metadata can be set by either using the metadata argument or by setting individual arguments
+        fee, title, description, author, language, license, license_url, thumbnail, preview, nsfw,
+        or sources. Individual arguments will overwrite the fields specified in metadata argument.
+
         Args:
-            'name': (str) name to be claimed, string
+            'name': (str) name to be claimed
             'bid': (float) amount of credits to commit in this claim,
-            'metadata': (dict) Metadata compliant (can be missing sources if a file is provided)
-            'file_path' (optional): (str) path to file to be associated with name, if not given
-                                    the stream from your existing claim for the name will be used
-            'fee' (optional): (dict) FeeValidator compliant (i.e. {'LBC':{'amount':10}} )
+            'metadata'(optional): (dict) Metadata to associate with the claim.
+            'file_path'(optional): (str) path to file to be associated with name. If provided,
+                                    a lbry stream of this file will be used in 'sources'.
+                                    If no path is given but a metadata dict is provided, the source
+                                    from the given metadata will be used.
+            'fee'(optional): (dict) Dictionary representing key fee to download content:
+                              {currency_symbol: {'amount': float, 'address': str, optional}}
+                              supported currencies: LBC, USD, BTC
+                              If an address is not provided a new one will be automatically
+                              generated. Default fee is zero.
+            'title'(optional): (str) title of the file
+            'description'(optional): (str) description of the file
+            'author'(optional): (str) author of the file
+            'language'(optional): (str), language code
+            'license'(optional): (str) license for the file
+            'license_url'(optional): (str) URL to license
+            'thumbnail'(optional): (str) thumbnail URL for the file
+            'preview'(optional): (str) preview URL for the file
+            'nsfw'(optional): (bool) True if not safe for work
+            'sources'(optional): (dict){'lbry_sd_hash':sd_hash} specifies sd hash of file
+
         Returns:
             (dict) Dictionary containing result of the claim
             {
@@ -1723,6 +1755,43 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
+        if bid <= 0.0:
+            raise Exception("Invalid bid")
+
+        metadata = metadata or {}
+        if fee is not None:
+            metadata['fee'] = fee
+        if title is not None:
+            metadata['title'] = title
+        if description is not None:
+            metadata['description'] = description
+        if author is not None:
+            metadata['author'] = author
+        if language is not None:
+            metadata['language'] = language
+        if license is not None:
+            metadata['license'] = license
+        if license_url is not None:
+            metadata['license_url'] = license_url
+        if thumbnail is not None:
+            metadata['thumbnail'] = thumbnail
+        if preview is not None:
+            metadata['preview'] = preview
+        if nsfw is not None:
+            metadata['nsfw'] = bool(nsfw)
+        if sources is not None:
+            metadata['sources'] = sources
+
+        # add address to fee if unspecified
+        if 'fee' in metadata:
+            assert len(metadata['fee']) == 1, "Too many fees"
+            for currency in metadata['fee']:
+                if 'address' not in metadata['fee'][currency]:
+                    new_address = yield self.session.wallet.get_new_address()
+                    metadata['fee'][currency]['address'] = new_address
+            metadata['fee'] = FeeValidator(metadata['fee'])
+
+
         log.info("Publish: %s", {
             'name': name,
             'file_path': file_path,
@@ -1731,9 +1800,9 @@ class Daemon(AuthJSONRPCServer):
             'fee': fee,
         })
 
-        d = self._publish_stream(name, bid, metadata, file_path, fee)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+        result = yield self._publish_stream(name, bid, metadata, file_path)
+        response = yield self._render_response(result)
+        defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_abandon_claim(self, **kwargs):

@@ -7,7 +7,6 @@ from lbrynet.core import file_utils
 from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
 from lbrynet.metadata.Metadata import Metadata
-from lbrynet.metadata.Fee import FeeValidator
 
 
 log = logging.getLogger(__name__)
@@ -19,16 +18,6 @@ class Publisher(object):
         self.lbry_file_manager = lbry_file_manager
         self.wallet = wallet
         self.lbry_file = None
-
-    @defer.inlineCallbacks
-    def add_fee_to_metadata(self, metadata, fee):
-        assert len(fee) == 1, "Too many fees"
-        for currency in fee:
-            if 'address' not in fee[currency]:
-                new_address = yield self.session.wallet.get_new_address()
-                fee[currency]['address'] = new_address
-        metadata['fee'] = FeeValidator(fee)
-        defer.returnValue(metadata)
 
     @defer.inlineCallbacks
     def publish_stream(self, name, file_path, bid, metadata):

@@ -389,13 +389,42 @@ Returns:
 ```text
 Make a new name claim and publish associated data to lbrynet
 
+Fields required in the final Metadata are:
+    'title'
+    'description'
+    'author'
+    'language'
+    'license',
+    'nsfw'
+
+Metadata can be set by either using the metadata argument or by setting individual arguments
+fee, title, description, author, language, license, license_url, thumbnail, preview, nsfw,
+or sources. Individual arguments will overwrite the fields specified in metadata argument.
+
 Args:
-    'name': (str) name to be claimed, string
+    'name': (str) name to be claimed
     'bid': (float) amount of credits to commit in this claim,
-    'metadata': (dict) Metadata compliant (can be missing sources if a file is provided)
-    'file_path' (optional): (str) path to file to be associated with name, if not given
-                            the stream from your existing claim for the name will be used
-    'fee' (optional): (dict) FeeValidator compliant (i.e. {'LBC':{'amount':10}} )
+    'metadata'(optional): (dict) Metadata to associate with the claim.
+    'file_path'(optional): (str) path to file to be associated with name. If provided,
+                            a lbry stream of this file will be used in 'sources'.
+                            If no path is given but a metadata dict is provided, the source
+                            from the given metadata will be used.
+    'fee'(optional): (dict) Dictionary representing key fee to download content:
+                      {currency_symbol: {'amount': float, 'address': str, optional}}
+                      supported currencies: LBC, USD, BTC
+                      If an address is not provided a new one will be automatically
+                      generated. Default fee is zero.
+    'title'(optional): (str) title of the file
+    'description'(optional): (str) description of the file
+    'author'(optional): (str) author of the file
+    'language'(optional): (str), language code
+    'license'(optional): (str) license for the file
+    'license_url'(optional): (str) URL to license
+    'thumbnail'(optional): (str) thumbnail URL for the file
+    'preview'(optional): (str) preview URL for the file
+    'nsfw'(optional): (bool) True if not safe for work
+    'sources'(optional): (dict){'lbry_sd_hash':sd_hash} specifies sd hash of file
+
 Returns:
     (dict) Dictionary containing result of the claim
     {
