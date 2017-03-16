@@ -820,9 +820,10 @@ class Daemon(AuthJSONRPCServer):
             claim_out = yield publisher.update_stream(name, bid, metadata)
         else:
             claim_out = yield publisher.publish_stream(name, file_path, bid, metadata)
-            d = reupload.reflect_stream(publisher.lbry_file)
-            d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
-                           log.exception)
+            if conf.settings['reflect_uploads']:
+                d = reupload.reflect_stream(publisher.lbry_file)
+                d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
+                               log.exception)
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
         yield self._add_to_pending_claims(claim_out, name)

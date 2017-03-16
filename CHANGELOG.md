@@ -10,6 +10,7 @@ at anytime.
 ## [Unreleased]
 ### Added
   * publish API command can take metadata fields as arguments
+  * Added `reflect_uploads` config to disable reflecting on upload
   *
   *
 
