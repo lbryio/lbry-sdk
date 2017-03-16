@@ -21,7 +21,7 @@ at anytime.
 ### Fixed
   * Fixed jsonrpc_reflect()
   * Fixed api help return
-  *
+  * Fixed API command descriptor_get
 
 ## [0.9.1rc2] - 2017-03-15
 ### Added

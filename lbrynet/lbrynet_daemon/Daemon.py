@@ -28,7 +28,6 @@ from lbrynet.metadata.Metadata import verify_name_characters
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbryfile.StreamDescriptor import save_sd_info
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
@@ -717,51 +716,6 @@ class Daemon(AuthJSONRPCServer):
         self.sd_identifier.add_stream_downloader_factory(
             EncryptedFileStreamType, file_opener_factory)
         return defer.succeed(None)
-
-    def _download_sd_blob(self, sd_blob_hash, rate_manager=None, timeout=None):
-        """
-        Download a sd blob and register it with the stream info manager
-        Use this when downloading a sd blob as part of a stream download
-
-        :param sd_blob_hash (str): sd blob hash
-        :param rate_manager (PaymentRateManager), optional: the payment rate manager to use,
-                                                         defaults to session.payment_rate_manager
-        :param timeout (int): sd blob timeout
-
-        :return: decoded sd blob
-        """
-        timeout = timeout if timeout is not None else conf.settings['sd_download_timeout']
-        rate_manager = rate_manager or self.session.payment_rate_manager
-
-        def cb(sd_blob):
-            if not finished_d.called:
-                finished_d.callback(sd_blob)
-
-        def eb():
-            if not finished_d.called:
-                finished_d.errback(Exception("Blob (%s) download timed out" %
-                                             sd_blob_hash[:SHORT_ID_LEN]))
-
-        def save_sd_blob(sd_blob):
-            d = defer.succeed(read_sd_blob(sd_blob))
-            d.addCallback(lambda decoded: save_sd_info(self.stream_info_manager, decoded))
-            d.addCallback(self.stream_info_manager.save_sd_blob_hash_to_stream, sd_blob_hash)
-            d.addCallback(lambda _: sd_blob)
-            return d
-
-        def read_sd_blob(sd_blob):
-            sd_blob_file = sd_blob.open_for_reading()
-            decoded_sd_blob = json.loads(sd_blob_file.read())
-            sd_blob.close_read_handle(sd_blob_file)
-            return decoded_sd_blob
-
-        finished_d = defer.Deferred()
-        finished_d.addCallback(save_sd_blob)
-
-        reactor.callLater(timeout, eb)
-        d = download_sd_blob(self.session, sd_blob_hash, rate_manager)
-        d.addCallback(cb)
-        return finished_d
 
     def _download_blob(self, blob_hash, rate_manager=None, timeout=None):
         """
@@ -2146,7 +2100,6 @@ class Daemon(AuthJSONRPCServer):
         return self.jsonrpc_descriptor_get(**kwargs)
 
     @AuthJSONRPCServer.auth_required
-    @defer.inlineCallbacks
     def jsonrpc_descriptor_get(self, sd_hash, timeout=None, payment_rate_manager=None):
         """
         Download and return a sd blob
@@ -2161,12 +2114,8 @@ class Daemon(AuthJSONRPCServer):
         Returns
             (str) Success/Fail message or (dict) decoded data
         """
+        return self.jsonrpc_blob_get(sd_hash, timeout, 'json', payment_rate_manager)
 
-        payment_rate_manager = get_blob_payment_rate_manager(self.session, payment_rate_manager)
-        decoded_sd_blob = yield self._download_sd_blob(sd_hash, payment_rate_manager,
-                                                       timeout=timeout)
-        result = yield self._render_response(decoded_sd_blob)
-        defer.returnValue(result)
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
