@@ -2052,18 +2052,20 @@ class Daemon(AuthJSONRPCServer):
         return self.jsonrpc_wallet_public_key(wallet)
 
     @AuthJSONRPCServer.auth_required
-    def jsonrpc_wallet_public_key(self, wallet):
+    def jsonrpc_wallet_public_key(self, address):
         """
         Get public key from wallet address
 
         Args:
-            'wallet': (str) wallet address in base58
+            'address': (str) wallet address in base58
         Returns:
-            (str) Public key in hex encoding
+            (list) list of public keys associated with address.
+                Could contain more than one public key if multisig.
         """
 
-        d = self.session.wallet.get_pub_keys(wallet)
+        d = self.session.wallet.get_pub_keys(address)
         d.addCallback(lambda r: self._render_response(r))
+        return d
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_get_new_address(self):
