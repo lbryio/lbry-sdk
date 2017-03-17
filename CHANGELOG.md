@@ -19,9 +19,13 @@ at anytime.
   *
 
 ### Fixed
-  * Fix wallet_public_key API command
   *
   *
+  *
+
+## [0.9.1] - 2017-03-17
+### Fixed
+ * Fix wallet_public_key API command
 
 ## [0.9.1rc5] - 2017-03-16
 ### Added
