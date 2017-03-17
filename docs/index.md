@@ -633,8 +633,9 @@ Returns:
 Get public key from wallet address
 
 Args:
-    'wallet': (str) wallet address in base58
+    'address': (str) wallet address in base58
 Returns:
-    (str) Public key in hex encoding
+    (list) list of public keys associated with address.
+        Could contain more than one public key if multisig.
 ```
 

@@ -19,7 +19,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fix wallet_public_key API command
   *
   *
 
