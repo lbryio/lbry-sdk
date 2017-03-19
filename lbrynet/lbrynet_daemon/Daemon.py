@@ -2068,6 +2068,22 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_wallet_list(self):
+        """
+        List wallet addresses
+
+        Args:
+            None
+        Returns:
+            List of wallet addresses
+        """
+
+        addresses = yield self.session.wallet.list_addresses()
+        response = yield self._render_response(addresses)
+        defer.returnValue(response)
+
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_new_address(self):
         """
         DEPRECATED. Use `wallet_new_address` instead

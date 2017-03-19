@@ -1106,6 +1106,9 @@ class LBRYumWallet(Wallet):
     def get_pub_keys(self, address):
         return self._run_cmd_as_defer_succeed('getpubkeys', address)
 
+    def list_addresses(self):
+        return self._run_cmd_as_defer_succeed('listaddresses')
+
     def _save_wallet(self, val):
         self.wallet.storage.write()
         return defer.succeed(val)
