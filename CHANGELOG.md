@@ -9,7 +9,7 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Add `wallet_list` command
   *
   *
 
