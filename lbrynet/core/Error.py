@@ -111,3 +111,7 @@ class InvalidAuthenticationToken(Exception):
 
 class NegotiationError(Exception):
     pass
+
+
+class NotRunning(Exception):
+    pass

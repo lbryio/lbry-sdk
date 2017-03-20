@@ -19,8 +19,8 @@ from lbryum.commands import known_commands, Commands
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
-from lbrynet.core.Error import (UnknownNameError, InvalidStreamInfoError, RequestCanceledError,
-                            InsufficientFundsError)
+from lbrynet.core.Error import UnknownNameError, InvalidStreamInfoError, RequestCanceledError
+from lbrynet.core.Error import InsufficientFundsError, NotRunning
 from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
 from lbrynet.metadata.Metadata import Metadata
 
@@ -180,11 +180,47 @@ class SqliteStorage(MetaDataStorage):
         return d
 
 
-class Wallet(object):
+class ThreadedCallTracker(object):
+    """
+    Cancels pending registered deferToThread calls before shutting down
+    """
+
+    def __init__(self):
+        self._threads = {}
+        self._thread_counter = 0
+        self.stopped = True
+
+    def stop(self):
+        if self._threads:
+            while self._threads:
+                id, threaded_call = self._threads.popitem()
+                log.info("Cancelling threaded call id %i", id)
+                threaded_call.addErrback(lambda err: err.trap(defer.CancelledError,
+                                                              defer.AlreadyCalledError))
+                threaded_call.cancel()
+            log.info("Finished stopping pending threaded calls")
+        else:
+            log.info("No threaded calls need cancelling")
+
+    @defer.inlineCallbacks
+    def defer_to_thread(self, f, *args):
+        if self.stopped:
+            raise NotRunning(self)
+        id = self._thread_counter
+        self._thread_counter += 1
+        self._threads[id] = threads.deferToThread(f, *args)
+        result = yield self._threads[id]
+        if id in self._threads:
+            del self._threads[id]
+        defer.returnValue(result)
+
+
+class Wallet(ThreadedCallTracker):
     """This class implements the Wallet interface for the LBRYcrd payment system"""
     implements(IWallet)
 
     def __init__(self, storage):
+        ThreadedCallTracker.__init__(self)
         if not isinstance(storage, MetaDataStorage):
             raise ValueError('storage must be an instance of MetaDataStorage')
         self._storage = storage
@@ -240,6 +276,7 @@ class Wallet(object):
     def stop(self):
         log.info("Stopping %s", self)
         self.stopped = True
+        ThreadedCallTracker.stop(self)
         # If self.next_manage_call is None, then manage is currently running or else
         # start has not been called, so set stopped and do nothing else.
         if self.next_manage_call is not None:
@@ -959,13 +996,11 @@ class LBRYumWallet(Wallet):
 
     # run commands as a deferToThread,  lbryum commands that only make
     # queries to lbryum server should be run this way
-    # TODO: keep track of running threads and cancel them on `stop`
-    #       otherwise the application will hang, waiting for threads to complete
     def _run_cmd_as_defer_to_thread(self, command_name, *args):
         cmd_runner = self._get_cmd_runner()
         cmd = known_commands[command_name]
         func = getattr(cmd_runner, cmd.name)
-        return threads.deferToThread(func, *args)
+        return self.defer_to_thread(func, *args)
 
     def _update_balance(self):
         accounts = None
