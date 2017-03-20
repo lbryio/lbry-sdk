@@ -192,7 +192,7 @@ ADJUSTABLE_SETTINGS = {
     'peer_port': (int, 3333),
     'pointtrader_server': (str, 'http://127.0.0.1:2424'),
     'reflector_port': (int, 5566),
-    'reflector_reupload': (bool, True),
+    'reflect_uploads': (bool, True),
     'reflector_servers': (list, [('reflector.lbry.io', 5566)], server_port),
     'run_on_startup': (bool, False),
     'run_reflector_server': (bool, False),

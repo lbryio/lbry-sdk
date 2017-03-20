@@ -64,8 +64,7 @@ def main():
                     os.path.basename(sys.argv[0]))
             )
         else:
-            help_response = api.call('help', params)
-            print help_response['help'] if 'help' in help_response else help_response
+            print_help_response(api.call('help', params))
 
     elif method not in api.commands():
         print_error("'" + method + "' is not a valid command.")
@@ -84,12 +83,15 @@ def main():
             # instead of this generic message.
             # https://app.asana.com/0/158602294500137/200173944358192
             print "Something went wrong, here's the usage for %s:" % method
-            print api.call('help', {'command': method})
+            print_help_response(api.call('help', {'command': method}))
             if hasattr(err, 'msg'):
                 print "Here's the traceback for the error you encountered:"
                 print err.msg
             return 1
 
+
+def print_help_response(help_response):
+    print help_response['help'] if 'help' in help_response else help_response
 
 def guess_type(x):
     if '.' in x:

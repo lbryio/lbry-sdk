@@ -17,6 +17,7 @@ from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.cryptstream.client.CryptStreamDownloader import CurrentlyStoppingError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
+from lbrynet import conf
 
 
 log = logging.getLogger(__name__)
@@ -57,7 +58,8 @@ class EncryptedFileManager(object):
         yield self._open_db()
         yield self._add_to_sd_identifier()
         yield self._start_lbry_files()
-        safe_start_looping_call(self.lbry_file_reflector)
+        if conf.settings['reflect_uploads']:
+            safe_start_looping_call(self.lbry_file_reflector)
 
     def get_lbry_file_status(self, lbry_file):
         return self._get_lbry_file_status(lbry_file.rowid)

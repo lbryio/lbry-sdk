@@ -1101,8 +1101,13 @@ class LBRYumWallet(Wallet):
     def _address_is_mine(self, address):
         return self._run_cmd_as_defer_succeed('ismine', address)
 
-    def get_pub_keys(self, wallet):
-        return self._run_cmd_as_defer_succeed('getpubkyes', wallet)
+    # returns a list of public keys associated with address
+    # (could be multiple public keys if a multisig address)
+    def get_pub_keys(self, address):
+        return self._run_cmd_as_defer_succeed('getpubkeys', address)
+
+    def list_addresses(self):
+        return self._run_cmd_as_defer_succeed('listaddresses')
 
     def _save_wallet(self, val):
         self.wallet.storage.write()

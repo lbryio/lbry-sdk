@@ -2,7 +2,6 @@
 import argparse
 import binascii
 import logging
-import os
 import StringIO
 import sys
 
@@ -11,7 +10,6 @@ from twisted.internet import reactor
 
 from lbrynet import conf
 from lbrynet.cryptstream import CryptBlob
-from lbrynet.core import HashBlob
 from lbrynet.core import log_support
 from lbrynet.core import cryptoutils
 
