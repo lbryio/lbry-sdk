@@ -14,7 +14,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Dont add expected payment to wallet when payment rate is 0
   *
   *
 

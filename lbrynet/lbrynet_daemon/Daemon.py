@@ -1264,29 +1264,11 @@ class Daemon(AuthJSONRPCServer):
         """
         Get daemon settings
 
-        Args:
-            None
         Returns:
             (dict) Dictionary of daemon settings
-            {
-                'run_on_startup': (bool) currently not supported
-                'data_rate': (float) data rate
-                'max_key_fee': (float) maximum key fee
-                'download_directory': (str) path of where files are downloaded
-                'max_upload': (float), currently not supported
-                'max_download': (float), currently not supported
-                'download_timeout': (int) download timeout in seconds
-                'max_search_results': (int) max search results
-                'wallet_type': (str) wallet type
-                'delete_blobs_on_remove': (bool) delete blobs on removal
-                'peer_port': (int) peer port
-                'dht_node_port': (int) dht node port
-                'use_upnp': (bool) use upnp if true
-            }
+            See ADJUSTABLE_SETTINGS in lbrynet/conf.py for full list of settings
         """
-
-        log.info("Get daemon settings")
-        return self._render_response(conf.settings.get_current_settings_dict())
+        return self._render_response(conf.settings.get_adjustable_settings_dict())
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_set_settings(self, **kwargs):
@@ -1296,6 +1278,7 @@ class Daemon(AuthJSONRPCServer):
         return self.jsonrpc_settings_set(**kwargs)
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_settings_set(self, **kwargs):
         """
         Set daemon settings
@@ -1308,22 +1291,14 @@ class Daemon(AuthJSONRPCServer):
             'max_upload': (float), currently not supported
             'max_download': (float), currently not supported
             'download_timeout': (int) download timeout in seconds
+            'search_timeout': (float) search timeout in seconds
+            'cache_time': (int) cache timeout in seconds
         Returns:
-            (dict) settings dict
+            (dict) Updated dictionary of daemon settings
         """
 
-        def _log_settings_change():
-            log.info(
-                "Set daemon settings to %s",
-                json.dumps(conf.settings.get_adjustable_settings_dict()))
-
-        d = self._update_settings(kwargs)
-        d.addErrback(lambda err: log.info(err.getTraceback()))
-        d.addCallback(lambda _: _log_settings_change())
-        d.addCallback(
-            lambda _: self._render_response(conf.settings.get_adjustable_settings_dict()))
-
-        return d
+        yield self._update_settings(kwargs)
+        defer.returnValue(conf.settings.get_adjustable_settings_dict())
 
     def jsonrpc_help(self, command=None):
         """

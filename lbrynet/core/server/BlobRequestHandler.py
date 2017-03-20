@@ -5,11 +5,9 @@ from twisted.protocols.basic import FileSender
 from twisted.python.failure import Failure
 from zope.interface import implements
 
-
 from lbrynet.core.Offer import Offer
 from lbrynet import analytics
 from lbrynet.interfaces import IQueryHandlerFactory, IQueryHandler, IBlobSender
-
 
 log = logging.getLogger(__name__)
 
@@ -212,11 +210,14 @@ class BlobRequestHandler(object):
 
         def set_expected_payment():
             log.debug("Setting expected payment")
-            if self.blob_bytes_uploaded != 0 and self.blob_data_payment_rate is not None:
+            if (
+                self.blob_bytes_uploaded != 0 and self.blob_data_payment_rate is not None
+                and self.blob_data_payment_rate > 0
+            ):
                 # TODO: explain why 2**20
                 self.wallet.add_expected_payment(self.peer,
                                                  self.currently_uploading.length * 1.0 *
-                                                 self.blob_data_payment_rate / 2**20)
+                                                 self.blob_data_payment_rate / 2 ** 20)
                 self.blob_bytes_uploaded = 0
             self.peer.update_stats('blobs_uploaded', 1)
             return None

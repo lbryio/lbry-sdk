@@ -19,9 +19,10 @@ def log_response(fn):
         elif future.exception():
             exc, traceback = future.exception_info()
             log.warning('Failed to send an analytics event', exc_info=(type(exc), exc, traceback))
-        else:
-            response = future.result()
-            log.debug('Response (%s): %s', response.status_code, response.content)
+        # GRIN TURNED THIS OFF. Segment only has one response: {"success": true}
+        # else:
+        #     response = future.result()
+        #     log.debug('Response (%s): %s', response.status_code, response.content)
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
