@@ -21,6 +21,7 @@ at anytime.
 ### Fixed
   * Fix restart procedure in DaemonControl
   *
+  * Create download directory if it doesn't exist
   *
 
 ## [0.9.2rc1] - 2017-03-21

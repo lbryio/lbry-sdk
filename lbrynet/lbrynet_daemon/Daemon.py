@@ -232,6 +232,8 @@ class Daemon(AuthJSONRPCServer):
         conf.settings.update(last_version)
         self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
+        if not os.path.exists(self.download_directory):
+            os.mkdir(self.download_directory)
         self.created_data_dir = False
         if not os.path.exists(self.db_dir):
             os.mkdir(self.db_dir)
