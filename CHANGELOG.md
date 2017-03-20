@@ -19,6 +19,10 @@ at anytime.
   *
 
 ### Fixed
+  * Fixed descriptor_get
+  * Fixed jsonrpc_reflect()
+  * Fixed api help return
+  * Fixed API command descriptor_get
   *
   *
   *
