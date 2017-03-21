@@ -24,7 +24,7 @@ at anytime.
   * Fixed api help return
   * Fixed API command descriptor_get
   * Fixed API command transaction_show
-  *
+  * Handle failure to decode claim cache file
   *
 
 ## [0.9.1] - 2017-03-17
