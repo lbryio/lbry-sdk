@@ -350,9 +350,13 @@ class Daemon(AuthJSONRPCServer):
         name_cache_filename = os.path.join(self.db_dir, "stream_info_cache.json")
 
         if os.path.isfile(name_cache_filename):
-            with open(name_cache_filename, "r") as name_cache:
-                self.name_cache = json.loads(name_cache.read())
-            log.info("Loaded claim info cache")
+            with open(name_cache_filename, "r") as name_cache_file:
+                name_cache = name_cache_file.read()
+            try:
+                self.name_cache = json.loads(name_cache)
+                log.info("Loaded claim info cache")
+            except ValueError:
+                log.warning("Unable to load claim info cache")
 
     def _check_network_connection(self):
         self.connected_to_internet = utils.check_connection()
