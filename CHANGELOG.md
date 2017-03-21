@@ -23,7 +23,7 @@ at anytime.
   * Fixed jsonrpc_reflect()
   * Fixed api help return
   * Fixed API command descriptor_get
-  *
+  * Fixed API command transaction_show
   *
   *
 

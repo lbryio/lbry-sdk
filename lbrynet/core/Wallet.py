@@ -1004,6 +1004,9 @@ class LBRYumWallet(Wallet):
         header = self.network.blockchain.read_header(height)
         return defer.succeed(self.network.blockchain.hash_header(header))
 
+    def _get_transaction(self, txid):
+        return self._run_cmd_as_defer_to_thread("gettransaction", txid)
+
     def get_name_claims(self):
         return self._run_cmd_as_defer_succeed('getnameclaims')
 
