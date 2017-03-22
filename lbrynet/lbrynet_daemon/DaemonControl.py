@@ -131,9 +131,11 @@ def start_server_and_listen(launchui, use_auth, analytics_manager, max_tries=5):
             break
         except Exception as e:
             log.exception('Failed to startup')
+            yield daemon_server.stop()
             analytics_manager.send_server_startup_error(str(e))
         tries += 1
     else:
+        log.warn("Exceeded max tries to start up, stopping")
         reactor.callFromThread(reactor.stop)
 
 
