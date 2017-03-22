@@ -19,7 +19,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fix restart procedure in DaemonControl
   *
   *
 
