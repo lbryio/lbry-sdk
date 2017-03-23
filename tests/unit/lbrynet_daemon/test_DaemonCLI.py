@@ -9,6 +9,12 @@ class DaemonCLITests(unittest.TestCase):
         self.assertEqual(3, DaemonCLI.guess_type('3'))
         self.assertEqual('VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA==', DaemonCLI.guess_type('VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA=='))
         self.assertEqual(0.3, DaemonCLI.guess_type('0.3'))
+        self.assertEqual(True, DaemonCLI.guess_type('TRUE'))
+        self.assertEqual(True, DaemonCLI.guess_type('true'))
+        self.assertEqual(True, DaemonCLI.guess_type('True'))
+        self.assertEqual(False, DaemonCLI.guess_type('FALSE'))
+        self.assertEqual(False, DaemonCLI.guess_type('false'))
+        self.assertEqual(False, DaemonCLI.guess_type('False'))
 
     def test_get_params(self):
         test_params = [
@@ -16,13 +22,17 @@ class DaemonCLITests(unittest.TestCase):
             'name=test',
             'amount=5.3',
             'n=5',
-            'address=bY13xeAjLrsjP4KGETwStK2a9UgKgXVTXu'
+            'address=bY13xeAjLrsjP4KGETwStK2a9UgKgXVTXu',
+            't=true',
+            'f=False',
         ]
         test_r = {
             'b64address': 'VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA==',
             'name': 'test',
             'amount': 5.3,
             'n': 5,
-            'address': 'bY13xeAjLrsjP4KGETwStK2a9UgKgXVTXu'
+            'address': 'bY13xeAjLrsjP4KGETwStK2a9UgKgXVTXu',
+            't': True,
+            'f': False,
         }
         self.assertDictEqual(test_r, DaemonCLI.get_params_from_kwargs(test_params))

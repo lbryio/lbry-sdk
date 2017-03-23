@@ -93,18 +93,6 @@ def main():
 def print_help_response(help_response):
     print help_response['help'] if 'help' in help_response else help_response
 
-def guess_type(x):
-    if '.' in x:
-        try:
-            return float(x)
-        except ValueError:
-            # not a float
-            pass
-    try:
-        return int(x)
-    except ValueError:
-        return x
-
 
 def parse_params(params):
     if len(params) > 1:
@@ -132,6 +120,23 @@ def get_params_from_kwargs(params):
         k, v = i[:eq_pos], i[eq_pos + 1:]
         params_for_return[k] = guess_type(v)
     return params_for_return
+
+
+def guess_type(x):
+    if x in ('true', 'True', 'TRUE'):
+        return True
+    if x in ('false', 'False', 'FALSE'):
+        return False
+    if '.' in x:
+        try:
+            return float(x)
+        except ValueError:
+            # not a float
+            pass
+    try:
+        return int(x)
+    except ValueError:
+        return x
 
 
 def print_help_suggestion():
