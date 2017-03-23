@@ -9,8 +9,6 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
-  *
   * Add `wallet_list` command
   * Add checks for missing/extraneous params when calling jsonrpc commands
   *
@@ -22,7 +20,6 @@ at anytime.
 
 ### Fixed
   * Fix restart procedure in DaemonControl
-  *
   * Create download directory if it doesn't exist
   * Fixed descriptor_get
   * Fixed jsonrpc_reflect()
@@ -92,7 +89,6 @@ at anytime.
   * Fixed ExchangeRateManager freezing the app
   * Fixed download not timing out properly when downloading sd blob
   * Fixed get not reassembling an already downloaded file that was deleted from download directory
-  * 
 
 ## [0.9.0rc11] - 2017-02-27
 ### Fixed
