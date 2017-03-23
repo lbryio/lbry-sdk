@@ -232,16 +232,11 @@ class Daemon(AuthJSONRPCServer):
         conf.settings.update(last_version)
         self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
-        self.created_data_dir = False
-        if not os.path.exists(self.db_dir):
-            os.mkdir(self.db_dir)
-            self.created_data_dir = True
         if conf.settings['BLOBFILES_DIR'] == "blobfiles":
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
         else:
             log.info("Using non-default blobfiles directory: %s", conf.settings['BLOBFILES_DIR'])
             self.blobfile_dir = conf.settings['BLOBFILES_DIR']
-
         self.run_on_startup = conf.settings['run_on_startup']
         self.data_rate = conf.settings['data_rate']
         self.max_key_fee = conf.settings['max_key_fee']
@@ -294,7 +289,7 @@ class Daemon(AuthJSONRPCServer):
         }
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
+        self.stream_info_manager = None
         self.lbry_file_manager = None
 
     @defer.inlineCallbacks
@@ -350,9 +345,13 @@ class Daemon(AuthJSONRPCServer):
         name_cache_filename = os.path.join(self.db_dir, "stream_info_cache.json")
 
         if os.path.isfile(name_cache_filename):
-            with open(name_cache_filename, "r") as name_cache:
-                self.name_cache = json.loads(name_cache.read())
-            log.info("Loaded claim info cache")
+            with open(name_cache_filename, "r") as name_cache_file:
+                name_cache = name_cache_file.read()
+            try:
+                self.name_cache = json.loads(name_cache)
+                log.info("Loaded claim info cache")
+            except ValueError:
+                log.warning("Unable to load claim info cache")
 
     def _check_network_connection(self):
         self.connected_to_internet = utils.check_connection()
@@ -595,7 +594,10 @@ class Daemon(AuthJSONRPCServer):
         old_revision = 1
         self.startup_status = STARTUP_STAGES[1]
         log.info("Loading databases")
-        if self.created_data_dir:
+        if not os.path.exists(self.download_directory):
+            os.mkdir(self.download_directory)
+        if not os.path.exists(self.db_dir):
+            os.mkdir(self.db_dir)
             self._write_db_revision_file(self.current_db_revision)
             log.debug("Created the db revision file: %s", self.db_revision_file)
         if not os.path.exists(self.blobfile_dir):
@@ -636,6 +638,7 @@ class Daemon(AuthJSONRPCServer):
     def _setup_lbry_file_manager(self):
         log.info('Starting to setup up file manager')
         self.startup_status = STARTUP_STAGES[3]
+        self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
         yield self.stream_info_manager.setup()
         self.lbry_file_manager = EncryptedFileManager(
             self.session,

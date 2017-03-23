@@ -9,23 +9,33 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  * Add `wallet_list` command
+  *
   *
   *
 
 ### Changed
-  * Dont add expected payment to wallet when payment rate is 0
+  *
   *
   *
 
 ### Fixed
-  * Fixed descriptor_get
-  * Fixed jsonrpc_reflect()
-  * Fixed api help return
-  * Fixed API command descriptor_get
-  * Fixed API command transaction_show
+  * Fix restart procedure in DaemonControl
   *
+  * Create download directory if it doesn't exist
   *
+
+## [0.9.2rc1] - 2017-03-21
+### Added
+ * Add `wallet_list` command
+### Changed
+ * Dont add expected payment to wallet when payment rate is 0
+### Fixed
+ * Fixed descriptor_get
+ * Fixed jsonrpc_reflect()
+ * Fixed api help return
+ * Fixed API command descriptor_get
+ * Fixed API command transaction_show
+ * Handle failure to decode claim cache file
 
 ## [0.9.1] - 2017-03-17
 ### Fixed
