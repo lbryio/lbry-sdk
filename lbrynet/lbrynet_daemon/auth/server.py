@@ -183,10 +183,11 @@ class AuthJSONRPCServer(AuthorizedBase):
         )
 
         self._set_headers(request, response_content)
-        try:
-            request.setResponseCode(JSONRPCError.HTTP_CODES[error.code])
-        except KeyError:
-            request.setResponseCode(JSONRPCError.HTTP_CODES[JSONRPCError.CODE_INTERNAL_ERROR])
+        # uncomment this after fixing lbrynet-cli to not raise exceptions on errors
+        # try:
+        #     request.setResponseCode(JSONRPCError.HTTP_CODES[error.code])
+        # except KeyError:
+        #     request.setResponseCode(JSONRPCError.HTTP_CODES[JSONRPCError.CODE_INTERNAL_ERROR])
         self._render_message(request, response_content)
 
     @staticmethod
