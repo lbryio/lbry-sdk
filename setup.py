@@ -24,7 +24,7 @@ requires = [
     'pycrypto',
     'pyyaml',
     'requests',
-    'requests_futures',
+    'txrequests',
     'seccure',
     'txJSON-RPC',
     'zope.interface',

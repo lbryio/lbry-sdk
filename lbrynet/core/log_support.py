@@ -6,7 +6,7 @@ import os
 import sys
 import traceback
 
-from requests_futures.sessions import FuturesSession
+from txrequests import Session
 import twisted.python.log
 
 from lbrynet import __version__ as lbrynet_version, analytics, build_type, conf
@@ -29,7 +29,7 @@ _srcfile = os.path.normcase(_srcfile)
 #####
 
 
-session = FuturesSession()
+session = Session()
 TRACE = 5
 
 

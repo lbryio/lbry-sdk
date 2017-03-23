@@ -2,33 +2,29 @@ import functools
 import json
 import logging
 
-from requests import auth
-from requests_futures import sessions
+from requests import auth, Response
+from txrequests import Session
+from twisted.python.failure import Failure
 
 from lbrynet import conf
 from lbrynet.analytics import utils
-
 
 log = logging.getLogger(__name__)
 
 
 def log_response(fn):
-    def _log(future):
-        if future.cancelled():
-            log.warning('Request was unexpectedly cancelled')
-        elif future.exception():
-            exc, traceback = future.exception_info()
-            log.warning('Failed to send an analytics event', exc_info=(type(exc), exc, traceback))
-        # GRIN TURNED THIS OFF. Segment only has one response: {"success": true}
-        # else:
-        #     response = future.result()
-        #     log.debug('Response (%s): %s', response.status_code, response.content)
+    def _log(response_or_failure):
+        if isinstance(response_or_failure, Response):
+            pass  # check if request was canceled and warn?
+        elif isinstance(response_or_failure, Failure):
+            log.warning('Failed to send an analytics event. Error: {}'.format(str(Failure)))
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        future = fn(*args, **kwargs)
-        future.add_done_callback(_log)
-        return future
+        d = fn(*args, **kwargs)
+        d.addBoth(_log)
+        return d
+
     return wrapper
 
 
@@ -81,7 +77,7 @@ class Api(object):
     def new_instance(cls, session=None):
         """Initialize an instance using values from the configuration"""
         if not session:
-            session = sessions.FuturesSession()
+            session = Session()
         return cls(
             session,
             conf.settings['ANALYTICS_ENDPOINT'],
