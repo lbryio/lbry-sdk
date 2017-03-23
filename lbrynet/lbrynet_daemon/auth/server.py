@@ -337,9 +337,10 @@ class AuthJSONRPCServer(AuthorizedBase):
     @staticmethod
     def _check_params(function, args_dict):
         argspec = inspect.getargspec(undecorated(function))
+        num_optional_params = 0 if argspec.defaults is None else len(argspec.defaults)
         missing_required_params = [
             required_param
-            for required_param in argspec.args[1:-len(argspec.defaults or ())]
+            for required_param in argspec.args[1:-num_optional_params]
             if required_param not in args_dict
             ]
         if len(missing_required_params):

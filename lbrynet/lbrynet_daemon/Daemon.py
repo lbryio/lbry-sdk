@@ -1444,9 +1444,8 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_get(
-    self, name, file_name=None, stream_info=None, timeout=None,
-    download_directory=None, wait_for_write=True):
+    def jsonrpc_get(self, name, file_name=None, stream_info=None, timeout=None,
+                    download_directory=None, wait_for_write=True):
         """
         Download stream from a LBRY name.
 
@@ -1764,6 +1763,7 @@ class Daemon(AuthJSONRPCServer):
             response = yield self._render_response(abandon_claim_tx)
         except BaseException as err:
             log.warning(err)
+            # pylint: disable=unsubscriptable-object
             if len(err.args) and err.args[0] == "txid was not found in wallet":
                 raise Exception("This transaction was not found in your wallet")
             else:

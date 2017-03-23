@@ -1033,11 +1033,11 @@ class LBRYumWallet(Wallet):
     def _abandon_claim(self, claim_outpoint):
         log.debug("Abandon %s %s" % (claim_outpoint['txid'], claim_outpoint['nout']))
         broadcast = False
-        claim_out = yield self._run_cmd_as_defer_succeed(
+        abandon_tx = yield self._run_cmd_as_defer_succeed(
             'abandon', claim_outpoint['txid'], claim_outpoint['nout'], broadcast
         )
-        yield self._broadcast_claim_transaction(claim_out)
-        defer.returnValue()
+        claim_out = yield self._broadcast_claim_transaction(abandon_tx)
+        defer.returnValue(claim_out)
 
     def _support_claim(self, name, claim_id, amount):
         log.debug("Support %s %s %f" % (name, claim_id, amount))
