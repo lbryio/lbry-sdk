@@ -11,6 +11,8 @@ at anytime.
 ### Added
   *
   *
+  * Add `wallet_list` command
+  * Add checks for missing/extraneous params when calling jsonrpc commands
   *
 
 ### Changed
@@ -22,6 +24,12 @@ at anytime.
   * Fix restart procedure in DaemonControl
   *
   * Create download directory if it doesn't exist
+  * Fixed descriptor_get
+  * Fixed jsonrpc_reflect()
+  * Fixed api help return
+  * Fixed API command descriptor_get
+  * Fixed API command transaction_show
+  * Fixed error handling for jsonrpc commands
   *
 
 ## [0.9.2rc1] - 2017-03-21
