@@ -1,6 +1,7 @@
 import logging
 import urlparse
 import inspect
+import json
 
 from decimal import Decimal
 from zope.interface import implements
@@ -15,7 +16,7 @@ from lbrynet import conf
 from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
 from lbrynet.undecorated import undecorated
-from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message, jsonrpc_dumps_pretty
+from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
 
 log = logging.getLogger(__name__)
@@ -94,6 +95,21 @@ def trap(err, *to_trap):
     err.trap(*to_trap)
 
 
+def jsonrpc_dumps_pretty(obj, **kwargs):
+    try:
+        id_ = kwargs.pop("id")
+    except KeyError:
+        id_ = None
+
+    if isinstance(obj, JSONRPCError):
+        data = {"jsonrpc": "2.0", "error": obj.to_dict(), "id": id_}
+    else:
+        data = {"jsonrpc": "2.0", "result": obj, "id": id_}
+
+    return json.dumps(data, cls=jsonrpclib.JSONRPCEncoder, sort_keys=True, indent=2,
+                      separators=(',', ': '), **kwargs) + "\n"
+
+
 class AuthorizedBase(object):
     def __init__(self):
         self.authorized_functions = []
@@ -165,7 +181,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         request.write(message)
         request.finish()
 
-    def _render_error(self, failure, request, id_, version=jsonrpclib.VERSION_2):
+    def _render_error(self, failure, request, id_):
         if isinstance(failure, JSONRPCError):
             error = failure
         elif isinstance(failure, Failure):
@@ -178,9 +194,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             # last resort, just cast it as a string
             error = JSONRPCError(str(failure))
 
-        response_content = jsonrpc_dumps_pretty(
-            error.to_dict(), id=id_, version=version, sort_keys=False
-        )
+        response_content = jsonrpc_dumps_pretty(error, id=id_)
 
         self._set_headers(request, response_content)
         # uncomment this after fixing lbrynet-cli to not raise exceptions on errors
@@ -239,18 +253,15 @@ class AuthJSONRPCServer(AuthorizedBase):
             return server.NOT_DONE_YET
 
         id_ = None
-        version = jsonrpclib.VERSION_2
         try:
             function_name = parsed.get('method')
             args = parsed.get('params', {})
             id_ = parsed.get('id', None)
-            version = self._get_jsonrpc_version(parsed.get('jsonrpc'), id_)
             token = parsed.pop('hmac', None)
         except AttributeError as err:
             log.warning(err)
             self._render_error(
-                JSONRPCError(None, code=JSONRPCError.CODE_INVALID_REQUEST),
-                request, id_, version=version
+                JSONRPCError(None, code=JSONRPCError.CODE_INVALID_REQUEST), request, id_
             )
             return server.NOT_DONE_YET
 
@@ -266,7 +277,7 @@ class AuthJSONRPCServer(AuthorizedBase):
                             err.message, code=JSONRPCError.CODE_AUTHENTICATION_ERROR,
                             traceback=format_exc()
                         ),
-                        request, id_, version=version
+                        request, id_
                     )
                     return server.NOT_DONE_YET
                 self._update_session_secret(session_id)
@@ -278,7 +289,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
                 JSONRPCError(None, JSONRPCError.CODE_METHOD_NOT_FOUND),
-                request, version
+                request
             )
             return server.NOT_DONE_YET
         except NotAllowedDuringStartupError as err:
@@ -286,7 +297,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._render_error(
                 JSONRPCError("This method is unavailable until the daemon is fully started",
                              code=JSONRPCError.CODE_INVALID_REQUEST),
-                request, version
+                request
             )
             return server.NOT_DONE_YET
 
@@ -310,7 +321,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             log.warning(params_error_message)
             self._render_error(
                 JSONRPCError(params_error_message, code=JSONRPCError.CODE_INVALID_PARAMS),
-                request, version
+                request, id_
             )
             return server.NOT_DONE_YET
 
@@ -322,12 +333,12 @@ class AuthJSONRPCServer(AuthorizedBase):
         # request.finish() from being called on a closed request.
         finished_deferred.addErrback(self._handle_dropped_request, d, function_name)
 
-        d.addCallback(self._callback_render, request, id_, version, reply_with_next_secret)
+        d.addCallback(self._callback_render, request, id_, reply_with_next_secret)
         # TODO: don't trap RuntimeError, which is presently caught to
         # handle deferredLists that won't peacefully cancel, namely
         # get_lbry_files
         d.addErrback(trap, ConnectionDone, ConnectionLost, defer.CancelledError, RuntimeError)
-        d.addErrback(log.fail(self._render_error, request, id_, version=version),
+        d.addErrback(log.fail(self._render_error, request, id_),
                      'Failed to process %s', function_name)
         d.addBoth(lambda _: log.debug("%s took %f",
                                       function_name,
@@ -445,31 +456,15 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _update_session_secret(self, session_id):
         self.sessions.update({session_id: APIKey.new(name=session_id)})
 
-    @staticmethod
-    def _get_jsonrpc_version(version=None, id_=None):
-        if version:
-            return int(float(version))
-        elif id_:
-            return jsonrpclib.VERSION_1
-        else:
-            return jsonrpclib.VERSION_PRE1
-
-    def _callback_render(self, result, request, id_, version, auth_required=False):
-        result_for_return = result
-
-        if version == jsonrpclib.VERSION_PRE1:
-            if not isinstance(result, jsonrpclib.Fault):
-                result_for_return = (result_for_return,)
-
+    def _callback_render(self, result, request, id_, auth_required=False):
         try:
-            encoded_message = jsonrpc_dumps_pretty(
-                result_for_return, id=id_, version=version, default=default_decimal)
+            encoded_message = jsonrpc_dumps_pretty(result, id=id_, default=default_decimal)
             request.setResponseCode(200)
             self._set_headers(request, encoded_message, auth_required)
             self._render_message(request, encoded_message)
         except Exception as err:
             log.exception("Failed to render API response: %s", result)
-            self._render_error(err, request, id_, version)
+            self._render_error(err, request, id_)
 
     @staticmethod
     def _render_response(result):
