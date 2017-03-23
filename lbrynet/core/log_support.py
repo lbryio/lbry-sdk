@@ -6,7 +6,7 @@ import os
 import sys
 import traceback
 
-from requests_futures.sessions import FuturesSession
+from txrequests import Session
 import twisted.python.log
 
 from lbrynet import __version__ as lbrynet_version, analytics, build_type, conf
@@ -29,7 +29,6 @@ _srcfile = os.path.normcase(_srcfile)
 #####
 
 
-session = FuturesSession()
 TRACE = 5
 
 
@@ -39,12 +38,13 @@ def bg_cb(sess, resp):
 
 
 class HTTPSHandler(logging.Handler):
-    def __init__(self, url, fqdn=False, localname=None, facility=None):
+    def __init__(self, url, fqdn=False, localname=None, facility=None, session=None):
         logging.Handler.__init__(self)
         self.url = url
         self.fqdn = fqdn
         self.localname = localname
         self.facility = facility
+        self.session = session if session is not None else Session()
 
     def get_full_message(self, record):
         if record.exc_info:
@@ -55,7 +55,7 @@ class HTTPSHandler(logging.Handler):
     def emit(self, record):
         try:
             payload = self.format(record)
-            session.post(self.url, data=payload, background_callback=bg_cb)
+            self.session.post(self.url, data=payload, background_callback=bg_cb)
         except (KeyboardInterrupt, SystemExit):
             raise
         except:
