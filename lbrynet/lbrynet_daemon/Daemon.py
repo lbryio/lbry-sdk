@@ -85,7 +85,6 @@ CONNECTION_MESSAGES = {
     CONNECTION_STATUS_NETWORK: "Your internet connection appears to have been interrupted",
 }
 
-PENDING_ID = "not set"
 SHORT_ID_LEN = 20
 
 
@@ -107,7 +106,6 @@ class Checker:
     INTERNET_CONNECTION = 'internet_connection_checker'
     VERSION = 'version_checker'
     CONNECTION_STATUS = 'connection_status_checker'
-    PENDING_CLAIM = 'pending_claim_checker'
 
 
 class _FileID(IterableContainer):
@@ -277,7 +275,6 @@ class Daemon(AuthJSONRPCServer):
         self.query_handlers = {}
         self.waiting_on = {}
         self.streams = {}
-        self.pending_claims = {}
         self.name_cache = {}
         self.exchange_rate_manager = ExchangeRateManager()
         self._remote_version = CheckRemoteVersion()
@@ -285,7 +282,6 @@ class Daemon(AuthJSONRPCServer):
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
             Checker.VERSION: LoopingCall(self._remote_version),
             Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
-            Checker.PENDING_CLAIM: LoopingCall(self._check_pending_claims),
         }
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
@@ -373,58 +369,6 @@ class Daemon(AuthJSONRPCServer):
 
         if not self.connected_to_internet:
             self.connection_status_code = CONNECTION_STATUS_NETWORK
-
-    # claim_out is dictionary containing 'txid' and 'nout'
-    def _add_to_pending_claims(self, claim_out, name):
-        txid = claim_out['txid']
-        nout = claim_out['nout']
-        log.info("Adding lbry://%s to pending claims, txid %s nout %d" % (name, txid, nout))
-        self.pending_claims[name] = (txid, nout)
-        return claim_out
-
-    def _check_pending_claims(self):
-        # TODO: this was blatantly copied from jsonrpc_start_lbry_file. Be DRY.
-        def _start_file(f):
-            d = self.lbry_file_manager.toggle_lbry_file_running(f)
-            return defer.succeed("Started LBRY file")
-
-        def _get_and_start_file(name):
-            def start_stopped_file(l):
-                if l.stopped:
-                    return _start_file(l)
-                else:
-                    return "LBRY file was already running"
-
-            d = defer.succeed(self.pending_claims.pop(name))
-            d.addCallback(lambda _: self._get_lbry_file(FileID.NAME, name, return_json=False))
-            d.addCallback(start_stopped_file)
-
-        def re_add_to_pending_claims(name):
-            log.warning("Re-add %s to pending claims", name)
-            txid, nout = self.pending_claims.pop(name)
-            claim_out = {'txid': txid, 'nout': nout}
-            self._add_to_pending_claims(claim_out, name)
-
-        def _process_lbry_file(name, lbry_file):
-            # lbry_file is an instance of ManagedEncryptedFileDownloader or None
-            # TODO: check for sd_hash in addition to txid
-            ready_to_start = (
-                lbry_file and
-                self.pending_claims[name] == (lbry_file.txid, lbry_file.nout)
-            )
-            if ready_to_start:
-                _get_and_start_file(name)
-            else:
-                re_add_to_pending_claims(name)
-
-        for name in self.pending_claims:
-            log.info("Checking if new claim for lbry://%s is confirmed" % name)
-            d = self._resolve_name(name, force_refresh=True)
-            d.addCallback(lambda _: self._get_lbry_file(FileID.NAME, name, return_json=False))
-            d.addCallbacks(
-                lambda lbry_file: _process_lbry_file(name, lbry_file),
-                lambda _: re_add_to_pending_claims(name)
-            )
 
     def _start_server(self):
         if self.peer_port is not None:
@@ -783,8 +727,6 @@ class Daemon(AuthJSONRPCServer):
                                log.exception)
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
-        yield self._add_to_pending_claims(claim_out, name)
-        self.looping_call_manager.start(Checker.PENDING_CLAIM, 30)
         defer.returnValue(claim_out)
 
     def add_stream(self, name, timeout, download_directory, file_name, stream_info):
