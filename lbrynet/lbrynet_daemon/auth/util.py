@@ -24,8 +24,9 @@ def generate_key(x=None):
         return sha(x)
 
 
-def jsonrpc_dumps_pretty(obj, **kwargs):
-    return jsonrpclib.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs) + "\n"
+def jsonrpc_dumps_pretty(obj, sort_keys=True, **kwargs):
+    return jsonrpclib.dumps(obj, sort_keys=sort_keys, indent=2, separators=(',', ': '), **kwargs) \
+           + "\n"
 
 
 class APIKey(object):

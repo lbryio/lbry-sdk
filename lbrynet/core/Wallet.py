@@ -20,10 +20,9 @@ from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import (UnknownNameError, InvalidStreamInfoError, RequestCanceledError,
-                            InsufficientFundsError)
+                                InsufficientFundsError)
 from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
 from lbrynet.metadata.Metadata import Metadata
-
 
 log = logging.getLogger(__name__)
 
@@ -1030,13 +1029,15 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda claim_out: self._broadcast_claim_transaction(claim_out))
         return d
 
+    @defer.inlineCallbacks
     def _abandon_claim(self, claim_outpoint):
         log.debug("Abandon %s %s" % (claim_outpoint['txid'], claim_outpoint['nout']))
         broadcast = False
-        d = self._run_cmd_as_defer_succeed('abandon', claim_outpoint['txid'],
-                                           claim_outpoint['nout'], broadcast)
-        d.addCallback(lambda claim_out: self._broadcast_claim_transaction(claim_out))
-        return d
+        claim_out = yield self._run_cmd_as_defer_succeed(
+            'abandon', claim_outpoint['txid'], claim_outpoint['nout'], broadcast
+        )
+        yield self._broadcast_claim_transaction(claim_out)
+        defer.returnValue()
 
     def _support_claim(self, name, claim_id, amount):
         log.debug("Support %s %s %f" % (name, claim_id, amount))
