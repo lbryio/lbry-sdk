@@ -289,7 +289,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
                 JSONRPCError(None, JSONRPCError.CODE_METHOD_NOT_FOUND),
-                request
+                request, id_
             )
             return server.NOT_DONE_YET
         except NotAllowedDuringStartupError as err:
@@ -297,7 +297,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._render_error(
                 JSONRPCError("This method is unavailable until the daemon is fully started",
                              code=JSONRPCError.CODE_INVALID_REQUEST),
-                request
+                request, id_
             )
             return server.NOT_DONE_YET
 

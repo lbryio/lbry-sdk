@@ -5,7 +5,6 @@ import yaml
 import os
 import json
 import logging
-from txjsonrpc import jsonrpclib
 
 log = logging.getLogger(__name__)
 
