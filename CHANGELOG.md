@@ -15,7 +15,7 @@ at anytime.
 
 ### Changed
   * Removed check_pending logic from Daemon
-  *
+  * Renamed API command file_seed to file_set_status
   *
 
 ### Fixed
