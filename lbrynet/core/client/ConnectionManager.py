@@ -21,6 +21,7 @@ class PeerConnectionHandler(object):
 class ConnectionManager(object):
     implements(interfaces.IConnectionManager)
     MANAGE_CALL_INTERVAL_SEC = 5
+    TCP_CONNECT_TIMEOUT = 15
 
     def __init__(self, downloader, rate_limiter,
                  primary_request_creators, secondary_request_creators):
@@ -208,7 +209,8 @@ class ConnectionManager(object):
                 lambda c_was_made: self._peer_disconnected(c_was_made, peer))
         self._peer_connections[peer] = PeerConnectionHandler(self._primary_request_creators[:],
                                                              factory)
-        connection = reactor.connectTCP(peer.host, peer.port, factory)
+        connection = reactor.connectTCP(peer.host, peer.port, factory,
+                                        timeout=self.TCP_CONNECT_TIMEOUT)
         self._peer_connections[peer].connection = connection
 
     def _peer_disconnected(self, connection_was_made, peer):
