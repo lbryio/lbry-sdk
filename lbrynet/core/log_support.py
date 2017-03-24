@@ -29,7 +29,7 @@ _srcfile = os.path.normcase(_srcfile)
 #####
 
 
-session = Session()
+session = None
 TRACE = 5
 
 
@@ -40,6 +40,10 @@ def bg_cb(sess, resp):
 
 class HTTPSHandler(logging.Handler):
     def __init__(self, url, fqdn=False, localname=None, facility=None):
+        global session
+        if session is None:
+            session = Session()
+
         logging.Handler.__init__(self)
         self.url = url
         self.fqdn = fqdn
