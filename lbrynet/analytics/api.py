@@ -2,9 +2,8 @@ import functools
 import json
 import logging
 
-from requests import auth, Response
+from requests import auth
 from txrequests import Session
-from twisted.python.failure import Failure
 
 from lbrynet import conf
 from lbrynet.analytics import utils
@@ -13,16 +12,13 @@ log = logging.getLogger(__name__)
 
 
 def log_response(fn):
-    def _log(response_or_failure):
-        if isinstance(response_or_failure, Response):
-            pass  # check if request was canceled and warn?
-        elif isinstance(response_or_failure, Failure):
-            log.warning('Failed to send an analytics event. Error: {}'.format(str(Failure)))
+    def _log_error(failure):
+        log.warning('Failed to send an analytics event. Error: {}'.format(str(failure)))
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         d = fn(*args, **kwargs)
-        d.addBoth(_log)
+        d.addErrback(_log_error)
         return d
 
     return wrapper

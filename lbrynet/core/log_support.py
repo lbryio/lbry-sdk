@@ -29,7 +29,6 @@ _srcfile = os.path.normcase(_srcfile)
 #####
 
 
-session = None
 TRACE = 5
 
 
@@ -39,16 +38,13 @@ def bg_cb(sess, resp):
 
 
 class HTTPSHandler(logging.Handler):
-    def __init__(self, url, fqdn=False, localname=None, facility=None):
-        global session
-        if session is None:
-            session = Session()
-
+    def __init__(self, url, fqdn=False, localname=None, facility=None, session=None):
         logging.Handler.__init__(self)
         self.url = url
         self.fqdn = fqdn
         self.localname = localname
         self.facility = facility
+        self.session = session if session is not None else Session()
 
     def get_full_message(self, record):
         if record.exc_info:
@@ -59,7 +55,7 @@ class HTTPSHandler(logging.Handler):
     def emit(self, record):
         try:
             payload = self.format(record)
-            session.post(self.url, data=payload, background_callback=bg_cb)
+            self.session.post(self.url, data=payload, background_callback=bg_cb)
         except (KeyboardInterrupt, SystemExit):
             raise
         except:
