@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 def log_response(fn):
     def _log_error(failure):
-        log.warning('Failed to send an analytics event. Error: {}'.format(str(failure)))
+        log.warning('Failed to send an analytics event. %s', failure.getTraceback())
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
