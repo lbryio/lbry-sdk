@@ -44,7 +44,7 @@ class AuthAPIClient(object):
     def call(self, method, params={}):
         self.__id_count += 1
         pre_auth_post_data = {
-            'version': '1.1',
+            'version': '2',
             'method': method,
             'params': params,
             'id': self.__id_count

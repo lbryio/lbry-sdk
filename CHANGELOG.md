@@ -11,6 +11,7 @@ at anytime.
 ### Added
   * Add `wallet_list` command
   * Add checks for missing/extraneous params when calling jsonrpc commands
+  * Added colors to cli error messages
   *
 
 ### Changed

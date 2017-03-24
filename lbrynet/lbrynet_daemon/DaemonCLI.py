@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import sys
+import colorama
 
 from lbrynet import conf
 from lbrynet.core import utils
@@ -13,6 +14,7 @@ from httplib import UNAUTHORIZED
 
 
 def main():
+    colorama.init()
     parser = argparse.ArgumentParser(add_help=False)
     _, arguments = parser.parse_known_args()
 
@@ -64,7 +66,7 @@ def main():
                     os.path.basename(sys.argv[0]))
             )
         else:
-            print_help_response(api.call('help', params))
+            print_help_for_command(api, params['command'])
 
     elif method not in api.commands():
         print_error("'" + method + "' is not a valid command.")
@@ -77,21 +79,28 @@ def main():
                 print result
             else:
                 print utils.json_dumps_pretty(result)
-        except (RPCError, KeyError, JSONRPCException) as err:
-            # TODO: The api should return proper error codes
-            # and messages so that they can be passed along to the user
-            # instead of this generic message.
-            # https://app.asana.com/0/158602294500137/200173944358192
-            print "Something went wrong, here's the usage for %s:" % method
-            print_help_response(api.call('help', {'command': method}))
-            if hasattr(err, 'msg'):
+        except (RPCError, KeyError, JSONRPCException, HTTPError) as err:
+            error_data = None
+            if isinstance(err, HTTPError):
+                error_body = err.read()
+                try:
+                    error_data = json.loads(error_body)
+                except ValueError:
+                    print (
+                        "There was an error, and the response was not valid JSON.\n" +
+                        "Raw JSONRPC response:\n" + error_body
+                    )
+                    return 1
+
+                print_error(error_data['error']['message'] + "\n", suggest_help=False)
+            else:
+                print_error("Something went wrong\n", suggest_help=False)
+
+            print_help_for_command(api, method)
+            if 'data' in error_data['error'] and 'traceback' in error_data['error']['data']:
                 print "Here's the traceback for the error you encountered:"
-                print err.msg
+                print "\n".join(error_data['error']['data']['traceback'])
             return 1
-
-
-def print_help_response(help_response):
-    print help_response['help'] if 'help' in help_response else help_response
 
 
 def parse_params(params):
@@ -144,7 +153,8 @@ def print_help_suggestion():
 
 
 def print_error(message, suggest_help=True):
-    print "ERROR: " + message
+    error_style = colorama.Style.BRIGHT + colorama.Fore.RED
+    print error_style + "ERROR: " + message + colorama.Style.RESET_ALL
     if suggest_help:
         print_help_suggestion()
 
@@ -166,6 +176,14 @@ def print_help(api):
         "COMMANDS",
         wrap_list_to_term_width(api.commands(), prefix='   ')
     ])
+
+
+def print_help_for_command(api, command):
+    help_response = api.call('help', {'command': command})
+    print "Help for %s method:" % command
+    message = help_response['help'] if 'help' in help_response else help_response
+    message = "\n".join(['    ' + line for line in message.split("\n")])
+    print message
 
 
 def wrap_list_to_term_width(l, width=None, separator=', ', prefix=''):
