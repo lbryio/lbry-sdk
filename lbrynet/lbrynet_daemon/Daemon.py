@@ -1467,22 +1467,22 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     def jsonrpc_stop_lbry_file(self, **kwargs):
         """
-        DEPRECATED. Use `file_seed status=stop` instead.
+        DEPRECATED. Use `file_set_status status=stop` instead.
         """
-        return self.jsonrpc_file_seed(status='stop', **kwargs)
+        return self.jsonrpc_file_set_status(status='stop', **kwargs)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_start_lbry_file(self, **kwargs):
         """
-        DEPRECATED. Use `file_seed status=start` instead.
+        DEPRECATED. Use `file_set_status status=start` instead.
         """
-        return self.jsonrpc_file_seed(status='start', **kwargs)
+        return self.jsonrpc_file_set_status(status='start', **kwargs)
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_file_seed(self, status, **kwargs):
+    def jsonrpc_file_set_status(self, status, **kwargs):
         """
-        Start or stop seeding a file
+        Start or stop downloading a file
 
         Args:
             'status': (str) "start" or "stop"
@@ -1503,10 +1503,11 @@ class Daemon(AuthJSONRPCServer):
 
         if status == 'start' and lbry_file.stopped or status == 'stop' and not lbry_file.stopped:
             yield self.lbry_file_manager.toggle_lbry_file_running(lbry_file)
-            msg = "Started seeding file" if status == 'start' else "Stopped seeding file"
+            msg = "Started downloading file" if status == 'start' else "Stopped downloading file"
         else:
             msg = (
-                "File was already being seeded" if status == 'start' else "File was already stopped"
+                "File was already being downloaded" if status == 'start'
+                    else "File was already stopped"
             )
         response = yield self._render_response(msg)
         defer.returnValue(response)

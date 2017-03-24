@@ -487,25 +487,9 @@ Returns:
 ```text
 Get daemon settings
 
-Args:
-    None
 Returns:
     (dict) Dictionary of daemon settings
-    {
-        'run_on_startup': (bool) currently not supported
-        'data_rate': (float) data rate
-        'max_key_fee': (float) maximum key fee
-        'download_directory': (str) path of where files are downloaded
-        'max_upload': (float), currently not supported
-        'max_download': (float), currently not supported
-        'download_timeout': (int) download timeout in seconds
-        'max_search_results': (int) max search results
-        'wallet_type': (str) wallet type
-        'delete_blobs_on_remove': (bool) delete blobs on removal
-        'peer_port': (int) peer port
-        'dht_node_port': (int) dht node port
-        'use_upnp': (bool) use upnp if true
-    }
+    See ADJUSTABLE_SETTINGS in lbrynet/conf.py for full list of settings
 ```
 
 ## settings_set
@@ -521,8 +505,10 @@ Args:
     'max_upload': (float), currently not supported
     'max_download': (float), currently not supported
     'download_timeout': (int) download timeout in seconds
+    'search_timeout': (float) search timeout in seconds
+    'cache_time': (int) cache timeout in seconds
 Returns:
-    (dict) settings dict
+    (dict) Updated dictionary of daemon settings
 ```
 
 ## status
@@ -614,6 +600,17 @@ Args:
     'address': (str) address to check in base58
 Returns:
     (bool) true, if address is associated with current wallet
+```
+
+## wallet_list
+
+```text
+List wallet addresses
+
+Args:
+    None
+Returns:
+    List of wallet addresses
 ```
 
 ## wallet_new_address
