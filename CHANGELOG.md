@@ -16,7 +16,7 @@ at anytime.
 
 ### Changed
   * Removed check_pending logic from Daemon
-  *
+  * Switched to txrequests so requests can use twisted event loop
   *
 
 ### Fixed
