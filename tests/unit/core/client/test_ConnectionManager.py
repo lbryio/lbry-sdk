@@ -177,12 +177,10 @@ class TestIntegrationConnectionManager(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_parallel_connections(self):
-        # Test to see that we make new connection for each manage call,
+        # Test to see that we make two new connections at a manage call,
         # without it waiting for the connection to complete
         test_peer2 = Peer(LOCAL_HOST, PEER_PORT+1)
         self.primary_request_creator.peers_to_return = [self.TEST_PEER, test_peer2]
-        yield self.connection_manager.manage(schedule_next_call=False)
-        self.assertEqual(1, self.connection_manager.num_peer_connections())
         yield self.connection_manager.manage(schedule_next_call=False)
         self.assertEqual(2, self.connection_manager.num_peer_connections())
         self.assertIn(self.TEST_PEER, self.connection_manager._peer_connections)

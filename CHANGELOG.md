@@ -14,7 +14,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Improved ConnectionManager speed
   *
   *
 
