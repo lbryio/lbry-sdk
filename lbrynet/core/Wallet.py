@@ -603,12 +603,6 @@ class Wallet(object):
         d = self._get_claims_for_name(name)
         return d
 
-    def update_metadata(self, new_metadata, old_metadata):
-        meta_for_return = old_metadata if isinstance(old_metadata, dict) else {}
-        for k in new_metadata:
-            meta_for_return[k] = new_metadata[k]
-        return defer.succeed(Metadata(meta_for_return))
-
     def _process_claim_out(self, claim_out):
         claim_out.pop('success')
         claim_out['fee'] = float(claim_out['fee'])
@@ -637,10 +631,9 @@ class Wallet(object):
             log.info("Updating claim")
             if self.get_balance() < Decimal(bid) - Decimal(my_claim['amount']):
                 raise InsufficientFundsError()
-            new_metadata = yield self.update_metadata(_metadata, my_claim['value'])
             old_claim_outpoint = ClaimOutpoint(my_claim['txid'], my_claim['nout'])
             claim = yield self._send_name_claim_update(name, my_claim['claim_id'],
-                                                       old_claim_outpoint, new_metadata, bid)
+                                                       old_claim_outpoint, _metadata, bid)
             claim['claim_id'] = my_claim['claim_id']
         else:
             log.info("Making a new claim")

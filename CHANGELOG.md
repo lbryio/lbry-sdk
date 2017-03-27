@@ -19,7 +19,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Removed update_metadata function that could cause update problems
   *
   *
 
