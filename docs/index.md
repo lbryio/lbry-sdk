@@ -293,10 +293,10 @@ Returns:
     ]
 ```
 
-## file_seed
+## file_set_status
 
 ```text
-Start or stop seeding a file
+Start or stop downloading a file
 
 Args:
     'status': (str) "start" or "stop"
@@ -634,5 +634,17 @@ Args:
 Returns:
     (list) list of public keys associated with address.
         Could contain more than one public key if multisig.
+```
+
+## wallet_unused_address
+
+```text
+Return an address containing no balance, will create
+a new address if there is none.
+
+Args:
+    None
+Returns:
+    (str) Unused wallet address in base58
 ```
 
