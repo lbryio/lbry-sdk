@@ -418,12 +418,12 @@ class Wallet(object):
     def update_peer_address(self, peer, address):
         self.peer_addresses[peer] = address
 
-    def get_new_address_for_peer(self, peer):
+    def get_unused_address_for_peer(self, peer):
         def set_address_for_peer(address):
             self.current_address_given_to_peer[peer] = address
             return address
 
-        d = self.get_new_address()
+        d = self.get_unused_address()
         d.addCallback(set_address_for_peer)
         return d
 
@@ -974,13 +974,22 @@ class LBRYumWallet(Wallet):
             lambda result: Decimal(result['confirmed']) + Decimal(result.get('unconfirmed', 0.0)))
         return d
 
+    # Always create and return a brand new address
+    @defer.inlineCallbacks
     def get_new_address(self):
+        addr = self.wallet.create_new_address(account=None)
+        yield self._save_wallet()
+        defer.returnValue(addr)
+
+    # Return an address with no balance in it, if
+    # there is none, create a brand new address
+    @defer.inlineCallbacks
+    def get_unused_address(self):
         addr = self.wallet.get_unused_address(account=None)
         if addr is None:
             addr = self.wallet.create_new_address()
-        d = defer.succeed(addr)
-        d.addCallback(self._save_wallet)
-        return d
+        yield self._save_wallet()
+        defer.returnValue(addr)
 
     def get_block(self, blockhash):
         return self._run_cmd_as_defer_to_thread('getblock', blockhash)
@@ -1113,7 +1122,7 @@ class LBRYumWallet(Wallet):
     def list_addresses(self):
         return self._run_cmd_as_defer_succeed('listaddresses')
 
-    def _save_wallet(self, val):
+    def _save_wallet(self, val=None):
         self.wallet.storage.write()
         return defer.succeed(val)
 
@@ -1198,7 +1207,7 @@ class LBRYcrdAddressQueryHandler(object):
             return fields
 
         if self.query_identifiers[0] in queries:
-            d = self.wallet.get_new_address_for_peer(self.peer)
+            d = self.wallet.get_unused_address_for_peer(self.peer)
             d.addCallback(create_response)
             return d
         if self.address is None:
