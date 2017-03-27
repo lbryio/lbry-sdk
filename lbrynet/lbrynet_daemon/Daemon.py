@@ -1985,6 +1985,29 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda address: self._render_response(address))
         return d
 
+
+    @AuthJSONRPCServer.auth_required
+    def jsonrpc_wallet_unused_address(self):
+        """
+        Return an address containing no balance, will create
+        a new address if there is none.
+
+        Args:
+            None
+        Returns:
+            (str) Unused wallet address in base58
+        """
+
+        def _disp(address):
+            log.info("Got unused wallet address: " + address)
+            return defer.succeed(address)
+
+        d = self.session.wallet.get_unused_address()
+        d.addCallback(_disp)
+        d.addCallback(lambda address: self._render_response(address))
+        return d
+
+
     @AuthJSONRPCServer.auth_required
     def jsonrpc_send_amount_to_address(self, amount, address):
         """
