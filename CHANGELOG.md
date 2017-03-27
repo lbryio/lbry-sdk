@@ -9,12 +9,12 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Create wallet_unused_address API command
   *
   *
 
 ### Changed
-  *
+  * wallet_new_address API command always returns new address
   *
   *
 
