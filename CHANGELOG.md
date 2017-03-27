@@ -15,6 +15,7 @@ at anytime.
 
 ### Changed
   * wallet_new_address API command always returns new address
+  * Improved ConnectionManager speed
   *
   *
 
