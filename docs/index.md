@@ -387,7 +387,8 @@ Returns:
 ## publish
 
 ```text
-Make a new name claim and publish associated data to lbrynet
+Make a new name claim and publish associated data to lbrynet,
+update over existing claim if user already has a claim for name.
 
 Fields required in the final Metadata are:
     'title'
