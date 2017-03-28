@@ -1580,7 +1580,8 @@ class Daemon(AuthJSONRPCServer):
                         description=None, author=None, language=None, license=None,
                         license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None):
         """
-        Make a new name claim and publish associated data to lbrynet
+        Make a new name claim and publish associated data to lbrynet,
+        update over existing claim if user already has a claim for name.
 
         Fields required in the final Metadata are:
             'title'
