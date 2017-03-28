@@ -221,7 +221,7 @@ class Session(object):
                             self.dht_node_port, 'UDP', u.lanaddr, self.dht_node_port,
                             'LBRY DHT port', '')
                         self.upnp_redirects.append((self.dht_node_port, 'UDP'))
-                        log.info("Set UPnP redirect for UPD port %d", self.dht_node_port)
+                        log.info("Set UPnP redirect for UDP port %d", self.dht_node_port)
                     else:
                         # TODO: check that the existing redirect was
                         # put up by an old lbrynet session before
