@@ -42,15 +42,6 @@ class Publisher(object):
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
-    def update_stream(self, name, bid, metadata):
-        my_claim = yield self.wallet.get_my_claim(name)
-        updated_metadata = my_claim['value']
-        for meta_key in metadata:
-            updated_metadata[meta_key] = metadata[meta_key]
-        claim_out = yield self.make_claim(name, bid, updated_metadata)
-        defer.returnValue(claim_out)
-
-    @defer.inlineCallbacks
     def make_claim(self, name, bid, metadata):
         validated_metadata = Metadata(metadata)
         claim_out = yield self.wallet.claim_name(name, bid, validated_metadata)
