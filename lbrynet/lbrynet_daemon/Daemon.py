@@ -24,7 +24,7 @@ from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.metadata.Fee import FeeValidator
-from lbrynet.metadata.Metadata import verify_name_characters
+from lbrynet.metadata.Metadata import verify_name_characters, Metadata
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
@@ -693,20 +693,17 @@ class Daemon(AuthJSONRPCServer):
         return finished_d
 
     @defer.inlineCallbacks
-    def _download_name(self, name, timeout=None, download_directory=None,
-                       file_name=None, stream_info=None, wait_for_write=True):
+    def _download_name(self, name, stream_info, timeout=None, download_directory=None,
+                       file_name=None, wait_for_write=True):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
+
         timeout = timeout if timeout is not None else conf.settings['download_timeout']
 
         helper = _DownloadNameHelper(self, name, timeout, download_directory, file_name,
                                      wait_for_write)
-        if not stream_info:
-            self.waiting_on[name] = True
-            stream_info = yield self._resolve_name(name)
-
         lbry_file = yield helper.setup_stream(stream_info)
         sd_hash, file_path = yield helper.wait_or_get_stream(stream_info, lbry_file)
         defer.returnValue((sd_hash, file_path))
@@ -1386,15 +1383,15 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_get(self, name, file_name=None, stream_info=None, timeout=None,
+    def jsonrpc_get(self, name, claim_id=None, file_name=None, timeout=None,
                     download_directory=None, wait_for_write=True):
         """
         Download stream from a LBRY name.
 
         Args:
             'name': (str) name to download
+            'claim_id' (optional): (str) claim id for claim to download
             'file_name'(optional): (str) a user specified name for the downloaded file
-            'stream_info'(optional): (str) specified stream info overrides name
             'timeout'(optional): (int) download timeout in number of seconds
             'download_directory'(optional): (str) path to directory where file will be saved
             'wait_for_write'(optional): (bool)  defaults to True. When set, waits for the file to
@@ -1426,13 +1423,31 @@ class Daemon(AuthJSONRPCServer):
 
         """
 
+        def _get_claim(_claim_id, _claims):
+            for claim in _claims['claims']:
+                if claim['claim_id'] == _claim_id:
+                    return Metadata(json.loads(claim['value']))
+
         timeout = timeout if timeout is not None else self.download_timeout
         download_directory = download_directory or self.download_directory
-        if name in self.waiting_on:
+        if name in self.streams:
             log.info("Already waiting on lbry://%s to start downloading", name)
             yield self.streams[name].data_downloading_deferred
 
-        lbry_file = yield self._get_lbry_file(FileID.NAME, name, return_json=False)
+        stream_info = None
+        lbry_file = None
+
+        if claim_id:
+            lbry_file = yield self._get_lbry_file(FileID.CLAIM_ID, claim_id, return_json=False)
+            claims = yield self.session.wallet.get_claims_for_name(name)
+            formatted_claims = format_json_out_amount_as_float(claims)
+            stream_info = _get_claim(claim_id, formatted_claims)
+            if not stream_info:
+                log.error("No claim %s for lbry://%s, using winning claim", claim_id, name)
+
+        if not stream_info:
+            lbry_file = yield self._get_lbry_file(FileID.NAME, name, return_json=False)
+            stream_info = yield self._resolve_name(name)
 
         if lbry_file:
             if not os.path.isfile(os.path.join(lbry_file.download_directory, lbry_file.file_name)):
@@ -1444,12 +1459,12 @@ class Daemon(AuthJSONRPCServer):
             result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
         else:
             download_id = utils.random_string()
+
             self.analytics_manager.send_download_started(download_id, name, stream_info)
             try:
-                yield self._download_name(name=name, timeout=timeout,
+                yield self._download_name(name=name, stream_info=stream_info, timeout=timeout,
                                           download_directory=download_directory,
-                                          stream_info=stream_info, file_name=file_name,
-                                          wait_for_write=wait_for_write)
+                                          file_name=file_name, wait_for_write=wait_for_write)
                 stream = self.streams[name]
                 stream.finished_deferred.addCallback(
                     lambda _: self.analytics_manager.send_download_finished(
