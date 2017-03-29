@@ -491,7 +491,8 @@ class Daemon(AuthJSONRPCServer):
             'max_download': float,
             'download_timeout': int,
             'search_timeout': float,
-            'cache_time': int
+            'cache_time': int,
+            'share_debug_info': bool,
         }
 
         def can_update_key(settings, key, setting_type):
