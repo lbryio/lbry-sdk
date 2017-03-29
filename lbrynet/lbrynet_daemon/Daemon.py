@@ -1429,6 +1429,8 @@ class Daemon(AuthJSONRPCServer):
                 if claim['claim_id'] == _claim_id:
                     return Metadata(json.loads(claim['value']))
 
+        log.info("Received request to get %s", name)
+
         timeout = timeout if timeout is not None else self.download_timeout
         download_directory = download_directory or self.download_directory
         if name in self.streams:
