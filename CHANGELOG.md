@@ -10,13 +10,13 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Create wallet_unused_address API command
-  *
+  * Add `claim_id` parameter to `get`, used to specify non-default claim for `name`
   *
 
 ### Changed
   * wallet_new_address API command always returns new address
   * Improved ConnectionManager speed
-  *
+  * Remove unused `stream_info` parameter in `get`
   *
 
 ### Fixed
