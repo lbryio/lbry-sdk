@@ -14,7 +14,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Return full `lbry_id` and `installation_id` from `status`
   *
   *
 
