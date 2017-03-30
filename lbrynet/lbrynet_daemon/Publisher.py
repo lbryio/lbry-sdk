@@ -19,8 +19,11 @@ class Publisher(object):
         self.wallet = wallet
         self.lbry_file = None
 
+    """
+    Create lbry file and make claim
+    """
     @defer.inlineCallbacks
-    def publish_stream(self, name, file_path, bid, metadata):
+    def create_and_publish_stream(self, name, bid, metadata, file_path):
         log.info('Starting publish for %s', name)
         file_name = os.path.basename(file_path)
         with file_utils.get_read_handle(file_path) as read_handle:
@@ -39,6 +42,14 @@ class Publisher(object):
         self.lbry_file.completed = True
         yield self.lbry_file.load_file_attributes()
         yield self.lbry_file.save_status()
+        defer.returnValue(claim_out)
+
+    """
+    Make a claim without creating a lbry file
+    """
+    @defer.inlineCallbacks
+    def publish_stream(self, name, bid, metadata):
+        claim_out = yield self.make_claim(name, bid, metadata)
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
