@@ -24,13 +24,13 @@ import msgtypes
 import msgformat
 from contact import Contact
 
-
 reactor = twisted.internet.reactor
 log = logging.getLogger(__name__)
 
 
 class TimeoutError(Exception):
     """ Raised when a RPC times out """
+
     def __init__(self, remote_contact_id):
         # remote_contact_id is a binary blob so we need to convert it
         # into something more readable
@@ -40,8 +40,8 @@ class TimeoutError(Exception):
 
 
 class Delay(object):
-    maxToSendDelay = 10**-3 #0.05
-    minToSendDelay = 10**-5 #0.01
+    maxToSendDelay = 10 ** -3  # 0.05
+    minToSendDelay = 10 ** -5  # 0.01
 
     def __init__(self, start=0):
         self._next = start
@@ -62,8 +62,7 @@ class Delay(object):
 
 class KademliaProtocol(protocol.DatagramProtocol):
     """ Implements all low-level network-related functions of a Kademlia node """
-    msgSizeLimit = constants.udpDatagramMaxSize-26
-
+    msgSizeLimit = constants.udpDatagramMaxSize - 26
 
     def __init__(self, node, msgEncoder=encoding.Bencode(),
                  msgTranslator=msgformat.DefaultFormat()):
@@ -115,7 +114,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
         # Set the RPC timeout timer
         timeoutCall = reactor.callLater(
-            constants.rpcTimeout, self._msgTimeout, msg.id) #IGNORE:E1101
+            constants.rpcTimeout, self._msgTimeout, msg.id)  # IGNORE:E1101
         # Transmit the data
         self._send(encodedMsg, msg.id, (contact.address, contact.port))
         self._sentMessages[msg.id] = (contact.id, df, timeoutCall)
@@ -182,7 +181,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     else:
                         localModuleHierarchy = self.__module__.split('.')
                         remoteHierarchy = message.exceptionType.split('.')
-                        #strip the remote hierarchy
+                        # strip the remote hierarchy
                         while remoteHierarchy[0] == localModuleHierarchy[0]:
                             remoteHierarchy.pop(0)
                             localModuleHierarchy.pop(0)
@@ -199,7 +198,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     df.callback(message.response)
             else:
                 # If the original message isn't found, it must have timed out
-                #TODO: we should probably do something with this...
+                # TODO: we should probably do something with this...
                 pass
 
     def _send(self, data, rpcID, address):
@@ -233,7 +232,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             seqNumber = 0
             startPos = 0
             while seqNumber < totalPackets:
-                packetData = data[startPos:startPos+self.msgSizeLimit]
+                packetData = data[startPos:startPos + self.msgSizeLimit]
                 encSeqNumber = chr(seqNumber >> 8) + chr(seqNumber & 0xff)
                 txData = '\x00%s%s%s\x00%s' % (encTotalPackets, encSeqNumber, rpcID, packetData)
                 self._scheduleSendNext(txData, address)
@@ -281,6 +280,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
     def _handleRPC(self, senderContact, rpcID, method, args):
         """ Executes a local function in response to an RPC request """
+
         # Set up the deferred callchain
         def handleError(f):
             self._sendError(senderContact, rpcID, f.type, f.getErrorMessage())
@@ -359,7 +359,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 log.debug('Attempted to cancel a DelayedCall that was not active')
             except Exception:
                 log.exception('Failed to cancel a DelayedCall')
-            # not sure why this is needed, but taking this out sometimes causes
-            # exceptions.AttributeError: 'Port' object has no attribute 'socket'
-            # to happen on shutdown
-            # reactor.iterate()
+                # not sure why this is needed, but taking this out sometimes causes
+                # exceptions.AttributeError: 'Port' object has no attribute 'socket'
+                # to happen on shutdown
+                # reactor.iterate()

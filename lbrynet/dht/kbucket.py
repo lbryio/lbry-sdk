@@ -9,6 +9,7 @@
 
 import constants
 
+
 class BucketFull(Exception):
     """ Raised when the bucket is full """
 
@@ -16,6 +17,7 @@ class BucketFull(Exception):
 class KBucket(object):
     """ Description - later
     """
+
     def __init__(self, rangeMin, rangeMax):
         """
         @param rangeMin: The lower boundary for the range in the n-bit ID

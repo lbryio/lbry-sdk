@@ -10,8 +10,10 @@
 import hashlib
 import random
 
+
 class Message(object):
     """ Base class for messages - all "unknown" messages use this class """
+
     def __init__(self, rpcID, nodeID):
         self.id = rpcID
         self.nodeID = nodeID
@@ -19,6 +21,7 @@ class Message(object):
 
 class RequestMessage(Message):
     """ Message containing an RPC request """
+
     def __init__(self, nodeID, method, methodArgs, rpcID=None):
         if rpcID == None:
             hash = hashlib.sha384()
@@ -31,6 +34,7 @@ class RequestMessage(Message):
 
 class ResponseMessage(Message):
     """ Message containing the result from a successful RPC request """
+
     def __init__(self, rpcID, nodeID, response):
         Message.__init__(self, rpcID, nodeID)
         self.response = response
@@ -38,6 +42,7 @@ class ResponseMessage(Message):
 
 class ErrorMessage(ResponseMessage):
     """ Message containing the error from an unsuccessful RPC request """
+
     def __init__(self, rpcID, nodeID, exceptionType, errorMessage):
         ResponseMessage.__init__(self, rpcID, nodeID, errorMessage)
         if isinstance(exceptionType, type):

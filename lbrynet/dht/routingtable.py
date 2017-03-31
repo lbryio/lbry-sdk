@@ -5,11 +5,13 @@
 # The docstrings in this module contain epytext markup; API documentation
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
-import time, random
-
+import time
+import random
 import constants
 import kbucket
+
 from protocol import TimeoutError
+
 
 class RoutingTable(object):
     """ Interface for RPC message translators/formatters
@@ -17,12 +19,14 @@ class RoutingTable(object):
     Classes inheriting from this should provide a suitable routing table for
     a parent Node object (i.e. the local entity in the Kademlia network)
     """
+
     def __init__(self, parentNodeID):
         """
         @param parentNodeID: The n-bit node ID of the node to which this
                              routing table belongs
         @type parentNodeID: str
         """
+
     def addContact(self, contact):
         """ Add the given contact to the correct k-bucket; if it already
         exists, its status will be updated
@@ -51,12 +55,14 @@ class RoutingTable(object):
                  node is returning all of the contacts that it knows of.
         @rtype: list
         """
+
     def getContact(self, contactID):
         """ Returns the (known) contact with the specified node ID
 
         @raise ValueError: No contact with the specified contact ID is known
                            by this node
         """
+
     def getRefreshList(self, startIndex=0, force=False):
         """ Finds all k-buckets that need refreshing, starting at the
         k-bucket with the specified index, and returns IDs to be searched for
@@ -78,6 +84,7 @@ class RoutingTable(object):
                  in order to refresh the routing Table
         @rtype: list
         """
+
     def removeContact(self, contactID):
         """ Remove the contact with the specified node ID from the routing
         table
@@ -85,6 +92,7 @@ class RoutingTable(object):
         @param contactID: The node ID of the contact to remove
         @type contactID: str
         """
+
     def touchKBucket(self, key):
         """ Update the "last accessed" timestamp of the k-bucket which covers
         the range containing the specified key in the key/ID space
@@ -109,6 +117,7 @@ class TreeRoutingTable(RoutingTable):
     C{PING} RPC-based k-bucket eviction algorithm described in section 2.2 of
     that paper.
     """
+
     def __init__(self, parentNodeID):
         """
         @param parentNodeID: The n-bit node ID of the node to which this
@@ -116,7 +125,7 @@ class TreeRoutingTable(RoutingTable):
         @type parentNodeID: str
         """
         # Create the initial (single) k-bucket covering the range of the entire n-bit ID space
-        self._buckets = [kbucket.KBucket(rangeMin=0, rangeMax=2**constants.key_bits)]
+        self._buckets = [kbucket.KBucket(rangeMin=0, rangeMax=2 ** constants.key_bits)]
         self._parentNodeID = parentNodeID
 
     def addContact(self, contact):
@@ -204,21 +213,21 @@ class TreeRoutingTable(RoutingTable):
         # with the specified key as node ID), unless there is less
         # than k remote nodes in the routing table
         i = 1
-        canGoLower = bucketIndex-i >= 0
-        canGoHigher = bucketIndex+i < len(self._buckets)
+        canGoLower = bucketIndex - i >= 0
+        canGoHigher = bucketIndex + i < len(self._buckets)
         # Fill up the node list to k nodes, starting with the closest neighbouring nodes known
         while len(closestNodes) < constants.k and (canGoLower or canGoHigher):
-            #TODO: this may need to be optimized
+            # TODO: this may need to be optimized
             if canGoLower:
                 closestNodes.extend(
-                    self._buckets[bucketIndex-i].getContacts(
+                    self._buckets[bucketIndex - i].getContacts(
                         constants.k - len(closestNodes), _rpcNodeID))
-                canGoLower = bucketIndex-(i+1) >= 0
+                canGoLower = bucketIndex - (i + 1) >= 0
             if canGoHigher:
                 closestNodes.extend(
-                    self._buckets[bucketIndex+i].getContacts(
+                    self._buckets[bucketIndex + i].getContacts(
                         constants.k - len(closestNodes), _rpcNodeID))
-                canGoHigher = bucketIndex+(i+1) < len(self._buckets)
+                canGoHigher = bucketIndex + (i + 1) < len(self._buckets)
             i += 1
         return closestNodes
 
@@ -322,7 +331,7 @@ class TreeRoutingTable(RoutingTable):
         if len(randomID) % 2 != 0:
             randomID = '0' + randomID
         randomID = randomID.decode('hex')
-        randomID = (constants.key_bits/8 - len(randomID))*'\x00' + randomID
+        randomID = (constants.key_bits / 8 - len(randomID)) * '\x00' + randomID
         return randomID
 
     def _splitBucket(self, oldBucketIndex):
@@ -335,7 +344,7 @@ class TreeRoutingTable(RoutingTable):
         """
         # Resize the range of the current (old) k-bucket
         oldBucket = self._buckets[oldBucketIndex]
-        splitPoint = oldBucket.rangeMax - (oldBucket.rangeMax - oldBucket.rangeMin)/2
+        splitPoint = oldBucket.rangeMax - (oldBucket.rangeMax - oldBucket.rangeMin) / 2
         # Create a new k-bucket to cover the range split off from the old bucket
         newBucket = kbucket.KBucket(splitPoint, oldBucket.rangeMax)
         oldBucket.rangeMax = splitPoint
@@ -349,11 +358,13 @@ class TreeRoutingTable(RoutingTable):
         for contact in newBucket._contacts:
             oldBucket.removeContact(contact)
 
+
 class OptimizedTreeRoutingTable(TreeRoutingTable):
     """ A version of the "tree"-type routing table specified by Kademlia,
     along with contact accounting optimizations specified in section 4.1 of
     of the 13-page version of the Kademlia paper.
     """
+
     def __init__(self, parentNodeID):
         TreeRoutingTable.__init__(self, parentNodeID)
         # Cache containing nodes eligible to replace stale k-bucket entries
@@ -386,7 +397,7 @@ class OptimizedTreeRoutingTable(TreeRoutingTable):
                 # We can't split the k-bucket
                 # NOTE: This implementation follows section 4.1 of the 13 page version
                 # of the Kademlia paper (optimized contact accounting without PINGs
-                #- results in much less network traffic, at the expense of some memory)
+                # - results in much less network traffic, at the expense of some memory)
 
                 # Put the new contact in our replacement cache for the
                 # corresponding k-bucket (or update it's position if
@@ -395,9 +406,9 @@ class OptimizedTreeRoutingTable(TreeRoutingTable):
                     self._replacementCache[bucketIndex] = []
                 if contact in self._replacementCache[bucketIndex]:
                     self._replacementCache[bucketIndex].remove(contact)
-                #TODO: Using k to limit the size of the contact
-                #replacement cache - maybe define a seperate value for
-                #this in constants.py?
+                # TODO: Using k to limit the size of the contact
+                # replacement cache - maybe define a seperate value for
+                # this in constants.py?
                 elif len(self._replacementCache) >= constants.k:
                     self._replacementCache.pop(0)
                 self._replacementCache[bucketIndex].append(contact)

@@ -12,12 +12,14 @@ class DecodeError(Exception):
     fails
     """
 
+
 class Encoding(object):
     """ Interface for RPC message encoders/decoders
 
     All encoding implementations used with this library should inherit and
     implement this.
     """
+
     def encode(self, data):
         """ Encode the specified data
 
@@ -31,6 +33,7 @@ class Encoding(object):
         @return: The encoded data
         @rtype: str
         """
+
     def decode(self, data):
         """ Decode the specified data string
 
@@ -39,6 +42,7 @@ class Encoding(object):
 
         @return: The decoded data (in its correct type)
         """
+
 
 class Bencode(Encoding):
     """ Implementation of a Bencode-based algorithm (Bencode is the encoding
@@ -112,15 +116,15 @@ class Bencode(Encoding):
         Do not call this; use C{decode()} instead
         """
         if data[startIndex] == 'i':
-            endPos = data[startIndex:].find('e')+startIndex
-            return (int(data[startIndex+1:endPos]), endPos+1)
+            endPos = data[startIndex:].find('e') + startIndex
+            return (int(data[startIndex + 1:endPos]), endPos + 1)
         elif data[startIndex] == 'l':
             startIndex += 1
             decodedList = []
             while data[startIndex] != 'e':
                 listData, startIndex = Bencode._decodeRecursive(data, startIndex)
                 decodedList.append(listData)
-            return (decodedList, startIndex+1)
+            return (decodedList, startIndex + 1)
         elif data[startIndex] == 'd':
             startIndex += 1
             decodedDict = {}
@@ -131,19 +135,19 @@ class Bencode(Encoding):
             return (decodedDict, startIndex)
         elif data[startIndex] == 'f':
             # This (float data type) is a non-standard extension to the original Bencode algorithm
-            endPos = data[startIndex:].find('e')+startIndex
-            return (float(data[startIndex+1:endPos]), endPos+1)
+            endPos = data[startIndex:].find('e') + startIndex
+            return (float(data[startIndex + 1:endPos]), endPos + 1)
         elif data[startIndex] == 'n':
             # This (None/NULL data type) is a non-standard extension
             # to the original Bencode algorithm
-            return (None, startIndex+1)
+            return (None, startIndex + 1)
         else:
-            splitPos = data[startIndex:].find(':')+startIndex
+            splitPos = data[startIndex:].find(':') + startIndex
             try:
                 length = int(data[startIndex:splitPos])
             except ValueError, e:
                 raise DecodeError, e
-            startIndex = splitPos+1
-            endPos = startIndex+length
+            startIndex = splitPos + 1
+            endPos = startIndex + length
             bytes = data[startIndex:endPos]
             return (bytes, endPos)

@@ -27,7 +27,6 @@ from contact import Contact
 from hashwatcher import HashWatcher
 import logging
 
-
 log = logging.getLogger(__name__)
 
 
@@ -51,6 +50,7 @@ class Node(object):
     In Entangled, all interactions with the Kademlia network by a client
     application is performed via this class (or a subclass).
     """
+
     def __init__(self, id=None, udpPort=4000, dataStore=None,
                  routingTableClass=None, networkProtocol=None, lbryid=None,
                  externalIP=None):
@@ -82,7 +82,7 @@ class Node(object):
             self.id = self._generateID()
         self.lbryid = lbryid
         self.port = udpPort
-        self._listeningPort = None # object implementing Twisted
+        self._listeningPort = None  # object implementing Twisted
         # IListeningPort This will contain a deferred created when
         # joining the network, to enable publishing/retrieving
         # information from the DHT as soon as the node is part of the
@@ -126,7 +126,7 @@ class Node(object):
             self._listeningPort.stopListening()
 
     def stop(self):
-        #cancel callLaters:
+        # cancel callLaters:
         if self.next_refresh_call is not None:
             self.next_refresh_call.cancel()
             self.next_refresh_call = None
@@ -136,7 +136,6 @@ class Node(object):
         if self._listeningPort is not None:
             self._listeningPort.stopListening()
         self.hash_watcher.stop()
-
 
     def joinNetwork(self, knownNodeAddresses=None):
         """ Causes the Node to join the Kademlia network; normally, this
@@ -156,7 +155,7 @@ class Node(object):
                 import traceback
                 log.error("Couldn't bind to port %d. %s", self.port, traceback.format_exc())
                 raise ValueError("%s lbrynet may already be running." % str(e))
-        #IGNORE:E1101
+        # IGNORE:E1101
         # Create temporary contact information for the list of addresses of known nodes
         if knownNodeAddresses != None:
             bootstrapContacts = []
@@ -167,10 +166,10 @@ class Node(object):
             bootstrapContacts = None
         # Initiate the Kademlia joining sequence - perform a search for this node's own ID
         self._joinDeferred = self._iterativeFind(self.id, bootstrapContacts)
-#        #TODO: Refresh all k-buckets further away than this node's closest neighbour
+        #        #TODO: Refresh all k-buckets further away than this node's closest neighbour
         # Start refreshing k-buckets periodically, if necessary
         self.next_refresh_call = twisted.internet.reactor.callLater(
-            constants.checkRefreshInterval, self._refreshNode) #IGNORE:E1101
+            constants.checkRefreshInterval, self._refreshNode)  # IGNORE:E1101
         self.hash_watcher.tick()
         return self._joinDeferred
 
@@ -187,7 +186,7 @@ class Node(object):
         # estimate!
         bucket = self._routingTable._buckets[self._routingTable._kbucketIndex(self.id)]
         num_in_bucket = len(bucket._contacts)
-        factor = (2**constants.key_bits) / (bucket.rangeMax - bucket.rangeMin)
+        factor = (2 ** constants.key_bits) / (bucket.rangeMax - bucket.rangeMin)
         return num_in_bucket * factor
 
     def getApproximateTotalHashes(self):
@@ -253,7 +252,7 @@ class Node(object):
             # The "raw response" tuple contains the response message,
             # and the originating address info
             responseMsg = responseTuple[0]
-            originAddress = responseTuple[1] # tuple: (ip adress, udp port)
+            originAddress = responseTuple[1]  # tuple: (ip adress, udp port)
             # Make sure the responding node is valid, and abort the operation if it isn't
             if not responseMsg.nodeID in known_nodes:
                 return responseMsg.nodeID
@@ -351,10 +350,11 @@ class Node(object):
         """
         # Prepare a callback for this operation
         outerDf = defer.Deferred()
+
         def checkResult(result):
             if type(result) == dict:
                 # We have found the value; now see who was the closest contact without it...
-                    # ...and store the key/value pair
+                # ...and store the key/value pair
                 outerDf.callback(result)
             else:
                 # The value wasn't found, but a list of contacts was returned
@@ -416,6 +416,7 @@ class Node(object):
                     return contact
                 else:
                     return None
+
             df = self.iterativeFindNode(contactID)
             df.addCallback(parseResults)
         return df
@@ -466,10 +467,10 @@ class Node(object):
             compact_ip = contact.compact_ip()
         else:
             return 'Not OK'
-            #raise TypeError, 'No contact info available'
+            # raise TypeError, 'No contact info available'
 
         if ((self_store is False) and
-            (not 'token' in value or not self.verify_token(value['token'], compact_ip))):
+                (not 'token' in value or not self.verify_token(value['token'], compact_ip))):
             raise ValueError('Invalid or missing token')
 
         if 'port' in value:
@@ -490,7 +491,7 @@ class Node(object):
             raise TypeError, 'No lbryid given'
 
         now = int(time.time())
-        originallyPublished = now# - age
+        originallyPublished = now  # - age
         self._dataStore.addPeerToBlob(
             key, compact_address, now, originallyPublished, originalPublisherID)
         return 'OK'
@@ -618,6 +619,7 @@ class Node(object):
     def _refreshRoutingTable(self):
         nodeIDs = self._routingTable.getRefreshList(0, False)
         outerDf = defer.Deferred()
+
         def searchForNextNodeID(dfResult=None):
             if len(nodeIDs) > 0:
                 searchID = nodeIDs.pop()
@@ -626,16 +628,16 @@ class Node(object):
             else:
                 # If this is reached, we have finished refreshing the routing table
                 outerDf.callback(None)
+
         # Start the refreshing cycle
         searchForNextNodeID()
         return outerDf
-
 
     def _scheduleNextNodeRefresh(self, *args):
         self.next_refresh_call = twisted.internet.reactor.callLater(
             constants.checkRefreshInterval, self._refreshNode)
 
-    #args put here because _refreshRoutingTable does outerDF.callback(None)
+    # args put here because _refreshRoutingTable does outerDF.callback(None)
     def _removeExpiredPeers(self, *args):
         df = twisted.internet.threads.deferToThread(self._dataStore.removeExpiredPeers)
         return df
@@ -679,7 +681,7 @@ class _IterativeFindHelper(object):
         # The "raw response" tuple contains the response message,
         # and the originating address info
         responseMsg = responseTuple[0]
-        originAddress = responseTuple[1] # tuple: (ip adress, udp port)
+        originAddress = responseTuple[1]  # tuple: (ip adress, udp port)
         # Make sure the responding node is valid, and abort the operation if it isn't
         if responseMsg.nodeID in self.active_contacts or responseMsg.nodeID == self.node.id:
             return responseMsg.nodeID
@@ -693,7 +695,7 @@ class _IterativeFindHelper(object):
             self.already_contacted.append(responseMsg.nodeID)
         # Now grow extend the (unverified) shortlist with the returned contacts
         result = responseMsg.response
-        #TODO: some validation on the result (for guarding against attacks)
+        # TODO: some validation on the result (for guarding against attacks)
         # If we are looking for a value, first see if this result is the value
         # we are looking for before treating it as a list of contact triples
         if self.find_value is True and self.key in result and not 'contacts' in result:
@@ -756,7 +758,7 @@ class _IterativeFindHelper(object):
 
     def cancelActiveProbe(self, contactID):
         self.active_probes.pop()
-        if len(self.active_probes) <= constants.alpha/2 and len(self.pending_iteration_calls):
+        if len(self.active_probes) <= constants.alpha / 2 and len(self.pending_iteration_calls):
             # Force the iteration
             self.pending_iteration_calls[0].cancel()
             del self.pending_iteration_calls[0]
@@ -804,7 +806,7 @@ class _IterativeFindHelper(object):
             # Schedule the next iteration if there are any active
             # calls (Kademlia uses loose parallelism)
             call = twisted.internet.reactor.callLater(
-                constants.iterativeLookupDelay, self.searchIteration) #IGNORE:E1101
+                constants.iterativeLookupDelay, self.searchIteration)  # IGNORE:E1101
             self.pending_iteration_calls.append(call)
         # Check for a quick contact response that made an update to the shortList
         elif prevShortlistLength < len(self.shortlist):
@@ -850,6 +852,7 @@ class Distance(object):
     Frequently we re-use one of the points so as an optimization
     we pre-calculate the long value of that point.
     """
+
     def __init__(self, key):
         self.key = key
         self.val_key_one = long(key.encode('hex'), 16)
@@ -879,6 +882,7 @@ class ExpensiveSort(object):
         key: callable, like `key` in normal python sort
         attr: the attribute name used to cache the value on each item.
     """
+
     def __init__(self, to_sort, key, attr='__value'):
         self.to_sort = to_sort
         self.key = key
@@ -922,6 +926,7 @@ def main():
     node = Node(udpPort=args.udp_port)
     node.joinNetwork(known_nodes)
     twisted.internet.reactor.run()
+
 
 if __name__ == '__main__':
     main()

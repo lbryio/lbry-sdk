@@ -9,6 +9,7 @@
 
 import msgtypes
 
+
 class MessageTranslator(object):
     """ Interface for RPC message translators/formatters
 
@@ -16,6 +17,7 @@ class MessageTranslator(object):
     the classes used internally by this Kademlia implementation and the actual
     data that is transmitted between nodes.
     """
+
     def fromPrimitive(self, msgPrimitive):
         """ Create an RPC Message from a message's string representation
 
@@ -36,6 +38,7 @@ class MessageTranslator(object):
                  messaging format
         @rtype: str, int, list or dict
         """
+
 
 class DefaultFormat(MessageTranslator):
     """ The default on-the-wire message format for this library """
@@ -64,7 +67,7 @@ class DefaultFormat(MessageTranslator):
         return msg
 
     def toPrimitive(self, message):
-        msg = {self.headerMsgID:  message.id,
+        msg = {self.headerMsgID: message.id,
                self.headerNodeID: message.nodeID}
         if isinstance(message, msgtypes.RequestMessage):
             msg[self.headerType] = self.typeRequest
