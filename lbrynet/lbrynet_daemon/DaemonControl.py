@@ -140,7 +140,4 @@ def start_server_and_listen(launchui, use_auth, analytics_manager, max_tries=5):
 
 
 if __name__ == "__main__":
-    # import cProfile
-    # import time
-    # cProfile.run('start()', '/home/grin/code/lbry/lbry/daemonstats_' + time.strftime("%Y%m%d_%H%M%S"))
     start()
