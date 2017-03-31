@@ -717,9 +717,9 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise Exception("Invalid bid")
         if not file_path:
-            claim_out = yield publisher.update_stream(name, bid, claim_dict)
+            claim_out = yield publisher.publish_stream(name, bid, claim_dict)
         else:
-            claim_out = yield publisher.publish_stream(name, bid, claim_dict, file_path)
+            claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path)
             if conf.settings['reflect_uploads']:
                 d = reupload.reflect_stream(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
