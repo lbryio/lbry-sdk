@@ -2,10 +2,10 @@
 CLI for sending rpc commands to a DHT node
 """
 
+import argparse
 
 from twisted.internet import reactor
 from txjsonrpc.web.jsonrpc import Proxy
-import argparse
 
 
 def print_value(value):

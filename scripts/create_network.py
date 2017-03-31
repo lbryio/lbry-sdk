@@ -8,7 +8,10 @@
 # Thanks to Paul Cannon for IP-address resolution functions (taken from aspn.activestate.com)
 
 import argparse
-import os, sys, time, signal
+import os
+import sys
+import time
+import signal
 
 amount = 0
 
@@ -18,8 +21,8 @@ def destroyNetwork(nodes):
     i = 0
     for node in nodes:
         i += 1
-        hashAmount = i*50/amount
-        hashbar = '#'*hashAmount
+        hashAmount = i * 50 / amount
+        hashbar = '#' * hashAmount
         output = '\r[%-50s] %d/%d' % (hashbar, i, amount)
         sys.stdout.write(output)
         time.sleep(0.15)
@@ -28,7 +31,6 @@ def destroyNetwork(nodes):
 
 
 def main():
-
     parser = argparse.ArgumentParser(description="Launch a network of dht nodes")
 
     parser.add_argument("amount_of_nodes",
@@ -53,17 +55,17 @@ def main():
         print 'Network interface IP address omitted; using %s' % ipAddress
 
     startPort = 4000
-    port = startPort+1
+    port = startPort + 1
     nodes = []
     print 'Creating Kademlia network'
     try:
         node = os.spawnlp(
             os.P_NOWAIT, 'lbrynet-launch-node', 'lbrynet-launch-node', str(startPort))
         nodes.append(node)
-        for i in range(amount-1):
+        for i in range(amount - 1):
             time.sleep(0.15)
-            hashAmount = i*50/amount
-            hashbar = '#'*hashAmount
+            hashAmount = i * 50 / amount
+            hashbar = '#' * hashAmount
             output = '\r[%-50s] %d/%d' % (hashbar, i, amount)
             sys.stdout.write(output)
             node = os.spawnlp(
@@ -84,6 +86,7 @@ def main():
         pass
     finally:
         destroyNetwork(nodes)
+
 
 if __name__ == '__main__':
     main()

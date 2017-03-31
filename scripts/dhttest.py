@@ -21,8 +21,9 @@
 # Thanks to Paul Cannon for IP-address resolution functions (taken from aspn.activestate.com)
 
 
-
-import sys, hashlib, random
+import binascii
+import hashlib
+import random
 import twisted.internet.reactor
 from lbrynet.dht.node import Node
 
@@ -35,7 +36,7 @@ hash.update("key")
 KEY = hash.digest()
 # The value to store
 VALUE = random.randint(10000, 20000)
-import binascii
+
 lbryid = KEY
 
 
@@ -67,6 +68,7 @@ def genericErrorCallback(failure):
     """ Callback function that is invoked if an error occurs during any of the DHT operations """
     print 'An error has occurred:', failure.getErrorMessage()
     twisted.internet.reactor.callLater(0, stop)
+
 
 def getValue():
     """ Retrieves the value of the specified key (KEY) from the DHT """
@@ -100,8 +102,10 @@ def stop():
     print '\nStopping Kademlia node and terminating script'
     twisted.internet.reactor.stop()
 
+
 if __name__ == '__main__':
     import sys
+
     if len(sys.argv) < 2:
         print 'Usage:\n%s UDP_PORT [KNOWN_NODE_IP  KNOWN_NODE_PORT]' % sys.argv[0]
         print 'or:\n%s UDP_PORT [FILE_WITH_KNOWN_NODES]' % sys.argv[0]
@@ -151,7 +155,7 @@ if __name__ == '__main__':
     # Schedule the node to join the Kademlia/Entangled DHT
     node.joinNetwork(knownNodes)
     # Schedule the "storeValue() call to be invoked after 2.5 seconds,
-    #using KEY and VALUE as arguments
+    # using KEY and VALUE as arguments
     twisted.internet.reactor.callLater(2.5, getValue)
     # Start the Twisted reactor - this fires up all networking, and
     # allows the scheduled join operation to take place

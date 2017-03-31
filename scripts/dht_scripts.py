@@ -1,10 +1,10 @@
-from lbrynet.dht.node import Node
 import binascii
-from twisted.internet import reactor, task
 import logging
 import sys
-from lbrynet.core.utils import generate_id
 
+from lbrynet.dht.node import Node
+from twisted.internet import reactor, task
+from lbrynet.core.utils import generate_id
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +34,6 @@ def join_network(udp_port, known_nodes):
 
 
 def get_hosts(node, h):
-
     def print_hosts(hosts):
         print "Hosts returned from the DHT: "
         print hosts
