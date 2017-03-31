@@ -1028,20 +1028,19 @@ class LBRYumWallet(Wallet):
     def _get_claims_for_name(self, name):
         return self._run_cmd_as_defer_to_thread('getclaimsforname', name)
 
-    def _send_name_claim(self, name, val, amount):
+    def _send_name_claim(self, name, value, amount):
         broadcast = False
-        log.debug("Name claim %s %s %f", name, val, amount)
-        d = self._run_cmd_as_defer_succeed('claim', name, json.dumps(val), amount, broadcast)
+        log.debug("Name claim %s %f", name, value, amount)
+        d = self._run_cmd_as_defer_succeed('claim', name, value, amount, broadcast)
         d.addCallback(lambda claim_out: self._broadcast_claim_transaction(claim_out))
         return d
 
     def _send_name_claim_update(self, name, claim_id, claim_outpoint, value, amount):
-        metadata = json.dumps(value)
-        log.debug("Update %s %d %f %s %s '%s'", claim_outpoint['txid'], claim_outpoint['nout'],
-                  amount, name, claim_id, metadata)
+        log.debug("Update %s %d %f %s %s", claim_outpoint['txid'], claim_outpoint['nout'],
+                  amount, name, claim_id)
         broadcast = False
         d = self._run_cmd_as_defer_succeed('update', claim_outpoint['txid'], claim_outpoint['nout'],
-                                           name, claim_id, metadata, amount, broadcast)
+                                           name, claim_id, value, amount, broadcast)
         d.addCallback(lambda claim_out: self._broadcast_claim_transaction(claim_out))
         return d
 
