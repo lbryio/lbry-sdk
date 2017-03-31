@@ -16,13 +16,16 @@ from lbryum.lbrycrd import COIN, RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS
 import lbryum.wallet
 from lbryum.commands import known_commands, Commands
 
+from lbryschema.claim import ClaimDict
+from lbryschema.decode import smart_decode
+from lbryschema.error import DecodeError
+
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import (UnknownNameError, InvalidStreamInfoError, RequestCanceledError,
                                 InsufficientFundsError)
 from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
-from lbrynet.metadata.Metadata import Metadata
 
 log = logging.getLogger(__name__)
 
@@ -479,7 +482,7 @@ class Wallet(object):
                 assert k in r, "getvalueforname response missing field %s" % k
 
         def _log_success(claim_id):
-            log.debug("lbry://%s complies with %s, claimid: %s", name, metadata.version, claim_id)
+            log.debug("lbry://%s complies with %s, claimid: %s", name, claim_dict.claim_dict['version'], claim_id)
             return defer.succeed(None)
 
         if 'error' in result:
@@ -487,15 +490,17 @@ class Wallet(object):
             return Failure(UnknownNameError(name))
         _check_result_fields(result)
         try:
-            metadata = Metadata(json.loads(result['value']))
-        except (TypeError, ValueError, ValidationError):
+            claim_dict = smart_decode(result['value'])
+        except (TypeError, ValueError, DecodeError):
             return Failure(InvalidStreamInfoError(name, result['value']))
-        sd_hash = metadata['sources']['lbry_sd_hash']
+        #TODO: what if keys don't exist here,
+        # probablly need get_sd_hash() function fro ClaimDict
+        sd_hash = claim_dict.claim_dict['stream']['source']['source']
         claim_outpoint = ClaimOutpoint(result['txid'], result['nout'])
         d = self._save_name_metadata(name, claim_outpoint, sd_hash)
         d.addCallback(lambda _: self.get_claimid(name, result['txid'], result['nout']))
         d.addCallback(lambda cid: _log_success(cid))
-        d.addCallback(lambda _: metadata)
+        d.addCallback(lambda _: claim_dict.claim_dict)
         return d
 
     def get_claim(self, name, claim_id):
@@ -575,11 +580,11 @@ class Wallet(object):
     def _get_claim_info(self, name, claim_outpoint):
         def _build_response(claim):
             try:
-                metadata = Metadata(json.loads(claim['value']))
-                meta_ver = metadata.version
-                sd_hash = metadata['sources']['lbry_sd_hash']
+                claim_dict = smart_decode(claim['value'])
+                meta_ver = claim_dict.claim_dict['stream']['metadata']['version']
+                sd_hash = claim_dict.claim_dict['stream']['source']['source']
                 d = self._save_name_metadata(name, claim_outpoint, sd_hash)
-            except (TypeError, ValueError, ValidationError):
+            except (TypeError, ValueError, DecodeError):
                 metadata = claim['value']
                 meta_ver = "Non-compliant"
                 d = defer.succeed(None)
@@ -622,8 +627,7 @@ class Wallet(object):
             fee - transaction fee paid to make claim
             claim_id -  claim id of the claim
         """
-
-        _metadata = Metadata(metadata)
+        claim_dict = ClaimDict.load_dict(metadata)
         my_claim = yield self.get_my_claim(name)
 
         if my_claim:
@@ -632,13 +636,13 @@ class Wallet(object):
                 raise InsufficientFundsError()
             old_claim_outpoint = ClaimOutpoint(my_claim['txid'], my_claim['nout'])
             claim = yield self._send_name_claim_update(name, my_claim['claim_id'],
-                                                       old_claim_outpoint, _metadata, bid)
+                                                       old_claim_outpoint, claim_dict.serialized, bid)
             claim['claim_id'] = my_claim['claim_id']
         else:
             log.info("Making a new claim")
             if self.get_balance() < bid:
                 raise InsufficientFundsError()
-            claim = yield self._send_name_claim(name, _metadata, bid)
+            claim = yield self._send_name_claim(name, claim_dict.serialized, bid)
 
         if not claim['success']:
             msg = 'Claim to name {} failed: {}'.format(name, claim['reason'])
@@ -647,8 +651,7 @@ class Wallet(object):
         claim = self._process_claim_out(claim)
         claim_outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
         log.info("Saving metadata for claim %s %d", claim['txid'], claim['nout'])
-
-        yield self._save_name_metadata(name, claim_outpoint, _metadata['sources']['lbry_sd_hash'])
+        yield self._save_name_metadata(name, claim_outpoint, claim_dict['stream']['source']['source'])
         defer.returnValue(claim)
 
     @defer.inlineCallbacks
@@ -680,6 +683,17 @@ class Wallet(object):
         d = self._support_claim(name, claim_id, amount)
         d.addCallback(lambda claim_out: _parse_support_claim_out(claim_out))
         return d
+
+    @defer.inlineCallbacks
+    def channel_claim(self, name, amount):
+        if self.get_balance() < amount:
+            raise InsufficientFundsError()
+        claim_out = yield self._send_channel_claim(name, amount)
+        if not claim_out['success']:
+            msg = 'Claim of channel {} failed: {}'.format(name, claim_out['reason'])
+            raise Exception(msg)
+        claim_out = self._process_claim_out(claim_out)
+        defer.returnValue(result)
 
     def get_block_info(self, height):
         d = self._get_blockhash(height)
@@ -1036,6 +1050,16 @@ class LBRYumWallet(Wallet):
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
+    def _send_channel_claim(self, name, amount):
+        log.debug("Channel claim %s %f", name, amount)
+        broadcast = False
+        claim_out = yield self._run_cmd_as_defer_succeed(
+            'claim_certificate', name, amount)
+        claim_out = yield self._broadcast_claim_transaction(claim_out)
+        defer.returnValue(claim_out)
+
+
+    @defer.inlineCallbacks
     def _abandon_claim(self, claim_outpoint):
         log.debug("Abandon %s %s" % (claim_outpoint['txid'], claim_outpoint['nout']))
         broadcast = False
@@ -1118,6 +1142,9 @@ class LBRYumWallet(Wallet):
     def _save_wallet(self, val=None):
         self.wallet.storage.write()
         return defer.succeed(val)
+
+    def get_certificate_signing_key(self, claim_id):
+        return self.wallet.get_certificate_signing_key(claim_id)
 
 
 class LBRYcrdAddressRequester(object):
