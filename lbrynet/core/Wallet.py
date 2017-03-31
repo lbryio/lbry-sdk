@@ -1014,22 +1014,26 @@ class LBRYumWallet(Wallet):
     def _get_claims_for_name(self, name):
         return self._run_cmd_as_defer_to_thread('getclaimsforname', name)
 
+    @defer.inlineCallbacks
     def _send_name_claim(self, name, val, amount):
         broadcast = False
         log.debug("Name claim %s %s %f", name, val, amount)
-        d = self._run_cmd_as_defer_succeed('claim', name, json.dumps(val), amount, broadcast)
-        d.addCallback(lambda claim_out: self._broadcast_claim_transaction(claim_out))
-        return d
+        tx = yield self._run_cmd_as_defer_succeed('claim', name, json.dumps(val), amount, broadcast)
+        claim_out = yield self._broadcast_claim_transaction(tx)
+        defer.returnValue(claim_out)
 
+    @defer.inlineCallbacks
     def _send_name_claim_update(self, name, claim_id, claim_outpoint, value, amount):
         metadata = json.dumps(value)
         log.debug("Update %s %d %f %s %s '%s'", claim_outpoint['txid'], claim_outpoint['nout'],
                   amount, name, claim_id, metadata)
         broadcast = False
-        d = self._run_cmd_as_defer_succeed('update', claim_outpoint['txid'], claim_outpoint['nout'],
-                                           name, claim_id, metadata, amount, broadcast)
-        d.addCallback(lambda claim_out: self._broadcast_claim_transaction(claim_out))
-        return d
+        tx = yield self._run_cmd_as_defer_succeed(
+            'update', claim_outpoint['txid'], claim_outpoint['nout'],
+            name, claim_id, metadata, amount, broadcast
+        )
+        claim_out = yield self._broadcast_claim_transaction(tx)
+        defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
     def _abandon_claim(self, claim_outpoint):
@@ -1041,33 +1045,29 @@ class LBRYumWallet(Wallet):
         claim_out = yield self._broadcast_claim_transaction(abandon_tx)
         defer.returnValue(claim_out)
 
+    @defer.inlineCallbacks
     def _support_claim(self, name, claim_id, amount):
         log.debug("Support %s %s %f" % (name, claim_id, amount))
         broadcast = False
-        d = self._run_cmd_as_defer_succeed('support', name, claim_id, amount, broadcast)
-        d.addCallback(lambda claim_out: self._broadcast_claim_transaction(claim_out))
-        return d
+        tx = yield self._run_cmd_as_defer_succeed('support', name, claim_id, amount, broadcast)
+        claim_out = yield self._broadcast_claim_transaction(tx)
+        defer.returnValue(claim_out)
 
+    @defer.inlineCallbacks
     def _broadcast_claim_transaction(self, claim_out):
         if 'success' not in claim_out:
-            raise Exception('Unexpected claim command output:{}'.format(claim_out))
+            raise Exception('Unexpected claim command output: {}'.format(claim_out))
         if claim_out['success']:
-            d = self._broadcast_transaction(claim_out['tx'])
-            d.addCallback(lambda _: claim_out)
-            return d
-        else:
-            return defer.succeed(claim_out)
+            yield self._broadcast_transaction(claim_out['tx'])
+        defer.returnValue(claim_out)
 
+    @defer.inlineCallbacks
     def _broadcast_transaction(self, raw_tx):
-        def _log_tx(r):
-            log.debug("Broadcast tx: %s", r)
-            return r
-
-        d = self._run_cmd_as_defer_to_thread('broadcast', raw_tx)
-        d.addCallback(_log_tx)
-        d.addCallback(
-            lambda r: r if len(r) == 64 else defer.fail(Exception("Transaction rejected")))
-        return d
+        txid = yield self._run_cmd_as_defer_to_thread('broadcast', raw_tx)
+        log.info("Broadcast tx: %s", txid)
+        if len(txid) != 64:
+            raise Exception("Transaction rejected. Raw tx: {}".format(raw_tx))
+        defer.returnValue(txid)
 
     def _do_send_many(self, payments_to_send):
         def broadcast_send_many(paytomany_out):
