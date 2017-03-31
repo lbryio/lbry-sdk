@@ -1030,7 +1030,7 @@ class LBRYumWallet(Wallet):
 
     def _send_name_claim(self, name, value, amount):
         broadcast = False
-        log.debug("Name claim %s %f", name, value, amount)
+        log.debug("Name claim %s %f", name, amount)
         d = self._run_cmd_as_defer_succeed('claim', name, value, amount, broadcast)
         d.addCallback(lambda claim_out: self._broadcast_claim_transaction(claim_out))
         return d
