@@ -402,15 +402,15 @@ class OptimizedTreeRoutingTable(TreeRoutingTable):
                 # Put the new contact in our replacement cache for the
                 # corresponding k-bucket (or update it's position if
                 # it exists already)
-                if not self._replacementCache.has_key(bucketIndex):
+                if bucketIndex not in self._replacementCache:
                     self._replacementCache[bucketIndex] = []
                 if contact in self._replacementCache[bucketIndex]:
                     self._replacementCache[bucketIndex].remove(contact)
                 # TODO: Using k to limit the size of the contact
-                # replacement cache - maybe define a seperate value for
+                # replacement cache - maybe define a separate value for
                 # this in constants.py?
-                elif len(self._replacementCache) >= constants.k:
-                    self._replacementCache.pop(0)
+                elif len(self._replacementCache[bucketIndex]) >= constants.k:
+                    self._replacementCache[bucketIndex].pop(0)
                 self._replacementCache[bucketIndex].append(contact)
 
     def removeContact(self, contactID):
@@ -428,8 +428,8 @@ class OptimizedTreeRoutingTable(TreeRoutingTable):
         contact.failedRPCs += 1
         if contact.failedRPCs >= 5:
             self._buckets[bucketIndex].removeContact(contactID)
-            # Replace this stale contact with one from our replacemnent cache, if we have any
-            if self._replacementCache.has_key(bucketIndex):
+            # Replace this stale contact with one from our replacement cache, if we have any
+            if bucketIndex in self._replacementCache:
                 if len(self._replacementCache[bucketIndex]) > 0:
                     self._buckets[bucketIndex].addContact(
                         self._replacementCache[bucketIndex].pop())
