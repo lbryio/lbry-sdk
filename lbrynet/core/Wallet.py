@@ -651,7 +651,7 @@ class Wallet(object):
         claim = self._process_claim_out(claim)
         claim_outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
         log.info("Saving metadata for claim %s %d", claim['txid'], claim['nout'])
-        yield self._save_name_metadata(name, claim_outpoint, claim_dict['stream']['source']['source'])
+        yield self._save_name_metadata(name, claim_outpoint, claim_dict.claim_dict['stream']['source']['source'])
         defer.returnValue(claim)
 
     @defer.inlineCallbacks
