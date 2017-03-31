@@ -4,11 +4,11 @@ Q: How do I get lbry for command line?
 
 A: In order to run lbry from command line, you need more than the packaged app/deb.
 
-######On OS X
+###### On OS X
 
 You can install LBRY command line by running `curl -sL https://rawgit.com/lbryio/lbry-setup/master/lbry_setup_osx.sh | sudo bash` in a terminal. This script will install lbrynet and its dependancies, as well as the app.
 
-######On Linux
+###### On Linux
 
 On Ubuntu or Mint you can install the prerequisites and lbrynet by running
 
