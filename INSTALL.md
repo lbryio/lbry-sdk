@@ -15,7 +15,7 @@ Install [xcode command line tools](https://developer.xamarin.com/guides/testclou
 Remaining dependencies can then be installed by running:
 
 ```
-brew install mpfr libmpc
+brew install mpfr libmpc protobuf
 sudo easy_install pip
 sudo pip install virtualenv
 ```
@@ -26,7 +26,7 @@ On Ubuntu (we recommend 16.04), install the following:
 
 ```
 sudo apt-get install libgmp3-dev build-essential python2.7 python2.7-dev \
-     python-pip git python-virtualenv libssl-dev libffi-dev
+     python-pip git python-virtualenv libssl-dev libffi-dev python-protobuf
 ```
 
 If you're running another Linux flavor, install the equivalent of the above packages for your system.
