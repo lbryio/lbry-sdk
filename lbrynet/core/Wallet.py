@@ -489,7 +489,7 @@ class Wallet(object):
         try:
             metadata = Metadata(json.loads(result['value']))
         except (TypeError, ValueError, ValidationError):
-            return Failure(InvalidStreamInfoError(name, result['value']))
+            return Failure(InvalidStreamInfoError(name, result['value'].encode('hex')))
         sd_hash = metadata['sources']['lbry_sd_hash']
         claim_outpoint = ClaimOutpoint(result['txid'], result['nout'])
         d = self._save_name_metadata(name, claim_outpoint, sd_hash)
