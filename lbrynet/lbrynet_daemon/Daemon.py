@@ -710,15 +710,16 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue((sd_hash, file_path))
 
     @defer.inlineCallbacks
-    def _publish_stream(self, name, bid, metadata, file_path=None):
+    def _publish_stream(self, name, bid, claim_dict, file_path=None):
+
         publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
         verify_name_characters(name)
         if bid <= 0.0:
             raise Exception("Invalid bid")
         if not file_path:
-            claim_out = yield publisher.publish_stream(name, bid, metadata)
+            claim_out = yield publisher.publish_stream(name, bid, claim_dict)
         else:
-            claim_out = yield publisher.create_and_publish_stream(name, bid, metadata, file_path)
+            claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path)
             if conf.settings['reflect_uploads']:
                 d = reupload.reflect_stream(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
@@ -1672,17 +1673,25 @@ class Daemon(AuthJSONRPCServer):
             metadata['preview'] = preview
         if nsfw is not None:
             metadata['nsfw'] = bool(nsfw)
-        if sources is not None:
-            metadata['sources'] = sources
 
-        # add address to fee if unspecified
+        metadata['version'] = '_0_1_0'
+
+        # original format {'currency':{'address','amount'}}
+        # add address to fee if unspecified {'version': ,'currency', 'address' , 'amount'}
         if 'fee' in metadata:
+            new_fee_dict = {}
             assert len(metadata['fee']) == 1, "Too many fees"
-            for currency in metadata['fee']:
-                if 'address' not in metadata['fee'][currency]:
-                    new_address = yield self.session.wallet.get_new_address()
-                    metadata['fee'][currency]['address'] = new_address
-            metadata['fee'] = FeeValidator(metadata['fee'])
+            currency, fee_dict = metadata['fee'].items()[0]
+            if 'address' not in fee_dict:
+                address = yield self.session.wallet.get_new_address()
+            else:
+                address = fee_dict['address']
+            new_fee_dict = {
+                'version':'_0_0_1',
+                'currency': currency,
+                'address':address,
+                'amount':fee_dict['amount']}
+            metadata['fee'] = new_fee_dict
 
         log.info("Publish: %s", {
             'name': name,
@@ -1692,7 +1701,15 @@ class Daemon(AuthJSONRPCServer):
             'fee': fee,
         })
 
-        result = yield self._publish_stream(name, bid, metadata, file_path)
+        claim_dict = {
+            'version':'_0_0_1',
+            'claimType':'streamType',
+            'stream':{'metadata':metadata, 'version':'_0_0_1'}}
+
+        if sources is not None:
+            claim_dict['stream']['source'] = sources
+
+        result = yield self._publish_stream(name, bid, claim_dict, file_path)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
