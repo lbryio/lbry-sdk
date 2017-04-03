@@ -14,7 +14,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Expect claim `value` received from `getvalueforname` in lbryum to be hex encoded
   *
   *
 

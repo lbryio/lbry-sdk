@@ -489,7 +489,7 @@ class Wallet(object):
         try:
             metadata = Metadata(json.loads(result['value']))
         except (TypeError, ValueError, ValidationError):
-            return Failure(InvalidStreamInfoError(name, result['value']))
+            return Failure(InvalidStreamInfoError(name, result['value'].encode('hex')))
         sd_hash = metadata['sources']['lbry_sd_hash']
         claim_outpoint = ClaimOutpoint(result['txid'], result['nout'])
         d = self._save_name_metadata(name, claim_outpoint, sd_hash)
@@ -1080,17 +1080,17 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda out: broadcast_send_many(out))
         return d
 
+    @defer.inlineCallbacks
     def _get_value_for_name(self, name):
         height_to_check = self.network.get_local_height() - RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS + 1
         if height_to_check < 0:
             msg = "Height to check is less than 0, blockchain headers are likely not initialized"
             raise Exception(msg)
-        block_header = self.network.blockchain.read_header(height_to_check)
-        block_hash = self.network.blockchain.hash_header(block_header)
-        d = self._run_cmd_as_defer_to_thread('requestvalueforname', name, block_hash)
-        d.addCallback(lambda response: Commands._verify_proof(name, block_header['claim_trie_root'],
-                                                              response))
-        return d
+        results = yield self._run_cmd_as_defer_to_thread('getvalueforname', name)
+        if results and 'value' in results:
+            raw_claim_value = results['value']
+            results['value'] = raw_claim_value.decode('hex')
+        defer.returnValue(results)
 
     def get_claims_from_tx(self, txid):
         return self._run_cmd_as_defer_to_thread('getclaimsfromtx', txid)
