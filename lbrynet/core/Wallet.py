@@ -1,6 +1,5 @@
 import datetime
 import logging
-import json
 import os
 
 from twisted.internet import threads, reactor, defer, task
@@ -19,6 +18,7 @@ from lbryschema.claim import ClaimDict
 from lbryschema.decode import smart_decode
 from lbryschema.error import DecodeError
 
+from lbrynet.core import utils
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
@@ -495,7 +495,7 @@ class Wallet(object):
             return Failure(InvalidStreamInfoError(name, result['value']))
         #TODO: what if keys don't exist here,
         # probablly need get_sd_hash() function fro ClaimDict
-        sd_hash = claim_dict.claim_dict['stream']['source']['source']
+        sd_hash = utils.get_sd_hash(claim_dict.claim_dict)
         claim_outpoint = ClaimOutpoint(result['txid'], result['nout'])
         d = self._save_name_metadata(name, claim_outpoint, sd_hash)
         d.addCallback(lambda _: self.get_claimid(name, result['txid'], result['nout']))
@@ -534,7 +534,7 @@ class Wallet(object):
         def _get_claim_for_return(claim):
             if not claim:
                 return False
-            claim['value'] = json.loads(claim['value'])
+            claim['value'] = smart_decode(claim['value'].decode('hex')).claim_dict
             return claim
 
         def _get_my_unspent_claim(claims):
@@ -559,6 +559,7 @@ class Wallet(object):
             d.addCallback(lambda r: self._get_claim_info(name, ClaimOutpoint(r['txid'], r['nout'])))
         else:
             d = self._get_claim_info(name, ClaimOutpoint(txid, nout))
+        # TODO: this catches every exception, fix this
         d.addErrback(lambda _: False)
         return d
 
@@ -579,9 +580,9 @@ class Wallet(object):
     def _get_claim_info(self, name, claim_outpoint):
         def _build_response(claim):
             try:
-                claim_dict = smart_decode(claim['value'].decode('hex'))
-                meta_ver = claim_dict.claim_dict['stream']['metadata']['version']
-                sd_hash = claim_dict.claim_dict['stream']['source']['source']
+                claim_dict = smart_decode(claim['value'].decode('hex')).claim_dict
+                meta_ver = claim_dict['stream']['metadata']['version']
+                sd_hash = utils.get_sd_hash(claim_dict)
                 d = self._save_name_metadata(name, claim_outpoint, sd_hash)
             except (TypeError, ValueError, KeyError, DecodeError):
                 claim_dict = claim['value']
@@ -651,7 +652,7 @@ class Wallet(object):
         claim_outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
         log.info("Saving metadata for claim %s %d", claim['txid'], claim['nout'])
         yield self._save_name_metadata(name, claim_outpoint,
-                    claim_dict.claim_dict['stream']['source']['source'])
+                    utils.get_sd_hash(claim_dict.claim_dict))
         defer.returnValue(claim)
 
     @defer.inlineCallbacks

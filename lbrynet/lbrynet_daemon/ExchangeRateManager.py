@@ -193,11 +193,10 @@ class ExchangeRateManager(object):
             fee_in = fee
 
         return FeeValidator({
-            fee_in.currency_symbol: {
+                'currency':fee_in.currency_symbol,
                 'amount': self.convert_currency(fee_in.currency_symbol, "LBC", fee_in.amount),
                 'address': fee_in.address
-            }
-        })
+                })
 
 
 class DummyBTCLBCFeed(MarketFeed):
@@ -252,8 +251,7 @@ class DummyExchangeRateManager(object):
             fee_in = fee
 
         return FeeValidator({
-            fee_in.currency_symbol: {
+                'currency':fee_in.currency_symbol,
                 'amount': self.convert_currency(fee_in.currency_symbol, "LBC", fee_in.amount),
                 'address': fee_in.address
-            }
-        })
+                })

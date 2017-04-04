@@ -14,12 +14,12 @@ class FeeValidator(StructuredDict):
 
         StructuredDict.__init__(self, fee, fee.get('ver', '0.0.1'))
 
-        self.currency_symbol = self.keys()[0]
+        self.currency_symbol = self['currency']
         self.amount = self._get_amount()
-        self.address = self[self.currency_symbol]['address']
+        self.address = self['address']
 
     def _get_amount(self):
-        amt = self[self.currency_symbol]['amount']
+        amt = self['amount']
         try:
             return float(amt)
         except TypeError:

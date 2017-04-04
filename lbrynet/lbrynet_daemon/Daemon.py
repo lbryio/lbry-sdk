@@ -24,7 +24,8 @@ from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.metadata.Fee import FeeValidator
-from lbrynet.metadata.Metadata import verify_name_characters, Metadata
+from lbrynet.metadata.Metadata import verify_name_characters
+from lbryschema.decode import smart_decode
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
@@ -828,7 +829,7 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _get_est_cost_from_metadata(self, metadata, name):
-        d = self.get_est_cost_from_sd_hash(metadata['sources']['lbry_sd_hash'])
+        d = self.get_est_cost_from_sd_hash(utils.get_sd_hash(metadata))
 
         def _handle_err(err):
             if isinstance(err, Failure):
@@ -1426,9 +1427,10 @@ class Daemon(AuthJSONRPCServer):
         """
 
         def _get_claim(_claim_id, _claims):
+            #TODO: do this in Wallet class
             for claim in _claims['claims']:
                 if claim['claim_id'] == _claim_id:
-                    return Metadata(json.loads(claim['value']))
+                    return smart_decode(claim['value']).claim_dict
 
         log.info("Received request to get %s", name)
 
@@ -1477,9 +1479,11 @@ class Daemon(AuthJSONRPCServer):
                 result = yield self._get_lbry_file_dict(self.streams[name].downloader,
                                                         full_status=True)
             except Exception as e:
+                # TODO: should reraise here, instead of returning e.message
                 log.warning('Failed to get %s', name)
                 self.analytics_manager.send_download_errored(download_id, name, stream_info)
                 result = e.message
+
         response = yield self._render_response(result)
         defer.returnValue(response)
 

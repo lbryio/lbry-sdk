@@ -112,7 +112,7 @@ def short_hash(hash_str):
 def get_sd_hash(stream_info):
     if not stream_info:
         return None
-    return stream_info['sources']['lbry_sd_hash']
+    return stream_info['stream']['source']['source']
 
 
 def json_dumps_pretty(obj, **kwargs):
