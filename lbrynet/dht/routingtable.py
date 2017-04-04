@@ -308,10 +308,9 @@ class TreeRoutingTable(RoutingTable):
         @return: The index of the k-bucket responsible for the specified key
         @rtype: int
         """
-        valKey = long(key.encode('hex'), 16)
         i = 0
         for bucket in self._buckets:
-            if bucket.keyInRange(valKey):
+            if bucket.keyInRange(key):
                 return i
             else:
                 i += 1
