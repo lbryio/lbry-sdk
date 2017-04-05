@@ -890,7 +890,7 @@ class Daemon(AuthJSONRPCServer):
                                                          lbry_file.txid,
                                                          lbry_file.nout)
         try:
-            metadata = claim['value']
+            metadata = smart_decode(claim['value']).claim_dict
         except:
             metadata = None
         try:
