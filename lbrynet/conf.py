@@ -153,7 +153,6 @@ ADJUSTABLE_SETTINGS = {
     'api_host': (str, 'localhost'),
 
     'api_port': (int, 5279),
-    'bittrex_feed': (str, 'https://bittrex.com/api/v1.1/public/getmarkethistory'),
     'cache_time': (int, 150),
     'check_ui_requirements': (bool, True),
     'data_dir': (str, default_data_dir),

@@ -44,10 +44,11 @@ class WalletTest(unittest.TestCase):
         def not_enough_funds_send_name_claim(self, name, val, amount):
             claim_out = {'success':False, 'reason':'Not enough funds'}
             return claim_out
+
         MocLbryumWallet._send_name_claim = not_enough_funds_send_name_claim
         wallet = MocLbryumWallet()
         d = wallet.claim_name('test', 1, test_claim_dict)
-        self.assertFailure(d,Exception)
+        self.assertFailure(d, Exception)
         return d
 
     def test_successful_send_name_claim(self):

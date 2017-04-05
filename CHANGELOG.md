@@ -19,6 +19,8 @@ at anytime.
 ### Changed
   * Use `uri` instead of `name` for `get`, remove explicit `claim_id` parameter
   * Increase default download timeout
+  * Use lbry.io api for exchange rate data
+  *
 
 ### Fixed
   * 

@@ -54,22 +54,14 @@ class GoogleBTCFeedTest(unittest.TestCase):
             out = yield feed._handle_response(response)
 
 
-
-
-class BittrexFeedTest(unittest.TestCase):
-    def setUp(self):
-        conf.initialize_settings()
-
-    def tearDown(self):
-        conf.settings = None
-
+class LBRYioFeedTest(unittest.TestCase):
     @defer.inlineCallbacks
     def test_handle_response(self):
-        feed = ExchangeRateManager.BittrexFeed()
+        feed = ExchangeRateManager.LBRYioFeed()
 
-        response ='{"success":true,"message":"","result":[{"Id":6902471,"TimeStamp":"2017-02-27T23:41:52.213","Quantity":56.12611239,"Price":0.00001621,"Total":0.00090980,"FillType":"PARTIAL_FILL","OrderType":"SELL"},{"Id":6902403,"TimeStamp":"2017-02-27T23:31:40.463","Quantity":430.99988180,"Price":0.00001592,"Total":0.00686151,"FillType":"PARTIAL_FILL","OrderType":"SELL"}]}'
+        response ='{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, \"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, \"success\": true, \"error\": null}'
         out = yield feed._handle_response(response)
-        expected= 1.0 / ((0.00090980+0.00686151) / (56.12611239+430.99988180))
+        expected = 1.0 / 5.065289549855739e-05
         self.assertEqual(expected, out)
 
         response='{}'
