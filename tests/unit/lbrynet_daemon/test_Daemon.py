@@ -80,7 +80,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     }
     if with_fee:
         metadata.update(
-            {"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
+            {"fee": {"currency":"USD", "address":"bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}})
     daemon._resolve_name = lambda _: defer.succeed(metadata)
     return daemon
 

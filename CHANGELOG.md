@@ -14,7 +14,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Use lbryschema library for metadata
   *
   *
 

@@ -20,6 +20,7 @@ requires = [
     'jsonrpc',
     'jsonschema',
     'lbryum>=2.7.6',
+    'lbryschema',
     'miniupnpc',
     'pycrypto',
     'pyyaml',

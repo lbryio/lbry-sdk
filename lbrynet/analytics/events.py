@@ -10,7 +10,7 @@ def get_sd_hash(stream_info):
     if not stream_info:
         return None
     try:
-        return stream_info['sources']['lbry_sd_hash']
+        return stream_info['stream']['source']['source']
     except (KeyError, TypeError, ValueError):
         log.debug('Failed to get sd_hash from %s', stream_info, exc_info=True)
         return None

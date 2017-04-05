@@ -24,7 +24,8 @@ from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.metadata.Fee import FeeValidator
-from lbrynet.metadata.Metadata import verify_name_characters, Metadata
+from lbrynet.metadata.Metadata import verify_name_characters
+from lbryschema.decode import smart_decode
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
@@ -710,15 +711,16 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue((sd_hash, file_path))
 
     @defer.inlineCallbacks
-    def _publish_stream(self, name, bid, metadata, file_path=None):
+    def _publish_stream(self, name, bid, claim_dict, file_path=None):
+
         publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
         verify_name_characters(name)
         if bid <= 0.0:
             raise Exception("Invalid bid")
         if not file_path:
-            claim_out = yield publisher.update_stream(name, bid, metadata)
+            claim_out = yield publisher.publish_stream(name, bid, claim_dict)
         else:
-            claim_out = yield publisher.publish_stream(name, file_path, bid, metadata)
+            claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path)
             if conf.settings['reflect_uploads']:
                 d = reupload.reflect_stream(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
@@ -827,7 +829,7 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _get_est_cost_from_metadata(self, metadata, name):
-        d = self.get_est_cost_from_sd_hash(metadata['sources']['lbry_sd_hash'])
+        d = self.get_est_cost_from_sd_hash(utils.get_sd_hash(metadata))
 
         def _handle_err(err):
             if isinstance(err, Failure):
@@ -888,7 +890,7 @@ class Daemon(AuthJSONRPCServer):
                                                          lbry_file.txid,
                                                          lbry_file.nout)
         try:
-            metadata = claim['value']
+            metadata = smart_decode(claim['value']).claim_dict
         except:
             metadata = None
         try:
@@ -1425,9 +1427,10 @@ class Daemon(AuthJSONRPCServer):
         """
 
         def _get_claim(_claim_id, _claims):
+            #TODO: do this in Wallet class
             for claim in _claims['claims']:
                 if claim['claim_id'] == _claim_id:
-                    return Metadata(json.loads(claim['value']))
+                    return smart_decode(claim['value']).claim_dict
 
         log.info("Received request to get %s", name)
 
@@ -1476,9 +1479,11 @@ class Daemon(AuthJSONRPCServer):
                 result = yield self._get_lbry_file_dict(self.streams[name].downloader,
                                                         full_status=True)
             except Exception as e:
+                # TODO: should reraise here, instead of returning e.message
                 log.warning('Failed to get %s', name)
                 self.analytics_manager.send_download_errored(download_id, name, stream_info)
                 result = e.message
+
         response = yield self._render_response(result)
         defer.returnValue(response)
 
@@ -1672,17 +1677,25 @@ class Daemon(AuthJSONRPCServer):
             metadata['preview'] = preview
         if nsfw is not None:
             metadata['nsfw'] = bool(nsfw)
-        if sources is not None:
-            metadata['sources'] = sources
 
-        # add address to fee if unspecified
+        metadata['version'] = '_0_1_0'
+
+        # original format {'currency':{'address','amount'}}
+        # add address to fee if unspecified {'version': ,'currency', 'address' , 'amount'}
         if 'fee' in metadata:
+            new_fee_dict = {}
             assert len(metadata['fee']) == 1, "Too many fees"
-            for currency in metadata['fee']:
-                if 'address' not in metadata['fee'][currency]:
-                    new_address = yield self.session.wallet.get_new_address()
-                    metadata['fee'][currency]['address'] = new_address
-            metadata['fee'] = FeeValidator(metadata['fee'])
+            currency, fee_dict = metadata['fee'].items()[0]
+            if 'address' not in fee_dict:
+                address = yield self.session.wallet.get_new_address()
+            else:
+                address = fee_dict['address']
+            new_fee_dict = {
+                'version':'_0_0_1',
+                'currency': currency,
+                'address':address,
+                'amount':fee_dict['amount']}
+            metadata['fee'] = new_fee_dict
 
         log.info("Publish: %s", {
             'name': name,
@@ -1692,7 +1705,15 @@ class Daemon(AuthJSONRPCServer):
             'fee': fee,
         })
 
-        result = yield self._publish_stream(name, bid, metadata, file_path)
+        claim_dict = {
+            'version':'_0_0_1',
+            'claimType':'streamType',
+            'stream':{'metadata':metadata, 'version':'_0_0_1'}}
+
+        if sources is not None:
+            claim_dict['stream']['source'] = sources
+
+        result = yield self._publish_stream(name, bid, claim_dict, file_path)
         response = yield self._render_response(result)
         defer.returnValue(response)
 

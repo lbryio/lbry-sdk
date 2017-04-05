@@ -3,6 +3,7 @@ import os
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
+from lbrynet.core import utils
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.metadata.Fee import FeeValidator
@@ -158,9 +159,9 @@ class GetStream(object):
     @defer.inlineCallbacks
     def download(self, stream_info, name):
         self.set_status(INITIALIZING_CODE, name)
-        self.sd_hash = stream_info['sources']['lbry_sd_hash']
-        if 'fee' in stream_info:
-            fee = self.check_fee(stream_info['fee'])
+        self.sd_hash = utils.get_sd_hash(stream_info)
+        if 'fee' in stream_info['stream']['metadata']:
+            fee = self.check_fee(stream_info['stream']['metadata']['fee'])
         else:
             fee = None
 

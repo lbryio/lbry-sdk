@@ -8,18 +8,20 @@ from lbrynet.core.Wallet import Wallet, ReservedPoints
 
 test_metadata = {
 'license': 'NASA',
-'fee': {'USD': {'amount': 0.01, 'address': 'baBYSK7CqGSn5KrEmNmmQwAhBSFgo6v47z'}},
-'ver': '0.0.3',
+'version': '_0_1_0',
 'description': 'test',
 'language': 'en',
 'author': 'test',
 'title': 'test',
-'sources': {
-    'lbry_sd_hash': '8655f713819344980a9a0d67b198344e2c462c90f813e86f0c63789ab0868031f25c54d0bb31af6658e997e2041806eb'},
 'nsfw': False,
-'content_type': 'video/mp4',
 'thumbnail': 'test'
 }
+
+test_claim_dict = {
+    'version':'_0_0_1',
+    'claimType':'streamType',
+    'stream':{'metadata':test_metadata, 'version':'_0_0_1','source':{'source':'8655f713819344980a9a0d67b198344e2c462c90f813e86f0c63789ab0868031f25c54d0bb31af6658e997e2041806eb','sourceType':'lbry_sd_hash','contentType':'video/mp4','version':'_0_0_1'},
+}}
 
 
 class MocLbryumWallet(Wallet):
@@ -42,7 +44,7 @@ class WalletTest(unittest.TestCase):
             return claim_out
         MocLbryumWallet._send_name_claim = not_enough_funds_send_name_claim
         wallet = MocLbryumWallet()
-        d = wallet.claim_name('test', 1, test_metadata)
+        d = wallet.claim_name('test', 1, test_claim_dict)
         self.assertFailure(d,Exception)
         return d
 
@@ -67,7 +69,7 @@ class WalletTest(unittest.TestCase):
 
         MocLbryumWallet._send_name_claim = success_send_name_claim
         wallet = MocLbryumWallet()
-        d = wallet.claim_name('test', 1, test_metadata)
+        d = wallet.claim_name('test', 1, test_claim_dict)
         d.addCallback(lambda claim_out: check_out(claim_out))
         return d
 
@@ -169,7 +171,7 @@ class WalletTest(unittest.TestCase):
         d = wallet.update_balance()
         d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
         d.addCallback(lambda _: wallet.reserve_points('testid',2))
-        d.addCallback(lambda _: wallet.claim_name('test', 4, test_metadata))
+        d.addCallback(lambda _: wallet.claim_name('test', 4, test_claim_dict))
         self.assertFailure(d,InsufficientFundsError)
         return d
 

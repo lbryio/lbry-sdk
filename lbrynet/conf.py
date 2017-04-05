@@ -182,7 +182,7 @@ ADJUSTABLE_SETTINGS = {
     #
     # TODO: writing json on the cmd line is a pain, come up with a nicer
     # parser for this data structure. (maybe MAX_KEY_FEE': USD:25
-    'max_key_fee': (json.loads, {'USD': {'amount': 25.0, 'address': ''}}),
+    'max_key_fee': (json.loads, {'currency':'USD', 'amount': 25.0, 'address':''}),
 
     'max_search_results': (int, 25),
     'max_upload': (float, 0.0),
