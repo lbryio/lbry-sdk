@@ -126,6 +126,16 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.claim_id = yield self.wallet.get_claimid(self.name, self.txid, self.nout)
         defer.returnValue(None)
 
+    # Same as load_file_attributes(), except we set attributes from the arguments,
+    # instead of looking it up on wallet. Used when publishing.
+    def load_file_attributes_from_arg(self, name, sd_hash, txid, nout, claim_id):
+        self.name = name
+        self.sd_hash = sd_hash
+        self.txid = txid
+        self.nout = nout
+        self.outpoint = ClaimOutpoint(self.txid, self.nout)
+        self.claim_id = self.claim_id
+
     @defer.inlineCallbacks
     def _start(self):
         yield EncryptedFileSaver._start(self)
