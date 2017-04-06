@@ -20,7 +20,7 @@ at anytime.
 
 ### Fixed
   * Removed update_metadata function that could cause update problems
-  *
+  * Fixed inefficient wallet look ups during publishing
   *
 
 ## [0.9.2rc3] - 2017-03-29
