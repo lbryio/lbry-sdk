@@ -14,14 +14,21 @@ at anytime.
   *
 
 ### Changed
-  * Use lbryschema library for metadata
+  *
   *
   *
 
 ### Fixed
-  * Removed update_metadata function that could cause update problems
-  * Fix DHT contact bug
   *
+  *
+  *
+
+## [0.9.2rc4] - 2017-04-06
+### Changed
+ * Use lbryschema library for metadata
+### Fixed
+ * Removed update_metadata function that could cause update problems
+ * Fix DHT contact bug
 
 ## [0.9.2rc3] - 2017-03-29
 ### Added
