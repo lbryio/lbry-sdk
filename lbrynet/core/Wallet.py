@@ -10,20 +10,18 @@ from zope.interface import implements
 from decimal import Decimal
 
 from lbryum import SimpleConfig, Network
-from lbryum.lbrycrd import COIN, RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS
+from lbryum.lbrycrd import COIN
 import lbryum.wallet
 from lbryum.commands import known_commands, Commands
 
+from lbryschema.uri import parse_lbry_uri
 from lbryschema.claim import ClaimDict
-from lbryschema.decode import smart_decode
 from lbryschema.error import DecodeError
 
-from lbrynet.core import utils
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
-from lbrynet.core.Error import (UnknownNameError, InvalidStreamInfoError, RequestCanceledError,
-                                InsufficientFundsError)
+from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError
 from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
 
 log = logging.getLogger(__name__)
@@ -450,65 +448,10 @@ class Wallet(object):
         log.debug("There were no payments to send")
         return defer.succeed(True)
 
-    def get_stream_info_for_name(self, name):
-        d = self._get_value_for_name(name)
-        d.addCallback(self._get_stream_info_from_value, name)
-        return d
+    ######
 
-    def get_txid_for_name(self, name):
-        d = self._get_value_for_name(name)
-        d.addCallback(lambda r: None if 'txid' not in r else r['txid'])
-        return d
-
-    def get_stream_info_from_claim_outpoint(self, name, txid, nout):
-        claim_outpoint = ClaimOutpoint(txid, nout)
-        d = self.get_claims_from_tx(claim_outpoint['txid'])
-
-        def get_claim_for_name(claims):
-            for claim in claims:
-                if claim_outpoint == claim:
-                    claim['txid'] = txid
-                    return claim
-            return Failure(UnknownNameError(name))
-
-        d.addCallback(get_claim_for_name)
-        d.addCallback(self._get_stream_info_from_value, name)
-        return d
-
-    def _get_stream_info_from_value(self, result, name):
-        def _check_result_fields(r):
-            for k in ['value', 'txid', 'nout', 'height', 'amount']:
-                assert k in r, "getvalueforname response missing field %s" % k
-
-        def _log_success(claim_id):
-            log.debug("lbry://%s complies with %s, claimid: %s",
-                    name, claim_dict.claim_dict['version'], claim_id)
-            return defer.succeed(None)
-
-        if 'error' in result:
-            log.warning("Got an error looking up lbry://%s: %s", name, result['error'])
-            return Failure(UnknownNameError(name))
-        _check_result_fields(result)
-        try:
-            claim_dict = smart_decode(result['value'].decode('hex'))
-        except (TypeError, ValueError, DecodeError):
-            return Failure(InvalidStreamInfoError(name, result['value']))
-        #TODO: what if keys don't exist here,
-        # probablly need get_sd_hash() function fro ClaimDict
-        sd_hash = utils.get_sd_hash(claim_dict.claim_dict)
-        claim_outpoint = ClaimOutpoint(result['txid'], result['nout'])
-        d = self._save_name_metadata(name, claim_outpoint, sd_hash)
-        d.addCallback(lambda _: self.get_claimid(name, result['txid'], result['nout']))
-        d.addCallback(lambda cid: _log_success(cid))
-        d.addCallback(lambda _: claim_dict.claim_dict)
-        return d
-
-    def get_claim(self, name, claim_id):
-        d = self.get_claims_for_name(name)
-        d.addCallback(
-            lambda claims: next(
-                claim for claim in claims['claims'] if claim['claim_id'] == claim_id))
-        return d
+    def get_claim(self, claim_id):
+        return self._get_claim_by_claimid(claim_id)
 
     def get_claimid(self, name, txid, nout):
         def _get_id_for_return(claim_id):
@@ -530,96 +473,135 @@ class Wallet(object):
         d.addCallback(_get_id_for_return)
         return d
 
+    @defer.inlineCallbacks
     def get_my_claim(self, name):
-        def _get_claim_for_return(claim):
-            if not claim:
-                return False
-            claim['value'] = smart_decode(claim['value'].decode('hex')).claim_dict
-            return claim
-
-        def _get_my_unspent_claim(claims):
-            for claim in claims:
-                is_unspent = (
-                    claim['name'] == name and
-                    not claim['is_spent'] and
-                    not claim.get('supported_claimid', False)
-                )
-                if is_unspent:
-                    return claim
-            return False
-
-        d = self.get_name_claims()
-        d.addCallback(_get_my_unspent_claim)
-        d.addCallback(_get_claim_for_return)
-        return d
+        my_claims = yield self.get_name_claims()
+        my_claim = False
+        for claim in my_claims:
+            if claim['name'] == name:
+                claim['value'] = ClaimDict.load_dict(claim['value'])
+                my_claim = claim
+                break
+        defer.returnValue(my_claim)
 
     def get_claim_info(self, name, txid=None, nout=None):
         if txid is None or nout is None:
-            d = self._get_value_for_name(name)
-            d.addCallback(lambda r: self._get_claim_info(name, ClaimOutpoint(r['txid'], r['nout'])))
+            return self.get_claim_by_name(name)
         else:
-            d = self._get_claim_info(name, ClaimOutpoint(txid, nout))
-        # TODO: this catches every exception, fix this
-        d.addErrback(lambda _: False)
-        return d
+            return self.get_claim_by_outpoint(ClaimOutpoint(txid, nout))
 
-    def _format_claim_for_return(self, name, claim, claim_dict, meta_version):
-        result = {}
-        result['claim_id'] = claim['claim_id']
-        result['amount'] = claim['effective_amount']
-        result['height'] = claim['height']
-        result['name'] = name
-        result['txid'] = claim['txid']
-        result['nout'] = claim['nout']
-        result['value'] = claim_dict
-        result['supports'] = [
-            {'txid': support['txid'], 'nout': support['nout']} for support in claim['supports']]
-        result['meta_version'] = meta_version
-        return result
-
-    def _get_claim_info(self, name, claim_outpoint):
-        def _build_response(claim):
+    @defer.inlineCallbacks
+    def _handle_claim_result(self, results):
+        if 'error' in results:
+            raise Exception(results['error'])
+        elif 'claim' in results:
+            claim = results['claim']
+            if 'has_signature' in claim and claim['has_signature']:
+                if not claim['signature_is_valid']:
+                    raise Exception("Claim has invalid signature")
             try:
-                claim_dict = smart_decode(claim['value'].decode('hex')).claim_dict
-                meta_ver = claim_dict['stream']['metadata']['version']
-                sd_hash = utils.get_sd_hash(claim_dict)
-                d = self._save_name_metadata(name, claim_outpoint, sd_hash)
+                decoded = ClaimDict.load_dict(claim['value'])
+                claim_dict = decoded.claim_dict
+                outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
+                name = claim['name']
+                claim['value'] = claim_dict
+                yield self._save_name_metadata(name, outpoint, decoded.source_hash)
+                yield self._update_claimid(claim['claim_id'], name, outpoint)
             except (TypeError, ValueError, KeyError, DecodeError):
-                claim_dict = claim['value']
-                meta_ver = "Non-compliant"
-                d = defer.succeed(None)
+                claim = claim['value']
+                log.warning(results)
+            results = claim
+        elif 'value' in results:
+            if 'has_signature' in results and results['has_signature']:
+                if not results['signature_is_valid']:
+                    raise Exception("Claim has invalid signature")
+            try:
+                decoded = ClaimDict.load_dict(results['value'])
+                claim_dict = decoded.claim_dict
+                outpoint = ClaimOutpoint(results['txid'], results['nout'])
+                name = results['name']
+                yield self._save_name_metadata(name, outpoint, decoded.source_hash)
+                yield self._update_claimid(results['claim_id'], name, outpoint)
+            except (TypeError, ValueError, KeyError, DecodeError):
+                claim_dict = results['value']
+                log.warning(results)
+            results['value'] = claim_dict
+        log.info("get claim info lbry://%s#%s", results['name'], results['claim_id'])
+        defer.returnValue(results)
 
-            d.addCallback(lambda _: self._format_claim_for_return(name,
-                                                                  claim,
-                                                                  claim_dict=claim_dict,
-                                                                  meta_version=meta_ver))
-            log.info(
-                "get claim info lbry://%s metadata: %s, claimid: %s",
-                name, meta_ver, claim['claim_id'])
-            return d
+    @defer.inlineCallbacks
+    def resolve_uri(self, uri):
+        resolve_results = yield self._get_value_for_uri(uri)
+        if 'claim' in resolve_results:
+            formatted = yield self._handle_claim_result(resolve_results)
+            resolve_results['claim'] = formatted
+            result = resolve_results
+        elif 'claims_in_channel' in resolve_results:
+            claims_for_return = []
+            for claim in resolve_results['claims_in_channel']:
+                formatted = yield self._handle_claim_result(claim)
+                claims_for_return.append(formatted)
+            resolve_results['claims_in_channel'] = claims_for_return
+            result = resolve_results
+        else:
+            result = None
+        defer.returnValue(result)
 
-        d = self.get_claimid(name, claim_outpoint['txid'], claim_outpoint['nout'])
-        d.addCallback(lambda claim_id: self.get_claim(name, claim_id))
-        d.addCallback(_build_response)
-        return d
+    @defer.inlineCallbacks
+    def get_claim_by_outpoint(self, claim_outpoint):
+        claim = yield self._get_claim_by_outpoint(claim_outpoint['txid'], claim_outpoint['nout'])
+        result = yield self._handle_claim_result(claim)
+        defer.returnValue(result)
 
+    @defer.inlineCallbacks
+    def get_claim_by_name(self, name):
+        get_name_result = yield self._get_value_for_name(name)
+        result = yield self._handle_claim_result(get_name_result)
+        defer.returnValue(result)
+
+    @defer.inlineCallbacks
     def get_claims_for_name(self, name):
-        d = self._get_claims_for_name(name)
-        return d
+        result = yield self._get_claims_for_name(name)
+        claims = result['claims']
+        claims_for_return = []
+        for claim in claims:
+            claim['value'] = ClaimDict.load_dict(claim['value']).claim_dict
+            claims_for_return.append(claim)
+        result['claims'] = claims_for_return
+        defer.returnValue(result)
 
     def _process_claim_out(self, claim_out):
         claim_out.pop('success')
         claim_out['fee'] = float(claim_out['fee'])
         return claim_out
 
+    def claim_new_channel(self, channel_name, amount):
+        parsed_channel_name = parse_lbry_uri(channel_name)
+        if not parsed_channel_name.is_channel:
+            raise Exception("Invalid channel name")
+        elif (parsed_channel_name.path or parsed_channel_name.claim_id or
+              parsed_channel_name.bid_position or parsed_channel_name.claim_sequence):
+            raise Exception("New channel claim should have no fields other than name")
+        return self._claim_certificate(parsed_channel_name.name, amount)
+
     @defer.inlineCallbacks
-    def claim_name(self, name, bid, metadata):
+    def channel_list(self):
+        certificates = yield self._get_certificate_claims()
+        results = []
+        for claim in certificates:
+            formatted = yield self._handle_claim_result(claim)
+            results.append(formatted)
+        defer.returnValue(results)
+
+    @defer.inlineCallbacks
+    def claim_name(self, name, bid, metadata, certificate_id=None):
         """
         Claim a name, or update if name already claimed by user
 
         @param name: str, name to claim
         @param bid: float, bid amount
-        @param metadata: Metadata compliant dict
+        @param metadata: ClaimDict compliant dict
+        @param certificate_id: str (optional), claim id of channel certificate
 
         @return: Deferred which returns a dict containing below items
             txid - txid of the resulting transaction
@@ -627,22 +609,14 @@ class Wallet(object):
             fee - transaction fee paid to make claim
             claim_id -  claim id of the claim
         """
-        claim_dict = ClaimDict.load_dict(metadata)
-        my_claim = yield self.get_my_claim(name)
 
-        if my_claim:
-            log.info("Updating claim")
-            if self.get_balance() < Decimal(bid) - Decimal(my_claim['amount']):
-                raise InsufficientFundsError()
-            old_claim_outpoint = ClaimOutpoint(my_claim['txid'], my_claim['nout'])
-            claim = yield self._send_name_claim_update(name, my_claim['claim_id'],
-                    old_claim_outpoint, claim_dict.serialized, bid)
-            claim['claim_id'] = my_claim['claim_id']
-        else:
-            log.info("Making a new claim")
-            if self.get_balance() < bid:
-                raise InsufficientFundsError()
-            claim = yield self._send_name_claim(name, claim_dict.serialized, bid)
+        decoded = ClaimDict.load_dict(metadata)
+        serialized = decoded.serialized
+
+        if self.get_balance() < Decimal(bid):
+            raise InsufficientFundsError()
+
+        claim = yield self._send_name_claim(name, serialized.encode('hex'), bid, certificate_id)
 
         if not claim['success']:
             msg = 'Claim to name {} failed: {}'.format(name, claim['reason'])
@@ -651,24 +625,20 @@ class Wallet(object):
         claim = self._process_claim_out(claim)
         claim_outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
         log.info("Saving metadata for claim %s %d", claim['txid'], claim['nout'])
-        yield self._save_name_metadata(name, claim_outpoint,
-                    utils.get_sd_hash(claim_dict.claim_dict))
+        yield self._update_claimid(claim['claim_id'], name, claim_outpoint)
+        yield self._save_name_metadata(name, claim_outpoint, decoded.source_hash)
         defer.returnValue(claim)
 
     @defer.inlineCallbacks
-    def abandon_claim(self, txid, nout):
-        def _parse_abandon_claim_out(claim_out):
-            if not claim_out['success']:
-                msg = 'Abandon of {}:{} failed: {}'.format(txid, nout, claim_out['reason'])
-                raise Exception(msg)
-            claim_out = self._process_claim_out(claim_out)
-            log.info("Abandoned claim tx %s (n: %i) --> %s", txid, nout, claim_out)
-            return defer.succeed(claim_out)
+    def abandon_claim(self, claim_id):
+        claim_out = yield self._abandon_claim(claim_id)
 
-        claim_outpoint = ClaimOutpoint(txid, nout)
-        claim_out = yield self._abandon_claim(claim_outpoint)
-        result = yield _parse_abandon_claim_out(claim_out)
-        defer.returnValue(result)
+        if not claim_out['success']:
+            msg = 'Abandon of {} failed: {}'.format(claim_id, claim_out['reason'])
+            raise Exception(msg)
+
+        claim_out = self._process_claim_out(claim_out)
+        defer.returnValue(claim_out)
 
     def support_claim(self, name, claim_id, amount):
         def _parse_support_claim_out(claim_out):
@@ -778,13 +748,13 @@ class Wallet(object):
     def _get_claims_for_name(self, name):
         return defer.fail(NotImplementedError())
 
-    def _send_name_claim(self, name, val, amount):
+    def _claim_certificate(self, name, amount):
         return defer.fail(NotImplementedError())
 
-    def _abandon_claim(self, claim_outpoint):
+    def _send_name_claim(self, name, val, amount, certificate_id=None):
         return defer.fail(NotImplementedError())
 
-    def _send_name_claim_update(self, name, claim_id, claim_outpoint, value, amount):
+    def _abandon_claim(self, claim_id):
         return defer.fail(NotImplementedError())
 
     def _support_claim(self, name, claim_id, amount):
@@ -806,6 +776,18 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def _address_is_mine(self, address):
+        return defer.fail(NotImplementedError())
+
+    def _get_value_for_uri(self, uri):
+        return defer.fail(NotImplementedError())
+
+    def _get_certificate_claims(self):
+        return defer.fail(NotImplementedError())
+
+    def _get_claim_by_outpoint(self, txid, nout):
+        return defer.fail(NotImplementedError())
+
+    def _get_claim_by_claimid(self, claim_id):
         return defer.fail(NotImplementedError())
 
     def _start(self):
@@ -947,21 +929,21 @@ class LBRYumWallet(Wallet):
     # run commands as a defer.succeed,
     # lbryum commands should be run this way , unless if the command
     # only makes a lbrum server query, use _run_cmd_as_defer_to_thread()
-    def _run_cmd_as_defer_succeed(self, command_name, *args):
+    def _run_cmd_as_defer_succeed(self, command_name, *args, **kwargs):
         cmd_runner = self._get_cmd_runner()
         cmd = known_commands[command_name]
         func = getattr(cmd_runner, cmd.name)
-        return defer.succeed(func(*args))
+        return defer.succeed(func(*args, **kwargs))
 
     # run commands as a deferToThread,  lbryum commands that only make
     # queries to lbryum server should be run this way
     # TODO: keep track of running threads and cancel them on `stop`
     #       otherwise the application will hang, waiting for threads to complete
-    def _run_cmd_as_defer_to_thread(self, command_name, *args):
+    def _run_cmd_as_defer_to_thread(self, command_name, *args, **kwargs):
         cmd_runner = self._get_cmd_runner()
         cmd = known_commands[command_name]
         func = getattr(cmd_runner, cmd.name)
-        return threads.deferToThread(func, *args)
+        return threads.deferToThread(func, *args, **kwargs)
 
     def _update_balance(self):
         accounts = None
@@ -1019,35 +1001,17 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_to_thread('getclaimsforname', name)
 
     @defer.inlineCallbacks
-    def _send_name_claim(self, name, value, amount):
-        broadcast = False
-        log.debug("Name claim %s %f", name, amount)
-        tx = yield self._run_cmd_as_defer_succeed('claim', name, value, amount, broadcast)
-        claim_out = yield self._broadcast_claim_transaction(tx)
+    def _send_name_claim(self, name, value, amount, certificate_id=None):
+        log.info("Send claim: %s for %s: %s ", name, amount, value)
+        claim_out = yield self._run_cmd_as_defer_succeed('claim', name, value, amount,
+                                                         certificate_id=certificate_id)
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
-    def _send_name_claim_update(self, name, claim_id, claim_outpoint, value, amount):
-        log.debug("Update %s %d %f %s %s", claim_outpoint['txid'], claim_outpoint['nout'],
-                  amount, name, claim_id)
-        broadcast = False
-        tx = yield self._run_cmd_as_defer_succeed(
-            'update', claim_outpoint['txid'], claim_outpoint['nout'],
-            name, claim_id, value, amount, broadcast
-        )
-        claim_out = yield self._broadcast_claim_transaction(tx)
-        defer.returnValue(claim_out)
-
-
-    @defer.inlineCallbacks
-    def _abandon_claim(self, claim_outpoint):
-        log.debug("Abandon %s %s" % (claim_outpoint['txid'], claim_outpoint['nout']))
-        broadcast = False
-        abandon_tx = yield self._run_cmd_as_defer_succeed(
-            'abandon', claim_outpoint['txid'], claim_outpoint['nout'], broadcast
-        )
-        claim_out = yield self._broadcast_claim_transaction(abandon_tx)
-        defer.returnValue(claim_out)
+    def _abandon_claim(self, claim_id):
+        log.debug("Abandon %s" % claim_id)
+        tx_out = yield self._run_cmd_as_defer_succeed('abandon', claim_id)
+        defer.returnValue(tx_out)
 
     @defer.inlineCallbacks
     def _support_claim(self, name, claim_id, amount):
@@ -1085,19 +1049,29 @@ class LBRYumWallet(Wallet):
         return d
 
     def _get_value_for_name(self, name):
-        height_to_check = self.network.get_local_height() - RECOMMENDED_CLAIMTRIE_HASH_CONFIRMS + 1
-        if height_to_check < 0:
-            msg = "Height to check is less than 0, blockchain headers are likely not initialized"
-            raise Exception(msg)
-        block_header = self.network.blockchain.read_header(height_to_check)
-        block_hash = self.network.blockchain.hash_header(block_header)
-        d = self._run_cmd_as_defer_to_thread('requestvalueforname', name, block_hash)
-        d.addCallback(lambda response: Commands._verify_proof(name, block_header['claim_trie_root'],
-                                                              response))
-        return d
+        if not name:
+            raise Exception("No name given")
+        return self._run_cmd_as_defer_to_thread('getvalueforname', name)
+
+    def _get_value_for_uri(self, uri):
+        if not uri:
+            raise Exception("No uri given")
+        return self._run_cmd_as_defer_to_thread('getvalueforuri', uri)
+
+    def _claim_certificate(self, name, amount):
+        return self._run_cmd_as_defer_to_thread('claimcertificate', name, amount)
+
+    def _get_certificate_claims(self):
+        return self._run_cmd_as_defer_succeed('getcertificateclaims')
 
     def get_claims_from_tx(self, txid):
         return self._run_cmd_as_defer_to_thread('getclaimsfromtx', txid)
+
+    def _get_claim_by_outpoint(self, txid, nout):
+        return self._run_cmd_as_defer_to_thread('getclaimbyoutpoint', txid, nout)
+
+    def get_claim_by_claimid(self, claim_id):
+        return self._run_cmd_as_defer_to_thread('getclaimbyid', claim_id)
 
     def _get_balance_for_address(self, address):
         return defer.succeed(Decimal(self.wallet.get_addr_received(address)) / COIN)
