@@ -135,7 +135,7 @@ class EncryptedFileManager(object):
                 rowid, stream_hash, payment_rate_manager, blob_data_rate=options)
             yield downloader.restore()
         except Exception:
-            log.exception('An error occurred while starting a lbry file (%s, %s, %s)',
+            log.error('An error occurred while starting a lbry file (%s, %s, %s)',
                           rowid, stream_hash, options)
 
     @defer.inlineCallbacks

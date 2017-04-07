@@ -12,14 +12,9 @@ from requests import exceptions as requests_exceptions
 import random
 
 from twisted.web import server
-from twisted.internet import defer, threads, error, reactor, task
+from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
-
-from lbryschema.decode import smart_decode
-from lbryschema.claim import ClaimDict
-from lbryschema.uri import parse_lbry_uri
-from lbryschema.error import DecodeError
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION
@@ -30,7 +25,7 @@ from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.metadata.Fee import FeeValidator
 from lbrynet.metadata.Metadata import verify_name_characters
-from lbryschema.decode import smart_decode
+
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
@@ -737,9 +732,10 @@ class Daemon(AuthJSONRPCServer):
             defer.returnValue(result)
 
     @defer.inlineCallbacks
-    def _publish_stream(self, name, bid, claim_dict, file_path=None):
+    def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate_id=None):
 
-        publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
+        publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet,
+                              certificate_id)
         verify_name_characters(name)
         if bid <= 0.0:
             raise Exception("Invalid bid")
@@ -916,7 +912,7 @@ class Daemon(AuthJSONRPCServer):
                                                          lbry_file.txid,
                                                          lbry_file.nout)
         try:
-            metadata = smart_decode(claim['value']).claim_dict
+            metadata = claim['value']
         except:
             metadata = None
         try:
@@ -972,6 +968,7 @@ class Daemon(AuthJSONRPCServer):
                 lbry_file_dict = yield self._get_lbry_file_dict(lbry_file, full_status=full_status)
                 file_dicts.append(lbry_file_dict)
             lbry_files = file_dicts
+        log.info("Collected %i lbry files", len(lbry_files))
         defer.returnValue(lbry_files)
 
     # TODO: do this and get_blobs_for_sd_hash in the stream info manager
@@ -1363,10 +1360,6 @@ class Daemon(AuthJSONRPCServer):
                     resolvable
         """
 
-        if not name:
-            # TODO: seems like we should raise an error here
-            defer.returnValue(None)
-
         try:
             metadata = yield self._resolve_name(name, force_refresh=force)
         except UnknownNameError:
@@ -1412,6 +1405,31 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
+    def jsonrpc_resolve(self, uri):
+        """
+        Resolve a LBRY URI
+
+        Args:
+            'uri': (str) uri to download
+        Returns:
+            {
+                'claim_id': (str) claim id,
+                'claim_sequence': (int) claim sequence number,
+                'decoded_claim': (bool) whether or not the claim value was decoded,
+                'depth': (int) claim depth,
+                'has_signature': (bool) included if decoded_claim
+                'name': (str) claim name,
+                'txid': (str) claim txid,
+                'nout': (str) claim nout,
+                'signature_is_valid': (bool), included if has_signature,
+                'value': ClaimDict if decoded, otherwise hex string
+            }
+        """
+
+        resolved = yield self.session.wallet.resolve_uri(uri)
+        results = yield self._render_response(resolved)
+        defer.returnValue(results)
+
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     def jsonrpc_get(self, uri, file_name=None, timeout=None, download_directory=None):
@@ -1536,7 +1554,7 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_file_delete(self, delete_target_file=True, **kwargs):
+    def jsonrpc_file_delete(self, delete_target_file=True, delete_all=False, **kwargs):
         """
         Delete a lbry file
 
@@ -1556,21 +1574,27 @@ class Daemon(AuthJSONRPCServer):
         """
 
         lbry_files = yield self._get_lbry_files(return_json=False, **kwargs)
+
         if len(lbry_files) > 1:
-            log.warning("There are %i files to delete, use narrower filters to select one",
-                        len(lbry_files))
-            result = False
-        elif not lbry_files:
+            if not delete_all:
+                log.warning("There are %i files to delete, use narrower filters to select one",
+                            len(lbry_files))
+                result = False
+            else:
+                log.warning("Deleting %i files",
+                            len(lbry_files))
+
+        if not lbry_files:
             log.warning("There is no file to delete")
             result = False
         else:
-            lbry_file = lbry_files[0]
-            file_name, stream_hash = lbry_file.file_name, lbry_file.stream_hash
-            if lbry_file.claim_id in self.streams:
-                del self.streams[lbry_file.claim_id]
-            yield self.lbry_file_manager.delete_lbry_file(lbry_file,
-                                                          delete_file=delete_target_file)
-            log.info("Deleted %s (%s)", file_name, utils.short_hash(stream_hash))
+            for lbry_file in lbry_files:
+                file_name, stream_hash = lbry_file.file_name, lbry_file.stream_hash
+                if lbry_file.claim_id in self.streams:
+                    del self.streams[lbry_file.claim_id]
+                yield self.lbry_file_manager.delete_lbry_file(lbry_file,
+                                                              delete_file=delete_target_file)
+                log.info("Deleted %s (%s)", file_name, utils.short_hash(stream_hash))
             result = True
         response = yield self._render_response(result)
         defer.returnValue(response)
@@ -1598,9 +1622,49 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
+    def jsonrpc_channel_new(self, channel_name, amount):
+        """
+        Generate a publisher key and create a new certificate claim
+
+        Args:
+            'name': (str) '@' prefixed name
+            'amount': (float) amount to claim name
+
+        Returns:
+            (dict) Dictionary containing result of the claim
+            {
+                'tx' : (str) hex encoded transaction
+                'txid' : (str) txid of resulting claim
+                'nout' : (int) nout of the resulting claim
+                'fee' : (float) fee paid for the claim transaction
+                'claim_id' : (str) claim ID of the resulting claim
+            }
+        """
+
+        result = yield self.session.wallet.claim_new_channel(channel_name, amount)
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_channel_list_mine(self):
+        """
+        Get my channels
+
+        Returns:
+            (list) ClaimDict
+        """
+
+        result = yield self.session.wallet.channel_list()
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
                         description=None, author=None, language=None, license=None,
-                        license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None):
+                        license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None,
+                        channel_name=None):
         """
         Make a new name claim and publish associated data to lbrynet,
         update over existing claim if user already has a claim for name.
@@ -1640,6 +1704,7 @@ class Daemon(AuthJSONRPCServer):
             'preview'(optional): (str) preview URL for the file
             'nsfw'(optional): (bool) True if not safe for work
             'sources'(optional): (dict){'lbry_sd_hash':sd_hash} specifies sd hash of file
+            'channel_name' (optional): (str) name of the publisher channel
 
         Returns:
             (dict) Dictionary containing result of the claim
@@ -1690,10 +1755,11 @@ class Daemon(AuthJSONRPCServer):
             else:
                 address = fee_dict['address']
             new_fee_dict = {
-                'version':'_0_0_1',
+                'version': '_0_0_1',
                 'currency': currency,
-                'address':address,
-                'amount':fee_dict['amount']}
+                'address': address,
+                'amount': fee_dict['amount']
+            }
             metadata['fee'] = new_fee_dict
 
         log.info("Publish: %s", {
@@ -1705,14 +1771,30 @@ class Daemon(AuthJSONRPCServer):
         })
 
         claim_dict = {
-            'version':'_0_0_1',
-            'claimType':'streamType',
-            'stream':{'metadata':metadata, 'version':'_0_0_1'}}
+            'version': '_0_0_1',
+            'claimType': 'streamType',
+            'stream': {
+                'metadata': metadata,
+                'version': '_0_0_1'
+            }
+        }
 
         if sources is not None:
             claim_dict['stream']['source'] = sources
 
-        result = yield self._publish_stream(name, bid, claim_dict, file_path)
+        if channel_name:
+            certificate_id = None
+            my_certificates = yield self.session.wallet.channel_list()
+            for certificate in my_certificates:
+                if channel_name == certificate['name']:
+                    certificate_id = certificate['claim_id']
+                    break
+            if not certificate_id:
+                raise Exception("Cannot publish using channel %s" % channel_name)
+        else:
+            certificate_id = None
+
+        result = yield self._publish_stream(name, bid, claim_dict, file_path, certificate_id)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
@@ -1725,13 +1807,12 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_claim_abandon(self, txid, nout):
+    def jsonrpc_claim_abandon(self, claim_id):
         """
         Abandon a name and reclaim credits from the claim
 
         Args:
-            'txid': (str) txid of claim
-            'nout': (int) nout of claim
+            'claim_id': (str) claim_id of claim
         Return:
             (dict) Dictionary containing result of the claim
             {
@@ -1741,7 +1822,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         try:
-            abandon_claim_tx = yield self.session.wallet.abandon_claim(txid, nout)
+            abandon_claim_tx = yield self.session.wallet.abandon_claim(claim_id)
             response = yield self._render_response(abandon_claim_tx)
         except BaseException as err:
             log.warning(err)
@@ -1861,6 +1942,7 @@ class Daemon(AuthJSONRPCServer):
         """
         return self.jsonrpc_claim_list(**kwargs)
 
+    @defer.inlineCallbacks
     def jsonrpc_claim_list(self, name):
         """
         Get claims for a name
@@ -1889,10 +1971,8 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        d = self.session.wallet.get_claims_for_name(name)
-        d.addCallback(format_json_out_amount_as_float)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+        claims = yield self.session.wallet.get_claims_for_name(name)
+        defer.returnValue(claims)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_get_transaction_history(self):
@@ -2409,7 +2489,7 @@ class _ResolveNameHelper(object):
     def get_deferred(self):
         if self.need_fresh_stream():
             log.info("Resolving stream info for lbry://%s", self.name)
-            d = self.wallet.get_stream_info_for_name(self.name)
+            d = self.wallet.get_claim_by_name(self.name)
             d.addCallback(self._cache_stream_info)
         else:
             log.debug("Returning cached stream info for lbry://%s", self.name)
@@ -2433,11 +2513,10 @@ class _ResolveNameHelper(object):
 
     def _cache_stream_info(self, stream_info):
         self.daemon.name_cache[self.name] = {
-            'claim_metadata': stream_info,
+            'claim_metadata': stream_info['value'],
             'timestamp': self.now()
         }
-        d = self.wallet.get_txid_for_name(self.name)
-        d.addCallback(self._add_txid)
+        d = self._add_txid(stream_info['txid'])
         d.addCallback(lambda _: self.daemon._update_claim_cache())
         d.addCallback(lambda _: self.name_data['claim_metadata'])
         return d

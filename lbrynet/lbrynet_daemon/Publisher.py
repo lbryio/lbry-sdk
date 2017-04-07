@@ -13,10 +13,11 @@ log = logging.getLogger(__name__)
 
 
 class Publisher(object):
-    def __init__(self, session, lbry_file_manager, wallet):
+    def __init__(self, session, lbry_file_manager, wallet, certificate_id):
         self.session = session
         self.lbry_file_manager = lbry_file_manager
         self.wallet = wallet
+        self.certificate_id = certificate_id
         self.lbry_file = None
 
     """
@@ -56,7 +57,8 @@ class Publisher(object):
 
     @defer.inlineCallbacks
     def make_claim(self, name, bid, claim_dict):
-        claim_out = yield self.wallet.claim_name(name, bid, claim_dict)
+        claim_out = yield self.wallet.claim_name(name, bid, claim_dict,
+                                                 certificate_id=self.certificate_id)
         defer.returnValue(claim_out)
 
 
