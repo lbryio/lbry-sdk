@@ -8,6 +8,7 @@ import json
 
 import pkg_resources
 
+from lbryschema.claim import ClaimDict
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 # digest_size is in bytes, and blob hashes are hex encoded
@@ -112,6 +113,8 @@ def short_hash(hash_str):
 def get_sd_hash(stream_info):
     if not stream_info:
         return None
+    if isinstance(stream_info, ClaimDict):
+        return stream_info.source_hash
     return stream_info['stream']['source']['source']
 
 

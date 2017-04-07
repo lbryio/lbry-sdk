@@ -64,7 +64,6 @@ class MarketFeed(object):
         self.rate = ExchangeRate(self.market, price, int(time.time()))
 
     def _log_error(self, err):
-        log.error(err)
         log.warning(
             "There was a problem updating %s exchange rate information from %s",
             self.market, self.name)

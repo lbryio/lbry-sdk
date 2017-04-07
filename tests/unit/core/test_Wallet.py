@@ -4,7 +4,7 @@ from twisted.trial import unittest
 from twisted.internet import threads, defer
 
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.Wallet import Wallet, ReservedPoints
+from lbrynet.core.Wallet import Wallet, ReservedPoints, InMemoryStorage
 
 test_metadata = {
 'license': 'NASA',
@@ -29,6 +29,8 @@ class MocLbryumWallet(Wallet):
         self.wallet_balance = Decimal(10.0)
         self.total_reserved_points = Decimal(0.0)
         self.queued_payments = defaultdict(Decimal)
+        self._storage = InMemoryStorage()
+
     def get_name_claims(self):
         return threads.deferToThread(lambda: [])
 
@@ -50,7 +52,7 @@ class WalletTest(unittest.TestCase):
 
     def test_successful_send_name_claim(self):
         expected_claim_out = {
-            "claimid": "f43dc06256a69988bdbea09a58c80493ba15dcfa",
+            "claim_id": "f43dc06256a69988bdbea09a58c80493ba15dcfa",
             "fee": "0.00012",
             "nout": 0,
             "success": True,
@@ -59,12 +61,12 @@ class WalletTest(unittest.TestCase):
 
         def check_out(claim_out):
             self.assertTrue('success' not in claim_out)
-            self.assertEqual(expected_claim_out['claimid'], claim_out['claimid'])
+            self.assertEqual(expected_claim_out['claim_id'], claim_out['claim_id'])
             self.assertEqual(expected_claim_out['fee'], claim_out['fee'])
             self.assertEqual(expected_claim_out['nout'], claim_out['nout'])
             self.assertEqual(expected_claim_out['txid'], claim_out['txid'])
 
-        def success_send_name_claim(self, name, val, amount):
+        def success_send_name_claim(self, name, val, amount, certificate_id=None):
             return expected_claim_out
 
         MocLbryumWallet._send_name_claim = success_send_name_claim
@@ -111,8 +113,8 @@ class WalletTest(unittest.TestCase):
             return threads.deferToThread(lambda: claim_out)
         MocLbryumWallet._abandon_claim = failed_abandon_claim
         wallet = MocLbryumWallet()
-        d = wallet.abandon_claim("11030a76521e5f552ca87ad70765d0cc52e6ea4c0dc0063335e6cf2a9a85085f", 1)
-        self.assertFailure(d,Exception)
+        d = wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa")
+        self.assertFailure(d, Exception)
         return d
 
     def test_successful_abandon(self):
@@ -132,7 +134,7 @@ class WalletTest(unittest.TestCase):
 
         MocLbryumWallet._abandon_claim = success_abandon_claim
         wallet = MocLbryumWallet()
-        d = wallet.abandon_claim("0578c161ad8d36a7580c557d7444f967ea7f988e194c20d0e3c42c3cabf110dd", 1)
+        d = wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa")
         d.addCallback(lambda claim_out: check_out(claim_out))
         return d
 
@@ -187,7 +189,3 @@ class WalletTest(unittest.TestCase):
         d.addCallback(lambda _: wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 4))
         self.assertFailure(d,InsufficientFundsError)
         return d
-
-
-
-

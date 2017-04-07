@@ -12,7 +12,7 @@ from requests import exceptions as requests_exceptions
 import random
 
 from twisted.web import server
-from twisted.internet import defer, threads, error, reactor, task
+from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
@@ -25,7 +25,7 @@ from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.metadata.Fee import FeeValidator
 from lbrynet.metadata.Metadata import verify_name_characters
-from lbryschema.decode import smart_decode
+
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
@@ -695,25 +695,47 @@ class Daemon(AuthJSONRPCServer):
         return finished_d
 
     @defer.inlineCallbacks
-    def _download_name(self, name, stream_info, timeout=None, download_directory=None,
-                       file_name=None, wait_for_write=True):
+    def _download_name(self, name, stream_info, claim_id, timeout=None, download_directory=None,
+                       file_name=None):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
 
-        timeout = timeout if timeout is not None else conf.settings['download_timeout']
+        if claim_id in self.streams:
+            downloader = self.streams[claim_id]
+            result = yield downloader.finished_deferred
+            defer.returnValue(result)
+        else:
+            download_id = utils.random_string()
+            self.analytics_manager.send_download_started(download_id, name, stream_info)
 
-        helper = _DownloadNameHelper(self, name, timeout, download_directory, file_name,
-                                     wait_for_write)
-        lbry_file = yield helper.setup_stream(stream_info)
-        sd_hash, file_path = yield helper.wait_or_get_stream(stream_info, lbry_file)
-        defer.returnValue((sd_hash, file_path))
+            self.streams[claim_id] = GetStream(self.sd_identifier, self.session,
+                                               self.session.wallet, self.lbry_file_manager,
+                                               self.exchange_rate_manager, self.max_key_fee,
+                                               conf.settings['data_rate'], timeout,
+                                               download_directory, file_name)
+            try:
+                download = self.streams[claim_id].start(stream_info, name)
+                self.streams[claim_id].finished_deferred.addCallback(
+                    lambda _: self.analytics_manager.send_download_finished(download_id,
+                                                                            name,
+                                                                            stream_info))
+                lbry_file = yield download
+                result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
+                del self.streams[claim_id]
+            except Exception as err:
+                log.warning('Failed to get %s: %s', name, err)
+                self.analytics_manager.send_download_errored(download_id, name, stream_info)
+                del self.streams[claim_id]
+                result = {'error': err.message}
+            defer.returnValue(result)
 
     @defer.inlineCallbacks
-    def _publish_stream(self, name, bid, claim_dict, file_path=None):
+    def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate_id=None):
 
-        publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet)
+        publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet,
+                              certificate_id)
         verify_name_characters(name)
         if bid <= 0.0:
             raise Exception("Invalid bid")
@@ -890,7 +912,7 @@ class Daemon(AuthJSONRPCServer):
                                                          lbry_file.txid,
                                                          lbry_file.nout)
         try:
-            metadata = smart_decode(claim['value']).claim_dict
+            metadata = claim['value']
         except:
             metadata = None
         try:
@@ -946,6 +968,7 @@ class Daemon(AuthJSONRPCServer):
                 lbry_file_dict = yield self._get_lbry_file_dict(lbry_file, full_status=full_status)
                 file_dicts.append(lbry_file_dict)
             lbry_files = file_dicts
+        log.info("Collected %i lbry files", len(lbry_files))
         defer.returnValue(lbry_files)
 
     # TODO: do this and get_blobs_for_sd_hash in the stream info manager
@@ -1337,10 +1360,6 @@ class Daemon(AuthJSONRPCServer):
                     resolvable
         """
 
-        if not name:
-            # TODO: seems like we should raise an error here
-            defer.returnValue(None)
-
         try:
             metadata = yield self._resolve_name(name, force_refresh=force)
         except UnknownNameError:
@@ -1386,19 +1405,42 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_get(self, name, claim_id=None, file_name=None, timeout=None,
-                    download_directory=None, wait_for_write=True):
+    def jsonrpc_resolve(self, uri):
+        """
+        Resolve a LBRY URI
+
+        Args:
+            'uri': (str) uri to download
+        Returns:
+            {
+                'claim_id': (str) claim id,
+                'claim_sequence': (int) claim sequence number,
+                'decoded_claim': (bool) whether or not the claim value was decoded,
+                'depth': (int) claim depth,
+                'has_signature': (bool) included if decoded_claim
+                'name': (str) claim name,
+                'txid': (str) claim txid,
+                'nout': (str) claim nout,
+                'signature_is_valid': (bool), included if has_signature,
+                'value': ClaimDict if decoded, otherwise hex string
+            }
+        """
+
+        resolved = yield self.session.wallet.resolve_uri(uri)
+        results = yield self._render_response(resolved)
+        defer.returnValue(results)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_get(self, uri, file_name=None, timeout=None, download_directory=None):
         """
         Download stream from a LBRY name.
 
         Args:
-            'name': (str) name to download
-            'claim_id' (optional): (str) claim id for claim to download
+            'uri': (str) lbry uri to download
             'file_name'(optional): (str) a user specified name for the downloaded file
             'timeout'(optional): (int) download timeout in number of seconds
             'download_directory'(optional): (str) path to directory where file will be saved
-            'wait_for_write'(optional): (bool)  defaults to True. When set, waits for the file to
-                only start to be written before returning any results.
         Returns:
             (dict) Dictionary contaning information about the stream
 
@@ -1426,34 +1468,26 @@ class Daemon(AuthJSONRPCServer):
 
         """
 
-        def _get_claim(_claim_id, _claims):
-            #TODO: do this in Wallet class
-            for claim in _claims['claims']:
-                if claim['claim_id'] == _claim_id:
-                    return smart_decode(claim['value']).claim_dict
-
-        log.info("Received request to get %s", name)
-
         timeout = timeout if timeout is not None else self.download_timeout
         download_directory = download_directory or self.download_directory
-        if name in self.streams:
+
+        resolved = yield self.session.wallet.resolve_uri(uri)
+
+        if 'value' not in resolved:
+            if 'claim' not in resolved:
+                raise Exception("Nothing to download")
+            else:
+                resolved = resolved['claim']
+
+        name = resolved['name']
+        claim_id = resolved['claim_id']
+        stream_info = resolved['value']
+
+        if claim_id in self.streams:
             log.info("Already waiting on lbry://%s to start downloading", name)
-            yield self.streams[name].data_downloading_deferred
+            yield self.streams[claim_id].data_downloading_deferred
 
-        stream_info = None
-        lbry_file = None
-
-        if claim_id:
-            lbry_file = yield self._get_lbry_file(FileID.CLAIM_ID, claim_id, return_json=False)
-            claims = yield self.session.wallet.get_claims_for_name(name)
-            formatted_claims = format_json_out_amount_as_float(claims)
-            stream_info = _get_claim(claim_id, formatted_claims)
-            if not stream_info:
-                log.error("No claim %s for lbry://%s, using winning claim", claim_id, name)
-
-        if not stream_info:
-            lbry_file = yield self._get_lbry_file(FileID.NAME, name, return_json=False)
-            stream_info = yield self._resolve_name(name)
+        lbry_file = yield self._get_lbry_file(FileID.CLAIM_ID, claim_id, return_json=False)
 
         if lbry_file:
             if not os.path.isfile(os.path.join(lbry_file.download_directory, lbry_file.file_name)):
@@ -1464,26 +1498,9 @@ class Daemon(AuthJSONRPCServer):
                 log.info('Already have a file for %s', name)
             result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
         else:
-            download_id = utils.random_string()
-
-            self.analytics_manager.send_download_started(download_id, name, stream_info)
-            try:
-                yield self._download_name(name=name, stream_info=stream_info, timeout=timeout,
-                                          download_directory=download_directory,
-                                          file_name=file_name, wait_for_write=wait_for_write)
-                stream = self.streams[name]
-                stream.finished_deferred.addCallback(
-                    lambda _: self.analytics_manager.send_download_finished(
-                        download_id, name, stream_info)
-                )
-                result = yield self._get_lbry_file_dict(self.streams[name].downloader,
-                                                        full_status=True)
-            except Exception as e:
-                # TODO: should reraise here, instead of returning e.message
-                log.warning('Failed to get %s', name)
-                self.analytics_manager.send_download_errored(download_id, name, stream_info)
-                result = e.message
-
+            result = yield self._download_name(name, stream_info, claim_id, timeout=timeout,
+                                               download_directory=download_directory,
+                                               file_name=file_name)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
@@ -1537,7 +1554,7 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_file_delete(self, delete_target_file=True, **kwargs):
+    def jsonrpc_file_delete(self, delete_target_file=True, delete_all=False, **kwargs):
         """
         Delete a lbry file
 
@@ -1557,21 +1574,27 @@ class Daemon(AuthJSONRPCServer):
         """
 
         lbry_files = yield self._get_lbry_files(return_json=False, **kwargs)
+
         if len(lbry_files) > 1:
-            log.warning("There are %i files to delete, use narrower filters to select one",
-                        len(lbry_files))
-            result = False
-        elif not lbry_files:
+            if not delete_all:
+                log.warning("There are %i files to delete, use narrower filters to select one",
+                            len(lbry_files))
+                result = False
+            else:
+                log.warning("Deleting %i files",
+                            len(lbry_files))
+
+        if not lbry_files:
             log.warning("There is no file to delete")
             result = False
         else:
-            lbry_file = lbry_files[0]
-            file_name, stream_hash = lbry_file.file_name, lbry_file.stream_hash
-            if lbry_file.claim_id in self.streams:
-                del self.streams[lbry_file.claim_id]
-            yield self.lbry_file_manager.delete_lbry_file(lbry_file,
-                                                          delete_file=delete_target_file)
-            log.info("Deleted %s (%s)", file_name, utils.short_hash(stream_hash))
+            for lbry_file in lbry_files:
+                file_name, stream_hash = lbry_file.file_name, lbry_file.stream_hash
+                if lbry_file.claim_id in self.streams:
+                    del self.streams[lbry_file.claim_id]
+                yield self.lbry_file_manager.delete_lbry_file(lbry_file,
+                                                              delete_file=delete_target_file)
+                log.info("Deleted %s (%s)", file_name, utils.short_hash(stream_hash))
             result = True
         response = yield self._render_response(result)
         defer.returnValue(response)
@@ -1599,9 +1622,49 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
+    def jsonrpc_channel_new(self, channel_name, amount):
+        """
+        Generate a publisher key and create a new certificate claim
+
+        Args:
+            'name': (str) '@' prefixed name
+            'amount': (float) amount to claim name
+
+        Returns:
+            (dict) Dictionary containing result of the claim
+            {
+                'tx' : (str) hex encoded transaction
+                'txid' : (str) txid of resulting claim
+                'nout' : (int) nout of the resulting claim
+                'fee' : (float) fee paid for the claim transaction
+                'claim_id' : (str) claim ID of the resulting claim
+            }
+        """
+
+        result = yield self.session.wallet.claim_new_channel(channel_name, amount)
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_channel_list_mine(self):
+        """
+        Get my channels
+
+        Returns:
+            (list) ClaimDict
+        """
+
+        result = yield self.session.wallet.channel_list()
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
                         description=None, author=None, language=None, license=None,
-                        license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None):
+                        license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None,
+                        channel_name=None):
         """
         Make a new name claim and publish associated data to lbrynet,
         update over existing claim if user already has a claim for name.
@@ -1641,6 +1704,7 @@ class Daemon(AuthJSONRPCServer):
             'preview'(optional): (str) preview URL for the file
             'nsfw'(optional): (bool) True if not safe for work
             'sources'(optional): (dict){'lbry_sd_hash':sd_hash} specifies sd hash of file
+            'channel_name' (optional): (str) name of the publisher channel
 
         Returns:
             (dict) Dictionary containing result of the claim
@@ -1691,10 +1755,11 @@ class Daemon(AuthJSONRPCServer):
             else:
                 address = fee_dict['address']
             new_fee_dict = {
-                'version':'_0_0_1',
+                'version': '_0_0_1',
                 'currency': currency,
-                'address':address,
-                'amount':fee_dict['amount']}
+                'address': address,
+                'amount': fee_dict['amount']
+            }
             metadata['fee'] = new_fee_dict
 
         log.info("Publish: %s", {
@@ -1706,14 +1771,30 @@ class Daemon(AuthJSONRPCServer):
         })
 
         claim_dict = {
-            'version':'_0_0_1',
-            'claimType':'streamType',
-            'stream':{'metadata':metadata, 'version':'_0_0_1'}}
+            'version': '_0_0_1',
+            'claimType': 'streamType',
+            'stream': {
+                'metadata': metadata,
+                'version': '_0_0_1'
+            }
+        }
 
         if sources is not None:
             claim_dict['stream']['source'] = sources
 
-        result = yield self._publish_stream(name, bid, claim_dict, file_path)
+        if channel_name:
+            certificate_id = None
+            my_certificates = yield self.session.wallet.channel_list()
+            for certificate in my_certificates:
+                if channel_name == certificate['name']:
+                    certificate_id = certificate['claim_id']
+                    break
+            if not certificate_id:
+                raise Exception("Cannot publish using channel %s" % channel_name)
+        else:
+            certificate_id = None
+
+        result = yield self._publish_stream(name, bid, claim_dict, file_path, certificate_id)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
@@ -1726,13 +1807,12 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_claim_abandon(self, txid, nout):
+    def jsonrpc_claim_abandon(self, claim_id):
         """
         Abandon a name and reclaim credits from the claim
 
         Args:
-            'txid': (str) txid of claim
-            'nout': (int) nout of claim
+            'claim_id': (str) claim_id of claim
         Return:
             (dict) Dictionary containing result of the claim
             {
@@ -1742,7 +1822,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         try:
-            abandon_claim_tx = yield self.session.wallet.abandon_claim(txid, nout)
+            abandon_claim_tx = yield self.session.wallet.abandon_claim(claim_id)
             response = yield self._render_response(abandon_claim_tx)
         except BaseException as err:
             log.warning(err)
@@ -1862,6 +1942,7 @@ class Daemon(AuthJSONRPCServer):
         """
         return self.jsonrpc_claim_list(**kwargs)
 
+    @defer.inlineCallbacks
     def jsonrpc_claim_list(self, name):
         """
         Get claims for a name
@@ -1890,10 +1971,8 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        d = self.session.wallet.get_claims_for_name(name)
-        d.addCallback(format_json_out_amount_as_float)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+        claims = yield self.session.wallet.get_claims_for_name(name)
+        defer.returnValue(claims)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_get_transaction_history(self):
@@ -2401,114 +2480,6 @@ class Daemon(AuthJSONRPCServer):
         return d
 
 
-class _DownloadNameHelper(object):
-    def __init__(self, daemon, name, timeout=None, download_directory=None, file_name=None,
-                 wait_for_write=True):
-        self.daemon = daemon
-        self.name = name
-        self.timeout = timeout if timeout is not None else conf.settings['download_timeout']
-        if not download_directory or not os.path.isdir(download_directory):
-            self.download_directory = daemon.download_directory
-        else:
-            self.download_directory = download_directory
-        self.file_name = file_name
-        self.wait_for_write = wait_for_write
-
-    @defer.inlineCallbacks
-    def setup_stream(self, stream_info):
-        sd_hash = utils.get_sd_hash(stream_info)
-        lbry_file = yield self.daemon._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
-        if self._does_lbry_file_exists(lbry_file):
-            defer.returnValue(lbry_file)
-        else:
-            defer.returnValue(None)
-
-    def _does_lbry_file_exists(self, lbry_file):
-        return lbry_file and os.path.isfile(self._full_path(lbry_file))
-
-    def _full_path(self, lbry_file):
-        return os.path.join(self.download_directory, lbry_file.file_name)
-
-    @defer.inlineCallbacks
-    def wait_or_get_stream(self, stream_info, lbry_file):
-        if lbry_file:
-            log.debug('Wait on lbry_file')
-            # returns the lbry_file
-            yield self._wait_on_lbry_file(lbry_file)
-            defer.returnValue((lbry_file.sd_hash, self._full_path(lbry_file)))
-        else:
-            log.debug('No lbry_file, need to get stream')
-            # returns an instance of ManagedEncryptedFileDownloaderFactory
-            sd_hash, file_path = yield self._get_stream(stream_info)
-            defer.returnValue((sd_hash, file_path))
-
-    def _wait_on_lbry_file(self, f):
-        file_path = self._full_path(f)
-        written_bytes = self._get_written_bytes(file_path)
-        if written_bytes:
-            log.info("File has bytes: %s --> %s", f.sd_hash, file_path)
-            return defer.succeed(True)
-        return task.deferLater(reactor, 1, self._wait_on_lbry_file, f)
-
-    @defer.inlineCallbacks
-    def _get_stream(self, stream_info):
-        try:
-            download_path = yield self.daemon.add_stream(
-                self.name, self.timeout, self.download_directory, self.file_name, stream_info)
-            self.remove_from_wait(None)
-        except (InsufficientFundsError, Exception) as err:
-            if Failure(err).check(InsufficientFundsError):
-                log.warning("Insufficient funds to download lbry://%s", self.name)
-                self.remove_from_wait("Insufficient funds")
-            else:
-                log.warning("lbry://%s timed out, removing from streams", self.name)
-                self.remove_from_wait("Timed out")
-            if self.daemon.streams[self.name].downloader is not None:
-                yield self.daemon.lbry_file_manager.delete_lbry_file(
-                    self.daemon.streams[self.name].downloader)
-            del self.daemon.streams[self.name]
-            raise err
-
-        if self.wait_for_write:
-            yield self._wait_for_write()
-        defer.returnValue((self.daemon.streams[self.name].sd_hash, download_path))
-
-    def _wait_for_write(self):
-        d = defer.succeed(None)
-        if not self._has_downloader_wrote():
-            d.addCallback(lambda _: reactor.callLater(1, self._wait_for_write))
-        return d
-
-    def _has_downloader_wrote(self):
-        stream = self.daemon.streams.get(self.name, False)
-        if stream:
-            file_path = self._full_path(stream.downloader)
-            return self._get_written_bytes(file_path)
-        else:
-            return False
-
-    def _get_written_bytes(self, file_path):
-        """Returns the number of bytes written to `file_path`.
-
-        Returns False if there were issues reading `file_path`.
-        """
-        try:
-            if os.path.isfile(file_path):
-                with open(file_path) as written_file:
-                    written_file.seek(0, os.SEEK_END)
-                    written_bytes = written_file.tell()
-            else:
-                written_bytes = False
-        except Exception:
-            writen_bytes = False
-        return written_bytes
-
-    def remove_from_wait(self, reason):
-        if self.name in self.daemon.waiting_on:
-            del self.daemon.waiting_on[self.name]
-        return reason
-
-
 class _ResolveNameHelper(object):
     def __init__(self, daemon, name, force_refresh):
         self.daemon = daemon
@@ -2518,7 +2489,7 @@ class _ResolveNameHelper(object):
     def get_deferred(self):
         if self.need_fresh_stream():
             log.info("Resolving stream info for lbry://%s", self.name)
-            d = self.wallet.get_stream_info_for_name(self.name)
+            d = self.wallet.get_claim_by_name(self.name)
             d.addCallback(self._cache_stream_info)
         else:
             log.debug("Returning cached stream info for lbry://%s", self.name)
@@ -2542,11 +2513,10 @@ class _ResolveNameHelper(object):
 
     def _cache_stream_info(self, stream_info):
         self.daemon.name_cache[self.name] = {
-            'claim_metadata': stream_info,
+            'claim_metadata': stream_info['value'],
             'timestamp': self.now()
         }
-        d = self.wallet.get_txid_for_name(self.name)
-        d.addCallback(self._add_txid)
+        d = self._add_txid(stream_info['txid'])
         d.addCallback(lambda _: self.daemon._update_claim_cache())
         d.addCallback(lambda _: self.name_data['claim_metadata'])
         return d
