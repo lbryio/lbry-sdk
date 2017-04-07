@@ -9,17 +9,19 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
-  *
-  *
+  * Use `claim_id` instead of outpoint for `claim_abandon`
+  * Add `channel_name` parameter to `publish`
+  * Add `delete_all` parameter to `file_delete` to allow deleting multiple files
+  * Add `channel_list_mine`
+  * Add `channel_new`
+  * Add `resolve` to resolve lbry uris
 
 ### Changed
-  *
-  *
-  *
+  * Use `uri` instead of `name` for `get`, remove explicit `claim_id` parameter
+  * Increase default download timeout
 
 ### Fixed
-  *
+  * 
   *
   *
 
