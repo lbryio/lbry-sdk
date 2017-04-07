@@ -162,7 +162,7 @@ ADJUSTABLE_SETTINGS = {
     'delete_blobs_on_remove': (bool, True),
     'dht_node_port': (int, 4444),
     'download_directory': (str, default_download_directory),
-    'download_timeout': (int, 30),
+    'download_timeout': (int, 180),
     'host_ui': (bool, True),
     'is_generous_host': (bool, True),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_port),
