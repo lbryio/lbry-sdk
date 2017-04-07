@@ -1,6 +1,6 @@
 import logging
 import os
-from twisted.internet import defer
+from twisted.internet import defer, threads
 from twisted.internet.task import LoopingCall
 
 from lbrynet.core import utils
@@ -63,6 +63,8 @@ class GetStream(object):
         # fired after the metadata and the first data blob have been downloaded
         self.data_downloading_deferred = defer.Deferred(None)
 
+        self._running = False
+
     @property
     def download_path(self):
         return os.path.join(self.download_directory, self.downloader.file_name)
@@ -88,7 +90,7 @@ class GetStream(object):
         elif self.downloader:
             d = self.downloader.status()
             d.addCallback(self._check_status)
-        else:
+        elif self._running:
             log.info("Downloading stream descriptor blob (%i seconds)", self.timeout_counter)
 
     def convert_max_fee(self):
@@ -158,10 +160,21 @@ class GetStream(object):
 
     @defer.inlineCallbacks
     def download(self, stream_info, name):
+        if self._running:
+            raise Exception("Already running")
+        self._running = True
+
         self.set_status(INITIALIZING_CODE, name)
         self.sd_hash = utils.get_sd_hash(stream_info)
+
         if 'fee' in stream_info['stream']['metadata']:
-            fee = self.check_fee(stream_info['stream']['metadata']['fee'])
+            try:
+                fee = yield threads.deferToThread(self.check_fee,
+                                                  stream_info['stream']['metadata']['fee'])
+            except Exception as err:
+                self._running = False
+                self.finished_deferred.errback(err)
+                raise err
         else:
             fee = None
 
@@ -184,7 +197,7 @@ class GetStream(object):
             safe_start(self.checker)
             self.download(stream_info, name)
             yield self.data_downloading_deferred
-            defer.returnValue(self.download_path)
+            defer.returnValue(self.downloader)
         except Exception as err:
             safe_stop(self.checker)
             raise err
