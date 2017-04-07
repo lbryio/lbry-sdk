@@ -1,4 +1,3 @@
-import io
 import logging
 from multiprocessing import Process, Event, Queue
 import os
@@ -8,17 +7,13 @@ import sys
 import random
 import unittest
 
-from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.Hash import MD5
 from lbrynet import conf
-from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager, \
-    DBEncryptedFileMetadataManager
 from lbrynet import analytics
 from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.core.PTCWallet import PointTraderKeyQueryHandlerFactory, PointTraderKeyExchanger
 from lbrynet.core.Session import Session
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
@@ -40,7 +35,6 @@ from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 
 from tests import mocks
 
-
 FakeNode = mocks.Node
 FakeWallet = mocks.Wallet
 FakePeerFinder = mocks.PeerFinder
@@ -48,7 +42,6 @@ FakeAnnouncer = mocks.Announcer
 GenFile = mocks.GenFile
 test_create_stream_sd_file = mocks.create_stream_sd_file
 DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
-
 
 log_format = "%(funcName)s(): %(message)s"
 logging.basicConfig(level=logging.CRITICAL, format=log_format)
@@ -212,11 +205,13 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
     os.mkdir(db_dir)
     os.mkdir(blob_dir)
 
-    session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd" + str(n),
+    session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
+                      lbryid="abcd" + str(n),
                       peer_finder=peer_finder, hash_announcer=hash_announcer,
                       blob_dir=None, peer_port=peer_port,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-                      blob_tracker_class=DummyBlobAvailabilityTracker, is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
+                      blob_tracker_class=DummyBlobAvailabilityTracker,
+                      is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
     stream_info_manager = TempEncryptedFileMetadataManager()
 
@@ -229,7 +224,8 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
         info_validator = metadata.validator
         options = metadata.options
         factories = metadata.factories
-        chosen_options = [o.default_value for o in options.get_downloader_options(info_validator, prm)]
+        chosen_options = [o.default_value for o in
+                          options.get_downloader_options(info_validator, prm)]
         return factories[0].make_downloader(metadata, chosen_options, prm)
 
     def download_file():
@@ -351,8 +347,8 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
         query_handler_factories = {
             1: BlobAvailabilityHandlerFactory(session.blob_manager),
             2: BlobRequestHandlerFactory(session.blob_manager, session.wallet,
-                                      session.payment_rate_manager,
-                                      analytics.Track()),
+                                         session.payment_rate_manager,
+                                         analytics.Track()),
             3: session.wallet.get_wallet_info_query_handler_factory(),
         }
 
@@ -520,7 +516,7 @@ class TestTransfer(TestCase):
             factories = metadata.factories
             chosen_options = [
                 o.default_value for o in options.get_downloader_options(info_validator, prm)
-            ]
+                ]
             return factories[0].make_downloader(metadata, chosen_options, prm)
 
         def download_file(sd_hash):
@@ -642,11 +638,14 @@ class TestTransfer(TestCase):
             d1 = self.wait_for_event(dead_event_1, 15)
             d2 = self.wait_for_event(dead_event_2, 15)
             dl = defer.DeferredList([d1, d2])
+
             def print_shutting_down():
                 logging.info("Client is shutting down")
+
             dl.addCallback(lambda _: print_shutting_down())
             dl.addCallback(lambda _: arg)
             return dl
+
         d.addBoth(stop)
         return d
 
@@ -683,7 +682,8 @@ class TestTransfer(TestCase):
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
 
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
-        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager,
+                                                      sd_identifier)
 
         @defer.inlineCallbacks
         def make_downloader(metadata, prm):
@@ -692,7 +692,7 @@ class TestTransfer(TestCase):
             factories = metadata.factories
             chosen_options = [
                 o.default_value for o in options.get_downloader_options(info_validator, prm)
-            ]
+                ]
             downloader = yield factories[0].make_downloader(metadata, chosen_options, prm)
             defer.returnValue(downloader)
 
@@ -719,9 +719,11 @@ class TestTransfer(TestCase):
         def delete_lbry_file():
             logging.debug("deleting the file")
             d = self.lbry_file_manager.delete_lbry_file(downloaders[0])
-            d.addCallback(lambda _: self.lbry_file_manager.get_count_for_stream_hash(downloaders[0].stream_hash))
+            d.addCallback(lambda _: self.lbry_file_manager.get_count_for_stream_hash(
+                downloaders[0].stream_hash))
             d.addCallback(
-                lambda c: self.stream_info_manager.delete_stream(downloaders[1].stream_hash) if c == 0 else True)
+                lambda c: self.stream_info_manager.delete_stream(
+                    downloaders[1].stream_hash) if c == 0 else True)
             return d
 
         def check_lbry_file():
@@ -777,7 +779,7 @@ class TestTransfer(TestCase):
         dead_events = [Event() for _ in range(num_uploaders)]
         ready_events = [Event() for _ in range(1, num_uploaders)]
         lbry_uploader = LbryUploader(
-            sd_hash_queue, kill_event, dead_events[0], 5209343, 9373419, 2**22)
+            sd_hash_queue, kill_event, dead_events[0], 5209343, 9373419, 2 ** 22)
         uploader = Process(target=lbry_uploader.start)
         uploader.start()
         self.server_processes.append(uploader)
@@ -811,19 +813,23 @@ class TestTransfer(TestCase):
         def start_additional_uploaders(sd_hash):
             for i in range(1, num_uploaders):
                 uploader = Process(target=start_lbry_reuploader,
-                                   args=(sd_hash, kill_event, dead_events[i], ready_events[i - 1], i, 2 ** 10))
+                                   args=(
+                                   sd_hash, kill_event, dead_events[i], ready_events[i - 1], i,
+                                   2 ** 10))
                 uploader.start()
                 self.server_processes.append(uploader)
             return defer.succeed(True)
 
         def wait_for_ready_events():
-            return defer.DeferredList([self.wait_for_event(ready_event, 60) for ready_event in ready_events])
+            return defer.DeferredList(
+                [self.wait_for_event(ready_event, 60) for ready_event in ready_events])
 
         def make_downloader(metadata, prm):
             info_validator = metadata.validator
             options = metadata.options
             factories = metadata.factories
-            chosen_options = [o.default_value for o in options.get_downloader_options(info_validator, prm)]
+            chosen_options = [o.default_value for o in
+                              options.get_downloader_options(info_validator, prm)]
             return factories[0].make_downloader(metadata, chosen_options, prm)
 
         def download_file(sd_hash):
@@ -861,7 +867,8 @@ class TestTransfer(TestCase):
                 logging.debug("Client is stopping normally.")
             kill_event.set()
             logging.debug("Set the kill event")
-            d = defer.DeferredList([self.wait_for_event(dead_event, 15) for dead_event in dead_events])
+            d = defer.DeferredList(
+                [self.wait_for_event(dead_event, 15) for dead_event in dead_events])
 
             def print_shutting_down():
                 logging.info("Client is shutting down")
