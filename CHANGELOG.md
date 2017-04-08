@@ -9,23 +9,32 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  * Use `claim_id` instead of outpoint for `claim_abandon`
-  * Add `channel_name` parameter to `publish`
-  * Add `delete_all` parameter to `file_delete` to allow deleting multiple files
-  * Add `channel_list_mine`
-  * Add `channel_new`
-  * Add `resolve` to resolve lbry uris
+  *
+  *
+  *
 
 ### Changed
-  * Use `uri` instead of `name` for `get`, remove explicit `claim_id` parameter
-  * Increase default download timeout
-  * Use lbry.io api for exchange rate data
+  *
+  *
   *
 
 ### Fixed
-  * 
   *
   *
+  *
+
+## [0.9.2rc9] - 2017-04-08
+### Added
+ * Use `claim_id` instead of outpoint for `claim_abandon`
+ * Add `channel_name` parameter to `publish`
+ * Add `delete_all` parameter to `file_delete` to allow deleting multiple files
+ * Add `channel_list_mine`
+ * Add `channel_new`
+ * Add `resolve` to resolve lbry uris
+### Changed
+ * Use `uri` instead of `name` for `get`, remove explicit `claim_id` parameter
+ * Increase default download timeout
+ * Use lbry.io api for exchange rate data
 
 ## [0.9.2rc4] - 2017-04-06
 ### Changed
