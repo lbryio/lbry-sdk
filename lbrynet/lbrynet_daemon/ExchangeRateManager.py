@@ -111,6 +111,24 @@ class BittrexFeed(MarketFeed):
         return defer.succeed(float(1.0 / vwap))
 
 
+class LBRYioFeed(MarketFeed):
+    def __init__(self):
+        MarketFeed.__init__(
+            self,
+            "BTCLBC",
+            "lbry.io",
+            "https://api.lbry.io/lbc/exchange_rate",
+            {},
+            0.0,
+        )
+
+    def _handle_response(self, response):
+        json_response = json.loads(response)
+        if 'data' not in json_response:
+            raise InvalidExchangeRateResponse(self.name, 'result not found')
+        return defer.succeed(1.0 / json_response['data']['lbc_btc'])
+
+
 class GoogleBTCFeed(MarketFeed):
     def __init__(self):
         MarketFeed.__init__(
@@ -144,7 +162,7 @@ def get_default_market_feed(currency_pair):
     if currencies == ("USD", "BTC"):
         return GoogleBTCFeed()
     elif currencies == ("BTC", "LBC"):
-        return BittrexFeed()
+        return LBRYioFeed()
 
 
 class ExchangeRateManager(object):
