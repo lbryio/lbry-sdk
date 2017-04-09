@@ -9,18 +9,18 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
-  *
-  *
-
+  * Add `claim_id` parameter to `claim_show`
+  * Add `hex` field to claim responses for the raw claim value
+  * Add an `error` field to to file responses if an error occurs
+  
 ### Changed
   *
   *
   *
 
 ### Fixed
-  *
-  *
+  * `file_list` for files with bad signatures
+  * return None from resolve commands when nothing is found
   *
 
 ## [0.9.2rc9] - 2017-04-08
