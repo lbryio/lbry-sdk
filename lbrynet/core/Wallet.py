@@ -17,11 +17,12 @@ from lbryum.commands import known_commands, Commands
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.claim import ClaimDict
 from lbryschema.error import DecodeError
+from lbryschema.decode import smart_decode
 
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
-from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError
+from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError, UnknownNameError
 from lbrynet.db_migrator.migrate1to2 import UNSET_NOUT
 
 log = logging.getLogger(__name__)
@@ -450,8 +451,20 @@ class Wallet(object):
 
     ######
 
+    @defer.inlineCallbacks
     def get_claim(self, claim_id):
-        return self._get_claim_by_claimid(claim_id)
+        claim = yield self._get_claim_by_claimid(claim_id)
+        try:
+            decoded = smart_decode(claim['value'])
+            claim['value'] = decoded.claim_dict
+            claim['hex'] = decoded.serialized.encode('hex')
+        except DecodeError:
+            claim['hex'] = claim['value']
+            claim['value'] = None
+            claim['error'] = "Failed to decode"
+            log.warning("Failed to decode claim value for lbry://%s#%s", claim['name'],
+                        claim['claim_id'])
+        defer.returnValue(claim)
 
     def get_claimid(self, name, txid, nout):
         def _get_id_for_return(claim_id):
@@ -484,48 +497,82 @@ class Wallet(object):
                 break
         defer.returnValue(my_claim)
 
-    def get_claim_info(self, name, txid=None, nout=None):
-        if txid is None or nout is None:
-            return self.get_claim_by_name(name)
+    @defer.inlineCallbacks
+    def get_claim_info(self, name, txid=None, nout=None, claim_id=None):
+        if claim_id is not None:
+            results = yield self.get_claim(claim_id)
+            if results['name'] != name:
+                raise Exception("Name does not match claim referenced by id")
+        elif txid is None or nout is None:
+            results = yield self.get_claim_by_name(name)
         else:
-            return self.get_claim_by_outpoint(ClaimOutpoint(txid, nout))
+            results = yield self.get_claim_by_outpoint(ClaimOutpoint(txid, nout))
+        defer.returnValue(results)
 
     @defer.inlineCallbacks
     def _handle_claim_result(self, results):
+        if not results:
+            raise UnknownNameError("No results to return")
+
         if 'error' in results:
-            raise Exception(results['error'])
-        elif 'claim' in results:
+            if results['error'] == 'name is not claimed':
+                raise UnknownNameError(results['error'])
+            else:
+                raise Exception(results['error'])
+
+        if 'claim' in results:
             claim = results['claim']
             if 'has_signature' in claim and claim['has_signature']:
                 if not claim['signature_is_valid']:
-                    raise Exception("Claim has invalid signature")
+                    log.warning("lbry://%s#%s has an invalid signature",
+                                claim['name'], claim['claim_id'])
+                    decoded = ClaimDict.load_dict(claim['value'])
+                    claim_dict = decoded.claim_dict
+                    claim['value'] = claim_dict
+                    defer.returnValue(claim)
             try:
                 decoded = ClaimDict.load_dict(claim['value'])
                 claim_dict = decoded.claim_dict
                 outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
                 name = claim['name']
                 claim['value'] = claim_dict
+                claim['hex'] = decoded.serialized.encode('hex')
                 yield self._save_name_metadata(name, outpoint, decoded.source_hash)
                 yield self._update_claimid(claim['claim_id'], name, outpoint)
-            except (TypeError, ValueError, KeyError, DecodeError):
-                claim = claim['value']
-                log.warning(results)
+            except DecodeError:
+                claim['hex'] = claim['value']
+                claim['value'] = None
+                claim['error'] = "Failed to decode value"
+
             results = claim
+
         elif 'value' in results:
             if 'has_signature' in results and results['has_signature']:
                 if not results['signature_is_valid']:
-                    raise Exception("Claim has invalid signature")
+                    log.warning("lbry://%s#%s has an invalid signature",
+                                results['name'], results['claim_id'])
+                    decoded = ClaimDict.load_dict(results['value'])
+                    claim_dict = decoded.claim_dict
+                    results['value'] = claim_dict
+                    defer.returnValue(results)
             try:
                 decoded = ClaimDict.load_dict(results['value'])
                 claim_dict = decoded.claim_dict
+                claim_hex = decoded.serialized.encode('hex')
+                claim_err = None
                 outpoint = ClaimOutpoint(results['txid'], results['nout'])
                 name = results['name']
                 yield self._save_name_metadata(name, outpoint, decoded.source_hash)
                 yield self._update_claimid(results['claim_id'], name, outpoint)
-            except (TypeError, ValueError, KeyError, DecodeError):
-                claim_dict = results['value']
-                log.warning(results)
+            except DecodeError:
+                claim_dict = None
+                claim_hex = results['value']
+                claim_err = "Failed to decode value"
+            if claim_err:
+                results['error'] = claim_err
+            results['hex'] = claim_hex
             results['value'] = claim_dict
+
         log.info("get claim info lbry://%s#%s", results['name'], results['claim_id'])
         defer.returnValue(results)
 
@@ -565,8 +612,19 @@ class Wallet(object):
         claims = result['claims']
         claims_for_return = []
         for claim in claims:
-            claim['value'] = ClaimDict.load_dict(claim['value']).claim_dict
-            claims_for_return.append(claim)
+            try:
+                decoded = smart_decode(claim['value'])
+                claim['value'] = decoded.claim_dict
+                claim['hex'] = decoded.serialized.encode('hex')
+                claims_for_return.append(claim)
+            except DecodeError:
+                claim['hex'] = claim['value']
+                claim['value'] = None
+                claim['error'] = "Failed to decode"
+                log.warning("Failed to decode claim value for lbry://%s#%s", claim['name'],
+                            claim['claim_id'])
+                claims_for_return.append(claim)
+
         result['claims'] = claims_for_return
         defer.returnValue(result)
 
@@ -1070,7 +1128,7 @@ class LBRYumWallet(Wallet):
     def _get_claim_by_outpoint(self, txid, nout):
         return self._run_cmd_as_defer_to_thread('getclaimbyoutpoint', txid, nout)
 
-    def get_claim_by_claimid(self, claim_id):
+    def _get_claim_by_claimid(self, claim_id):
         return self._run_cmd_as_defer_to_thread('getclaimbyid', claim_id)
 
     def _get_balance_for_address(self, address):

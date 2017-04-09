@@ -908,9 +908,13 @@ class Daemon(AuthJSONRPCServer):
         else:
             size = None
             message = None
-        claim = yield self.session.wallet.get_claim_info(lbry_file.name,
-                                                         lbry_file.txid,
-                                                         lbry_file.nout)
+
+        if lbry_file.claim_id:
+            claim = yield self.session.wallet.get_claim(lbry_file.claim_id)
+        else:
+            claim = yield self.session.wallet.get_claim_info(lbry_file.name,
+                                                             lbry_file.txid,
+                                                             lbry_file.nout)
         try:
             metadata = claim['value']
         except:
@@ -920,7 +924,16 @@ class Daemon(AuthJSONRPCServer):
         except TypeError:
             outpoint = None
 
-        defer.returnValue({
+        if claim and 'has_signature' in claim:
+            has_signature = claim['has_signature']
+        else:
+            has_signature = None
+        if claim and 'signature_is_valid' in claim:
+            signature_is_valid = claim['signature_is_valid']
+        else:
+            signature_is_valid = None
+
+        result = {
             'completed': lbry_file.completed,
             'file_name': lbry_file.file_name,
             'download_directory': lbry_file.download_directory,
@@ -940,7 +953,12 @@ class Daemon(AuthJSONRPCServer):
             'written_bytes': written_bytes,
             'message': message,
             'metadata': metadata
-        })
+        }
+        if has_signature is not None:
+            result['has_signature'] = has_signature
+        if signature_is_valid is not None:
+            result['signature_is_valid'] = signature_is_valid
+        defer.returnValue(result)
 
     @defer.inlineCallbacks
     def _get_lbry_file(self, search_by, val, return_json=False, full_status=False):
@@ -1374,7 +1392,7 @@ class Daemon(AuthJSONRPCServer):
         """
         return self.jsonrpc_claim_show(**kwargs)
 
-    def jsonrpc_claim_show(self, name, txid=None, nout=None):
+    def jsonrpc_claim_show(self, name, txid=None, nout=None, claim_id=None):
 
         """
         Resolve claim info from a LBRY name
@@ -1383,6 +1401,7 @@ class Daemon(AuthJSONRPCServer):
             'name': (str) name to look up, do not include lbry:// prefix
             'txid'(optional): (str) if specified, look for claim with this txid
             'nout'(optional): (int) if specified, look for claim with this nout
+            'claim_id'(optional): (str) if specified, look for claim with this claim_id
         Returns:
             (dict) Dictionary contaning claim info, (bool) false if claim is not
                 resolvable
@@ -1398,7 +1417,7 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        d = self.session.wallet.get_claim_info(name, txid, nout)
+        d = self.session.wallet.get_claim_info(name, txid, nout, claim_id)
         d.addCallback(format_json_out_amount_as_float)
         d.addCallback(lambda r: self._render_response(r))
         return d
