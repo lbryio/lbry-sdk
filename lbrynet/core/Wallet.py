@@ -643,6 +643,7 @@ class Wallet(object):
         elif (parsed_channel_name.path or parsed_channel_name.claim_id or
               parsed_channel_name.bid_position or parsed_channel_name.claim_sequence):
             raise Exception("New channel claim should have no fields other than name")
+        log.info("Preparing to make certificate claim for %s", channel_name)
         return self._claim_certificate(parsed_channel_name.name, amount)
 
     @defer.inlineCallbacks

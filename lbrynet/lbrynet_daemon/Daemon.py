@@ -1642,7 +1642,7 @@ class Daemon(AuthJSONRPCServer):
         Generate a publisher key and create a new certificate claim
 
         Args:
-            'name': (str) '@' prefixed name
+            'channel_name': (str) '@' prefixed name
             'amount': (float) amount to claim name
 
         Returns:
@@ -1657,6 +1657,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
+        log.info("Claimed a new channel! Result: %s", result)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
