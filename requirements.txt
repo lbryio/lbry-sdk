@@ -1,5 +1,5 @@
 Twisted==16.6.0
-appdirs==1.4.0
+appdirs==1.4.3
 argparse==1.2.1
 base58==0.2.2
 colorama==0.3.7
