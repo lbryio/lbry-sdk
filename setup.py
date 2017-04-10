@@ -11,7 +11,9 @@ from setuptools import setup, find_packages
 # dependencies of the lbrynet library.  requirements.txt includes
 # dependencies of dependencies and specific versions that we know
 # all work together.
-# See https://packaging.python.org/requirements/ for more details.
+#
+# See https://packaging.python.org/requirements/  and
+# https://caremad.io/posts/2013/07/setup-vs-requirement/  for more details.
 requires = [
     'Twisted',
     'appdirs',

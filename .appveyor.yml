@@ -1,13 +1,37 @@
 version: 1.0.{build}
 
+environment:
+  GH_TOKEN:
+    secure: LiI5jyuHUw6XbH4kC3gP1HX4P/v4rwD/gCNtaFhQu2AvJz1/1wALkp5ECnIxRyS
+#  key_pass:
+#    secure: u6DydPcdrUJlxGL9uc7yQRYG8+5rY6aAEE9nfCSzFyNzZlX9NniOp8Uh5ZKQqX7bGEngLI6ipbLfiJvn0XFnhbn2iTkOuMqOXVJVOehvwlQ=
+#  pfx_key:
+#    secure: 1mwqyRy7hDqDjDK+TIAoaXyXzpNgwruFNA6TPkinUcVM7A+NLD33RQLnfnwVy+R5ovD2pUfhQ6+N0Fqebv6tZh436LIEsock+6IOdpgFwrg=
 
-notifications:
-  - provider: Slack
-    incoming_webhook:
-      secure: LuxwG5OZnnA//gmSXzCKu8/FRqYjCgGfVFqajSsGHeQ1HQNp7rYNhQpsO8/3PK63xKJj3wzt86DJekf9q9Q5OcHa9AHXUQbEveX0psd7elw=
+#
+#notifications:
+#  - provider: Slack
+#    incoming_webhook:
+#      secure: LuxwG5OZnnA//gmSXzCKu8/FRqYjCgGfVFqajSsGHeQ1HQNp7rYNhQpsO8/3PK63xKJj3wzt86DJekf9q9Q5OcHa9AHXUQbEveX0psd7elw=
 
 
 clone_folder: c:\projects\lbry
 
 build_script:
-  - echo "Not currently building on appveyor"
+- cd C:\projects\lbry\build\
+- python set_version.py
+- python set_build.py
+- ps: .\build.ps1
+- python zip_daemon.py
+- python release_on_tag.py
+- dir .\build
+- dir .\dist
+
+
+artifacts:
+- path: build\dist\*.zip
+  name: lbrynet-daemon
+#- path: build/exe.win32-2.7/
+#  name: lbry-portable
+#- path: packaging/windows/lbry-win32-app/LBRY-URI.reg
+#  name: LBRY-URI
