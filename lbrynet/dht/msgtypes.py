@@ -7,9 +7,8 @@
 # The docstrings in this module contain epytext markup; API documentation
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
-import hashlib
-import random
 from lbrynet.core.utils import generate_id
+
 
 class Message(object):
     """ Base class for messages - all "unknown" messages use this class """
