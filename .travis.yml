@@ -4,7 +4,8 @@ language: python
 python: 2.7
 
 addons:
-  srcclr: true
+    srcclr:
+        debug: true
 
 notifications:
   slack:
