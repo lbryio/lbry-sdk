@@ -175,6 +175,7 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.assertEqual(0, self.TEST_PEER.success_count)
         self.assertEqual(1, self.TEST_PEER.down_count)
 
+    @unittest.SkipTest
     @defer.inlineCallbacks
     def test_parallel_connections(self):
         # Test to see that we make two new connections at a manage call,
