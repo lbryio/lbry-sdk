@@ -684,7 +684,10 @@ class Daemon(AuthJSONRPCServer):
         def eb():
             if not finished_d.called:
                 finished_d.errback(Exception("Blob (%s) download timed out" %
-                                             blob_hash[:SHORT_ID_LEN]))
+                                              blob_hash[:SHORT_ID_LEN]))
+
+        if not blob_hash:
+            raise Exception("Nothing to download")
 
         rate_manager = rate_manager or self.session.payment_rate_manager
         timeout = timeout or 30
@@ -2414,12 +2417,12 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @defer.inlineCallbacks
-    def jsonrpc_get_availability(self, name, sd_timeout=None, peer_timeout=None):
+    def jsonrpc_get_availability(self, uri, sd_timeout=None, peer_timeout=None):
         """
-        Get stream availability for a winning claim
+        Get stream availability for lbry uri
 
         Args:
-            'name' : (str) lbry name
+            'uri' : (str) lbry uri
             'sd_timeout' (optional): (int) sd blob download timeout
             'peer_timeout' (optional): (int) how long to look for peers
 
@@ -2443,7 +2446,16 @@ class Daemon(AuthJSONRPCServer):
             sd_blob.close_read_handle(sd_blob_file)
             return decoded_sd_blob
 
-        metadata = yield self._resolve_name(name)
+        try:
+            resolved = yield self.session.wallet.resolve_uri(uri)
+        except Exception:
+            defer.returnValue(None)
+
+        if resolved and 'claim' in resolved:
+            metadata = resolved['claim']['value']
+        else:
+            defer.returnValue(None)
+
         sd_hash = utils.get_sd_hash(metadata)
         sd_timeout = sd_timeout or conf.settings['sd_download_timeout']
         peer_timeout = peer_timeout or conf.settings['peer_search_timeout']
@@ -2455,6 +2467,7 @@ class Daemon(AuthJSONRPCServer):
         except NoSuchSDHash:
             need_sd_blob = True
             log.info("Need sd blob")
+
         blob_hashes = [blob.blob_hash for blob in blobs]
         if need_sd_blob:
             # we don't want to use self._download_descriptor here because it would create a stream
@@ -2462,6 +2475,7 @@ class Daemon(AuthJSONRPCServer):
                 sd_blob = yield self._download_blob(sd_hash, timeout=sd_timeout)
             except Exception as err:
                 response = yield self._render_response(0.0)
+                log.warning(err)
                 defer.returnValue(response)
             decoded = read_sd_blob(sd_blob)
             blob_hashes = [blob.get("blob_hash") for blob in decoded['blobs']

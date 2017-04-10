@@ -14,7 +14,7 @@ at anytime.
   * Add an `error` field to to file responses if an error occurs
   
 ### Changed
-  *
+  * Use `uri` instead of `name` in `get_availability`
   *
   *
 

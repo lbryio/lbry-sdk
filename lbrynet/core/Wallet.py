@@ -534,7 +534,7 @@ class Wallet(object):
                     claim['value'] = claim_dict
                     defer.returnValue(claim)
             try:
-                decoded = ClaimDict.load_dict(claim['value'])
+                decoded = smart_decode(claim['value'])
                 claim_dict = decoded.claim_dict
                 outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
                 name = claim['name']
@@ -593,6 +593,8 @@ class Wallet(object):
                 claims_for_return.append(formatted)
             resolve_results['claims_in_channel'] = claims_for_return
             result = resolve_results
+        elif 'error' in resolve_results:
+            raise Exception(resolve_results['error'])
         else:
             result = None
         defer.returnValue(result)
