@@ -454,6 +454,9 @@ class Wallet(object):
     @defer.inlineCallbacks
     def get_claim(self, claim_id):
         claim = yield self._get_claim_by_claimid(claim_id)
+        if not claim:
+            log.warning("Claim does not exist: %s", claim_id)
+            defer.returnValue(None)
         try:
             decoded = smart_decode(claim['value'])
             claim['value'] = decoded.claim_dict
