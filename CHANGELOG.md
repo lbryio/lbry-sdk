@@ -21,7 +21,7 @@ at anytime.
 ### Fixed
   * `file_list` for files with bad signatures
   * return None from resolve commands when nothing is found
-  *
+  * return lbry files with claims that are abandoned
 
 ## [0.9.2rc9] - 2017-04-08
 ### Added

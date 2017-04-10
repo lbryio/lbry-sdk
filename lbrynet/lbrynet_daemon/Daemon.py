@@ -909,19 +909,15 @@ class Daemon(AuthJSONRPCServer):
             size = None
             message = None
 
-        if lbry_file.claim_id:
-            claim = yield self.session.wallet.get_claim(lbry_file.claim_id)
-        else:
-            claim = yield self.session.wallet.get_claim_info(lbry_file.name,
-                                                             lbry_file.txid,
-                                                             lbry_file.nout)
-        try:
+        claim = yield self.session.wallet.get_claim(lbry_file.claim_id)
+
+        if claim and 'value' in claim:
             metadata = claim['value']
-        except:
+        else:
             metadata = None
-        try:
+        if lbry_file.txid and lbry_file.nout is not None:
             outpoint = repr(ClaimOutpoint(lbry_file.txid, lbry_file.nout))
-        except TypeError:
+        else:
             outpoint = None
 
         if claim and 'has_signature' in claim:
