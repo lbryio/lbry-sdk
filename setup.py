@@ -19,7 +19,7 @@ requires = [
     'envparse',
     'jsonrpc',
     'jsonschema',
-    'lbryum>=2.7.14',
+    'lbryum>=2.7.15',
     'lbryschema>=0.0.2',
     'miniupnpc',
     'pycrypto',
