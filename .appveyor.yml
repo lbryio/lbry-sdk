@@ -24,14 +24,8 @@ build_script:
 - ps: .\build.ps1
 - python zip_daemon.py
 - python release_on_tag.py
-- dir .\build
-- dir .\dist
 
 
 artifacts:
 - path: build\dist\*.zip
   name: lbrynet-daemon
-#- path: build/exe.win32-2.7/
-#  name: lbry-portable
-#- path: packaging/windows/lbry-win32-app/LBRY-URI.reg
-#  name: LBRY-URI
