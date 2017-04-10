@@ -9,7 +9,7 @@
 
 import hashlib
 import random
-
+from lbrynet.core.utils import generate_id
 
 class Message(object):
     """ Base class for messages - all "unknown" messages use this class """
@@ -24,9 +24,7 @@ class RequestMessage(Message):
 
     def __init__(self, nodeID, method, methodArgs, rpcID=None):
         if rpcID == None:
-            hash = hashlib.sha384()
-            hash.update(str(random.getrandbits(255)))
-            rpcID = hash.digest()
+            rpcID = generate_id()
         Message.__init__(self, rpcID, nodeID)
         self.request = method
         self.args = methodArgs

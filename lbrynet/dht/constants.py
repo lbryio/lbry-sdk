@@ -46,7 +46,10 @@ peer_request_timeout = 10
 checkRefreshInterval = refreshTimeout / 5
 
 #: Max size of a single UDP datagram, in bytes. If a message is larger than this, it will
-#: be spread accross several UDP packets.
+#: be spread across several UDP packets.
 udpDatagramMaxSize = 8192  # 8 KB
 
-key_bits = 384
+from lbrynet.core.cryptoutils import get_lbry_hash_obj
+
+h = get_lbry_hash_obj()
+key_bits = h.digest_size * 8  # 384 bits

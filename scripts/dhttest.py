@@ -22,18 +22,18 @@
 
 
 import binascii
-import hashlib
 import random
 import twisted.internet.reactor
 from lbrynet.dht.node import Node
+from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 # The Entangled DHT node; instantiated in the main() method
 node = None
 
 # The key to use for this example when storing/retrieving data
-hash = hashlib.sha384()
-hash.update("key")
-KEY = hash.digest()
+h = get_lbry_hash_obj()
+h.update("key")
+KEY = h.digest()
 # The value to store
 VALUE = random.randint(10000, 20000)
 

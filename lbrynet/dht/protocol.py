@@ -108,6 +108,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)
 
+        log.debug("DHT SEND: %s(%s)", method, args)
+
         df = defer.Deferred()
         if rawResponse:
             df._rpcRawResponse = True
@@ -163,7 +165,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             self._handleRPC(remoteContact, message.id, message.request, message.args)
         elif isinstance(message, msgtypes.ResponseMessage):
             # Find the message that triggered this response
-            if self._sentMessages.has_key(message.id):
+            if message.id in self._sentMessages:
                 # Cancel timeout timer for this RPC
                 df, timeoutCall = self._sentMessages[message.id][1:3]
                 timeoutCall.cancel()
@@ -296,6 +298,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         func = getattr(self._node, method, None)
         if callable(func) and hasattr(func, 'rpcmethod'):
             # Call the exposed Node method and return the result to the deferred callback chain
+            log.debug("DHT RECV CALL %s with args %s", method, args)
             try:
                 kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
                 result = func(*args, **kwargs)
@@ -351,7 +354,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
         Will only be called once, after all ports are disconnected.
         """
-        log.info('Stopping dht')
+        log.info('Stopping DHT')
         for delayed_call in self._call_later_list.values():
             try:
                 delayed_call.cancel()
@@ -363,3 +366,4 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 # exceptions.AttributeError: 'Port' object has no attribute 'socket'
                 # to happen on shutdown
                 # reactor.iterate()
+        log.info('DHT stopped')

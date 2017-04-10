@@ -160,7 +160,6 @@ class TreeRoutingTable(RoutingTable):
                 # be dropped, and the new contact added to the tail of
                 # the k-bucket. This implementation follows section
                 # 2.2 regarding this point.
-                headContact = self._buckets[bucketIndex]._contacts[0]
 
                 def replaceContact(failure):
                     """ Callback for the deferred PING RPC to see if the head
@@ -181,8 +180,8 @@ class TreeRoutingTable(RoutingTable):
                     self.addContact(contact)
 
                 # Ping the least-recently seen contact in this k-bucket
-                headContact = self._buckets[bucketIndex]._contacts[0]
-                df = headContact.ping()
+                head_contact = self._buckets[bucketIndex]._contacts[0]
+                df = head_contact.ping()
                 # If there's an error (i.e. timeout), remove the head
                 # contact, and append the new one
                 df.addErrback(replaceContact)

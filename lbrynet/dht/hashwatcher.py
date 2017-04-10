@@ -2,8 +2,8 @@ from collections import Counter
 import datetime
 
 
-class HashWatcher():
-    def __init__(self, ttl=600):
+class HashWatcher(object):
+    def __init__(self):
         self.ttl = 600
         self.hashes = []
         self.next_tick = None

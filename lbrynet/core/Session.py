@@ -12,7 +12,6 @@ from lbrynet.core.PaymentRateManager import BasePaymentRateManager, NegotiatedPa
 from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
 from twisted.internet import threads, defer
 
-
 log = logging.getLogger(__name__)
 
 
@@ -36,6 +35,7 @@ class Session(object):
     upnp, which opens holes in compatible firewalls so that remote
     peers can connect to this peer.
     """
+
     def __init__(self, blob_data_payment_rate, db_dir=None,
                  lbryid=None, peer_manager=None, dht_node_port=None,
                  known_dht_nodes=None, peer_finder=None,
@@ -251,10 +251,7 @@ class Session(object):
 
         from twisted.internet import reactor
 
-        log.debug("Starting the dht")
-
-        def match_port(h, p):
-            return h, p
+        log.info("Starting DHT")
 
         def join_resolved_addresses(result):
             addresses = []
@@ -272,7 +269,7 @@ class Session(object):
         ds = []
         for host, port in self.known_dht_nodes:
             d = reactor.resolve(host)
-            d.addCallback(match_port, port)
+            d.addCallback(lambda h: (h, port))  # match host to port
             ds.append(d)
 
         self.dht_node = self.dht_node_class(
@@ -323,6 +320,7 @@ class Session(object):
 
     def _unset_upnp(self):
         log.info("Unsetting upnp for %s", self)
+
         def threaded_unset_upnp():
             u = miniupnpc.UPnP()
             num_devices_found = u.discover()

@@ -44,7 +44,7 @@ def datetime_obj(*args, **kwargs):
 
 
 def call_later(delay, func, *args, **kwargs):
-    # Import here to ensure that it gets called after installing a reator
+    # Import here to ensure that it gets called after installing a reactor
     # see: http://twistedmatrix.com/documents/current/core/howto/choosing-reactor.html
     from twisted.internet import reactor
     return reactor.callLater(delay, func, *args, **kwargs)
@@ -87,7 +87,7 @@ def obfuscate(plain):
     return base64.b64encode(plain).encode('rot13')
 
 
-def check_connection(server="www.lbry.io", port=80):
+def check_connection(server="lbry.io", port=80):
     """Attempts to open a socket to server:port and returns True if successful."""
     try:
         log.debug('Checking connection to %s:%s', server, port)

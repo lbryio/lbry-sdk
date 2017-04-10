@@ -6,11 +6,9 @@
 #
 # The docstrings in this module contain epytext markup; API documentation
 # may be created by processing this file with epydoc: http://epydoc.sf.net
-import argparse
 import binascii
 import hashlib
 import operator
-import random
 import struct
 import time
 
@@ -23,9 +21,12 @@ import protocol
 import twisted.internet.reactor
 import twisted.internet.threads
 import twisted.python.log
+
 from contact import Contact
 from hashwatcher import HashWatcher
 import logging
+
+from lbrynet.core.utils import generate_id
 
 log = logging.getLogger(__name__)
 
@@ -512,14 +513,14 @@ class Node(object):
         """
         # Get the sender's ID (if any)
         if '_rpcNodeID' in kwargs:
-            rpcSenderID = kwargs['_rpcNodeID']
+            rpc_sender_id = kwargs['_rpcNodeID']
         else:
-            rpcSenderID = None
-        contacts = self._routingTable.findCloseNodes(key, constants.k, rpcSenderID)
-        contactTriples = []
+            rpc_sender_id = None
+        contacts = self._routingTable.findCloseNodes(key, constants.k, rpc_sender_id)
+        contact_triples = []
         for contact in contacts:
-            contactTriples.append((contact.id, contact.address, contact.port))
-        return contactTriples
+            contact_triples.append((contact.id, contact.address, contact.port))
+        return contact_triples
 
     @rpcmethod
     def findValue(self, key, **kwargs):
@@ -536,8 +537,8 @@ class Node(object):
         if self._dataStore.hasPeersForBlob(key):
             rval = {key: self._dataStore.getPeersForBlob(key)}
         else:
-            contactTriples = self.findNode(key, **kwargs)
-            rval = {'contacts': contactTriples}
+            contact_triples = self.findNode(key, **kwargs)
+            rval = {'contacts': contact_triples}
         if '_rpcNodeContact' in kwargs:
             contact = kwargs['_rpcNodeContact']
             compact_ip = contact.compact_ip()
@@ -551,9 +552,7 @@ class Node(object):
         @return: A globally unique n-bit pseudo-random identifier
         @rtype: str
         """
-        hash = hashlib.sha384()
-        hash.update(str(random.getrandbits(255)))
-        return hash.digest()
+        return generate_id()
 
     def _iterativeFind(self, key, startupShortlist=None, rpc='findNode'):
         """ The basic Kademlia iterative lookup operation (for nodes/values)
@@ -583,11 +582,8 @@ class Node(object):
                  return a list of the k closest nodes to the specified key
         @rtype: twisted.internet.defer.Deferred
         """
-        if rpc != 'findNode':
-            findValue = True
-        else:
-            findValue = False
-        shortlist = []
+        findValue = rpc != 'findNode'
+
         if startupShortlist == None:
             shortlist = self._routingTable.findCloseNodes(key, constants.alpha)
             if key != self.id:
@@ -903,30 +899,3 @@ class ExpensiveSort(object):
     def _removeValue(self):
         for item in self.to_sort:
             delattr(item, self.attr)
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Launch a dht node")
-    parser.add_argument("udp_port", help="The UDP port on which the node will listen",
-                        type=int)
-    parser.add_argument("known_node_ip",
-                        help="The IP of a known node to be used to bootstrap into the network",
-                        nargs='?')
-    parser.add_argument("known_node_port",
-                        help="The port of a known node to be used to bootstrap into the network",
-                        nargs='?', default=4000, type=int)
-
-    args = parser.parse_args()
-
-    if args.known_node_ip:
-        known_nodes = [(args.known_node_ip, args.known_node_port)]
-    else:
-        known_nodes = []
-
-    node = Node(udpPort=args.udp_port)
-    node.joinNetwork(known_nodes)
-    twisted.internet.reactor.run()
-
-
-if __name__ == '__main__':
-    main()
