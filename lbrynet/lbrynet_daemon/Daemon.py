@@ -1451,7 +1451,10 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        resolved = yield self.session.wallet.resolve_uri(uri)
+        try:
+            resolved = yield self.session.wallet.resolve_uri(uri)
+        except Exception:
+            resolved = None
         results = yield self._render_response(resolved)
         defer.returnValue(results)
 
