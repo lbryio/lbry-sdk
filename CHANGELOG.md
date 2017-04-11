@@ -17,6 +17,7 @@ at anytime.
   * Use `uri` instead of `name` in `get_availability`
   * Add `channel_name` to claim and file responses where applicable
   * Return None (instead of errors) if a uri cannot be resolved
+  * Use `uri` instead of `name` for `stream_cost_estimate`, update cost estimate for lbryschema
 
 ### Fixed
   * `file_list` for files with bad signatures

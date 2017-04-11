@@ -16,6 +16,8 @@ from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
+from lbryschema.claim import ClaimDict
+
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION
 from lbrynet import __version__ as LBRYNET_VERSION
@@ -832,15 +834,15 @@ class Daemon(AuthJSONRPCServer):
             return 0.0
         return size / (10 ** 6) * conf.settings['data_rate']
 
-    def get_est_cost_using_known_size(self, name, size):
+    def get_est_cost_using_known_size(self, uri, size):
         """
         Calculate estimated LBC cost for a stream given its size in bytes
         """
 
         cost = self._get_est_cost_from_stream_size(size)
 
-        d = self._resolve_name(name)
-        d.addCallback(lambda metadata: self._add_key_fee_to_est_data_cost(metadata, cost))
+        d = self.session.wallet.resolve_uri(uri)
+        d.addCallback(lambda response: self._add_key_fee_to_est_data_cost(response, cost))
         return d
 
     def get_est_cost_from_sd_hash(self, sd_hash):
@@ -867,29 +869,39 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda data_cost: self._add_key_fee_to_est_data_cost(metadata, data_cost))
         return d
 
-    def _add_key_fee_to_est_data_cost(self, metadata, data_cost):
-        fee = self.exchange_rate_manager.to_lbc(metadata.get('fee', None))
+    def _add_key_fee_to_est_data_cost(self, claim_response, data_cost):
+        fee = self.exchange_rate_manager.to_lbc(claim_response['stream']['metadata'].get('fee',
+                                                                                         None))
         fee_amount = 0.0 if fee is None else fee.amount
         return data_cost + fee_amount
 
     @defer.inlineCallbacks
-    def get_est_cost_from_name(self, name):
+    def get_est_cost_from_uri(self, uri):
         """
         Resolve a name and return the estimated stream cost
         """
-        metadata = yield self._resolve_name(name)
-        cost = yield self._get_est_cost_from_metadata(metadata, name)
-        defer.returnValue(cost)
+        try:
+            claim_response = yield self.session.wallet.resolve_uri(uri)
+        except Exception:
+            claim_response = None
 
-    def get_est_cost(self, name, size=None):
+        if claim_response and 'claim' in claim_response:
+            cost = yield self._get_est_cost_from_metadata(ClaimDict.load_dict(
+                claim_response['claim']['value']), uri)
+            rounded = round(cost, 5)
+            defer.returnValue(rounded)
+        else:
+            defer.returnValue(None)
+
+    def get_est_cost(self, uri, size=None):
         """Get a cost estimate for a lbry stream, if size is not provided the
         sd blob will be downloaded to determine the stream size
 
         """
 
         if size is not None:
-            return self.get_est_cost_using_known_size(name, size)
-        return self.get_est_cost_from_name(name)
+            return self.get_est_cost_using_known_size(uri, size)
+        return self.get_est_cost_from_uri(uri)
 
     @defer.inlineCallbacks
     def _get_lbry_file_dict(self, lbry_file, full_status=False):
@@ -1634,7 +1646,7 @@ class Daemon(AuthJSONRPCServer):
         return self.jsonrpc_stream_cost_estimate(**kwargs)
 
     @defer.inlineCallbacks
-    def jsonrpc_stream_cost_estimate(self, name, size=None):
+    def jsonrpc_stream_cost_estimate(self, uri, size=None):
         """
         Get estimated cost for a lbry stream
 
@@ -1645,7 +1657,7 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (float) Estimated cost in lbry credits
         """
-        cost = yield self.get_est_cost(name, size)
+        cost = yield self.get_est_cost(uri, size)
         defer.returnValue(cost)
 
     @AuthJSONRPCServer.auth_required
