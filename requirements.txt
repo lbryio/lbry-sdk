@@ -11,7 +11,7 @@ jsonrpc==1.2
 jsonrpclib==0.1.7
 jsonschema==2.5.1
 git+https://github.com/lbryio/lbryschema.git@v0.0.2#egg=lbryschema
-git+https://github.com/lbryio/lbryum.git@v2.7.16#egg=lbryum
+git+https://github.com/lbryio/lbryum.git@v2.7.17#egg=lbryum
 miniupnpc==1.9
 pbkdf2==1.3
 protobuf==3.0.0
