@@ -1,10 +1,12 @@
 import mock
+import json
 import requests
 from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 from tests import util
 from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.trial import unittest
+from lbryschema.decode import smart_decode
 from lbrynet.lbrynet_daemon import Daemon
 from lbrynet.core import Session, PaymentRateManager, Wallet
 from lbrynet.lbrynet_daemon.Daemon import Daemon as LBRYDaemon
@@ -59,6 +61,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     }
     daemon = LBRYDaemon(None, None)
     daemon.session = mock.Mock(spec=Session.Session)
+    daemon.session.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
     daemon.exchange_rate_manager = ExchangeRateManager.DummyExchangeRateManager(rates)
     base_prm = PaymentRateManager.BasePaymentRateManager(rate=data_rate)
     prm = PaymentRateManager.NegotiatedPaymentRateManager(base_prm, DummyBlobAvailabilityTracker(),
@@ -66,6 +69,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     daemon.session.payment_rate_manager = prm
     metadata = {
         "author": "fake author",
+        "language": "en",
         "content_type": "fake/format",
         "description": "fake description",
         "license": "fake license",
@@ -80,8 +84,9 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     }
     if with_fee:
         metadata.update(
-            {"fee": {"currency":"USD", "address":"bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}})
+            {"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
     daemon._resolve_name = lambda _: defer.succeed(metadata)
+    daemon.session.wallet.resolve_uri = lambda _: defer.succeed(smart_decode(json.dumps(metadata)))
     return daemon
 
 
@@ -94,6 +99,7 @@ class TestCostEst(unittest.TestCase):
         size = 10000000
         correct_result = 4.5
         daemon = get_test_daemon(generous=True, with_fee=True)
+        print daemon.get_est_cost("test", size)
         self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
 
     def test_fee_and_ungenerous_data(self):
