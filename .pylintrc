@@ -65,7 +65,61 @@ confidence=
 # --enable=similarities". If you want to run only the classes checker, but have
 # no Warning level messages displayed, use"--disable=all --enable=classes
 # --disable=W"
-disable=import-star-module-level,old-octal-literal,oct-method,print-statement,unpacking-in-except,parameter-unpacking,backtick,old-raise-syntax,old-ne-operator,long-suffix,dict-view-method,dict-iter-method,metaclass-assignment,next-method-called,raising-string,indexing-exception,raw_input-builtin,long-builtin,file-builtin,execfile-builtin,coerce-builtin,cmp-builtin,buffer-builtin,basestring-builtin,apply-builtin,filter-builtin-not-iterating,using-cmp-argument,useless-suppression,range-builtin-not-iterating,suppressed-message,no-absolute-import,old-division,cmp-method,reload-builtin,zip-builtin-not-iterating,intern-builtin,unichr-builtin,reduce-builtin,standarderror-builtin,unicode-builtin,xrange-builtin,coerce-method,delslice-method,getslice-method,setslice-method,input-builtin,round-builtin,hex-method,nonzero-method,map-builtin-not-iterating
+disable=
+  anomalous-backslash-in-string,
+  arguments-differ,
+  attribute-defined-outside-init,
+  bad-continuation,
+  bare-except,
+  broad-except,
+  cell-var-from-loop,
+  consider-iterating-dictionary,
+  cyclic-import,
+  dangerous-default-value,
+  duplicate-code,
+  exec-used,
+  fixme,
+  global-statement,
+  inherit-non-class,
+  invalid-name,
+  locally-disabled,
+  logging-not-lazy,
+  missing-docstring,
+  multiple-imports,
+  no-init,
+  no-member,
+  no-self-use,
+  old-style-class,
+  pointless-string-statement,
+  protected-access,
+  redefined-builtin,
+  redefined-outer-name,
+  redefined-variable-type,
+  relative-import,
+  signature-differs,
+  singleton-comparison,
+  super-init-not-called,
+  too-few-public-methods,
+  too-many-arguments,
+  too-many-branches,
+  too-many-instance-attributes,
+  too-many-lines,
+  too-many-locals,
+  too-many-nested-blocks,
+  too-many-public-methods,
+  too-many-return-statements,
+  too-many-statements,
+  trailing-newlines,
+  undefined-loop-variable,
+  ungrouped-imports,
+  unidiomatic-typecheck,
+  unnecessary-lambda,
+  unused-argument,
+  unused-variable,
+  useless-else-on-loop,
+  wildcard-import,
+  wrong-import-order,
+  wrong-import-position
 
 
 [REPORTS]
@@ -294,7 +348,8 @@ ignore-mixin-members=yes
 # (useful for modules/projects where namespaces are manipulated during runtime
 # and thus existing member attributes cannot be deduced by static analysis. It
 # supports qualified module names, as well as Unix pattern matching.
-ignored-modules=twisted.internet.reactor,leveldb
+ignored-modules=twisted.internet.reactor,leveldb,distutils
+# Ignoring distutils because: https://github.com/PyCQA/pylint/issues/73
 
 # List of classes names for which member attributes should not be checked
 # (useful for classes with attributes dynamically set). This supports can work

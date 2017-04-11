@@ -10,7 +10,7 @@ def main():
     build = get_build()
     root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     with open(os.path.join(root_dir, 'lbrynet', 'build_type.py'), 'w') as f:
-        f.write('BUILD = "{}"'.format(build))
+        f.write("BUILD = '{}'\n".format(build))
 
 
 def get_build():
