@@ -414,9 +414,6 @@ class AuthJSONRPCServer(AuthorizedBase):
             return True
         allowed_server, allowed_port = self.get_server_port(allowed_origin)
         return (allowed_server, allowed_port) == (server, port)
-        return (
-            server == conf.settings['api_host'] and
-            port == conf.settings['api_port'])
 
     def get_server_port(self, origin):
         parsed = urlparse.urlparse(origin)

@@ -239,9 +239,9 @@ class RequestHelper(object):
 
 
 def _handle_incoming_blob(response_dict, peer, request):
-    if not request.response_identifier in response_dict:
+    if request.response_identifier not in response_dict:
         return InvalidResponseError("response identifier not in response")
-    if not type(response_dict[request.response_identifier]) == dict:
+    if type(response_dict[request.response_identifier]) != dict:
         return InvalidResponseError("response not a dict. got %s" %
                                     type(response_dict[request.response_identifier]))
     response = response_dict[request.response_identifier]
@@ -255,14 +255,14 @@ def _handle_incoming_blob(response_dict, peer, request):
             return InvalidResponseError("Got an unknown error from the peer: %s" %
                                         (response['error'],))
     else:
-        if not 'blob_hash' in response:
+        if 'blob_hash' not in response:
             return InvalidResponseError("Missing the required field 'blob_hash'")
         if not response['blob_hash'] == request.request_dict['requested_blob']:
             return InvalidResponseError(
                 "Incoming blob does not match expected. Incoming: %s. Expected: %s" %
                 (response['blob_hash'], request.request_dict['requested_blob'])
             )
-        if not 'length' in response:
+        if 'length' not in response:
             return InvalidResponseError("Missing the required field 'length'")
         if not request.blob.set_length(response['length']):
             return InvalidResponseError("Could not set the length of the blob")
@@ -358,7 +358,7 @@ class AvailabilityRequest(RequestHelper):
 class PriceRequest(RequestHelper):
     """Ask a peer if a certain price is acceptable"""
     def can_make_request(self):
-        if len(self.available_blobs) and not self.protocol in self.protocol_prices:
+        if len(self.available_blobs) and self.protocol not in self.protocol_prices:
             return self.get_rate() is not None
         return False
 

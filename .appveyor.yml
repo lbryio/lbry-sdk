@@ -17,13 +17,18 @@ environment:
 
 clone_folder: c:\projects\lbry
 
+test_script:
+- cd C:\projects\lbry\
+- pip install cython
+- pip install mock pylint unqlite
+- pylint lbrynet
+- python -m twisted.trial tests # avoids having to set PYTHONPATH=. (see https://twistedmatrix.com/trac/ticket/9035)
+#- rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
+
+
 build_script:
 - cd C:\projects\lbry\build\
-- python set_version.py
-- python set_build.py
 - ps: .\build.ps1
-- python zip_daemon.py
-- python release_on_tag.py
 
 
 artifacts:

@@ -21,9 +21,6 @@ class DHTPeerFinder(object):
         self.next_manage_call = None
 
     def run_manage_loop(self):
-
-        from twisted.internet import reactor
-
         self._manage_peers()
         self.next_manage_call = reactor.callLater(60, self.run_manage_loop)
 

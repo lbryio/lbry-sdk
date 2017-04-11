@@ -38,6 +38,6 @@ install:
 script:
   - pip install cython
   - pip install mock pylint unqlite
-  - ./run_pylint.sh
-  - ./run_tests.sh
+  - pylint lbrynet
+  - PYTHONPATH=. trial tests
   - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
