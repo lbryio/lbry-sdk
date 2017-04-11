@@ -15,8 +15,8 @@ at anytime.
   
 ### Changed
   * Use `uri` instead of `name` in `get_availability`
-  *
-  *
+  * Add `channel_name` to claim and file responses where applicable
+  * Return None (instead of errors) if a uri cannot be resolved
 
 ### Fixed
   * `file_list` for files with bad signatures
