@@ -89,7 +89,6 @@ disable=
   no-init,
   no-member,
   no-self-use,
-  old-style-class,
   pointless-string-statement,
   protected-access,
   redefined-builtin,

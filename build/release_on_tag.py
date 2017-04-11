@@ -58,7 +58,7 @@ def upload_asset(release, asset_to_upload, token):
     count = 0
     while count < 10:
         try:
-            return _upload_asset(release, asset_to_upload, token, _requests_uploader)
+            return _upload_asset(release, asset_to_upload, token, _curl_uploader)
         except Exception:
             print 'Failed uploading on attempt {}'.format(count + 1)
             count += 1

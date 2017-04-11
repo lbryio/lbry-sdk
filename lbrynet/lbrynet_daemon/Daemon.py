@@ -104,7 +104,7 @@ class IterableContainer(object):
         return False
 
 
-class Checker:
+class Checker(object):
     """The looping calls the daemon runs"""
     INTERNET_CONNECTION = 'internet_connection_checker'
     VERSION = 'version_checker'

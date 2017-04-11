@@ -20,7 +20,7 @@ class GUID(ctypes.Structure):
 
 
 # http://msdn.microsoft.com/en-us/library/windows/desktop/dd378457.aspx
-class FOLDERID:
+class FOLDERID(object):
     # pylint: disable=bad-whitespace
     AccountPictures         = UUID('{008ca0b1-55b4-4c56-b8a8-4de4b299d3be}')
     AdminTools              = UUID('{724EF170-A42D-4FEF-9F26-B60E846FBA4F}')
@@ -119,7 +119,7 @@ class FOLDERID:
 
 
 # http://msdn.microsoft.com/en-us/library/windows/desktop/bb762188.aspx
-class UserHandle:
+class UserHandle(object):
     current = wintypes.HANDLE(0)
     common = wintypes.HANDLE(-1)
 
