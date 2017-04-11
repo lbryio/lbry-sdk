@@ -918,6 +918,12 @@ class Daemon(AuthJSONRPCServer):
             metadata = claim['value']
         else:
             metadata = None
+
+        if claim and 'channel_name' in claim:
+            channel_name = claim['channel_name']
+        else:
+            channel_name = None
+
         if lbry_file.txid and lbry_file.nout is not None:
             outpoint = repr(ClaimOutpoint(lbry_file.txid, lbry_file.nout))
         else:
@@ -943,6 +949,7 @@ class Daemon(AuthJSONRPCServer):
             'suggested_file_name': lbry_file.suggested_file_name,
             'sd_hash': lbry_file.sd_hash,
             'name': lbry_file.name,
+            'channel_name': channel_name,
             'outpoint': outpoint,
             'claim_id': lbry_file.claim_id,
             'download_path': full_path,
