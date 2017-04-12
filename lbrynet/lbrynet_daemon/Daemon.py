@@ -836,6 +836,7 @@ class Daemon(AuthJSONRPCServer):
             return 0.0
         return size / (10 ** 6) * conf.settings['data_rate']
 
+    @defer.inlineCallbacks
     def get_est_cost_using_known_size(self, uri, size):
         """
         Calculate estimated LBC cost for a stream given its size in bytes
@@ -843,9 +844,14 @@ class Daemon(AuthJSONRPCServer):
 
         cost = self._get_est_cost_from_stream_size(size)
 
-        d = self.session.wallet.resolve_uri(uri)
-        d.addCallback(lambda response: self._add_key_fee_to_est_data_cost(response, cost))
-        return d
+        resolved = yield self.session.wallet.resolve_uri(uri)
+        if 'claim' in resolved:
+            claim = ClaimDict.deserialize(resolved['claim']['hex'].decode('hex'))
+            final_fee = self._add_key_fee_to_est_data_cost(claim.source_fee, cost)
+            result = yield self._render_response(final_fee)
+            defer.returnValue(result)
+        else:
+            defer.returnValue(None)
 
     def get_est_cost_from_sd_hash(self, sd_hash):
         """
@@ -858,7 +864,7 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _get_est_cost_from_metadata(self, metadata, name):
-        d = self.get_est_cost_from_sd_hash(utils.get_sd_hash(metadata))
+        d = self.get_est_cost_from_sd_hash(metadata.source_hash)
 
         def _handle_err(err):
             if isinstance(err, Failure):
@@ -868,13 +874,12 @@ class Daemon(AuthJSONRPCServer):
             raise err
 
         d.addErrback(_handle_err)
-        d.addCallback(lambda data_cost: self._add_key_fee_to_est_data_cost(metadata, data_cost))
+        d.addCallback(lambda data_cost: self._add_key_fee_to_est_data_cost(metadata.source_fee,
+                                                                           data_cost))
         return d
 
-    def _add_key_fee_to_est_data_cost(self, claim_response, data_cost):
-        fee = self.exchange_rate_manager.to_lbc(claim_response['stream']['metadata'].get('fee',
-                                                                                         None))
-        fee_amount = 0.0 if fee is None else fee.amount
+    def _add_key_fee_to_est_data_cost(self, fee, data_cost):
+        fee_amount = 0.0 if not fee else self.exchange_rate_manager.to_lbc(fee).amount
         return data_cost + fee_amount
 
     @defer.inlineCallbacks
