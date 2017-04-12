@@ -1842,7 +1842,7 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise Exception("Invalid bid")
 
-        if bid < self.session.wallet.get_balance():
+        if bid > self.session.wallet.get_balance():
             raise InsufficientFundsError()
 
         metadata = metadata or {}
