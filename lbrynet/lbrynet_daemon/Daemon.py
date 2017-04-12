@@ -17,6 +17,8 @@ from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
 from lbryschema.claim import ClaimDict
+from lbryschema.uri import parse_lbry_uri
+from lbryschema.error import URIParseError
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION
@@ -1681,6 +1683,19 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
+        try:
+            parsed = parse_lbry_uri(channel_name)
+            if not parsed.is_channel:
+                raise Exception("Cannot make a new channel for a non channel name")
+            if parsed.path:
+                raise Exception("Invalid channel uri")
+        except (TypeError, URIParseError):
+            raise Exception("Invalid channel name")
+        if amount <= 0:
+            raise Exception("Invalid amount")
+        if amount > self.session.wallet.wallet_balance:
+            raise InsufficientFundsError()
+
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
         log.info("Claimed a new channel! Result: %s", result)
         response = yield self._render_response(result)
@@ -1758,8 +1773,16 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
+        try:
+            parse_lbry_uri(name)
+        except (TypeError, URIParseError):
+            raise Exception("Invalid name given to publish")
+
         if bid <= 0.0:
             raise Exception("Invalid bid")
+
+        if bid < self.session.wallet.wallet_balance:
+            raise InsufficientFundsError()
 
         metadata = metadata or {}
         if fee is not None:
