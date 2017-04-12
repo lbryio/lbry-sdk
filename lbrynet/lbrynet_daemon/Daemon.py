@@ -1412,6 +1412,7 @@ class Daemon(AuthJSONRPCServer):
         """
         return self.jsonrpc_claim_show(**kwargs)
 
+    @defer.inlineCallbacks
     def jsonrpc_claim_show(self, name, txid=None, nout=None, claim_id=None):
 
         """
@@ -1436,11 +1437,13 @@ class Daemon(AuthJSONRPCServer):
                 'supports': (list) list of supports associated with claim
             }
         """
-
-        d = self.session.wallet.get_claim_info(name, txid, nout, claim_id)
-        d.addCallback(format_json_out_amount_as_float)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+        try:
+            claim_results = yield self.session.wallet.get_claim_info(name, txid, nout, claim_id)
+            result = format_json_out_amount_as_float(claim_results)
+        except (TypeError, UnknownNameError):
+            result = False
+        response = yield self._render_response(result)
+        defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
