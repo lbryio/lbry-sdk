@@ -1754,7 +1754,7 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Invalid channel name")
         if amount <= 0:
             raise Exception("Invalid amount")
-        if amount > self.session.wallet.wallet_balance:
+        if amount > self.session.wallet.get_balance():
             raise InsufficientFundsError()
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
@@ -1842,7 +1842,7 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise Exception("Invalid bid")
 
-        if bid < self.session.wallet.wallet_balance:
+        if bid < self.session.wallet.get_balance():
             raise InsufficientFundsError()
 
         metadata = metadata or {}
