@@ -9,21 +9,35 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  * Add `claim_id` parameter to `claim_show`
-  * Add `hex` field to claim responses for the raw claim value
-  * Add an `error` field to to file responses if an error occurs
-  
+  *
+  *
+  *
+
 ### Changed
-  * Use `uri` instead of `name` in `get_availability`
-  * Add `channel_name` to claim and file responses where applicable
-  * Return None (instead of errors) if a uri cannot be resolved
-  * Use `uri` instead of `name` for `stream_cost_estimate`, update cost estimate for lbryschema
+  *
+  *
+  *
 
 ### Fixed
-  * `file_list` for files with bad signatures
-  * return None from resolve commands when nothing is found
-  * return lbry files with claims that are abandoned
-  * unhelpful error messages in `publish` and `channel_new`
+  *
+  *
+  *
+
+## [0.9.2rc22] - 2017-04-12
+### Added
+ * Add `claim_id` parameter to `claim_show`
+ * Add `hex` field to claim responses for the raw claim value
+ * Add an `error` field to to file responses if an error occurs
+### Changed
+ * Use `uri` instead of `name` in `get_availability`
+ * Add `channel_name` to claim and file responses where applicable
+ * Return None (instead of errors) if a uri cannot be resolved
+ * Use `uri` instead of `name` for `stream_cost_estimate`, update cost estimate for lbryschema
+### Fixed
+ * `file_list` for files with bad signatures
+ * return None from resolve commands when nothing is found
+ * return lbry files with claims that are abandoned
+ * unhelpful error messages in `publish` and `channel_new`
 
 ## [0.9.2rc9] - 2017-04-08
 ### Added
