@@ -846,7 +846,7 @@ class Daemon(AuthJSONRPCServer):
 
         resolved = yield self.session.wallet.resolve_uri(uri)
         if 'claim' in resolved:
-            claim = ClaimDict.deserialize(resolved['claim']['hex'].decode('hex'))
+            claim = ClaimDict.load_dict(resolved['claim']['value'])
             final_fee = self._add_key_fee_to_est_data_cost(claim.source_fee, cost)
             result = yield self._render_response(final_fee)
             defer.returnValue(result)
@@ -1472,8 +1472,8 @@ class Daemon(AuthJSONRPCServer):
                     'depth': (int) claim depth,
                     'has_signature': (bool) included if decoded_claim
                     'name': (str) claim name,
-                    'supports: (list) list of supports [{'txid': txid, 
-                                                         'nout': nout, 
+                    'supports: (list) list of supports [{'txid': txid,
+                                                         'nout': nout,
                                                          'amount': amount}],
                     'txid': (str) claim txid,
                     'nout': (str) claim nout,
@@ -1483,23 +1483,23 @@ class Daemon(AuthJSONRPCServer):
             If uri resolves to a channel:
                 'claims_in_channel': [
                     {
-                    'address': (str) claim address,
-                    'amount': (float) claim amount,
-                    'effective_amount': (float) claim amount including supports,
-                    'claim_id': (str) claim id,
-                    'claim_sequence': (int) claim sequence number,
-                    'decoded_claim': (bool) whether or not the claim value was decoded,
-                    'height': (int) claim height,
-                    'depth': (int) claim depth,
-                    'has_signature': (bool) included if decoded_claim
-                    'name': (str) claim name,
-                    'supports: (list) list of supports [{'txid': txid, 
-                                                         'nout': nout, 
-                                                         'amount': amount}],
-                    'txid': (str) claim txid,
-                    'nout': (str) claim nout,
-                    'signature_is_valid': (bool), included if has_signature,
-                    'value': ClaimDict if decoded, otherwise hex string
+                        'address': (str) claim address,
+                        'amount': (float) claim amount,
+                        'effective_amount': (float) claim amount including supports,
+                        'claim_id': (str) claim id,
+                        'claim_sequence': (int) claim sequence number,
+                        'decoded_claim': (bool) whether or not the claim value was decoded,
+                        'height': (int) claim height,
+                        'depth': (int) claim depth,
+                        'has_signature': (bool) included if decoded_claim
+                        'name': (str) claim name,
+                        'supports: (list) list of supports [{'txid': txid,
+                                                             'nout': nout,
+                                                             'amount': amount}],
+                        'txid': (str) claim txid,
+                        'nout': (str) claim nout,
+                        'signature_is_valid': (bool), included if has_signature,
+                        'value': ClaimDict if decoded, otherwise hex string
                     }
                 ]
             If uri resolves to a claim:
@@ -1515,14 +1515,14 @@ class Daemon(AuthJSONRPCServer):
                     'has_signature': (bool) included if decoded_claim
                     'name': (str) claim name,
                     'channel_name': (str) channel name if claim is in a channel
-                    'supports: (list) list of supports [{'txid': txid, 
-                                                         'nout': nout, 
+                    'supports: (list) list of supports [{'txid': txid,
+                                                         'nout': nout,
                                                          'amount': amount}]
                     'txid': (str) claim txid,
                     'nout': (str) claim nout,
                     'signature_is_valid': (bool), included if has_signature,
                     'value': ClaimDict if decoded, otherwise hex string
-                }            
+                }
             }
         """
 
@@ -1546,7 +1546,6 @@ class Daemon(AuthJSONRPCServer):
             'download_directory'(optional): (str) path to directory where file will be saved
         Returns:
             (dict) Dictionary contaning information about the stream
-
             {
                 'completed': (bool) true if download is completed,
                 'file_name': (str) name of file,
@@ -1554,7 +1553,7 @@ class Daemon(AuthJSONRPCServer):
                 'points_paid': (float) credit paid to download file,
                 'stopped': (bool) true if download is stopped,
                 'stream_hash': (str) stream hash of file,
-                'stream_name': (str) stream name ,
+                'stream_name': (str) stream name,
                 'suggested_file_name': (str) suggested file name,
                 'sd_hash': (str) sd hash of file,
                 'name': (str) name claim attached to file
@@ -1568,7 +1567,6 @@ class Daemon(AuthJSONRPCServer):
                 'message': (str), None if full_status is false
                 'metadata': (dict) Metadata dictionary
             }
-
         """
 
         timeout = timeout if timeout is not None else self.download_timeout
