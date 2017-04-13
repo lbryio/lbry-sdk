@@ -892,13 +892,15 @@ class Daemon(AuthJSONRPCServer):
         except Exception:
             claim_response = None
 
+        result = None
         if claim_response and 'claim' in claim_response:
-            cost = yield self._get_est_cost_from_metadata(ClaimDict.load_dict(
-                claim_response['claim']['value']), uri)
-            rounded = round(cost, 5)
-            defer.returnValue(rounded)
-        else:
-            defer.returnValue(None)
+            if 'value' in claim_response['claim']:
+                claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
+                cost = yield self._get_est_cost_from_metadata(claim_value, uri)
+                result = round(cost, 5)
+            else:
+                log.warning("Failed to estimate cost for %s", uri)
+        defer.returnValue(result)
 
     def get_est_cost(self, uri, size=None):
         """Get a cost estimate for a lbry stream, if size is not provided the

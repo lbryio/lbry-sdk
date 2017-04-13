@@ -19,7 +19,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fix uncaught exception in `stream_cost_estimate`
   *
   *
 
