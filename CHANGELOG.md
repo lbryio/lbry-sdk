@@ -19,9 +19,13 @@ at anytime.
   *
 
 ### Fixed
-  * Fix uncaught exception in `stream_cost_estimate`
   *
   *
+  *
+
+## [0.10.0rc1] - 2017-04-13
+### Fixed
+ * Fix uncaught exception in `stream_cost_estimate`
 
 ## [0.9.2rc22] - 2017-04-12
 ### Added
