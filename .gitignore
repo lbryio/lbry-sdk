@@ -15,7 +15,7 @@
 /docs_build
 /lbry-venv
 
-.idea/.name
+.idea/
 .coverage
 .DS_Store
 

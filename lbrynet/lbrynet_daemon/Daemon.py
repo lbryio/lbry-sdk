@@ -1061,8 +1061,8 @@ class Daemon(AuthJSONRPCServer):
         best_hash = (yield self.session.wallet.get_best_blockhash()) if has_wallet else None
 
         response = {
-            'lbry_id': base58.b58encode(self.lbryid)[:SHORT_ID_LEN],
-            'installation_id': conf.settings.get_installation_id()[:SHORT_ID_LEN],
+            'lbry_id': base58.b58encode(self.lbryid),
+            'installation_id': conf.settings.installation_id,
             'is_running': self.announced_startup,
             'is_first_run': self.session.wallet.is_first_run if has_wallet else None,
             'startup_status': {
