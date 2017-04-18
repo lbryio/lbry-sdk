@@ -889,12 +889,13 @@ class Daemon(AuthJSONRPCServer):
         """
         try:
             claim_response = yield self.session.wallet.resolve_uri(uri)
+        #TODO: fix me, this is a hack
         except Exception:
             claim_response = None
 
         result = None
         if claim_response and 'claim' in claim_response:
-            if 'value' in claim_response['claim']:
+            if 'value' in claim_response['claim'] and claim_response['claim']['value'] is not None:
                 claim_value = ClaimDict.load_dict(claim_response['claim']['value'])
                 cost = yield self._get_est_cost_from_metadata(claim_value, uri)
                 result = round(cost, 5)
