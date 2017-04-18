@@ -1720,7 +1720,8 @@ class Daemon(AuthJSONRPCServer):
             'size' (optional): (int) stream size, in bytes. if provided an sd blob
                                 won't be downloaded.
         Returns:
-            (float) Estimated cost in lbry credits
+            (float) Estimated cost in lbry credits, returns None if uri is not
+                resolveable
         """
         cost = yield self.get_est_cost(uri, size)
         defer.returnValue(cost)
