@@ -31,7 +31,7 @@ def main():
     if args.dry_run:
         print "DRY RUN. Nothing will be committed/pushed."
 
-    repo = Repo('lbry-app', args.part, ROOT)
+    repo = Repo('lbry', args.part, ROOT)
     branch = 'master'
 
     print 'Current version: {}'.format(repo.current_version)
@@ -56,7 +56,7 @@ def main():
 
     gh_token = get_gh_token()
     auth = github.Github(gh_token)
-    github_repo = auth.get_repo('lbryio/lbry-app')
+    github_repo = auth.get_repo('lbryio/lbry')
 
     if not is_rc:
         repo.bump_changelog()
