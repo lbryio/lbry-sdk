@@ -33,12 +33,11 @@ before_install:
 install:
   - pip install -U pip
   - pip install -r requirements.txt
-  - pip install git+https://github.com/lbryio/lbryum.git
   - pip install .
 
 script:
   - pip install cython
   - pip install mock pylint unqlite
-  - ./run_pylint.sh
-  - ./run_tests.sh
+  - pylint lbrynet
+  - PYTHONPATH=. trial tests
   - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger

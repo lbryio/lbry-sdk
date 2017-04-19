@@ -9,8 +9,10 @@
 *.prof
 .#*
 
-/build
-/dist
+/build/build
+/build/dist
+/bulid/requirements_base.txt
+
 /lbrynet.egg-info
 /docs_build
 /lbry-venv
