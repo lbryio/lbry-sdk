@@ -260,7 +260,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 if err.errno == errno.EWOULDBLOCK:
                     # i'm scared this may swallow important errors, but i get a million of these
                     # on Linux and it doesnt seem to affect anything  -grin
-                    log.warning("Can't send data to dht: EWOULDBLOCK")
+                    log.debug("Can't send data to dht: EWOULDBLOCK")
                 else:
                     raise err
 
