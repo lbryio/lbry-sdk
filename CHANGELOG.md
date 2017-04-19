@@ -9,7 +9,7 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Add `lbryschema_version` to response from `version`
   *
   *
 

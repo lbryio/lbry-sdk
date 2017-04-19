@@ -1187,6 +1187,7 @@ class Daemon(AuthJSONRPCServer):
                 'lbrynet_update_available': (bool) whether there's an update available,
                 'lbrynet_version': (str) lbrynet_version,
                 'lbryum_version': (str) lbryum_version,
+                'lbryschema_version': (str) lbryschema_version,
                 'os_release': (str) os release string
                 'os_system': (str) os name
                 'platform': (str) platform string
