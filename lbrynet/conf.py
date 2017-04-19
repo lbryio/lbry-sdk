@@ -316,9 +316,9 @@ class Config(object):
         if data_type is not None:
             self._assert_valid_data_type(data_type)
             return self._data[data_type][name]
-        for data_type in self._search_order:
-            if name in self._data[data_type]:
-                return self._data[data_type][name]
+        for possible_data_type in self._search_order:
+            if name in self._data[possible_data_type]:
+                return self._data[possible_data_type][name]
         raise KeyError('{} is not a valid setting'.format(name))
 
     def set(self, name, value, data_types=(TYPE_RUNTIME,)):

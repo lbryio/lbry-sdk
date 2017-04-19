@@ -2745,7 +2745,7 @@ def format_json_out_amount_as_float(obj):
         for k, v in obj.iteritems():
             if k == 'amount' or k == 'effective_amount':
                 obj[k] = float(obj[k])
-            if isinstance(v, dict) or isinstance(v, list):
+            if isinstance(v, (dict, list)):
                 obj[k] = format_json_out_amount_as_float(v)
 
     elif isinstance(obj, list):
