@@ -28,7 +28,7 @@ class BlobAvailabilityTracker(object):
 
     def start(self):
         log.info("Starting %s", self)
-        self._check_popular.start(30)
+        self._check_popular.start(600)
         self._check_mine.start(600)
 
     def stop(self):
@@ -70,7 +70,7 @@ class BlobAvailabilityTracker(object):
 
     def _get_most_popular(self):
         dl = []
-        for (hash, _) in self._dht_node.get_most_popular_hashes(100):
+        for (hash, _) in self._dht_node.get_most_popular_hashes(10):
             encoded = hash.encode('hex')
             dl.append(self._update_peers_for_blob(encoded))
         return defer.DeferredList(dl)
@@ -87,7 +87,7 @@ class BlobAvailabilityTracker(object):
             return defer.DeferredList(dl)
 
         def sample(blobs):
-            return random.sample(blobs, min(len(blobs), 100))
+            return random.sample(blobs, min(len(blobs), 10))
 
         start = time.time()
         log.debug('==> Updating the peers for my blobs')
