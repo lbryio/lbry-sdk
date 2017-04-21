@@ -21,7 +21,7 @@ test_script:
 - cd C:\projects\lbry\
 - pip install cython
 - pip install mock pylint unqlite
-- pip install ./lbrynet
+- pip install .
 - pylint lbrynet
 - python -m twisted.trial tests # avoids having to set PYTHONPATH=. (see https://twistedmatrix.com/trac/ticket/9035)
 #- rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
