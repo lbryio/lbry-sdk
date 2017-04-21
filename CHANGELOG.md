@@ -10,7 +10,7 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Add `lbryschema_version` to response from `version`
-  *
+  * Added functionality to check the balance of a given address.
   *
 
 ### Changed
@@ -22,12 +22,6 @@ at anytime.
   * fix stream_cost_estimate throwing exception on non decodeable claims
   *
   *
-
-
-
-## [0.10.0rc3] - 2017-04-21
-### Added
-  * Added functionality to check the balance of a given address.
 
 ## [0.10.0rc2] - 2017-04-17
 ### Changed
