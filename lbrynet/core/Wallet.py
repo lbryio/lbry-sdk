@@ -29,12 +29,14 @@ log = logging.getLogger(__name__)
 
 
 class ReservedPoints(object):
+
     def __init__(self, identifier, amount):
         self.identifier = identifier
         self.amount = amount
 
 
 class ClaimOutpoint(dict):
+
     def __init__(self, txid, nout):
         if len(txid) != 64:
             raise TypeError('{} is not a txid'.format(txid))
@@ -61,6 +63,7 @@ class ClaimOutpoint(dict):
 
 
 class MetaDataStorage(object):
+
     def load(self):
         return defer.succeed(True)
 
@@ -81,6 +84,7 @@ class MetaDataStorage(object):
 
 
 class InMemoryStorage(MetaDataStorage):
+
     def __init__(self):
         self.metadata = {}
         self.claimids = {}
@@ -98,7 +102,8 @@ class InMemoryStorage(MetaDataStorage):
             return defer.succeed(None)
 
     def update_claimid(self, claim_id, name, claim_outpoint):
-        self.claimids[(name, claim_outpoint['txid'], claim_outpoint['nout'])] = claim_id
+        self.claimids[
+            (name, claim_outpoint['txid'], claim_outpoint['nout'])] = claim_id
         return defer.succeed(True)
 
     def get_claimid_for_tx(self, name, claim_outpoint):
@@ -110,13 +115,15 @@ class InMemoryStorage(MetaDataStorage):
 
 
 class SqliteStorage(MetaDataStorage):
+
     def __init__(self, db_dir):
         self.db_dir = db_dir
         self.db = None
         MetaDataStorage.__init__(self)
 
     def load(self):
-        self.db = adbapi.ConnectionPool('sqlite3', os.path.join(self.db_dir, "blockchainname.db"),
+        self.db = adbapi.ConnectionPool(
+            'sqlite3', os.path.join(self.db_dir, "blockchainname.db"),
                                         check_same_thread=False)
 
         def create_tables(transaction):
@@ -134,7 +141,8 @@ class SqliteStorage(MetaDataStorage):
         return self.db.runInteraction(create_tables)
 
     def clean_bad_records(self):
-        d = self.db.runQuery("delete from name_metadata where length(txid) > 64 or txid is null")
+        d = self.db.runQuery(
+            "delete from name_metadata where length(txid) > 64 or txid is null")
         return d
 
     def save_name_metadata(self, name, claim_outpoint, sd_hash):
@@ -153,7 +161,8 @@ class SqliteStorage(MetaDataStorage):
 
     @rerun_if_locked
     def get_claim_metadata_for_sd_hash(self, sd_hash):
-        d = self.db.runQuery("select name, txid, n from name_metadata where sd_hash=?", (sd_hash,))
+        d = self.db.runQuery(
+            "select name, txid, n from name_metadata where sd_hash=?", (sd_hash,))
         d.addCallback(lambda r: r[0] if r else None)
         return d
 
@@ -181,6 +190,7 @@ class SqliteStorage(MetaDataStorage):
 
 
 class Wallet(object):
+
     """This class implements the Wallet interface for the LBRYcrd payment system"""
     implements(IWallet)
 
@@ -192,8 +202,10 @@ class Wallet(object):
         self.wallet_balance = Decimal(0.0)
         self.total_reserved_points = Decimal(0.0)
         self.peer_addresses = {}  # {Peer: string}
-        self.queued_payments = defaultdict(Decimal)  # {address(string): amount(Decimal)}
-        self.expected_balances = defaultdict(Decimal)  # {address(string): amount(Decimal)}
+        self.queued_payments = defaultdict(
+            Decimal)  # {address(string): amount(Decimal)}
+        self.expected_balances = defaultdict(
+            Decimal)  # {address(string): amount(Decimal)}
         self.current_address_given_to_peer = {}  # {Peer: address(string)}
         # (Peer, address(string), amount(Decimal), time(datetime), count(int),
         # incremental_amount(float))
@@ -235,7 +247,8 @@ class Wallet(object):
 
     @staticmethod
     def log_stop_error(err):
-        log.error("An error occurred stopping the wallet: %s", err.getTraceback())
+        log.error(
+            "An error occurred stopping the wallet: %s", err.getTraceback())
 
     def stop(self):
         log.info("Stopping %s", self)
@@ -289,7 +302,8 @@ class Wallet(object):
             def log_error(err):
                 if isinstance(err, AttributeError):
                     log.warning("Failed to get an updated balance")
-                    log.warning("Last balance update: %s", str(self.wallet_balance))
+                    log.warning(
+                        "Last balance update: %s", str(self.wallet_balance))
 
             d.addCallbacks(lambda _: self.update_balance(), log_error)
             return d
@@ -298,7 +312,8 @@ class Wallet(object):
 
         def set_next_manage_call():
             if not self.stopped:
-                self.next_manage_call = reactor.callLater(self._balance_refresh_time, self.manage)
+                self.next_manage_call = reactor.callLater(
+                    self._balance_refresh_time, self.manage)
 
         d.addCallback(lambda _: set_next_manage_call())
 
@@ -411,7 +426,8 @@ class Wallet(object):
                   str(address), str(rounded_amount))
         self.expected_balances[address] += rounded_amount
         expected_balance = self.expected_balances[address]
-        expected_time = datetime.datetime.now() + self.max_expected_payment_time
+        expected_time = datetime.datetime.now(
+        ) + self.max_expected_payment_time
         self.expected_balance_at_time.append(
             (peer, address, expected_balance, expected_time, 0, amount))
         peer.update_stats('expected_points', amount)
@@ -432,7 +448,8 @@ class Wallet(object):
         payments_to_send = {}
         for address, points in self.queued_payments.items():
             if points > 0:
-                log.debug("Should be sending %s points to %s", str(points), str(address))
+                log.debug(
+                    "Should be sending %s points to %s", str(points), str(address))
                 payments_to_send[address] = points
                 self.total_reserved_points -= points
             else:
@@ -441,7 +458,8 @@ class Wallet(object):
             del self.queued_payments[address]
 
         if payments_to_send:
-            log.debug("Creating a transaction with outputs %s", str(payments_to_send))
+            log.debug(
+                "Creating a transaction with outputs %s", str(payments_to_send))
             d = self._do_send_many(payments_to_send)
             d.addCallback(lambda txid: log.debug("Sent transaction %s", txid))
             return d
@@ -449,7 +467,7 @@ class Wallet(object):
         log.debug("There were no payments to send")
         return defer.succeed(True)
 
-    ######
+    #
 
     @defer.inlineCallbacks
     def get_claim(self, claim_id):
@@ -465,7 +483,8 @@ class Wallet(object):
             claim['hex'] = claim['value']
             claim['value'] = None
             claim['error'] = "Failed to decode"
-            log.warning("Failed to decode claim value for lbry://%s#%s", claim['name'],
+            log.warning(
+                "Failed to decode claim value for lbry://%s#%s", claim['name'],
                         claim['claim_id'])
         defer.returnValue(claim)
 
@@ -576,7 +595,8 @@ class Wallet(object):
             results['hex'] = claim_hex
             results['value'] = claim_dict
 
-        log.info("get claim info lbry://%s#%s", results['name'], results['claim_id'])
+        log.info("get claim info lbry://%s#%s",
+                 results['name'], results['claim_id'])
         defer.returnValue(results)
 
     @defer.inlineCallbacks
@@ -626,7 +646,9 @@ class Wallet(object):
                 claim['hex'] = claim['value']
                 claim['value'] = None
                 claim['error'] = "Failed to decode"
-                log.warning("Failed to decode claim value for lbry://%s#%s", claim['name'],
+                log.warning(
+                    "Failed to decode claim value for lbry://%s#%s", claim[
+                        'name'],
                             claim['claim_id'])
                 claims_for_return.append(claim)
 
@@ -644,7 +666,8 @@ class Wallet(object):
             raise Exception("Invalid channel name")
         elif (parsed_channel_name.path or parsed_channel_name.claim_id or
               parsed_channel_name.bid_position or parsed_channel_name.claim_sequence):
-            raise Exception("New channel claim should have no fields other than name")
+            raise Exception(
+                "New channel claim should have no fields other than name")
         log.info("Preparing to make certificate claim for %s", channel_name)
         return self._claim_certificate(parsed_channel_name.name, amount)
 
@@ -688,7 +711,8 @@ class Wallet(object):
 
         claim = self._process_claim_out(claim)
         claim_outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
-        log.info("Saving metadata for claim %s %d", claim['txid'], claim['nout'])
+        log.info("Saving metadata for claim %s %d",
+                 claim['txid'], claim['nout'])
         yield self._update_claimid(claim['claim_id'], name, claim_outpoint)
         yield self._save_name_metadata(name, claim_outpoint, decoded.source_hash)
         defer.returnValue(claim)
@@ -698,7 +722,8 @@ class Wallet(object):
         claim_out = yield self._abandon_claim(claim_id)
 
         if not claim_out['success']:
-            msg = 'Abandon of {} failed: {}'.format(claim_id, claim_out['reason'])
+            msg = 'Abandon of {} failed: {}'.format(
+                claim_id, claim_out['reason'])
             raise Exception(msg)
 
         claim_out = self._process_claim_out(claim_out)
@@ -707,7 +732,8 @@ class Wallet(object):
     def support_claim(self, name, claim_id, amount):
         def _parse_support_claim_out(claim_out):
             if not claim_out['success']:
-                msg = 'Support of {}:{} failed: {}'.format(name, claim_id, claim_out['reason'])
+                msg = 'Support of {}:{} failed: {}'.format(
+                    name, claim_id, claim_out['reason'])
                 raise Exception(msg)
             claim_out = self._process_claim_out(claim_out)
             return defer.succeed(claim_out)
@@ -740,22 +766,24 @@ class Wallet(object):
 
     def get_balance(self, address=None):
         if address is None:
-            return self.wallet_balance - self.total_reserved_points - sum(self.queued_payments.values())
+            return self.wallet_balance-self.total_reserved_points-sum(self.queued_payments.values())
         else:
             c, u, x = self.wallet.get_addr_balance(address)
             return Decimal(float(c) / COIN)
-            
+
     def _check_expected_balances(self):
         now = datetime.datetime.now()
         balances_to_check = []
         try:
             while self.expected_balance_at_time[0][3] < now:
-                balances_to_check.append(self.expected_balance_at_time.popleft())
+                balances_to_check.append(
+                    self.expected_balance_at_time.popleft())
         except IndexError:
             pass
         ds = []
         for balance_to_check in balances_to_check:
-            log.debug("Checking balance of address %s", str(balance_to_check[1]))
+            log.debug(
+                "Checking balance of address %s", str(balance_to_check[1]))
             d = self._get_balance_for_address(balance_to_check[1])
             d.addCallback(lambda bal: bal >= balance_to_check[2])
             ds.append(d)
@@ -772,11 +800,13 @@ class Wallet(object):
                                 balance[0],
                                 balance[1],
                                 balance[2],
-                                datetime.datetime.now() + self.max_expected_payment_time,
+                                datetime.datetime.now() +
+                                                      self.max_expected_payment_time,
                                 balance[4] + 1,
                                 balance[5]
                             )
-                            self.expected_balance_at_time.append(new_expected_balance)
+                            self.expected_balance_at_time.append(
+                                new_expected_balance)
                             peer.update_score(-5.0)
                         else:
                             peer.update_score(-50.0)
@@ -787,7 +817,8 @@ class Wallet(object):
                 else:
                     log.warning("Something went wrong checking a balance. Peer: %s, account: %s,"
                                 "expected balance: %s, expected time: %s, count: %s, error: %s",
-                                str(balance[0]), str(balance[1]), str(balance[2]), str(balance[3]),
+                                str(balance[0]), str(balance[1]), str(
+                                    balance[2]), str(balance[3]),
                                 str(balance[4]), str(result.getErrorMessage()))
 
         dl.addCallback(handle_checks)
@@ -866,6 +897,7 @@ class Wallet(object):
 
 
 class LBRYumWallet(Wallet):
+
     def __init__(self, storage, config=None):
         Wallet.__init__(self, storage)
         self._config = config
@@ -896,7 +928,8 @@ class LBRYumWallet(Wallet):
         def check_started():
             if self.network.is_connecting():
                 if self._is_first_run():
-                    log.info("Running the wallet for the first time. This may take a moment.")
+                    log.info(
+                        "Running the wallet for the first time. This may take a moment.")
                     self.printed_retrieving_headers = True
                 return False
             self._start_check.stop()
@@ -904,7 +937,8 @@ class LBRYumWallet(Wallet):
             if self.network.is_connected():
                 network_start_d.callback(True)
             else:
-                network_start_d.errback(ValueError("Failed to connect to network."))
+                network_start_d.errback(
+                    ValueError("Failed to connect to network."))
 
         self._start_check = task.LoopingCall(check_started)
 
@@ -960,8 +994,9 @@ class LBRYumWallet(Wallet):
 
     def _check_large_wallet(self):
         if len(self.wallet.addresses(include_change=False)) > 1000:
-            log.warning(("Your wallet is excessively large, please follow instructions here: ",
-                         "https://github.com/lbryio/lbry/issues/437 to reduce your wallet size"))
+            log.warning(
+                ("Your wallet is excessively large, please follow instructions here: ",
+                 "https://github.com/lbryio/lbry/issues/437 to reduce your wallet size"))
 
     def _load_blockchain(self):
         blockchain_caught_d = defer.Deferred()
@@ -1006,7 +1041,7 @@ class LBRYumWallet(Wallet):
     # run commands as a deferToThread,  lbryum commands that only make
     # queries to lbryum server should be run this way
     # TODO: keep track of running threads and cancel them on `stop`
-    #       otherwise the application will hang, waiting for threads to complete
+    # otherwise the application will hang, waiting for threads to complete
     def _run_cmd_as_defer_to_thread(self, command_name, *args, **kwargs):
         cmd_runner = self._get_cmd_runner()
         cmd = known_commands[command_name]
@@ -1016,7 +1051,8 @@ class LBRYumWallet(Wallet):
     def _update_balance(self):
         accounts = None
         exclude_claimtrietx = True
-        d = self._run_cmd_as_defer_succeed('getbalance', accounts, exclude_claimtrietx)
+        d = self._run_cmd_as_defer_succeed(
+            'getbalance', accounts, exclude_claimtrietx)
         d.addCallback(
             lambda result: Decimal(result['confirmed']) + Decimal(result.get('unconfirmed', 0.0)))
         return d
@@ -1071,7 +1107,8 @@ class LBRYumWallet(Wallet):
     @defer.inlineCallbacks
     def _send_name_claim(self, name, value, amount, certificate_id=None):
         log.info("Send claim: %s for %s: %s ", name, amount, value)
-        claim_out = yield self._run_cmd_as_defer_succeed('claim', name, value, amount,
+        claim_out = yield self._run_cmd_as_defer_succeed(
+            'claim', name, value, amount,
                                                          certificate_id=certificate_id)
         defer.returnValue(claim_out)
 
@@ -1092,7 +1129,8 @@ class LBRYumWallet(Wallet):
     @defer.inlineCallbacks
     def _broadcast_claim_transaction(self, claim_out):
         if 'success' not in claim_out:
-            raise Exception('Unexpected claim command output: {}'.format(claim_out))
+            raise Exception(
+                'Unexpected claim command output: {}'.format(claim_out))
         if claim_out['success']:
             yield self._broadcast_transaction(claim_out['tx'])
         defer.returnValue(claim_out)
@@ -1108,11 +1146,14 @@ class LBRYumWallet(Wallet):
     def _do_send_many(self, payments_to_send):
         def broadcast_send_many(paytomany_out):
             if 'hex' not in paytomany_out:
-                raise Exception('Unepxected paytomany output:{}'.format(paytomany_out))
+                raise Exception(
+                    'Unepxected paytomany output:{}'.format(paytomany_out))
             return self._broadcast_transaction(paytomany_out['hex'])
 
-        log.debug("Doing send many. payments to send: %s", str(payments_to_send))
-        d = self._run_cmd_as_defer_succeed('paytomany', payments_to_send.iteritems())
+        log.debug(
+            "Doing send many. payments to send: %s", str(payments_to_send))
+        d = self._run_cmd_as_defer_succeed(
+            'paytomany', payments_to_send.iteritems())
         d.addCallback(lambda out: broadcast_send_many(out))
         return d
 
@@ -1199,7 +1240,8 @@ class LBRYcrdAddressRequester(object):
 
     def _request_failed(self, err, peer):
         if not err.check(RequestCanceledError):
-            log.warning("A peer failed to send a valid public key response. Error: %s, peer: %s",
+            log.warning(
+                "A peer failed to send a valid public key response. Error: %s, peer: %s",
                         err.getErrorMessage(), str(peer))
             return err
 
@@ -1250,7 +1292,8 @@ class LBRYcrdAddressQueryHandler(object):
             d.addCallback(create_response)
             return d
         if self.address is None:
-            log.warning("Expected a request for an address, but did not receive one")
+            log.warning(
+                "Expected a request for an address, but did not receive one")
             return defer.fail(
                 Failure(ValueError("Expected but did not receive an address request")))
         else:

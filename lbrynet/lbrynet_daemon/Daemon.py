@@ -740,7 +740,6 @@ class Daemon(AuthJSONRPCServer):
 
     @defer.inlineCallbacks
     def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate_id=None):
-
         publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet,
                               certificate_id)
         verify_name_characters(name)
@@ -1303,8 +1302,6 @@ class Daemon(AuthJSONRPCServer):
         """
         Return a list of available commands
 
-        
-
         Returns:
             (list) list of available commands
         """
@@ -1313,24 +1310,20 @@ class Daemon(AuthJSONRPCServer):
              if 'DEPRECATED' not in getattr(self, "jsonrpc_" + command).__doc__]
         ))
 
-    def jsonrpc_get_balance(self, address=None):
+    def jsonrpc_get_balance(self):
         """
         DEPRECATED. Use `wallet_balance` instead.
         """
-        return self.jsonrpc_wallet_balance(address)
+        return self.jsonrpc_wallet_balance()
 
-    def jsonrpc_wallet_balance(self, address=None):
+    def jsonrpc_wallet_balance(self):
         """
         Return the balance of the wallet
-
-        Args:
-            'address' (optional): (str) Address to get balance of
-
 
         Returns:
             (float) amount of lbry credits in wallet
         """
-        return self._render_response(float(self.session.wallet.get_balance(address)))
+        return self._render_response(float(self.session.wallet.get_balance()))
 
     def jsonrpc_stop(self):
         """
