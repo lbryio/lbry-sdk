@@ -738,9 +738,13 @@ class Wallet(object):
     def get_claim_metadata_for_sd_hash(self, sd_hash):
         return self._get_claim_metadata_for_sd_hash(sd_hash)
 
-    def get_balance(self):
-        return self.wallet_balance - self.total_reserved_points - sum(self.queued_payments.values())
-
+    def get_balance(self, address=None):
+        if address is None:
+            return self.wallet_balance - self.total_reserved_points - sum(self.queued_payments.values())
+        else:
+            c, u, x = self.wallet.get_addr_balance(address)
+            return Decimal(float(c) / COIN)
+            
     def _check_expected_balances(self):
         now = datetime.datetime.now()
         balances_to_check = []

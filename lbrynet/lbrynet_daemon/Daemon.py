@@ -1303,6 +1303,8 @@ class Daemon(AuthJSONRPCServer):
         """
         Return a list of available commands
 
+        
+
         Returns:
             (list) list of available commands
         """
@@ -1311,20 +1313,24 @@ class Daemon(AuthJSONRPCServer):
              if 'DEPRECATED' not in getattr(self, "jsonrpc_" + command).__doc__]
         ))
 
-    def jsonrpc_get_balance(self):
+    def jsonrpc_get_balance(self, address=None):
         """
         DEPRECATED. Use `wallet_balance` instead.
         """
-        return self.jsonrpc_wallet_balance()
+        return self.jsonrpc_wallet_balance(address)
 
-    def jsonrpc_wallet_balance(self):
+    def jsonrpc_wallet_balance(self, address=None):
         """
         Return the balance of the wallet
+
+        Args:
+            'address' (optional): (str) Address to get balance of
+
 
         Returns:
             (float) amount of lbry credits in wallet
         """
-        return self._render_response(float(self.session.wallet.get_balance()))
+        return self._render_response(float(self.session.wallet.get_balance(address)))
 
     def jsonrpc_stop(self):
         """
