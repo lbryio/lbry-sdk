@@ -20,7 +20,6 @@ Add-Content requirements.txt "./gmpy-1.17-cp27-none-win32.whl"
 
 pip install -r requirements.txt
 
-python set_version.py
 python set_build.py
 
 pyinstaller -y daemon.onefile.spec
