@@ -18,9 +18,11 @@ def main():
         print 'Stopping as we are not currently on a tag'
         return
 
+    print "Current tag: " + current_tag
+
     if 'GH_TOKEN' not in os.environ:
         print 'Must set GH_TOKEN in order to publish assets to a release'
-        return
+        return 1
 
     gh_token = os.environ['GH_TOKEN']
     auth = github.Github(gh_token)
@@ -29,9 +31,10 @@ def main():
     if not check_repo_has_tag(repo, current_tag):
         print 'Tag {} is not in repo {}'.format(current_tag, repo)
         # TODO: maybe this should be an error
-        return
+        return 1
 
     daemon_zip = glob.glob(this_dir + '/dist/*.zip')[0]
+    print "Uploading " + daemon_zip
     release = get_release(repo, current_tag)
     upload_asset(release, daemon_zip, gh_token)
 
