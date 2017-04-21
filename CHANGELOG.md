@@ -23,6 +23,12 @@ at anytime.
   *
   *
 
+
+
+## [0.10.0rc3] - 2017-04-21
+### Added
+  * Added functionality to check the balance of a given address.
+
 ## [0.10.0rc2] - 2017-04-17
 ### Changed
  * Return full `lbry_id` and `installation_id` from `status`
