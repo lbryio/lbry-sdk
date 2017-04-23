@@ -123,7 +123,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             self.outpoint = ClaimOutpoint(self.txid, self.nout)
         else:
             raise NoSuchSDHash(self.sd_hash)
-        self.claim_id = yield self.wallet.get_claimid(self.name, self.txid, self.nout)
+        self.claim_id = yield self.wallet.get_claimid(self.txid, self.nout)
         defer.returnValue(None)
 
     @defer.inlineCallbacks
