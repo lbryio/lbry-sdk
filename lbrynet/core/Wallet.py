@@ -913,6 +913,9 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda _: self._start_check.start(.1))
         d.addCallback(lambda _: network_start_d)
         d.addCallback(lambda _: self._load_blockchain())
+        d.addCallback(lambda _: log.info("Subscribing to addresses"))
+        d.addCallback(lambda _: self.wallet.wait_until_synchronized(lambda _: None))
+        d.addCallback(lambda _: log.info("Synchronized wallet"))
         return d
 
     def _stop(self):

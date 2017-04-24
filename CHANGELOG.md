@@ -16,7 +16,8 @@ at anytime.
 
 ### Changed
   * Added optional `address` and `include_unconfirmed` params to `jsonrpc_wallet_balance` method
-
+  * Wait for subscriptions before announcing wallet has finished starting
+  
 ### Fixed
   * fix stream_cost_estimate throwing exception on non decodeable claims
   *
