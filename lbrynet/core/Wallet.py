@@ -797,6 +797,9 @@ class Wallet(object):
     def get_new_address(self):
         return defer.fail(NotImplementedError())
 
+    def get_address_balance(self, address):
+        return defer.fail(NotImplementedError())
+
     def get_block(self, blockhash):
         return defer.fail(NotImplementedError())
 
@@ -1023,6 +1026,16 @@ class LBRYumWallet(Wallet):
         addr = self.wallet.create_new_address(account=None)
         yield self._save_wallet()
         defer.returnValue(addr)
+
+    # Get the balance of a given address.
+
+    def get_address_balance(self, address, include_balance=False):
+        c, u, x = self.wallet.get_addr_balance(address)
+        if include_balance is False:
+            return Decimal(float(c) / COIN)
+        else:
+            return Decimal((float(c) + float(u) + float(x)) / COIN)
+
 
     # Return an address with no balance in it, if
     # there is none, create a brand new address

@@ -1311,20 +1311,30 @@ class Daemon(AuthJSONRPCServer):
              if 'DEPRECATED' not in getattr(self, "jsonrpc_" + command).__doc__]
         ))
 
-    def jsonrpc_get_balance(self):
+    def jsonrpc_get_balance(self, address=None, include_unconfirmed=False):
         """
         DEPRECATED. Use `wallet_balance` instead.
         """
-        return self.jsonrpc_wallet_balance()
+        return self.jsonrpc_wallet_balance(address, include_unconfirmed)
 
-    def jsonrpc_wallet_balance(self):
+    def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
         """
         Return the balance of the wallet
+
+        Args:
+            'address' (optional): If address is provided only that balance will be given
+            'include_unconfirmed' (optional): If set unconfirmed balance will be included in
+             the only takes effect when address is also provided.
 
         Returns:
             (float) amount of lbry credits in wallet
         """
-        return self._render_response(float(self.session.wallet.get_balance()))
+        if address is None:
+            return self._render_response(float(self.session.wallet.get_balance()))
+        else:
+            return self._render_response(float(
+                self.session.wallet.get_address_balance(address, include_unconfirmed)))
+
 
     def jsonrpc_stop(self):
         """

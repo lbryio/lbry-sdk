@@ -10,17 +10,15 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Add `lbryschema_version` to response from `version`
-  *
-  *
+  * Added call to `get_address_balance` when `address` conditional returns true
+  * Added `address` conditional to `jsonrpc_wallet_balance` 
+  * Added `get_address_balance` method to the `Wallet` class
 
 ### Changed
-  *
-  *
-  *
+  * Added optional `address` and `include_unconfirmed` params to `jsonrpc_wallet_balance` method
 
 ### Fixed
   * fix stream_cost_estimate throwing exception on non decodeable claims
-  *
   *
 
 ## [0.10.0rc2] - 2017-04-17
