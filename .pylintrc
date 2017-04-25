@@ -112,7 +112,6 @@ disable=
   trailing-newlines,
   undefined-loop-variable,
   ungrouped-imports,
-  unidiomatic-typecheck,
   unnecessary-lambda,
   unused-argument,
   unused-variable,

@@ -241,7 +241,7 @@ class RequestHelper(object):
 def _handle_incoming_blob(response_dict, peer, request):
     if request.response_identifier not in response_dict:
         return InvalidResponseError("response identifier not in response")
-    if type(response_dict[request.response_identifier]) != dict:
+    if not isinstance(response_dict[request.response_identifier], dict):
         return InvalidResponseError("response not a dict. got %s" %
                                     type(response_dict[request.response_identifier]))
     response = response_dict[request.response_identifier]

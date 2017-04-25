@@ -207,7 +207,7 @@ class Node(object):
 
         def expand_and_filter(result):
             expanded_peers = []
-            if type(result) == dict:
+            if isinstance(result, dict):
                 if blob_hash in result:
                     for peer in result[blob_hash]:
                         if self.lbryid != peer[6:]:
@@ -353,7 +353,7 @@ class Node(object):
         outerDf = defer.Deferred()
 
         def checkResult(result):
-            if type(result) == dict:
+            if isinstance(result, dict):
                 # We have found the value; now see who was the closest contact without it...
                 # ...and store the key/value pair
                 outerDf.callback(result)

@@ -24,7 +24,7 @@ __version__ = '0.3.0'
 def undecorated(o):
     """Remove all decorators from a function, method or class"""
     # class decorator
-    if type(o) is type:
+    if isinstance(o, type):
         return o
 
     try:
