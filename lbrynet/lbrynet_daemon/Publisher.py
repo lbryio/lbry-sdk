@@ -20,11 +20,9 @@ class Publisher(object):
         self.certificate_id = certificate_id
         self.lbry_file = None
 
-    """
-    Create lbry file and make claim
-    """
     @defer.inlineCallbacks
     def create_and_publish_stream(self, name, bid, claim_dict, file_path):
+        """Create lbry file and make claim"""
         log.info('Starting publish for %s', name)
         file_name = os.path.basename(file_path)
         with file_utils.get_read_handle(file_path) as read_handle:
@@ -47,11 +45,9 @@ class Publisher(object):
         yield self.lbry_file.save_status()
         defer.returnValue(claim_out)
 
-    """
-    Make a claim without creating a lbry file
-    """
     @defer.inlineCallbacks
     def publish_stream(self, name, bid, claim_dict):
+        """Make a claim without creating a lbry file"""
         claim_out = yield self.make_claim(name, bid, claim_dict)
         defer.returnValue(claim_out)
 
