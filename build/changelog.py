@@ -24,6 +24,14 @@ TEMPLATE = """### Added
   *
   *
 
+### Deprecated
+  *
+  *
+
+### Removed
+  *
+  *
+
 """
 
 
@@ -96,6 +104,7 @@ class Changelog(object):
             output.append('### {}'.format(section))
             for entry in sections[section]:
                 output.append(' * {}'.format(entry))
+            output.append("\n")
         return output
 
     def get_unreleased(self):
@@ -106,7 +115,7 @@ class Changelog(object):
             return
 
         today = datetime.datetime.today()
-        header = '## [{}] - {}\n'.format(version, today.strftime('%Y-%m-%d'))
+        header = "## [{}] - {}\n\n".format(version, today.strftime('%Y-%m-%d'))
 
         changelog_data = (
             ''.join(self.start) +

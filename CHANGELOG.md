@@ -8,6 +8,7 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+
 ### Added
   *
   *
@@ -20,7 +21,17 @@ at anytime.
   *
   *
 
+### Deprecated
+  *
+  *
+
+### Removed
+  *
+  *
+
+
 ## [0.10.0] - 2017-04-25
+
 ### Added
  * Add `lbryschema_version` to response from `version`
  * Added call to `get_address_balance` when `address` conditional returns true
@@ -34,13 +45,16 @@ at anytime.
  * fixed signing of Windows binaries
  * fixed a few pylint warnings
 
+
 ## [0.10.0rc2] - 2017-04-17
 ### Changed
  * Return full `lbry_id` and `installation_id` from `status`
 
+
 ## [0.10.0rc1] - 2017-04-13
 ### Fixed
  * Fix uncaught exception in `stream_cost_estimate`
+
 
 ## [0.9.2rc22] - 2017-04-12
 ### Added
