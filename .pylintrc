@@ -118,7 +118,6 @@ disable=
   unnecessary-lambda,
   unused-argument,
   unused-variable,
-  useless-else-on-loop,
   wildcard-import,
   wrong-import-order,
   wrong-import-position
@@ -137,7 +136,7 @@ output-format=text
 files-output=no
 
 # Tells whether to display a full report or only the messages
-reports=yes
+reports=no
 
 # Python expression which should return a note less than 10 (10 is the highest
 # note). You have access to the variables errors warning, statement which

@@ -56,13 +56,8 @@ def undecorated(o):
                 undecd = undecorated(cell.cell_contents)
                 if undecd:
                     return undecd
-        else:
-            return o
-    else:
-        return o
+    return o
 
 
 def looks_like_a_decorator(a):
-    return (
-        isfunction(a) or ismethod(a) or isclass(a)
-    )
+    return isfunction(a) or ismethod(a) or isclass(a)
