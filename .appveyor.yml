@@ -2,7 +2,7 @@ version: 1.0.{build}
 
 environment:
   GH_TOKEN:
-    secure: LiI5jyuHUw6XbH4kC3gP1HX4P/v4rwD/gCNtaFhQu2AvJz1/1wALkp5ECnIxRyS
+    secure: LiI5jyuHUw6XbH4kC3gP1HX4P/v4rwD/gCNtaFhQu2AvJz1/1wALkp5ECnIxRySN
 #  key_pass:
 #    secure: u6DydPcdrUJlxGL9uc7yQRYG8+5rY6aAEE9nfCSzFyNzZlX9NniOp8Uh5ZKQqX7bGEngLI6ipbLfiJvn0XFnhbn2iTkOuMqOXVJVOehvwlQ=
 #  pfx_key:
