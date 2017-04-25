@@ -20,6 +20,8 @@ at anytime.
   
 ### Fixed
   * fix stream_cost_estimate throwing exception on non decodeable claims
+  * fixed signing of Windows binaries
+  * fixed a few pylint warnings
   *
 
 ## [0.10.0rc2] - 2017-04-17
