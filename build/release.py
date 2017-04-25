@@ -156,7 +156,10 @@ in the future"""
 
 
 def confirm():
-    return raw_input('Is this what you want? [y/N] ').strip().lower() == 'y'
+    try:
+        return raw_input('Is this what you want? [y/N] ').strip().lower() == 'y'
+    except KeyboardInterrupt:
+        return False
 
 
 def run_sanity_checks(repo, branch):
