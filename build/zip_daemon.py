@@ -6,6 +6,7 @@ import zipfile
 
 
 def main():
+    print "zip_daemon.py called"
     this_dir = os.path.dirname(os.path.realpath(__file__))
     tag = subprocess.check_output(['git', 'describe']).strip()
     zipfilename = 'lbrynet-daemon-{}-{}.zip'.format(tag, get_system_label())

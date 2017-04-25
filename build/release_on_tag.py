@@ -10,6 +10,7 @@ import uritemplate
 
 
 def main():
+    print "release_on_tag.py called"
     this_dir = os.path.dirname(os.path.realpath(__file__))
     try:
         current_tag = subprocess.check_output(
