@@ -93,13 +93,13 @@ class Node(object):
         self.next_refresh_call = None
         self.next_change_token_call = None
         # Create k-buckets (for storing contacts)
-        if routingTableClass == None:
+        if routingTableClass is None:
             self._routingTable = routingtable.OptimizedTreeRoutingTable(self.id)
         else:
             self._routingTable = routingTableClass(self.id)
 
         # Initialize this node's network access mechanisms
-        if networkProtocol == None:
+        if networkProtocol is None:
             self._protocol = protocol.KademliaProtocol(self)
         else:
             self._protocol = networkProtocol
@@ -107,7 +107,7 @@ class Node(object):
         self.token_secret = self._generateID()
         self.old_token_secret = None
         self.change_token()
-        if dataStore == None:
+        if dataStore is None:
             self._dataStore = datastore.DictDataStore()
         else:
             self._dataStore = dataStore
@@ -454,7 +454,7 @@ class Node(object):
                to fix this (perhaps use a stream from the Protocol class?)
         """
         # Get the sender's ID (if any)
-        if originalPublisherID == None:
+        if originalPublisherID is None:
             if '_rpcNodeID' in kwargs:
                 originalPublisherID = kwargs['_rpcNodeID']
             else:
@@ -471,7 +471,7 @@ class Node(object):
             # raise TypeError, 'No contact info available'
 
         if ((self_store is False) and
-                (not 'token' in value or not self.verify_token(value['token'], compact_ip))):
+                ('token' not in value or not self.verify_token(value['token'], compact_ip))):
             raise ValueError('Invalid or missing token')
 
         if 'port' in value:
@@ -584,7 +584,7 @@ class Node(object):
         """
         findValue = rpc != 'findNode'
 
-        if startupShortlist == None:
+        if startupShortlist is None:
             shortlist = self._routingTable.findCloseNodes(key, constants.alpha)
             if key != self.id:
                 # Update the "last accessed" timestamp for the appropriate k-bucket
@@ -776,7 +776,7 @@ class _IterativeFindHelper(object):
         if self.key in self.find_value_result:
             self.outer_d.callback(self.find_value_result)
             return
-        elif len(self.active_contacts) and self.find_value == False:
+        elif len(self.active_contacts) and self.find_value is False:
             if self._is_all_done():
                 # TODO: Re-send the FIND_NODEs to all of the k closest nodes not already queried
                 #

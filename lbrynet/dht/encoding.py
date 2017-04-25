@@ -83,7 +83,7 @@ class Bencode(Encoding):
         elif type(data) == float:
             # This (float data type) is a non-standard extension to the original Bencode algorithm
             return 'f%fe' % data
-        elif data == None:
+        elif data is None:
             # This (None/NULL data type) is a non-standard extension
             # to the original Bencode algorithm
             return 'n'

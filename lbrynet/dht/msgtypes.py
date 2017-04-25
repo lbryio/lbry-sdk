@@ -22,7 +22,7 @@ class RequestMessage(Message):
     """ Message containing an RPC request """
 
     def __init__(self, nodeID, method, methodArgs, rpcID=None):
-        if rpcID == None:
+        if rpcID is None:
             rpcID = generate_id()
         Message.__init__(self, rpcID, nodeID)
         self.request = method

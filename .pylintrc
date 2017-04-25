@@ -99,7 +99,6 @@ disable=
   redefined-variable-type,
   relative-import,
   signature-differs,
-  singleton-comparison,
   super-init-not-called,
   too-few-public-methods,
   too-many-arguments,
