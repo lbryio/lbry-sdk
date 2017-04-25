@@ -9,20 +9,30 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  * Add `lbryschema_version` to response from `version`
-  * Added call to `get_address_balance` when `address` conditional returns true
-  * Added `address` conditional to `jsonrpc_wallet_balance` 
-  * Added `get_address_balance` method to the `Wallet` class
+  *
+  *
 
 ### Changed
-  * Added optional `address` and `include_unconfirmed` params to `jsonrpc_wallet_balance` method
-  * Wait for subscriptions before announcing wallet has finished starting
-  
-### Fixed
-  * fix stream_cost_estimate throwing exception on non decodeable claims
-  * fixed signing of Windows binaries
-  * fixed a few pylint warnings
   *
+  *
+
+### Fixed
+  *
+  *
+
+## [0.10.0] - 2017-04-25
+### Added
+ * Add `lbryschema_version` to response from `version`
+ * Added call to `get_address_balance` when `address` conditional returns true
+ * Added `address` conditional to `jsonrpc_wallet_balance`
+ * Added `get_address_balance` method to the `Wallet` class
+### Changed
+ * Added optional `address` and `include_unconfirmed` params to `jsonrpc_wallet_balance` method
+ * Wait for subscriptions before announcing wallet has finished starting
+### Fixed
+ * fix stream_cost_estimate throwing exception on non decodeable claims
+ * fixed signing of Windows binaries
+ * fixed a few pylint warnings
 
 ## [0.10.0rc2] - 2017-04-17
 ### Changed
