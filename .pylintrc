@@ -92,7 +92,6 @@ disable=
   no-member,
   no-self-use,
   not-context-manager,
-  pointless-string-statement,
   protected-access,
   redefined-builtin,
   redefined-outer-name,
