@@ -10,6 +10,8 @@ from lbrynet.core import utils
 
 log = logging.getLogger(__name__)
 
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 ENV_NAMESPACE = 'LBRY_'
 
 LBRYCRD_WALLET = 'lbrycrd'

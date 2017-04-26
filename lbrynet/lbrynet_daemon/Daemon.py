@@ -21,7 +21,7 @@ from lbryschema.error import URIParseError
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION
-from lbrynet import __version__ as LBRYNET_VERSION
+from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet import conf, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
@@ -178,8 +178,8 @@ class Daemon(AuthJSONRPCServer):
             'is_running', 'is_first_run', 'get_time_behind_blockchain', 'daemon_status',
             'get_start_notice',
         ]
-        last_version = {'last_version': {'lbrynet': LBRYNET_VERSION, 'lbryum': LBRYUM_VERSION}}
-        conf.settings.update(last_version)
+        conf.settings.set('last_version',
+                          {'lbrynet': get_lbrynet_version(), 'lbryum': LBRYUM_VERSION})
         self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
         if conf.settings['BLOBFILES_DIR'] == "blobfiles":
@@ -1159,7 +1159,7 @@ class Daemon(AuthJSONRPCServer):
             message,
             conf.settings.installation_id,
             platform_name,
-            LBRYNET_VERSION
+            get_lbrynet_version()
         )
         return self._render_response(True)
 
