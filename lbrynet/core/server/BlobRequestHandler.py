@@ -5,8 +5,8 @@ from twisted.protocols.basic import FileSender
 from twisted.python.failure import Failure
 from zope.interface import implements
 
-from lbrynet.core.Offer import Offer
 from lbrynet import analytics
+from lbrynet.core.Offer import Offer
 from lbrynet.interfaces import IQueryHandlerFactory, IQueryHandler, IBlobSender
 
 log = logging.getLogger(__name__)
@@ -15,17 +15,17 @@ log = logging.getLogger(__name__)
 class BlobRequestHandlerFactory(object):
     implements(IQueryHandlerFactory)
 
-    def __init__(self, blob_manager, wallet, payment_rate_manager, track):
+    def __init__(self, blob_manager, wallet, payment_rate_manager, analytics_manager):
         self.blob_manager = blob_manager
         self.wallet = wallet
         self.payment_rate_manager = payment_rate_manager
-        self.track = track
+        self.analytics_manager = analytics_manager
 
     ######### IQueryHandlerFactory #########
 
     def build_query_handler(self):
         q_h = BlobRequestHandler(
-            self.blob_manager, self.wallet, self.payment_rate_manager, self.track)
+            self.blob_manager, self.wallet, self.payment_rate_manager, self.analytics_manager)
         return q_h
 
     def get_primary_query_identifier(self):
@@ -41,12 +41,12 @@ class BlobRequestHandler(object):
     BLOB_QUERY = 'requested_blob'
     AVAILABILITY_QUERY = 'requested_blobs'
 
-    def __init__(self, blob_manager, wallet, payment_rate_manager, track):
+    def __init__(self, blob_manager, wallet, payment_rate_manager, analytics_manager):
         self.blob_manager = blob_manager
         self.payment_rate_manager = payment_rate_manager
         self.wallet = wallet
         self.query_identifiers = [self.PAYMENT_RATE_QUERY, self.BLOB_QUERY, self.AVAILABILITY_QUERY]
-        self.track = track
+        self.analytics_manager = analytics_manager
         self.peer = None
         self.blob_data_payment_rate = None
         self.read_handle = None
@@ -197,7 +197,8 @@ class BlobRequestHandler(object):
             uploaded = len(data)
             self.blob_bytes_uploaded += uploaded
             self.peer.update_stats('blob_bytes_uploaded', uploaded)
-            self.track.add_observation(analytics.BLOB_BYTES_UPLOADED, uploaded)
+            if self.analytics_manager is not None:
+                self.analytics_manager.add_observation(analytics.BLOB_BYTES_UPLOADED, uploaded)
             return data
 
         def start_transfer():

@@ -390,7 +390,7 @@ class Daemon(AuthJSONRPCServer):
                 self.session.blob_manager,
                 self.session.wallet,
                 self.session.payment_rate_manager,
-                self.analytics_manager.track
+                self.analytics_manager
             ),
             self.session.wallet.get_wallet_info_query_handler_factory(),
         ]
@@ -632,7 +632,7 @@ class Daemon(AuthJSONRPCServer):
         def eb():
             if not finished_d.called:
                 finished_d.errback(Exception("Blob (%s) download timed out" %
-                                              blob_hash[:SHORT_ID_LEN]))
+                                             blob_hash[:SHORT_ID_LEN]))
 
         if not blob_hash:
             raise Exception("Nothing to download")
@@ -833,7 +833,7 @@ class Daemon(AuthJSONRPCServer):
         """
         try:
             claim_response = yield self.session.wallet.resolve_uri(uri)
-        #TODO: fix me, this is a hack
+        # TODO: fix me, this is a hack
         except Exception:
             claim_response = None
 
@@ -1275,7 +1275,6 @@ class Daemon(AuthJSONRPCServer):
             return self._render_response(float(
                 self.session.wallet.get_address_balance(address, include_unconfirmed)))
 
-
     def jsonrpc_stop(self):
         """
         DEPRECATED. Use `daemon_stop` instead.
@@ -1602,7 +1601,7 @@ class Daemon(AuthJSONRPCServer):
         else:
             msg = (
                 "File was already being downloaded" if status == 'start'
-                    else "File was already stopped"
+                else "File was already stopped"
             )
         response = yield self._render_response(msg)
         defer.returnValue(response)
@@ -2182,7 +2181,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda address: self._render_response(address))
         return d
 
-
     @AuthJSONRPCServer.auth_required
     def jsonrpc_wallet_unused_address(self):
         """
@@ -2203,7 +2201,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(_disp)
         d.addCallback(lambda address: self._render_response(address))
         return d
-
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_send_amount_to_address(self, amount, address):

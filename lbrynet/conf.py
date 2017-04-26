@@ -79,7 +79,7 @@ class Env(envparse.Env):
         my_schema = {
             self._convert_key(key): self._convert_value(value)
             for key, value in schema.items()
-        }
+            }
         envparse.Env.__init__(self, **my_schema)
 
     def __call__(self, key, *args, **kwargs):
@@ -103,6 +103,7 @@ class Env(envparse.Env):
                 new_value['subcast'] = value[2]
             return new_value
         return value
+
 
 TYPE_DEFAULT = 'default'
 TYPE_PERSISTED = 'persisted'
@@ -183,7 +184,7 @@ ADJUSTABLE_SETTINGS = {
     #
     # TODO: writing json on the cmd line is a pain, come up with a nicer
     # parser for this data structure. (maybe MAX_KEY_FEE': USD:25
-    'max_key_fee': (json.loads, {'currency':'USD', 'amount': 25.0, 'address':''}),
+    'max_key_fee': (json.loads, {'currency': 'USD', 'amount': 25.0, 'address': ''}),
 
     'max_search_results': (int, 25),
     'max_upload': (float, 0.0),
@@ -221,11 +222,11 @@ class Config(object):
         self._adjustable_defaults = adjustable_defaults
 
         self._data = {
-            TYPE_DEFAULT: {},    # defaults
+            TYPE_DEFAULT: {},  # defaults
             TYPE_PERSISTED: {},  # stored settings from daemon_settings.yml (or from a db, etc)
-            TYPE_ENV: {},        # settings from environment variables
-            TYPE_CLI: {},        # command-line arguments
-            TYPE_RUNTIME: {},    # set during runtime (using self.set(), etc)
+            TYPE_ENV: {},  # settings from environment variables
+            TYPE_CLI: {},  # command-line arguments
+            TYPE_RUNTIME: {},  # set during runtime (using self.set(), etc)
         }
 
         # the order in which a piece of data is searched for. earlier types override later types
@@ -359,7 +360,7 @@ class Config(object):
         return {
             key: val for key, val in self.get_current_settings_dict().iteritems()
             if key in self._adjustable_defaults
-        }
+            }
 
     def save_conf_file_settings(self):
         path = self.get_conf_filename()
@@ -472,4 +473,3 @@ def initialize_settings(load_conf_file=True):
         settings.installation_id = settings.get_installation_id()
         if load_conf_file:
             settings.load_conf_file_settings()
-
