@@ -34,9 +34,8 @@ class Manager(object):
         self.is_started = False
 
     @classmethod
-    def new_instance(cls, api=None):
-        if api is None:
-            api = Api.new_instance()
+    def new_instance(cls, enabled=None):
+        api = Api.new_instance(enabled)
         return cls(api)
 
     # Things We Track
@@ -194,10 +193,11 @@ class Manager(object):
 
 
 class Api(object):
-    def __init__(self, session, url, write_key):
+    def __init__(self, session, url, write_key, enabled):
         self.session = session
         self.url = url
         self._write_key = write_key
+        self._enabled = enabled
 
     def _post(self, endpoint, data):
         # there is an issue with a timing condition with keep-alive
@@ -220,6 +220,8 @@ class Api(object):
 
     def track(self, event):
         """Send a single tracking event"""
+        if not self._enabled:
+            return defer.succeed('analytics disabled')
 
         def _log_error(failure):
             log.warning('Failed to send track event. %s', failure.getTraceback())
@@ -230,12 +232,14 @@ class Api(object):
         return d
 
     @classmethod
-    def new_instance(cls, session=None):
+    def new_instance(cls, enabled=None):
         """Initialize an instance using values from the configuration"""
-        if not session:
-            session = Session()
+        session = Session()
+        if enabled is None:
+            enabled = conf.settings['share_debug_info']
         return cls(
             session,
             conf.settings['ANALYTICS_ENDPOINT'],
-            utils.deobfuscate(conf.settings['ANALYTICS_TOKEN'])
+            utils.deobfuscate(conf.settings['ANALYTICS_TOKEN']),
+            enabled,
         )
