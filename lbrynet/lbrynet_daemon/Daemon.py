@@ -8,7 +8,6 @@ import requests
 import urllib
 import json
 import textwrap
-from requests import exceptions as requests_exceptions
 import random
 
 from twisted.web import server
@@ -109,7 +108,6 @@ class IterableContainer(object):
 class Checker(object):
     """The looping calls the daemon runs"""
     INTERNET_CONNECTION = 'internet_connection_checker'
-    VERSION = 'version_checker'
     CONNECTION_STATUS = 'connection_status_checker'
 
 
@@ -141,57 +139,6 @@ class CheckInternetConnection(object):
 
     def __call__(self):
         self.daemon.connected_to_internet = utils.check_connection()
-
-
-class CheckRemoteVersion(object):
-    URL = 'https://api.github.com/repos/lbryio/lbry-app/releases/latest'
-
-    def __init__(self):
-        self.version = None
-
-    def __call__(self):
-        d = threads.deferToThread(self._get_lbry_electron_client_version)
-        d.addErrback(self._trap_and_log_error, 'lbry-app')
-        d.addErrback(log.fail(), 'Failure checking versions on github')
-
-    def _trap_and_log_error(self, err, module_checked):
-        # KeyError is thrown by get_version_from_github
-        # It'd be better to catch the error before trying to parse the response
-        err.trap(requests_exceptions.RequestException, KeyError)
-        log.warning("Failed to check latest %s version from github", module_checked)
-
-    def _get_lbry_electron_client_version(self):
-        # We'll need to ensure the lbry-app version is in sync with the lbrynet-daemon version
-        self._set_data_from_github()
-        log.info(
-            "remote lbrynet %s > local lbrynet %s = %s",
-            self.version, LBRYNET_VERSION,
-            utils.version_is_greater_than(self.version, LBRYNET_VERSION)
-        )
-
-    def _set_data_from_github(self):
-        release = self._get_release_data()
-        # githubs documentation claims this should never happen, but we'll check just in case
-        if release['prerelease']:
-            raise Exception('Release {} is a pre-release'.format(release['tag_name']))
-        self.version = self._get_version_from_release(release)
-
-    def _get_release_data(self):
-        response = requests.get(self.URL, timeout=20)
-        release = response.json()
-        return release
-
-    @staticmethod
-    def _get_version_from_release(release):
-        """Return the latest released version from github."""
-        tag = release['tag_name']
-        return get_version_from_tag(tag)
-
-    def is_update_available(self):
-        try:
-            return utils.version_is_greater_than(self.version, LBRYNET_VERSION)
-        except TypeError:
-            return False
 
 
 class AlwaysSend(object):
@@ -282,10 +229,8 @@ class Daemon(AuthJSONRPCServer):
         self.streams = {}
         self.name_cache = {}
         self.exchange_rate_manager = ExchangeRateManager()
-        self._remote_version = CheckRemoteVersion()
         calls = {
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
-            Checker.VERSION: LoopingCall(self._remote_version),
             Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
         }
         self.looping_call_manager = LoopingCallManager(calls)
@@ -311,7 +256,6 @@ class Daemon(AuthJSONRPCServer):
         log.info("Starting lbrynet-daemon")
 
         self.looping_call_manager.start(Checker.INTERNET_CONNECTION, 3600)
-        self.looping_call_manager.start(Checker.VERSION, 1800)
         self.looping_call_manager.start(Checker.CONNECTION_STATUS, 30)
         self.exchange_rate_manager.start()
 
@@ -1185,7 +1129,6 @@ class Daemon(AuthJSONRPCServer):
             {
                 'build': (str) build type (e.g. "dev", "rc", "release"),
                 'ip': (str) remote ip, if available,
-                'lbrynet_update_available': (bool) whether there's an update available,
                 'lbrynet_version': (str) lbrynet_version,
                 'lbryum_version': (str) lbryum_version,
                 'lbryschema_version': (str) lbryschema_version,
@@ -1194,13 +1137,10 @@ class Daemon(AuthJSONRPCServer):
                 'platform': (str) platform string
                 'processor': (str) processor type,
                 'python_version': (str) python version,
-                'remote_lbrynet': (str) most recent lbrynet version available from github
             }
         """
 
         platform_info = self._get_platform()
-        platform_info['remote_lbrynet'] = self._remote_version.version
-        platform_info['lbrynet_update_available'] = self._remote_version.is_update_available()
         log.info("Get version info: " + json.dumps(platform_info))
         return self._render_response(platform_info)
 
@@ -2739,14 +2679,6 @@ def get_blob_payment_rate_manager(session, payment_rate_manager=None):
             payment_rate_manager = rate_managers[payment_rate_manager]
             log.info("Downloading blob with rate manager: %s", payment_rate_manager)
     return payment_rate_manager or session.payment_rate_manager
-
-
-def get_version_from_tag(tag):
-    match = re.match('v([\d.]+)', tag)
-    if match:
-        return match.group(1)
-    else:
-        raise Exception('Failed to parse version from tag {}'.format(tag))
 
 
 # lbryum returns json loadeable object with amounts as decimal encoded string,
