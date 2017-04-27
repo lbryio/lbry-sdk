@@ -15,6 +15,9 @@ DOWNLOAD_STARTED = 'Download Started'
 DOWNLOAD_ERRORED = 'Download Errored'
 DOWNLOAD_FINISHED = 'Download Finished'
 HEARTBEAT = 'Heartbeat'
+CLAIM_ACTION = 'Claim Action'  # publish/create/update/abandon
+NEW_CHANNEL = 'New Channel'
+CREDITS_SENT = 'Credits Sent'
 
 BLOB_BYTES_UPLOADED = 'Blob Bytes Uploaded'
 BLOB_BYTES_AVAILABLE = 'Blob Bytes Available'
@@ -63,6 +66,15 @@ class Manager(object):
         self.analytics_api.track(
             self._event(DOWNLOAD_FINISHED, self._download_properties(id_, name, stream_info))
         )
+
+    def send_claim_action(self, action):
+        self.analytics_api.track(self._event(CLAIM_ACTION, {'action': action}))
+
+    def send_new_channel(self):
+        self.analytics_api.track(self._event(NEW_CHANNEL))
+
+    def send_credits_sent(self):
+        self.analytics_api.track(self._event(CREDITS_SENT))
 
     def _send_heartbeat(self):
         self.analytics_api.track(self._event(HEARTBEAT))
@@ -236,7 +248,7 @@ class Api(object):
         """Initialize an instance using values from the configuration"""
         session = Session()
         if enabled is None:
-            enabled = conf.settings['share_debug_info']
+            enabled = conf.settings['share_usage_data']
         return cls(
             session,
             conf.settings['ANALYTICS_ENDPOINT'],

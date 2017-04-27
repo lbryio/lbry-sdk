@@ -199,7 +199,7 @@ ADJUSTABLE_SETTINGS = {
     'run_on_startup': (bool, False),
     'run_reflector_server': (bool, False),
     'sd_download_timeout': (int, 3),
-    'share_debug_info': (bool, True),  # whether to share diagnostic info with LBRY
+    'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
     'peer_search_timeout': (int, 3),
     'search_servers': (list, ['lighthouse1.lbry.io:50005']),
     'search_timeout': (float, 5.0),
@@ -392,8 +392,11 @@ class Config(object):
         if 'startup_scripts' in settings_dict:
             del settings_dict['startup_scripts']
         if 'upload_log' in settings_dict:
-            settings_dict['share_debug_info'] = settings_dict['upload_log']
+            settings_dict['share_usage_data'] = settings_dict['upload_log']
             del settings_dict['upload_log']
+        if 'share_debug_info' in settings_dict:
+            settings_dict['share_usage_data'] = settings_dict['share_debug_info']
+            del settings_dict['share_debug_info']
         for key in settings_dict.keys():
             if not self._is_valid_setting(key):
                 log.warning('Ignoring invalid conf file setting: %s', key)

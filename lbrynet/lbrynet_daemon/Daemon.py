@@ -441,7 +441,7 @@ class Daemon(AuthJSONRPCServer):
             'download_timeout': int,
             'search_timeout': float,
             'cache_time': int,
-            'share_debug_info': bool,
+            'share_usage_data': bool,
         }
 
         def can_update_key(settings, key, setting_type):
@@ -698,6 +698,7 @@ class Daemon(AuthJSONRPCServer):
                 d = reupload.reflect_stream(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
+        self.analytics_manager.send_claim_action('publish')
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
         defer.returnValue(claim_out)
@@ -1710,6 +1711,7 @@ class Daemon(AuthJSONRPCServer):
             raise InsufficientFundsError()
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
+        self.analytics_manager.send_new_channel()
         log.info("Claimed a new channel! Result: %s", result)
         response = yield self._render_response(result)
         defer.returnValue(response)
@@ -1824,20 +1826,18 @@ class Daemon(AuthJSONRPCServer):
         # original format {'currency':{'address','amount'}}
         # add address to fee if unspecified {'version': ,'currency', 'address' , 'amount'}
         if 'fee' in metadata:
-            new_fee_dict = {}
             assert len(metadata['fee']) == 1, "Too many fees"
             currency, fee_dict = metadata['fee'].items()[0]
             if 'address' not in fee_dict:
                 address = yield self.session.wallet.get_new_address()
             else:
                 address = fee_dict['address']
-            new_fee_dict = {
+            metadata['fee'] = {
                 'version': '_0_0_1',
                 'currency': currency,
                 'address': address,
                 'amount': fee_dict['amount']
             }
-            metadata['fee'] = new_fee_dict
 
         log.info("Publish: %s", {
             'name': name,
@@ -1900,6 +1900,7 @@ class Daemon(AuthJSONRPCServer):
 
         try:
             abandon_claim_tx = yield self.session.wallet.abandon_claim(claim_id)
+            self.analytics_manager.send_claim_action('abandon')
             response = yield self._render_response(abandon_claim_tx)
         except BaseException as err:
             log.warning(err)
@@ -1913,10 +1914,9 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     def jsonrpc_abandon_name(self, **kwargs):
         """
-        DEPRECATED, use abandon_claim
+        DEPRECATED. Use `claim_abandon` instead
         """
-
-        return self.jsonrpc_abandon_claim(**kwargs)
+        return self.jsonrpc_claim_abandon(**kwargs)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_support_claim(self, **kwargs):
@@ -1926,6 +1926,7 @@ class Daemon(AuthJSONRPCServer):
         return self.jsonrpc_claim_new_support(**kwargs)
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_claim_new_support(self, name, claim_id, amount):
         """
         Support a name claim
@@ -1943,9 +1944,9 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        d = self.session.wallet.support_claim(name, claim_id, amount)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+        result = yield self.session.wallet.support_claim(name, claim_id, amount)
+        self.analytics_manager.send_claim_action('new_support')
+        defer.returnValue(result)
 
     # TODO: merge this into claim_list
     @AuthJSONRPCServer.auth_required
@@ -2203,6 +2204,7 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_send_amount_to_address(self, amount, address):
         """
         Send credits to an address
@@ -2216,10 +2218,10 @@ class Daemon(AuthJSONRPCServer):
 
         reserved_points = self.session.wallet.reserve_points(address, amount)
         if reserved_points is None:
-            return defer.fail(InsufficientFundsError())
-        d = self.session.wallet.send_points_to_address(reserved_points, amount)
-        d.addCallback(lambda _: self._render_response(True))
-        return d
+            raise InsufficientFundsError()
+        yield self.session.wallet.send_points_to_address(reserved_points, amount)
+        self.analytics_manager.send_credits_sent()
+        defer.returnValue(True)
 
     def jsonrpc_get_block(self, **kwargs):
         """
