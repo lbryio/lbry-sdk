@@ -938,8 +938,12 @@ class LBRYumWallet(Wallet):
             self.network = None
             d.callback(True)
 
+        if self.wallet:
+            self.wallet.stop_threads()
+            log.info("Stopped wallet")
         if self.network:
             self.network.stop()
+            log.info("Stopped connection to lbryum server")
 
         stop_check = task.LoopingCall(check_stopped)
         stop_check.start(.1)
