@@ -169,8 +169,6 @@ class Daemon(AuthJSONRPCServer):
 
     def __init__(self, root, analytics_manager):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
-        reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
-
         self.allowed_during_startup = [
             'stop', 'status', 'version',
             # delete these once they are fully removed:
@@ -239,6 +237,8 @@ class Daemon(AuthJSONRPCServer):
 
     @defer.inlineCallbacks
     def setup(self, launch_ui):
+        reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
+
         self._modify_loggly_formatter()
 
         @defer.inlineCallbacks
@@ -1281,6 +1281,7 @@ class Daemon(AuthJSONRPCServer):
         """
         return self.jsonrpc_daemon_stop()
 
+    @defer.inlineCallbacks
     def jsonrpc_daemon_stop(self):
         """
         Stop lbrynet-daemon
@@ -1289,13 +1290,10 @@ class Daemon(AuthJSONRPCServer):
             (string) Shutdown message
         """
 
-        def _display_shutdown_message():
-            log.info("Shutting down lbrynet daemon")
-
-        d = self._shutdown()
-        d.addCallback(lambda _: _display_shutdown_message())
-        d.addCallback(lambda _: reactor.callLater(0.0, reactor.stop))
-        return self._render_response("Shutting down")
+        log.info("Shutting down lbrynet daemon")
+        response = yield self._render_response("Shutting down")
+        reactor.callLater(0.1, reactor.fireSystemEvent, "shutdown")
+        defer.returnValue(response)
 
     @defer.inlineCallbacks
     def jsonrpc_file_list(self, **kwargs):

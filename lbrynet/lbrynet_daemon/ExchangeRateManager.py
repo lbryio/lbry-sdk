@@ -2,7 +2,7 @@ import time
 import requests
 import logging
 import json
-from twisted.internet import defer, threads, reactor
+from twisted.internet import defer, threads
 from twisted.internet.task import LoopingCall
 
 from lbrynet import conf
@@ -167,7 +167,6 @@ def get_default_market_feed(currency_pair):
 
 class ExchangeRateManager(object):
     def __init__(self):
-        reactor.addSystemEventTrigger('before', 'shutdown', self.stop)
         self.market_feeds = [
             get_default_market_feed(currency_pair) for currency_pair in CURRENCY_PAIRS]
 
