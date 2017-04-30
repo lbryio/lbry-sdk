@@ -51,7 +51,7 @@ class ClaimOutpoint(dict):
                 return (self['txid'], self['nout']) == (compare['txid'], compare['nOut'])
             elif 'nout' in compare:
                 return (self['txid'], self['nout']) == (compare['txid'], compare['nout'])
-        elif type(compare) in [str, unicode]:
+        elif isinstance(compare, (str, unicode)):
             return compare == self.__repr__()
         else:
             raise TypeError('cannot compare {}'.format(type(compare)))
@@ -913,7 +913,30 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda _: self._start_check.start(.1))
         d.addCallback(lambda _: network_start_d)
         d.addCallback(lambda _: self._load_blockchain())
+        d.addCallback(lambda _: log.info("Subscribing to addresses"))
+        d.addCallback(lambda _: self.wallet.wait_until_synchronized(lambda _: None))
+        d.addCallback(lambda _: log.info("Synchronized wallet"))
+
+        storage = lbryum.wallet.WalletStorage(self.config.get_wallet_path())
+        if storage.get('use_encryption') is True:
+            d.addCallback(lambda _: self.wallet.wait_until_authenticated(self.decrypt_wallet()))
+            d.addCallback(lambda _: log.info("Decrypted wallet"))
         return d
+
+    def decrypt_wallet(self):
+        import os
+        from lbryum.util import InvalidPassword
+        import getpass
+
+        password = getpass.getpass("Password for encrypted wallet: ")
+
+        try:
+            seed = self.wallet.check_password(password)
+            self.wallet.set_is_decrypted(True)
+        except InvalidPassword:
+            log.error("Error: This password does not decode this wallet.")
+            os._exit(1)
+
 
     def _stop(self):
         if self._start_check is not None:

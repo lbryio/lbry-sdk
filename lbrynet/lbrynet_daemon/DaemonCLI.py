@@ -15,7 +15,7 @@ from httplib import UNAUTHORIZED
 
 def main():
     colorama.init()
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = argparse.ArgumentParser(add_help=True)
     _, arguments = parser.parse_known_args()
 
     conf.initialize_settings()
