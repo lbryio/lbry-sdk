@@ -18,8 +18,9 @@ at anytime.
   *
 
 ### Fixed
-  *
-  *
+  * Fix multiple reactor.stop() calls
+  * Properly shut down lbryum wallet from lbrynet
+  * Set LBRYumWallet.config upon initialization, fixes attribute error
 
 ### Deprecated
   *
