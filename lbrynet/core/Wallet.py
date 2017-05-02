@@ -868,6 +868,7 @@ class LBRYumWallet(Wallet):
     def __init__(self, storage, config=None):
         Wallet.__init__(self, storage)
         self._config = config
+        self.config = make_config(self._config)
         self.network = None
         self.wallet = None
         self.is_first_run = False
@@ -885,7 +886,6 @@ class LBRYumWallet(Wallet):
 
     def _start(self):
         network_start_d = defer.Deferred()
-        self.config = make_config(self._config)
 
         def setup_network():
             self.network = Network(self.config)
@@ -938,8 +938,12 @@ class LBRYumWallet(Wallet):
             self.network = None
             d.callback(True)
 
+        if self.wallet:
+            self.wallet.stop_threads()
+            log.info("Stopped wallet")
         if self.network:
             self.network.stop()
+            log.info("Stopped connection to lbryum server")
 
         stop_check = task.LoopingCall(check_stopped)
         stop_check.start(.1)

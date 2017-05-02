@@ -55,6 +55,7 @@ class DaemonServer(object):
         if self.server_port is not None:
             yield self.server_port.stopListening()
 
+
 def get_site_base(use_auth, root):
     if use_auth:
         log.info("Using authenticated API")
