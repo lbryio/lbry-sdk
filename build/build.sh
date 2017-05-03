@@ -27,18 +27,16 @@ if [ "$FULL_BUILD" == "true" ]; then
   set +u
   source "$VENV/bin/activate"
   set -u
-fi
 
+  # must set build before installing lbrynet. otherwise it has no effect
+  python "$BUILD_DIR/set_build.py"
+fi
 
 cp "$ROOT/requirements.txt" "$BUILD_DIR/requirements_base.txt"
 (
   cd "$BUILD_DIR"
   pip install -r requirements.txt
 )
-
-if [ "$FULL_BUILD" == "true" ]; then
-  python "$BUILD_DIR/set_build.py"
-fi
 
 (
   cd "$BUILD_DIR"
