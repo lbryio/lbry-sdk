@@ -1297,3 +1297,4 @@ def make_config(config=None):
     if config is None:
         config = {}
     return SimpleConfig(config) if isinstance(config, dict) else config
+    

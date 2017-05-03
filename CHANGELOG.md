@@ -10,12 +10,13 @@ at anytime.
 ## [Unreleased]
 
 ### Added
-  *
-  *
+* Added checks to see if wallet is encrypted within the method `check_started` in `lbrynet/core/Wallet.py`
+* Added callback `self.wallet.wait_until_authenticated(self.decrypt_wallet())` to `check_started` in `lbrynet/core/Wallet.py`
+* Added `decrypt_wallet()` method in `lbrynet/core/Wallet.py`
 
 ### Changed
-  *
-  *
+* updated `add_help` to true on the arugment parser within `main()` `lbrynet/lbrynet_daemon/DaemonCLI.py`
+* fixed PyLint Errors and warnings
 
 ### Fixed
   * Fix multiple reactor.stop() calls
