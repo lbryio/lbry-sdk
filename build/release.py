@@ -47,11 +47,13 @@ def main():
 
     is_rc = re.search('\drc\d+$', repo.new_version) is not None
     # only have a release message for real releases, not for RCs
-    release_msg = '' if is_rc else repo.get_unreleased_changelog()
+    release_msg = None if is_rc else repo.get_unreleased_changelog()
+    if release_msg is None:
+        release_msg = ''
 
     if args.dry_run:
         print "rc: " + ("yes" if is_rc else "no")
-        print "release message: \n" + (release_msg or "  NO MESSAGE FOR RCs")
+        print "release message: \n" + (release_msg if not is_rc else "  NO MESSAGE FOR RCs")
         return
 
     gh_token = get_gh_token()
