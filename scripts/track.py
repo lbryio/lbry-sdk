@@ -1,9 +1,6 @@
 import logging
-import random
 
 from twisted.internet import defer
-
-from lbrynet.core import Error
 
 import pool
 

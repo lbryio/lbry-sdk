@@ -2,13 +2,11 @@ import binascii
 import logging.handlers
 import mimetypes
 import os
-import re
 import base58
 import requests
 import urllib
 import json
 import textwrap
-from requests import exceptions as requests_exceptions
 import random
 
 from twisted.web import server
@@ -22,7 +20,7 @@ from lbryschema.error import URIParseError
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION
-from lbrynet import __version__ as LBRYNET_VERSION
+from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet import conf, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
@@ -109,7 +107,6 @@ class IterableContainer(object):
 class Checker(object):
     """The looping calls the daemon runs"""
     INTERNET_CONNECTION = 'internet_connection_checker'
-    VERSION = 'version_checker'
     CONNECTION_STATUS = 'connection_status_checker'
 
 
@@ -143,57 +140,6 @@ class CheckInternetConnection(object):
         self.daemon.connected_to_internet = utils.check_connection()
 
 
-class CheckRemoteVersion(object):
-    URL = 'https://api.github.com/repos/lbryio/lbry-app/releases/latest'
-
-    def __init__(self):
-        self.version = None
-
-    def __call__(self):
-        d = threads.deferToThread(self._get_lbry_electron_client_version)
-        d.addErrback(self._trap_and_log_error, 'lbry-app')
-        d.addErrback(log.fail(), 'Failure checking versions on github')
-
-    def _trap_and_log_error(self, err, module_checked):
-        # KeyError is thrown by get_version_from_github
-        # It'd be better to catch the error before trying to parse the response
-        err.trap(requests_exceptions.RequestException, KeyError)
-        log.warning("Failed to check latest %s version from github", module_checked)
-
-    def _get_lbry_electron_client_version(self):
-        # We'll need to ensure the lbry-app version is in sync with the lbrynet-daemon version
-        self._set_data_from_github()
-        log.info(
-            "remote lbrynet %s > local lbrynet %s = %s",
-            self.version, LBRYNET_VERSION,
-            utils.version_is_greater_than(self.version, LBRYNET_VERSION)
-        )
-
-    def _set_data_from_github(self):
-        release = self._get_release_data()
-        # githubs documentation claims this should never happen, but we'll check just in case
-        if release['prerelease']:
-            raise Exception('Release {} is a pre-release'.format(release['tag_name']))
-        self.version = self._get_version_from_release(release)
-
-    def _get_release_data(self):
-        response = requests.get(self.URL, timeout=20)
-        release = response.json()
-        return release
-
-    @staticmethod
-    def _get_version_from_release(release):
-        """Return the latest released version from github."""
-        tag = release['tag_name']
-        return get_version_from_tag(tag)
-
-    def is_update_available(self):
-        try:
-            return utils.version_is_greater_than(self.version, LBRYNET_VERSION)
-        except TypeError:
-            return False
-
-
 class AlwaysSend(object):
     def __init__(self, value_generator, *args, **kwargs):
         self.value_generator = value_generator
@@ -223,16 +169,14 @@ class Daemon(AuthJSONRPCServer):
 
     def __init__(self, root, analytics_manager):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
-        reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
-
         self.allowed_during_startup = [
             'stop', 'status', 'version',
             # delete these once they are fully removed:
             'is_running', 'is_first_run', 'get_time_behind_blockchain', 'daemon_status',
             'get_start_notice',
         ]
-        last_version = {'last_version': {'lbrynet': LBRYNET_VERSION, 'lbryum': LBRYUM_VERSION}}
-        conf.settings.update(last_version)
+        conf.settings.set('last_version',
+                          {'lbrynet': get_lbrynet_version(), 'lbryum': LBRYUM_VERSION})
         self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
         if conf.settings['BLOBFILES_DIR'] == "blobfiles":
@@ -282,10 +226,8 @@ class Daemon(AuthJSONRPCServer):
         self.streams = {}
         self.name_cache = {}
         self.exchange_rate_manager = ExchangeRateManager()
-        self._remote_version = CheckRemoteVersion()
         calls = {
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
-            Checker.VERSION: LoopingCall(self._remote_version),
             Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
         }
         self.looping_call_manager = LoopingCallManager(calls)
@@ -295,6 +237,8 @@ class Daemon(AuthJSONRPCServer):
 
     @defer.inlineCallbacks
     def setup(self, launch_ui):
+        reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
+
         self._modify_loggly_formatter()
 
         @defer.inlineCallbacks
@@ -311,7 +255,6 @@ class Daemon(AuthJSONRPCServer):
         log.info("Starting lbrynet-daemon")
 
         self.looping_call_manager.start(Checker.INTERNET_CONNECTION, 3600)
-        self.looping_call_manager.start(Checker.VERSION, 1800)
         self.looping_call_manager.start(Checker.CONNECTION_STATUS, 30)
         self.exchange_rate_manager.start()
 
@@ -446,7 +389,7 @@ class Daemon(AuthJSONRPCServer):
                 self.session.blob_manager,
                 self.session.wallet,
                 self.session.payment_rate_manager,
-                self.analytics_manager.track
+                self.analytics_manager
             ),
             self.session.wallet.get_wallet_info_query_handler_factory(),
         ]
@@ -497,7 +440,7 @@ class Daemon(AuthJSONRPCServer):
             'download_timeout': int,
             'search_timeout': float,
             'cache_time': int,
-            'share_debug_info': bool,
+            'share_usage_data': bool,
         }
 
         def can_update_key(settings, key, setting_type):
@@ -688,7 +631,7 @@ class Daemon(AuthJSONRPCServer):
         def eb():
             if not finished_d.called:
                 finished_d.errback(Exception("Blob (%s) download timed out" %
-                                              blob_hash[:SHORT_ID_LEN]))
+                                             blob_hash[:SHORT_ID_LEN]))
 
         if not blob_hash:
             raise Exception("Nothing to download")
@@ -754,6 +697,7 @@ class Daemon(AuthJSONRPCServer):
                 d = reupload.reflect_stream(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
+        self.analytics_manager.send_claim_action('publish')
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
         defer.returnValue(claim_out)
@@ -889,7 +833,7 @@ class Daemon(AuthJSONRPCServer):
         """
         try:
             claim_response = yield self.session.wallet.resolve_uri(uri)
-        #TODO: fix me, this is a hack
+        # TODO: fix me, this is a hack
         except Exception:
             claim_response = None
 
@@ -1185,7 +1129,6 @@ class Daemon(AuthJSONRPCServer):
             {
                 'build': (str) build type (e.g. "dev", "rc", "release"),
                 'ip': (str) remote ip, if available,
-                'lbrynet_update_available': (bool) whether there's an update available,
                 'lbrynet_version': (str) lbrynet_version,
                 'lbryum_version': (str) lbryum_version,
                 'lbryschema_version': (str) lbryschema_version,
@@ -1194,13 +1137,10 @@ class Daemon(AuthJSONRPCServer):
                 'platform': (str) platform string
                 'processor': (str) processor type,
                 'python_version': (str) python version,
-                'remote_lbrynet': (str) most recent lbrynet version available from github
             }
         """
 
         platform_info = self._get_platform()
-        platform_info['remote_lbrynet'] = self._remote_version.version
-        platform_info['lbrynet_update_available'] = self._remote_version.is_update_available()
         log.info("Get version info: " + json.dumps(platform_info))
         return self._render_response(platform_info)
 
@@ -1219,7 +1159,7 @@ class Daemon(AuthJSONRPCServer):
             message,
             conf.settings.installation_id,
             platform_name,
-            LBRYNET_VERSION
+            get_lbrynet_version()
         )
         return self._render_response(True)
 
@@ -1335,13 +1275,13 @@ class Daemon(AuthJSONRPCServer):
             return self._render_response(float(
                 self.session.wallet.get_address_balance(address, include_unconfirmed)))
 
-
     def jsonrpc_stop(self):
         """
         DEPRECATED. Use `daemon_stop` instead.
         """
         return self.jsonrpc_daemon_stop()
 
+    @defer.inlineCallbacks
     def jsonrpc_daemon_stop(self):
         """
         Stop lbrynet-daemon
@@ -1350,13 +1290,10 @@ class Daemon(AuthJSONRPCServer):
             (string) Shutdown message
         """
 
-        def _display_shutdown_message():
-            log.info("Shutting down lbrynet daemon")
-
-        d = self._shutdown()
-        d.addCallback(lambda _: _display_shutdown_message())
-        d.addCallback(lambda _: reactor.callLater(0.0, reactor.stop))
-        return self._render_response("Shutting down")
+        log.info("Shutting down lbrynet daemon")
+        response = yield self._render_response("Shutting down")
+        reactor.callLater(0.1, reactor.fireSystemEvent, "shutdown")
+        defer.returnValue(response)
 
     @defer.inlineCallbacks
     def jsonrpc_file_list(self, **kwargs):
@@ -1662,7 +1599,7 @@ class Daemon(AuthJSONRPCServer):
         else:
             msg = (
                 "File was already being downloaded" if status == 'start'
-                    else "File was already stopped"
+                else "File was already stopped"
             )
         response = yield self._render_response(msg)
         defer.returnValue(response)
@@ -1771,6 +1708,7 @@ class Daemon(AuthJSONRPCServer):
             raise InsufficientFundsError()
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
+        self.analytics_manager.send_new_channel()
         log.info("Claimed a new channel! Result: %s", result)
         response = yield self._render_response(result)
         defer.returnValue(response)
@@ -1885,20 +1823,18 @@ class Daemon(AuthJSONRPCServer):
         # original format {'currency':{'address','amount'}}
         # add address to fee if unspecified {'version': ,'currency', 'address' , 'amount'}
         if 'fee' in metadata:
-            new_fee_dict = {}
             assert len(metadata['fee']) == 1, "Too many fees"
             currency, fee_dict = metadata['fee'].items()[0]
             if 'address' not in fee_dict:
                 address = yield self.session.wallet.get_new_address()
             else:
                 address = fee_dict['address']
-            new_fee_dict = {
+            metadata['fee'] = {
                 'version': '_0_0_1',
                 'currency': currency,
                 'address': address,
                 'amount': fee_dict['amount']
             }
-            metadata['fee'] = new_fee_dict
 
         log.info("Publish: %s", {
             'name': name,
@@ -1961,6 +1897,7 @@ class Daemon(AuthJSONRPCServer):
 
         try:
             abandon_claim_tx = yield self.session.wallet.abandon_claim(claim_id)
+            self.analytics_manager.send_claim_action('abandon')
             response = yield self._render_response(abandon_claim_tx)
         except BaseException as err:
             log.warning(err)
@@ -1974,10 +1911,9 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     def jsonrpc_abandon_name(self, **kwargs):
         """
-        DEPRECATED, use abandon_claim
+        DEPRECATED. Use `claim_abandon` instead
         """
-
-        return self.jsonrpc_abandon_claim(**kwargs)
+        return self.jsonrpc_claim_abandon(**kwargs)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_support_claim(self, **kwargs):
@@ -1987,6 +1923,7 @@ class Daemon(AuthJSONRPCServer):
         return self.jsonrpc_claim_new_support(**kwargs)
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_claim_new_support(self, name, claim_id, amount):
         """
         Support a name claim
@@ -2004,9 +1941,9 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        d = self.session.wallet.support_claim(name, claim_id, amount)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+        result = yield self.session.wallet.support_claim(name, claim_id, amount)
+        self.analytics_manager.send_claim_action('new_support')
+        defer.returnValue(result)
 
     # TODO: merge this into claim_list
     @AuthJSONRPCServer.auth_required
@@ -2242,7 +2179,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda address: self._render_response(address))
         return d
 
-
     @AuthJSONRPCServer.auth_required
     def jsonrpc_wallet_unused_address(self):
         """
@@ -2264,8 +2200,8 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda address: self._render_response(address))
         return d
 
-
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_send_amount_to_address(self, amount, address):
         """
         Send credits to an address
@@ -2279,10 +2215,10 @@ class Daemon(AuthJSONRPCServer):
 
         reserved_points = self.session.wallet.reserve_points(address, amount)
         if reserved_points is None:
-            return defer.fail(InsufficientFundsError())
-        d = self.session.wallet.send_points_to_address(reserved_points, amount)
-        d.addCallback(lambda _: self._render_response(True))
-        return d
+            raise InsufficientFundsError()
+        yield self.session.wallet.send_points_to_address(reserved_points, amount)
+        self.analytics_manager.send_credits_sent()
+        defer.returnValue(True)
 
     def jsonrpc_get_block(self, **kwargs):
         """
@@ -2739,14 +2675,6 @@ def get_blob_payment_rate_manager(session, payment_rate_manager=None):
             payment_rate_manager = rate_managers[payment_rate_manager]
             log.info("Downloading blob with rate manager: %s", payment_rate_manager)
     return payment_rate_manager or session.payment_rate_manager
-
-
-def get_version_from_tag(tag):
-    match = re.match('v([\d.]+)', tag)
-    if match:
-        return match.group(1)
-    else:
-        raise Exception('Failed to parse version from tag {}'.format(tag))
 
 
 # lbryum returns json loadeable object with amounts as decimal encoded string,

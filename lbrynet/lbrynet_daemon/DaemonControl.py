@@ -120,23 +120,15 @@ def start_server_and_listen(launchui, use_auth, analytics_manager, max_tries=5):
         analytics_manager: to send analytics
     """
     analytics_manager.send_server_startup()
-    log_support.configure_analytics_handler(analytics_manager)
-    tries = 1
-    while tries < max_tries:
-        log.info('Making attempt %s / %s to startup', tries, max_tries)
-        try:
-            daemon_server = DaemonServer(analytics_manager)
-            yield daemon_server.start(use_auth, launchui)
-            analytics_manager.send_server_startup_success()
-            break
-        except Exception as e:
-            log.exception('Failed to startup')
-            yield daemon_server.stop()
-            analytics_manager.send_server_startup_error(str(e))
-        tries += 1
-    else:
-        log.warn("Exceeded max tries to start up, stopping")
-        reactor.callFromThread(reactor.stop)
+    daemon_server = DaemonServer(analytics_manager)
+    try:
+        yield daemon_server.start(use_auth, launchui)
+        analytics_manager.send_server_startup_success()
+    except Exception as e:
+        log.exception('Failed to startup')
+        yield daemon_server.stop()
+        analytics_manager.send_server_startup_error(str(e))
+        reactor.fireSystemEvent("shutdown")
 
 
 if __name__ == "__main__":

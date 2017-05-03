@@ -239,8 +239,7 @@ class EncryptedFileManager(object):
         for l in self.lbry_files:
             if l == lbry_file:
                 return l.toggle_running()
-        else:
-            return defer.fail(Failure(ValueError("Could not find that LBRY file")))
+        return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
     def _reflect_lbry_files(self):
         for lbry_file in self.lbry_files:

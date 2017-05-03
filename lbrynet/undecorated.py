@@ -24,7 +24,7 @@ __version__ = '0.3.0'
 def undecorated(o):
     """Remove all decorators from a function, method or class"""
     # class decorator
-    if type(o) is type:
+    if isinstance(o, type):
         return o
 
     try:
@@ -56,13 +56,8 @@ def undecorated(o):
                 undecd = undecorated(cell.cell_contents)
                 if undecd:
                     return undecd
-        else:
-            return o
-    else:
-        return o
+    return o
 
 
 def looks_like_a_decorator(a):
-    return (
-        isfunction(a) or ismethod(a) or isclass(a)
-    )
+    return isfunction(a) or ismethod(a) or isclass(a)

@@ -9,7 +9,7 @@ import traceback
 from txrequests import Session
 import twisted.python.log
 
-from lbrynet import __version__ as lbrynet_version, analytics, build_type, conf
+from lbrynet import __version__ as lbrynet_version, build_type, conf
 from lbrynet.core import utils
 
 ####
@@ -132,12 +132,6 @@ def configure_file_handler(file_name, **kwargs):
     handler.setFormatter(DEFAULT_FORMATTER)
     handler.name = 'file'
     return handler
-
-
-def configure_analytics_handler(analytics_manager):
-    handler = analytics.Handler(analytics_manager)
-    handler.name = 'analytics'
-    return configure_handler(handler, logging.getLogger(), logging.ERROR)
 
 
 def get_loggly_url(token=None, version=None):

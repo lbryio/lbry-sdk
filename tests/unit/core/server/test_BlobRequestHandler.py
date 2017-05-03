@@ -5,7 +5,6 @@ from twisted.internet import defer
 from twisted.test import proto_helpers
 from twisted.trial import unittest
 
-from lbrynet import analytics
 from lbrynet.core import Peer
 from lbrynet.core.server import BlobRequestHandler
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
@@ -120,8 +119,7 @@ class TestBlobRequestHandlerSender(unittest.TestCase):
         # TODO: also check that the expected payment values are set
         consumer = proto_helpers.StringTransport()
         test_file = StringIO.StringIO('test')
-        track = analytics.Track()
-        handler = BlobRequestHandler.BlobRequestHandler(None, None, None, track)
+        handler = BlobRequestHandler.BlobRequestHandler(None, None, None, None)
         handler.peer = mock.create_autospec(Peer.Peer)
         handler.currently_uploading = mock.Mock()
         handler.read_handle = test_file

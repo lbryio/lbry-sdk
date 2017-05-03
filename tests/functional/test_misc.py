@@ -10,7 +10,6 @@ import unittest
 from Crypto import Random
 from Crypto.Hash import MD5
 from lbrynet import conf
-from lbrynet import analytics
 from lbrynet.lbryfile.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
@@ -136,7 +135,7 @@ class LbryUploader(object):
             2: BlobRequestHandlerFactory(
                 session.blob_manager, session.wallet,
                 session.payment_rate_manager,
-                analytics.Track()),
+                None),
             3: session.wallet.get_wallet_info_query_handler_factory(),
         }
         server_factory = ServerProtocolFactory(session.rate_limiter,
@@ -256,7 +255,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
             2: BlobRequestHandlerFactory(
                 session.blob_manager, session.wallet,
                 session.payment_rate_manager,
-                analytics.Track()),
+                None),
             3: session.wallet.get_wallet_info_query_handler_factory(),
         }
 
@@ -348,7 +347,7 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
             1: BlobAvailabilityHandlerFactory(session.blob_manager),
             2: BlobRequestHandlerFactory(session.blob_manager, session.wallet,
                                          session.payment_rate_manager,
-                                         analytics.Track()),
+                                         None),
             3: session.wallet.get_wallet_info_query_handler_factory(),
         }
 

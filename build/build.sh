@@ -37,7 +37,6 @@ cp "$ROOT/requirements.txt" "$BUILD_DIR/requirements_base.txt"
 )
 
 if [ "$FULL_BUILD" == "true" ]; then
-  python "$BUILD_DIR/set_version.py"
   python "$BUILD_DIR/set_build.py"
 fi
 

@@ -178,22 +178,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     df.callback((message, address))
                 elif isinstance(message, msgtypes.ErrorMessage):
                     # The RPC request raised a remote exception; raise it locally
-                    if message.exceptionType.startswith('exceptions.'):
-                        exceptionClassName = message.exceptionType[11:]
-                    else:
-                        localModuleHierarchy = self.__module__.split('.')
-                        remoteHierarchy = message.exceptionType.split('.')
-                        # strip the remote hierarchy
-                        while remoteHierarchy[0] == localModuleHierarchy[0]:
-                            remoteHierarchy.pop(0)
-                            localModuleHierarchy.pop(0)
-                        exceptionClassName = '.'.join(remoteHierarchy)
-                    remoteException = None
-                    try:
-                        exec 'remoteException = %s("%s")' % (exceptionClassName, message.response)
-                    except Exception:
-                        # We could not recreate the exception; create a generic one
-                        remoteException = Exception(message.response)
+                    remoteException = Exception(message.response)
                     df.errback(remoteException)
                 else:
                     # We got a result from the RPC

@@ -2,8 +2,6 @@ from __future__ import print_function
 from lbrynet.core import log_support
 
 import argparse
-import collections
-import itertools
 import logging
 import os
 import random
@@ -12,28 +10,16 @@ import sys
 import appdirs
 from twisted.internet import defer
 from twisted.internet import reactor
-from twisted.internet import protocol
-from twisted.internet import endpoints
 
 from lbrynet import conf
-from lbrynet.core import Error
 from lbrynet.core import Wallet
-from lbrynet.core import BlobAvailability
 from lbrynet.core import BlobManager
-from lbrynet.core import HashAnnouncer
-from lbrynet.core import PeerManager
 from lbrynet.core import Session
 from lbrynet.core import utils
-from lbrynet.core.client import DHTPeerFinder
-from lbrynet.dht import node
 
-from lbrynet.metadata import Metadata
-from lbrynet.core import StreamDescriptor as sd
 from lbrynet import reflector
 
-import common
 import name
-import pool
 import track
 
 

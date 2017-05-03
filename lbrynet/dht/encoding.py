@@ -63,16 +63,16 @@ class Bencode(Encoding):
         @return: The encoded data
         @rtype: str
         """
-        if type(data) in (int, long):
+        if isinstance(data, (int, long)):
             return 'i%de' % data
-        elif type(data) == str:
+        elif isinstance(data, str):
             return '%d:%s' % (len(data), data)
-        elif type(data) in (list, tuple):
+        elif isinstance(data, (list, tuple)):
             encodedListItems = ''
             for item in data:
                 encodedListItems += self.encode(item)
             return 'l%se' % encodedListItems
-        elif type(data) == dict:
+        elif isinstance(data, dict):
             encodedDictItems = ''
             keys = data.keys()
             keys.sort()
@@ -80,16 +80,16 @@ class Bencode(Encoding):
                 encodedDictItems += self.encode(key)
                 encodedDictItems += self.encode(data[key])
             return 'd%se' % encodedDictItems
-        elif type(data) == float:
+        elif isinstance(data, float):
             # This (float data type) is a non-standard extension to the original Bencode algorithm
             return 'f%fe' % data
-        elif data == None:
+        elif data is None:
             # This (None/NULL data type) is a non-standard extension
             # to the original Bencode algorithm
             return 'n'
         else:
             print data
-            raise TypeError, "Cannot bencode '%s' object" % type(data)
+            raise TypeError("Cannot bencode '%s' object" % type(data))
 
     def decode(self, data):
         """ Decoder implementation of the Bencode algorithm
@@ -104,11 +104,11 @@ class Bencode(Encoding):
         @rtype:  int, list, dict or str
         """
         if len(data) == 0:
-            raise DecodeError, 'Cannot decode empty string'
+            raise DecodeError('Cannot decode empty string')
         try:
             return self._decodeRecursive(data)[0]
         except ValueError as e:
-            raise DecodeError, e.message
+            raise DecodeError(e.message)
 
     @staticmethod
     def _decodeRecursive(data, startIndex=0):
@@ -118,14 +118,14 @@ class Bencode(Encoding):
         """
         if data[startIndex] == 'i':
             endPos = data[startIndex:].find('e') + startIndex
-            return (int(data[startIndex + 1:endPos]), endPos + 1)
+            return int(data[startIndex + 1:endPos]), endPos + 1
         elif data[startIndex] == 'l':
             startIndex += 1
             decodedList = []
             while data[startIndex] != 'e':
                 listData, startIndex = Bencode._decodeRecursive(data, startIndex)
                 decodedList.append(listData)
-            return (decodedList, startIndex + 1)
+            return decodedList, startIndex + 1
         elif data[startIndex] == 'd':
             startIndex += 1
             decodedDict = {}
@@ -133,15 +133,15 @@ class Bencode(Encoding):
                 key, startIndex = Bencode._decodeRecursive(data, startIndex)
                 value, startIndex = Bencode._decodeRecursive(data, startIndex)
                 decodedDict[key] = value
-            return (decodedDict, startIndex)
+            return decodedDict, startIndex
         elif data[startIndex] == 'f':
             # This (float data type) is a non-standard extension to the original Bencode algorithm
             endPos = data[startIndex:].find('e') + startIndex
-            return (float(data[startIndex + 1:endPos]), endPos + 1)
+            return float(data[startIndex + 1:endPos]), endPos + 1
         elif data[startIndex] == 'n':
             # This (None/NULL data type) is a non-standard extension
             # to the original Bencode algorithm
-            return (None, startIndex + 1)
+            return None, startIndex + 1
         else:
             splitPos = data[startIndex:].find(':') + startIndex
             try:
@@ -151,4 +151,4 @@ class Bencode(Encoding):
             startIndex = splitPos + 1
             endPos = startIndex + length
             bytes = data[startIndex:endPos]
-            return (bytes, endPos)
+            return bytes, endPos

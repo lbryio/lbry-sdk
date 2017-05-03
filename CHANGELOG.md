@@ -8,26 +8,54 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+
 ### Added
-  * Add `lbryschema_version` to response from `version`
-  * Added call to `get_address_balance` when `address` conditional returns true
-  * Added `address` conditional to `jsonrpc_wallet_balance` 
-  * Added `get_address_balance` method to the `Wallet` class
+  *
+  *
 
 ### Changed
-  * Added optional `address` and `include_unconfirmed` params to `jsonrpc_wallet_balance` method
+  *
+  *
 
 ### Fixed
-  * fix stream_cost_estimate throwing exception on non decodeable claims
+  * Fix multiple reactor.stop() calls
+  * Properly shut down lbryum wallet from lbrynet
+  * Set LBRYumWallet.config upon initialization, fixes attribute error
+
+### Deprecated
   *
+  *
+
+### Removed
+  *
+  *
+
+
+## [0.10.0] - 2017-04-25
+
+### Added
+ * Add `lbryschema_version` to response from `version`
+ * Added call to `get_address_balance` when `address` conditional returns true
+ * Added `address` conditional to `jsonrpc_wallet_balance`
+ * Added `get_address_balance` method to the `Wallet` class
+### Changed
+ * Added optional `address` and `include_unconfirmed` params to `jsonrpc_wallet_balance` method
+ * Wait for subscriptions before announcing wallet has finished starting
+### Fixed
+ * fix stream_cost_estimate throwing exception on non decodeable claims
+ * fixed signing of Windows binaries
+ * fixed a few pylint warnings
+
 
 ## [0.10.0rc2] - 2017-04-17
 ### Changed
  * Return full `lbry_id` and `installation_id` from `status`
 
+
 ## [0.10.0rc1] - 2017-04-13
 ### Fixed
  * Fix uncaught exception in `stream_cost_estimate`
+
 
 ## [0.9.2rc22] - 2017-04-12
 ### Added

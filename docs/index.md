@@ -80,14 +80,42 @@ Returns:
     (dict) Requested block
 ```
 
+## channel_list_mine
+
+```text
+Get my channels
+
+Returns:
+    (list) ClaimDict
+```
+
+## channel_new
+
+```text
+Generate a publisher key and create a new certificate claim
+
+Args:
+    'channel_name': (str) '@' prefixed name
+    'amount': (float) amount to claim name
+
+Returns:
+    (dict) Dictionary containing result of the claim
+    {
+        'tx' : (str) hex encoded transaction
+        'txid' : (str) txid of resulting claim
+        'nout' : (int) nout of the resulting claim
+        'fee' : (float) fee paid for the claim transaction
+        'claim_id' : (str) claim ID of the resulting claim
+    }
+```
+
 ## claim_abandon
 
 ```text
 Abandon a name and reclaim credits from the claim
 
 Args:
-    'txid': (str) txid of claim
-    'nout': (int) nout of claim
+    'claim_id': (str) claim_id of claim
 Return:
     (dict) Dictionary containing result of the claim
     {
@@ -181,6 +209,7 @@ Args:
     'name': (str) name to look up, do not include lbry:// prefix
     'txid'(optional): (str) if specified, look for claim with this txid
     'nout'(optional): (int) if specified, look for claim with this nout
+    'claim_id'(optional): (str) if specified, look for claim with this claim_id
 Returns:
     (dict) Dictionary contaning claim info, (bool) false if claim is not
         resolvable
@@ -313,16 +342,12 @@ Returns:
 Download stream from a LBRY name.
 
 Args:
-    'name': (str) name to download
+    'uri': (str) lbry uri to download
     'file_name'(optional): (str) a user specified name for the downloaded file
-    'stream_info'(optional): (str) specified stream info overrides name
     'timeout'(optional): (int) download timeout in number of seconds
     'download_directory'(optional): (str) path to directory where file will be saved
-    'wait_for_write'(optional): (bool)  defaults to True. When set, waits for the file to
-        only start to be written before returning any results.
 Returns:
     (dict) Dictionary contaning information about the stream
-
     {
         'completed': (bool) true if download is completed,
         'file_name': (str) name of file,
@@ -330,7 +355,7 @@ Returns:
         'points_paid': (float) credit paid to download file,
         'stopped': (bool) true if download is stopped,
         'stream_hash': (str) stream hash of file,
-        'stream_name': (str) stream name ,
+        'stream_name': (str) stream name,
         'suggested_file_name': (str) suggested file name,
         'sd_hash': (str) sd hash of file,
         'name': (str) name claim attached to file
@@ -349,10 +374,10 @@ Returns:
 ## get_availability
 
 ```text
-Get stream availability for a winning claim
+Get stream availability for lbry uri
 
 Args:
-    'name' : (str) lbry name
+    'uri' : (str) lbry uri
     'sd_timeout' (optional): (int) sd blob download timeout
     'peer_timeout' (optional): (int) how long to look for peers
 
@@ -425,6 +450,7 @@ Args:
     'preview'(optional): (str) preview URL for the file
     'nsfw'(optional): (bool) True if not safe for work
     'sources'(optional): (dict){'lbry_sd_hash':sd_hash} specifies sd hash of file
+    'channel_name' (optional): (str) name of the publisher channel
 
 Returns:
     (dict) Dictionary containing result of the claim
@@ -457,6 +483,81 @@ Args:
     'message': (str) message to send
 Returns:
     (bool) true if successful
+```
+
+## resolve
+
+```text
+Resolve a LBRY URI
+
+Args:
+    'uri': (str) uri to download
+Returns:
+    None if nothing can be resolved, otherwise:
+    If uri resolves to a channel or a claim in a channel:
+        'certificate': {
+            'address': (str) claim address,
+            'amount': (float) claim amount,
+            'effective_amount': (float) claim amount including supports,
+            'claim_id': (str) claim id,
+            'claim_sequence': (int) claim sequence number,
+            'decoded_claim': (bool) whether or not the claim value was decoded,
+            'height': (int) claim height,
+            'depth': (int) claim depth,
+            'has_signature': (bool) included if decoded_claim
+            'name': (str) claim name,
+            'supports: (list) list of supports [{'txid': txid,
+                                                 'nout': nout,
+                                                 'amount': amount}],
+            'txid': (str) claim txid,
+            'nout': (str) claim nout,
+            'signature_is_valid': (bool), included if has_signature,
+            'value': ClaimDict if decoded, otherwise hex string
+        }
+    If uri resolves to a channel:
+        'claims_in_channel': [
+            {
+                'address': (str) claim address,
+                'amount': (float) claim amount,
+                'effective_amount': (float) claim amount including supports,
+                'claim_id': (str) claim id,
+                'claim_sequence': (int) claim sequence number,
+                'decoded_claim': (bool) whether or not the claim value was decoded,
+                'height': (int) claim height,
+                'depth': (int) claim depth,
+                'has_signature': (bool) included if decoded_claim
+                'name': (str) claim name,
+                'supports: (list) list of supports [{'txid': txid,
+                                                     'nout': nout,
+                                                     'amount': amount}],
+                'txid': (str) claim txid,
+                'nout': (str) claim nout,
+                'signature_is_valid': (bool), included if has_signature,
+                'value': ClaimDict if decoded, otherwise hex string
+            }
+        ]
+    If uri resolves to a claim:
+        'claim': {
+            'address': (str) claim address,
+            'amount': (float) claim amount,
+            'effective_amount': (float) claim amount including supports,
+            'claim_id': (str) claim id,
+            'claim_sequence': (int) claim sequence number,
+            'decoded_claim': (bool) whether or not the claim value was decoded,
+            'height': (int) claim height,
+            'depth': (int) claim depth,
+            'has_signature': (bool) included if decoded_claim
+            'name': (str) claim name,
+            'channel_name': (str) channel name if claim is in a channel
+            'supports: (list) list of supports [{'txid': txid,
+                                                 'nout': nout,
+                                                 'amount': amount}]
+            'txid': (str) claim txid,
+            'nout': (str) claim nout,
+            'signature_is_valid': (bool), included if has_signature,
+            'value': ClaimDict if decoded, otherwise hex string
+        }
+    }
 ```
 
 ## resolve_name
@@ -534,7 +635,8 @@ Args:
     'size' (optional): (int) stream size, in bytes. if provided an sd blob
                         won't be downloaded.
 Returns:
-    (float) Estimated cost in lbry credits
+    (float) Estimated cost in lbry credits, returns None if uri is not
+        resolveable
 ```
 
 ## transaction_list
@@ -574,6 +676,7 @@ Returns:
         'lbrynet_update_available': (bool) whether there's an update available,
         'lbrynet_version': (str) lbrynet_version,
         'lbryum_version': (str) lbryum_version,
+        'lbryschema_version': (str) lbryschema_version,
         'os_release': (str) os release string
         'os_system': (str) os name
         'platform': (str) platform string
@@ -587,6 +690,11 @@ Returns:
 
 ```text
 Return the balance of the wallet
+
+Args:
+    'address' (optional): If address is provided only that balance will be given
+    'include_unconfirmed' (optional): If set unconfirmed balance will be included in
+     the only takes effect when address is also provided.
 
 Returns:
     (float) amount of lbry credits in wallet

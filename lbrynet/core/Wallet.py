@@ -868,6 +868,7 @@ class LBRYumWallet(Wallet):
     def __init__(self, storage, config=None):
         Wallet.__init__(self, storage)
         self._config = config
+        self.config = make_config(self._config)
         self.network = None
         self.wallet = None
         self.is_first_run = False
@@ -885,7 +886,6 @@ class LBRYumWallet(Wallet):
 
     def _start(self):
         network_start_d = defer.Deferred()
-        self.config = make_config(self._config)
 
         def setup_network():
             self.network = Network(self.config)
@@ -916,11 +916,14 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda _: log.info("Subscribing to addresses"))
         d.addCallback(lambda _: self.wallet.wait_until_synchronized(lambda _: None))
         d.addCallback(lambda _: log.info("Synchronized wallet"))
+<<<<<<< HEAD
 
         storage = lbryum.wallet.WalletStorage(self.config.get_wallet_path())
         if storage.get('use_encryption') is True:
             d.addCallback(lambda _: self.wallet.wait_until_authenticated(self.decrypt_wallet()))
             d.addCallback(lambda _: log.info("Decrypted wallet"))
+=======
+>>>>>>> 1c8735295b3839190281833aab0e5d81cfcc3495
         return d
 
     def decrypt_wallet(self):
@@ -958,8 +961,12 @@ class LBRYumWallet(Wallet):
             self.network = None
             d.callback(True)
 
+        if self.wallet:
+            self.wallet.stop_threads()
+            log.info("Stopped wallet")
         if self.network:
             self.network.stop()
+            log.info("Stopped connection to lbryum server")
 
         stop_check = task.LoopingCall(check_stopped)
         stop_check.start(.1)
