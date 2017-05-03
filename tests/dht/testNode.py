@@ -54,13 +54,7 @@ class NodeDataTest(unittest.TestCase):
             h.update(str(i))
             self.cases.append((h.digest(), 5000+2*i))
             self.cases.append((h.digest(), 5001+2*i))
-<<<<<<< Updated upstream
-            #(('a', 'hello there\nthis is a test'),
-            #         ('aMuchLongerKeyThanAnyOfThePreviousOnes', 'some data'))
-        
-=======
 
->>>>>>> Stashed changes
     def testStore(self):
 
         def check_val_in_result(r, peer_info):
@@ -105,15 +99,6 @@ class NodeContactTest(unittest.TestCase):
         closestNodes = self.node._routingTable.findCloseNodes(self.node.id, lbrynet.dht.constants.k)
         self.failIf(contact in closestNodes, 'Node added itself as a contact')
 
-
-<<<<<<< Updated upstream
-#    """ Test case for the Node class's iterative node lookup algorithm """
-            
-            
-#        """ Ugly brute-force test to see if the iterative node lookup algorithm runs without failing """
-
-=======
->>>>>>> Stashed changes
 
 """Some scaffolding for the NodeLookupTest class. Allows isolated
 node testing by simulating remote node responses"""
@@ -203,11 +188,7 @@ class NodeLookupTest(unittest.TestCase):
         
         self.updPort = 81173
         
-<<<<<<< Updated upstream
-        # create a dummy reactor 
-        
-=======
->>>>>>> Stashed changes
+
         self.contactsAmount = 80
         # set the node ID manually for testing
         self.node.id = '12345678901234567800'

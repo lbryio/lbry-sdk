@@ -916,18 +916,15 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda _: log.info("Subscribing to addresses"))
         d.addCallback(lambda _: self.wallet.wait_until_synchronized(lambda _: None))
         d.addCallback(lambda _: log.info("Synchronized wallet"))
-<<<<<<< HEAD
 
         storage = lbryum.wallet.WalletStorage(self.config.get_wallet_path())
         if storage.get('use_encryption') is True:
             d.addCallback(lambda _: self.wallet.wait_until_authenticated(self.decrypt_wallet()))
             d.addCallback(lambda _: log.info("Decrypted wallet"))
-=======
->>>>>>> 1c8735295b3839190281833aab0e5d81cfcc3495
+
         return d
 
     def decrypt_wallet(self):
-        import os
         from lbryum.util import InvalidPassword
         import getpass
 
