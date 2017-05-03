@@ -8,7 +8,6 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
-
 ### Added
   *
   *
@@ -18,9 +17,8 @@ at anytime.
   *
 
 ### Fixed
-  * Fix multiple reactor.stop() calls
-  * Properly shut down lbryum wallet from lbrynet
-  * Set LBRYumWallet.config upon initialization, fixes attribute error
+  *
+  *
 
 ### Deprecated
   *
@@ -29,6 +27,14 @@ at anytime.
 ### Removed
   *
   *
+
+## [0.10.1] - 2017-05-03
+
+### Fixed
+ * Fix multiple reactor.stop() calls
+ * Properly shut down lbryum wallet from lbrynet
+ * Set LBRYumWallet.config upon initialization, fixes attribute error
+
 
 
 ## [0.10.0] - 2017-04-25
