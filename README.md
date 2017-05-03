@@ -23,7 +23,11 @@ Run `lbrynet-daemon` to launch the daemon.
 
 ## Using
 
+<<<<<<< HEAD
 By default, `lbrynet-daemon` will provide a JSON-RPC server at `http://localhost:5279`. It is easy to interact with via cURL or sane programming languages.
+=======
+By default, `lbrynet-daemon` will provide a JSON-RPC server at http://localhost:5279. It is easy to interact with via cURL or sane programming languages.
+>>>>>>> e038431287924df2f8af6fa62b9579c970059866
 
 Our [quickstart guide](http://lbry.io/quickstart) provides clear sample usages and free credits for learning.
 
