@@ -673,7 +673,6 @@ Returns:
     {
         'build': (str) build type (e.g. "dev", "rc", "release"),
         'ip': (str) remote ip, if available,
-        'lbrynet_update_available': (bool) whether there's an update available,
         'lbrynet_version': (str) lbrynet_version,
         'lbryum_version': (str) lbryum_version,
         'lbryschema_version': (str) lbryschema_version,
@@ -682,7 +681,6 @@ Returns:
         'platform': (str) platform string
         'processor': (str) processor type,
         'python_version': (str) python version,
-        'remote_lbrynet': (str) most recent lbrynet version available from github
     }
 ```
 
