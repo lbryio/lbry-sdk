@@ -878,7 +878,7 @@ class Daemon(AuthJSONRPCServer):
             size = None
             message = None
 
-        claim = yield self.session.wallet.get_claim(lbry_file.claim_id)
+        claim = yield self.session.wallet.get_claim(lbry_file.claim_id, check_expire=False)
 
         if claim and 'value' in claim:
             metadata = claim['value']
@@ -915,7 +915,6 @@ class Daemon(AuthJSONRPCServer):
             'suggested_file_name': lbry_file.suggested_file_name,
             'sd_hash': lbry_file.sd_hash,
             'name': lbry_file.name,
-            'channel_name': channel_name,
             'outpoint': outpoint,
             'claim_id': lbry_file.claim_id,
             'download_path': full_path,
@@ -926,6 +925,8 @@ class Daemon(AuthJSONRPCServer):
             'message': message,
             'metadata': metadata
         }
+        if channel_name is not None:
+            result['channel_name'] = channel_name
         if has_signature is not None:
             result['has_signature'] = has_signature
         if signature_is_valid is not None:
@@ -1394,7 +1395,13 @@ class Daemon(AuthJSONRPCServer):
             }
         """
         try:
-            claim_results = yield self.session.wallet.get_claim_info(name, txid, nout, claim_id)
+            if claim_id:
+                claim_results = yield self.session.wallet.get_claim(claim_id)
+            elif txid and nout is not None:
+                outpoint = ClaimOutpoint(txid, nout)
+                claim_results = yield self.session.wallet.get_claim_by_outpoint(outpoint)
+            else:
+                claim_results = yield self.session.wallet.get_claim_by_name(name)
             result = format_json_out_amount_as_float(claim_results)
         except (TypeError, UnknownNameError):
             result = False

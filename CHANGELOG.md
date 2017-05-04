@@ -16,6 +16,12 @@ at anytime.
   *
   *
 
+  * Added optional `address` and `include_unconfirmed` params to `jsonrpc_wallet_balance` method
+  * Wait for subscriptions before announcing wallet has finished starting
+  * Cache claims in wallet storage for use looking claims up by id or outpoint
+  * Try to use cached claim info for `file_list`
+  * Convert wallet storage to inlinecallbacks
+  
 ### Fixed
   *
   *
