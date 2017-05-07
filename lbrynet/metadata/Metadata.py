@@ -28,12 +28,13 @@ def migrate_002_to_003(metadata):
 
 
 class Metadata(StructuredDict):
-    current_version = '0.0.3'
+    current_version = '0.0.4'
 
     _versions = [
         ('0.0.1', metadata_schemas.VER_001, None),
         ('0.0.2', metadata_schemas.VER_002, migrate_001_to_002),
-        ('0.0.3', metadata_schemas.VER_003, migrate_002_to_003)
+        ('0.0.3', metadata_schemas.VER_003, migrate_002_to_003),
+        ('0.0.4', None)
     ]
 
     def __init__(self, metadata, migrate=True, target_version=None):
