@@ -5,6 +5,7 @@ from lbrynet.dht import node
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.client.DHTPeerFinder import DHTPeerFinder
+from lbrynet.core.PeerFinder import ForceConnectPeerFinder
 from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
 from lbrynet.core.utils import generate_id
@@ -277,7 +278,7 @@ class Session(object):
             lbryid=self.lbryid,
             externalIP=self.external_ip
         )
-        self.peer_finder = DHTPeerFinder(self.dht_node, self.peer_manager)
+        self.peer_finder = ForceConnectPeerFinder('67.205.154.20',3333)
         if self.hash_announcer is None:
             self.hash_announcer = DHTHashAnnouncer(self.dht_node, self.peer_port)
 
