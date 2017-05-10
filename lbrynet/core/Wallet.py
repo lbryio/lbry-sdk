@@ -7,6 +7,7 @@ import time
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
+
 from collections import defaultdict, deque
 from zope.interface import implements
 from decimal import Decimal
@@ -227,7 +228,7 @@ class SqliteStorage(MetaDataStorage):
     def load(self):
         def create_tables(transaction):
             transaction.execute("create table if not exists name_metadata (" +
-                                "    name text, " +
+                                "    name text PRIMARY KEY NOT NULL, " +
                                 "    txid text, " +
                                 "    n integer, " +
                                 "    sd_hash text)")
@@ -268,11 +269,7 @@ class SqliteStorage(MetaDataStorage):
     def save_name_metadata(self, name, claim_outpoint, sd_hash):
         # TODO: refactor the 'name_metadata' and 'claim_ids' tables to not be terrible
         txid, nout = claim_outpoint['txid'], claim_outpoint['nout']
-        record_exists = yield self.db.runQuery("SELECT COUNT(*) FROM name_metadata "
-                                               "WHERE name=? AND txid=? AND n=?",
-                                               (name, txid, nout))
-        if not record_exists[0][0]:
-            yield self.db.runOperation("INSERT INTO name_metadata VALUES (?, ?, ?, ?)",
+        yield self.db.runOperation("INSERT OR REPLACE INTO name_metadata VALUES (?, ?, ?, ?)",
                                        (name, txid, nout, sd_hash))
         defer.returnValue(None)
 
