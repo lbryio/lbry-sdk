@@ -1363,7 +1363,7 @@ class LBRYumWallet(Wallet):
 
     @defer.inlineCallbacks
     def _broadcast_transaction(self, raw_tx):
-        txid = yield self._run_cmd_as_defer_to_thread('broadcast', raw_tx)
+        txid = yield self._run_cmd_as_defer_succeed('broadcast', raw_tx)
         log.info("Broadcast tx: %s", txid)
         if len(txid) != 64:
             raise Exception("Transaction rejected. Raw tx: {}".format(raw_tx))
@@ -1391,7 +1391,7 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_to_thread('getvalueforuri', uri)
 
     def _claim_certificate(self, name, amount):
-        return self._run_cmd_as_defer_to_thread('claimcertificate', name, amount)
+        return self._run_cmd_as_defer_succeed('claimcertificate', name, amount)
 
     def _get_certificate_claims(self):
         return self._run_cmd_as_defer_succeed('getcertificateclaims')
