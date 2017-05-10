@@ -112,9 +112,6 @@ class MetaDataStorage(object):
     def load(self):
         return defer.succeed(True)
 
-    def clean_bad_records(self):
-        return defer.succeed(True)
-
     def save_name_metadata(self, name, claim_outpoint, sd_hash):
         return defer.succeed(True)
 
@@ -257,12 +254,6 @@ class SqliteStorage(MetaDataStorage):
                                 "    last_modified TEXT)")
 
         return self.db.runInteraction(create_tables)
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
-    def clean_bad_records(self):
-        yield self.db.runQuery("DELETE FROM name_metadata WHERE LENGTH(txid) > 64 OR txid IS NULL")
-        defer.returnValue(None)
 
     @rerun_if_locked
     @defer.inlineCallbacks
@@ -424,13 +415,9 @@ class Wallet(object):
             return True
 
         d = self._storage.load()
-        d.addCallback(lambda _: self._clean_bad_records())
         d.addCallback(lambda _: self._start())
         d.addCallback(lambda _: start_manage())
         return d
-
-    def _clean_bad_records(self):
-        self._storage.clean_bad_records()
 
     def _save_name_metadata(self, name, claim_outpoint, sd_hash):
         return self._storage.save_name_metadata(name, claim_outpoint, sd_hash)
