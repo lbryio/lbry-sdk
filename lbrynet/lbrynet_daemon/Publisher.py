@@ -41,7 +41,7 @@ class Publisher(object):
 
         claim_out = yield self.make_claim(name, bid, claim_dict)
         self.lbry_file.completed = True
-        yield self.lbry_file.load_file_attributes()
+        yield self.lbry_file.load_file_attributes(sd_hash)
         yield self.lbry_file.save_status()
         defer.returnValue(claim_out)
 
