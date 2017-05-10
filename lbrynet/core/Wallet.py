@@ -271,7 +271,7 @@ class SqliteStorage(MetaDataStorage):
         record_exists = yield self.db.runQuery("SELECT COUNT(*) FROM name_metadata "
                                                "WHERE name=? AND txid=? AND n=?",
                                                (name, txid, nout))
-        if not record_exists:
+        if not record_exists[0][0]:
             yield self.db.runOperation("INSERT INTO name_metadata VALUES (?, ?, ?, ?)",
                                        (name, txid, nout, sd_hash))
         defer.returnValue(None)
