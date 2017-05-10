@@ -227,11 +227,11 @@ class SqliteStorage(MetaDataStorage):
 
     def load(self):
         def create_tables(transaction):
-            transaction.execute("create table if not exists name_metadata (" +
-                                "    name text PRIMARY KEY NOT NULL, " +
-                                "    txid text, " +
-                                "    n integer, " +
-                                "    sd_hash text)")
+            transaction.execute("CREATE TABLE IF NOT EXISTS name_metadata (" +
+                                "    name TEXT UNIQUE NOT NULL, " +
+                                "    txid TEXT NOT NULL, " +
+                                "    n INTEGER NOT NULL, " +
+                                "    sd_hash TEXT NOT NULL)")
             transaction.execute("create table if not exists claim_ids (" +
                                 "    claimId text, " +
                                 "    name text, " +
@@ -267,7 +267,7 @@ class SqliteStorage(MetaDataStorage):
     @rerun_if_locked
     @defer.inlineCallbacks
     def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        # TODO: refactor the 'name_metadata' and 'claim_ids' tables to not be terrible
+        # TODO: refactor the 'claim_ids' table to not be terrible
         txid, nout = claim_outpoint['txid'], claim_outpoint['nout']
         yield self.db.runOperation("INSERT OR REPLACE INTO name_metadata VALUES (?, ?, ?, ?)",
                                        (name, txid, nout, sd_hash))

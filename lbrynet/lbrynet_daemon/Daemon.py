@@ -207,7 +207,7 @@ class Daemon(AuthJSONRPCServer):
         self.platform = None
         self.first_run = None
         self.log_file = conf.settings.get_log_filename()
-        self.current_db_revision = 2
+        self.current_db_revision = 3
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self.uploaded_temp_files = []
