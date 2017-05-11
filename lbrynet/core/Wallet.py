@@ -732,7 +732,8 @@ class Wallet(object):
                 results['certificate']['value'] = claim_dict
                 results['certificate']['hex'] = decoded.serialized.encode('hex')
                 if update_caches:
-                    yield self._save_name_metadata(name, outpoint, decoded.source_hash)
+                    if decoded.is_stream:
+                        yield self._save_name_metadata(name, outpoint, decoded.source_hash)
                     yield self._update_claimid(results['certificate']['claim_id'], name, outpoint)
                     yield self._storage.save_claim_to_cache(results['certificate']['claim_id'],
                                                         results['certificate']['claim_sequence'],
@@ -759,7 +760,8 @@ class Wallet(object):
                 claim['value'] = claim_dict
                 claim['hex'] = decoded.serialized.encode('hex')
                 if update_caches:
-                    yield self._save_name_metadata(name, outpoint, decoded.source_hash)
+                    if decoded.is_stream:
+                        yield self._save_name_metadata(name, outpoint, decoded.source_hash)
                     yield self._update_claimid(claim['claim_id'], name, outpoint)
                     yield self._storage.save_claim_to_cache(claim['claim_id'],
                                                             claim['claim_sequence'],
@@ -788,7 +790,8 @@ class Wallet(object):
                 outpoint = ClaimOutpoint(results['txid'], results['nout'])
                 name = results['name']
                 if update_caches:
-                    yield self._save_name_metadata(name, outpoint, decoded.source_hash)
+                    if decoded.is_stream:
+                        yield self._save_name_metadata(name, outpoint, decoded.source_hash)
                     yield self._update_claimid(results['claim_id'], name, outpoint)
                     yield self._storage.save_claim_to_cache(results['claim_id'],
                                                             results.get('claim_sequence', None),
