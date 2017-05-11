@@ -7,6 +7,7 @@ import time
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
+
 from collections import defaultdict, deque
 from zope.interface import implements
 from decimal import Decimal
@@ -109,9 +110,6 @@ class CachedClaim(object):
 
 class MetaDataStorage(object):
     def load(self):
-        return defer.succeed(True)
-
-    def clean_bad_records(self):
         return defer.succeed(True)
 
     def save_name_metadata(self, name, claim_outpoint, sd_hash):
@@ -226,11 +224,11 @@ class SqliteStorage(MetaDataStorage):
 
     def load(self):
         def create_tables(transaction):
-            transaction.execute("create table if not exists name_metadata (" +
-                                "    name text, " +
-                                "    txid text, " +
-                                "    n integer, " +
-                                "    sd_hash text)")
+            transaction.execute("CREATE TABLE IF NOT EXISTS name_metadata (" +
+                                "    name TEXT UNIQUE NOT NULL, " +
+                                "    txid TEXT NOT NULL, " +
+                                "    n INTEGER NOT NULL, " +
+                                "    sd_hash TEXT NOT NULL)")
             transaction.execute("create table if not exists claim_ids (" +
                                 "    claimId text, " +
                                 "    name text, " +
@@ -259,20 +257,10 @@ class SqliteStorage(MetaDataStorage):
 
     @rerun_if_locked
     @defer.inlineCallbacks
-    def clean_bad_records(self):
-        yield self.db.runQuery("DELETE FROM name_metadata WHERE LENGTH(txid) > 64 OR txid IS NULL")
-        defer.returnValue(None)
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
     def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        # TODO: refactor the 'name_metadata' and 'claim_ids' tables to not be terrible
+        # TODO: refactor the 'claim_ids' table to not be terrible
         txid, nout = claim_outpoint['txid'], claim_outpoint['nout']
-        record_exists = yield self.db.runQuery("SELECT COUNT(*) FROM name_metadata "
-                                               "WHERE name=? AND txid=? AND n=?",
-                                               (name, txid, nout))
-        if not record_exists[0][0]:
-            yield self.db.runOperation("INSERT INTO name_metadata VALUES (?, ?, ?, ?)",
+        yield self.db.runOperation("INSERT OR REPLACE INTO name_metadata VALUES (?, ?, ?, ?)",
                                        (name, txid, nout, sd_hash))
         defer.returnValue(None)
 
@@ -427,13 +415,9 @@ class Wallet(object):
             return True
 
         d = self._storage.load()
-        d.addCallback(lambda _: self._clean_bad_records())
         d.addCallback(lambda _: self._start())
         d.addCallback(lambda _: start_manage())
         return d
-
-    def _clean_bad_records(self):
-        self._storage.clean_bad_records()
 
     def _save_name_metadata(self, name, claim_outpoint, sd_hash):
         return self._storage.save_name_metadata(name, claim_outpoint, sd_hash)
@@ -1363,7 +1347,7 @@ class LBRYumWallet(Wallet):
 
     @defer.inlineCallbacks
     def _broadcast_transaction(self, raw_tx):
-        txid = yield self._run_cmd_as_defer_to_thread('broadcast', raw_tx)
+        txid = yield self._run_cmd_as_defer_succeed('broadcast', raw_tx)
         log.info("Broadcast tx: %s", txid)
         if len(txid) != 64:
             raise Exception("Transaction rejected. Raw tx: {}".format(raw_tx))
@@ -1391,7 +1375,7 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_to_thread('getvalueforuri', uri)
 
     def _claim_certificate(self, name, amount):
-        return self._run_cmd_as_defer_to_thread('claimcertificate', name, amount)
+        return self._run_cmd_as_defer_succeed('claimcertificate', name, amount)
 
     def _get_certificate_claims(self):
         return self._run_cmd_as_defer_succeed('getcertificateclaims')

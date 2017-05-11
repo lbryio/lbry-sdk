@@ -9,7 +9,7 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Add decorator to support queueing api calls
   *
 
 ### Changed
@@ -21,9 +21,10 @@ at anytime.
   * Cache claims in wallet storage for use looking claims up by id or outpoint
   * Try to use cached claim info for `file_list`
   * Convert wallet storage to inlinecallbacks
+  * Improve internal name_metadata sqlite table
   
 ### Fixed
-  *
+  * Fix race condition in publish that resulted in claims being rejected when making many publishes concurrently
   *
 
 ### Deprecated

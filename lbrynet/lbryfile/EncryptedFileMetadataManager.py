@@ -240,15 +240,10 @@ class DBEncryptedFileMetadataManager(object):
 
     @rerun_if_locked
     def _save_sd_blob_hash_to_stream(self, stream_hash, sd_blob_hash):
-        log.info("Saving sd blob hash %s to stream hash %s", str(sd_blob_hash), str(stream_hash))
-        d = self.db_conn.runQuery("insert into lbry_file_descriptors values (?, ?)",
-                                  (sd_blob_hash, stream_hash))
-
-        def ignore_duplicate(err):
-            err.trap(sqlite3.IntegrityError)
-            log.info("sd blob hash already known")
-
-        d.addErrback(ignore_duplicate)
+        d = self.db_conn.runOperation("insert or ignore into lbry_file_descriptors values (?, ?)",
+                                      (sd_blob_hash, stream_hash))
+        d.addCallback(lambda _: log.info("Saved sd blob hash %s to stream hash %s",
+                                         str(sd_blob_hash), str(stream_hash)))
         return d
 
     @rerun_if_locked

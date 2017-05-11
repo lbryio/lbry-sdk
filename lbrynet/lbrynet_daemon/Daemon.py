@@ -207,7 +207,7 @@ class Daemon(AuthJSONRPCServer):
         self.platform = None
         self.first_run = None
         self.log_file = conf.settings.get_log_filename()
-        self.current_db_revision = 2
+        self.current_db_revision = 3
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self.uploaded_temp_files = []
@@ -1681,6 +1681,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(cost)
 
     @AuthJSONRPCServer.auth_required
+    @AuthJSONRPCServer.queued
     @defer.inlineCallbacks
     def jsonrpc_channel_new(self, channel_name, amount):
         """
@@ -1735,6 +1736,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
+    @AuthJSONRPCServer.queued
     @defer.inlineCallbacks
     def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
                         description=None, author=None, language=None, license=None,

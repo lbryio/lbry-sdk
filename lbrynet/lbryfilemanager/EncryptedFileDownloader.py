@@ -108,12 +108,16 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
                                                     num_blobs_known, status))
 
     @defer.inlineCallbacks
-    def load_file_attributes(self):
-        sd_hash = yield self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
-        if sd_hash:
-            self.sd_hash = sd_hash[0]
+    def load_file_attributes(self, sd_hash=None):
+        if not sd_hash:
+            sd_hash = yield self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
+            if sd_hash:
+                self.sd_hash = sd_hash[0]
+            else:
+                raise NoSuchStreamHash(self.stream_hash)
         else:
-            raise NoSuchStreamHash(self.stream_hash)
+            self.sd_hash = sd_hash
+
         stream_metadata = yield self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
         if stream_metadata:
             name, txid, nout = stream_metadata
