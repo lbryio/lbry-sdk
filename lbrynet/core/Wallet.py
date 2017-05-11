@@ -1164,7 +1164,27 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda _: log.info("Subscribing to addresses"))
         d.addCallback(lambda _: self.wallet.wait_until_synchronized(lambda _: None))
         d.addCallback(lambda _: log.info("Synchronized wallet"))
+
+        storage = lbryum.wallet.WalletStorage(self.config.get_wallet_path())
+        if storage.get('use_encryption') is True:
+            d.addCallback(lambda _: self.wallet.wait_until_authenticated(self.decrypt_wallet()))
+            d.addCallback(lambda _: log.info("Decrypted wallet"))
+
         return d
+
+    def decrypt_wallet(self):
+        from lbryum.util import InvalidPassword
+        import getpass
+
+        password = getpass.getpass("Password for encrypted wallet: ")
+
+        try:
+            seed = self.wallet.check_password(password)
+            self.wallet.set_is_decrypted(True)
+        except InvalidPassword:
+            log.error("Error: This password does not decode this wallet.")
+            os._exit(1)
+
 
     def _stop(self):
         if self._start_check is not None:
@@ -1525,3 +1545,4 @@ def make_config(config=None):
     if config is None:
         config = {}
     return SimpleConfig(config) if isinstance(config, dict) else config
+    
