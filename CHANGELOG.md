@@ -10,7 +10,7 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Add decorator to support queueing api calls
-  *
+  * Added force option to API command resolve
 
 ### Changed
   *
