@@ -1410,12 +1410,13 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_resolve(self, uri):
+    def jsonrpc_resolve(self, uri, force=False):
         """
         Resolve a LBRY URI
 
         Args:
             'uri': (str) uri to download
+            'force'(optional): (boolean) set to true to ignore cache and force refresh
         Returns:
             None if nothing can be resolved, otherwise:
             If uri resolves to a channel or a claim in a channel:
@@ -1485,7 +1486,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         try:
-            resolved = yield self.session.wallet.resolve_uri(uri)
+            resolved = yield self.session.wallet.resolve_uri(uri, check_cache=not force)
         except Exception:
             resolved = None
         results = yield self._render_response(resolved)
