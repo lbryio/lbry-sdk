@@ -1742,7 +1742,7 @@ class Daemon(AuthJSONRPCServer):
     def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
                         description=None, author=None, language=None, license=None,
                         license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None,
-                        channel_name=None):
+                        channel_name=None, channel_id=None):
         """
         Make a new name claim and publish associated data to lbrynet,
         update over existing claim if user already has a claim for name.
@@ -1783,7 +1783,8 @@ class Daemon(AuthJSONRPCServer):
             'nsfw'(optional): (bool) True if not safe for work
             'sources'(optional): (dict){'lbry_sd_hash':sd_hash} specifies sd hash of file
             'channel_name' (optional): (str) name of the publisher channel
-
+            'channel_id' (optional): (str) claim id of the publisher channel
+            
         Returns:
             (dict) Dictionary containing result of the claim
             {
@@ -1866,7 +1867,9 @@ class Daemon(AuthJSONRPCServer):
         if sources is not None:
             claim_dict['stream']['source'] = sources
 
-        if channel_name:
+        if channel_id:
+            certificate_id = channel_id
+        elif channel_name:
             certificate_id = None
             my_certificates = yield self.session.wallet.channel_list()
             for certificate in my_certificates:
