@@ -1784,7 +1784,7 @@ class Daemon(AuthJSONRPCServer):
             'sources'(optional): (dict){'lbry_sd_hash':sd_hash} specifies sd hash of file
             'channel_name' (optional): (str) name of the publisher channel
             'channel_id' (optional): (str) claim id of the publisher channel
-            
+
         Returns:
             (dict) Dictionary containing result of the claim
             {
