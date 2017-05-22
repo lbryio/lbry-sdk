@@ -18,10 +18,10 @@ Get-Content ..\requirements.txt | Select-String -Pattern 'gmpy|miniupnpc' -NotMa
 # add in gmpy wheel
 Add-Content requirements.txt "./gmpy-1.17-cp27-none-win32.whl"
 
+python set_build.py
+
 pip install -r requirements.txt
 pip install ..\.
-
-python set_build.py
 
 pyinstaller -y daemon.onefile.spec
 pyinstaller -y cli.onefile.spec
