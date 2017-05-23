@@ -7,7 +7,4 @@ file:../.
 # install other build requirements
 PyInstaller==3.2.1
 requests[security]==2.13.0
-GitPython==2.1.1
-PyGithub==1.32
 uritemplate==3.0.0
-git+https://github.com/lbryio/bumpversion.git
