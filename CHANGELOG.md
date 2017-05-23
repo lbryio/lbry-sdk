@@ -9,22 +9,15 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  * Add decorator to support queueing api calls
-  * Added force option to API command resolve
+  *
+  *
 
 ### Changed
   *
   *
 
-  * Added optional `address` and `include_unconfirmed` params to `jsonrpc_wallet_balance` method
-  * Wait for subscriptions before announcing wallet has finished starting
-  * Cache claims in wallet storage for use looking claims up by id or outpoint
-  * Try to use cached claim info for `file_list`
-  * Convert wallet storage to inlinecallbacks
-  * Improve internal name_metadata sqlite table
-  
 ### Fixed
-  * Fix race condition in publish that resulted in claims being rejected when making many publishes concurrently
+  *
   *
 
 ### Deprecated
@@ -34,6 +27,27 @@ at anytime.
 ### Removed
   *
   *
+
+## [0.10.3] - 2017-05-23
+
+### Added
+ * Add decorator to support queueing api calls
+ * Added force option to API command resolve
+
+
+### Changed
+ * Added optional `address` and `include_unconfirmed` params to `jsonrpc_wallet_balance` method
+ * Wait for subscriptions before announcing wallet has finished starting
+ * Cache claims in wallet storage for use looking claims up by id or outpoint
+ * Try to use cached claim info for `file_list`
+ * Convert wallet storage to inlinecallbacks
+ * Improve internal name_metadata sqlite table
+
+
+### Fixed
+ * Fix race condition in publish that resulted in claims being rejected when making many publishes concurrently
+
+
 
 ## [0.10.1] - 2017-05-03
 
