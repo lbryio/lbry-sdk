@@ -8,8 +8,6 @@ import github
 import uritemplate
 import boto3
 
-this_dir = os.path.dirname(os.path.realpath(__file__))
-
 
 def main():
     upload_to_github_if_tagged('lbryio/lbry')
@@ -17,6 +15,7 @@ def main():
 
 
 def get_asset_filename():
+    this_dir = os.path.dirname(os.path.realpath(__file__))
     return glob.glob(this_dir + '/dist/*.zip')[0]
 
 
