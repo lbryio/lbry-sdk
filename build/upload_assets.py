@@ -5,18 +5,52 @@ import subprocess
 import sys
 
 import github
-import requests
 import uritemplate
+import boto3
+
+this_dir = os.path.dirname(os.path.realpath(__file__))
 
 
 def main():
-    this_dir = os.path.dirname(os.path.realpath(__file__))
+    upload_to_github_if_tagged('lbryio/lbry')
+    upload_to_s3('daemon')
+
+
+def get_asset_filename():
+    return glob.glob(this_dir + '/dist/*.zip')[0]
+
+
+def upload_to_s3(folder):
+    tag = subprocess.check_output(['git', 'describe', '--always', 'HEAD']).strip()
+    commit_date = subprocess.check_output([
+        'git', 'show', '-s', '--format=%cd', '--date=format:%Y%m%d-%H%I%S', 'HEAD']).strip()
+
+    asset_path = get_asset_filename()
+    bucket = 'releases.lbry.io'
+    key = folder + '/' + commit_date + '-' + tag + '/' + os.path.basename(asset_path)
+
+    print "Uploading " + asset_path + " to s3://" + bucket + '/' + key + ''
+
+    if 'AWS_ACCESS_KEY_ID' not in os.environ or 'AWS_SECRET_ACCESS_KEY' not in os.environ:
+        print 'Must set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to publish assets to s3'
+        return 1
+
+    s3 = boto3.resource(
+        's3',
+        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+        config=boto3.session.Config(signature_version='s3v4')
+    )
+    s3.meta.client.upload_file(asset_path, bucket, key)
+
+
+def upload_to_github_if_tagged(repo_name):
     try:
         current_tag = subprocess.check_output(
             ['git', 'describe', '--exact-match', 'HEAD']).strip()
     except subprocess.CalledProcessError:
-        print 'Stopping as we are not currently on a tag'
-        return
+        print 'Not uploading to GitHub as we are not currently on a tag'
+        return 1
 
     print "Current tag: " + current_tag
 
@@ -26,17 +60,17 @@ def main():
 
     gh_token = os.environ['GH_TOKEN']
     auth = github.Github(gh_token)
-    repo = auth.get_repo('lbryio/lbry')
+    repo = auth.get_repo(repo_name)
 
     if not check_repo_has_tag(repo, current_tag):
         print 'Tag {} is not in repo {}'.format(current_tag, repo)
         # TODO: maybe this should be an error
         return 1
 
-    daemon_zip = glob.glob(this_dir + '/dist/*.zip')[0]
-    print "Uploading " + daemon_zip
-    release = get_release(repo, current_tag)
-    upload_asset(release, daemon_zip, gh_token)
+    asset_path = get_asset_filename()
+    print "Uploading " + asset_path + " to Github tag " + current_tag
+    release = get_github_release(repo, current_tag)
+    upload_asset_to_github(release, asset_path, gh_token)
 
 
 def check_repo_has_tag(repo, target_tag):
@@ -47,45 +81,32 @@ def check_repo_has_tag(repo, target_tag):
     return False
 
 
-def get_release(current_repo, current_tag):
-    for release in current_repo.get_releases():
+def get_github_release(repo, current_tag):
+    for release in repo.get_releases():
         if release.tag_name == current_tag:
             return release
     raise Exception('No release for {} was found'.format(current_tag))
 
 
-def upload_asset(release, asset_to_upload, token):
+def upload_asset_to_github(release, asset_to_upload, token):
     basename = os.path.basename(asset_to_upload)
-    if is_asset_already_uploaded(release, basename):
-        return
+    for asset in release.raw_data['assets']:
+        if asset['name'] == basename:
+            print 'File {} has already been uploaded to {}'.format(basename, release.tag_name)
+            return
+
+    upload_uri = uritemplate.expand(release.upload_url, {'name': basename})
     count = 0
     while count < 10:
         try:
-            return _upload_asset(release, asset_to_upload, token, _curl_uploader)
+            output = _curl_uploader(upload_uri, asset_to_upload, token)
+            if 'errors' in output:
+                raise Exception(output)
+            else:
+                print 'Successfully uploaded to {}'.format(output['browser_download_url'])
         except Exception:
             print 'Failed uploading on attempt {}'.format(count + 1)
             count += 1
-
-
-def _upload_asset(release, asset_to_upload, token, uploader):
-    basename = os.path.basename(asset_to_upload)
-    upload_uri = uritemplate.expand(release.upload_url, {'name': basename})
-    output = uploader(upload_uri, asset_to_upload, token)
-    if 'errors' in output:
-        raise Exception(output)
-    else:
-        print 'Successfully uploaded to {}'.format(output['browser_download_url'])
-
-
-# requests doesn't work on windows / linux / osx.
-def _requests_uploader(upload_uri, asset_to_upload, token):
-    print 'Using requests to upload {} to {}'.format(asset_to_upload, upload_uri)
-    with open(asset_to_upload, 'rb') as f:
-        response = requests.post(upload_uri, data=f, auth=('', token))
-    return response.json()
-
-
-# curl -H "Content-Type: application/json" -X POST -d '{"username":"xyz","password":"xyz"}' http://localhost:3000/api/login
 
 
 def _curl_uploader(upload_uri, asset_to_upload, token):
@@ -117,14 +138,6 @@ def _curl_uploader(upload_uri, asset_to_upload, token):
     print 'stdout from curl:'
     print stdout
     return json.loads(stdout)
-
-
-def is_asset_already_uploaded(release, basename):
-    for asset in release.raw_data['assets']:
-        if asset['name'] == basename:
-            print 'File {} has already been uploaded to {}'.format(basename, release.tag_name)
-            return True
-    return False
 
 
 if __name__ == '__main__':

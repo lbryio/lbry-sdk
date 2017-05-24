@@ -1,4 +1,4 @@
-# install daemon requirements (copied from root, with possible modifications. see build.sh, build.ps1)
+# install daemon requirements (created by build script. see build.sh, build.ps1)
 -r requirements_base.txt
 
 # install daemon itself. make sure you run `pip install` from this dir. this is how you do relative file paths with pip
@@ -8,3 +8,4 @@ file:../.
 PyInstaller==3.2.1
 requests[security]==2.13.0
 uritemplate==3.0.0
+boto3==1.4.4

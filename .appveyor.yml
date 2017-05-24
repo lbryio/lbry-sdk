@@ -7,7 +7,10 @@ environment:
     secure: u6DydPcdrUJlxGL9uc7yQRYG8+5rY6aAEE9nfCSzFyNzZlX9NniOp8Uh5ZKQqX7bGEngLI6ipbLfiJvn0XFnhbn2iTkOuMqOXVJVOehvwlQ=
   pfx_key:
     secure: 1mwqyRy7hDqDjDK+TIAoaXyXzpNgwruFNA6TPkinUcVM7A+NLD33RQLnfnwVy+R5ovD2pUfhQ6+N0Fqebv6tZh436LIEsock+6IOdpgFwrg=
-
+  AWS_ACCESS_KEY_ID:
+    secure: iVGwoJ7ogspjSmuqr+haVPLglSgQsp6tUZx6mIlKH7Q=
+  AWS_SECRET_ACCESS_KEY:
+    secure: zKaqdZGPl0exDL5YhJkb33prSemC9Rzg9S7Lw2wFy1WnJ6ffgl6mQH7jqJDUTqsY
 
 #notifications:
 #  - provider: Slack
