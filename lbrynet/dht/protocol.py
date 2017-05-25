@@ -13,10 +13,8 @@ import time
 import socket
 import errno
 
-from twisted.internet import protocol, defer
+from twisted.internet import protocol, defer, error, reactor, task
 from twisted.python import failure
-from twisted.internet import error
-import twisted.internet.reactor
 
 import constants
 import encoding
@@ -24,7 +22,6 @@ import msgtypes
 import msgformat
 from contact import Contact
 
-reactor = twisted.internet.reactor
 log = logging.getLogger(__name__)
 
 
@@ -62,13 +59,13 @@ class Delay(object):
 
 class KademliaProtocol(protocol.DatagramProtocol):
     """ Implements all low-level network-related functions of a Kademlia node """
+
     msgSizeLimit = constants.udpDatagramMaxSize - 26
 
-    def __init__(self, node, msgEncoder=encoding.Bencode(),
-                 msgTranslator=msgformat.DefaultFormat()):
+    def __init__(self, node):
         self._node = node
-        self._encoder = msgEncoder
-        self._translator = msgTranslator
+        self._encoder = encoding.Bencode()
+        self._translator = msgformat.DefaultFormat()
         self._sentMessages = {}
         self._partialMessages = {}
         self._partialMessagesProgress = {}
@@ -76,6 +73,94 @@ class KademliaProtocol(protocol.DatagramProtocol):
         # keep track of outstanding writes so that they
         # can be cancelled on shutdown
         self._call_later_list = {}
+
+        # keep track of bandwidth usage by peer
+        self._history_rx = {}
+        self._history_tx = {}
+        self._bytes_rx = {}
+        self._bytes_tx = {}
+        self._queries_rx_per_second = 0
+        self._queries_tx_per_second = 0
+        self._kbps_tx = 0
+        self._kbps_rx = 0
+        self._recent_contact_count = 0
+        self._total_bytes_tx = 0
+        self._total_bytes_rx = 0
+        self._bandwidth_stats_update_lc = task.LoopingCall(self._update_bandwidth_stats)
+
+    def _update_bandwidth_stats(self):
+        recent_rx_history = {}
+        now = time.time()
+        for address, history in self._history_rx.iteritems():
+            recent_rx_history[address] = [(s, t) for (s, t) in history if now - t < 1.0]
+        qps_rx = sum(len(v) for (k, v) in recent_rx_history.iteritems())
+        bps_rx = sum(sum([x[0] for x in v]) for (k, v) in recent_rx_history.iteritems())
+        kbps_rx = round(float(bps_rx) / 1024.0, 2)
+
+        recent_tx_history = {}
+        now = time.time()
+        for address, history in self._history_tx.iteritems():
+            recent_tx_history[address] = [(s, t) for (s, t) in history if now - t < 1.0]
+        qps_tx = sum(len(v) for (k, v) in recent_tx_history.iteritems())
+        bps_tx = sum(sum([x[0] for x in v]) for (k, v) in recent_tx_history.iteritems())
+        kbps_tx = round(float(bps_tx) / 1024.0, 2)
+
+        recent_contacts = []
+        for k, v in recent_rx_history.iteritems():
+            if v:
+                recent_contacts.append(k)
+        for k, v in recent_tx_history.iteritems():
+            if v and k not in recent_contacts:
+                recent_contacts.append(k)
+
+        self._queries_rx_per_second = qps_rx
+        self._queries_tx_per_second = qps_tx
+        self._kbps_tx = kbps_tx
+        self._kbps_rx = kbps_rx
+        self._recent_contact_count = len(recent_contacts)
+        self._total_bytes_tx = sum(v for (k, v) in self._bytes_tx.iteritems())
+        self._total_bytes_rx = sum(v for (k, v) in self._bytes_rx.iteritems())
+
+    @property
+    def queries_rx_per_second(self):
+        return self._queries_rx_per_second
+
+    @property
+    def queries_tx_per_second(self):
+        return self._queries_tx_per_second
+
+    @property
+    def kbps_tx(self):
+        return self._kbps_tx
+
+    @property
+    def kbps_rx(self):
+        return self._kbps_rx
+
+    @property
+    def recent_contact_count(self):
+        return self._recent_contact_count
+
+    @property
+    def total_bytes_tx(self):
+        return self._total_bytes_tx
+
+    @property
+    def total_bytes_rx(self):
+        return self._total_bytes_rx
+
+    @property
+    def bandwidth_stats(self):
+        response = {
+            "kbps_received": self.kbps_rx,
+            "kbps_sent": self.kbps_tx,
+            "total_bytes_sent": self.total_bytes_tx,
+            "total_bytes_received": self.total_bytes_rx,
+            "queries_received": self.queries_rx_per_second,
+            "queries_sent": self.queries_tx_per_second,
+            "recent_contacts": self.recent_contact_count,
+        }
+        return response
 
     def sendRPC(self, contact, method, args, rawResponse=False):
         """ Sends an RPC to the specified contact
@@ -108,19 +193,23 @@ class KademliaProtocol(protocol.DatagramProtocol):
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)
 
-        log.debug("DHT SEND: %s(%s)", method, args)
+        log.debug("DHT SEND CALL %s(%s)", method, args[0].encode('hex'))
 
         df = defer.Deferred()
         if rawResponse:
             df._rpcRawResponse = True
 
         # Set the RPC timeout timer
-        timeoutCall = reactor.callLater(
-            constants.rpcTimeout, self._msgTimeout, msg.id)  # IGNORE:E1101
+        timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, msg.id)
         # Transmit the data
         self._send(encodedMsg, msg.id, (contact.address, contact.port))
         self._sentMessages[msg.id] = (contact.id, df, timeoutCall)
         return df
+
+    def startProtocol(self):
+        log.info("DHT listening on UDP %i", self._node.port)
+        if not self._bandwidth_stats_update_lc.running:
+            self._bandwidth_stats_update_lc.start(1)
 
     def datagramReceived(self, datagram, address):
         """ Handles and parses incoming RPC messages (and responses)
@@ -128,6 +217,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         @note: This is automatically called by Twisted when the protocol
                receives a UDP datagram
         """
+
         if datagram[0] == '\x00' and datagram[25] == '\x00':
             totalPackets = (ord(datagram[1]) << 8) | ord(datagram[2])
             msgID = datagram[5:25]
@@ -157,12 +247,22 @@ class KademliaProtocol(protocol.DatagramProtocol):
         message = self._translator.fromPrimitive(msgPrimitive)
         remoteContact = Contact(message.nodeID, address[0], address[1], self)
 
+        now = time.time()
+        contact_history = self._history_rx.get(address, [])
+        if len(contact_history) > 1000:
+            contact_history = [x for x in contact_history if now - x[1] < 1.0]
+        contact_history.append((len(datagram), time.time()))
+        self._history_rx[address] = contact_history
+        bytes_rx = self._bytes_rx.get(address, 0)
+        bytes_rx += len(datagram)
+        self._bytes_rx[address] = bytes_rx
+
         # Refresh the remote node's details in the local node's k-buckets
         self._node.addContact(remoteContact)
-
         if isinstance(message, msgtypes.RequestMessage):
             # This is an RPC method request
             self._handleRPC(remoteContact, message.id, message.request, message.args)
+
         elif isinstance(message, msgtypes.ResponseMessage):
             # Find the message that triggered this response
             if message.id in self._sentMessages:
@@ -205,6 +305,17 @@ class KademliaProtocol(protocol.DatagramProtocol):
                future, into something similar to a message translator/encoder
                class (see C{kademlia.msgformat} and C{kademlia.encoding}).
         """
+
+        now = time.time()
+        contact_history = self._history_tx.get(address, [])
+        if len(contact_history) > 1000:
+            contact_history = [x for x in contact_history if now - x[1] < 1.0]
+        contact_history.append((len(data), time.time()))
+        self._history_tx[address] = contact_history
+        bytes_tx = self._bytes_tx.get(address, 0)
+        bytes_tx += len(data)
+        self._bytes_tx[address] = bytes_tx
+
         if len(data) > self.msgSizeLimit:
             # We have to spread the data over multiple UDP datagrams,
             # and provide sequencing information
@@ -283,7 +394,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
         func = getattr(self._node, method, None)
         if callable(func) and hasattr(func, 'rpcmethod'):
             # Call the exposed Node method and return the result to the deferred callback chain
-            log.debug("DHT RECV CALL %s with args %s", method, args)
+            log.debug("DHT RECV CALL %s(%s) %s:%i", method, args[0].encode('hex'),
+                      senderContact.address, senderContact.port)
             try:
                 kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
                 result = func(*args, **kwargs)
@@ -340,6 +452,10 @@ class KademliaProtocol(protocol.DatagramProtocol):
         Will only be called once, after all ports are disconnected.
         """
         log.info('Stopping DHT')
+
+        if self._bandwidth_stats_update_lc.running:
+            self._bandwidth_stats_update_lc.stop()
+
         for delayed_call in self._call_later_list.values():
             try:
                 delayed_call.cancel()

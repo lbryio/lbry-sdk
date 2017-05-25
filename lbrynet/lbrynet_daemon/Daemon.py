@@ -990,12 +990,14 @@ class Daemon(AuthJSONRPCServer):
     ############################################################################
 
     @defer.inlineCallbacks
-    def jsonrpc_status(self, session_status=False):
+    def jsonrpc_status(self, session_status=False, dht_status=False):
         """
         Return daemon status
 
         Args:
             'session_status' (optional): (bool) true to return session status,
+                default is false
+            'dht_status' (optional): (bool) true to return dht status,
                 default is false
         Returns:
             (dict) Daemon status dictionary
@@ -1036,6 +1038,8 @@ class Daemon(AuthJSONRPCServer):
                 'managed_blobs': len(blobs),
                 'managed_streams': len(self.lbry_file_manager.lbry_files),
             }
+        if dht_status:
+            response['dht_status'] = self.session.dht_node.get_bandwidth_stats()
         defer.returnValue(response)
 
     def jsonrpc_get_best_blockhash(self):

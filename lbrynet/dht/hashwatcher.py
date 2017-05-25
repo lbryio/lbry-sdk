@@ -20,7 +20,8 @@ class HashWatcher(object):
             self.next_tick.cancel()
             self.next_tick = None
 
-    def add_requested_hash(self, hashsum, from_ip):
+    def add_requested_hash(self, hashsum, contact):
+        from_ip = contact.compact_ip
         matching_hashes = [h for h in self.hashes if h[0] == hashsum and h[2] == from_ip]
         if len(matching_hashes) == 0:
             self.hashes.append((hashsum, datetime.datetime.now(), from_ip))
