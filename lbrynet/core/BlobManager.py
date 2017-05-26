@@ -104,7 +104,6 @@ class DiskBlobManager(BlobManager):
         if self._next_manage_call is not None and self._next_manage_call.active():
             self._next_manage_call.cancel()
             self._next_manage_call = None
-        self.db_conn = None
         return defer.succeed(True)
 
     def get_blob(self, blob_hash, length=None):
