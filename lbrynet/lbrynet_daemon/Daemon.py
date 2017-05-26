@@ -2063,6 +2063,27 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(claims)
 
     @AuthJSONRPCServer.auth_required
+    def jsonrpc_channel_new(self, channel_name):
+        """
+        WORK IN PROGRESS
+        Make a channel claim, or update if already claimed
+        by user.
+        Args:
+            'channel_name': name of channel, must start with @
+        Returns:
+            (dict) Dictionary containing result of the channel claim
+            {
+                'tx' : (str) hex encoded transaction
+                'txid' : (str) txid of resulting claim
+                'nout' : (int) nout of the resulting claim
+                'fee' : (float) fee paid for the claim transaction
+                'claim_id' : (str) claim ID of the resulting claim
+            }
+
+        """
+        pass
+
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_get_transaction_history(self):
         """
         DEPRECATED. Use `transaction_list` instead
