@@ -1,7 +1,7 @@
 import logging
 import urlparse
-import inspect
 import json
+import inspect
 
 from decimal import Decimal
 from zope.interface import implements
@@ -15,9 +15,9 @@ from traceback import format_exc
 from lbrynet import conf
 from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
-from lbrynet.undecorated import undecorated
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
+from lbrynet.undecorated import undecorated
 
 log = logging.getLogger(__name__)
 
@@ -338,12 +338,16 @@ class AuthJSONRPCServer(AuthorizedBase):
 
         if args == EMPTY_PARAMS or args == []:
             args_dict = {}
+            _args, _kwargs = (), {}
         elif isinstance(args, dict):
             args_dict = args
         elif len(args) == 1 and isinstance(args[0], dict):
             # TODO: this is for backwards compatibility. Remove this once API and UI are updated
             # TODO: also delete EMPTY_PARAMS then
             args_dict = args[0]
+            _args, _kwargs = (), args
+        elif isinstance(args, list):
+            _args, _kwargs = args, {}
         else:
             # d = defer.maybeDeferred(function, *args)  # if we want to support positional args too
             raise ValueError('Args must be a dict')
@@ -399,28 +403,6 @@ class AuthJSONRPCServer(AuthorizedBase):
                                       function_name,
                                       (utils.now() - time_in).total_seconds()))
         return server.NOT_DONE_YET
-
-    @staticmethod
-    def _check_params(function, args_dict):
-        argspec = inspect.getargspec(undecorated(function))
-        num_optional_params = 0 if argspec.defaults is None else len(argspec.defaults)
-        missing_required_params = [
-            required_param
-            for required_param in argspec.args[1:-num_optional_params]
-            if required_param not in args_dict
-            ]
-        if len(missing_required_params):
-            return 'Missing required parameters', missing_required_params
-
-        extraneous_params = [] if argspec.keywords is not None else [
-            extra_param
-            for extra_param in args_dict
-            if extra_param not in argspec.args[1:]
-            ]
-        if len(extraneous_params):
-            return 'Extraneous parameters', extraneous_params
-
-        return None, None
 
     def _register_user_session(self, session_id):
         """
@@ -501,6 +483,28 @@ class AuthJSONRPCServer(AuthorizedBase):
         function_path = self._check_deprecated(function_path)
         self._verify_method_is_callable(function_path)
         return self.callable_methods.get(function_path)
+
+    @staticmethod
+    def _check_params(function, args_dict):
+        argspec = inspect.getargspec(undecorated(function))
+        num_optional_params = 0 if argspec.defaults is None else len(argspec.defaults)
+        missing_required_params = [
+            required_param
+            for required_param in argspec.args[1:-num_optional_params]
+            if required_param not in args_dict
+        ]
+        if len(missing_required_params):
+            return 'Missing required parameters', missing_required_params
+
+        extraneous_params = [] if argspec.keywords is not None else [
+            extra_param
+            for extra_param in args_dict
+            if extra_param not in argspec.args[1:]
+        ]
+        if len(extraneous_params):
+            return 'Extraneous parameters', extraneous_params
+
+        return None, None
 
     def _initialize_session(self, session_id):
         if not self.sessions.get(session_id, False):

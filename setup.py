@@ -31,6 +31,7 @@ requires = [
     'seccure',
     'txJSON-RPC',
     'zope.interface',
+    'docopt'
 ]
 
 console_scripts = [
