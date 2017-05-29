@@ -17,6 +17,7 @@ from twisted.python.failure import Failure
 from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError
+from lbryschema.fee import Fee
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbryum.version import LBRYUM_VERSION
@@ -25,8 +26,6 @@ from lbrynet import conf, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
-from lbrynet.metadata.Fee import FeeValidator
-from lbrynet.metadata.Metadata import verify_name_characters
 
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
@@ -448,7 +447,7 @@ class Daemon(AuthJSONRPCServer):
                 isinstance(settings[key], setting_type) or
                 (
                     key == "max_key_fee" and
-                    isinstance(FeeValidator(settings[key]).amount, setting_type)
+                    isinstance(Fee(settings[key]).amount, setting_type)
                 )
             )
 
@@ -686,7 +685,7 @@ class Daemon(AuthJSONRPCServer):
 
         publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet,
                               certificate_id)
-        verify_name_characters(name)
+        parse_lbry_uri(name)
         if bid <= 0.0:
             raise Exception("Invalid bid")
         if not file_path:
@@ -1596,7 +1595,7 @@ class Daemon(AuthJSONRPCServer):
 
         name = resolved['name']
         claim_id = resolved['claim_id']
-        stream_info = resolved['value']
+        stream_info = ClaimDict.load_dict(resolved['value'])
 
         if claim_id in self.streams:
             log.info("Already waiting on lbry://%s to start downloading", name)

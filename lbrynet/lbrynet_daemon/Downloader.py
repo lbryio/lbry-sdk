@@ -3,10 +3,10 @@ import os
 from twisted.internet import defer, threads
 from twisted.internet.task import LoopingCall
 
-from lbrynet.core import utils
+from lbryschema.fee import Fee
+
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.metadata.Fee import FeeValidator
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet import conf
 
@@ -94,7 +94,7 @@ class GetStream(object):
             log.info("Downloading stream descriptor blob (%i seconds)", self.timeout_counter)
 
     def convert_max_fee(self):
-        max_fee = FeeValidator(self.max_key_fee)
+        max_fee = Fee(self.max_key_fee)
         if max_fee.currency_symbol == "LBC":
             return max_fee.amount
         return self.exchange_rate_manager.to_lbc(self.max_key_fee).amount
@@ -104,15 +104,14 @@ class GetStream(object):
         self.code = next(s for s in STREAM_STAGES if s[0] == status)
 
     def check_fee(self, fee):
-        validated_fee = FeeValidator(fee)
         max_key_fee = self.convert_max_fee()
-        converted_fee = self.exchange_rate_manager.to_lbc(validated_fee).amount
+        converted_fee = self.exchange_rate_manager.to_lbc(fee).amount
         if converted_fee > self.wallet.get_balance():
             raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee)
         if converted_fee > max_key_fee:
             raise KeyFeeAboveMaxAllowed('Key fee %s above max allowed %s' % (converted_fee,
                                                                              max_key_fee))
-        return validated_fee
+        return fee
 
     def get_downloader_factory(self, factories):
         for factory in factories:
@@ -165,12 +164,12 @@ class GetStream(object):
         self._running = True
 
         self.set_status(INITIALIZING_CODE, name)
-        self.sd_hash = utils.get_sd_hash(stream_info)
+        self.sd_hash = stream_info.source_hash
 
-        if 'fee' in stream_info['stream']['metadata']:
+        if stream_info.has_fee:
             try:
                 fee = yield threads.deferToThread(self.check_fee,
-                                                  stream_info['stream']['metadata']['fee'])
+                                                  stream_info.source_fee)
             except Exception as err:
                 self._running = False
                 self.finished_deferred.errback(err)

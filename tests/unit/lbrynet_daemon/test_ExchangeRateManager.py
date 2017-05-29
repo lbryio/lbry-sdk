@@ -1,6 +1,5 @@
-from lbrynet.metadata import Fee
+from lbryschema.fee import Fee
 from lbrynet.lbrynet_daemon import ExchangeRateManager
-from lbrynet import conf
 from lbrynet.core.Error import InvalidExchangeRateResponse
 
 from twisted.trial import unittest
@@ -15,7 +14,7 @@ class FeeFormatTest(unittest.TestCase):
             'amount': 10.0,
             'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
         }
-        fee = Fee.FeeValidator(fee_dict)
+        fee = Fee(fee_dict)
         self.assertEqual(10.0, fee['amount'])
         self.assertEqual('USD', fee['currency'])
 

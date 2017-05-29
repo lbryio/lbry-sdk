@@ -5,8 +5,9 @@ import json
 from twisted.internet import defer, threads
 from twisted.internet.task import LoopingCall
 
+from lbryschema.fee import Fee
+
 from lbrynet import conf
-from lbrynet.metadata.Fee import FeeValidator
 from lbrynet.core.Error import InvalidExchangeRateResponse
 
 log = logging.getLogger(__name__)
@@ -203,14 +204,14 @@ class ExchangeRateManager(object):
     def to_lbc(self, fee):
         if fee is None:
             return None
-        if not isinstance(fee, FeeValidator):
-            fee_in = FeeValidator(fee)
+        if not isinstance(fee, Fee):
+            fee_in = Fee(fee)
         else:
             fee_in = fee
 
-        return FeeValidator({
-                'currency':fee_in.currency_symbol,
-                'amount': self.convert_currency(fee_in.currency_symbol, "LBC", fee_in.amount),
+        return Fee({
+                'currency':fee_in.currency,
+                'amount': self.convert_currency(fee_in.currency, "LBC", fee_in.amount),
                 'address': fee_in.address
                 })
 
@@ -261,13 +262,13 @@ class DummyExchangeRateManager(object):
     def to_lbc(self, fee):
         if fee is None:
             return None
-        if not isinstance(fee, FeeValidator):
-            fee_in = FeeValidator(fee)
+        if not isinstance(fee, Fee):
+            fee_in = Fee(fee)
         else:
             fee_in = fee
 
-        return FeeValidator({
-                'currency':fee_in.currency_symbol,
-                'amount': self.convert_currency(fee_in.currency_symbol, "LBC", fee_in.amount),
+        return Fee({
+                'currency':fee_in.currency,
+                'amount': self.convert_currency(fee_in.currency, "LBC", fee_in.amount),
                 'address': fee_in.address
                 })
