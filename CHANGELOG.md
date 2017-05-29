@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Do not catch base exception in API command resolve
   *
 
 ### Fixed

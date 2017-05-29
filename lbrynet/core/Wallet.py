@@ -701,7 +701,7 @@ class Wallet(object):
             raise UnknownNameError("No results to return")
 
         if 'error' in results:
-            if results['error'] == 'name is not claimed':
+            if results['error'] in ['name is not claimed', 'claim not found']:
                 raise UnknownNameError(results['error'])
             else:
                 raise Exception(results['error'])
