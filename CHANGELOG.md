@@ -18,7 +18,7 @@ at anytime.
 
 ### Fixed
   *
-  *
+  * Allow fee fields in metadata with amount 0
   * Allow claim_show to be used without specifying name
 
 ### Deprecated

@@ -7,7 +7,7 @@ VER_001 = {
         'amount': {
             'type': 'number',
             'minimum': 0,
-            'exclusiveMinimum': True,
+            'exclusiveMinimum': False,
         },
         'address': {
             'type': 'string'
