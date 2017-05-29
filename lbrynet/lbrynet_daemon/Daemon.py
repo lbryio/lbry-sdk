@@ -1370,7 +1370,7 @@ class Daemon(AuthJSONRPCServer):
         return self.jsonrpc_claim_show(**kwargs)
 
     @defer.inlineCallbacks
-    def jsonrpc_claim_show(self, name, txid=None, nout=None, claim_id=None):
+    def jsonrpc_claim_show(self, name=None, txid=None, nout=None, claim_id=None):
 
         """
         Resolve claim info from a LBRY name

@@ -19,6 +19,7 @@ at anytime.
 ### Fixed
   *
   *
+  * Allow claim_show to be used without specifying name
 
 ### Deprecated
   *
