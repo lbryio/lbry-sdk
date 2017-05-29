@@ -24,6 +24,11 @@ class Publisher(object):
     def create_and_publish_stream(self, name, bid, claim_dict, file_path):
         """Create lbry file and make claim"""
         log.info('Starting publish for %s', name)
+        if not os.path.isfile(file_path):
+            raise Exception("File {} not found".format(file_path))
+        if os.path.getsize(file_path) == 0:
+            raise Exception("Cannot publish empty file {}".format(file_path))
+
         file_name = os.path.basename(file_path)
         with file_utils.get_read_handle(file_path) as read_handle:
             stream_hash = yield create_lbry_file(self.session, self.lbry_file_manager, file_name,

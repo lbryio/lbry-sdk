@@ -9,7 +9,7 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Prevent publish of files with size 0
   *
 
 ### Changed
