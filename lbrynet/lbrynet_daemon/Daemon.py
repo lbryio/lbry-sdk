@@ -1804,7 +1804,7 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise Exception("Invalid bid")
 
-        if bid > self.session.wallet.get_balance():
+        if bid >= self.session.wallet.get_balance():
             raise InsufficientFundsError()
 
         metadata = metadata or {}
@@ -1821,7 +1821,7 @@ class Daemon(AuthJSONRPCServer):
         if license is not None:
             metadata['license'] = license
         if license_url is not None:
-            metadata['license_url'] = license_url
+            metadata['licenseUrl'] = license_url
         if thumbnail is not None:
             metadata['thumbnail'] = thumbnail
         if preview is not None:
@@ -1834,26 +1834,13 @@ class Daemon(AuthJSONRPCServer):
         # original format {'currency':{'address','amount'}}
         # add address to fee if unspecified {'version': ,'currency', 'address' , 'amount'}
         if 'fee' in metadata:
-            assert len(metadata['fee']) == 1, "Too many fees"
-            currency, fee_dict = metadata['fee'].items()[0]
-            if 'address' not in fee_dict:
-                address = yield self.session.wallet.get_new_address()
-            else:
-                address = fee_dict['address']
-            metadata['fee'] = {
-                'version': '_0_0_1',
-                'currency': currency,
-                'address': address,
-                'amount': fee_dict['amount']
-            }
-
-        log.info("Publish: %s", {
-            'name': name,
-            'file_path': file_path,
-            'bid': bid,
-            'metadata': metadata,
-            'fee': fee,
-        })
+            if 'amount' in metadata['fee'] and 'currency' in metadata['fee']:
+                if not metadata['fee']['amount']:
+                    log.warning("Stripping empty fee from published metadata")
+                    del metadata['fee']
+                elif 'address' not in metadata['fee']:
+                    address = yield self.session.wallet.get_unused_address()
+                    metadata['fee']['address'] = address
 
         claim_dict = {
             'version': '_0_0_1',
@@ -1866,6 +1853,13 @@ class Daemon(AuthJSONRPCServer):
 
         if sources is not None:
             claim_dict['stream']['source'] = sources
+
+        log.info("Publish: %s", {
+            'name': name,
+            'file_path': file_path,
+            'bid': bid,
+            'claim_dict': claim_dict,
+        })
 
         if channel_id:
             certificate_id = channel_id

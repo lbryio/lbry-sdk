@@ -13,12 +13,15 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Update `publish` to use {'currency': ..., 'address': ..., 'amount'} format for fee parameter,
+    previously used old {currency: {'address': ..., 'amount': ...}} format
   *
 
 ### Fixed
   *
   *
+  * Allow claim_show to be used without specifying name
+  * Fix licenseUrl field in `publish`
 
 ### Deprecated
   *
