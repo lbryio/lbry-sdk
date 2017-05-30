@@ -19,7 +19,6 @@ at anytime.
 ### Fixed
   *
   *
-  * Allow claim_show to be used without specifying name
 
 ### Deprecated
   *
@@ -28,6 +27,13 @@ at anytime.
 ### Removed
   *
   *
+
+## [0.10.3production2] - 2017-05-30
+
+### Fixed
+ * Allow claim_show to be used without specifying name
+
+
 
 ## [0.10.3] - 2017-05-23
 
