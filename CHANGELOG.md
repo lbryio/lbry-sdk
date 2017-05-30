@@ -13,8 +13,7 @@ at anytime.
   *
 
 ### Changed
-  * Update `publish` to use {'currency': ..., 'address': ..., 'amount'} format for fee parameter,
-    previously used old {currency: {'address': ..., 'amount': ...}} format
+  * Update `publish` to use {'currency': ..., 'address': ..., 'amount'} format for fee parameter, previously used old {currency: {'address': ..., 'amount': ...}} format
   *
 
 ### Fixed
