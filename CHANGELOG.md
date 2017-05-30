@@ -10,6 +10,7 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Prevent publish of files with size 0
+  * Add `dht_status` parameter to `status` to include bandwidth and peer info
   *
 
 ### Changed
