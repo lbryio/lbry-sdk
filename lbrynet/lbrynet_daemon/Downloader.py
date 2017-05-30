@@ -94,24 +94,28 @@ class GetStream(object):
             log.info("Downloading stream descriptor blob (%i seconds)", self.timeout_counter)
 
     def convert_max_fee(self):
-        max_fee = Fee(self.max_key_fee)
-        if max_fee.currency_symbol == "LBC":
-            return max_fee.amount
-        return self.exchange_rate_manager.to_lbc(self.max_key_fee).amount
+        currency, amount = self.max_key_fee['currency'], self.max_key_fee['amount']
+        return self.exchange_rate_manager.convert_currency(currency, "LBC", amount)
 
     def set_status(self, status, name):
         log.info("Download lbry://%s status changed to %s" % (name, status))
         self.code = next(s for s in STREAM_STAGES if s[0] == status)
 
-    def check_fee(self, fee):
-        max_key_fee = self.convert_max_fee()
-        converted_fee = self.exchange_rate_manager.to_lbc(fee).amount
-        if converted_fee > self.wallet.get_balance():
-            raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee)
-        if converted_fee > max_key_fee:
-            raise KeyFeeAboveMaxAllowed('Key fee %s above max allowed %s' % (converted_fee,
-                                                                             max_key_fee))
-        return fee
+    def check_fee_and_convert(self, fee):
+        max_key_fee_amount = self.convert_max_fee()
+        converted_fee_amount = self.exchange_rate_manager.convert_currency(fee.currency, "LBC",
+                                                                           fee.amount)
+        if converted_fee_amount > self.wallet.get_balance():
+            raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee_amount)
+        if converted_fee_amount > max_key_fee_amount:
+            raise KeyFeeAboveMaxAllowed('Key fee %s above max allowed %s' % (converted_fee_amount,
+                                                                             max_key_fee_amount))
+        converted_fee = {
+            'currency': 'LBC',
+            'amount': converted_fee_amount,
+            'address': fee.address
+        }
+        return Fee(converted_fee)
 
     def get_downloader_factory(self, factories):
         for factory in factories:
@@ -142,8 +146,7 @@ class GetStream(object):
     @defer.inlineCallbacks
     def pay_key_fee(self, fee, name):
         if fee is not None:
-            fee_lbc = self.exchange_rate_manager.to_lbc(fee).amount
-            yield self._pay_key_fee(fee.address, fee_lbc, name)
+            yield self._pay_key_fee(fee.address, fee.amount, name)
         else:
             defer.returnValue(None)
 
@@ -168,7 +171,7 @@ class GetStream(object):
 
         if stream_info.has_fee:
             try:
-                fee = yield threads.deferToThread(self.check_fee,
+                fee = yield threads.deferToThread(self.check_fee_and_convert,
                                                   stream_info.source_fee)
             except Exception as err:
                 self._running = False

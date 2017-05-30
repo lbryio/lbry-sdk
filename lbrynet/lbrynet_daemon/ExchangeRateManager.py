@@ -5,8 +5,6 @@ import json
 from twisted.internet import defer, threads
 from twisted.internet.task import LoopingCall
 
-from lbryschema.fee import Fee
-
 from lbrynet import conf
 from lbrynet.core.Error import InvalidExchangeRateResponse
 
@@ -201,20 +199,6 @@ class ExchangeRateManager(object):
     def fee_dict(self):
         return {market: market.rate.as_dict() for market in self.market_feeds}
 
-    def to_lbc(self, fee):
-        if fee is None:
-            return None
-        if not isinstance(fee, Fee):
-            fee_in = Fee(fee)
-        else:
-            fee_in = fee
-
-        return Fee({
-                'currency':fee_in.currency,
-                'amount': self.convert_currency(fee_in.currency, "LBC", fee_in.amount),
-                'address': fee_in.address
-                })
-
 
 class DummyBTCLBCFeed(MarketFeed):
     def __init__(self):
@@ -258,17 +242,3 @@ class DummyExchangeRateManager(object):
                 market.rate.currency_pair[0] == from_currency):
                 return self.convert_currency(
                     market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
-
-    def to_lbc(self, fee):
-        if fee is None:
-            return None
-        if not isinstance(fee, Fee):
-            fee_in = Fee(fee)
-        else:
-            fee_in = fee
-
-        return Fee({
-                'currency':fee_in.currency,
-                'amount': self.convert_currency(fee_in.currency, "LBC", fee_in.amount),
-                'address': fee_in.address
-                })

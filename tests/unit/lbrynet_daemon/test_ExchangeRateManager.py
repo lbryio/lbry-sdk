@@ -23,18 +23,18 @@ class FeeTest(unittest.TestCase):
         util.resetTime(self)
 
     def test_fee_converts_to_lbc(self):
-        fee_dict = {
+        fee = Fee({
             'currency':'USD',
             'amount': 10.0,
             'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
-            }
+            })
 
         rates = {
             'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
             'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
         }
         manager = ExchangeRateManager.DummyExchangeRateManager(rates)
-        result = manager.to_lbc(fee_dict).amount
+        result = manager.convert_currency(fee.currency, "LBC", fee.amount)
         self.assertEqual(60.0, result)
 
 class GoogleBTCFeedTest(unittest.TestCase):

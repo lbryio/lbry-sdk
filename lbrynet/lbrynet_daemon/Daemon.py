@@ -822,7 +822,9 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     def _add_key_fee_to_est_data_cost(self, fee, data_cost):
-        fee_amount = 0.0 if not fee else self.exchange_rate_manager.to_lbc(fee).amount
+        fee_amount = 0.0 if not fee else self.exchange_rate_manager.convert_currency(fee.currency,
+                                                                                     "LBC",
+                                                                                     fee.amount)
         return data_cost + fee_amount
 
     @defer.inlineCallbacks
@@ -1855,8 +1857,11 @@ class Daemon(AuthJSONRPCServer):
                                              If no path is given but a metadata dict is provided,
                                              the source from the given metadata will be used.
             --fee=<fee>                    : Dictionary representing key fee to download content:
-                                              {currency_symbol: {'amount': float,
-                                                                'address': str, optional}}
+                                              {
+                                                'currency': currency_symbol,
+                                                'amount': float,
+                                                'address': str, optional
+                                              }
                                               supported currencies: LBC, USD, BTC
                                               If an address is not provided a new one will be
                                               automatically generated. Default fee is zero.
