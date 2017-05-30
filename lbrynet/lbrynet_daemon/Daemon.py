@@ -1821,7 +1821,7 @@ class Daemon(AuthJSONRPCServer):
         if license is not None:
             metadata['license'] = license
         if license_url is not None:
-            metadata['license_url'] = license_url
+            metadata['licenseUrl'] = license_url
         if thumbnail is not None:
             metadata['thumbnail'] = thumbnail
         if preview is not None:
