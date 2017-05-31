@@ -13,7 +13,8 @@ from lbrynet.lbrynet_daemon import ExchangeRateManager
 from tests import util
 from tests.mocks import mock_conf_settings, FakeNetwork
 from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
-
+from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
+from tests.mocks import BTCLBCFeed, USDBTCFeed
 
 def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     if data_rate is None:
@@ -26,7 +27,8 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     daemon = LBRYDaemon(None, None)
     daemon.session = mock.Mock(spec=Session.Session)
     daemon.session.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
-    daemon.exchange_rate_manager = ExchangeRateManager.DummyExchangeRateManager(rates)
+    market_feeds = [BTCLBCFeed(), USDBTCFeed()]
+    daemon.exchange_rate_manager = DummyExchangeRateManager(market_feeds, rates)
     base_prm = PaymentRateManager.BasePaymentRateManager(rate=data_rate)
     prm = PaymentRateManager.NegotiatedPaymentRateManager(base_prm, DummyBlobAvailabilityTracker(),
                                                           generous=generous)

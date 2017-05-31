@@ -6,6 +6,7 @@ from twisted.internet import defer
 
 from lbrynet.core import PTCWallet
 from lbrynet.core import BlobAvailability
+from lbrynet.lbrynet_daemon import ExchangeRateManager as ERM
 from lbrynet import conf
 
 KB = 2**10
@@ -38,6 +39,37 @@ class FakeNetwork(object):
     @staticmethod
     def get_server_height():
         return 1
+
+
+class BTCLBCFeed(ERM.MarketFeed):
+    def __init__(self):
+        ERM.MarketFeed.__init__(
+            self,
+            "BTCLBC",
+            "market name",
+            "derp.com",
+            None,
+            0.0
+        )
+
+class USDBTCFeed(ERM.MarketFeed):
+    def __init__(self):
+        ERM.MarketFeed.__init__(
+            self,
+            "USDBTC",
+            "market name",
+            "derp.com",
+            None,
+            0.0
+        )
+
+class ExchangeRateManager(ERM.ExchangeRateManager):
+    def __init__(self, market_feeds, rates):
+        self.market_feeds = market_feeds
+        for feed in self.market_feeds:
+            feed.rate = ERM.ExchangeRate(
+                feed.market, rates[feed.market]['spot'], rates[feed.market]['ts'])
+
 
 
 class Wallet(object):
@@ -254,3 +286,6 @@ def mock_conf_settings(obj, settings={}):
         conf.settings = original_settings
 
     obj.addCleanup(_reset_settings)
+
+
+
