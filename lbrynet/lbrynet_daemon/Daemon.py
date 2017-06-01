@@ -1287,7 +1287,7 @@ class Daemon(AuthJSONRPCServer):
         Return the balance of the wallet
 
         Usage:
-            wallet_balance [<address> | --address=<address] [-u]
+            wallet_balance [<address> | --address=<address>] [-u]
 
         Options:
             <address>  :  If provided only the balance for this address will be given
@@ -2474,7 +2474,7 @@ t
         Get peers for blob hash
 
         Usage:
-            peer_list (<blob_hash> | --blob_hash=<blob_hash) [<timeout> | --timeout=<timeout>]
+            peer_list (<blob_hash> | --blob_hash=<blob_hash>) [<timeout> | --timeout=<timeout>]
 
         Options:
             <timeout>, --timeout=<timeout>  : peer search timeout in seconds
@@ -2615,7 +2615,7 @@ t
         Get stream availability for lbry uri
 
         Usage:
-            get_availability (<uri> | --uri=<uri) [<sd_timeout> | --sd_timeout=<sd_timeout>]
+            get_availability (<uri> | --uri=<uri>) [<sd_timeout> | --sd_timeout=<sd_timeout>]
                              [<peer_timeout> | --peer_timeout=<peer_timeout>]
 
         Options:
