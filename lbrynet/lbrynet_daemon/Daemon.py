@@ -1538,7 +1538,7 @@ class Daemon(AuthJSONRPCServer):
 
         try:
             resolved = yield self.session.wallet.resolve_uri(uri, check_cache=not force)
-        except Exception:
+        except UnknownNameError:
             resolved = None
         results = yield self._render_response(resolved)
         defer.returnValue(results)
