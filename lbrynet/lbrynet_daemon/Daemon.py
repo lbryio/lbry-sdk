@@ -2715,6 +2715,28 @@ t
         return d
 
 
+
+    @defer.inlineCallbacks
+    def jsonrpc_cli_test_command(self, pos_arg, pos_args=[], pos_arg2=None, pos_arg3=None):
+        """
+        This command is only for testing the CLI argument parsing
+        Usage:
+            cli_test_command (<pos_arg> | --pos_arg=<pos_arg>)
+                             [<pos_args>...] [--pos_arg2=<pos_arg2>]
+                             [--pos_arg3=<pos_arg3>]
+
+        Options:
+            <pos_arg2>, --pos_arg2=<pos_arg2>  : pos arg 2
+            <pos_arg3>, --pos_arg3=<pos_arg3>  : pos arg 3
+
+        Returns:
+            pos args
+        """
+        out = (pos_arg, pos_args, pos_arg2, pos_arg3)
+        response = yield self._render_response(out)
+        defer.returnValue(response)
+
+
 class _ResolveNameHelper(object):
     def __init__(self, daemon, name, force_refresh):
         self.daemon = daemon
