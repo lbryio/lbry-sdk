@@ -9,15 +9,12 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  * Prevent publish of files with size 0
-  * Add `dht_status` parameter to `status` to include bandwidth and peer info
   *
-  * Positional and flag arguments in lbrynet-cli
-  * 
+  *
 
 ### Changed
-  * Changed keyword arguments in lbrynet-cli to use a -- prefix
-  * Using the help function in lbrynet-cli no longer requires lbrynet-daemon to be running
+  *
+  *
 
 ### Fixed
   *
@@ -30,6 +27,20 @@ at anytime.
 ### Removed
   *
   *
+
+## [0.10.3production4] - 2017-06-01
+
+### Added
+ * Prevent publish of files with size 0
+ * Add `dht_status` parameter to `status` to include bandwidth and peer info
+ * Positional and flag arguments in lbrynet-cli
+
+
+### Changed
+ * Changed keyword arguments in lbrynet-cli to use a -- prefix
+ * Using the help function in lbrynet-cli no longer requires lbrynet-daemon to be running
+
+
 
 ## [0.10.3production3] - 2017-05-30
 
