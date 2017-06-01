@@ -1335,16 +1335,18 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
                       [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--rowid=<rowid>]
+                      [--name=<name>]
                       [-f]
 
         Options:
-            --sd_hash=<sd_hash>          : set status of file with matching sd hash
-            --file_name=<file_name>      : set status of file with matching file name in the
+            --sd_hash=<sd_hash>          : get file with matching sd hash
+            --file_name=<file_name>      : get file with matching file name in the
                                            downloads folder
-            --stream_hash=<stream_hash>  : set status of file with matching stream hash
-            --claim_id=<claim_id>        : set status of file with matching claim id
-            --outpoint=<outpoint>        : set status of file with matching claim outpoint
-            --rowid=<rowid>              : set status of file with matching row id
+            --stream_hash=<stream_hash>  : get file with matching stream hash
+            --claim_id=<claim_id>        : get file with matching claim id
+            --outpoint=<outpoint>        : get file with matching claim outpoint
+            --rowid=<rowid>              : get file with matching row id
+            --name=<name>                : get file with matching associated name claim
             -f                           : full status, populate the 'message' and 'size' fields
 
         Returns:
@@ -1640,16 +1642,20 @@ class Daemon(AuthJSONRPCServer):
         Start or stop downloading a file
 
         Usage:
-            file_set_status <status> [-s <sd_hash>] [-n <file_name>] [-h <stream_hash>]
-                                     [-c <claim_id>] [-o <outpoint>] [-r <rowid>]
+            file_set_status <status> [--sd_hash=<sd_hash>] [--file_name=<file_name>]
+                      [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
+                      [--outpoint=<outpoint>] [--rowid=<rowid>]
+                      [--name=<name>]
 
         Options:
-            -s <sd_hash>      : set status of file with matching sd hash
-            -n <file_name>    : set status of file with matching file name in the downloads folder
-            -h <stream_hash>  : set status of file with matching stream hash
-            -c <claim_id>     : set status of file with matching claim id
-            -o <outpoint>     : set status of file with matching claim outpoint
-            -r <rowid>        : set status of file with matching row id
+            --sd_hash=<sd_hash>          : set status of file with matching sd hash
+            --file_name=<file_name>      : set status of file with matching file name in the
+                                           downloads folder
+            --stream_hash=<stream_hash>  : set status of file with matching stream hash
+            --claim_id=<claim_id>        : set status of file with matching claim id
+            --outpoint=<outpoint>        : set status of file with matching claim outpoint
+            --rowid=<rowid>              : set status of file with matching row id
+            --name=<name>                : set status of file with matching associated name claim
 
         Returns:
             (str) Confirmation message
@@ -1685,6 +1691,7 @@ class Daemon(AuthJSONRPCServer):
             file_delete [-a | -f] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
                         [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
                         [--outpoint=<outpoint>] [--rowid=<rowid>]
+                        [--name=<name>]
 
         Options:
             -a                          : delete file from downloads and delete stored blobs
@@ -1695,6 +1702,7 @@ class Daemon(AuthJSONRPCServer):
             --claim_id=<claim_id>       : delete by file claim id
             --outpoint=<outpoint>       : delete by file claim outpoint
             --rowid=<rowid>             : delete by file row id
+            --name=<name>               : delete by associated name claim of file
 
         Returns:
             (bool) true if deletion was successful
