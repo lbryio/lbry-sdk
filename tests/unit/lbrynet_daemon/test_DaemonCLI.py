@@ -16,23 +16,3 @@ class DaemonCLITests(unittest.TestCase):
         self.assertEqual(False, DaemonCLI.guess_type('false'))
         self.assertEqual(False, DaemonCLI.guess_type('False'))
 
-    def test_get_params(self):
-        test_params = [
-            'b64address=VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA==',
-            'name=test',
-            'amount=5.3',
-            'n=5',
-            'address=bY13xeAjLrsjP4KGETwStK2a9UgKgXVTXu',
-            't=true',
-            'f=False',
-        ]
-        test_r = {
-            'b64address': 'VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA==',
-            'name': 'test',
-            'amount': 5.3,
-            'n': 5,
-            'address': 'bY13xeAjLrsjP4KGETwStK2a9UgKgXVTXu',
-            't': True,
-            'f': False,
-        }
-        self.assertDictEqual(test_r, DaemonCLI.get_params_from_kwargs(test_params))

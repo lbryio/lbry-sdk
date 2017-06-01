@@ -1,7 +1,7 @@
 import logging
 import urlparse
-import inspect
 import json
+import inspect
 
 from decimal import Decimal
 from zope.interface import implements
@@ -15,9 +15,9 @@ from traceback import format_exc
 from lbrynet import conf
 from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
-from lbrynet.undecorated import undecorated
 from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
 from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
+from lbrynet.undecorated import undecorated
 
 log = logging.getLogger(__name__)
 
@@ -110,21 +110,30 @@ def jsonrpc_dumps_pretty(obj, **kwargs):
                       separators=(',', ': '), **kwargs) + "\n"
 
 
-class AuthorizedBase(object):
-    def __init__(self):
-        self.authorized_functions = []
-        self.callable_methods = {}
-        self._call_lock = {}
-        self._queued_methods = []
+class JSONRPCServerType(type):
+    def __new__(mcs, name, bases, newattrs):
+        klass = type.__new__(mcs, name, bases, newattrs)
+        klass.callable_methods = {}
+        klass.deprecated_methods = {}
+        klass.authorized_functions = []
+        klass.queued_methods = []
 
-        for methodname in dir(self):
+        for methodname in dir(klass):
             if methodname.startswith("jsonrpc_"):
-                method = getattr(self, methodname)
-                self.callable_methods.update({methodname.split("jsonrpc_")[1]: method})
-                if hasattr(method, '_auth_required'):
-                    self.authorized_functions.append(methodname.split("jsonrpc_")[1])
-                if hasattr(method, '_queued'):
-                    self._queued_methods.append(methodname.split("jsonrpc_")[1])
+                method = getattr(klass, methodname)
+                if not hasattr(method, '_deprecated'):
+                    klass.callable_methods.update({methodname.split("jsonrpc_")[1]: method})
+                    if hasattr(method, '_auth_required'):
+                        klass.authorized_functions.append(methodname.split("jsonrpc_")[1])
+                    if hasattr(method, '_queued'):
+                        klass.queued_methods.append(methodname.split("jsonrpc_")[1])
+                else:
+                    klass.deprecated_methods.update({methodname.split("jsonrpc_")[1]: method})
+        return klass
+
+
+class AuthorizedBase(object):
+    __metaclass__ = JSONRPCServerType
 
     @staticmethod
     def auth_required(f):
@@ -135,6 +144,23 @@ class AuthorizedBase(object):
     def queued(f):
         f._queued = True
         return f
+
+    @staticmethod
+    def deprecated(new_command=None):
+        def _deprecated_wrapper(f):
+            f._new_command = new_command
+            f._deprecated = True
+            return f
+        return _deprecated_wrapper
+
+    @staticmethod
+    def flags(**kwargs):
+        def _flag_wrapper(f):
+            f._flags = {}
+            for k, v in kwargs.iteritems():
+                f._flags[v] = k
+            return f
+        return _flag_wrapper
 
 
 class AuthJSONRPCServer(AuthorizedBase):
@@ -164,7 +190,7 @@ class AuthJSONRPCServer(AuthorizedBase):
     isLeaf = True
 
     def __init__(self, use_authentication=None):
-        AuthorizedBase.__init__(self)
+        self._call_lock = {}
         self._use_authentication = (
             use_authentication if use_authentication is not None else conf.settings['use_auth_http']
         )
@@ -263,7 +289,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         id_ = None
         try:
             function_name = parsed.get('method')
-            is_queued = function_name in self._queued_methods
+            is_queued = function_name in self.queued_methods
             args = parsed.get('params', {})
             id_ = parsed.get('id', None)
             token = parsed.pop('hmac', None)
@@ -312,12 +338,16 @@ class AuthJSONRPCServer(AuthorizedBase):
 
         if args == EMPTY_PARAMS or args == []:
             args_dict = {}
+            _args, _kwargs = (), {}
         elif isinstance(args, dict):
             args_dict = args
         elif len(args) == 1 and isinstance(args[0], dict):
             # TODO: this is for backwards compatibility. Remove this once API and UI are updated
             # TODO: also delete EMPTY_PARAMS then
             args_dict = args[0]
+            _args, _kwargs = (), args
+        elif isinstance(args, list):
+            _args, _kwargs = args, {}
         else:
             # d = defer.maybeDeferred(function, *args)  # if we want to support positional args too
             raise ValueError('Args must be a dict')
@@ -337,7 +367,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         if is_queued:
             d_lock = self._call_lock.get(function_name, False)
             if not d_lock:
-                d = defer.maybeDeferred(function, **args_dict)
+                d = defer.maybeDeferred(function, self, **args_dict)
                 self._call_lock[function_name] = finished_deferred
 
                 def _del_lock(*args):
@@ -352,9 +382,9 @@ class AuthJSONRPCServer(AuthorizedBase):
                 log.info("queued %s", function_name)
                 d = d_lock
                 d.addBoth(lambda _: log.info("running %s from queue", function_name))
-                d.addCallback(lambda _: defer.maybeDeferred(function, **args_dict))
+                d.addCallback(lambda _: defer.maybeDeferred(function, self, **args_dict))
         else:
-            d = defer.maybeDeferred(function, **args_dict)
+            d = defer.maybeDeferred(function, self, **args_dict)
 
         # finished_deferred will callback when the request is finished
         # and errback if something went wrong. If the errback is
@@ -373,28 +403,6 @@ class AuthJSONRPCServer(AuthorizedBase):
                                       function_name,
                                       (utils.now() - time_in).total_seconds()))
         return server.NOT_DONE_YET
-
-    @staticmethod
-    def _check_params(function, args_dict):
-        argspec = inspect.getargspec(undecorated(function))
-        num_optional_params = 0 if argspec.defaults is None else len(argspec.defaults)
-        missing_required_params = [
-            required_param
-            for required_param in argspec.args[1:-num_optional_params]
-            if required_param not in args_dict
-            ]
-        if len(missing_required_params):
-            return 'Missing required parameters', missing_required_params
-
-        extraneous_params = [] if argspec.keywords is not None else [
-            extra_param
-            for extra_param in args_dict
-            if extra_param not in argspec.args[1:]
-            ]
-        if len(extraneous_params):
-            return 'Extraneous parameters', extraneous_params
-
-        return None, None
 
     def _register_user_session(self, session_id):
         """
@@ -454,6 +462,16 @@ class AuthJSONRPCServer(AuthorizedBase):
         else:
             return server_port[0], 80
 
+    def _check_deprecated(self, function_path):
+        if function_path in self.deprecated_methods:
+            deprecated_fn = self.deprecated_methods[function_path]
+            deprecated_function_path = function_path
+            new_function_path = deprecated_fn._new_command
+            log.warning("\"%s\" is deprecated, please update to use \"%s\"",
+                        deprecated_function_path, new_function_path)
+            return new_function_path
+        return function_path
+
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
             raise UnknownAPIMethodError(function_path)
@@ -462,8 +480,31 @@ class AuthJSONRPCServer(AuthorizedBase):
                 raise NotAllowedDuringStartupError(function_path)
 
     def _get_jsonrpc_method(self, function_path):
+        function_path = self._check_deprecated(function_path)
         self._verify_method_is_callable(function_path)
         return self.callable_methods.get(function_path)
+
+    @staticmethod
+    def _check_params(function, args_dict):
+        argspec = inspect.getargspec(undecorated(function))
+        num_optional_params = 0 if argspec.defaults is None else len(argspec.defaults)
+        missing_required_params = [
+            required_param
+            for required_param in argspec.args[1:-num_optional_params]
+            if required_param not in args_dict
+        ]
+        if len(missing_required_params):
+            return 'Missing required parameters', missing_required_params
+
+        extraneous_params = [] if argspec.keywords is not None else [
+            extra_param
+            for extra_param in args_dict
+            if extra_param not in argspec.args[1:]
+        ]
+        if len(extraneous_params):
+            return 'Extraneous parameters', extraneous_params
+
+        return None, None
 
     def _initialize_session(self, session_id):
         if not self.sessions.get(session_id, False):
