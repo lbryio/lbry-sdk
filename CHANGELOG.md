@@ -18,7 +18,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Download analytics error
   *
 
 ### Deprecated

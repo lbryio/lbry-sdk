@@ -52,19 +52,19 @@ class Manager(object):
     def send_server_startup_error(self, message):
         self.analytics_api.track(self._event(SERVER_STARTUP_ERROR, {'message': message}))
 
-    def send_download_started(self, id_, name, stream_info=None):
+    def send_download_started(self, id_, name, claim_dict=None):
         self.analytics_api.track(
-            self._event(DOWNLOAD_STARTED, self._download_properties(id_, name, stream_info))
+            self._event(DOWNLOAD_STARTED, self._download_properties(id_, name, claim_dict))
         )
 
-    def send_download_errored(self, id_, name, stream_info=None):
+    def send_download_errored(self, id_, name, claim_dict=None):
         self.analytics_api.track(
-            self._event(DOWNLOAD_ERRORED, self._download_properties(id_, name, stream_info))
+            self._event(DOWNLOAD_ERRORED, self._download_properties(id_, name, claim_dict))
         )
 
-    def send_download_finished(self, id_, name, stream_info=None):
+    def send_download_finished(self, id_, name, claim_dict=None):
         self.analytics_api.track(
-            self._event(DOWNLOAD_FINISHED, self._download_properties(id_, name, stream_info))
+            self._event(DOWNLOAD_FINISHED, self._download_properties(id_, name, claim_dict))
         )
 
     def send_claim_action(self, action):
@@ -159,13 +159,13 @@ class Manager(object):
         return properties
 
     @staticmethod
-    def _download_properties(id_, name, stream_info=None):
+    def _download_properties(id_, name, claim_dict=None):
         sd_hash = None
-        if stream_info:
+        if claim_dict:
             try:
-                sd_hash = stream_info['stream']['source']['source']
+                sd_hash = claim_dict.source_hash
             except (KeyError, TypeError, ValueError):
-                log.debug('Failed to get sd_hash from %s', stream_info, exc_info=True)
+                log.debug('Failed to get sd_hash from %s', claim_dict, exc_info=True)
         return {
             'download_id': id_,
             'name': name,
@@ -235,12 +235,12 @@ class Api(object):
         if not self._enabled:
             return defer.succeed('analytics disabled')
 
-        def _log_error(failure):
-            log.warning('Failed to send track event. %s', failure.getTraceback())
+        def _log_error(failure, event):
+            log.warning('Failed to send track event. %s (%s)', failure.getTraceback(), str(event))
 
         log.debug('Sending track event: %s', event)
         d = self._post('/track', event)
-        d.addErrback(_log_error)
+        d.addErrback(_log_error, event)
         return d
 
     @classmethod

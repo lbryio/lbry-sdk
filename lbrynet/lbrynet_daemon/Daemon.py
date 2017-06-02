@@ -644,7 +644,7 @@ class Daemon(AuthJSONRPCServer):
         return finished_d
 
     @defer.inlineCallbacks
-    def _download_name(self, name, stream_info, claim_id, timeout=None, download_directory=None,
+    def _download_name(self, name, claim_dict, claim_id, timeout=None, download_directory=None,
                        file_name=None):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
@@ -657,7 +657,7 @@ class Daemon(AuthJSONRPCServer):
             defer.returnValue(result)
         else:
             download_id = utils.random_string()
-            self.analytics_manager.send_download_started(download_id, name, stream_info)
+            self.analytics_manager.send_download_started(download_id, name, claim_dict)
 
             self.streams[claim_id] = GetStream(self.sd_identifier, self.session,
                                                self.session.wallet, self.lbry_file_manager,
@@ -665,17 +665,17 @@ class Daemon(AuthJSONRPCServer):
                                                conf.settings['data_rate'], timeout,
                                                download_directory, file_name)
             try:
-                download = self.streams[claim_id].start(stream_info, name)
-                self.streams[claim_id].finished_deferred.addCallback(
-                    lambda _: self.analytics_manager.send_download_finished(download_id,
-                                                                            name,
-                                                                            stream_info))
+                download = self.streams[claim_id].start(claim_dict, name)
                 lbry_file = yield download
+                f_d = self.streams[claim_id].finished_deferred
+                f_d.addCallback(lambda _: self.analytics_manager.send_download_finished(download_id,
+                                                                                        name,
+                                                                                        claim_dict))
                 result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
                 del self.streams[claim_id]
             except Exception as err:
                 log.warning('Failed to get %s: %s', name, err)
-                self.analytics_manager.send_download_errored(download_id, name, stream_info)
+                self.analytics_manager.send_download_errored(download_id, name, claim_dict)
                 del self.streams[claim_id]
                 result = {'error': err.message}
             defer.returnValue(result)
@@ -960,7 +960,7 @@ class Daemon(AuthJSONRPCServer):
                 lbry_file_dict = yield self._get_lbry_file_dict(lbry_file, full_status=full_status)
                 file_dicts.append(lbry_file_dict)
             lbry_files = file_dicts
-        log.info("Collected %i lbry files", len(lbry_files))
+        log.debug("Collected %i lbry files", len(lbry_files))
         defer.returnValue(lbry_files)
 
     # TODO: do this and get_blobs_for_sd_hash in the stream info manager
@@ -1597,7 +1597,7 @@ class Daemon(AuthJSONRPCServer):
 
         name = resolved['name']
         claim_id = resolved['claim_id']
-        stream_info = ClaimDict.load_dict(resolved['value'])
+        claim_dict = ClaimDict.load_dict(resolved['value'])
 
         if claim_id in self.streams:
             log.info("Already waiting on lbry://%s to start downloading", name)
@@ -1614,7 +1614,7 @@ class Daemon(AuthJSONRPCServer):
                 log.info('Already have a file for %s', name)
             result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
         else:
-            result = yield self._download_name(name, stream_info, claim_id, timeout=timeout,
+            result = yield self._download_name(name, claim_dict, claim_id, timeout=timeout,
                                                download_directory=download_directory,
                                                file_name=file_name)
         response = yield self._render_response(result)
