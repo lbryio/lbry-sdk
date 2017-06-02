@@ -45,6 +45,7 @@ class NegotiatedPaymentRateManager(object):
         """
 
         self.base = base
+        self.min_blob_data_payment_rate = base.min_blob_data_payment_rate
         self.points_paid = 0.0
         self.blob_tracker = availability_tracker
         self.generous = generous if generous is not None else conf.settings['is_generous_host']
