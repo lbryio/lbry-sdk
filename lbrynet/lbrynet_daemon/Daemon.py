@@ -1937,6 +1937,8 @@ class Daemon(AuthJSONRPCServer):
                 elif 'address' not in metadata['fee']:
                     address = yield self.session.wallet.get_unused_address()
                     metadata['fee']['address'] = address
+            if 'fee' in metadata and 'version' not in metadata['fee']:
+                metadata['fee']['version'] = '_0_0_1'
 
         claim_dict = {
             'version': '_0_0_1',
