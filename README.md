@@ -13,7 +13,7 @@ It provides a daemon that can interact with the network via a json-rpc interface
 
 **Note**: This project no longer directly bundles a graphic interface (browser). If you want to use LBRY via a browser, [use the LBRY App](https://github.com/lbryio/lbry-app).
 
-Our [releases page](https://github.com/lbryio/lbry-app/releases/latest) contains pre-built binaries of the latest release, pre-releases, and past releases, for macOS, Debian-based Linux, and Windows.
+Our [releases page](https://github.com/lbryio/lbry/releases) contains pre-built binaries of the latest release, pre-releases, and past releases, for macOS, Debian-based Linux, and Windows.
 
 Installing from source is also relatively painless, full instructions are in [INSTALL.md](INSTALL.md)
 
