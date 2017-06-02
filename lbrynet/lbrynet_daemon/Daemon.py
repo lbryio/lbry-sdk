@@ -1927,9 +1927,13 @@ class Daemon(AuthJSONRPCServer):
 
         metadata['version'] = '_0_1_0'
 
-        # original format {'currency':{'address','amount'}}
-        # add address to fee if unspecified {'version': ,'currency', 'address' , 'amount'}
+        # check for original deprecated format {'currency':{'address','amount'}}
+        # add address, version to fee if unspecified
         if 'fee' in metadata:
+            if len(metadata['fee'].keys()) == 1 and isinstance(metadata['fee'].values()[0], dict):
+                raise Exception('Old format for fee no longer supported. ' \
+                                'Fee must be specified as {"currency":,"address":,"amount":}')
+
             if 'amount' in metadata['fee'] and 'currency' in metadata['fee']:
                 if not metadata['fee']['amount']:
                     log.warning("Stripping empty fee from published metadata")
