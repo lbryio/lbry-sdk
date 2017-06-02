@@ -22,7 +22,7 @@ at anytime.
   *
 
 ### Deprecated
-  *
+  * Old fee metadata format in publish API command is deprecated, throw relevant exception
   *
 
 ### Removed
