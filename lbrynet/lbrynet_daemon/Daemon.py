@@ -1046,97 +1046,6 @@ class Daemon(AuthJSONRPCServer):
             response['dht_status'] = self.session.dht_node.get_bandwidth_stats()
         defer.returnValue(response)
 
-    @AuthJSONRPCServer.deprecated('status')
-    def jsonrpc_get_best_blockhash(self):
-        """
-        DEPRECATED. Use `status blockchain_status=True` instead
-        """
-
-        d = self.jsonrpc_status()
-        d.addCallback(lambda x: self._render_response(
-            x['blockchain_status']['best_blockhash']))
-        return d
-
-    @AuthJSONRPCServer.deprecated('status')
-    def jsonrpc_is_running(self):
-        """
-        DEPRECATED. Use `status` instead
-        """
-
-        d = self.jsonrpc_status()
-        d.addCallback(lambda x: self._render_response(x['is_running']))
-        return d
-
-    @AuthJSONRPCServer.deprecated('status')
-    def jsonrpc_daemon_status(self):
-        """
-        DEPRECATED. Use `status` instead
-        """
-
-        def _simulate_old_daemon_status(status):
-            message = status['startup_status']['message']
-            problem_code = None
-            progress = None
-
-            if self.connection_status_code != CONNECTION_STATUS_CONNECTED:
-                problem_code = self.connection_status_code
-                message = CONNECTION_MESSAGES[self.connection_status_code]
-            elif status['startup_status']['code'] == LOADING_WALLET_CODE:
-                message = "Catching up with the blockchain."
-                progress = 0
-                if status['blockchain_status']['blocks_behind'] > 0:
-                    message += (
-                        ' ' + str(status['blockchain_status']['blocks_behind']) + " blocks behind."
-                    )
-                    progress = status['blockchain_status']['blocks_behind']
-
-            return {
-                'message': message,
-                'code': status['startup_status']['code'],
-                'progress': progress,
-                'is_lagging': self.connection_status_code != CONNECTION_STATUS_CONNECTED,
-                'problem_code': problem_code,
-            }
-
-        d = self.jsonrpc_status()
-        d.addCallback(_simulate_old_daemon_status)
-        d.addCallback(lambda x: self._render_response(x))  # is this necessary?
-        return d
-
-    @AuthJSONRPCServer.deprecated('status')
-    def jsonrpc_is_first_run(self):
-        """
-        DEPRECATED. Use `status` instead
-        """
-
-        d = self.jsonrpc_status()
-        d.addCallback(lambda x: self._render_response(x['is_first_run']))
-        return d
-
-    @AuthJSONRPCServer.deprecated('status')
-    def jsonrpc_get_lbry_session_info(self):
-        """
-        DEPRECATED. Use `status` instead
-        """
-
-        d = self.jsonrpc_status(session_status=True)
-        d.addCallback(lambda x: self._render_response({
-            'lbry_id': x['lbry_id'],
-            'managed_blobs': x['session_status']['managed_blobs'],
-            'managed_streams': x['session_status']['managed_streams'],
-        }))
-        return d
-
-    @AuthJSONRPCServer.deprecated('status')
-    def jsonrpc_get_time_behind_blockchain(self):
-        """
-        DEPRECATED. Use `status` instead
-        """
-
-        d = self.jsonrpc_status()
-        d.addCallback(lambda x: self._render_response(x['blockchain_status']['blocks_behind']))
-        return d
-
     def jsonrpc_version(self):
         """
         Get lbry version information
@@ -1184,13 +1093,6 @@ class Daemon(AuthJSONRPCServer):
         )
         return self._render_response(True)
 
-    @AuthJSONRPCServer.deprecated('settings_get')
-    def jsonrpc_get_settings(self):
-        """
-        DEPRECATED. Use `settings_get` instead.
-        """
-        return self.jsonrpc_settings_get()
-
     def jsonrpc_settings_get(self):
         """
         Get daemon settings
@@ -1203,14 +1105,6 @@ class Daemon(AuthJSONRPCServer):
             See ADJUSTABLE_SETTINGS in lbrynet/conf.py for full list of settings
         """
         return self._render_response(conf.settings.get_adjustable_settings_dict())
-
-    @AuthJSONRPCServer.deprecated('settings_set')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_set_settings(self, **kwargs):
-        """
-        DEPRECATED. Use `settings_set` instead.
-        """
-        return self.jsonrpc_settings_set(**kwargs)
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
@@ -1277,13 +1171,6 @@ class Daemon(AuthJSONRPCServer):
         """
         return self._render_response(sorted([command for command in self.callable_methods.keys()]))
 
-    @AuthJSONRPCServer.deprecated('wallet_balance')
-    def jsonrpc_get_balance(self, address=None, include_unconfirmed=False):
-        """
-        DEPRECATED. Use `wallet_balance` instead.
-        """
-        return self.jsonrpc_wallet_balance(address, include_unconfirmed)
-
     @AuthJSONRPCServer.flags(include_unconfirmed='-u')
     def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
         """
@@ -1304,13 +1191,6 @@ class Daemon(AuthJSONRPCServer):
         else:
             return self._render_response(float(
                 self.session.wallet.get_address_balance(address, include_unconfirmed)))
-
-    @AuthJSONRPCServer.deprecated('daemon_stop')
-    def jsonrpc_stop(self):
-        """
-        DEPRECATED. Use `daemon_stop` instead.
-        """
-        return self.jsonrpc_daemon_stop()
 
     @defer.inlineCallbacks
     def jsonrpc_daemon_stop(self):
@@ -1408,13 +1288,6 @@ class Daemon(AuthJSONRPCServer):
             defer.returnValue(None)
         else:
             defer.returnValue(metadata)
-
-    @AuthJSONRPCServer.deprecated('claim_show')
-    def jsonrpc_get_claim_info(self, **kwargs):
-        """
-        DEPRECATED. Use `claim_show` instead.
-        """
-        return self.jsonrpc_claim_show(**kwargs)
 
     @defer.inlineCallbacks
     def jsonrpc_claim_show(self, name=None, txid=None, nout=None, claim_id=None):
@@ -1622,22 +1495,6 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(result)
         defer.returnValue(response)
 
-    @AuthJSONRPCServer.deprecated('file_set_status')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_stop_lbry_file(self, **kwargs):
-        """
-        DEPRECATED. Use `file_set_status status=stop` instead.
-        """
-        return self.jsonrpc_file_set_status(status='stop', **kwargs)
-
-    @AuthJSONRPCServer.deprecated('file_set_status')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_start_lbry_file(self, **kwargs):
-        """
-        DEPRECATED. Use `file_set_status status=start` instead.
-        """
-        return self.jsonrpc_file_set_status(status='start', **kwargs)
-
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     def jsonrpc_file_set_status(self, status, **kwargs):
@@ -1736,13 +1593,6 @@ class Daemon(AuthJSONRPCServer):
             result = True
         response = yield self._render_response(result)
         defer.returnValue(response)
-
-    @AuthJSONRPCServer.deprecated('stream_cost_estimate')
-    def jsonrpc_get_est_cost(self, **kwargs):
-        """
-        DEPRECATED. Use `stream_cost_estimate` instead
-        """
-        return self.jsonrpc_stream_cost_estimate(**kwargs)
 
     @defer.inlineCallbacks
     def jsonrpc_stream_cost_estimate(self, uri, size=None):
@@ -1989,14 +1839,6 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(result)
         defer.returnValue(response)
 
-    @AuthJSONRPCServer.deprecated('claim_abandon')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_abandon_claim(self, **kwargs):
-        """
-        DEPRECATED. Use `claim_abandon` instead
-        """
-        return self.jsonrpc_claim_abandon(**kwargs)
-
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     def jsonrpc_claim_abandon(self, claim_id):
@@ -2027,24 +1869,6 @@ class Daemon(AuthJSONRPCServer):
                 response = yield self._render_response(err)
         defer.returnValue(response)
 
-    @AuthJSONRPCServer.deprecated('claim_abandon')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_abandon_name(self, **kwargs):
-        """
-        DEPRECATED. Use `claim_abandon` instead
-        """
-
-        return self.jsonrpc_claim_abandon(**kwargs)
-
-    @AuthJSONRPCServer.deprecated('claim_support_new')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_support_claim(self, **kwargs):
-        """
-        DEPRECATED. Use `claim_support_new` instead
-        """
-
-        return self.jsonrpc_claim_new_support(**kwargs)
-
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     def jsonrpc_claim_new_support(self, name, claim_id, amount):
@@ -2067,32 +1891,6 @@ class Daemon(AuthJSONRPCServer):
         result = yield self.session.wallet.support_claim(name, claim_id, amount)
         self.analytics_manager.send_claim_action('new_support')
         defer.returnValue(result)
-
-    @AuthJSONRPCServer.deprecated('claim_list_mine')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_get_my_claim(self, name):
-        """
-        DEPRECATED. This method will be removed in a future release.
-
-        Return existing claim for a given name
-
-        Args:
-            'name': name to look up
-        Returns:
-            claim info, false if no such claim exists
-        """
-
-        d = self.session.wallet.get_my_claim(name)
-        d.addCallback(lambda r: self._render_response(r))
-        return d
-
-    @AuthJSONRPCServer.deprecated('claim_list_mine')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_get_name_claims(self):
-        """
-        DEPRECATED. Use `claim_list_mine` instead
-        """
-        return self.jsonrpc_claim_list_mine()
 
     # TODO: claim_list_mine should be merged into claim_list, but idk how to authenticate it -Grin
     @AuthJSONRPCServer.auth_required
@@ -2130,20 +1928,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda claims: self._render_response(claims))
         return d
 
-    @AuthJSONRPCServer.deprecated('claim_list')
-    def jsonrpc_get_claims_for_name(self, **kwargs):
-        """
-        DEPRECATED. Use `claim_list` instead.
-        """
-        return self.jsonrpc_claim_list(**kwargs)
-
-    @AuthJSONRPCServer.deprecated('claim_list')
-    def jsonrpc_get_claims_for_tx(self, **kwargs):
-        """
-        DEPRECATED. Use `claim_list` instead.
-        """
-        return self.jsonrpc_claim_list(**kwargs)
-
     @defer.inlineCallbacks
     def jsonrpc_claim_list(self, name):
         """
@@ -2177,14 +1961,6 @@ class Daemon(AuthJSONRPCServer):
         claims = yield self.session.wallet.get_claims_for_name(name)
         defer.returnValue(claims)
 
-    @AuthJSONRPCServer.deprecated('transaction_list')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_get_transaction_history(self):
-        """
-        DEPRECATED. Use `transaction_list` instead
-        """
-        return self.jsonrpc_transaction_list()
-
     @AuthJSONRPCServer.auth_required
     def jsonrpc_transaction_list(self):
         """
@@ -2201,13 +1977,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r))
         return d
 
-    @AuthJSONRPCServer.deprecated('transaction_show')
-    def jsonrpc_get_transaction(self, txid):
-        """
-        DEPRECATED. Use `transaction_show` instead
-        """
-        return self.jsonrpc_transaction_show(txid)
-
     def jsonrpc_transaction_show(self, txid):
         """
         Get a decoded transaction from a txid
@@ -2222,14 +1991,6 @@ class Daemon(AuthJSONRPCServer):
         d = self.session.wallet.get_transaction(txid)
         d.addCallback(lambda r: self._render_response(r))
         return d
-
-    @AuthJSONRPCServer.deprecated('wallet_is_address_mine')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_address_is_mine(self, address):
-        """
-        DEPRECATED. Use `wallet_is_address_mine` instead
-        """
-        return self.jsonrpc_wallet_is_address_mine(address)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_wallet_is_address_mine(self, address):
@@ -2246,14 +2007,6 @@ class Daemon(AuthJSONRPCServer):
         d = self.session.wallet.address_is_mine(address)
         d.addCallback(lambda is_mine: self._render_response(is_mine))
         return d
-
-    @AuthJSONRPCServer.deprecated('wallet_public_key')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_get_public_key_from_wallet(self, wallet):
-        """
-        DEPRECATED. Use `wallet_public_key` instead
-        """
-        return self.jsonrpc_wallet_public_key(wallet)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_wallet_public_key(self, address):
@@ -2288,14 +2041,6 @@ class Daemon(AuthJSONRPCServer):
         addresses = yield self.session.wallet.list_addresses()
         response = yield self._render_response(addresses)
         defer.returnValue(response)
-
-    @AuthJSONRPCServer.deprecated('wallet_new_address')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_get_new_address(self):
-        """
-        DEPRECATED. Use `wallet_new_address` instead
-        """
-        return self.jsonrpc_wallet_new_address()
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_wallet_new_address(self):
@@ -2360,13 +2105,6 @@ class Daemon(AuthJSONRPCServer):
         self.analytics_manager.send_credits_sent()
         defer.returnValue(True)
 
-    @AuthJSONRPCServer.deprecated('block_show')
-    def jsonrpc_get_block(self, **kwargs):
-        """
-        DEPRECATED. Use `block_show` instead
-        """
-        return self.jsonrpc_block_show(**kwargs)
-
     def jsonrpc_block_show(self, blockhash=None, height=None):
         """
         Get contents of a block
@@ -2393,32 +2131,6 @@ class Daemon(AuthJSONRPCServer):
 
         d.addCallback(lambda r: self._render_response(r))
         return d
-
-    @AuthJSONRPCServer.deprecated('descriptor_get')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_download_descriptor(self, **kwargs):
-        """
-        DEPRECATED. Use `descriptor_get` instead
-        """
-        return self.jsonrpc_descriptor_get(**kwargs)
-
-    @AuthJSONRPCServer.deprecated('blob_get')
-    @AuthJSONRPCServer.auth_required
-    def jsonrpc_descriptor_get(self, sd_hash, timeout=None, payment_rate_manager=None):
-        """
-        Download and return a sd blob
-
-        Args:
-            'sd_hash': (str) hash of sd blob
-            'timeout'(optional): (int) timeout in number of seconds
-            'payment_rate_manager'(optional): (str) if not given the default payment rate manager
-                                             will be used. supported alternative rate managers:
-                                             only-free
-
-        Returns
-            (str) Success/Fail message or (dict) decoded data
-        """
-        return self.jsonrpc_blob_get(sd_hash, timeout, 'json', payment_rate_manager)
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
@@ -2488,13 +2200,6 @@ t
         response = yield self._render_response("Deleted %s" % blob_hash)
         defer.returnValue(response)
 
-    @AuthJSONRPCServer.deprecated('peer_list')
-    def jsonrpc_get_peers_for_hash(self, blob_hash):
-        """
-        DEPRECATED. Use `peer_list` instead
-        """
-        return self.jsonrpc_peer_list(blob_hash)
-
     def jsonrpc_peer_list(self, blob_hash, timeout=None):
         """
         Get peers for blob hash
@@ -2515,13 +2220,6 @@ t
         d.addCallback(lambda r: [[c.host, c.port, c.is_available()] for c in r])
         d.addCallback(lambda r: self._render_response(r))
         return d
-
-    @AuthJSONRPCServer.deprecated('blob_announce_all')
-    def jsonrpc_announce_all_blobs_to_dht(self):
-        """
-        DEPRECATED. Use `blob_announce_all` instead.
-        """
-        return self.jsonrpc_blob_announce_all()
 
     def jsonrpc_blob_announce_all(self):
         """
@@ -2555,13 +2253,6 @@ t
             raise Exception('No file found for give sd hash')
         yield reupload.reflect_stream(lbry_file)
         defer.returnValue("Reflect success")
-
-    @AuthJSONRPCServer.deprecated('blob_list')
-    def jsonrpc_get_blob_hashes(self):
-        """
-        DEPRECATED. Use `blob_list` instead
-        """
-        return self.jsonrpc_blob_list()
 
     @defer.inlineCallbacks
     def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
@@ -2611,13 +2302,6 @@ t
         blob_hashes_for_return = blob_hashes[start_index:stop_index]
         response = yield self._render_response(blob_hashes_for_return)
         defer.returnValue(response)
-
-    @AuthJSONRPCServer.deprecated('blob_reflect_all')
-    def jsonrpc_reflect_all_blobs(self):
-        """
-        DEPRECATED. Use `blob_reflect_all` instead
-        """
-        return self.jsonrpc_blob_reflect_all()
 
     def jsonrpc_blob_reflect_all(self):
         """
@@ -2709,30 +2393,6 @@ t
         mean_availability = _get_mean(availabilities)
         response = yield self._render_response(mean_availability)
         defer.returnValue(response)
-
-    @AuthJSONRPCServer.deprecated('status')
-    def jsonrpc_get_start_notice(self):
-        """
-        DEPRECATED.
-
-        Get special message to be displayed at startup
-        Args:
-            None
-        Returns:
-            (str) Startup message, such as first run notification
-        """
-
-        def _get_startup_message(status):
-            if status['is_first_run'] and self.session.wallet.wallet_balance:
-                return self._render_response(None)
-            else:
-                return self._render_response(status['startup_status']['message'])
-
-        d = self.jsonrpc_status()
-        d.addCallback(_get_startup_message)
-        return d
-
-
 
     @defer.inlineCallbacks
     def jsonrpc_cli_test_command(self, pos_arg, pos_args=[], pos_arg2=None, pos_arg3=None):
