@@ -890,7 +890,7 @@ class Wallet(object):
         defer.returnValue(results)
 
     @defer.inlineCallbacks
-    def claim_name(self, name, bid, metadata, certificate_id=None):
+    def claim_name(self, name, bid, metadata, certificate_id=None, claim_address=None):
         """
         Claim a name, or update if name already claimed by user
 
@@ -898,6 +898,7 @@ class Wallet(object):
         @param bid: float, bid amount
         @param metadata: ClaimDict compliant dict
         @param certificate_id: str (optional), claim id of channel certificate
+        @param claim_address: str (optional), address to send claim to
 
         @return: Deferred which returns a dict containing below items
             txid - txid of the resulting transaction
@@ -912,7 +913,8 @@ class Wallet(object):
         if self.get_balance() < Decimal(bid):
             raise InsufficientFundsError()
 
-        claim = yield self._send_name_claim(name, serialized.encode('hex'), bid, certificate_id)
+        claim = yield self._send_name_claim(name, serialized.encode('hex'),
+                                            bid, certificate_id, claim_address)
 
         if not claim['success']:
             msg = 'Claim to name {} failed: {}'.format(name, claim['reason'])
@@ -1050,7 +1052,7 @@ class Wallet(object):
     def _claim_certificate(self, name, amount):
         return defer.fail(NotImplementedError())
 
-    def _send_name_claim(self, name, val, amount, certificate_id=None):
+    def _send_name_claim(self, name, val, amount, certificate_id=None, claim_address=None):
         return defer.fail(NotImplementedError())
 
     def _abandon_claim(self, claim_id):
@@ -1317,10 +1319,12 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_to_thread('getclaimsforname', name)
 
     @defer.inlineCallbacks
-    def _send_name_claim(self, name, value, amount, certificate_id=None):
+    def _send_name_claim(self, name, value, amount,
+                            certificate_id=None, claim_address=None):
         log.info("Send claim: %s for %s: %s ", name, amount, value)
         claim_out = yield self._run_cmd_as_defer_succeed('claim', name, value, amount,
-                                                         certificate_id=certificate_id)
+                                                         certificate_id=certificate_id,
+                                                         claim_addr=claim_address)
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks

@@ -67,7 +67,7 @@ class WalletTest(unittest.TestCase):
             self.assertEqual(expected_claim_out['nout'], claim_out['nout'])
             self.assertEqual(expected_claim_out['txid'], claim_out['txid'])
 
-        def success_send_name_claim(self, name, val, amount, certificate_id=None):
+        def success_send_name_claim(self, name, val, amount, certificate_id=None, claim_address=None):
             return expected_claim_out
 
         MocLbryumWallet._send_name_claim = success_send_name_claim
