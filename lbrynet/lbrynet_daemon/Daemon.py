@@ -2501,22 +2501,25 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    def jsonrpc_cli_test_command(self, pos_arg, pos_args=[], pos_arg2=None, pos_arg3=None):
+    @AuthJSONRPCServer.flags(a_arg='-a', b_arg='-b')
+    def jsonrpc_cli_test_command(self, pos_arg, pos_args=[], pos_arg2=None, pos_arg3=None,
+                                 a_arg=False, b_arg=False):
         """
         This command is only for testing the CLI argument parsing
         Usage:
-            cli_test_command (<pos_arg> | --pos_arg=<pos_arg>)
+            cli_test_command [-a] [-b] (<pos_arg> | --pos_arg=<pos_arg>)
                              [<pos_args>...] [--pos_arg2=<pos_arg2>]
                              [--pos_arg3=<pos_arg3>]
 
         Options:
+            -a, --a_arg                        : a arg
+            -b, --b_arg                        : b arg
             <pos_arg2>, --pos_arg2=<pos_arg2>  : pos arg 2
             <pos_arg3>, --pos_arg3=<pos_arg3>  : pos arg 3
-
         Returns:
             pos args
         """
-        out = (pos_arg, pos_args, pos_arg2, pos_arg3)
+        out = (pos_arg, pos_args, pos_arg2, pos_arg3, a_arg, b_arg)
         response = yield self._render_response(out)
         defer.returnValue(response)
 
