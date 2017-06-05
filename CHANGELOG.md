@@ -23,41 +23,38 @@ at anytime.
 
 ### Deprecated
   * Old fee metadata format in publish API command is deprecated, throw relevant exception
-  * Removed deprecated commands:
-    `get_best_blockhash`
-    `is_running`
-    `daemon_status`
-    `is_first_run`
-    `get_lbry_session_info`
-    `get_time_behind_blockchain`
-    `get_settings`
-    `set_settings`
-    `get_balance`
-    `stop`
-    `get_claim_info`
-    `stop_lbry_file`
-    `start_lbry_file`
-    `get_est_cost`
-    `abandon_claim`
-    `support_claim`
-    `get_my_claim`
-    `get_name_claims`
-    `get_claims_for_tx`
-    `get_transaction_history`
-    `get_transaction`
-    `address_is_mine`
-    `get_public_key_from_wallet`
-    `get_new_address`    
-    `get_block`
-    `descriptor_get`
-    `download_descriptor`
-    `get_peers_for_hash`
-    `announce_all_blobs_to_dht`
-    `get_blob_hashes`
-    `reflect_all_blobs`
-    `get_start_notice`
-    
-  *
+  * Removed deprecated `get_best_blockhash`
+  * Removed deprecated `is_running`
+  * Removed deprecated `daemon_status`
+  * Removed deprecated `is_first_run`
+  * Removed deprecated `get_lbry_session_info`
+  * Removed deprecated `get_time_behind_blockchain`
+  * Removed deprecated `get_settings`
+  * Removed deprecated `set_settings`
+  * Removed deprecated `get_balance`
+  * Removed deprecated `stop`
+  * Removed deprecated `get_claim_info`
+  * Removed deprecated `stop_lbry_file`
+  * Removed deprecated `start_lbry_file`
+  * Removed deprecated `get_est_cost`
+  * Removed deprecated `abandon_claim`
+  * Removed deprecated `support_claim`
+  * Removed deprecated `get_my_claim`
+  * Removed deprecated `get_name_claims`
+  * Removed deprecated `get_claims_for_tx`
+  * Removed deprecated `get_transaction_history`
+  * Removed deprecated `get_transaction`
+  * Removed deprecated `address_is_mine`
+  * Removed deprecated `get_public_key_from_wallet`
+  * Removed deprecated `get_new_address`    
+  * Removed deprecated `get_block`
+  * Removed deprecated `descriptor_get`
+  * Removed deprecated `download_descriptor`
+  * Removed deprecated `get_peers_for_hash`
+  * Removed deprecated `announce_all_blobs_to_dht`
+  * Removed deprecated `get_blob_hashes`
+  * Removed deprecated `reflect_all_blobs`
+  * Removed deprecated `get_start_notice`
 
 ### Removed
   *
