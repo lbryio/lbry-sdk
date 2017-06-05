@@ -20,6 +20,9 @@ at anytime.
 ### Fixed
   * Race condition from improper initialization and shutdown of the blob manager database
   * Various fixes for GetStream class used in API command get
+  * Download analytics error
+  * Fixed flag options in file_delete API command
+  *
 
 ### Deprecated
   *
