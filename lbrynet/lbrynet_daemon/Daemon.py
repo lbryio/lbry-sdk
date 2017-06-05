@@ -1536,20 +1536,20 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     @AuthJSONRPCServer.flags(delete_target_file='-f', delete_all='-a')
-    def jsonrpc_file_delete(self, delete_target_file=True, delete_all=False, **kwargs):
+    def jsonrpc_file_delete(self, delete_target_file=False, delete_all=False, **kwargs):
         """
         Delete a LBRY file
 
         Usage:
-            file_delete [-a | -f] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
+            file_delete [-a] [-f] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
                         [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
                         [--outpoint=<outpoint>] [--rowid=<rowid>]
                         [--name=<name>]
 
         Options:
-            -a                          : if there are multiple matching files, allow the deletion
+            -a, --delete_all            : if there are multiple matching files, allow the deletion
                                             of multiple files. Otherwise do not delete anything.
-            -f                          : delete only from downloads, do not delete blobs
+            -f, --delete_target_file    : delete file from download directory, instead of just blobs
             --sd_hash=<sd_hash>         : delete by file sd hash
             --file_name<file_name>      : delete by file name in downloads folder
             --stream_hash=<stream_hash> : delete by file stream hash
