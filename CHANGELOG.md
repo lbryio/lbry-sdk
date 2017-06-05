@@ -23,6 +23,40 @@ at anytime.
 
 ### Deprecated
   * Old fee metadata format in publish API command is deprecated, throw relevant exception
+  * Removed deprecated commands:
+    `get_best_blockhash`
+    `is_running`
+    `daemon_status`
+    `is_first_run`
+    `get_lbry_session_info`
+    `get_time_behind_blockchain`
+    `get_settings`
+    `set_settings`
+    `get_balance`
+    `stop`
+    `get_claim_info`
+    `stop_lbry_file`
+    `start_lbry_file`
+    `get_est_cost`
+    `abandon_claim`
+    `support_claim`
+    `get_my_claim`
+    `get_name_claims`
+    `get_claims_for_tx`
+    `get_transaction_history`
+    `get_transaction`
+    `address_is_mine`
+    `get_public_key_from_wallet`
+    `get_new_address`    
+    `get_block`
+    `descriptor_get`
+    `download_descriptor`
+    `get_peers_for_hash`
+    `announce_all_blobs_to_dht`
+    `get_blob_hashes`
+    `reflect_all_blobs`
+    `get_start_notice`
+    
   *
 
 ### Removed
