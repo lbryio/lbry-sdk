@@ -1535,28 +1535,30 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(delete_target_file='-f', delete_all='-a')
-    def jsonrpc_file_delete(self, delete_target_file=False, delete_all=False, **kwargs):
+    @AuthJSONRPCServer.flags(delete_from_download_dir='-f', delete_all='--delete_all')
+    def jsonrpc_file_delete(self, delete_from_download_dir=False, delete_all=False, **kwargs):
         """
         Delete a LBRY file
 
         Usage:
-            file_delete [-a] [-f] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
+            file_delete [-f] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
                         [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
                         [--outpoint=<outpoint>] [--rowid=<rowid>]
                         [--name=<name>]
 
         Options:
-            -a, --delete_all            : if there are multiple matching files, allow the deletion
-                                            of multiple files. Otherwise do not delete anything.
-            -f, --delete_target_file    : delete file from download directory, instead of just blobs
-            --sd_hash=<sd_hash>         : delete by file sd hash
-            --file_name<file_name>      : delete by file name in downloads folder
-            --stream_hash=<stream_hash> : delete by file stream hash
-            --claim_id=<claim_id>       : delete by file claim id
-            --outpoint=<outpoint>       : delete by file claim outpoint
-            --rowid=<rowid>             : delete by file row id
-            --name=<name>               : delete by associated name claim of file
+            -f, --delete_from_download_dir  : delete file from download directory,
+                                                instead of just deleting blobs
+            --delete_all                    : if there are multiple matching files,
+                                                allow the deletion of multiple files.
+                                                Otherwise do not delete anything.
+            --sd_hash=<sd_hash>             : delete by file sd hash
+            --file_name<file_name>          : delete by file name in downloads folder
+            --stream_hash=<stream_hash>     : delete by file stream hash
+            --claim_id=<claim_id>           : delete by file claim id
+            --outpoint=<outpoint>           : delete by file claim outpoint
+            --rowid=<rowid>                 : delete by file row id
+            --name=<name>                   : delete by associated name claim of file
 
         Returns:
             (bool) true if deletion was successful
@@ -1583,7 +1585,7 @@ class Daemon(AuthJSONRPCServer):
                 if lbry_file.claim_id in self.streams:
                     del self.streams[lbry_file.claim_id]
                 yield self.lbry_file_manager.delete_lbry_file(lbry_file,
-                                                              delete_file=delete_target_file)
+                                                              delete_file=delete_from_download_dir)
                 log.info("Deleted %s (%s)", file_name, utils.short_hash(stream_hash))
             result = True
 
