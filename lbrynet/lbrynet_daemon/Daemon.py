@@ -660,17 +660,15 @@ class Daemon(AuthJSONRPCServer):
             self.analytics_manager.send_download_started(download_id, name, claim_dict)
 
             self.streams[claim_id] = GetStream(self.sd_identifier, self.session,
-                                               self.session.wallet, self.lbry_file_manager,
                                                self.exchange_rate_manager, self.max_key_fee,
                                                conf.settings['data_rate'], timeout,
                                                download_directory, file_name)
             try:
-                download = self.streams[claim_id].start(claim_dict, name)
-                lbry_file = yield download
-                f_d = self.streams[claim_id].finished_deferred
-                f_d.addCallback(lambda _: self.analytics_manager.send_download_finished(download_id,
-                                                                                        name,
-                                                                                        claim_dict))
+                lbry_file, finished_deferred = yield self.streams[claim_id].start(claim_dict, name)
+                finished_deferred.addCallback(
+                    lambda _: self.analytics_manager.send_download_finished(download_id,
+                                                                            name,
+                                                                            claim_dict))
                 result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
                 del self.streams[claim_id]
             except Exception as err:
