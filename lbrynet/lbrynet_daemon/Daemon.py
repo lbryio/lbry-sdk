@@ -1757,7 +1757,8 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Invalid bid")
 
         if bid >= self.session.wallet.get_balance():
-            raise InsufficientFundsError("Insufficient funds. Make sure you have enough LBC to deposit")
+            raise InsufficientFundsError('Insufficient funds. ' \
+                                         'Make sure you have enough LBC to deposit')
 
         metadata = metadata or {}
         if fee is not None:
