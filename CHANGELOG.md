@@ -15,7 +15,7 @@ at anytime.
 ### Changed
   * Do not catch base exception in API command resolve
   * Remove deprecated `lbrynet.metadata` and update what used it to instead use `lbryschema`
-  *
+  * Get version information locally instead of via api for cli
 
 ### Fixed
   * Download analytics error
