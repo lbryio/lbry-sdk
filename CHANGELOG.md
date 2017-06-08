@@ -10,7 +10,7 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Added claim_address option to publish API command
-  *
+  * Added message for InsufficientFundsError exception
 
 ### Changed
   * Do not catch base exception in API command resolve
