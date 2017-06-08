@@ -8,6 +8,7 @@ from lbrynet import conf
 from lbrynet.core import utils
 from lbrynet.lbrynet_daemon.auth.client import JSONRPCException, LBRYAPIClient
 from lbrynet.lbrynet_daemon.Daemon import LOADING_WALLET_CODE, Daemon
+from lbrynet.core.system_info import get_platform
 from jsonrpc.common import RPCError
 from urllib2 import URLError, HTTPError
 from httplib import UNAUTHORIZED
@@ -48,6 +49,10 @@ def main():
             print_help_for_command(args[0])
         else:
             print_help()
+        return
+
+    elif method in ['version', '--version']:
+        print utils.json_dumps_pretty(get_platform(get_ip=False))
         return
 
     if method not in Daemon.callable_methods:
