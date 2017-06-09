@@ -1971,6 +1971,94 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(claims)
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
+        """
+        Get paginated claims in a channel specified by a channel uri
+
+        Usage:
+            claim_list_by_channel (<uri> | --uri=<uri>) [<uris>...] [--page=<page>]
+                                   [--page_size=<page_size>]
+
+        Options:
+            --page=<page>            : which page of results to return where page 1 is the first
+                                       page, defaults to no pages
+            --page_size=<page_size>  : number of results in a page, default of 10
+
+        Returns:
+            {
+                 resolved channel uri: {
+                    If there was an error:
+                    'error': (str) error message
+
+                    'claims_in_channel_pages': total number of pages with <page_size> results,
+
+                    If a page of results was requested:
+                    'returned_page': page number returned,
+                    'claims_in_channel': [
+                        {
+                            'absolute_channel_position': (int) claim index number in sorted list of
+                                                         claims which assert to be part of the
+                                                         channel
+                            'address': (str) claim address,
+                            'amount': (float) claim amount,
+                            'effective_amount': (float) claim amount including supports,
+                            'claim_id': (str) claim id,
+                            'claim_sequence': (int) claim sequence number,
+                            'decoded_claim': (bool) whether or not the claim value was decoded,
+                            'height': (int) claim height,
+                            'depth': (int) claim depth,
+                            'has_signature': (bool) included if decoded_claim
+                            'name': (str) claim name,
+                            'supports: (list) list of supports [{'txid': txid,
+                                                                 'nout': nout,
+                                                                 'amount': amount}],
+                            'txid': (str) claim txid,
+                            'nout': (str) claim nout,
+                            'signature_is_valid': (bool), included if has_signature,
+                            'value': ClaimDict if decoded, otherwise hex string
+                        }
+                    ],
+                }
+            }
+        """
+
+        uris = tuple(uris)
+        if uri is not None:
+            uris += (uri, )
+
+        results = {}
+
+        valid_uris = tuple()
+        for chan_uri in uris:
+            try:
+                parsed = parse_lbry_uri(chan_uri)
+                if not parsed.is_channel:
+                    results[chan_uri] = {"error": "%s is not a channel uri" % parsed.name}
+                elif parsed.path:
+                    results[chan_uri] = {"error": "%s is a claim in a channel" % parsed.path}
+                else:
+                    valid_uris += (chan_uri, )
+            except URIParseError:
+                results[chan_uri] = {"error": "%s is not a valid uri" % chan_uri}
+
+        resolved = yield self.session.wallet.resolve(*valid_uris, check_cache=False, page=page,
+                                                     page_size=page_size)
+        for u in resolved:
+            if 'error' in resolved[u]:
+                results[u] = resolved[u]
+            else:
+                results[u] = {
+                        'claims_in_channel_pages': resolved[u]['claims_in_channel_pages']
+                    }
+                if page:
+                    results[u]['returned_page'] = page
+                    results[u]['claims_in_channel'] = resolved[u].get('claims_in_channel', [])
+
+        response = yield self._render_response(results)
+        defer.returnValue(response)
+
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_transaction_list(self):
         """
         List transactions belonging to wallet
