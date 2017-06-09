@@ -83,7 +83,7 @@ class DiskBlobManager(BlobManager):
         BlobManager.__init__(self, hash_announcer)
         self.blob_dir = blob_dir
         self.db_file = os.path.join(db_dir, "blobs.db")
-        self.db_conn = None
+        self.db_conn = adbapi.ConnectionPool('sqlite3', self.db_file, check_same_thread=False)
         self.blob_type = BlobFile
         self.blob_creator_type = BlobFileCreator
         # TODO: consider using an LRU for blobs as there could potentially
@@ -104,7 +104,7 @@ class DiskBlobManager(BlobManager):
         if self._next_manage_call is not None and self._next_manage_call.active():
             self._next_manage_call.cancel()
             self._next_manage_call = None
-        self.db_conn = None
+        self.db_conn.close()
         return defer.succeed(True)
 
     def get_blob(self, blob_hash, length=None):
@@ -233,7 +233,6 @@ class DiskBlobManager(BlobManager):
         # to a bug in twisted, where the connection is closed by a different thread than the
         # one that opened it. The individual connections in the pool are not used in multiple
         # threads.
-        self.db_conn = adbapi.ConnectionPool('sqlite3', self.db_file, check_same_thread=False)
 
         def create_tables(transaction):
             transaction.execute("create table if not exists blobs (" +
