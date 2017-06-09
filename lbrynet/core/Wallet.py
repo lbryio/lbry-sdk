@@ -685,18 +685,6 @@ class Wallet(object):
         defer.returnValue(my_claim)
 
     @defer.inlineCallbacks
-    def get_claim_info(self, name, txid=None, nout=None, claim_id=None, check_expire=True):
-        if claim_id is not None:
-            results = yield self.get_claim(claim_id, check_expire)
-            if results['name'] != name:
-                raise Exception("Name does not match claim referenced by id")
-        elif txid is None or nout is None:
-            results = yield self.get_claim_by_name(name)
-        else:
-            results = yield self.get_claim_by_outpoint(ClaimOutpoint(txid, nout), check_expire)
-        defer.returnValue(results)
-
-    @defer.inlineCallbacks
     def _handle_claim_result(self, results, update_caches=True):
         if not results:
             raise UnknownNameError("No results to return")
@@ -803,27 +791,39 @@ class Wallet(object):
         defer.returnValue(results)
 
     @defer.inlineCallbacks
-    def resolve_uri(self, uri, check_cache=True):
-        cached_claim = None
-        if check_cache:
-            cached_claim = yield self._storage.get_cached_claim_for_uri(uri, check_cache)
-        if cached_claim:
-            log.debug("Using cached results for %s", uri)
-            resolve_results = cached_claim
-        else:
-            log.info("Resolving %s", uri)
-            resolve_results = yield self._get_value_for_uri(uri)
+    def resolve(self, *uris, **kwargs):
+        check_cache = kwargs.get('check_cache', True)
+        page = kwargs.get('page', 0)
+        page_size = kwargs.get('page_size', 10)
 
-        claim_id = None
-        if resolve_results and 'claim' in resolve_results:
-            claim_id = resolve_results['claim']['claim_id']
-        certificate_id = None
-        if resolve_results and 'certificate' in resolve_results:
-            certificate_id = resolve_results['certificate']['claim_id']
+        result = {}
+        needed = []
+        for uri in uris:
+            cached_claim = None
+            if check_cache:
+                cached_claim = yield self._storage.get_cached_claim_for_uri(uri, check_cache)
+            if cached_claim:
+                log.debug("Using cached results for %s", uri)
+                result[uri] = yield self._handle_claim_result(cached_claim, update_caches=False)
+            else:
+                log.info("Resolving %s", uri)
+                needed.append(uri)
 
-        result = yield self._handle_claim_result(resolve_results, cached_claim is None)
-        if claim_id:
-            yield self._storage.save_claim_to_uri_cache(uri, claim_id, certificate_id)
+        batch_results = yield self._get_values_for_uris(page, page_size, *uris)
+
+        for uri, resolve_results in batch_results.iteritems():
+            claim_id = None
+            if resolve_results and 'claim' in resolve_results:
+                claim_id = resolve_results['claim']['claim_id']
+            certificate_id = None
+            if resolve_results and 'certificate' in resolve_results:
+                certificate_id = resolve_results['certificate']['claim_id']
+            try:
+                result[uri] = yield self._handle_claim_result(resolve_results, update_caches=True)
+                if claim_id:
+                    yield self._storage.save_claim_to_uri_cache(uri, claim_id, certificate_id)
+            except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
+                result[uri] = {'error': err.message}
 
         defer.returnValue(result)
 
@@ -1097,6 +1097,9 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def _get_claim_by_claimid(self, claim_id):
+        return defer.fail(NotImplementedError())
+
+    def _get_values_for_uris(self, page, page_size, *uris):
         return defer.fail(NotImplementedError())
 
     def _start(self):
@@ -1385,6 +1388,10 @@ class LBRYumWallet(Wallet):
         if not uri:
             raise Exception("No uri given")
         return self._run_cmd_as_defer_to_thread('getvalueforuri', uri)
+
+    def _get_values_for_uris(self, page, page_size, *uris):
+        return self._run_cmd_as_defer_to_thread('getvaluesforuris', False, page, page_size,
+                                                *uris)
 
     def _claim_certificate(self, name, amount):
         return self._run_cmd_as_defer_succeed('claimcertificate', name, amount)

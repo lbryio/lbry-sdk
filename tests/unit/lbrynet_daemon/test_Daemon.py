@@ -33,6 +33,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     prm = PaymentRateManager.NegotiatedPaymentRateManager(base_prm, DummyBlobAvailabilityTracker(),
                                                           generous=generous)
     daemon.session.payment_rate_manager = prm
+
     metadata = {
         "author": "fake author",
         "language": "en",
@@ -53,7 +54,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
             {"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
     daemon._resolve_name = lambda _: defer.succeed(metadata)
     migrated = smart_decode(json.dumps(metadata))
-    daemon.session.wallet.resolve_uri = lambda _: defer.succeed({'claim': {'value': migrated.claim_dict}})
+    daemon.session.wallet.resolve = lambda *_: defer.succeed({"test": {'claim': {'value': migrated.claim_dict}}})
     return daemon
 
 
