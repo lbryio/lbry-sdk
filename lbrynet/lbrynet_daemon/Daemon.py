@@ -46,7 +46,7 @@ from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError, NoSuchSDHash
-from lbrynet.core.Error import NoSuchStreamHash
+from lbrynet.core.Error import NoSuchStreamHash, UnknownClaimID, UnknownURI
 
 log = logging.getLogger(__name__)
 
@@ -727,6 +727,7 @@ class Daemon(AuthJSONRPCServer):
         f.close()
         return defer.succeed(True)
 
+    @defer.inlineCallbacks
     def _resolve_name(self, name, force_refresh=False):
         """Resolves a name. Checks the cache first before going out to the blockchain.
 
@@ -734,10 +735,12 @@ class Daemon(AuthJSONRPCServer):
             name: the lbry://<name> to resolve
             force_refresh: if True, always go out to the blockchain to resolve.
         """
-        if name.startswith('lbry://'):
-            raise ValueError('name {} should not start with lbry://'.format(name))
-        helper = _ResolveNameHelper(self, name, force_refresh)
-        return helper.get_deferred()
+
+        parsed = parse_lbry_uri(name)
+        resolution = yield self.session.wallet.resolve(parsed.name, check_cache=not force_refresh)
+        if parsed.name in resolution:
+            result = resolution[parsed.name]
+            defer.returnValue(result)
 
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
@@ -789,9 +792,10 @@ class Daemon(AuthJSONRPCServer):
 
         cost = self._get_est_cost_from_stream_size(size)
 
-        resolved = yield self.session.wallet.resolve_uri(uri)
-        if 'claim' in resolved:
-            claim = ClaimDict.load_dict(resolved['claim']['value'])
+        resolved = yield self.session.wallet.resolve(uri)
+
+        if uri in resolved and 'claim' in resolved[uri]:
+            claim = ClaimDict.load_dict(resolved[uri]['claim']['value'])
             final_fee = self._add_key_fee_to_est_data_cost(claim.source_fee, cost)
             result = yield self._render_response(final_fee)
             defer.returnValue(result)
@@ -834,10 +838,11 @@ class Daemon(AuthJSONRPCServer):
         """
         Resolve a name and return the estimated stream cost
         """
-        try:
-            claim_response = yield self.session.wallet.resolve_uri(uri)
-        # TODO: fix me, this is a hack
-        except Exception:
+
+        resolved = yield self.session.wallet.resolve(uri)
+        if resolved:
+            claim_response = resolved[uri]
+        else:
             claim_response = None
 
         result = None
@@ -1324,9 +1329,11 @@ class Daemon(AuthJSONRPCServer):
                 outpoint = ClaimOutpoint(txid, nout)
                 claim_results = yield self.session.wallet.get_claim_by_outpoint(outpoint)
             else:
-                claim_results = yield self.session.wallet.get_claim_by_name(name)
+                claim_results = yield self.session.wallet.resolve(name)
+                if claim_results:
+                    claim_results = claim_results[name]
             result = format_json_out_amount_as_float(claim_results)
-        except (TypeError, UnknownNameError):
+        except (TypeError, UnknownNameError, UnknownClaimID, UnknownURI):
             result = False
         response = yield self._render_response(result)
         defer.returnValue(response)
@@ -1334,41 +1341,24 @@ class Daemon(AuthJSONRPCServer):
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     @AuthJSONRPCServer.flags(force='-f')
-    def jsonrpc_resolve(self, uri, force=False):
+    def jsonrpc_resolve(self, force=False, uri=None, uris=[]):
         """
-        Resolve a LBRY URI
+        Resolve given LBRY URIs
 
         Usage:
-            resolve <uri> [-f]
+            resolve [-f] (<uri> | --uri=<uri>) [<uris>...]
 
         Options:
             -f  : force refresh and ignore cache
 
         Returns:
-            None if nothing can be resolved, otherwise:
-            If uri resolves to a channel or a claim in a channel:
-                'certificate': {
-                    'address': (str) claim address,
-                    'amount': (float) claim amount,
-                    'effective_amount': (float) claim amount including supports,
-                    'claim_id': (str) claim id,
-                    'claim_sequence': (int) claim sequence number,
-                    'decoded_claim': (bool) whether or not the claim value was decoded,
-                    'height': (int) claim height,
-                    'depth': (int) claim depth,
-                    'has_signature': (bool) included if decoded_claim
-                    'name': (str) claim name,
-                    'supports: (list) list of supports [{'txid': txid,
-                                                         'nout': nout,
-                                                         'amount': amount}],
-                    'txid': (str) claim txid,
-                    'nout': (str) claim nout,
-                    'signature_is_valid': (bool), included if has_signature,
-                    'value': ClaimDict if decoded, otherwise hex string
-                }
-            If uri resolves to a channel:
-                'claims_in_channel': [
-                    {
+            Dictionary of results, keyed by uri
+            '<uri>': {
+                    If a resolution error occurs:
+                    'error': Error message
+
+                    If the uri resolves to a channel or a claim in a channel:
+                    'certificate': {
                         'address': (str) claim address,
                         'amount': (float) claim amount,
                         'effective_amount': (float) claim amount including supports,
@@ -1387,37 +1377,51 @@ class Daemon(AuthJSONRPCServer):
                         'signature_is_valid': (bool), included if has_signature,
                         'value': ClaimDict if decoded, otherwise hex string
                     }
-                ]
-            If uri resolves to a claim:
-                'claim': {
-                    'address': (str) claim address,
-                    'amount': (float) claim amount,
-                    'effective_amount': (float) claim amount including supports,
-                    'claim_id': (str) claim id,
-                    'claim_sequence': (int) claim sequence number,
-                    'decoded_claim': (bool) whether or not the claim value was decoded,
-                    'height': (int) claim height,
-                    'depth': (int) claim depth,
-                    'has_signature': (bool) included if decoded_claim
-                    'name': (str) claim name,
-                    'channel_name': (str) channel name if claim is in a channel
-                    'supports: (list) list of supports [{'txid': txid,
-                                                         'nout': nout,
-                                                         'amount': amount}]
-                    'txid': (str) claim txid,
-                    'nout': (str) claim nout,
-                    'signature_is_valid': (bool), included if has_signature,
-                    'value': ClaimDict if decoded, otherwise hex string
-                }
+
+                    If the uri resolves to a claim:
+                    'claim': {
+                        'address': (str) claim address,
+                        'amount': (float) claim amount,
+                        'effective_amount': (float) claim amount including supports,
+                        'claim_id': (str) claim id,
+                        'claim_sequence': (int) claim sequence number,
+                        'decoded_claim': (bool) whether or not the claim value was decoded,
+                        'height': (int) claim height,
+                        'depth': (int) claim depth,
+                        'has_signature': (bool) included if decoded_claim
+                        'name': (str) claim name,
+                        'channel_name': (str) channel name if claim is in a channel
+                        'supports: (list) list of supports [{'txid': txid,
+                                                             'nout': nout,
+                                                             'amount': amount}]
+                        'txid': (str) claim txid,
+                        'nout': (str) claim nout,
+                        'signature_is_valid': (bool), included if has_signature,
+                        'value': ClaimDict if decoded, otherwise hex string
+                    }
             }
         """
 
-        try:
-            resolved = yield self.session.wallet.resolve_uri(uri, check_cache=not force)
-        except UnknownNameError:
-            resolved = None
-        results = yield self._render_response(resolved)
-        defer.returnValue(results)
+        uris = tuple(uris)
+        if uri is not None:
+            uris += (uri,)
+
+        results = {}
+
+        valid_uris = tuple()
+        for u in uris:
+            try:
+                parse_lbry_uri(u)
+                valid_uris += (u, )
+            except URIParseError:
+                results[u] = {"error": "%s is not a valid uri" % u}
+
+        resolved = yield self.session.wallet.resolve(*valid_uris, check_cache=not force)
+
+        for resolved_uri in resolved:
+            results[resolved_uri] = resolved[resolved_uri]
+        response = yield self._render_response(results)
+        defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
@@ -1462,9 +1466,13 @@ class Daemon(AuthJSONRPCServer):
         timeout = timeout if timeout is not None else self.download_timeout
         download_directory = download_directory or self.download_directory
 
-        resolved = yield self.session.wallet.resolve_uri(uri)
+        resolved_result = yield self.session.wallet.resolve(uri)
+        if resolved_result and uri in resolved_result:
+            resolved = resolved_result[uri]
+        else:
+            resolved = None
 
-        if 'value' not in resolved:
+        if not resolved or 'value' not in resolved:
             if 'claim' not in resolved:
                 raise Exception("Nothing to download")
             else:
@@ -1932,7 +1940,7 @@ class Daemon(AuthJSONRPCServer):
     @defer.inlineCallbacks
     def jsonrpc_claim_list(self, name):
         """
-        Get claims for a name
+        List current claims and information about them for a given name
 
         Usage:
             claim_list (<name> | --name=<name>)
@@ -1961,6 +1969,94 @@ class Daemon(AuthJSONRPCServer):
 
         claims = yield self.session.wallet.get_claims_for_name(name)
         defer.returnValue(claims)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
+        """
+        Get paginated claims in a channel specified by a channel uri
+
+        Usage:
+            claim_list_by_channel (<uri> | --uri=<uri>) [<uris>...] [--page=<page>]
+                                   [--page_size=<page_size>]
+
+        Options:
+            --page=<page>            : which page of results to return where page 1 is the first
+                                       page, defaults to no pages
+            --page_size=<page_size>  : number of results in a page, default of 10
+
+        Returns:
+            {
+                 resolved channel uri: {
+                    If there was an error:
+                    'error': (str) error message
+
+                    'claims_in_channel_pages': total number of pages with <page_size> results,
+
+                    If a page of results was requested:
+                    'returned_page': page number returned,
+                    'claims_in_channel': [
+                        {
+                            'absolute_channel_position': (int) claim index number in sorted list of
+                                                         claims which assert to be part of the
+                                                         channel
+                            'address': (str) claim address,
+                            'amount': (float) claim amount,
+                            'effective_amount': (float) claim amount including supports,
+                            'claim_id': (str) claim id,
+                            'claim_sequence': (int) claim sequence number,
+                            'decoded_claim': (bool) whether or not the claim value was decoded,
+                            'height': (int) claim height,
+                            'depth': (int) claim depth,
+                            'has_signature': (bool) included if decoded_claim
+                            'name': (str) claim name,
+                            'supports: (list) list of supports [{'txid': txid,
+                                                                 'nout': nout,
+                                                                 'amount': amount}],
+                            'txid': (str) claim txid,
+                            'nout': (str) claim nout,
+                            'signature_is_valid': (bool), included if has_signature,
+                            'value': ClaimDict if decoded, otherwise hex string
+                        }
+                    ],
+                }
+            }
+        """
+
+        uris = tuple(uris)
+        if uri is not None:
+            uris += (uri, )
+
+        results = {}
+
+        valid_uris = tuple()
+        for chan_uri in uris:
+            try:
+                parsed = parse_lbry_uri(chan_uri)
+                if not parsed.is_channel:
+                    results[chan_uri] = {"error": "%s is not a channel uri" % parsed.name}
+                elif parsed.path:
+                    results[chan_uri] = {"error": "%s is a claim in a channel" % parsed.path}
+                else:
+                    valid_uris += (chan_uri, )
+            except URIParseError:
+                results[chan_uri] = {"error": "%s is not a valid uri" % chan_uri}
+
+        resolved = yield self.session.wallet.resolve(*valid_uris, check_cache=False, page=page,
+                                                     page_size=page_size)
+        for u in resolved:
+            if 'error' in resolved[u]:
+                results[u] = resolved[u]
+            else:
+                results[u] = {
+                        'claims_in_channel_pages': resolved[u]['claims_in_channel_pages']
+                    }
+                if page:
+                    results[u]['returned_page'] = page
+                    results[u]['claims_in_channel'] = resolved[u].get('claims_in_channel', [])
+
+        response = yield self._render_response(results)
+        defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
     def jsonrpc_transaction_list(self):
@@ -2353,12 +2449,13 @@ class Daemon(AuthJSONRPCServer):
             sd_blob.close_read_handle(sd_blob_file)
             return decoded_sd_blob
 
-        try:
-            resolved = yield self.session.wallet.resolve_uri(uri)
-        except Exception:
+        resolved_result = yield self.session.wallet.resolve(uri)
+        if resolved_result and uri in resolved_result:
+            resolved = resolved_result[uri]
+        else:
             defer.returnValue(None)
 
-        if resolved and 'claim' in resolved:
+        if 'claim' in resolved:
             metadata = resolved['claim']['value']
         else:
             defer.returnValue(None)
@@ -2414,58 +2511,6 @@ class Daemon(AuthJSONRPCServer):
         out = (pos_arg, pos_args, pos_arg2, pos_arg3)
         response = yield self._render_response(out)
         defer.returnValue(response)
-
-
-class _ResolveNameHelper(object):
-    def __init__(self, daemon, name, force_refresh):
-        self.daemon = daemon
-        self.name = name
-        self.force_refresh = force_refresh
-
-    def get_deferred(self):
-        if self.need_fresh_stream():
-            log.info("Resolving stream info for lbry://%s", self.name)
-            d = self.wallet.get_claim_by_name(self.name)
-            d.addCallback(self._cache_stream_info)
-        else:
-            log.debug("Returning cached stream info for lbry://%s", self.name)
-            d = defer.succeed(self.name_data['claim_metadata'])
-        return d
-
-    @property
-    def name_data(self):
-        return self.daemon.name_cache[self.name]
-
-    @property
-    def wallet(self):
-        return self.daemon.session.wallet
-
-    def now(self):
-        return self.daemon._get_long_count_timestamp()
-
-    def _add_txid(self, txid):
-        self.name_data['txid'] = txid
-        return defer.succeed(None)
-
-    def _cache_stream_info(self, stream_info):
-        self.daemon.name_cache[self.name] = {
-            'claim_metadata': stream_info['value'],
-            'timestamp': self.now()
-        }
-        d = self._add_txid(stream_info['txid'])
-        d.addCallback(lambda _: self.daemon._update_claim_cache())
-        d.addCallback(lambda _: self.name_data['claim_metadata'])
-        return d
-
-    def need_fresh_stream(self):
-        return self.force_refresh or not self.is_in_cache() or self.is_cached_name_expired()
-
-    def is_in_cache(self):
-        return self.name in self.daemon.name_cache
-
-    def is_cached_name_expired(self):
-        time_in_cache = self.now() - self.name_data['timestamp']
-        return time_in_cache >= self.daemon.cache_time
 
 
 def loggly_time_string(dt):

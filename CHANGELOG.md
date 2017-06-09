@@ -13,8 +13,9 @@ at anytime.
   *
 
 ### Changed
-  *
-  *
+  * Support resolution of multiple uris with `resolve`, all results are keyed by uri
+  * Add `error` responses for failed resolves
+  * Add `claim_list_by_channel`, supports multiple channel resolution
 
 ### Fixed
   * Race condition from improper initialization and shutdown of the blob manager database
@@ -25,7 +26,7 @@ at anytime.
   *
 
 ### Removed
-  *
+  * Remove `claims_in_channel` from `resolve` response
   *
 
 ## [0.11.0] - 2017-06-09
