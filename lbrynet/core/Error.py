@@ -39,6 +39,18 @@ class UnknownNameError(Exception):
         self.name = name
 
 
+class UnknownClaimID(Exception):
+    def __init__(self, claim_id):
+        Exception.__init__(self, 'Claim {} is unknown'.format(claim_id))
+        self.claim_id = claim_id
+
+
+class UnknownURI(Exception):
+    def __init__(self, uri):
+        Exception.__init__(self, 'URI {} cannot be resolved'.format(uri))
+        self.name = uri
+
+
 class InvalidName(Exception):
     def __init__(self, name, invalid_characters):
         self.name = name

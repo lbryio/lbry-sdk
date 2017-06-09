@@ -46,7 +46,7 @@ from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError, NoSuchSDHash
-from lbrynet.core.Error import NoSuchStreamHash
+from lbrynet.core.Error import NoSuchStreamHash, UnknownClaimID, UnknownURI
 
 log = logging.getLogger(__name__)
 
@@ -1326,7 +1326,7 @@ class Daemon(AuthJSONRPCServer):
             else:
                 claim_results = yield self.session.wallet.get_claim_by_name(name)
             result = format_json_out_amount_as_float(claim_results)
-        except (TypeError, UnknownNameError):
+        except (TypeError, UnknownNameError, UnknownClaimID, UnknownURI):
             result = False
         response = yield self._render_response(result)
         defer.returnValue(response)
