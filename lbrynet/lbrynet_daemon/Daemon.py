@@ -2184,7 +2184,7 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             blob_delete (<blob_hash> | --blob_hash=<blob_hash)
-t
+
         Returns:
             (str) Success/fail message
         """

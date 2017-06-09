@@ -9,7 +9,6 @@ import os.path as op
 import re
 import sys
 
-from six import string_types
 from lbrynet.lbrynet_daemon.Daemon import Daemon
 
 
@@ -41,41 +40,7 @@ def _replace_docstring_header(paragraph):
 
 def _doc(obj):
     docstr = (inspect.getdoc(obj) or '').strip()
-    return _replace_docstring_header(docstr) if docstr and '---' in docstr else docstr
-
-
-def _is_public(obj):
-    name = _name(obj) if not isinstance(obj, string_types) else obj
-    if name:
-        return not name.startswith('_')
-    else:
-        return True
-
-
-def _is_defined_in_package(obj, package):
-    if isinstance(obj, property):
-        obj = obj.fget
-    mod = inspect.getmodule(obj)
-    if mod and hasattr(mod, '__name__'):
-        name = mod.__name__
-        return name.split('.')[0] == package
-    return True
-
-
-def _iter_doc_members(obj, package=None):
-    for _, member in inspect.getmembers(obj):
-        if _is_public(member):
-            if package is None or _is_defined_in_package(member, package):
-                yield member
-
-
-def _iter_methods(klass, package=None):
-    for member in _iter_doc_members(klass, package):
-        if inspect.isfunction(member) or inspect.ismethod(member):
-            if inspect.isdatadescriptor(member):
-                continue
-            if _name(member).startswith('jsonrpc_'):
-                yield member
+    return _replace_docstring_header(docstr)
 
 
 def _link(name, anchor=None):
@@ -84,24 +49,18 @@ def _link(name, anchor=None):
 
 def main():
     curdir = op.dirname(op.realpath(__file__))
-    path = op.realpath(op.join(curdir, '..', 'docs', 'index.md'))
-
-    klass = Daemon
+    cli_doc_path = op.realpath(op.join(curdir, '..', 'docs', 'cli.md'))
 
     # toc = ''
     doc = ''
     # Table of contents
-    for method in _iter_methods(klass):
-        method_name = _name(method)[len('jsonrpc_'):]
-        method_doc = _doc(method)
-        if "DEPRECATED" in method_doc:
-            continue
+    for method_name in sorted(Daemon.callable_methods.keys()):
+        method = Daemon.callable_methods[method_name]
         # toc += '* ' + _link(method_name, _anchor(method_name)) + "\n"
-        doc += '## ' + method_name + "\n\n```text\n" + method_doc + "\n```\n\n"
+        doc += '## ' + method_name + "\n\n```text\n" + _doc(method) + "\n```\n\n"
 
-    text = "# LBRY JSON-RPC API Documentation\n\n" + doc
-
-    with open(path, 'w+') as f:
+    text = "# LBRY Command Line Documentation\n\n" + doc
+    with open(cli_doc_path, 'w+') as f:
         f.write(text)
 
 
