@@ -21,7 +21,8 @@ class Publisher(object):
         self.lbry_file = None
 
     @defer.inlineCallbacks
-    def create_and_publish_stream(self, name, bid, claim_dict, file_path, claim_address=None):
+    def create_and_publish_stream(self, name, bid, claim_dict, file_path, claim_address=None,
+                                  change_address=None):
         """Create lbry file and make claim"""
         log.info('Starting publish for %s', name)
         if not os.path.isfile(file_path):
@@ -44,23 +45,24 @@ class Publisher(object):
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
         claim_dict['stream']['source']['version'] = "_0_0_1" # need current version here
 
-        claim_out = yield self.make_claim(name, bid, claim_dict, claim_address)
+        claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
         self.lbry_file.completed = True
         yield self.lbry_file.load_file_attributes(sd_hash)
         yield self.lbry_file.save_status()
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
-    def publish_stream(self, name, bid, claim_dict, claim_address=None):
+    def publish_stream(self, name, bid, claim_dict, claim_address=None, change_address=None):
         """Make a claim without creating a lbry file"""
-        claim_out = yield self.make_claim(name, bid, claim_dict, claim_address)
+        claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
-    def make_claim(self, name, bid, claim_dict, claim_address=None):
+    def make_claim(self, name, bid, claim_dict, claim_address=None, change_address=None):
         claim_out = yield self.wallet.claim_name(name, bid, claim_dict,
                                                  certificate_id=self.certificate_id,
-                                                 claim_address=claim_address)
+                                                 claim_address=claim_address,
+                                                 change_address=change_address)
         defer.returnValue(claim_out)
 
 

@@ -10,7 +10,7 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Add `claim_send_to_address`
-  *
+  * Add `change_address` argument to `publish`
 
 ### Changed
   * Support resolution of multiple uris with `resolve`, all results are keyed by uri
