@@ -16,6 +16,8 @@ at anytime.
   * Support resolution of multiple uris with `resolve`, all results are keyed by uri
   * Add `error` responses for failed resolves
   * Add `claim_list_by_channel`, supports multiple channel resolution
+  * Rename delete_target_file argument of delete API command to delete_from_download_dir
+  * Rename delete_all CLI flag -a to --delete_all
 
 ### Fixed
   * Race condition from improper initialization and shutdown of the blob manager database
