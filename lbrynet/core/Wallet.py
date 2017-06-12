@@ -1102,6 +1102,9 @@ class Wallet(object):
     def _get_values_for_uris(self, page, page_size, *uris):
         return defer.fail(NotImplementedError())
 
+    def send_claim_to_address(self, claim_id, destination, amount):
+        return defer.fail(NotImplementedError())
+
     def _start(self):
         pass
 
@@ -1427,6 +1430,9 @@ class LBRYumWallet(Wallet):
 
     def list_addresses(self):
         return self._run_cmd_as_defer_succeed('listaddresses')
+
+    def send_claim_to_address(self, claim_id, destination, amount):
+        return self._run_cmd_as_defer_succeed('sendclaimtoaddress', claim_id, destination, amount)
 
     def _save_wallet(self, val=None):
         self.wallet.storage.write()

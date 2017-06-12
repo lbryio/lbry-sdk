@@ -9,7 +9,7 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Add `claim_send_to_address`
   *
 
 ### Changed
