@@ -994,6 +994,46 @@ class Daemon(AuthJSONRPCServer):
         Options:
             -s  : include session status in results
             -d  : include dht network and peer status
+
+        Returns:
+            (dict) lbrynet-daemon status
+            {
+                'lbry_id': lbry peer id, base58
+                'installation_id': installation id, base58
+                'is_running': bool
+                'is_first_run': bool
+                'startup_status': {
+                    'code': status code
+                    'message': status message
+                },
+                'connection_status': {
+                    'code': connection status code
+                    'message': connection status message
+                },
+                'blockchain_status': {
+                    'blocks': local blockchain height,
+                    'blocks_behind': remote_height - local_height,
+                    'best_blockhash': block hash of most recent block,
+                },
+
+                If given the session status option:
+                    'session_status': {
+                        'managed_blobs': count of blobs in the blob manager,
+                        'managed_streams': count of streams in the file manager
+                    }
+
+                If given the dht status option:
+                    'dht_status': {
+                        'kbps_received': current kbps receiving,
+                        'kbps_sent': current kdps being sent,
+                        'total_bytes_sent': total bytes sent
+                        'total_bytes_received': total bytes received
+                        'queries_received': number of queries received per second
+                        'queries_sent': number of queries sent per second
+                        'recent_contacts': count of recently contacted peers
+                        'unique_contacts': count of unique peers
+                    }
+            }
         """
 
         # on startup, the wallet or network won't be available but we still need this call to work

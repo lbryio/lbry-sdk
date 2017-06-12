@@ -79,6 +79,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._history_tx = {}
         self._bytes_rx = {}
         self._bytes_tx = {}
+        self._unique_contacts = []
         self._queries_rx_per_second = 0
         self._queries_tx_per_second = 0
         self._kbps_tx = 0
@@ -122,6 +123,10 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._total_bytes_rx = sum(v for (k, v) in self._bytes_rx.iteritems())
 
     @property
+    def unique_contacts(self):
+        return self._unique_contacts
+
+    @property
     def queries_rx_per_second(self):
         return self._queries_rx_per_second
 
@@ -159,6 +164,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             "queries_received": self.queries_rx_per_second,
             "queries_sent": self.queries_tx_per_second,
             "recent_contacts": self.recent_contact_count,
+            "unique_contacts": len(self.unique_contacts)
         }
         return response
 
@@ -256,6 +262,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
         bytes_rx = self._bytes_rx.get(address, 0)
         bytes_rx += len(datagram)
         self._bytes_rx[address] = bytes_rx
+        if address not in self.unique_contacts:
+            self._unique_contacts.append(address)
 
         # Refresh the remote node's details in the local node's k-buckets
         self._node.addContact(remoteContact)
@@ -315,6 +323,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
         bytes_tx = self._bytes_tx.get(address, 0)
         bytes_tx += len(data)
         self._bytes_tx[address] = bytes_tx
+        if address not in self.unique_contacts:
+            self._unique_contacts.append(address)
 
         if len(data) > self.msgSizeLimit:
             # We have to spread the data over multiple UDP datagrams,
