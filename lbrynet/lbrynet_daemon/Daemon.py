@@ -1901,6 +1901,25 @@ class Daemon(AuthJSONRPCServer):
         self.analytics_manager.send_claim_action('new_support')
         defer.returnValue(result)
 
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
+        """
+        Send a name claim to an address
+
+        Usage:
+            claim_send_to_address (<claim_id> | --claim_id=<claim_id>)
+                                  (<address> | --address=<address>)
+                                  [<amount> | --amount=<amount>]
+
+        Options:
+            <amount>  : Amount of credits to claim name for, defaults to the current amount
+                        on the claim
+        """
+        result = yield self.session.wallet.send_claim_to_address(claim_id, address, amount)
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
     # TODO: claim_list_mine should be merged into claim_list, but idk how to authenticate it -Grin
     @AuthJSONRPCServer.auth_required
     def jsonrpc_claim_list_mine(self):
