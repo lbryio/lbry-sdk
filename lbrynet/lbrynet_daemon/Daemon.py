@@ -681,8 +681,8 @@ class Daemon(AuthJSONRPCServer):
             defer.returnValue(result)
 
     @defer.inlineCallbacks
-    def _publish_stream(self, name, bid, claim_dict,
-                        file_path=None, certificate_id=None, claim_address=None):
+    def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate_id=None,
+                        claim_address=None, change_address=None):
 
         publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet,
                               certificate_id)
@@ -690,10 +690,11 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise Exception("Invalid bid")
         if not file_path:
-            claim_out = yield publisher.publish_stream(name, bid, claim_dict, claim_address)
+            claim_out = yield publisher.publish_stream(name, bid, claim_dict, claim_address,
+                                                       change_address)
         else:
-            claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict,
-                                                                  file_path, claim_address)
+            claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path,
+                                                                  claim_address, change_address)
             if conf.settings['reflect_uploads']:
                 d = reupload.reflect_stream(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
@@ -1686,7 +1687,7 @@ class Daemon(AuthJSONRPCServer):
                         description=None, author=None, language=None, license=None,
                         license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None,
                         channel_name=None, channel_id=None,
-                        claim_address=None):
+                        claim_address=None, change_address=None):
         """
         Make a new name claim and publish associated data to lbrynet,
         update over existing claim if user already has a claim for name.
@@ -1710,7 +1711,7 @@ class Daemon(AuthJSONRPCServer):
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail=<thumbnail>]
                     [--preview=<preview>] [--nsfw=<nsfw>] [--sources=<sources>]
                     [--channel_name=<channel_name>] [--channel_id=<channel_id>]
-                    [--claim_address=<claim_address>]
+                    [--claim_address=<claim_address>] [--change_address=<change_address>]
 
         Options:
             --metadata=<metadata>          : ClaimDict to associate with the claim.
@@ -1825,7 +1826,8 @@ class Daemon(AuthJSONRPCServer):
             'name': name,
             'file_path': file_path,
             'bid': bid,
-            'claim_address':claim_address,
+            'claim_address': claim_address,
+            'change_address': change_address,
             'claim_dict': claim_dict,
         })
 
@@ -1843,8 +1845,8 @@ class Daemon(AuthJSONRPCServer):
         else:
             certificate_id = None
 
-        result = yield self._publish_stream(name, bid, claim_dict, file_path,
-                                            certificate_id, claim_address)
+        result = yield self._publish_stream(name, bid, claim_dict, file_path, certificate_id,
+                                            claim_address, change_address)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
