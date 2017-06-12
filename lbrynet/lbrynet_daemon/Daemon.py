@@ -704,20 +704,6 @@ class Daemon(AuthJSONRPCServer):
                  claim_out['nout'])
         defer.returnValue(claim_out)
 
-    def add_stream(self, name, timeout, download_directory, file_name, stream_info):
-        """Makes, adds and starts a stream"""
-        self.streams[name] = GetStream(self.sd_identifier,
-                                       self.session,
-                                       self.session.wallet,
-                                       self.lbry_file_manager,
-                                       self.exchange_rate_manager,
-                                       max_key_fee=self.max_key_fee,
-                                       data_rate=self.data_rate,
-                                       timeout=timeout,
-                                       download_directory=download_directory,
-                                       file_name=file_name)
-        return self.streams[name].start(stream_info, name)
-
     def _get_long_count_timestamp(self):
         dt = utils.utcnow() - utils.datetime_obj(year=2012, month=12, day=21)
         return int(dt.total_seconds())
