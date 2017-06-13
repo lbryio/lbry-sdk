@@ -644,8 +644,7 @@ class Daemon(AuthJSONRPCServer):
         return finished_d
 
     @defer.inlineCallbacks
-    def _download_name(self, name, claim_dict, claim_id, timeout=None, download_directory=None,
-                       file_name=None):
+    def _download_name(self, name, claim_dict, claim_id, timeout=None, file_name=None):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
@@ -662,7 +661,7 @@ class Daemon(AuthJSONRPCServer):
             self.streams[claim_id] = GetStream(self.sd_identifier, self.session,
                                                self.exchange_rate_manager, self.max_key_fee,
                                                conf.settings['data_rate'], timeout,
-                                               download_directory, file_name)
+                                               file_name)
             try:
                 lbry_file, finished_deferred = yield self.streams[claim_id].start(claim_dict, name)
                 finished_deferred.addCallback(
@@ -1450,13 +1449,13 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_get(self, uri, file_name=None, timeout=None, download_directory=None):
+    def jsonrpc_get(self, uri, file_name=None, timeout=None):
         """
         Download stream from a LBRY name.
 
         Usage:
             get <uri> [<file_name> | --file_name=<file_name>] [<timeout> | --timeout=<timeout>]
-                      [<download_directory> | --download_directory=<download_directory>]
+
 
         Options:
             <file_name>           : specified name for the downloaded file
@@ -1489,7 +1488,6 @@ class Daemon(AuthJSONRPCServer):
         """
 
         timeout = timeout if timeout is not None else self.download_timeout
-        download_directory = download_directory or self.download_directory
 
         resolved_result = yield self.session.wallet.resolve(uri)
         if resolved_result and uri in resolved_result:
@@ -1523,7 +1521,6 @@ class Daemon(AuthJSONRPCServer):
             result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
         else:
             result = yield self._download_name(name, claim_dict, claim_id, timeout=timeout,
-                                               download_directory=download_directory,
                                                file_name=file_name)
         response = yield self._render_response(result)
         defer.returnValue(response)

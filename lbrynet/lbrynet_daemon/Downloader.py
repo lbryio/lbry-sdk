@@ -40,13 +40,13 @@ def safe_stop(looping_call):
 
 class GetStream(object):
     def __init__(self, sd_identifier, session, exchange_rate_manager,
-                 max_key_fee, data_rate=None, timeout=None, download_directory=None,
+                 max_key_fee, data_rate=None, timeout=None,
                  file_name=None):
 
         self.timeout = timeout or conf.settings['download_timeout']
         self.data_rate = data_rate or conf.settings['data_rate']
         self.max_key_fee = max_key_fee or conf.settings['max_key_fee'][1]
-        self.download_directory = download_directory or conf.settings['download_directory']
+        self.download_directory = conf.settings['download_directory']
         self.file_name = file_name
         self.timeout_counter = 0
         self.code = None
