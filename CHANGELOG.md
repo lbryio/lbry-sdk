@@ -44,7 +44,7 @@ at anytime.
 
 ### Removed
   * Removed unused settings from conf.py and `settings_set`
-  *
+  * Removed download_directory argument from API command get
 
 ## [0.13.1] - 2017-06-15
 

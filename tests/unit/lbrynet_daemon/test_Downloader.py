@@ -18,11 +18,12 @@ from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
 from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from tests.mocks import BTCLBCFeed, USDBTCFeed
-
+from tests.mocks import mock_conf_settings
 
 class GetStreamTests(unittest.TestCase):
 
     def init_getstream_with_mocs(self):
+        mock_conf_settings(self)
         sd_identifier = mock.Mock(spec=StreamDescriptorIdentifier)
         session = mock.Mock(spec=Session.Session)
         session.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
@@ -34,12 +35,9 @@ class GetStreamTests(unittest.TestCase):
         exchange_rate_manager = mock.Mock(spec=ExchangeRateManager)
         max_key_fee = {'currency':"LBC", 'amount':10, 'address':''}
         data_rate = {'currency':"LBC", 'amount':0, 'address':''}
-        download_directory = '.'
-
 
         getstream = Downloader.GetStream(sd_identifier, session,
-            exchange_rate_manager, max_key_fee, timeout=10, data_rate=data_rate,
-            download_directory=download_directory)
+            exchange_rate_manager, max_key_fee, timeout=10, data_rate=data_rate)
 
         return getstream
 
