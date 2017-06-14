@@ -77,21 +77,36 @@ class TestIntegration(unittest.TestCase):
 
         out,err = lbrynet_cli(['cli_test_command','1'])
         out = json.loads(out)
-        self.assertEqual([1,[],None,None], out)
+        self.assertEqual([1,[],None,None,False,False], out)
 
         out,err = lbrynet_cli(['cli_test_command','1','--pos_arg2=1'])
         out = json.loads(out)
-        self.assertEqual([1,[],1,None], out)
+        self.assertEqual([1,[],1,None,False,False], out)
 
 
         out,err = lbrynet_cli(['cli_test_command','1', '--pos_arg2=2','--pos_arg3=3'])
         out = json.loads(out)
-        self.assertEqual([1,[],2,3], out)
+        self.assertEqual([1,[],2,3,False,False], out)
 
         out,err = lbrynet_cli(['cli_test_command','1','2','3'])
         out = json.loads(out)
         # TODO: variable length arguments don't have guess_type() on them
-        self.assertEqual([1,['2','3'],None,None], out)
+        self.assertEqual([1,['2','3'],None,None,False,False], out)
+
+
+        out,err = lbrynet_cli(['cli_test_command','1','-a'])
+        out = json.loads(out)
+        self.assertEqual([1,[],None,None,True,False], out)
+
+        out,err = lbrynet_cli(['cli_test_command','1','--a_arg'])
+        out = json.loads(out)
+        self.assertEqual([1,[],None,None,True,False], out)
+
+
+        out,err = lbrynet_cli(['cli_test_command','1','-a','-b'])
+        out = json.loads(out)
+        self.assertEqual([1,[],None,None,True,True], out)
+
 
 
     def test_status(self):
