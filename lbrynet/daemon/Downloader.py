@@ -63,7 +63,6 @@ class GetStream(object):
     def _check_status(self, status):
         stop_condition = (status.num_completed > 0 or
                 status.running_status == ManagedEncryptedFileDownloader.STATUS_STOPPED)
-
         if stop_condition and not self.data_downloading_deferred.called:
             self.data_downloading_deferred.callback(True)
         if self.data_downloading_deferred.called:
@@ -75,7 +74,6 @@ class GetStream(object):
         """
         Check if we've got the first data blob in the stream yet
         """
-
         self.timeout_counter += 1
         if self.timeout_counter >= self.timeout:
             if not self.data_downloading_deferred.called:
