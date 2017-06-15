@@ -10,6 +10,7 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Add `claim_signature_update`
+  * Add `channel_update`
 
 ### Changed
   *
