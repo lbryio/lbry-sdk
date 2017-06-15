@@ -888,6 +888,9 @@ class Wallet(object):
         log.info("Preparing to make certificate claim for %s", channel_name)
         return self._claim_certificate(parsed_channel_name.name, amount)
 
+    def update_claim_signature(self, name, channel_claim_id):
+        return self._update_claim_signature(name, certificate_id=channel_claim_id)
+
     @defer.inlineCallbacks
     def channel_list(self):
         certificates = yield self._get_certificate_claims()
@@ -1060,6 +1063,9 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def _claim_certificate(self, name, amount):
+        return defer.fail(NotImplementedError())
+
+    def _update_claim_signature(self, name, amount=None, claim_id=None, certificate_id=None):
         return defer.fail(NotImplementedError())
 
     def _send_name_claim(self, name, val, amount, certificate_id=None, claim_address=None,
@@ -1402,6 +1408,10 @@ class LBRYumWallet(Wallet):
 
     def _claim_certificate(self, name, amount):
         return self._run_cmd_as_defer_succeed('claimcertificate', name, amount)
+
+    def _update_claim_signature(self, name, amount=None, claim_id=None, certificate_id=None):
+        return self._run_cmd_as_defer_succeed('updateclaimsignature', name, amount, claim_id,
+                                              certificate_id)
 
     def _get_certificate_claims(self):
         return self._run_cmd_as_defer_succeed('getcertificateclaims')

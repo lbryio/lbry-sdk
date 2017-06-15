@@ -1710,6 +1710,31 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_claim_signature_update(self, name, channel_claim_id):
+        """
+        Update the publisher signature on a claim
+
+        Usage:
+            claim_signature_update (<name> | --name=<name>)
+                                   (<channel_claim_id> | --channel_claim_id=<channel_claim_id>)
+
+        Returns:
+            (dict) Dictionary containing result of the claim
+            {
+                'tx' : (str) hex encoded transaction
+                'txid' : (str) txid of resulting claim
+                'nout' : (int) nout of the resulting claim
+                'fee' : (float) fee paid for the claim transaction
+                'claim_id' : (str) claim ID of the resulting claim
+            }
+        """
+
+        result = yield self.session.wallet.update_claim_signature(name, channel_claim_id)
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
+    @AuthJSONRPCServer.auth_required
     @AuthJSONRPCServer.queued
     @defer.inlineCallbacks
     def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
