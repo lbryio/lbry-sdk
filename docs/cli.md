@@ -144,7 +144,7 @@ Return:
 ## claim_list
 
 ```text
-Get claims for a name
+List current claims and information about them for a given name
 
 Usage:
     claim_list (<name> | --name=<name>)
@@ -168,6 +168,58 @@ Returns
         ]
         'supports_without_claims': (list) supports without any claims attached to them
         'last_takeover_height': (int) the height of last takeover for the name
+    }
+```
+
+## claim_list_by_channel
+
+```text
+Get paginated claims in a channel specified by a channel uri
+
+Usage:
+    claim_list_by_channel (<uri> | --uri=<uri>) [<uris>...] [--page=<page>]
+                           [--page_size=<page_size>]
+
+Options:
+    --page=<page>            : which page of results to return where page 1 is the first
+                               page, defaults to no pages
+    --page_size=<page_size>  : number of results in a page, default of 10
+
+Returns:
+    {
+         resolved channel uri: {
+            If there was an error:
+            'error': (str) error message
+
+            'claims_in_channel_pages': total number of pages with <page_size> results,
+
+            If a page of results was requested:
+            'returned_page': page number returned,
+            'claims_in_channel': [
+                {
+                    'absolute_channel_position': (int) claim index number in sorted list of
+                                                 claims which assert to be part of the
+                                                 channel
+                    'address': (str) claim address,
+                    'amount': (float) claim amount,
+                    'effective_amount': (float) claim amount including supports,
+                    'claim_id': (str) claim id,
+                    'claim_sequence': (int) claim sequence number,
+                    'decoded_claim': (bool) whether or not the claim value was decoded,
+                    'height': (int) claim height,
+                    'depth': (int) claim depth,
+                    'has_signature': (bool) included if decoded_claim
+                    'name': (str) claim name,
+                    'supports: (list) list of supports [{'txid': txid,
+                                                         'nout': nout,
+                                                         'amount': amount}],
+                    'txid': (str) claim txid,
+                    'nout': (str) claim nout,
+                    'signature_is_valid': (bool), included if has_signature,
+                    'value': ClaimDict if decoded, otherwise hex string
+                }
+            ],
+        }
     }
 ```
 
@@ -219,6 +271,21 @@ Return:
     }
 ```
 
+## claim_send_to_address
+
+```text
+Send a name claim to an address
+
+Usage:
+    claim_send_to_address (<claim_id> | --claim_id=<claim_id>)
+                          (<address> | --address=<address>)
+                          [<amount> | --amount=<amount>]
+
+Options:
+    <amount>  : Amount of credits to claim name for, defaults to the current amount
+                on the claim
+```
+
 ## claim_show
 
 ```text
@@ -253,14 +320,15 @@ Returns:
 ```text
 This command is only for testing the CLI argument parsing
 Usage:
-    cli_test_command (<pos_arg> | --pos_arg=<pos_arg>)
+    cli_test_command [-a] [-b] (<pos_arg> | --pos_arg=<pos_arg>)
                      [<pos_args>...] [--pos_arg2=<pos_arg2>]
                      [--pos_arg3=<pos_arg3>]
 
 Options:
+    -a, --a_arg                        : a arg
+    -b, --b_arg                        : b arg
     <pos_arg2>, --pos_arg2=<pos_arg2>  : pos arg 2
     <pos_arg3>, --pos_arg3=<pos_arg3>  : pos arg 3
-
 Returns:
     pos args
 ```
@@ -295,21 +363,24 @@ Returns:
 Delete a LBRY file
 
 Usage:
-    file_delete [-a | -f] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
+    file_delete [-f] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
                 [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
                 [--outpoint=<outpoint>] [--rowid=<rowid>]
                 [--name=<name>]
 
 Options:
-    -a                          : delete file from downloads and delete stored blobs
-    -f                          : delete only from downloads, do not delete blobs
-    --sd_hash=<sd_hash>         : delete by file sd hash
-    --file_name<file_name>      : delete by file name in downloads folder
-    --stream_hash=<stream_hash> : delete by file stream hash
-    --claim_id=<claim_id>       : delete by file claim id
-    --outpoint=<outpoint>       : delete by file claim outpoint
-    --rowid=<rowid>             : delete by file row id
-    --name=<name>               : delete by associated name claim of file
+    -f, --delete_from_download_dir  : delete file from download directory,
+                                        instead of just deleting blobs
+    --delete_all                    : if there are multiple matching files,
+                                        allow the deletion of multiple files.
+                                        Otherwise do not delete anything.
+    --sd_hash=<sd_hash>             : delete by file sd hash
+    --file_name<file_name>          : delete by file name in downloads folder
+    --stream_hash=<stream_hash>     : delete by file stream hash
+    --claim_id=<claim_id>           : delete by file claim id
+    --outpoint=<outpoint>           : delete by file claim outpoint
+    --rowid=<rowid>                 : delete by file row id
+    --name=<name>                   : delete by associated name claim of file
 
 Returns:
     (bool) true if deletion was successful
@@ -498,7 +569,7 @@ Usage:
             [--license=<license>] [--license_url=<license_url>] [--thumbnail=<thumbnail>]
             [--preview=<preview>] [--nsfw=<nsfw>] [--sources=<sources>]
             [--channel_name=<channel_name>] [--channel_id=<channel_id>]
-            [--claim_address=<claim_address>]
+            [--claim_address=<claim_address>] [--change_address=<change_address>]
 
 Options:
     --metadata=<metadata>          : ClaimDict to associate with the claim.
@@ -571,39 +642,22 @@ Returns:
 ## resolve
 
 ```text
-Resolve a LBRY URI
+Resolve given LBRY URIs
 
 Usage:
-    resolve <uri> [-f]
+    resolve [-f] (<uri> | --uri=<uri>) [<uris>...]
 
 Options:
     -f  : force refresh and ignore cache
 
 Returns:
-    None if nothing can be resolved, otherwise:
-    If uri resolves to a channel or a claim in a channel:
-        'certificate': {
-            'address': (str) claim address,
-            'amount': (float) claim amount,
-            'effective_amount': (float) claim amount including supports,
-            'claim_id': (str) claim id,
-            'claim_sequence': (int) claim sequence number,
-            'decoded_claim': (bool) whether or not the claim value was decoded,
-            'height': (int) claim height,
-            'depth': (int) claim depth,
-            'has_signature': (bool) included if decoded_claim
-            'name': (str) claim name,
-            'supports: (list) list of supports [{'txid': txid,
-                                                 'nout': nout,
-                                                 'amount': amount}],
-            'txid': (str) claim txid,
-            'nout': (str) claim nout,
-            'signature_is_valid': (bool), included if has_signature,
-            'value': ClaimDict if decoded, otherwise hex string
-        }
-    If uri resolves to a channel:
-        'claims_in_channel': [
-            {
+    Dictionary of results, keyed by uri
+    '<uri>': {
+            If a resolution error occurs:
+            'error': Error message
+
+            If the uri resolves to a channel or a claim in a channel:
+            'certificate': {
                 'address': (str) claim address,
                 'amount': (float) claim amount,
                 'effective_amount': (float) claim amount including supports,
@@ -622,28 +676,28 @@ Returns:
                 'signature_is_valid': (bool), included if has_signature,
                 'value': ClaimDict if decoded, otherwise hex string
             }
-        ]
-    If uri resolves to a claim:
-        'claim': {
-            'address': (str) claim address,
-            'amount': (float) claim amount,
-            'effective_amount': (float) claim amount including supports,
-            'claim_id': (str) claim id,
-            'claim_sequence': (int) claim sequence number,
-            'decoded_claim': (bool) whether or not the claim value was decoded,
-            'height': (int) claim height,
-            'depth': (int) claim depth,
-            'has_signature': (bool) included if decoded_claim
-            'name': (str) claim name,
-            'channel_name': (str) channel name if claim is in a channel
-            'supports: (list) list of supports [{'txid': txid,
-                                                 'nout': nout,
-                                                 'amount': amount}]
-            'txid': (str) claim txid,
-            'nout': (str) claim nout,
-            'signature_is_valid': (bool), included if has_signature,
-            'value': ClaimDict if decoded, otherwise hex string
-        }
+
+            If the uri resolves to a claim:
+            'claim': {
+                'address': (str) claim address,
+                'amount': (float) claim amount,
+                'effective_amount': (float) claim amount including supports,
+                'claim_id': (str) claim id,
+                'claim_sequence': (int) claim sequence number,
+                'decoded_claim': (bool) whether or not the claim value was decoded,
+                'height': (int) claim height,
+                'depth': (int) claim depth,
+                'has_signature': (bool) included if decoded_claim
+                'name': (str) claim name,
+                'channel_name': (str) channel name if claim is in a channel
+                'supports: (list) list of supports [{'txid': txid,
+                                                     'nout': nout,
+                                                     'amount': amount}]
+                'txid': (str) claim txid,
+                'nout': (str) claim nout,
+                'signature_is_valid': (bool), included if has_signature,
+                'value': ClaimDict if decoded, otherwise hex string
+            }
     }
 ```
 
@@ -718,6 +772,46 @@ Usage:
 Options:
     -s  : include session status in results
     -d  : include dht network and peer status
+
+Returns:
+    (dict) lbrynet-daemon status
+    {
+        'lbry_id': lbry peer id, base58
+        'installation_id': installation id, base58
+        'is_running': bool
+        'is_first_run': bool
+        'startup_status': {
+            'code': status code
+            'message': status message
+        },
+        'connection_status': {
+            'code': connection status code
+            'message': connection status message
+        },
+        'blockchain_status': {
+            'blocks': local blockchain height,
+            'blocks_behind': remote_height - local_height,
+            'best_blockhash': block hash of most recent block,
+        },
+
+        If given the session status option:
+            'session_status': {
+                'managed_blobs': count of blobs in the blob manager,
+                'managed_streams': count of streams in the file manager
+            }
+
+        If given the dht status option:
+            'dht_status': {
+                'kbps_received': current kbps receiving,
+                'kbps_sent': current kdps being sent,
+                'total_bytes_sent': total bytes sent
+                'total_bytes_received': total bytes received
+                'queries_received': number of queries received per second
+                'queries_sent': number of queries sent per second
+                'recent_contacts': count of recently contacted peers
+                'unique_contacts': count of unique peers
+            }
+    }
 ```
 
 ## stream_cost_estimate
