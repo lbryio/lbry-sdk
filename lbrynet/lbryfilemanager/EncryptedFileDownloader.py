@@ -83,7 +83,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
     @defer.inlineCallbacks
     def stop(self, err=None, change_status=True):
-        log.debug('Stopping download for %s', short_hash(self.sd_hash))
+        log.debug('Stopping download for stream %s', short_hash(self.stream_hash))
         # EncryptedFileSaver deletes metadata when it's stopped. We don't want that here.
         yield EncryptedFileDownloader.stop(self, err=err)
         if change_status is True:
