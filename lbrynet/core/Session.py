@@ -171,7 +171,7 @@ class Session(object):
         """Stop all services"""
         log.info('Shutting down %s', self)
         ds = []
-        if self.blob_manager is not None:
+        if self.blob_tracker is not None:
             ds.append(defer.maybeDeferred(self.blob_tracker.stop))
         if self.dht_node is not None:
             ds.append(defer.maybeDeferred(self.dht_node.stop))
