@@ -33,7 +33,7 @@ at anytime.
 
 ### Removed
   * Remove `claims_in_channel` from `resolve` response
-  *
+  * Removed download_directory argument from API command get
 
 ## [0.11.0] - 2017-06-09
 
