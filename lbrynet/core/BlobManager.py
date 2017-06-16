@@ -257,8 +257,13 @@ class DiskBlobManager(BlobManager):
         return self.db_conn.runInteraction(delete_blobs)
 
     @rerun_if_locked
-    def _get_all_verified_blob_hashes(self):
+    def _get_all_blob_hashes(self):
         d = self.db_conn.runQuery("select blob_hash from blobs")
+        return d
+
+    @rerun_if_locked
+    def _get_all_verified_blob_hashes(self):
+        d = self._get_all_blob_hashes()
 
         def get_verified_blobs(blobs):
             verified_blobs = []
