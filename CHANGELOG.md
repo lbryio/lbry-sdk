@@ -9,31 +9,52 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  * Add `claim_send_to_address`
-  * Add `change_address` argument to `publish`
-  * Add `unique_contacts` count to `status` response
+  *
+  *
 
 ### Changed
-  * Support resolution of multiple uris with `resolve`, all results are keyed by uri
-  * Add `error` responses for failed resolves
-  * Add `claim_list_by_channel`, supports multiple channel resolution
-  * Rename delete_target_file argument of delete API command to delete_from_download_dir
-  * Rename delete_all CLI flag -a to --delete_all
+  *
+  *
 
 ### Fixed
-  * Race condition from improper initialization and shutdown of the blob manager database
-  * Various fixes for GetStream class used in API command get
-  * Download analytics error
-  * Fixed flag options in file_delete API command
   * Fixed some log messages throwing exceptions
+  *
 
 ### Deprecated
   *
   *
 
 ### Removed
-  * Remove `claims_in_channel` from `resolve` response
   *
+  *
+
+## [0.13.1] - 2017-06-15
+
+### Added
+ * Add `claim_send_to_address`
+ * Add `change_address` argument to `publish`
+ * Add `unique_contacts` count to `status` response
+
+
+### Changed
+ * Support resolution of multiple uris with `resolve`, all results are keyed by uri
+ * Add `error` responses for failed resolves
+ * Add `claim_list_by_channel`, supports multiple channel resolution
+ * Rename delete_target_file argument of delete API command to delete_from_download_dir
+ * Rename delete_all CLI flag -a to --delete_all
+
+
+### Removed
+ * Remove `claims_in_channel` from `resolve` response
+
+
+### Fixed
+ * Race condition from improper initialization and shutdown of the blob manager database
+ * Various fixes for GetStream class used in API command get
+ * Download analytics error
+ * Fixed flag options in file_delete API command
+
+
 
 ## [0.11.0] - 2017-06-09
 
