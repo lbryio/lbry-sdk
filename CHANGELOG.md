@@ -17,7 +17,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed some log messages throwing exceptions
   *
 
 ### Deprecated

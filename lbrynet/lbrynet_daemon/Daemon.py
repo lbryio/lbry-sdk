@@ -1626,7 +1626,7 @@ class Daemon(AuthJSONRPCServer):
                     del self.streams[lbry_file.claim_id]
                 yield self.lbry_file_manager.delete_lbry_file(lbry_file,
                                                               delete_file=delete_from_download_dir)
-                log.info("Deleted %s (%s)", file_name, utils.short_hash(stream_hash))
+                log.info("Deleted file: %s", file_name)
             result = True
 
         response = yield self._render_response(result)
