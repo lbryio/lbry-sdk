@@ -746,8 +746,9 @@ class TestTransfer(TestCase):
             yield download_file(sd_hash)
             yield check_md5_sum()
             yield download_file(sd_hash)
-            yield delete_lbry_file()
+
             yield check_lbry_file()
+            yield delete_lbry_file()
 
         def stop(arg):
             if isinstance(arg, Failure):
