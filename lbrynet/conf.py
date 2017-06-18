@@ -2,10 +2,11 @@ import base58
 import json
 import logging
 import os
+import re
 import sys
 import yaml
 import envparse
-from appdirs import user_data_dir
+from appdirs import user_data_dir, user_config_dir
 from lbrynet.core import utils
 
 log = logging.getLogger(__name__)
@@ -43,25 +44,34 @@ settings_encoders = {
     '.yml': yaml.safe_dump
 }
 
-if sys.platform.startswith('darwin'):
+if 'darwin' in sys.platform:
     platform = DARWIN
-    default_download_directory = os.path.join(os.path.expanduser('~'), 'Downloads')
+    default_download_directory = os.path.expanduser('~/Downloads')
     default_data_dir = user_data_dir('LBRY')
-    default_lbryum_dir = os.path.join(os.path.expanduser('~'), '.lbryum')
-elif sys.platform.startswith('win'):
+    default_lbryum_dir = os.path.expanduser('~/.lbryum')
+elif 'nt' in sys.platform:
     platform = WINDOWS
     from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
 
     default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
-    default_data_dir = os.path.join(
-        get_path(FOLDERID.RoamingAppData, UserHandle.current), 'lbrynet')
-    default_lbryum_dir = os.path.join(
-        get_path(FOLDERID.RoamingAppData, UserHandle.current), 'lbryum')
+    default_data_dir = user_data_dir('lbrynet', 'LBRY', roaming=True)
+    default_lbryum_dir = user_data_dir('lbryum', 'LBRY', roaming=True)
 else:
     platform = LINUX
-    default_download_directory = os.path.join(os.path.expanduser('~'), 'Downloads')
-    default_data_dir = os.path.join(os.path.expanduser('~'), '.lbrynet')
-    default_lbryum_dir = os.path.join(os.path.expanduser('~'), '.lbryum')
+
+    try:
+        with open(os.path.join(user_config_dir(), "/user-dirs.dirs"), 'r') as xdg:
+            down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
+            down_dir = re.sub('\$HOME', os.getenv('HOME'), down_dir)
+            default_download_directory = re.sub('\"', "", down_dir)
+    except:
+        default_download_directory = os.getenv('XDG_DOWNLOAD_DIR')
+    finally:
+        if not default_download_directory:
+            default_download_directory = os.path.join(os.getenv('HOME'), 'Downloads')
+
+    default_data_dir = user_data_dir('LBRY')
+    default_lbryum_dir = user_config_dir('LBRY')
 
 ICON_PATH = 'icons' if platform is WINDOWS else 'app.icns'
 
