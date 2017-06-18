@@ -64,7 +64,6 @@ class GetStream(object):
         # fired after the metadata and the first data blob have been downloaded
         self.data_downloading_deferred = defer.Deferred(None)
 
-
     @property
     def download_path(self):
         return os.path.join(self.download_directory, self.downloader.file_name)
@@ -215,7 +214,6 @@ class GetStream(object):
             safe_stop(self.checker)
             raise
 
-
         try:
             yield self.data_downloading_deferred
         except Exception as err:
@@ -224,4 +222,3 @@ class GetStream(object):
             raise
 
         defer.returnValue((self.downloader, self.finished_deferred))
-
