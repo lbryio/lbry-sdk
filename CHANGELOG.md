@@ -13,12 +13,14 @@ at anytime.
   *
 
 ### Changed
-  *
-  *
+  * Linux data folder changed from `.lbrynet` to `~/.local/share/LBRY`
+  * Linux config folder changed from `.lbryum` to `~/.config/LBRY`
+  * Linux downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
 
 ### Fixed
   * Fixed some log messages throwing exceptions
   * Fix shutdown of the blob tracker by Session
+  * Fix default directories to comply to XDG
 
 ### Deprecated
   *
