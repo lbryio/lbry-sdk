@@ -22,6 +22,9 @@ at anytime.
   * Updated lbryum imports
   * Improve error message when resolving a claim fails using the "get" command
   *
+  * Linux data folder changed from `.lbrynet` to `~/.local/share/LBRY`
+  * Linux config folder changed from `.lbryum` to `~/.config/LBRY`
+  * Linux downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
 
 ### Fixed
   * Fixed some log messages throwing exceptions
@@ -29,6 +32,7 @@ at anytime.
   * Fixed claim_new_support docstrings
   * Fixed BlobManager causing functional tests to fail, removed its unneeded manage() loop
   * Increased max_key_fee
+  * Fix default directories to comply to XDG
 
 ### Deprecated
   *
