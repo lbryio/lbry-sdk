@@ -46,14 +46,14 @@ settings_encoders = {
 
 if 'darwin' in sys.platform:
     platform = DARWIN
-    default_download_directory = os.path.expanduser('~/Downloads')
+    default_download_dir = os.path.expanduser('~/Downloads')
     default_data_dir = user_data_dir('LBRY')
     default_lbryum_dir = os.path.expanduser('~/.lbryum')
 elif 'nt' in sys.platform:
     platform = WINDOWS
     from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
 
-    default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
+    default_download_dir = get_path(FOLDERID.Downloads, UserHandle.current)
     default_data_dir = user_data_dir('lbrynet', 'LBRY', roaming=True)
     default_lbryum_dir = user_data_dir('lbryum', 'LBRY', roaming=True)
 else:
@@ -63,12 +63,12 @@ else:
         with open(os.path.join(user_config_dir(), "/user-dirs.dirs"), 'r') as xdg:
             down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
             down_dir = re.sub('\$HOME', os.getenv('HOME'), down_dir)
-            default_download_directory = re.sub('\"', "", down_dir)
+            default_download_dir = re.sub('\"', "", down_dir)
     except:
-        default_download_directory = os.getenv('XDG_DOWNLOAD_DIR')
+        default_download_dir = os.getenv('XDG_DOWNLOAD_DIR')
     finally:
-        if not default_download_directory:
-            default_download_directory = os.path.join(os.getenv('HOME'), 'Downloads')
+        if not default_download_dir:
+            default_download_dir = os.path.join(os.getenv('HOME'), 'Downloads')
 
     default_data_dir = user_data_dir('LBRY')
     default_lbryum_dir = user_config_dir('LBRY')
@@ -173,7 +173,7 @@ ADJUSTABLE_SETTINGS = {
     'default_ui_branch': (str, 'master'),
     'delete_blobs_on_remove': (bool, True),
     'dht_node_port': (int, 4444),
-    'download_directory': (str, default_download_directory),
+    'download_directory': (str, default_download_dir),
     'download_timeout': (int, 180),
     'host_ui': (bool, True),
     'is_generous_host': (bool, True),
