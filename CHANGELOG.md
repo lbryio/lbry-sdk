@@ -13,9 +13,9 @@ at anytime.
   *
 
 ### Changed
-  * Linux data folder changed from `.lbrynet` to `~/.local/share/LBRY`
-  * Linux config folder changed from `.lbryum` to `~/.config/LBRY`
-  * Linux downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
+  * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
+  * Linux folders moved from the home directory to `~/.local/share/LBRY`
+  * Windows folders moved from `%APPDATA%/Roaming/lbry` to `%APPDATA%/Local/LBRY`
 
 ### Fixed
   * Fixed some log messages throwing exceptions

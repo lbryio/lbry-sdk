@@ -54,24 +54,39 @@ elif 'nt' in sys.platform:
     from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
 
     default_download_dir = get_path(FOLDERID.Downloads, UserHandle.current)
-    default_data_dir = user_data_dir('lbrynet', 'LBRY', roaming=True)
-    default_lbryum_dir = user_data_dir('lbryum', 'LBRY', roaming=True)
+
+    # This checks whether the folders are still in their old locations
+    if os.path.isdir(user_data_dir('lbryum', 'lbry', roaming=True)) and \
+       os.path.isdir(user_data_dir('lbrynet', 'lbry', roaming=True)):
+        default_data_dir = user_data_dir('lbrynet', 'lbry', roaming=True)
+        default_lbryum_dir = user_data_dir('lbryum', 'lbry', roaming=True)
+    else:
+        default_data_dir = user_data_dir('lbrynet', 'LBRY')
+        default_lbryum_dir = user_data_dir('lbryum', 'LBRY')
+
 else:
     platform = LINUX
 
-    try:
-        with open(os.path.join(user_config_dir(), "/user-dirs.dirs"), 'r') as xdg:
-            down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
-            down_dir = re.sub('\$HOME', os.getenv('HOME'), down_dir)
-            default_download_dir = re.sub('\"', "", down_dir)
-    except:
-        default_download_dir = os.getenv('XDG_DOWNLOAD_DIR')
-    finally:
-        if not default_download_dir:
-            default_download_dir = os.path.join(os.getenv('HOME'), 'Downloads')
+    # This checks whether the folders are still in their old locations
+    if os.path.isdir(os.path.expanduser('~/.lbrynet')) and \
+       os.path.isdir(os.path.expanduser('~/.lbryum')):
+        default_data_dir = os.path.expanduser('~/.lbrynet')
+        default_lbryum_dir = os.path.expanduser('~/.lbryum')
+        default_download_dir = os.path.expanduser('~/Downloads')
+    else:
+        default_data_dir = user_data_dir('LBRY/lbrynet')
+        default_lbryum_dir = user_data_dir('LBRY/lbryum')
+        try:
+            with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
+                down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
+                down_dir = re.sub('\$HOME', os.getenv('HOME'), down_dir)
+                default_download_dir = re.sub('\"', '', down_dir)
+        except:
+            default_download_dir = os.getenv('XDG_DOWNLOAD_DIR')
 
-    default_data_dir = user_data_dir('LBRY')
-    default_lbryum_dir = user_config_dir('LBRY')
+        if not default_download_dir:
+            default_download_dir = os.path.expanduser('~/Downloads')
+
 
 ICON_PATH = 'icons' if platform is WINDOWS else 'app.icns'
 
