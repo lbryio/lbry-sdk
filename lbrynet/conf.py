@@ -61,9 +61,8 @@ elif 'nt' in sys.platform:
         default_data_dir = user_data_dir('lbrynet', 'lbry', roaming=True)
         default_lbryum_dir = user_data_dir('lbryum', 'lbry', roaming=True)
     else:
-        default_data_dir = user_data_dir('lbrynet', 'LBRY')
-        default_lbryum_dir = user_data_dir('lbryum', 'LBRY')
-
+        default_data_dir = user_data_dir('lbrynet', 'lbry')
+        default_lbryum_dir = user_data_dir('lbryum', 'lbry')
 else:
     platform = LINUX
 
@@ -74,14 +73,14 @@ else:
         default_lbryum_dir = os.path.expanduser('~/.lbryum')
         default_download_dir = os.path.expanduser('~/Downloads')
     else:
-        default_data_dir = user_data_dir('LBRY/lbrynet')
-        default_lbryum_dir = user_data_dir('LBRY/lbryum')
+        default_data_dir = user_data_dir('lbry/lbrynet')
+        default_lbryum_dir = user_data_dir('lbry/lbryum')
         try:
             with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
                 down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
                 down_dir = re.sub('\$HOME', os.getenv('HOME'), down_dir)
                 default_download_dir = re.sub('\"', '', down_dir)
-        except:
+        except EnvironmentError:
             default_download_dir = os.getenv('XDG_DOWNLOAD_DIR')
 
         if not default_download_dir:

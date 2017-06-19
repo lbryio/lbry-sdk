@@ -7,6 +7,7 @@ from twisted.internet import reactor
 from lbrynet import conf
 
 
+conf.initialize_settings()
 log_dir = conf.settings['data_dir']
 LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
 
