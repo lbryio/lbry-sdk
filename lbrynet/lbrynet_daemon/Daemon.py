@@ -2542,6 +2542,49 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(mean_availability)
         defer.returnValue(response)
 
+
+    def jsonrpc_password_set(self, pw, pw_verify, old_pw=None):
+        """
+        Encrypt the wallet with password pw, and pw_verify must equal pw.
+        If wallet encryption passsword was set previously, old_pw
+        must be set to the previous encryption password.
+
+        Usage:
+            password_set (<pw> | --pw=<pw>) (<pw_verify> | --pw_verify=<pw_verify>)
+                         [<old_pw> | --old_pw=<old_pw>]
+
+        Options:
+            <old_pw>, --old_pw=<old_pw>        : old password if password has been set before
+
+        Returns:
+            (bool) True if setting password was succesful, False otherwise
+
+        """
+        pass
+
+
+    def jsonrpc_password_enter(self, pw):
+        """
+        If wallet password has been set with API command password_set,
+        use this command to enter the password. It will attempt to
+        decrypt the wallet with this password and return True if it succeeds.
+
+        If decryption is succesful, it will store the password until the daemon
+        closes for any subsequent operation that require acess to the wallet.
+
+        The daemon will pause startup until this command is used if
+        the password has been set.
+
+        Usage:
+            password_enter (<pw> | --pw=<pw>)
+
+        Returns:
+            (bool) True if the entered password was correct, False otherwise
+
+        """
+        pass
+
+
     @defer.inlineCallbacks
     @AuthJSONRPCServer.flags(a_arg='-a', b_arg='-b')
     def jsonrpc_cli_test_command(self, pos_arg, pos_args=[], pos_arg2=None, pos_arg3=None,
