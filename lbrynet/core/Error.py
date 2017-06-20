@@ -9,6 +9,10 @@ class DuplicateStreamHashError(Exception):
 class DownloadCanceledError(Exception):
     pass
 
+class DownloadTimeoutError(Exception):
+    def __init__(self, download):
+        Exception.__init__(self, 'Failed to download {} within timeout'.format(download))
+        self.download = download
 
 class RequestCanceledError(Exception):
     pass
