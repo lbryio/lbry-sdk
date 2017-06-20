@@ -6,10 +6,10 @@ from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.ConnectionManager import ConnectionManager
 from lbrynet.core.client.DownloadManager import DownloadManager
 from lbrynet.core.Error import InvalidBlobHashError
-from lbrynet.core.utils import is_valid_blobhash
+from lbrynet.core.utils import is_valid_blobhash, safe_start_looping_call, safe_stop_looping_call
 from twisted.python.failure import Failure
 from twisted.internet import defer
-
+from twisted.internet import LoopingCall
 
 log = logging.getLogger(__name__)
 
@@ -34,34 +34,24 @@ class SingleBlobMetadataHandler(object):
 class SingleProgressManager(object):
     def __init__(self, finished_callback, download_manager):
         self.finished_callback = finished_callback
-        self.finished = False
         self.download_manager = download_manager
-        self._next_check_if_finished = None
+
+        self.checker = LoopingCall(self._check_if_finished) 
 
     def start(self):
-
-        from twisted.internet import reactor
-
-        assert self._next_check_if_finished is None
-        self._next_check_if_finished = reactor.callLater(0, self._check_if_finished)
+        safe_start_looping_call(self.checker,1) 
         return defer.succeed(True)
 
     def stop(self):
-        if self._next_check_if_finished is not None:
-            self._next_check_if_finished.cancel()
-            self._next_check_if_finished = None
+        safe_stop_looping_call(self.checker)
         return defer.succeed(True)
 
     def _check_if_finished(self):
-
-        from twisted.internet import reactor
-
-        self._next_check_if_finished = None
-        if self.finished is False:
-            if self.stream_position() == 1:
-                self.blob_downloaded(self.download_manager.blobs[0], 0)
-            else:
-                self._next_check_if_finished = reactor.callLater(1, self._check_if_finished)
+        if self.stream_position() == 1:
+            blob_downloaded = self.download_manager.blobs[0]
+            log.debug("The blob %s has been downloaded. Calling the finished callback", str(blob_downloaded))
+            safe_stop_looping_call(self.checker)
+            self.finished_callback(blob_downloaded)
 
     def stream_position(self):
         blobs = self.download_manager.blobs
@@ -73,15 +63,6 @@ class SingleProgressManager(object):
         blobs = self.download_manager.blobs
         assert len(blobs) == 1
         return [b for b in blobs.itervalues() if not b.is_validated()]
-
-    def blob_downloaded(self, blob, blob_num):
-
-        from twisted.internet import reactor
-
-        log.debug("The blob %s has been downloaded. Calling the finished callback", str(blob))
-        if self.finished is False:
-            self.finished = True
-            reactor.callLater(0, self.finished_callback, blob)
 
 
 class DummyBlobHandler(object):

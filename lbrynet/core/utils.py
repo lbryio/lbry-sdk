@@ -49,6 +49,13 @@ def call_later(delay, func, *args, **kwargs):
     from twisted.internet import reactor
     return reactor.callLater(delay, func, *args, **kwargs)
 
+def safe_start_looping_call(looping_call, interval_sec):
+    if not looping_call.running:
+        looping_call.start(interval_sec)
+
+def safe_stop_looping_call(looping_call):
+    if looping_call.running:
+        looping_call.stop()
 
 def generate_id(num=None):
     h = get_lbry_hash_obj()
