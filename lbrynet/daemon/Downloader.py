@@ -6,6 +6,7 @@ from twisted.internet.task import LoopingCall
 from lbryschema.fee import Fee
 
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, DownloadTimeoutError
+from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
@@ -26,16 +27,6 @@ STREAM_STAGES = [
 
 
 log = logging.getLogger(__name__)
-
-
-def safe_start(looping_call):
-    if not looping_call.running:
-        looping_call.start(1)
-
-
-def safe_stop(looping_call):
-    if looping_call.running:
-        looping_call.stop()
 
 
 class GetStream(object):
@@ -76,7 +67,7 @@ class GetStream(object):
         if stop_condition and not self.data_downloading_deferred.called:
             self.data_downloading_deferred.callback(True)
         if self.data_downloading_deferred.called:
-            safe_stop(self.checker)
+            safe_stop_looping_call(self.checker)
         else:
             log.info("Downloading stream data (%i seconds)", self.timeout_counter)
 
@@ -89,7 +80,7 @@ class GetStream(object):
         if self.timeout_counter >= self.timeout:
             if not self.data_downloading_deferred.called:
                 self.data_downloading_deferred.errback(DownloadTimeoutError(self.file_name))
-            safe_stop(self.checker)
+            safe_stop_looping_call(self.checker)
         else:
             d = self.downloader.status()
             d.addCallback(self._check_status)
@@ -156,7 +147,7 @@ class GetStream(object):
         self.set_status(DOWNLOAD_STOPPED_CODE, name)
         log.info("Finished downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6],
                  self.download_path)
-        safe_stop(self.checker)
+        safe_stop_looping_call(self.checker)
         status = yield self.downloader.status()
         self._check_status(status)
         defer.returnValue(self.download_path)
@@ -211,13 +202,13 @@ class GetStream(object):
 
         yield self._download(sd_blob, name, key_fee)
         self.set_status(DOWNLOAD_RUNNING_CODE, name)
-        safe_start(self.checker)
+        safe_start_looping_call(self.checker, 1)
 
         try:
             yield self.data_downloading_deferred
         except Exception as err:
             self.downloader.stop()
-            safe_stop(self.checker)
+            safe_stop_looping_call(self.checker)
             raise
 
         defer.returnValue((self.downloader, self.finished_deferred))
