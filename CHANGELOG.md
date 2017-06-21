@@ -20,6 +20,7 @@ at anytime.
   * Renamed `lbrynet.lbrynet_daemon` to `lbrynet.daemon`
   * Initialize lbrynet settings when configuring an api client if they are not set yet
   * Updated lbryum imports
+  * Improve error message when resolving a claim fails using the "get" command
   *
 
 ### Fixed
