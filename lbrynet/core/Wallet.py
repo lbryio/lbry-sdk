@@ -22,6 +22,7 @@ from lbryschema.claim import ClaimDict
 from lbryschema.error import DecodeError
 from lbryschema.decode import smart_decode
 
+from lbrynet import conf
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
@@ -29,8 +30,6 @@ from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError, Unk
 from lbrynet.core.Error import UnknownClaimID, UnknownURI
 
 log = logging.getLogger(__name__)
-
-CLAIM_CACHE_TIME = 600
 
 
 class ReservedPoints(object):
@@ -84,8 +83,9 @@ class CachedClaim(object):
         self.nout = nout
 
     def response_dict(self, check_expires=True):
-        if check_expires and (time.time() - int(self.cache_timestamp)) > CLAIM_CACHE_TIME:
-            return
+        if check_expires:
+            if (time.time() - int(self.cache_timestamp)) > conf.settings['cache_time']:
+                return
         claim = {
             "height": self.height,
             "address": self.address,
@@ -370,7 +370,7 @@ class SqliteStorage(MetaDataStorage):
         if result:
             claim_id, certificate_id, last_modified = result[0]
             last_modified = int(last_modified)
-            if check_expire and time.time() - last_modified > CLAIM_CACHE_TIME:
+            if check_expire and time.time() - last_modified > conf.settings['cache_time']:
                 defer.returnValue(None)
             claim = yield self.get_cached_claim(claim_id)
             if claim:

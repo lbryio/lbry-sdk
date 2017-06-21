@@ -41,17 +41,6 @@ def start():
         default=conf.settings['wallet']
     )
     parser.add_argument(
-        "--ui", help="path to custom UI folder", default=None
-    )
-    parser.add_argument(
-        "--branch",
-        help='Branch of lbry-web-ui repo to use, defaults to {}'.format(conf.settings['ui_branch']),
-        default=conf.settings['ui_branch']
-    )
-    parser.add_argument(
-        '--launch-ui', dest='launchui', action="store_true"
-    )
-    parser.add_argument(
         "--http-auth", dest="useauth", action="store_true", default=conf.settings['use_auth_http']
     )
     parser.add_argument(
@@ -93,7 +82,7 @@ def start():
 
     if test_internet_connection():
         analytics_manager = analytics.Manager.new_instance()
-        start_server_and_listen(args.launchui, args.useauth, analytics_manager)
+        start_server_and_listen(args.useauth, analytics_manager)
         reactor.run()
     else:
         log.info("Not connected to internet, unable to start")
@@ -101,28 +90,23 @@ def start():
 
 def update_settings_from_args(args):
     cli_settings = {}
-    if args.ui:
-        cli_settings['local_ui_path'] = args.ui
-    if args.branch:
-        cli_settings['ui_branch'] = args.branch
     cli_settings['use_auth_http'] = args.useauth
     cli_settings['wallet'] = args.wallet
     conf.settings.update(cli_settings, data_types=(conf.TYPE_CLI,))
 
 
 @defer.inlineCallbacks
-def start_server_and_listen(launchui, use_auth, analytics_manager, max_tries=5):
+def start_server_and_listen(use_auth, analytics_manager, max_tries=5):
     """The primary entry point for launching the daemon.
 
     Args:
-        launchui: set to true to open a browser window
         use_auth: set to true to enable http authentication
         analytics_manager: to send analytics
     """
     analytics_manager.send_server_startup()
     daemon_server = DaemonServer(analytics_manager)
     try:
-        yield daemon_server.start(use_auth, launchui)
+        yield daemon_server.start(use_auth)
         analytics_manager.send_server_startup_success()
     except Exception as e:
         log.exception('Failed to startup')
