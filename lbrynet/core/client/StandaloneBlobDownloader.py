@@ -52,7 +52,8 @@ class SingleProgressManager(object):
     def _check_if_finished(self):
         if self.stream_position() == 1:
             blob_downloaded = self.download_manager.blobs[0]
-            log.debug("The blob %s has been downloaded. Calling the finished callback", str(blob_downloaded))
+            log.debug("The blob %s has been downloaded. Calling the finished callback",
+                        str(blob_downloaded))
             safe_stop_looping_call(self.checker)
             self.finished_callback(blob_downloaded)
         elif self.timeout is not None:

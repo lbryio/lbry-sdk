@@ -162,9 +162,8 @@ class GetStream(object):
         defer.returnValue(self.download_path)
 
     @defer.inlineCallbacks
-    def initialize(self, stream_info, name):
+    def _initialize(self, stream_info):
         # Set sd_hash and return key_fee from stream_info
-        self.set_status(INITIALIZING_CODE, name)
         self.sd_hash = stream_info.source_hash
         key_fee = None
         if stream_info.has_fee:
@@ -179,15 +178,15 @@ class GetStream(object):
         defer.returnValue(downloader)
 
     @defer.inlineCallbacks
-    def download(self, name, key_fee):
-        # download sd blob, and start downloader
-        self.set_status(DOWNLOAD_METADATA_CODE, name)
-        sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager, self.timeout)
-        self.downloader = yield self._create_downloader(sd_blob)
+    def _download_sd_blob(self):
+        sd_blob = yield download_sd_blob(self.session, self.sd_hash,
+                                         self.payment_rate_manager, self.timeout)
+        defer.returnValue(sd_blob)
 
-        self.set_status(DOWNLOAD_RUNNING_CODE, name)
-        if key_fee:
-            yield self.pay_key_fee(key_fee, name)
+    @defer.inlineCallbacks
+    def _download(self, sd_blob, name, key_fee):
+        self.downloader = yield self._create_downloader(sd_blob)
+        yield self.pay_key_fee(key_fee, name)
 
         log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
         self.finished_deferred = self.downloader.start()
@@ -204,11 +203,16 @@ class GetStream(object):
             downloader - instance of ManagedEncryptedFileDownloader
             finished_deferred - deferred callbacked when download is finished
         """
-        key_fee = yield self.initialize(stream_info, name)
+        self.set_status(INITIALIZING_CODE, name)
+        key_fee = yield self._initialize(stream_info)
 
-        yield self.download(name, key_fee)
+        self.set_status(DOWNLOAD_METADATA_CODE, name)
+        sd_blob = yield self._download_sd_blob()
 
+        yield self._download(sd_blob, name, key_fee)
+        self.set_status(DOWNLOAD_RUNNING_CODE, name)
         safe_start(self.checker)
+
         try:
             yield self.data_downloading_deferred
         except Exception as err:
