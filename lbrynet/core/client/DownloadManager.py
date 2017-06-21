@@ -1,6 +1,5 @@
 import logging
 from twisted.internet import defer
-from twisted.python import failure
 from zope.interface import implements
 from lbrynet import interfaces
 
@@ -29,37 +28,17 @@ class DownloadManager(object):
         d.addCallback(lambda _: self.resume_downloading())
         return d
 
+    @defer.inlineCallbacks
     def resume_downloading(self):
+        yield self.connection_manager.start()
+        yield self.progress_manager.start()
+        defer.returnValue(True)
 
-        def check_start(result, manager):
-            if isinstance(result, failure.Failure):
-                log.error("Failed to start the %s: %s", manager, result.getErrorMessage())
-                return False
-            return True
-
-        d1 = self.progress_manager.start()
-        d1.addBoth(check_start, "progress manager")
-        d2 = self.connection_manager.start()
-        d2.addBoth(check_start, "connection manager")
-        dl = defer.DeferredList([d1, d2])
-        dl.addCallback(lambda xs: False not in xs)
-        return dl
-
+    @defer.inlineCallbacks
     def stop_downloading(self):
-
-        def check_stop(result, manager):
-            if isinstance(result, failure.Failure):
-                log.error("Failed to stop the %s: %s", manager, result.getErrorMessage())
-                return False
-            return True
-
-        d1 = self.progress_manager.stop()
-        d1.addBoth(check_stop, "progress manager")
-        d2 = self.connection_manager.stop()
-        d2.addBoth(check_stop, "connection manager")
-        dl = defer.DeferredList([d1, d2], consumeErrors=True)
-        dl.addCallback(lambda results: all([success for success, val in results]))
-        return dl
+        yield self.progress_manager.stop()
+        yield self.connection_manager.stop()
+        defer.returnValue(True)
 
     def add_blobs_to_download(self, blob_infos):
 
