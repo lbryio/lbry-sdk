@@ -2402,19 +2402,26 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue("Reflect success")
 
     @defer.inlineCallbacks
+    @AuthJSONRPCServer.flags(needed="-n", finished="-f")
     def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
                           finished=None, page_size=None, page=None):
         """
         Returns blob hashes. If not given filters, returns all blobs known by the blob manager
 
-        Args:
-            'uri' (optional): (str) filter by blobs in stream for winning claim
-            'stream_hash' (optional): (str) filter by blobs in given stream hash
-            'sd_hash' (optional): (str) filter by blobs in given sd hash
-            'needed' (optional): (bool) only return needed blobs
-            'finished' (optional): (bool) only return finished blobs
-            'page_size' (optional): (int) limit number of results returned
-            'page' (optional): (int) filter to page x of [page_size] results
+        Usage:
+            blob_list [-n] [-f] [<uri> | --uri=<uri>] [<stream_hash> | --stream_hash=<stream_hash>]
+                      [<sd_hash> | --sd_hash=<sd_hash>] [<page_size> | --page_size=<page_size>]
+                      [<page> | --page=<page>]
+
+        Options:
+            -n                                          : only return needed blobs
+            -f                                          : only return finished blobs
+            <uri>, --uri=<uri>                          : filter blobs by stream in a uri
+            <stream_hash>, --stream_hash=<stream_hash>  : filter blobs by stream hash
+            <sd_hash>, --sd_hash=<sd_hash>              : filter blobs by sd hash
+            <page_size>, --page_size=<page_size>        : results page size
+            <page>, --page=<page>                       : page of results to return
+
         Returns:
             (list) List of blob hashes
         """
