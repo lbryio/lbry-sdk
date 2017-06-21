@@ -90,11 +90,9 @@ class GetStream(object):
             if not self.data_downloading_deferred.called:
                 self.data_downloading_deferred.errback(Exception("Timeout"))
             safe_stop(self.checker)
-        elif self.downloader:
+        else:
             d = self.downloader.status()
             d.addCallback(self._check_status)
-        else:
-            log.info("Downloading stream descriptor blob (%i seconds)", self.timeout_counter)
 
     def convert_max_fee(self):
         currency, amount = self.max_key_fee['currency'], self.max_key_fee['amount']
@@ -184,7 +182,7 @@ class GetStream(object):
     def download(self, name, key_fee):
         # download sd blob, and start downloader
         self.set_status(DOWNLOAD_METADATA_CODE, name)
-        sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager)
+        sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager, self.timeout)
         self.downloader = yield self._create_downloader(sd_blob)
 
         self.set_status(DOWNLOAD_RUNNING_CODE, name)
@@ -207,15 +205,10 @@ class GetStream(object):
             finished_deferred - deferred callbacked when download is finished
         """
         key_fee = yield self.initialize(stream_info, name)
+
+        yield self.download(name, key_fee)
+
         safe_start(self.checker)
-
-        try:
-            yield self.download(name, key_fee)
-        except Exception as err:
-            safe_stop(self.checker)
-            raise
-
-
         try:
             yield self.data_downloading_deferred
         except Exception as err:

@@ -56,7 +56,7 @@ class SingleProgressManager(object):
             safe_stop_looping_call(self.checker)
             self.finished_callback(blob_downloaded)
         elif self.timeout is not None:
-            self.timeout_counter +=1
+            self.timeout_counter += 1
             if self.timeout_counter >= self.timeout:
                 safe_stop_looping_call(self.checker)
                 self.timeout_callback()
@@ -84,7 +84,7 @@ class DummyBlobHandler(object):
 class StandaloneBlobDownloader(object):
     def __init__(self, blob_hash, blob_manager, peer_finder,
                  rate_limiter, payment_rate_manager, wallet,
-                 timeout = None):
+                 timeout=None):
         self.blob_hash = blob_hash
         self.blob_manager = blob_manager
         self.peer_finder = peer_finder
