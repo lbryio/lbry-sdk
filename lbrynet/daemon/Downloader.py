@@ -5,7 +5,7 @@ from twisted.internet.task import LoopingCall
 
 from lbryschema.fee import Fee
 
-from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
+from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, DownloadTimeoutError
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
@@ -88,7 +88,7 @@ class GetStream(object):
         self.timeout_counter += 1
         if self.timeout_counter >= self.timeout:
             if not self.data_downloading_deferred.called:
-                self.data_downloading_deferred.errback(Exception("Timeout"))
+                self.data_downloading_deferred.errback(DownloadTimeoutError(self.file_name))
             safe_stop(self.checker)
         else:
             d = self.downloader.status()
