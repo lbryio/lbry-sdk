@@ -41,4 +41,5 @@ script:
   - pylint lbrynet
   - PYTHONPATH=. trial tests
   - python -m unittest discover tests/integration
+  - rvm install ruby-2.3.1
   - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
