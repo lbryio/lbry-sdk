@@ -19,6 +19,7 @@ at anytime.
 ### Fixed
   * Fixed some log messages throwing exceptions
   * Fix shutdown of the blob tracker by Session
+  * Fixed claim_new_support docstrings
 
 ### Deprecated
   *

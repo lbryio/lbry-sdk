@@ -1917,7 +1917,7 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             claim_new_support (<name> | --name=<name>) (<claim_id> | --claim_id=<claim_id>)
-                              (<amount> | --amount<amount>)
+                              (<amount> | --amount=<amount>)
 
         Return:
             (dict) Dictionary containing result of the claim
