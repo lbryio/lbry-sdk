@@ -56,10 +56,10 @@ elif 'nt' in sys.platform:
     default_download_dir = get_path(FOLDERID.Downloads, UserHandle.current)
 
     # This checks whether the folders are still in their old locations
-    if os.path.isdir(user_data_dir('lbryum', 'lbry', roaming=True)) and \
-       os.path.isdir(user_data_dir('lbrynet', 'lbry', roaming=True)):
-        default_data_dir = user_data_dir('lbrynet', 'lbry', roaming=True)
-        default_lbryum_dir = user_data_dir('lbryum', 'lbry', roaming=True)
+    if os.path.isdir(user_data_dir('lbryum', roaming=True)) and \
+       os.path.isdir(user_data_dir('lbrynet', roaming=True)):
+        default_data_dir = user_data_dir('lbrynet', roaming=True)
+        default_lbryum_dir = user_data_dir('lbryum', roaming=True)
     else:
         default_data_dir = user_data_dir('lbrynet', 'lbry')
         default_lbryum_dir = user_data_dir('lbryum', 'lbry')

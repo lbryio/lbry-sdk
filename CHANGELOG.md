@@ -27,7 +27,7 @@ at anytime.
   * Linux downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
   * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
   * Linux folders moved from the home directory to `~/.local/share/lbry`
-  * Windows folders moved from `%APPDATA%/Roaming/lbry` to `%APPDATA%/Local/lbry`
+  * Windows folders moved from `%APPDATA%/Roaming` to `%APPDATA%/Local/lbry`
 
 ### Fixed
   * Fixed some log messages throwing exceptions
