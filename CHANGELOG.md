@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Improve error message when resolving a claim fails using the "get" command
   *
 
 ### Fixed
