@@ -17,10 +17,8 @@ from twisted.python.failure import Failure
 from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError
-from lbryschema.fee import Fee
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
-from lbryum.version import LBRYUM_VERSION
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet import conf, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
@@ -170,12 +168,7 @@ class Daemon(AuthJSONRPCServer):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         self.allowed_during_startup = [
             'stop', 'status', 'version',
-            # delete these once they are fully removed:
-            'is_running', 'is_first_run', 'get_time_behind_blockchain', 'daemon_status',
-            'get_start_notice',
         ]
-        conf.settings.set('last_version',
-                          {'lbrynet': get_lbrynet_version(), 'lbryum': LBRYUM_VERSION})
         self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
         if conf.settings['BLOBFILES_DIR'] == "blobfiles":
@@ -183,14 +176,9 @@ class Daemon(AuthJSONRPCServer):
         else:
             log.info("Using non-default blobfiles directory: %s", conf.settings['BLOBFILES_DIR'])
             self.blobfile_dir = conf.settings['BLOBFILES_DIR']
-        self.run_on_startup = conf.settings['run_on_startup']
         self.data_rate = conf.settings['data_rate']
         self.max_key_fee = conf.settings['max_key_fee']
-        self.max_upload = conf.settings['max_upload']
-        self.max_download = conf.settings['max_download']
-        self.search_timeout = conf.settings['search_timeout']
         self.download_timeout = conf.settings['download_timeout']
-        self.max_search_results = conf.settings['max_search_results']
         self.run_reflector_server = conf.settings['run_reflector_server']
         self.wallet_type = conf.settings['wallet']
         self.delete_blobs_on_remove = conf.settings['delete_blobs_on_remove']
@@ -198,14 +186,11 @@ class Daemon(AuthJSONRPCServer):
         self.reflector_port = conf.settings['reflector_port']
         self.dht_node_port = conf.settings['dht_node_port']
         self.use_upnp = conf.settings['use_upnp']
-        self.cache_time = conf.settings['cache_time']
 
         self.startup_status = STARTUP_STAGES[0]
         self.connected_to_internet = True
         self.connection_status_code = None
         self.platform = None
-        self.first_run = None
-        self.log_file = conf.settings.get_log_filename()
         self.current_db_revision = 3
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
@@ -235,7 +220,7 @@ class Daemon(AuthJSONRPCServer):
         self.lbry_file_manager = None
 
     @defer.inlineCallbacks
-    def setup(self, launch_ui):
+    def setup(self):
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
         self._modify_loggly_formatter()
@@ -430,31 +415,27 @@ class Daemon(AuthJSONRPCServer):
 
     def _update_settings(self, settings):
         setting_types = {
-            'run_on_startup': bool,
-            'data_rate': float,
-            'max_key_fee': float,
             'download_directory': str,
-            'max_upload': float,
-            'max_download': float,
+            'data_rate': float,
             'download_timeout': int,
-            'search_timeout': float,
+            'max_key_fee': dict,
+            'use_upnp': bool,
+            'run_reflector_server': bool,
             'cache_time': int,
+            'reflect_uploads': bool,
             'share_usage_data': bool,
+            'peer_search_timeout': int,
+            'sd_download_timeout': int,
         }
-
-        def can_update_key(settings, key, setting_type):
-            return (
-                isinstance(settings[key], setting_type) or
-                (
-                    key == "max_key_fee" and
-                    isinstance(Fee(settings[key]).amount, setting_type)
-                )
-            )
 
         for key, setting_type in setting_types.iteritems():
             if key in settings:
-                if can_update_key(settings, key, setting_type):
+                if isinstance(settings[key], setting_type):
                     conf.settings.update({key: settings[key]},
+                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
+                elif setting_type is dict and isinstance(settings[key], (unicode, str)):
+                    decoded = json.loads(str(settings[key]))
+                    conf.settings.update({key: decoded},
                                          data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
                 else:
                     try:
@@ -463,18 +444,14 @@ class Daemon(AuthJSONRPCServer):
                                              data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
                     except Exception as err:
                         log.warning(err.message)
-                        log.warning("error converting setting '%s' to type %s", key, setting_type)
+                        log.warning("error converting setting '%s' to type %s from type %s", key,
+                                    setting_type, str(type(settings[key])))
         conf.settings.save_conf_file_settings()
 
-        self.run_on_startup = conf.settings['run_on_startup']
         self.data_rate = conf.settings['data_rate']
         self.max_key_fee = conf.settings['max_key_fee']
         self.download_directory = conf.settings['download_directory']
-        self.max_upload = conf.settings['max_upload']
-        self.max_download = conf.settings['max_download']
         self.download_timeout = conf.settings['download_timeout']
-        self.search_timeout = conf.settings['search_timeout']
-        self.cache_time = conf.settings['cache_time']
 
         return defer.succeed(True)
 
@@ -1142,16 +1119,41 @@ class Daemon(AuthJSONRPCServer):
         """
         Set daemon settings
 
-        Args:
-            'run_on_startup': (bool) currently not supported
-            'data_rate': (float) data rate,
-            'max_key_fee': (float) maximum key fee,
-            'download_directory': (str) path of where files are downloaded,
-            'max_upload': (float), currently not supported
-            'max_download': (float), currently not supported
-            'download_timeout': (int) download timeout in seconds
-            'search_timeout': (float) search timeout in seconds
-            'cache_time': (int) cache timeout in seconds
+        Usage:
+            settings_set [<download_directory> | --download_directory=<download_directory>]
+                         [<data_rate> | --data_rate=<data_rate>]
+                         [<download_timeout> | --download_timeout=<download_timeout>]
+                         [<max_key_fee> | --max_key_fee=<max_key_fee>]
+                         [<use_upnp> | --use_upnp=<use_upnp>]
+                         [<run_reflector_server> | --run_reflector_server=<run_reflector_server>]
+                         [<cache_time> | --cache_time=<cache_time>]
+                         [<reflect_uploads> | --reflect_uploads=<reflect_uploads>]
+                         [<share_usage_data> | --share_usage_data=<share_usage_data>]
+                         [<peer_search_timeout> | --peer_search_timeout=<peer_search_timeout>]
+                         [<sd_download_timeout> | --sd_download_timeout=<sd_download_timeout>]
+
+        Options:
+            <download_directory>, --download_directory=<download_directory>  : (str)
+            <data_rate>, --data_rate=<data_rate>                             : (float), 0.0001
+            <download_timeout>, --download_timeout=<download_timeout>        : (int), 180
+            <max_key_fee>, --max_key_fee=<max_key_fee>   : (dict) maximum key fee for downloads,
+                                                            in the format: {
+                                                                "currency": <currency_symbol>,
+                                                                "amount": <amount>
+                                                            }. In the CLI, it must be an escaped
+                                                            JSON string
+                                                            Supported currency symbols:
+                                                                LBC
+                                                                BTC
+                                                                USD
+            <use_upnp>, --use_upnp=<use_upnp>            : (bool), True
+            <run_reflector_server>, --run_reflector_server=<run_reflector_server>  : (bool), False
+            <cache_time>, --cache_time=<cache_time>  : (int), 150
+            <reflect_uploads>, --reflect_uploads=<reflect_uploads>  : (bool), True
+            <share_usage_data>, --share_usage_data=<share_usage_data>  : (bool), True
+            <peer_search_timeout>, --peer_search_timeout=<peer_search_timeout>  : (int), 3
+            <sd_download_timeout>, --sd_download_timeout=<sd_download_timeout>  : (int), 3
+
         Returns:
             (dict) Updated dictionary of daemon settings
         """
@@ -2402,19 +2404,26 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue("Reflect success")
 
     @defer.inlineCallbacks
+    @AuthJSONRPCServer.flags(needed="-n", finished="-f")
     def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
                           finished=None, page_size=None, page=None):
         """
         Returns blob hashes. If not given filters, returns all blobs known by the blob manager
 
-        Args:
-            'uri' (optional): (str) filter by blobs in stream for winning claim
-            'stream_hash' (optional): (str) filter by blobs in given stream hash
-            'sd_hash' (optional): (str) filter by blobs in given sd hash
-            'needed' (optional): (bool) only return needed blobs
-            'finished' (optional): (bool) only return finished blobs
-            'page_size' (optional): (int) limit number of results returned
-            'page' (optional): (int) filter to page x of [page_size] results
+        Usage:
+            blob_list [-n] [-f] [<uri> | --uri=<uri>] [<stream_hash> | --stream_hash=<stream_hash>]
+                      [<sd_hash> | --sd_hash=<sd_hash>] [<page_size> | --page_size=<page_size>]
+                      [<page> | --page=<page>]
+
+        Options:
+            -n                                          : only return needed blobs
+            -f                                          : only return finished blobs
+            <uri>, --uri=<uri>                          : filter blobs by stream in a uri
+            <stream_hash>, --stream_hash=<stream_hash>  : filter blobs by stream hash
+            <sd_hash>, --sd_hash=<sd_hash>              : filter blobs by sd hash
+            <page_size>, --page_size=<page_size>        : results page size
+            <page>, --page=<page>                       : page of results to return
+
         Returns:
             (list) List of blob hashes
         """

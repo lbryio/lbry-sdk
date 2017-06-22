@@ -137,7 +137,6 @@ FIXED_SETTINGS = {
     'PROTOCOL_PREFIX': PROTOCOL_PREFIX,
     'SLACK_WEBHOOK': ('nUE0pUZ6Yl9bo29epl5moTSwnl5wo20ip2IlqzywMKZiIQSFZR5'
                       'AHx4mY0VmF0WQZ1ESEP9kMHZlp1WzJwWOoKN3ImR1M2yUAaMyqGZ='),
-    'SOURCE_TYPES': ['lbry_sd_hash', 'url', 'btih'],
     'WALLET_TYPES': [LBRYUM_WALLET, LBRYCRD_WALLET],
 }
 
@@ -154,40 +153,21 @@ ADJUSTABLE_SETTINGS = {
     # give an attacker access to your wallet and you could lose
     # all of your credits.
     'api_host': (str, 'localhost'),
-
     'api_port': (int, 5279),
     'cache_time': (int, 150),
-    'check_ui_requirements': (bool, True),
     'data_dir': (str, default_data_dir),
     'data_rate': (float, .0001),  # points/megabyte
-    'default_ui_branch': (str, 'master'),
     'delete_blobs_on_remove': (bool, True),
     'dht_node_port': (int, 4444),
     'download_directory': (str, default_download_directory),
     'download_timeout': (int, 180),
-    'host_ui': (bool, True),
     'is_generous_host': (bool, True),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_port),
-
-    # TODO: this should not be configured; move it elsewhere
-    'last_version': (dict, {'lbrynet': '0.0.1', 'lbryum': '0.0.1'}),
-
     'lbryum_wallet_dir': (str, default_lbryum_dir),
-    'local_ui_path': (str, ''),
     'max_connections_per_stream': (int, 5),
-    'max_download': (float, 0.0),
-
-    # TODO: this field is more complicated than it needs to be because
-    # it goes through a Fee validator when loaded by the exchange rate
-    # manager.  Look into refactoring the exchange rate conversion to
-    # take in a simpler form.
-    #
     # TODO: writing json on the cmd line is a pain, come up with a nicer
-    # parser for this data structure. (maybe MAX_KEY_FEE': USD:25
-    'max_key_fee': (json.loads, {'currency': 'USD', 'amount': 25.0, 'address': ''}),
-
-    'max_search_results': (int, 25),
-    'max_upload': (float, 0.0),
+    # parser for this data structure. maybe 'USD:25'
+    'max_key_fee': (json.loads, {'currency': 'USD', 'amount': 25.0}),
     'min_info_rate': (float, .02),  # points/1000 infos
     'min_valuable_hash_rate': (float, .05),  # points/1000 infos
     'min_valuable_info_rate': (float, .05),  # points/1000 infos
@@ -196,15 +176,10 @@ ADJUSTABLE_SETTINGS = {
     'reflector_port': (int, 5566),
     'reflect_uploads': (bool, True),
     'reflector_servers': (list, [('reflector.lbry.io', 5566)], server_port),
-    'run_on_startup': (bool, False),
     'run_reflector_server': (bool, False),
     'sd_download_timeout': (int, 3),
     'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
     'peer_search_timeout': (int, 3),
-    'search_servers': (list, ['lighthouse1.lbry.io:50005']),
-    'search_timeout': (float, 5.0),
-    'startup_scripts': (list, []),
-    'ui_branch': (str, 'master'),
     'use_auth_http': (bool, False),
     'use_upnp': (bool, True),
     'wallet': (str, LBRYUM_WALLET),
