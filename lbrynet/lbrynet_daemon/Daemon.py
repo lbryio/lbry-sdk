@@ -1694,6 +1694,39 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
+    @AuthJSONRPCServer.flags(revoke="-r")
+    def jsonrpc_channel_update(self, name, amount=None, revoke=False):
+        """
+        Update a claim to a channel
+
+        Usage:
+            channel_update (<name> | --name=<name>) [<amount> | --amount=<amount] [-r]
+
+        Options:
+            <amount>, --amount=<amount>  :  the amount to update the channel claim with, defaults
+                                            to the current amount
+            -r                           :  generate a new channel signing key, revoke signatures
+                                            for claims in the channel that were made with the old
+                                            signing key
+
+
+        Returns:
+            (dict) Dictionary containing result of the claim
+            {
+                'tx' : (str) hex encoded transaction
+                'txid' : (str) txid of resulting claim
+                'nout' : (int) nout of the resulting claim
+                'fee' : (float) fee paid for the claim transaction
+                'claim_id' : (str) claim ID of the resulting claim
+            }
+        """
+
+        result = yield self.session.wallet.update_certificate_claim(name, amount, revoke)
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_channel_list_mine(self):
         """
         Get my channels
@@ -1706,6 +1739,31 @@ class Daemon(AuthJSONRPCServer):
         """
 
         result = yield self.session.wallet.channel_list()
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_claim_signature_update(self, name, channel_claim_id):
+        """
+        Update the publisher signature on a claim
+
+        Usage:
+            claim_signature_update (<name> | --name=<name>)
+                                   (<channel_claim_id> | --channel_claim_id=<channel_claim_id>)
+
+        Returns:
+            (dict) Dictionary containing result of the claim
+            {
+                'tx' : (str) hex encoded transaction
+                'txid' : (str) txid of resulting claim
+                'nout' : (int) nout of the resulting claim
+                'fee' : (float) fee paid for the claim transaction
+                'claim_id' : (str) claim ID of the resulting claim
+            }
+        """
+
+        result = yield self.session.wallet.update_claim_signature(name, channel_claim_id)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
