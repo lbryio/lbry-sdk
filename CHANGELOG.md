@@ -9,11 +9,11 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Missing docstring for `blob_list`
   *
 
 ### Changed
-  *
+  * Change `max_key_fee` setting to be a dictionary with values for `currency` and `amount`
   *
 
 ### Fixed
@@ -25,7 +25,7 @@ at anytime.
   *
 
 ### Removed
-  *
+  * Removed unused settings from conf.py and `settings_set`
   *
 
 ## [0.13.1] - 2017-06-15
