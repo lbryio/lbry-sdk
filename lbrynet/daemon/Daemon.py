@@ -1317,20 +1317,21 @@ class Daemon(AuthJSONRPCServer):
     @defer.inlineCallbacks
     def jsonrpc_claim_show(self, txid=None, nout=None, claim_id=None):
         """
-        Resolve claim info from a LBRY name
+        Resolve claim info from txid/nout or with claim ID
 
         Usage:
             claim_show [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
                        [<claim_id> | --claim_id=<claim_id>]
 
         Options:
-            <txid>, --txid=<txid>              : look for claim with this txid
-            <nout>, --nout=<nout>              : look for claim with this nout
+            <txid>, --txid=<txid>              : look for claim with this txid, nout must
+                                                    also be specified
+            <nout>, --nout=<nout>              : look for claim with this nout, txid must
+                                                    also be specified
             <claim_id>, --claim_id=<claim_id>  : look for claim with this claim id
 
         Returns:
-            (dict) Dictionary contaning claim info, (bool) false if claim is not
-                resolvable
+            (dict) Dictionary containing claim info as below,
 
             {
                 'txid': (str) txid of claim
@@ -1341,6 +1342,13 @@ class Daemon(AuthJSONRPCServer):
                 'claim_id': (str) claim ID of claim
                 'supports': (list) list of supports associated with claim
             }
+
+            if claim cannot be resolved, dictionary as below will be returned
+
+            {
+                'error': (str) reason for error
+            }
+
         """
         if claim_id is not None and txid is None and nout is None:
             claim_results = yield self.session.wallet.get_claim_by_claim_id(claim_id)
