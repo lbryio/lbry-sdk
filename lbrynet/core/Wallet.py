@@ -700,11 +700,11 @@ class Wallet(object):
         else:
             log.debug("Refreshing cached claim: %s", claim_id)
             claim = yield self._get_claim_by_claimid(claim_id)
-            result = None
-            if claim:
+            try:
                 result = yield self._handle_claim_result(claim)
-            else:
-                log.warning("Claim does not exist: %s", claim_id)
+            except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
+                result = {'error': err.message}
+
         defer.returnValue(result)
 
     @defer.inlineCallbacks

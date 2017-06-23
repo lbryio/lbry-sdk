@@ -44,7 +44,7 @@ from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError, NoSuchSDHash
-from lbrynet.core.Error import NoSuchStreamHash, UnknownClaimID, UnknownURI
+from lbrynet.core.Error import NoSuchStreamHash
 from lbrynet.core.Error import NullFundsError, NegativeFundsError
 
 log = logging.getLogger(__name__)
@@ -1315,13 +1315,13 @@ class Daemon(AuthJSONRPCServer):
             defer.returnValue(metadata)
 
     @defer.inlineCallbacks
-    def jsonrpc_claim_show(self, name=None, txid=None, nout=None, claim_id=None):
+    def jsonrpc_claim_show(self, txid=None, nout=None, claim_id=None):
         """
         Resolve claim info from a LBRY name
 
         Usage:
-            claim_show <name> [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
-                              [<claim_id> | --claim_id=<claim_id>]
+            claim_show [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
+                       [<claim_id> | --claim_id=<claim_id>]
 
         Options:
             <txid>, --txid=<txid>              : look for claim with this txid
@@ -1342,19 +1342,14 @@ class Daemon(AuthJSONRPCServer):
                 'supports': (list) list of supports associated with claim
             }
         """
-        try:
-            if claim_id:
-                claim_results = yield self.session.wallet.get_claim_by_claim_id(claim_id)
-            elif txid and nout is not None:
-                outpoint = ClaimOutpoint(txid, nout)
-                claim_results = yield self.session.wallet.get_claim_by_outpoint(outpoint)
-            else:
-                claim_results = yield self.session.wallet.resolve(name)
-                if claim_results:
-                    claim_results = claim_results[name]
-            result = format_json_out_amount_as_float(claim_results)
-        except (TypeError, UnknownNameError, UnknownClaimID, UnknownURI):
-            result = False
+        if claim_id is not None and txid is None and nout is None:
+            claim_results = yield self.session.wallet.get_claim_by_claim_id(claim_id)
+        elif txid is not None and nout is not None and claim_id is None:
+            outpoint = ClaimOutpoint(txid, nout)
+            claim_results = yield self.session.wallet.get_claim_by_outpoint(outpoint)
+        else:
+            raise Exception("Must specify either txid/nout, or claim_id")
+        result = format_json_out_amount_as_float(claim_results)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
