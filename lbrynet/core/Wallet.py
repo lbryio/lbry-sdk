@@ -760,7 +760,9 @@ class Wallet(object):
     @defer.inlineCallbacks
     def _handle_claim_result(self, results, update_caches=True):
         if not results:
-            raise UnknownNameError("No results to return")
+            #TODO: cannot determine what name we searched for here
+            # we should fix lbryum commands that return None
+            raise UnknownNameError("")
 
         if 'error' in results:
             if results['error'] in ['name is not claimed', 'claim not found']:
