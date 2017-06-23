@@ -20,6 +20,7 @@ at anytime.
   * Fixed some log messages throwing exceptions
   * Fix shutdown of the blob tracker by Session
   * Fixed claim_new_support docstrings
+  * Fixed BlobManager causing functional tests to fail, removed its unneeded manage() loop
 
 ### Deprecated
   *
