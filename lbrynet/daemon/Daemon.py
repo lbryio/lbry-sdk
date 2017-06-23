@@ -836,7 +836,8 @@ class Daemon(AuthJSONRPCServer):
             size = None
             message = None
 
-        claim = yield self.session.wallet.get_claim(lbry_file.claim_id, check_expire=False)
+        claim = yield self.session.wallet.get_claim_by_claim_id(lbry_file.claim_id,
+                                                                check_expire=False)
 
         if claim and 'value' in claim:
             metadata = claim['value']
@@ -1343,7 +1344,7 @@ class Daemon(AuthJSONRPCServer):
         """
         try:
             if claim_id:
-                claim_results = yield self.session.wallet.get_claim(claim_id)
+                claim_results = yield self.session.wallet.get_claim_by_claim_id(claim_id)
             elif txid and nout is not None:
                 outpoint = ClaimOutpoint(txid, nout)
                 claim_results = yield self.session.wallet.get_claim_by_outpoint(outpoint)

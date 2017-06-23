@@ -693,7 +693,7 @@ class Wallet(object):
         defer.returnValue(results)
 
     @defer.inlineCallbacks
-    def get_claim(self, claim_id, check_expire=True):
+    def get_claim_by_claim_id(self, claim_id, check_expire=True):
         cached_claim = yield self.get_cached_claim(claim_id, check_expire)
         if cached_claim:
             result = cached_claim
