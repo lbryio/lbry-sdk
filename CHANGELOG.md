@@ -9,25 +9,29 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Missing docstring for `blob_list`
   *
 
 ### Changed
+  * Change `max_key_fee` setting to be a dictionary with values for `currency` and `amount`
   * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
   * Linux folders moved from the home directory to `~/.local/share/lbry`
   * Windows folders moved from `%APPDATA%/Roaming` to `%APPDATA%/Local/lbry`
+  *
 
 ### Fixed
   * Fixed some log messages throwing exceptions
   * Fix shutdown of the blob tracker by Session
+  * Fixed claim_new_support docstrings
   * Fix default directories to comply to XDG
+  *
 
 ### Deprecated
   *
   *
 
 ### Removed
-  *
+  * Removed unused settings from conf.py and `settings_set`
   *
 
 ## [0.13.1] - 2017-06-15

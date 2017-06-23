@@ -331,8 +331,8 @@ class AuthJSONRPCServer(AuthorizedBase):
                 request, id_
             )
             return server.NOT_DONE_YET
-        except NotAllowedDuringStartupError as err:
-            log.warning('Function not allowed during startup %s: %s', function_name, err)
+        except NotAllowedDuringStartupError:
+            log.warning('Function not allowed during startup: %s', function_name)
             self._render_error(
                 JSONRPCError("This method is unavailable until the daemon is fully started",
                              code=JSONRPCError.CODE_INVALID_REQUEST),
