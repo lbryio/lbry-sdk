@@ -4,7 +4,7 @@ from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
 from lbryschema.fee import Fee
-from lbrynet.lbrynet_daemon.HttpFileDownloader import HttpDownloader
+from lbrynet.lbrynet_daemon.HttpDownloader import HttpDownloader
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
