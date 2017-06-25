@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 
 
-class TorrentDownloader(object):
+class HttpDownloader(object):
     implements(IStreamDownloader)
 
 
@@ -31,14 +31,11 @@ class TorrentDownloader(object):
         self.download_directory = download_directory
         self.link = link
        	self.file_name = link.split("/")[-1]
-
-
- 
-
-    def start(self):       
+    def start(self):
         log.info("downloading from %s to %s", link, download_directory)
         testfile = urllib.URLopener()
         testfile.retrieve(link, download_directory + "/" + file_name)
         log.info("downloaded from http")
 
-
+     def insufficient_funds(self, err):
+        return self.stop(err=err)
