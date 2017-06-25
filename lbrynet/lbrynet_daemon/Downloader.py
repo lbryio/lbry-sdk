@@ -183,12 +183,14 @@ class GetStream(object):
         defer.returnValue(downloader)
 
     @defer.inlineCallbacks
-    def download(self, name, key_fee):
+    def download(self, name, key_fee, source_type):
         # download sd blob, and start downloader
         self.set_status(DOWNLOAD_METADATA_CODE, name)
-        sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager)
-        self.downloader = yield self._create_downloader(sd_blob)
-
+        if source_type == "lbry_sd_hash":
+            sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager)
+            self.downloader = yield self._create_downloader(sd_blob)
+        elif source_type == "http":
+        elif source_type == "btih":
         self.set_status(DOWNLOAD_RUNNING_CODE, name)
         if key_fee:
             yield self.pay_key_fee(key_fee, name)
@@ -213,7 +215,7 @@ class GetStream(object):
         safe_start(self.checker)
 
         try:
-            yield self.download(name, key_fee)
+            yield self.download(name, key_fee, stream_info.stream.source.sourceType)
         except Exception as err:
             safe_stop(self.checker)
             raise
