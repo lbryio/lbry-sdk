@@ -31,11 +31,13 @@ class HttpDownloader(object):
         self.download_directory = download_directory
         self.link = link
        	self.file_name = link.split("/")[-1]
+        
+    @defer.inlineCallbacks
     def start(self):
         log.info("downloading from %s to %s", link, download_directory)
         testfile = urllib.URLopener()
         testfile.retrieve(link, download_directory + "/" + file_name)
         log.info("downloaded from http")
-
+        
      def insufficient_funds(self, err):
-        return self.stop(err=err)
+        pass
