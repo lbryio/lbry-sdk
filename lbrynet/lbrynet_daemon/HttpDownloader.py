@@ -39,5 +39,7 @@ class HttpDownloader(object):
         testfile.retrieve(link, download_directory + "/" + file_name)
         log.info("downloaded from http")
         
-     def insufficient_funds(self, err):
+    def insufficient_funds(self, err):
+        pass
+    def stop(self):
         pass
