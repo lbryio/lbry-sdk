@@ -190,7 +190,7 @@ class GetStream(object):
             sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager)
             self.downloader = yield self._create_downloader(sd_blob)
         elif source_type == "http":
-        elif source_type == "btih":
+            self.downloader = HttpDownloader(self.download_path, self.sd_hash)
         self.set_status(DOWNLOAD_RUNNING_CODE, name)
         if key_fee:
             yield self.pay_key_fee(key_fee, name)
