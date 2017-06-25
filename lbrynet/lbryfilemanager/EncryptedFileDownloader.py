@@ -176,7 +176,7 @@ class ManagedEncryptedFileDownloaderFactory(object):
         return True
 
     @defer.inlineCallbacks
-    def make_downloader(self, metadata, options, payment_rate_manager, download_directory=None,
+    def make_downloader(self, stream_info, metadata, options, payment_rate_manager, download_directory=None,
                         file_name=None):
         assert len(options) == 1
         data_rate = options[0]
@@ -185,7 +185,7 @@ class ManagedEncryptedFileDownloaderFactory(object):
         if metadata.metadata_source == StreamMetadata.FROM_BLOB:
             yield self.lbry_file_manager.save_sd_blob_hash_to_stream(stream_hash,
                                                                      metadata.source_blob_hash)
-        lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash, payment_rate_manager,
+        lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_info, stream_hash, payment_rate_manager,
                                                                data_rate,
                                                                download_directory, file_name)
         defer.returnValue(lbry_file)
