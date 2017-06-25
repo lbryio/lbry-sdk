@@ -208,7 +208,7 @@ class GetStream(object):
             downloader - instance of ManagedEncryptedFileDownloader
             finished_deferred - deferred callbacked when download is finished
         """
-        self.stream_info = stream_info
+
         key_fee = yield self.initialize(stream_info, name)
         safe_start(self.checker)
 
