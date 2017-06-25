@@ -58,6 +58,7 @@ class GetStream(object):
         self.sd_identifier = sd_identifier
         self.downloader = None
         self.checker = LoopingCall(self.check_status)
+        self.stream_info = None
 
         # fired when the download is complete
         self.finished_deferred = None
@@ -131,6 +132,7 @@ class GetStream(object):
         # TODO: we should use stream_metadata.options.get_downloader_options
         #       instead of hard-coding the options to be [self.data_rate]
         downloader = yield factory.make_downloader(
+            self.stream_info
             stream_metadata,
             [self.data_rate],
             self.payment_rate_manager,
@@ -206,6 +208,7 @@ class GetStream(object):
             downloader - instance of ManagedEncryptedFileDownloader
             finished_deferred - deferred callbacked when download is finished
         """
+        self.stream_info = stream_info
         key_fee = yield self.initialize(stream_info, name)
         safe_start(self.checker)
 
