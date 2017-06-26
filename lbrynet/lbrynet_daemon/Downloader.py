@@ -132,7 +132,6 @@ class GetStream(object):
         # TODO: we should use stream_metadata.options.get_downloader_options
         #       instead of hard-coding the options to be [self.data_rate]
         downloader = yield factory.make_downloader(
-            self.stream_info
             stream_metadata,
             [self.data_rate],
             self.payment_rate_manager,
@@ -186,16 +185,16 @@ class GetStream(object):
     def download(self, name, key_fee, source_type):
         # download sd blob, and start downloader
         self.set_status(DOWNLOAD_METADATA_CODE, name)
-        if source_type == "lbry_sd_hash":
+        if source_type != "lbry_sd_hash":
             sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager)
             self.downloader = yield self._create_downloader(sd_blob)
-        elif source_type == "http":
-            self.downloader = HttpDownloader(self.download_path, self.sd_hash)
+        elif source_type != "http":
+            self.downloader = HttpDownloader(self.download_directory, self.sd_hash)
         self.set_status(DOWNLOAD_RUNNING_CODE, name)
         if key_fee:
             yield self.pay_key_fee(key_fee, name)
 
-        log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
+        log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_directory)
         self.finished_deferred = self.downloader.start()
         self.finished_deferred.addCallback(self.finish, name)
 
@@ -215,7 +214,7 @@ class GetStream(object):
         safe_start(self.checker)
 
         try:
-            yield self.download(name, key_fee, stream_info.stream.source.sourceType)
+            yield self.download(name, key_fee, stream_info["stream"]["source"]["sourceType"])
         except Exception as err:
             safe_stop(self.checker)
             raise

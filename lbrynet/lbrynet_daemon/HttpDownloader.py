@@ -3,7 +3,7 @@ Download LBRY Files from LBRYnet and save them to disk.
 """
 import logging
 import time
-
+import urllib
 from zope.interface import implements
 from twisted.internet import defer
 
@@ -29,14 +29,13 @@ class HttpDownloader(object):
     def __init__(self, download_directory, link):
  
         self.download_directory = download_directory
-        self.link = link
-       	self.file_name = link.split("/")[-1]
+        self.link = link 
         
     @defer.inlineCallbacks
     def start(self):
-        log.info("downloading from %s to %s", link, download_directory)
+        log.info("downloading from %s to %s", self.link, self.download_directory)
         testfile = urllib.URLopener()
-        testfile.retrieve(link, download_directory + "/" + file_name)
+        testfile.retrieve(self.link, self.download_directory + "/" + self.link.split("/")[-1])
         log.info("downloaded from http")
         
     def insufficient_funds(self, err):

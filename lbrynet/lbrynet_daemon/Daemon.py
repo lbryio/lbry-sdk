@@ -646,7 +646,10 @@ class Daemon(AuthJSONRPCServer):
                     lambda _: self.analytics_manager.send_download_finished(download_id,
                                                                             name,
                                                                             claim_dict))
-                result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
+                if hasattr(lbry_file, "rowid"):
+                    result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
+                else:
+		    result = {'result': 'HTTP file downloaded successfully'}
                 del self.streams[claim_id]
             except Exception as err:
                 log.warning('Failed to get %s: %s', name, err)
