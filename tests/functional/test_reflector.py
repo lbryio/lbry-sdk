@@ -15,8 +15,8 @@ from lbrynet.core import StreamDescriptor
 from lbrynet.dht.node import Node
 from lbrynet.lbry_file import EncryptedFileMetadataManager
 from lbrynet.lbry_file.client import EncryptedFileOptions
-from lbrynet.lbryfilemanager import EncryptedFileCreator
-from lbrynet.lbryfilemanager import EncryptedFileManager
+from lbrynet.file_manager import EncryptedFileCreator
+from lbrynet.file_manager import EncryptedFileManager
 
 from tests import mocks
 

@@ -12,7 +12,7 @@ from lbrynet.core.utils import short_hash
 from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaver
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileDownloader
-from lbrynet.lbryfilemanager.EncryptedFileStatusReport import EncryptedFileStatusReport
+from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbry_file.StreamDescriptor import save_sd_info
 from lbrynet.core.Wallet import ClaimOutpoint

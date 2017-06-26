@@ -1,7 +1,7 @@
 from twisted.internet import defer
 from twisted.trial import unittest
-from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
-from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from tests.util import random_lbry_hash
 
 class TestEncryptedFileManager(unittest.TestCase):

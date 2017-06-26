@@ -12,14 +12,14 @@ from Crypto.Hash import MD5
 from lbrynet import conf
 from lbrynet.lbry_file.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
-from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.Session import Session
 from lbrynet.core.server.BlobAvailabilityHandler import BlobAvailabilityHandlerFactory
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
+from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbry_file.StreamDescriptor import get_sd_info
 from twisted.internet import defer, threads, task

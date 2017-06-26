@@ -30,7 +30,7 @@ from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileOpener
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
-from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.lbrynet_daemon.Downloader import GetStream
 from lbrynet.lbrynet_daemon.Publisher import Publisher
 from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
