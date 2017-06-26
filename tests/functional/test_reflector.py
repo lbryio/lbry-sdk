@@ -5,7 +5,7 @@ from twisted.internet import defer, threads, error
 from twisted.trial import unittest
 
 from lbrynet import conf
-from lbrynet import lbryfile
+from lbrynet import lbry_file
 from lbrynet import reflector
 from lbrynet.core import BlobManager
 from lbrynet.core import PeerManager
@@ -13,8 +13,8 @@ from lbrynet.core import RateLimiter
 from lbrynet.core import Session
 from lbrynet.core import StreamDescriptor
 from lbrynet.dht.node import Node
-from lbrynet.lbryfile import EncryptedFileMetadataManager
-from lbrynet.lbryfile.client import EncryptedFileOptions
+from lbrynet.lbry_file import EncryptedFileMetadataManager
+from lbrynet.lbry_file.client import EncryptedFileOptions
 from lbrynet.lbryfilemanager import EncryptedFileCreator
 from lbrynet.lbryfilemanager import EncryptedFileManager
 
@@ -95,10 +95,10 @@ class TestReflector(unittest.TestCase):
 
         def verify_stream_descriptor_file(stream_hash):
             self.stream_hash = stream_hash
-            d = lbryfile.get_sd_info(self.lbry_file_manager.stream_info_manager, stream_hash, True)
+            d = lbry_file.get_sd_info(self.lbry_file_manager.stream_info_manager, stream_hash, True)
             d.addCallback(verify_equal)
             d.addCallback(
-                lambda _: lbryfile.publish_sd_blob(
+                lambda _: lbry_file.publish_sd_blob(
                     self.lbry_file_manager.stream_info_manager,
                     self.session.blob_manager, stream_hash
                 )

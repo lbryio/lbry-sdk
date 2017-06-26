@@ -1,7 +1,7 @@
 import os.path
 from twisted.trial import unittest
 from twisted.internet import defer
-from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaver
+from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaver
 
 
 

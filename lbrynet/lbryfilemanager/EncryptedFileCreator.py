@@ -8,7 +8,7 @@ import os
 from lbrynet.core.StreamDescriptor import PlainStreamDescriptorWriter
 from lbrynet.cryptstream.CryptStreamCreator import CryptStreamCreator
 from lbrynet import conf
-from lbrynet.lbryfile.StreamDescriptor import get_sd_info
+from lbrynet.lbry_file.StreamDescriptor import get_sd_info
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from twisted.protocols.basic import FileSender
 

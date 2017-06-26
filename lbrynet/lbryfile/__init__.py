@@ -1,2 +1,0 @@
-from lbrynet.lbryfile.StreamDescriptor import get_sd_info
-from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob

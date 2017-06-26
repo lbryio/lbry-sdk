@@ -13,7 +13,7 @@ from lbrynet.reflector.reupload import reflect_stream
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
+from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.cryptstream.client.CryptStreamDownloader import CurrentlyStoppingError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
