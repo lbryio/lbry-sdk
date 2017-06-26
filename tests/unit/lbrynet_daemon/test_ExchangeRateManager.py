@@ -1,5 +1,5 @@
 from lbryschema.fee import Fee
-from lbrynet.lbrynet_daemon import ExchangeRateManager
+from lbrynet.daemon import ExchangeRateManager
 from lbrynet.core.Error import InvalidExchangeRateResponse
 
 from twisted.trial import unittest

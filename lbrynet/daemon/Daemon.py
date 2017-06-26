@@ -31,10 +31,10 @@ from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_id
 from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.lbrynet_daemon.Downloader import GetStream
-from lbrynet.lbrynet_daemon.Publisher import Publisher
-from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
-from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
+from lbrynet.daemon.Downloader import GetStream
+from lbrynet.daemon.Publisher import Publisher
+from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
+from lbrynet.daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core import log_support, utils, system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob

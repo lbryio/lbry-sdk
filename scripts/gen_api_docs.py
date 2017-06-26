@@ -9,7 +9,7 @@ import os.path as op
 import re
 import sys
 
-from lbrynet.lbrynet_daemon.Daemon import Daemon
+from lbrynet.daemon.Daemon import Daemon
 
 
 def _name(obj):

@@ -5,7 +5,7 @@ import os
 import base64
 import json
 
-from lbrynet.lbrynet_daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
+from lbrynet.daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
 from lbrynet import conf
 from jsonrpc.proxy import JSONRPCProxy
 

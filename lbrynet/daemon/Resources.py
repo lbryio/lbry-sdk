@@ -11,7 +11,7 @@ from twisted.web import server, static, resource
 from twisted.internet import defer, error
 
 from lbrynet import conf
-from lbrynet.lbrynet_daemon.FileStreamer import EncryptedFileStreamer
+from lbrynet.daemon.FileStreamer import EncryptedFileStreamer
 
 # TODO: omg, this code is essentially duplicated in Daemon
 

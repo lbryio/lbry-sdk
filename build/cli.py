@@ -1,4 +1,4 @@
-from lbrynet.lbrynet_daemon import DaemonCLI
+from lbrynet.daemon import DaemonCLI
 import logging
 
 logging.basicConfig()
