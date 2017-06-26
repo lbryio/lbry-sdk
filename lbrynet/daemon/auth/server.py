@@ -15,8 +15,8 @@ from traceback import format_exc
 from lbrynet import conf
 from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
-from lbrynet.lbrynet_daemon.auth.util import APIKey, get_auth_message
-from lbrynet.lbrynet_daemon.auth.client import LBRY_SECRET
+from lbrynet.daemon.auth.util import APIKey, get_auth_message
+from lbrynet.daemon.auth.client import LBRY_SECRET
 from lbrynet.undecorated import undecorated
 
 log = logging.getLogger(__name__)

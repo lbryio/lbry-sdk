@@ -6,7 +6,7 @@ from twisted.internet import defer
 
 from lbrynet.core import PTCWallet
 from lbrynet.core import BlobAvailability
-from lbrynet.lbrynet_daemon import ExchangeRateManager as ERM
+from lbrynet.daemon import ExchangeRateManager as ERM
 from lbrynet import conf
 
 KB = 2**10

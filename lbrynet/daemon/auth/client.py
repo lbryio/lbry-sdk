@@ -5,7 +5,7 @@ import os
 import base64
 import json
 
-from lbrynet.lbrynet_daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
+from lbrynet.daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
 from lbrynet import conf
 from jsonrpc.proxy import JSONRPCProxy
 
@@ -158,5 +158,7 @@ class AuthAPIClient(object):
 class LBRYAPIClient(object):
     @staticmethod
     def get_client():
+        if not conf.settings:
+            conf.initialize_settings()
         return AuthAPIClient.config() if conf.settings['use_auth_http'] else \
             JSONRPCProxy.from_url(conf.settings.get_api_connection_string())

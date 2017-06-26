@@ -2,7 +2,7 @@ import tempfile
 import shutil
 from twisted.trial import unittest
 from twisted.internet import defer
-from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
+from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.core import utils
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 from lbrynet.core.Error import NoSuchStreamHash

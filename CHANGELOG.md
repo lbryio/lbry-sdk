@@ -10,11 +10,14 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Missing docstring for `blob_list`
-  *
+  * Added convenient import for setting up a daemon client, `from lbrynet.daemon import get_client`
 
 ### Changed
   * Change `max_key_fee` setting to be a dictionary with values for `currency` and `amount`
-  *
+  * Renamed `lbrynet.lbryfile` to `lbrynet.lbry_file`
+  * Renamed `lbrynet.lbryfilemanager` to `lbrynet.file_manager`
+  * Renamed `lbrynet.lbrynet_daemon` to `lbrynet.daemon`
+  * Initialize lbrynet settings when configuring an api client if they are not set yet
 
 ### Fixed
   * Fixed some log messages throwing exceptions

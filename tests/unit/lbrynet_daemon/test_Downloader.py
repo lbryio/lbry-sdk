@@ -7,13 +7,13 @@ from twisted.internet import defer
 from lbryschema.claim import ClaimDict
 
 from lbrynet.core import Session, PaymentRateManager, Wallet
-from lbrynet.lbrynet_daemon import Downloader
+from lbrynet.daemon import Downloader
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier,StreamMetadata
-from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.core.HashBlob import TempBlob
 from lbrynet.core.BlobManager import TempBlobManager
-from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
+from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
+from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
 
 from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 from tests.mocks import ExchangeRateManager as DummyExchangeRateManager

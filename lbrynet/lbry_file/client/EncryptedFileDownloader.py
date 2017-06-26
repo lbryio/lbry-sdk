@@ -3,12 +3,12 @@ import binascii
 
 from zope.interface import implements
 
-from lbrynet.lbryfile.StreamDescriptor import save_sd_info
+from lbrynet.lbry_file.StreamDescriptor import save_sd_info
 from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.interfaces import IStreamDownloaderFactory
-from lbrynet.lbryfile.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
+from lbrynet.lbry_file.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
 import os
 from twisted.internet import defer, threads, reactor
 from twisted.python.procutils import which

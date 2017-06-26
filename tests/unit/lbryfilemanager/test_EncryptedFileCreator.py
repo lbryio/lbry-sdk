@@ -9,8 +9,8 @@ from twisted.trial import unittest
 from lbrynet.core import BlobManager
 from lbrynet.core import Session
 from lbrynet.core.server import DHTHashAnnouncer
-from lbrynet.lbryfilemanager import EncryptedFileCreator
-from lbrynet.lbryfilemanager import EncryptedFileManager
+from lbrynet.file_manager import EncryptedFileCreator
+from lbrynet.file_manager import EncryptedFileManager
 
 from tests import mocks
 
