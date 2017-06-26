@@ -185,10 +185,10 @@ class GetStream(object):
     def download(self, name, key_fee, source_type):
         # download sd blob, and start downloader
         self.set_status(DOWNLOAD_METADATA_CODE, name)
-        if source_type != "lbry_sd_hash":
+        if source_type == "lbry_sd_hash":
             sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager)
             self.downloader = yield self._create_downloader(sd_blob)
-        elif source_type != "http":
+        elif source_type == "http":
             self.downloader = HttpDownloader(self.download_directory, self.sd_hash)
         self.set_status(DOWNLOAD_RUNNING_CODE, name)
         if key_fee:
