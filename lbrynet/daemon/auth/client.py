@@ -158,5 +158,7 @@ class AuthAPIClient(object):
 class LBRYAPIClient(object):
     @staticmethod
     def get_client():
+        if not conf.settings:
+            conf.initialize_settings()
         return AuthAPIClient.config() if conf.settings['use_auth_http'] else \
             JSONRPCProxy.from_url(conf.settings.get_api_connection_string())
