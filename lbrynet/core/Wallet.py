@@ -12,9 +12,10 @@ from collections import defaultdict, deque
 from zope.interface import implements
 from decimal import Decimal
 
-from lbryum import SimpleConfig, Network
-from lbryum.lbrycrd import COIN
 import lbryum.wallet
+from lbryum.network import Network
+from lbryum.simple_config import SimpleConfig
+from lbryum.constants import COIN
 from lbryum.commands import known_commands, Commands
 
 from lbryschema.uri import parse_lbry_uri

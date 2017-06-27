@@ -4,11 +4,10 @@ import subprocess
 import os
 
 from urllib2 import urlopen
-
+from lbryschema import __version__ as lbryschema_version
+from lbryum import __version__ as LBRYUM_VERSION
 from lbrynet import build_type, __version__ as lbrynet_version
 from lbrynet.conf import ROOT_DIR
-from lbryum.version import LBRYUM_VERSION
-from lbryschema import __version__ as lbryschema_version
 
 
 def get_lbrynet_version():

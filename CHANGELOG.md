@@ -18,6 +18,8 @@ at anytime.
   * Renamed `lbrynet.lbryfilemanager` to `lbrynet.file_manager`
   * Renamed `lbrynet.lbrynet_daemon` to `lbrynet.daemon`
   * Initialize lbrynet settings when configuring an api client if they are not set yet
+  * Updated lbryum imports
+  *
 
 ### Fixed
   * Fixed some log messages throwing exceptions
