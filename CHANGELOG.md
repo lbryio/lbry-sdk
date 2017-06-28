@@ -10,13 +10,18 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Missing docstring for `blob_list`
-  *
+  * Added convenient import for setting up a daemon client, `from lbrynet.daemon import get_client`
 
 ### Changed
   * Change `max_key_fee` setting to be a dictionary with values for `currency` and `amount`
   * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
   * Linux folders moved from the home directory to `~/.local/share/lbry`
   * Windows folders moved from `%APPDATA%/Roaming` to `%APPDATA%/Local/lbry`
+  * Renamed `lbrynet.lbryfile` to `lbrynet.lbry_file`
+  * Renamed `lbrynet.lbryfilemanager` to `lbrynet.file_manager`
+  * Renamed `lbrynet.lbrynet_daemon` to `lbrynet.daemon`
+  * Initialize lbrynet settings when configuring an api client if they are not set yet
+  * Updated lbryum imports
   *
 
 ### Fixed
@@ -25,6 +30,8 @@ at anytime.
   * Fixed claim_new_support docstrings
   * Fix default directories to comply to XDG
   *
+  * Fixed BlobManager causing functional tests to fail, removed its unneeded manage() loop
+  * Increased max_key_fee
 
 ### Deprecated
   *

@@ -7,8 +7,8 @@ from twisted.trial import unittest
 from lbryschema.decode import smart_decode
 from lbrynet import conf
 from lbrynet.core import Session, PaymentRateManager, Wallet
-from lbrynet.lbrynet_daemon.Daemon import Daemon as LBRYDaemon
-from lbrynet.lbrynet_daemon import ExchangeRateManager
+from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
+from lbrynet.daemon import ExchangeRateManager
 
 from tests import util
 from tests.mocks import mock_conf_settings, FakeNetwork

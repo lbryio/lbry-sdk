@@ -9,8 +9,8 @@ from jsonrpc.proxy import JSONRPCProxy
 from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils, system_info
-from lbrynet.lbrynet_daemon.auth.client import LBRYAPIClient
-from lbrynet.lbrynet_daemon.DaemonServer import DaemonServer
+from lbrynet.daemon.auth.client import LBRYAPIClient
+from lbrynet.daemon.DaemonServer import DaemonServer
 
 log = logging.getLogger(__name__)
 

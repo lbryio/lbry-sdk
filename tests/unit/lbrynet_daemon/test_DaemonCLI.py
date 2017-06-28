@@ -1,5 +1,5 @@
 from twisted.trial import unittest
-from lbrynet.lbrynet_daemon import DaemonCLI
+from lbrynet.daemon import DaemonCLI
 
 
 class DaemonCLITests(unittest.TestCase):

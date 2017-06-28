@@ -6,8 +6,8 @@ from docopt import docopt
 from collections import OrderedDict
 from lbrynet import conf
 from lbrynet.core import utils
-from lbrynet.lbrynet_daemon.auth.client import JSONRPCException, LBRYAPIClient
-from lbrynet.lbrynet_daemon.Daemon import LOADING_WALLET_CODE, Daemon
+from lbrynet.daemon.auth.client import JSONRPCException, LBRYAPIClient
+from lbrynet.daemon.Daemon import LOADING_WALLET_CODE, Daemon
 from lbrynet.core.system_info import get_platform
 from jsonrpc.common import RPCError
 from urllib2 import URLError, HTTPError

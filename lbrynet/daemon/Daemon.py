@@ -25,16 +25,16 @@ from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 
-from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileSaverFactory
-from lbrynet.lbryfile.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
-from lbrynet.lbryfile.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbryfile.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
-from lbrynet.lbryfile.StreamDescriptor import EncryptedFileStreamType
-from lbrynet.lbryfilemanager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.lbrynet_daemon.Downloader import GetStream
-from lbrynet.lbrynet_daemon.Publisher import Publisher
-from lbrynet.lbrynet_daemon.ExchangeRateManager import ExchangeRateManager
-from lbrynet.lbrynet_daemon.auth.server import AuthJSONRPCServer
+from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
+from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
+from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
+from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
+from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.daemon.Downloader import GetStream
+from lbrynet.daemon.Publisher import Publisher
+from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
+from lbrynet.daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core import log_support, utils, system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob

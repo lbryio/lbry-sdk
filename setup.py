@@ -21,7 +21,7 @@ requires = [
     'envparse',
     'jsonrpc',
     'jsonschema',
-    'lbryum==3.0.1',
+    'lbryum==3.1.0',
     'lbryschema==0.0.7',
     'miniupnpc',
     'pycrypto',
@@ -35,8 +35,8 @@ requires = [
 ]
 
 console_scripts = [
-    'lbrynet-daemon = lbrynet.lbrynet_daemon.DaemonControl:start',
-    'lbrynet-cli = lbrynet.lbrynet_daemon.DaemonCLI:main'
+    'lbrynet-daemon = lbrynet.daemon.DaemonControl:start',
+    'lbrynet-cli = lbrynet.daemon.DaemonCLI:main'
 ]
 
 
@@ -62,7 +62,6 @@ setup(
     long_description=long_description,
     keywords="lbry protocol media",
     license='MIT',
-
     packages=find_packages(base_dir, exclude=['tests']),
     install_requires=requires,
     entry_points={'console_scripts': console_scripts},

@@ -7,8 +7,8 @@ from lbryschema.fee import Fee
 
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet.lbryfilemanager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
+from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet import conf
 
 INITIALIZING_CODE = 'initializing'

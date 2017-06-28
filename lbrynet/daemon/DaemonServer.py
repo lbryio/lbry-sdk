@@ -6,11 +6,11 @@ from twisted.internet import defer, reactor, error
 from twisted.cred import portal
 
 from lbrynet import conf
-from lbrynet.lbrynet_daemon.Daemon import Daemon
-from lbrynet.lbrynet_daemon.Resources import LBRYindex, HostedEncryptedFile, EncryptedFileUpload
-from lbrynet.lbrynet_daemon.auth.auth import PasswordChecker, HttpPasswordRealm
-from lbrynet.lbrynet_daemon.auth.util import initialize_api_key_file
-from lbrynet.lbrynet_daemon.DaemonRequest import DaemonRequest
+from lbrynet.daemon.Daemon import Daemon
+from lbrynet.daemon.Resources import LBRYindex, HostedEncryptedFile, EncryptedFileUpload
+from lbrynet.daemon.auth.auth import PasswordChecker, HttpPasswordRealm
+from lbrynet.daemon.auth.util import initialize_api_key_file
+from lbrynet.daemon.DaemonRequest import DaemonRequest
 
 
 log = logging.getLogger(__name__)

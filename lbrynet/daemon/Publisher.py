@@ -5,8 +5,8 @@ import os
 from twisted.internet import defer
 
 from lbrynet.core import file_utils
-from lbrynet.lbryfilemanager.EncryptedFileCreator import create_lbry_file
-from lbrynet.lbryfile.StreamDescriptor import publish_sd_blob
+from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
+from lbrynet.lbry_file.StreamDescriptor import publish_sd_blob
 
 
 log = logging.getLogger(__name__)
