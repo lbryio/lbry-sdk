@@ -16,6 +16,15 @@ class CryptBlobInfo(BlobInfo):
 
 class StreamBlobDecryptor(object):
     def __init__(self, blob, key, iv, length):
+        """
+        This class decrypts blob
+
+        blob - object which implements read() function.
+        key = encryption_key
+        iv = initialization vector
+        blob_num = blob number (has no effect on encryption)
+        length = length in bytes of blob
+        """
         self.blob = blob
         self.key = key
         self.iv = iv
@@ -25,6 +34,12 @@ class StreamBlobDecryptor(object):
         self.cipher = AES.new(self.key, AES.MODE_CBC, self.iv)
 
     def decrypt(self, write_func):
+        """
+        Decrypt blob and write its content useing write_func
+
+        write_func - function that takes decrypted string as
+            arugment and writes it somewhere
+        """
 
         def remove_padding(data):
             pad_len = ord(data[-1])
@@ -55,8 +70,16 @@ class StreamBlobDecryptor(object):
 
 
 class CryptStreamBlobMaker(object):
-    """This class encrypts data and writes it to a new blob"""
     def __init__(self, key, iv, blob_num, blob):
+        """
+        This class encrypts data and writes it to a new blob
+
+        key = encryption_key
+        iv = initialization vector
+        blob_num = blob number (has no effect on encryption)
+        blob = object which implements write(), close() function , close() function must
+            be a deferred. (Will generally be of HashBlobCreator type)
+        """
         self.key = key
         self.iv = iv
         self.blob_num = blob_num
@@ -66,6 +89,14 @@ class CryptStreamBlobMaker(object):
         self.length = 0
 
     def write(self, data):
+        """
+        encrypt and write string data
+
+        Returns:
+        tuple (done, num_bytes_to_write) where done is True if
+        max bytes are written. num_bytes_to_write is the number
+        of bytes that will be written from data in this call
+        """
         max_bytes_to_write = conf.settings['BLOB_SIZE'] - self.length - 1
         done = False
         if max_bytes_to_write <= len(data):
