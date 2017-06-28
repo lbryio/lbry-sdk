@@ -29,7 +29,6 @@ at anytime.
   * Fix shutdown of the blob tracker by Session
   * Fixed claim_new_support docstrings
   * Fix default directories to comply to XDG
-  *
   * Fixed BlobManager causing functional tests to fail, removed its unneeded manage() loop
   * Increased max_key_fee
 
