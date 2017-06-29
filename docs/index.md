@@ -449,7 +449,8 @@ Args:
     'thumbnail'(optional): (str) thumbnail URL for the file
     'preview'(optional): (str) preview URL for the file
     'nsfw'(optional): (bool) True if not safe for work
-    'sources'(optional): (dict){'lbry_sd_hash':sd_hash} specifies sd hash of file
+    'sources'(optional): (dict) {'source': source} specifies source of file. Source
+                          can be a lbry_sd_hash, http url, or a btih hash.
     'channel_name' (optional): (str) name of the publisher channel
 
 Returns:
@@ -754,4 +755,3 @@ Args:
 Returns:
     (str) Unused wallet address in base58
 ```
-

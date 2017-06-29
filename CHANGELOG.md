@@ -12,6 +12,8 @@ at anytime.
   * Missing docstring for `blob_list`
   * Added convenient import for setting up a daemon client, `from lbrynet.daemon import get_client`
   * Added unit tests for CryptBlob.py
+  * Add support for publishing source types `btih` and `http`
+  *
 
 ### Changed
   * Change `max_key_fee` setting to be a dictionary with values for `currency` and `amount`

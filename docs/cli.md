@@ -594,8 +594,9 @@ Options:
     --license_url=<license_url>    : publication license url
     --thumbnail=<thumbnail>        : thumbnail url
     --preview=<preview>            : preview url
-    --nsfw=<nsfw>                  : title of the publication
-    --sources=<sources>            : {'lbry_sd_hash':sd_hash} specifies sd hash of file
+    --nsfw=<nsfw>                  : mark as nsfw (not safe for work)
+    --sources=<sources>            : {'source': source} specifies source of file. Source
+                                     can be a lbry_sd_hash, http url, or a btih hash.
     --channel_name=<channel_name>  : name of the publisher channel name in the wallet
     --channel_id=<channel_id>      : claim id of the publisher channel, does not check
                                      for channel claim being in the wallet. This allows
@@ -956,4 +957,3 @@ Usage:
 Returns:
     (str) Unused wallet address in base58
 ```
-
