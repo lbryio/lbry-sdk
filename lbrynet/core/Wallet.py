@@ -1000,7 +1000,7 @@ class Wallet(object):
         return self._get_claim_metadata_for_sd_hash(sd_hash)
 
     def get_balance(self):
-        return self.wallet_balance - self.total_reserved_points - sum(self.queued_payments.values())
+        return self._update_balance()
 
     def _check_expected_balances(self):
         now = datetime.datetime.now()
