@@ -1,11 +1,12 @@
 import logging
 import mimetypes
 import os
+import re
 
 from twisted.internet import defer
 
 from lbrynet.core import file_utils
-from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
+from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file, hexlify
 from lbrynet.lbry_file.StreamDescriptor import publish_sd_blob
 
 
@@ -54,6 +55,42 @@ class Publisher(object):
     @defer.inlineCallbacks
     def publish_stream(self, name, bid, claim_dict, claim_address=None, change_address=None):
         """Make a claim without creating a lbry file"""
+        log.info('Starting publish for %s', name)
+
+        source = claim_dict['stream']['source'].get('source', None)
+        source_type = claim_dict['stream']['source'].get('sourceType', None)
+        content_type = claim_dict['stream']['source'].get('contentType', 'application/octet-stream')
+        version = claim_dict['stream']['source'].get('version', '_0_0_1')
+
+        if source is None:
+            raise Exception("Cannot publish a stream with no source")
+
+        if source_type is None:
+            lbry_sd_hash_re = r'^[a-f0-9]{96}$'
+            http_re = r'^https?://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]'
+            btih_re = r'^[a-f0-9]{40}$'
+
+            lbry_sd_hash = re.findall(lbry_sd_hash_re, source)
+            http = re.findall(http_re, source)
+            btih = re.findall(btih_re, source.lower())
+
+            if len(lbry_sd_hash) == 1:
+                source_type = "lbry_sd_hash"
+            elif len(btih) == 1:
+                source_type = "btih"
+            elif len(http) == 1:
+                source_type = "http"
+            else:
+                raise Exception("Unknown source type")
+
+        if source_type == "btih" or source_type == "http":
+            source = hexlify(source)
+
+        claim_dict['stream']['source']['source'] = source
+        claim_dict['stream']['source']['sourceType'] = source_type
+        claim_dict['stream']['source']['contentType'] = content_type
+        claim_dict['stream']['source']['version'] = version
+
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
         defer.returnValue(claim_out)
 
