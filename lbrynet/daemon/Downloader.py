@@ -128,10 +128,7 @@ class GetStream(object):
 
     def _pay_key_fee(self, address, fee_lbc, name):
         log.info("Pay key fee %f --> %s", fee_lbc, address)
-        reserved_points = self.wallet.reserve_points(address, fee_lbc)
-        if reserved_points is None:
-            raise InsufficientFundsError('Unable to pay the key fee of %s for %s' % (fee_lbc, name))
-        return self.wallet.send_points_to_address(reserved_points, fee_lbc)
+        return self.wallet.send_amount_to_address(fee_lbc, address)
 
     @defer.inlineCallbacks
     def pay_key_fee(self, fee, name):

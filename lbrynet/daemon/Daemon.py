@@ -2243,10 +2243,7 @@ class Daemon(AuthJSONRPCServer):
         elif not amount:
             raise NullFundsError()
 
-        reserved_points = self.session.wallet.reserve_points(address, amount)
-        if reserved_points is None:
-            raise InsufficientFundsError()
-        yield self.session.wallet.send_points_to_address(reserved_points, amount)
+        yield self.session.wallet.send_amount_to_address(amount, address)
         self.analytics_manager.send_credits_sent()
         defer.returnValue(True)
 

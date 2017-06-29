@@ -601,6 +601,20 @@ class Wallet(object):
                   str(address))
         return defer.succeed(True)
 
+    def send_amount_to_address(self, amount, address):
+        """
+        Send a payment of amount to address
+
+        @param amount : amount to send in lbry credits
+
+        @param address: address to send to
+
+        @return: txid if successful , Exception will be thrown otherwise
+        """
+        rounded_amount = Decimal(str(round(amount, 8)))
+        d = self._do_send_many({address:rounded_amount})
+        return d
+
     def add_expected_payment(self, peer, amount):
         """Increase the number of points expected to be paid by a peer"""
         rounded_amount = Decimal(str(round(amount, 8)))
@@ -1379,6 +1393,11 @@ class LBRYumWallet(Wallet):
         defer.returnValue(txid)
 
     def _do_send_many(self, payments_to_send):
+        """
+        Send transactions from wallet
+
+        payment_to_send - dictionary where key is address, value is amount in lbry credits
+        """
         def broadcast_send_many(paytomany_out):
             if 'hex' not in paytomany_out:
                 raise Exception('Unexpected paytomany output:{}'.format(paytomany_out))
