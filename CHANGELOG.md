@@ -24,7 +24,6 @@ at anytime.
   * Initialize lbrynet settings when configuring an api client if they are not set yet
   * Updated lbryum imports
   * Improve error message when resolving a claim fails using the "get" command
-  *
 
 ### Fixed
   * Fixed some log messages throwing exceptions
@@ -40,7 +39,7 @@ at anytime.
 
 ### Removed
   * Removed unused settings from conf.py and `settings_set`
-  *
+  * Removed download_directory argument from API command get
 
 ## [0.13.1] - 2017-06-15
 
