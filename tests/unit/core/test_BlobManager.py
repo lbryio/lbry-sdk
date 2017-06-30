@@ -110,4 +110,4 @@ class BlobManagerTest(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(self.blob_dir,blob_hashes[-1])))
 
  
-        blob._close_writer(blob.writers[self.peer])
+        blob._close_writer(blob.writers[self.peer][0])
