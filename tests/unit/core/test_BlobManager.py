@@ -109,5 +109,5 @@ class BlobManagerTest(unittest.TestCase):
         self.assertTrue(blob_hashes[-1] in blobs)
         self.assertTrue(os.path.isfile(os.path.join(self.blob_dir,blob_hashes[-1])))
 
-        # call write so that it will close
-        yield write('test')
+ 
+        blob._close_writer(blob.writers[self.peer])
