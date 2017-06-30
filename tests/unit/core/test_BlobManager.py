@@ -100,8 +100,8 @@ class BlobManagerTest(unittest.TestCase):
 
         # open the last blob
         blob = yield self.bm.get_blob(blob_hashes[-1])
-        yield blob.open_for_writing(self.peer)
-        
+        finished_d, write, cancel = yield blob.open_for_writing(self.peer)
+
         # delete the last blob and check if it still exists
         out = yield self.bm.delete_blobs([blob_hash])
         blobs = yield self.bm.get_all_verified_blobs()
@@ -109,4 +109,5 @@ class BlobManagerTest(unittest.TestCase):
         self.assertTrue(blob_hashes[-1] in blobs)
         self.assertTrue(os.path.isfile(os.path.join(self.blob_dir,blob_hashes[-1])))
 
-
+        # call write so that it will close
+        yield write('test')
