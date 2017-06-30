@@ -14,6 +14,7 @@ class DBEncryptedFileMetadataManagerTest(unittest.TestCase):
         self.manager = DBEncryptedFileMetadataManager(self.db_dir)
 
     def tearDown(self):
+        self.manager.close()
         shutil.rmtree(self.db_dir)
 
     @defer.inlineCallbacks
