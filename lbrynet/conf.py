@@ -44,6 +44,22 @@ settings_encoders = {
     '.yml': yaml.safe_dump
 }
 
+def _win_path_to_bytes(path):
+    """
+    Encode Windows paths to string. appdirs.user_data_dir()
+    on windows will return unicode path, unlike other platforms
+    which returns string. This will cause problems
+    because we use strings for filenames and combining them with
+    os.path.join() will result in errors.
+    """
+    for encoding in ('ASCII', 'MBCS'):
+        try:
+            return path.encode(encoding)
+        except (UnicodeEncodeError, LookupError):
+            pass
+    raise Exception('Unables to encode path {} into byte string'.format(path))
+
+
 if 'darwin' in sys.platform:
     platform = DARWIN
     default_download_dir = os.path.expanduser('~/Downloads')
@@ -63,6 +79,12 @@ elif 'nt' in sys.platform:
     else:
         default_data_dir = user_data_dir('lbrynet', 'lbry')
         default_lbryum_dir = user_data_dir('lbryum', 'lbry')
+
+    default_download_dir = _win_path_to_bytes(default_download_dir)
+    default_data_dir = _win_path_to_bytes(default_data_dir)
+    default_lbryum_dir = _win_path_to_bytes(default_lbryum_dir)
+
+
 else:
     platform = LINUX
 
