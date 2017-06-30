@@ -1,7 +1,6 @@
 import os
 
 from twisted.trial import unittest
-
 from lbrynet import conf
 
 
@@ -54,3 +53,11 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual('cli_test_string', settings['test'])
         settings.set('test', 'runtime_takes_precedence', data_types=(conf.TYPE_RUNTIME,))
         self.assertEqual('runtime_takes_precedence', settings['test'])
+
+    def test_data_dir(self):
+        # check if these directories are returned as string and not unicode
+        # otherwise there will be problems when calling os.path.join on
+        # unicode directory names with string file names
+        self.assertTrue(type(conf.default_download_dir)==str)
+        self.assertTrue(type(conf.default_data_dir)==str)
+        self.assertTrue(type(conf.default_lbryum_dir)==str)
