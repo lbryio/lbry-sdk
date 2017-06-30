@@ -28,7 +28,7 @@ test_script:
 - pylint lbrynet
 # disable tests for now so that appveyor can build the app
 - set PYTHONPATH=.
-- trial tests
+- trial tests/unit
 #- python -m twisted.trial tests # avoids having to set PYTHONPATH=. (see https://twistedmatrix.com/trac/ticket/9035)
 #- rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
 
