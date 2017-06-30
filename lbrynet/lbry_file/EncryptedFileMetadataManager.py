@@ -24,7 +24,7 @@ class DBEncryptedFileMetadataManager(object):
         return self._open_db()
 
     def stop(self):
-        self.db_conn = None
+        self.db_conn.close()
         return defer.succeed(True)
 
     def get_all_streams(self):
