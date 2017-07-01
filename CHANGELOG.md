@@ -32,6 +32,7 @@ at anytime.
   * Fix default directories to comply to XDG
   * Fixed BlobManager causing functional tests to fail, removed its unneeded manage() loop
   * Increased max_key_fee
+  * Gives message and instructions if port 3333 is used
 
 ### Deprecated
   *
