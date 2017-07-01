@@ -65,6 +65,19 @@ def use_epoll_on_linux():
         sys.modules['twisted.internet.reactor'] = twisted.internet.reactor
 
 
+def init_conf_windows(settings={}):
+    """
+    There is no fork on windows, so imports
+    are freshly initialized in new processes.
+    So conf needs to be intialized for new processes
+    """
+    if os.name == 'nt':
+        original_settings = conf.settings
+        conf.settings = conf.Config(conf.FIXED_SETTINGS, conf.ADJUSTABLE_SETTINGS)
+        conf.settings.installation_id = conf.settings.get_installation_id()
+        conf.settings.update(settings)
+
+
 class LbryUploader(object):
     def __init__(self, sd_hash_queue, kill_event, dead_event,
                  file_size, ul_rate_limit=None, is_generous=False):
@@ -84,6 +97,8 @@ class LbryUploader(object):
 
     def start(self):
         use_epoll_on_linux()
+        init_conf_windows()
+
         from twisted.internet import reactor
         self.reactor = reactor
         logging.debug("Starting the uploader")
@@ -98,6 +113,7 @@ class LbryUploader(object):
         self.sd_identifier = StreamDescriptorIdentifier()
         db_dir = "server"
         os.mkdir(db_dir)
+
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
@@ -182,6 +198,7 @@ class LbryUploader(object):
 def start_lbry_reuploader(sd_hash, kill_event, dead_event,
                           ready_event, n, ul_rate_limit=None, is_generous=False):
     use_epoll_on_linux()
+    init_conf_windows()
     from twisted.internet import reactor
 
     logging.debug("Starting the uploader")
@@ -295,6 +312,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
 
 def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_generous=False):
     use_epoll_on_linux()
+    init_conf_windows()
     from twisted.internet import reactor
 
     logging.debug("Starting the uploader")
