@@ -1,5 +1,7 @@
 import logging
+import binascii
 import os
+import urllib
 from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
@@ -9,6 +11,8 @@ from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.file_manager.HTTPFileDownloader import HttpDownloader
+from lbrynet.file_manager.TorrentFileDownloader import TorrentDownloader
 from lbrynet import conf
 
 INITIALIZING_CODE = 'initializing'
@@ -57,6 +61,7 @@ class GetStream(object):
         self.payment_rate_manager = self.session.payment_rate_manager
         self.sd_identifier = sd_identifier
         self.downloader = None
+        self.http_downloader = None
         self.checker = LoopingCall(self.check_status)
 
         # fired when the download is complete
@@ -162,6 +167,15 @@ class GetStream(object):
         self._check_status(status)
         defer.returnValue(self.download_path)
 
+    # Attempted callbacks
+    # See not in the function download
+    # @defer.inlineCallbacks
+    # def http_finish(self, results, name):
+    #     self.set_status(DOWNLOAD_STOPPED_CODE, name)
+    #     log.info("Finished downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6],
+    #              self.download_path)
+    #     defer.returnValue(self.download_path)
+
     @defer.inlineCallbacks
     def initialize(self, stream_info, name):
         # Set sd_hash and return key_fee from stream_info
@@ -180,18 +194,68 @@ class GetStream(object):
         defer.returnValue(downloader)
 
     @defer.inlineCallbacks
-    def download(self, name, key_fee):
+    def download(self, name, key_fee, source_type):
         # download sd blob, and start downloader
         self.set_status(DOWNLOAD_METADATA_CODE, name)
-        sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager)
-        self.downloader = yield self._create_downloader(sd_blob)
+        if source_type == "lbry_sd_hash":
+            safe_start(self.checker)
+            sd_blob = yield download_sd_blob(self.session, self.sd_hash, self.payment_rate_manager)
+            self.downloader = yield self._create_downloader(sd_blob)
+            
+            self.set_status(DOWNLOAD_RUNNING_CODE, name)
+            if key_fee:
+                yield self.pay_key_fee(key_fee, name)
 
-        self.set_status(DOWNLOAD_RUNNING_CODE, name)
-        if key_fee:
-            yield self.pay_key_fee(key_fee, name)
+            log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
+    
+            self.finished_deferred = self.downloader.start()
+        elif source_type == "http":
+            # download the file from source
+            url = binascii.unhexlify(self.sd_hash)
+            self.downloader = HttpDownloader(self.download_directory, url)
 
-        log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
-        self.finished_deferred = self.downloader.start()
+            self.set_status(DOWNLOAD_RUNNING_CODE, name)
+            if key_fee:
+                yield self.pay_key_fee(key_fee, name)
+
+            '''
+            #TODO:
+                Get callbacks working, ask @jack(slack)
+            '''
+            # self.finished_deferred = self.downloader.start()
+            # self.finished_deferred.addCallback(self.http_finish, name)
+
+            # Workaround for now
+            file_address = self.downloader.start()
+
+            if file_address:
+                log.info("File downloaded successfully")
+            else:
+                log.error("File couldn't be downloaded")
+
+        elif source_type == "btih":
+            url = binascii.unhexlify(self.sd_hash)
+            self.downloader = TorrentDownloader(self.download_directory, url)
+
+            self.set_status(DOWNLOAD_RUNNING_CODE, name)
+            if key_fee:
+                yield self.pay_key_fee(key_fee, name)
+
+            '''
+            #TODO:
+                Get callbacks working, ask @jack(slack)
+            '''
+            # self.finished_deferred = self.downloader.start()
+            # self.finished_deferred.addCallback(self.http_finish, name)
+
+            # Workaround for now
+            file_address = self.downloader.start()
+
+            if file_address:
+                log.info("File downloaded successfully")
+            else:
+                log.error("File couldn't be downloaded")
+
         self.finished_deferred.addCallback(self.finish, name)
 
     @defer.inlineCallbacks
@@ -206,10 +270,9 @@ class GetStream(object):
             finished_deferred - deferred callbacked when download is finished
         """
         key_fee = yield self.initialize(stream_info, name)
-        safe_start(self.checker)
 
         try:
-            yield self.download(name, key_fee)
+            yield self.download(name, key_fee, stream_info["stream"]["source"]["sourceType"])
         except Exception as err:
             safe_stop(self.checker)
             raise
