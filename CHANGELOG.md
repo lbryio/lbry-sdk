@@ -29,6 +29,7 @@ at anytime.
   * Fixed BlobManager causing functional tests to fail, removed its unneeded manage() loop
   * Increased max_key_fee
   * Fixed unit tests on appveyor Windows build
+  * Fixed [#692](https://github.com/lbryio/lbry/issues/692) 
 
 ### Deprecated
   *
