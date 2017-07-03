@@ -1,21 +1,14 @@
 import json
 import logging.handlers
-import sys
 import os
 
-from appdirs import user_data_dir
 from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
+from lbrynet import conf
 
 
-if sys.platform != "darwin":
-    log_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-else:
-    log_dir = user_data_dir("LBRY")
-
-if not os.path.isdir(log_dir):
-    os.mkdir(log_dir)
-
+conf.initialize_settings()
+log_dir = conf.settings['data_dir']
 LOG_FILENAME = os.path.join(log_dir, 'lbrynet-daemon.log')
 
 if os.path.isfile(LOG_FILENAME):

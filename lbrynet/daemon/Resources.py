@@ -2,25 +2,14 @@ import logging
 import os
 import shutil
 import json
-import sys
 import tempfile
 
 
-from appdirs import user_data_dir
 from twisted.web import server, static, resource
 from twisted.internet import defer, error
 
 from lbrynet import conf
 from lbrynet.daemon.FileStreamer import EncryptedFileStreamer
-
-# TODO: omg, this code is essentially duplicated in Daemon
-
-if sys.platform != "darwin":
-    data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
-else:
-    data_dir = user_data_dir("LBRY")
-if not os.path.isdir(data_dir):
-    os.mkdir(data_dir)
 
 log = logging.getLogger(__name__)
 
