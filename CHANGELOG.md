@@ -15,9 +15,6 @@ at anytime.
 
 ### Changed
   * Change `max_key_fee` setting to be a dictionary with values for `currency` and `amount`
-  * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
-  * Linux folders moved from the home directory to `~/.local/share/lbry`
-  * Windows folders moved from `%APPDATA%/Roaming` to `%APPDATA%/Local/lbry`
   * Renamed `lbrynet.lbryfile` to `lbrynet.lbry_file`
   * Renamed `lbrynet.lbryfilemanager` to `lbrynet.file_manager`
   * Renamed `lbrynet.lbrynet_daemon` to `lbrynet.daemon`
@@ -29,7 +26,6 @@ at anytime.
   * Fixed some log messages throwing exceptions
   * Fix shutdown of the blob tracker by Session
   * Fixed claim_new_support docstrings
-  * Fix default directories to comply to XDG
   * Fixed BlobManager causing functional tests to fail, removed its unneeded manage() loop
   * Increased max_key_fee
 
