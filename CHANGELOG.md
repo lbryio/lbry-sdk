@@ -32,6 +32,7 @@ at anytime.
   * Fix default directories to comply to XDG
   * Fixed BlobManager causing functional tests to fail, removed its unneeded manage() loop
   * Increased max_key_fee
+  * Fixed unit tests on appveyor Windows build
 
 ### Deprecated
   *
