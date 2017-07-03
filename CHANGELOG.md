@@ -15,13 +15,16 @@ at anytime.
 
 ### Changed
   * claim_show API command no longer takes name as argument
-  *
+  * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
+  * Linux folders moved from the home directory to `~/.local/share/lbry`
+  * Windows folders moved from `%AppData%/Roaming` to `%AppData%/Local/lbry`
 
 ### Fixed
   * Fix for https://github.com/lbryio/lbry/issues/750
   * Fixed inconsistencies in claim_show output
   * Fixed daemon process hanging when started without an internet connection
   * Fixed https://github.com/lbryio/lbry/issues/774
+  * Fix XDG compliance on Linux
 
 ### Deprecated
   *

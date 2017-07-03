@@ -2,11 +2,17 @@ import base58
 import json
 import logging
 import os
+import re
 import sys
 import yaml
 import envparse
-from appdirs import user_data_dir
+from appdirs import user_data_dir, user_config_dir
 from lbrynet.core import utils
+
+try:
+    from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
+except (ImportError, ValueError):
+    pass
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +49,7 @@ settings_encoders = {
     '.yml': yaml.safe_dump
 }
 
+
 def _win_path_to_bytes(path):
     """
     Encode Windows paths to string. appdirs.user_data_dir()
@@ -58,29 +65,77 @@ def _win_path_to_bytes(path):
             pass
     return path
 
-if sys.platform.startswith('darwin'):
+
+def _get_old_directories(platform):
+    dirs = {}
+    if platform == WINDOWS:
+        appdata = get_path(FOLDERID.RoamingAppData, UserHandle.current)
+        dirs['data'] = os.path.join(appdata, 'lbrynet')
+        dirs['lbryum'] = os.path.join(appdata, 'lbryum')
+        dirs['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
+    elif platform == DARWIN:
+        dirs['data'] = user_data_dir('LBRY')
+        dirs['lbryum'] = os.path.expanduser('~/.lbryum')
+        dirs['download'] = os.path.expanduser('~/Downloads')
+    elif platform == LINUX:
+        dirs['data'] = os.path.join(os.path.expanduser('~'), '~/.lbrynet')
+        dirs['lbryum'] = os.path.join(os.path.expanduser('~'), '~/.lbryum')
+        dirs['download'] = os.path.join(os.path.expanduser('~'), 'Downloads')
+    else:
+        raise ValueError('unknown platform value')
+    return dirs
+
+
+def _get_new_directories(platform):
+    dirs = {}
+    if platform == WINDOWS:
+        dirs['data'] = user_data_dir('lbrynet', 'lbry')
+        dirs['lbryum'] = user_data_dir('lbryum', 'lbry')
+        dirs['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
+    elif platform == DARWIN:
+        _get_old_directories(platform)
+    elif platform == LINUX:
+        dirs['data'] = user_data_dir('lbry/lbrynet')
+        dirs['lbryum'] = user_data_dir('lbry/lbryum')
+        try:
+            with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
+                down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
+                down_dir = re.sub('\$HOME', os.getenv('HOME'), down_dir)
+                dirs['download'] = re.sub('\"', '', down_dir)
+        except EnvironmentError:
+            dirs['download'] = os.getenv('XDG_DOWNLOAD_DIR')
+
+        if not dirs['download']:
+            dirs['download'] = os.path.expanduser('~/Downloads')
+    else:
+        raise ValueError('unknown platform value')
+    return dirs
+
+
+if 'darwin' in sys.platform:
     platform = DARWIN
-    default_download_directory = os.path.join(os.path.expanduser('~'), 'Downloads')
-    default_data_dir = user_data_dir('LBRY')
-    default_lbryum_dir = os.path.join(os.path.expanduser('~'), '.lbryum')
-elif sys.platform.startswith('win'):
+    dirs = _get_old_directories(DARWIN)
+elif 'win' in sys.platform:
     platform = WINDOWS
-    from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
-
-    default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
-    default_data_dir = os.path.join(
-        get_path(FOLDERID.RoamingAppData, UserHandle.current), 'lbrynet')
-    default_lbryum_dir = os.path.join(
-        get_path(FOLDERID.RoamingAppData, UserHandle.current), 'lbryum')
-
-    default_download_directory = _win_path_to_bytes(default_download_directory)
-    default_data_dir = _win_path_to_bytes(default_data_dir)
-    default_lbryum_dir = _win_path_to_bytes(default_lbryum_dir)
+    if os.path.isdir(_get_old_directories(WINDOWS)['data']) or \
+       os.path.isdir(_get_old_directories(WINDOWS)['lbryum']):
+        dirs = _get_old_directories(WINDOWS)
+    else:
+        dirs = _get_new_directories(WINDOWS)
+    dirs['data'] = _win_path_to_bytes(dirs['data'])
+    dirs['lbryum'] = _win_path_to_bytes(dirs['lbryum'])
+    dirs['download'] = _win_path_to_bytes(dirs['download'])
 else:
     platform = LINUX
-    default_download_directory = os.path.join(os.path.expanduser('~'), 'Downloads')
-    default_data_dir = os.path.join(os.path.expanduser('~'), '.lbrynet')
-    default_lbryum_dir = os.path.join(os.path.expanduser('~'), '.lbryum')
+    if os.path.isdir(_get_old_directories(LINUX)['data']) or \
+       os.path.isdir(_get_old_directories(LINUX)['lbryum']):
+        dirs = _get_old_directories(LINUX)
+    else:
+        dirs = _get_new_directories(LINUX)
+
+default_data_dir = dirs['data']
+default_lbryum_dir = dirs['lbryum']
+default_download_dir = dirs['download']
 
 ICON_PATH = 'icons' if platform is WINDOWS else 'app.icns'
 
@@ -178,7 +233,7 @@ ADJUSTABLE_SETTINGS = {
     'data_rate': (float, .0001),  # points/megabyte
     'delete_blobs_on_remove': (bool, True),
     'dht_node_port': (int, 4444),
-    'download_directory': (str, default_download_directory),
+    'download_directory': (str, default_download_dir),
     'download_timeout': (int, 180),
     'is_generous_host': (bool, True),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_port),
