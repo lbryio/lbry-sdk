@@ -24,7 +24,10 @@ class BlobManagerTest(unittest.TestCase):
 
     def tearDown(self):
         self.bm.stop()
-        shutil.rmtree(self.blob_dir)
+        # BlobFile will try to delete itself  in _close_writer
+        # thus when calling rmtree we may get a FileNotFoundError
+        # for the blob file
+        shutil.rmtree(self.blob_dir, ignore_errors=True)
         shutil.rmtree(self.db_dir)
 
     @defer.inlineCallbacks
@@ -109,5 +112,4 @@ class BlobManagerTest(unittest.TestCase):
         self.assertTrue(blob_hashes[-1] in blobs)
         self.assertTrue(os.path.isfile(os.path.join(self.blob_dir,blob_hashes[-1])))
 
- 
         blob._close_writer(blob.writers[self.peer][0])
