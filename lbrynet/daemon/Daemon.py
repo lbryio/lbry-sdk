@@ -1338,8 +1338,7 @@ class Daemon(AuthJSONRPCServer):
             claim_results = yield self.session.wallet.get_claim_by_outpoint(outpoint)
         else:
             raise Exception("Must specify either txid/nout, or claim_id")
-        result = format_json_out_amount_as_float(claim_results)
-        response = yield self._render_response(result)
+        response = yield self._render_response(claim_results)
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
@@ -1961,7 +1960,6 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_name_claims()
-        d.addCallback(format_json_out_amount_as_float)
         d.addCallback(lambda claims: self._render_response(claims))
         return d
 
@@ -2614,19 +2612,3 @@ def get_blob_payment_rate_manager(session, payment_rate_manager=None):
             payment_rate_manager = rate_managers[payment_rate_manager]
             log.info("Downloading blob with rate manager: %s", payment_rate_manager)
     return payment_rate_manager or session.payment_rate_manager
-
-
-# lbryum returns json loadeable object with amounts as decimal encoded string,
-# convert them into floats for the daemon
-# TODO: daemon should also use decimal encoded string
-def format_json_out_amount_as_float(obj):
-    if isinstance(obj, dict):
-        for k, v in obj.iteritems():
-            if k == 'amount' or k == 'effective_amount':
-                obj[k] = float(obj[k])
-            if isinstance(v, (dict, list)):
-                obj[k] = format_json_out_amount_as_float(v)
-
-    elif isinstance(obj, list):
-        obj = [format_json_out_amount_as_float(o) for o in obj]
-    return obj
