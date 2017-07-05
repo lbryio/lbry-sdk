@@ -58,6 +58,6 @@ class SettingsTest(unittest.TestCase):
         # check if these directories are returned as string and not unicode
         # otherwise there will be problems when calling os.path.join on
         # unicode directory names with string file names
-        self.assertEqual(str, type(conf.default_download_directory))
+        self.assertEqual(str, type(conf.default_download_dir))
         self.assertEqual(str, type(conf.default_data_dir))
         self.assertEqual(str, type(conf.default_lbryum_dir))
