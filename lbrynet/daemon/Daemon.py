@@ -599,26 +599,12 @@ class Daemon(AuthJSONRPCServer):
         :param timeout (int): blob timeout
         :return: BlobFile
         """
-
-        def cb(blob):
-            if not finished_d.called:
-                finished_d.callback(blob)
-
-        def eb():
-            if not finished_d.called:
-                finished_d.errback(Exception("Blob (%s) download timed out" %
-                                             blob_hash[:SHORT_ID_LEN]))
-
         if not blob_hash:
             raise Exception("Nothing to download")
 
         rate_manager = rate_manager or self.session.payment_rate_manager
         timeout = timeout or 30
-        finished_d = defer.Deferred(None)
-        reactor.callLater(timeout, eb)
-        d = download_sd_blob(self.session, blob_hash, rate_manager)
-        d.addCallback(cb)
-        return finished_d
+        return download_sd_blob(self.session, blob_hash, rate_manager, timeout)
 
     @defer.inlineCallbacks
     def _download_name(self, name, claim_dict, claim_id, timeout=None, file_name=None):

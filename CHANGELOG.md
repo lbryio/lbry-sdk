@@ -17,7 +17,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed timeout behaviour when calling API command get
   *
 
 ### Deprecated

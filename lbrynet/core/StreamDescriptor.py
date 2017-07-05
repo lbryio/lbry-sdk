@@ -236,7 +236,7 @@ class StreamDescriptorIdentifier(object):
         return d
 
 
-def download_sd_blob(session, blob_hash, payment_rate_manager):
+def download_sd_blob(session, blob_hash, payment_rate_manager, timeout=None):
     """
     Downloads a single blob from the network
 
@@ -253,5 +253,6 @@ def download_sd_blob(session, blob_hash, payment_rate_manager):
                                           session.peer_finder,
                                           session.rate_limiter,
                                           payment_rate_manager,
-                                          session.wallet)
+                                          session.wallet,
+                                          timeout)
     return downloader.download()
