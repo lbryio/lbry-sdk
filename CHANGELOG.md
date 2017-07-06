@@ -9,7 +9,7 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Added an option to disable max key fee check.
   *
 
 ### Changed
