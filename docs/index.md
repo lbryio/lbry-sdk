@@ -603,6 +603,7 @@ Args:
     'run_on_startup': (bool) currently not supported
     'data_rate': (float) data rate,
     'max_key_fee': (float) maximum key fee,
+    'disable_max_key_fee': (bool) true to disable max_key_fee check,
     'download_directory': (str) path of where files are downloaded,
     'peer_port': (int) port through which daemon should connect,
     'max_upload': (float), currently not supported

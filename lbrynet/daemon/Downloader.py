@@ -31,12 +31,13 @@ log = logging.getLogger(__name__)
 
 class GetStream(object):
     def __init__(self, sd_identifier, session, exchange_rate_manager,
-                 max_key_fee, data_rate=None, timeout=None,
+                 max_key_fee, disable_max_key_fee, data_rate=None, timeout=None,
                  file_name=None):
 
         self.timeout = timeout or conf.settings['download_timeout']
         self.data_rate = data_rate or conf.settings['data_rate']
         self.max_key_fee = max_key_fee or conf.settings['max_key_fee'][1]
+        self.disable_max_key_fee = disable_max_key_fee or conf.settings['disable_max_key_fee']
         self.download_directory = conf.settings['download_directory']
         self.file_name = file_name
         self.timeout_counter = 0
@@ -97,7 +98,7 @@ class GetStream(object):
                                                                            fee.amount)
         if converted_fee_amount > self.wallet.get_balance():
             raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee_amount)
-        if converted_fee_amount > max_key_fee_amount:
+        if converted_fee_amount > max_key_fee_amount and not self.disable_max_key_fee:
             raise KeyFeeAboveMaxAllowed('Key fee %s above max allowed %s' % (converted_fee_amount,
                                                                              max_key_fee_amount))
         converted_fee = {
