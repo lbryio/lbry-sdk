@@ -18,7 +18,7 @@ at anytime.
 
 ### Fixed
   * Fixed timeout behaviour when calling API command get
-  *
+  * Fixed https://github.com/lbryio/lbry/issues/765
 
 ### Deprecated
   *
