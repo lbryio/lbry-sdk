@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Make `lbrynet-daemon --version` reliably machine readable (writes warning to stderr instead of stdout)
   *
 
 ### Fixed

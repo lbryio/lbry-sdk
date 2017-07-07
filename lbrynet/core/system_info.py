@@ -2,6 +2,7 @@ import platform
 import json
 import subprocess
 import os
+import sys
 
 from urllib2 import urlopen
 from lbryschema import __version__ as lbryschema_version
@@ -20,7 +21,7 @@ def get_lbrynet_version():
                     stderr=devnull
                 ).strip().lstrip('v')
         except (subprocess.CalledProcessError, OSError):
-            print "failed to get version from git"
+            sys.stderr.write("failed to get version from git\n")
     return lbrynet_version
 
 
