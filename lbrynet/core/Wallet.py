@@ -28,7 +28,7 @@ from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError, UnknownNameError
-from lbrynet.core.Error import UnknownClaimID, UnknownURI
+from lbrynet.core.Error import UnknownClaimID, UnknownURI, NegativeFundsError
 
 log = logging.getLogger(__name__)
 
@@ -541,6 +541,8 @@ class Wallet(object):
             once the service has been rendered
         """
         rounded_amount = Decimal(str(round(amount, 8)))
+        if rounded_amount < 0:
+            raise NegativeFundsError(rounded_amount)
         if self.get_balance() >= rounded_amount:
             self.total_reserved_points += rounded_amount
             return ReservedPoints(identifier, rounded_amount)

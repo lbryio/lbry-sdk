@@ -18,6 +18,14 @@ class RequestCanceledError(Exception):
     pass
 
 
+class NegativeFundsError(Exception):
+    pass
+
+
+class NullFundsError(Exception):
+    pass
+
+
 class InsufficientFundsError(Exception):
     pass
 
