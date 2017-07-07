@@ -45,6 +45,7 @@ from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError, NoSuchSDHash
 from lbrynet.core.Error import NoSuchStreamHash, UnknownClaimID, UnknownURI
+from lbrynet.core.Error import NullFundsError, NegativeFundsError
 
 log = logging.getLogger(__name__)
 
@@ -2230,6 +2231,11 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (bool) true if payment successfully scheduled
         """
+
+        if amount < 0:
+            raise NegativeFundsError()
+        elif not amount:
+            raise NullFundsError()
 
         reserved_points = self.session.wallet.reserve_points(address, amount)
         if reserved_points is None:
