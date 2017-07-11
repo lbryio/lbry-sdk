@@ -18,6 +18,8 @@ at anytime.
 
 ### Fixed
   * peer_port is settable using `settings_set`
+  * Fix for https://github.com/lbryio/lbry/issues/750
+  *
 
 ### Deprecated
   *
