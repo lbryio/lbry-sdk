@@ -1313,10 +1313,11 @@ class Daemon(AuthJSONRPCServer):
         Resolve claim info from a LBRY name
 
         Usage:
-            claim_show <name> [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
+            claim_show [<name> | --name=<name>] [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
                               [<claim_id> | --claim_id=<claim_id>]
 
         Options:
+            <name>, --name=<name>              : look for claim with this name
             <txid>, --txid=<txid>              : look for claim with this txid
             <nout>, --nout=<nout>              : look for claim with this nout
             <claim_id>, --claim_id=<claim_id>  : look for claim with this claim id
