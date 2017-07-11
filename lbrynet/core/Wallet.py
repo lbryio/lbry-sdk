@@ -514,15 +514,6 @@ class Wallet(object):
         d.addBoth(set_manage_not_running)
         return d
 
-    @defer.inlineCallbacks
-    def update_balance(self):
-        """ obtain balance from lbryum wallet and set self.wallet_balance
-        """
-        balance = yield self._update_balance()
-        if self.wallet_balance != balance:
-            log.debug("Got a new balance: %s", balance)
-        self.wallet_balance = balance
-
     def get_info_exchanger(self):
         return LBRYcrdAddressRequester(self)
 
@@ -928,7 +919,7 @@ class Wallet(object):
         return self._get_claim_metadata_for_sd_hash(sd_hash)
 
     def get_balance(self):
-        return self._update_balance()
+        return self._get_balance()
 
     def _check_expected_balances(self):
         now = datetime.datetime.now()
@@ -980,7 +971,7 @@ class Wallet(object):
 
     # ======== Must be overridden ======== #
 
-    def _update_balance(self):
+    def _get_balance(self):
         return defer.fail(NotImplementedError())
 
     def get_new_address(self):
@@ -1215,7 +1206,7 @@ class LBRYumWallet(Wallet):
         func = getattr(cmd_runner, cmd.name)
         return threads.deferToThread(func, *args, **kwargs)
 
-    def _update_balance(self):
+    def _get_balance(self):
         accounts = None
         exclude_claimtrietx = True
         d = self._run_cmd_as_defer_succeed('getbalance', accounts, exclude_claimtrietx)
