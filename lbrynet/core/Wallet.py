@@ -386,10 +386,7 @@ class Wallet(object):
             raise ValueError('storage must be an instance of MetaDataStorage')
         self._storage = storage
         self.next_manage_call = None
-        self.wallet_balance = Decimal(0.0)
-        self.total_reserved_points = Decimal(0.0)
         self.peer_addresses = {}  # {Peer: string}
-        self.queued_payments = defaultdict(Decimal)  # {address(string): amount(Decimal)}
         self.expected_balances = defaultdict(Decimal)  # {address(string): amount(Decimal)}
         self.current_address_given_to_peer = {}  # {Peer: address(string)}
         # (Peer, address(string), amount(Decimal), time(datetime), count(int),
