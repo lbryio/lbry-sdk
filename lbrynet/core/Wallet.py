@@ -5,6 +5,7 @@ import json
 import time
 
 from twisted.internet import threads, reactor, defer, task
+from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
 
@@ -29,6 +30,7 @@ from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHand
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError, UnknownNameError
 from lbrynet.core.Error import UnknownClaimID, UnknownURI
+from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 
 log = logging.getLogger(__name__)
 
@@ -385,31 +387,42 @@ class Wallet(object):
         if not isinstance(storage, MetaDataStorage):
             raise ValueError('storage must be an instance of MetaDataStorage')
         self._storage = storage
-        self.next_manage_call = None
         self.peer_addresses = {}  # {Peer: string}
         self.expected_balances = defaultdict(Decimal)  # {address(string): amount(Decimal)}
         self.current_address_given_to_peer = {}  # {Peer: address(string)}
+
+        self.manage_looping_call = LoopingCall(self.manage)
+        self.manage_looping_call_interval = 30
+        self._manage_deferred = None
         # (Peer, address(string), amount(Decimal), time(datetime), count(int),
         # incremental_amount(float))
         self.expected_balance_at_time = deque()
         self.max_expected_payment_time = datetime.timedelta(minutes=3)
-        self.stopped = True
 
-        self.manage_running = False
-        self._manage_count = 0
         self._balance_refresh_time = 3
         self._batch_count = 20
 
+    @defer.inlineCallbacks
     def start(self):
-        def start_manage():
-            self.stopped = False
-            self.manage()
-            return True
+        yield self._storage.load()
+        yield self._start()
+        safe_start_looping_call(self.manage_looping_call, self.manage_looping_call_interval)
 
-        d = self._storage.load()
-        d.addCallback(lambda _: self._start())
-        d.addCallback(lambda _: start_manage())
-        return d
+    @defer.inlineCallbacks
+    def stop(self):
+        log.info("Stopping %s", self)
+        safe_stop_looping_call(self.manage_looping_call)
+        # wait for last manage call to finish
+        if self._manage_deferred:
+            yield self._manage_deferred
+        yield self._stop()
+
+    @defer.inlineCallbacks
+    def manage(self):
+        self._manage_deferred = defer.Deferred()
+        yield self._check_expected_balances()
+        self._manage_deferred.callback(None)
+        self._manage_deferred = None
 
     def _save_name_metadata(self, name, claim_outpoint, sd_hash):
         return self._storage.save_name_metadata(name, claim_outpoint, sd_hash)
@@ -419,90 +432,6 @@ class Wallet(object):
 
     def _update_claimid(self, claim_id, name, claim_outpoint):
         return self._storage.update_claimid(claim_id, name, claim_outpoint)
-
-    @staticmethod
-    def log_stop_error(err):
-        log.error("An error occurred stopping the wallet: %s", err.getTraceback())
-
-    def stop(self):
-        log.info("Stopping %s", self)
-        self.stopped = True
-        # If self.next_manage_call is None, then manage is currently running or else
-        # start has not been called, so set stopped and do nothing else.
-        if self.next_manage_call is not None:
-            self.next_manage_call.cancel()
-            self.next_manage_call = None
-
-        d = self.manage(do_full=True)
-        d.addErrback(self.log_stop_error)
-        d.addCallback(lambda _: self._stop())
-        d.addErrback(self.log_stop_error)
-        return d
-
-    def manage(self, do_full=False):
-        self.next_manage_call = None
-        have_set_manage_running = [False]
-        self._manage_count += 1
-        if self._manage_count % self._batch_count == 0:
-            self._manage_count = 0
-            do_full = True
-
-        def check_if_manage_running():
-
-            d = defer.Deferred()
-
-            def fire_if_not_running():
-                if self.manage_running is False:
-                    self.manage_running = True
-                    have_set_manage_running[0] = True
-                    d.callback(True)
-                elif do_full is False:
-                    d.callback(False)
-                else:
-                    task.deferLater(reactor, 1, fire_if_not_running)
-
-            fire_if_not_running()
-            return d
-
-        d = check_if_manage_running()
-
-        def do_manage():
-            if do_full:
-                d = self._check_expected_balances()
-                d.addCallback(lambda _: self._send_payments())
-            else:
-                d = defer.succeed(True)
-
-            def log_error(err):
-                if isinstance(err, AttributeError):
-                    log.warning("Failed to get an updated balance")
-                    log.warning("Last balance update: %s", str(self.wallet_balance))
-
-            d.addCallbacks(lambda _: self.update_balance(), log_error)
-            return d
-
-        d.addCallback(lambda should_run: do_manage() if should_run else None)
-
-        def set_next_manage_call():
-            if not self.stopped:
-                self.next_manage_call = reactor.callLater(self._balance_refresh_time, self.manage)
-
-        d.addCallback(lambda _: set_next_manage_call())
-
-        def log_error(err):
-            log.error("Something went wrong during manage. Error message: %s",
-                      err.getErrorMessage())
-            return err
-
-        d.addErrback(log_error)
-
-        def set_manage_not_running(arg):
-            if have_set_manage_running[0] is True:
-                self.manage_running = False
-            return arg
-
-        d.addBoth(set_manage_not_running)
-        return d
 
     def get_info_exchanger(self):
         return LBRYcrdAddressRequester(self)
@@ -549,27 +478,6 @@ class Wallet(object):
         d = self.get_unused_address()
         d.addCallback(set_address_for_peer)
         return d
-
-    def _send_payments(self):
-        payments_to_send = {}
-        for address, points in self.queued_payments.items():
-            if points > 0:
-                log.debug("Should be sending %s points to %s", str(points), str(address))
-                payments_to_send[address] = points
-                self.total_reserved_points -= points
-            else:
-                log.info("Skipping dust")
-
-            del self.queued_payments[address]
-
-        if payments_to_send:
-            log.debug("Creating a transaction with outputs %s", str(payments_to_send))
-            d = self._do_send_many(payments_to_send)
-            d.addCallback(lambda txid: log.debug("Sent transaction %s", txid))
-            return d
-
-        log.debug("There were no payments to send")
-        return defer.succeed(True)
 
     ######
 
