@@ -4,7 +4,7 @@ from twisted.trial import unittest
 from twisted.internet import threads, defer
 
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.Wallet import Wallet, ReservedPoints, InMemoryStorage
+from lbrynet.core.Wallet import Wallet, InMemoryStorage
 
 test_metadata = {
 'license': 'NASA',

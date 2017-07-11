@@ -32,13 +32,6 @@ from lbrynet.core.Error import UnknownClaimID, UnknownURI
 
 log = logging.getLogger(__name__)
 
-
-class ReservedPoints(object):
-    def __init__(self, identifier, amount):
-        self.identifier = identifier
-        self.amount = amount
-
-
 class ClaimOutpoint(dict):
     def __init__(self, txid, nout):
         if len(txid) != 64:
