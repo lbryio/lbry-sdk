@@ -17,7 +17,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * claim_show now works properly
   *
 
 ### Deprecated

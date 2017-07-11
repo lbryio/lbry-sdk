@@ -1339,16 +1339,28 @@ class Daemon(AuthJSONRPCServer):
         try:
             if claim_id:
                 claim_results = yield self.session.wallet.get_claim(claim_id)
+                check_name =  claim_results.get("name", None) if claim_results is not None else None
             elif txid and nout is not None:
                 outpoint = ClaimOutpoint(txid, nout)
                 claim_results = yield self.session.wallet.get_claim_by_outpoint(outpoint)
+                check_name = claim_results.get("name", None)
             else:
                 claim_results = yield self.session.wallet.resolve(name)
                 if claim_results:
                     claim_results = claim_results[name]
+                if claim_results.get('claim') is not None:
+                    check_name = claim_results.get("claim").get("name")
+                else:
+                    check_name = None
+
             result = format_json_out_amount_as_float(claim_results)
         except (TypeError, UnknownNameError, UnknownClaimID, UnknownURI):
+            check_name = None
             result = False
+            
+        if name and check_name and (name != check_name):
+            result = "The given name and name returned by server do not match."
+
         response = yield self._render_response(result)
         defer.returnValue(response)
 
