@@ -603,47 +603,6 @@ class IWallet(Interface):
         @rtype: An object implementing IQueryHandlerFactory
         """
 
-    def reserve_points(self, peer, amount):
-        """Ensure a certain amount of points are available to be sent as
-        payment, before the service is rendered
-
-        @param peer: The peer to which the payment will ultimately be sent
-        @type peer: Peer
-
-        @param amount: The amount of points to reserve
-        @type amount: float
-
-        @return: A ReservedPoints object which is given to send_points
-        once the service has been rendered
-        @rtype: ReservedPoints
-
-        """
-
-    def cancel_point_reservation(self, reserved_points):
-        """
-        Return all of the points that were reserved previously for some ReservedPoints object
-
-        @param reserved_points: ReservedPoints previously returned by reserve_points
-        @type reserved_points: ReservedPoints
-
-        @return: None
-        """
-
-    def send_points(self, reserved_points, amount):
-        """
-        Schedule a payment to be sent to a peer
-
-        @param reserved_points: ReservedPoints object previously returned by reserve_points.
-        @type reserved_points: ReservedPoints
-
-        @param amount: amount of points to actually send, must be less than or equal to the
-            amount reserved in reserved_points
-        @type amount: float
-
-        @return: Deferred which fires when the payment has been scheduled
-        @rtype: Deferred which fires with anything
-        """
-
     def get_balance(self):
         """
         Return the balance of this wallet

@@ -28,7 +28,7 @@ from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError, UnknownNameError
-from lbrynet.core.Error import UnknownClaimID, UnknownURI, NegativeFundsError
+from lbrynet.core.Error import UnknownClaimID, UnknownURI
 
 log = logging.getLogger(__name__)
 
@@ -528,78 +528,6 @@ class Wallet(object):
 
     def get_wallet_info_query_handler_factory(self):
         return LBRYcrdAddressQueryHandlerFactory(self)
-
-    def reserve_points(self, identifier, amount):
-        """Ensure a certain amount of points are available to be sent as
-        payment, before the service is rendered
-
-        @param identifier: The peer to which the payment will ultimately be sent
-
-        @param amount: The amount of points to reserve
-
-        @return: A ReservedPoints object which is given to send_points
-            once the service has been rendered
-        """
-        rounded_amount = Decimal(str(round(amount, 8)))
-        if rounded_amount < 0:
-            raise NegativeFundsError(rounded_amount)
-        if self.get_balance() >= rounded_amount:
-            self.total_reserved_points += rounded_amount
-            return ReservedPoints(identifier, rounded_amount)
-        return None
-
-    def cancel_point_reservation(self, reserved_points):
-        """
-        Return all of the points that were reserved previously for some ReservedPoints object
-
-        @param reserved_points: ReservedPoints previously returned by reserve_points
-
-        @return: None
-        """
-        self.total_reserved_points -= reserved_points.amount
-
-    def send_points(self, reserved_points, amount):
-        """
-        Schedule a payment to be sent to a peer
-
-        @param reserved_points: ReservedPoints object previously returned by reserve_points
-
-        @param amount: amount of points to actually send, must be less than or equal to the
-            amount reserved in reserved_points
-
-        @return: Deferred which fires when the payment has been scheduled
-        """
-        rounded_amount = Decimal(str(round(amount, 8)))
-        peer = reserved_points.identifier
-        assert rounded_amount <= reserved_points.amount
-        assert peer in self.peer_addresses
-        self.queued_payments[self.peer_addresses[peer]] += rounded_amount
-        # make any unused points available
-        self.total_reserved_points -= (reserved_points.amount - rounded_amount)
-        log.debug("ordering that %s points be sent to %s", str(rounded_amount),
-                  str(self.peer_addresses[peer]))
-        peer.update_stats('points_sent', amount)
-        return defer.succeed(True)
-
-    def send_points_to_address(self, reserved_points, amount):
-        """
-        Schedule a payment to be sent to an address
-
-        @param reserved_points: ReservedPoints object previously returned by reserve_points
-
-        @param amount: amount of points to actually send. must be less than or equal to the
-            amount reselved in reserved_points
-
-        @return: Deferred which fires when the payment has been scheduled
-        """
-        rounded_amount = Decimal(str(round(amount, 8)))
-        address = reserved_points.identifier
-        assert rounded_amount <= reserved_points.amount
-        self.queued_payments[address] += rounded_amount
-        self.total_reserved_points -= (reserved_points.amount - rounded_amount)
-        log.debug("Ordering that %s points be sent to %s", str(rounded_amount),
-                  str(address))
-        return defer.succeed(True)
 
     def send_amount_to_address(self, amount, address):
         """
