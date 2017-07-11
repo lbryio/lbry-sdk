@@ -295,6 +295,42 @@ class SqliteStorage(MetaDataStorage):
             response = result[0][0]
         defer.returnValue(response)
 
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _fix_malformed_supports_amount(self, row_id, supports, amount):
+        """
+        this fixes malformed supports and amounts that were entering the cache
+        support list of [txid, nout, amount in deweys] instead of list of
+        {'txid':,'nout':,'amount':}, with amount specified in dewey
+
+        and also supports could be "[]" (brackets enclosed by double quotes)
+        This code can eventually be removed, as new versions should not have this problem
+        """
+        fixed_supports = None
+        fixed_amount = None
+        supports = [] if not supports else json.loads(supports)
+        if isinstance(supports, (str, unicode)) and supports == '[]':
+            fixed_supports = []
+        elif len(supports) > 0 and not isinstance(supports[0], dict):
+            fixed_supports = []
+            fixed_amount = amount / 100000000.0
+            for support in supports:
+                fixed_supports.append(
+                    {'txid':support[0], 'nout':support[1], 'amount':support[2]/100000000.0})
+        if fixed_supports is not None:
+            log.warn("Malformed support found, fixing it")
+            r = yield self.db.runOperation('UPDATE claim_cache SET supports=? WHERE row_id=?',
+                                        (json.dumps(fixed_supports), row_id))
+            supports = fixed_supports
+        if fixed_amount is not None:
+            log.warn("Malformed amount found, fixing it")
+            r = yield self.db.runOperation('UPDATE claim_cache SET amount=? WHERE row_id=?',
+                                        (fixed_amount, row_id))
+            amount = fixed_amount
+
+        defer.returnValue((json.dumps(supports), amount))
+
     @rerun_if_locked
     @defer.inlineCallbacks
     def _get_cached_claim(self, claim_id, check_expire=True):
@@ -303,7 +339,8 @@ class SqliteStorage(MetaDataStorage):
                                                "WHERE claimId=?", (claim_id, ))
         response = None
         if r and claim_tx_info:
-            _, _, seq, claim_address, height, amount, supports, raw, chan_name, valid, ts = r[0]
+            rid, _, seq, claim_address, height, amount, supports, raw, chan_name, valid, ts = r[0]
+            supports, amount = yield self._fix_malformed_supports_amount(rid, supports, amount)
             last_modified = int(ts)
             name, txid, nout = claim_tx_info[0]
             claim = ClaimDict.deserialize(raw.decode('hex'))
