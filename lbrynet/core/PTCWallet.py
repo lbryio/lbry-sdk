@@ -12,7 +12,6 @@ from lbrynet.pointtraderclient import pointtraderclient
 from twisted.internet import defer, threads
 from zope.interface import implements
 from twisted.python.failure import Failure
-from lbrynet.core.Wallet import ReservedPoints
 
 
 log = logging.getLogger(__name__)
@@ -29,7 +28,6 @@ class PTCWallet(object):
         self.private_key = None
         self.encoded_public_key = None
         self.peer_pub_keys = {}
-        self.queued_payments = defaultdict(int)
         self.expected_payments = defaultdict(list)
         self.received_payments = defaultdict(list)
         self.next_manage_call = None
@@ -45,20 +43,18 @@ class PTCWallet(object):
         from twisted.internet import reactor
 
         if time.time() < self.new_payments_expected_time + self.payment_check_window:
-            d1 = self._get_new_payments()
+            d = self._get_new_payments()
         else:
-            d1 = defer.succeed(None)
-        d1.addCallback(lambda _: self._check_good_standing())
-        d2 = self._send_queued_points()
+            d = defer.succeed(None)
+        d.addCallback(lambda _: self._check_good_standing())
         self.next_manage_call = reactor.callLater(60, self.manage)
-        dl = defer.DeferredList([d1, d2])
-        dl.addCallback(lambda _: self.get_balance())
+        d.addCallback(lambda _: self.get_balance())
 
         def set_balance(balance):
             self.wallet_balance = balance
 
-        dl.addCallback(set_balance)
-        return dl
+        d.addCallback(set_balance)
+        return d
 
     def stop(self):
         if self.next_manage_call is not None:
@@ -109,66 +105,6 @@ class PTCWallet(object):
 
     def get_wallet_info_query_handler_factory(self):
         return PointTraderKeyQueryHandlerFactory(self)
-
-    def reserve_points(self, peer, amount):
-        """Ensure a certain amount of points are available to be sent as
-        payment, before the service is rendered
-
-        @param peer: The peer to which the payment will ultimately be sent
-
-        @param amount: The amount of points to reserve
-
-        @return: A ReservedPoints object which is given to send_points
-        once the service has been rendered
-
-        """
-        if self.wallet_balance >= self.total_reserved_points + amount:
-            self.total_reserved_points += amount
-            return ReservedPoints(peer, amount)
-        return None
-
-    def cancel_point_reservation(self, reserved_points):
-        """
-        Return all of the points that were reserved previously for some ReservedPoints object
-
-        @param reserved_points: ReservedPoints previously returned by reserve_points
-
-        @return: None
-        """
-        self.total_reserved_points -= reserved_points.amount
-
-    def send_points(self, reserved_points, amount):
-        """
-        Schedule a payment to be sent to a peer
-
-        @param reserved_points: ReservedPoints object previously returned by reserve_points
-
-        @param amount: amount of points to actually send, must be less than or equal to the
-            amount reserved in reserved_points
-
-        @return: Deferred which fires when the payment has been scheduled
-        """
-        self.queued_payments[reserved_points.identifier] += amount
-        # make any unused points available
-        self.total_reserved_points -= reserved_points.amount - amount
-        reserved_points.identifier.update_stats('points_sent', amount)
-        d = defer.succeed(True)
-        return d
-
-    def _send_queued_points(self):
-        ds = []
-        for peer, points in self.queued_payments.items():
-            if peer in self.peer_pub_keys:
-                d = pointtraderclient.send_points(
-                    self.private_key, self.peer_pub_keys[peer], points)
-                self.wallet_balance -= points
-                self.total_reserved_points -= points
-                ds.append(d)
-                del self.queued_payments[peer]
-            else:
-                log.warning("Don't have a payment address for peer %s. Can't send %s points.",
-                            str(peer), str(points))
-        return defer.DeferredList(ds)
 
     def get_balance(self):
         """Return the balance of this wallet"""
