@@ -9,7 +9,7 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  *
+  * Add link to instructions on how to change the default peer port
   *
 
 ### Changed
@@ -17,8 +17,7 @@ at anytime.
   *
 
 ### Fixed
-  *
-  *
+  * peer_port is settable using `settings_set`
 
 ### Deprecated
   *
