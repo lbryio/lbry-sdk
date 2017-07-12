@@ -1,13 +1,23 @@
 import logging
+import os
+import sys
 import mimetypes
 
+from appdirs import user_data_dir
 from zope.interface import implements
 from twisted.internet import defer, error, interfaces, abstract, task, reactor
 
 
+# TODO: omg, this code is essentially duplicated in Daemon
+if sys.platform != "darwin":
+    data_dir = os.path.join(os.path.expanduser("~"), ".lbrynet")
+else:
+    data_dir = user_data_dir("LBRY")
+if not os.path.isdir(data_dir):
+    os.mkdir(data_dir)
+
 log = logging.getLogger(__name__)
 STATUS_FINISHED = 'finished'
-
 
 class EncryptedFileStreamer(object):
     """
@@ -21,12 +31,14 @@ class EncryptedFileStreamer(object):
 
     bufferSize = abstract.FileDescriptor.bufferSize
 
+
     # How long to wait between sending blocks (needed because some
     # video players freeze up if you try to send data too fast)
     stream_interval = 0.005
 
     # How long to wait before checking if new data has been appended to the file
     new_data_check_interval = 0.25
+
 
     def __init__(self, request, path, stream, file_manager):
         def _set_content_length_header(length):

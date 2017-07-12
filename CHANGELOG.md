@@ -9,38 +9,65 @@ at anytime.
 
 ## [Unreleased]
 ### Added
-  * Missing docstring for `blob_list`
-  * Added convenient import for setting up a daemon client, `from lbrynet.daemon import get_client`
-  * Added unit tests for CryptBlob.py
+  * Add link to instructions on how to change the default peer port
+  *
 
 ### Changed
-  * Change `max_key_fee` setting to be a dictionary with values for `currency` and `amount`
-  * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
-  * Linux folders moved from the home directory to `~/.local/share/lbry`
-  * Windows folders moved from `%APPDATA%/Roaming` to `%APPDATA%/Local/lbry`
-  * Renamed `lbrynet.lbryfile` to `lbrynet.lbry_file`
-  * Renamed `lbrynet.lbryfilemanager` to `lbrynet.file_manager`
-  * Renamed `lbrynet.lbrynet_daemon` to `lbrynet.daemon`
-  * Initialize lbrynet settings when configuring an api client if they are not set yet
-  * Updated lbryum imports
-  * Improve error message when resolving a claim fails using the "get" command
+  *
+  *
 
 ### Fixed
-  * Fixed some log messages throwing exceptions
-  * Fix shutdown of the blob tracker by Session
-  * Fixed claim_new_support docstrings
-  * Fix default directories to comply to XDG
-  * Fixed BlobManager causing functional tests to fail, removed its unneeded manage() loop
-  * Increased max_key_fee
-  * Gives message and instructions if port 3333 is used
+  * peer_port is settable using `settings_set`
 
 ### Deprecated
   *
   *
 
 ### Removed
-  * Removed unused settings from conf.py and `settings_set`
-  * Removed download_directory argument from API command get
+  *
+  *
+
+## [0.14.1] - 2017-07-07
+
+### Fixed
+ * Fixed timeout behaviour when calling API command get
+ * Fixed https://github.com/lbryio/lbry/issues/765
+
+
+
+## [0.14.0] - 2017-07-05
+
+### Added
+ * Missing docstring for `blob_list`
+ * Added convenient import for setting up a daemon client, `from lbrynet.daemon import get_client`
+ * Added unit tests for CryptBlob.py
+
+
+### Changed
+ * Change `max_key_fee` setting to be a dictionary with values for `currency` and `amount`
+ * Renamed `lbrynet.lbryfile` to `lbrynet.lbry_file`
+ * Renamed `lbrynet.lbryfilemanager` to `lbrynet.file_manager`
+ * Renamed `lbrynet.lbrynet_daemon` to `lbrynet.daemon`
+ * Initialize lbrynet settings when configuring an api client if they are not set yet
+ * Updated lbryum imports
+ * Improve error message when resolving a claim fails using the "get" command
+
+
+### Removed
+ * Removed unused settings from conf.py and `settings_set`
+ * Removed download_directory argument from API command get
+
+
+### Fixed
+ * Fixed some log messages throwing exceptions
+ * Fix shutdown of the blob tracker by Session
+ * Fixed claim_new_support docstrings
+ * Fixed BlobManager causing functional tests to fail, removed its unneeded manage() loop
+ * Increased max_key_fee
+ * Fixed unit tests on appveyor Windows build
+ * Fixed [#692](https://github.com/lbryio/lbry/issues/692)
+
+
 
 ## [0.13.1] - 2017-06-15
 

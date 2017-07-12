@@ -2,11 +2,10 @@ import base58
 import json
 import logging
 import os
-import re
 import sys
 import yaml
 import envparse
-from appdirs import user_data_dir, user_config_dir
+from appdirs import user_data_dir
 from lbrynet.core import utils
 
 log = logging.getLogger(__name__)
@@ -44,48 +43,44 @@ settings_encoders = {
     '.yml': yaml.safe_dump
 }
 
-if 'darwin' in sys.platform:
+def _win_path_to_bytes(path):
+    """
+    Encode Windows paths to string. appdirs.user_data_dir()
+    on windows will return unicode path, unlike other platforms
+    which returns string. This will cause problems
+    because we use strings for filenames and combining them with
+    os.path.join() will result in errors.
+    """
+    for encoding in ('ASCII', 'MBCS'):
+        try:
+            return path.encode(encoding)
+        except (UnicodeEncodeError, LookupError):
+            pass
+    return path
+
+if sys.platform.startswith('darwin'):
     platform = DARWIN
-    default_download_dir = os.path.expanduser('~/Downloads')
+    default_download_directory = os.path.join(os.path.expanduser('~'), 'Downloads')
     default_data_dir = user_data_dir('LBRY')
-    default_lbryum_dir = os.path.expanduser('~/.lbryum')
-elif 'nt' in sys.platform:
+    default_lbryum_dir = os.path.join(os.path.expanduser('~'), '.lbryum')
+elif sys.platform.startswith('win'):
     platform = WINDOWS
     from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
 
-    default_download_dir = get_path(FOLDERID.Downloads, UserHandle.current)
+    default_download_directory = get_path(FOLDERID.Downloads, UserHandle.current)
+    default_data_dir = os.path.join(
+        get_path(FOLDERID.RoamingAppData, UserHandle.current), 'lbrynet')
+    default_lbryum_dir = os.path.join(
+        get_path(FOLDERID.RoamingAppData, UserHandle.current), 'lbryum')
 
-    # This checks whether the folders are still in their old locations
-    if os.path.isdir(user_data_dir('lbryum', roaming=True)) and \
-       os.path.isdir(user_data_dir('lbrynet', roaming=True)):
-        default_data_dir = user_data_dir('lbrynet', roaming=True)
-        default_lbryum_dir = user_data_dir('lbryum', roaming=True)
-    else:
-        default_data_dir = user_data_dir('lbrynet', 'lbry')
-        default_lbryum_dir = user_data_dir('lbryum', 'lbry')
+    default_download_directory = _win_path_to_bytes(default_download_directory)
+    default_data_dir = _win_path_to_bytes(default_data_dir)
+    default_lbryum_dir = _win_path_to_bytes(default_lbryum_dir)
 else:
     platform = LINUX
-
-    # This checks whether the folders are still in their old locations
-    if os.path.isdir(os.path.expanduser('~/.lbrynet')) and \
-       os.path.isdir(os.path.expanduser('~/.lbryum')):
-        default_data_dir = os.path.expanduser('~/.lbrynet')
-        default_lbryum_dir = os.path.expanduser('~/.lbryum')
-        default_download_dir = os.path.expanduser('~/Downloads')
-    else:
-        default_data_dir = user_data_dir('lbry/lbrynet')
-        default_lbryum_dir = user_data_dir('lbry/lbryum')
-        try:
-            with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
-                down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
-                down_dir = re.sub('\$HOME', os.getenv('HOME'), down_dir)
-                default_download_dir = re.sub('\"', '', down_dir)
-        except EnvironmentError:
-            default_download_dir = os.getenv('XDG_DOWNLOAD_DIR')
-
-        if not default_download_dir:
-            default_download_dir = os.path.expanduser('~/Downloads')
-
+    default_download_directory = os.path.join(os.path.expanduser('~'), 'Downloads')
+    default_data_dir = os.path.join(os.path.expanduser('~'), '.lbrynet')
+    default_lbryum_dir = os.path.join(os.path.expanduser('~'), '.lbryum')
 
 ICON_PATH = 'icons' if platform is WINDOWS else 'app.icns'
 
@@ -183,7 +178,7 @@ ADJUSTABLE_SETTINGS = {
     'data_rate': (float, .0001),  # points/megabyte
     'delete_blobs_on_remove': (bool, True),
     'dht_node_port': (int, 4444),
-    'download_directory': (str, default_download_dir),
+    'download_directory': (str, default_download_directory),
     'download_timeout': (int, 180),
     'is_generous_host': (bool, True),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_port),

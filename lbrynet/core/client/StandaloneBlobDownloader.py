@@ -5,11 +5,11 @@ from lbrynet.core.BlobInfo import BlobInfo
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.ConnectionManager import ConnectionManager
 from lbrynet.core.client.DownloadManager import DownloadManager
-from lbrynet.core.Error import InvalidBlobHashError
-from lbrynet.core.utils import is_valid_blobhash
+from lbrynet.core.Error import InvalidBlobHashError, DownloadTimeoutError
+from lbrynet.core.utils import is_valid_blobhash, safe_start_looping_call, safe_stop_looping_call
 from twisted.python.failure import Failure
 from twisted.internet import defer
-
+from twisted.internet.task import LoopingCall
 
 log = logging.getLogger(__name__)
 
@@ -32,36 +32,35 @@ class SingleBlobMetadataHandler(object):
 
 
 class SingleProgressManager(object):
-    def __init__(self, finished_callback, download_manager):
+    def __init__(self, download_manager, finished_callback, timeout_callback, timeout):
         self.finished_callback = finished_callback
-        self.finished = False
+        self.timeout_callback = timeout_callback
         self.download_manager = download_manager
-        self._next_check_if_finished = None
+
+        self.timeout = timeout
+        self.timeout_counter = 0
+        self.checker = LoopingCall(self._check_if_finished)
 
     def start(self):
-
-        from twisted.internet import reactor
-
-        assert self._next_check_if_finished is None
-        self._next_check_if_finished = reactor.callLater(0, self._check_if_finished)
+        safe_start_looping_call(self.checker, 1)
         return defer.succeed(True)
 
     def stop(self):
-        if self._next_check_if_finished is not None:
-            self._next_check_if_finished.cancel()
-            self._next_check_if_finished = None
+        safe_stop_looping_call(self.checker)
         return defer.succeed(True)
 
     def _check_if_finished(self):
-
-        from twisted.internet import reactor
-
-        self._next_check_if_finished = None
-        if self.finished is False:
-            if self.stream_position() == 1:
-                self.blob_downloaded(self.download_manager.blobs[0], 0)
-            else:
-                self._next_check_if_finished = reactor.callLater(1, self._check_if_finished)
+        if self.stream_position() == 1:
+            blob_downloaded = self.download_manager.blobs[0]
+            log.debug("The blob %s has been downloaded. Calling the finished callback",
+                        str(blob_downloaded))
+            safe_stop_looping_call(self.checker)
+            self.finished_callback(blob_downloaded)
+        elif self.timeout is not None:
+            self.timeout_counter += 1
+            if self.timeout_counter >= self.timeout:
+                safe_stop_looping_call(self.checker)
+                self.timeout_callback()
 
     def stream_position(self):
         blobs = self.download_manager.blobs
@@ -74,15 +73,6 @@ class SingleProgressManager(object):
         assert len(blobs) == 1
         return [b for b in blobs.itervalues() if not b.is_validated()]
 
-    def blob_downloaded(self, blob, blob_num):
-
-        from twisted.internet import reactor
-
-        log.debug("The blob %s has been downloaded. Calling the finished callback", str(blob))
-        if self.finished is False:
-            self.finished = True
-            reactor.callLater(0, self.finished_callback, blob)
-
 
 class DummyBlobHandler(object):
     def __init__(self):
@@ -94,13 +84,15 @@ class DummyBlobHandler(object):
 
 class StandaloneBlobDownloader(object):
     def __init__(self, blob_hash, blob_manager, peer_finder,
-                 rate_limiter, payment_rate_manager, wallet):
+                 rate_limiter, payment_rate_manager, wallet,
+                 timeout=None):
         self.blob_hash = blob_hash
         self.blob_manager = blob_manager
         self.peer_finder = peer_finder
         self.rate_limiter = rate_limiter
         self.payment_rate_manager = payment_rate_manager
         self.wallet = wallet
+        self.timeout = timeout
         self.download_manager = None
         self.finished_deferred = None
 
@@ -118,8 +110,10 @@ class StandaloneBlobDownloader(object):
                                                              self.download_manager)
         self.download_manager.blob_info_finder = SingleBlobMetadataHandler(self.blob_hash,
                                                                            self.download_manager)
-        self.download_manager.progress_manager = SingleProgressManager(self._blob_downloaded,
-                                                                       self.download_manager)
+        self.download_manager.progress_manager = SingleProgressManager(self.download_manager,
+                                                                       self._blob_downloaded,
+                                                                       self._download_timedout,
+                                                                       self.timeout)
         self.download_manager.blob_handler = DummyBlobHandler()
         self.download_manager.wallet_info_exchanger = self.wallet.get_info_exchanger()
         self.download_manager.connection_manager = ConnectionManager(
@@ -138,6 +132,11 @@ class StandaloneBlobDownloader(object):
         self.stop()
         if not self.finished_deferred.called:
             self.finished_deferred.callback(blob)
+
+    def _download_timedout(self):
+        self.stop()
+        if not self.finished_deferred.called:
+            self.finished_deferred.errback(DownloadTimeoutError(self.blob_hash))
 
     def insufficient_funds(self, err):
         self.stop()
