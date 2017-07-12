@@ -24,7 +24,7 @@ at anytime.
   *
 
 ### Removed
-  *
+  * Removed payment queueing and therefore ability for clients to make data payments
   *
 
 ## [0.14.1] - 2017-07-07
