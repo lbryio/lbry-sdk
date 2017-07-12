@@ -17,7 +17,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed incorrect formatting of "amount" fields
   *
 
 ### Deprecated
