@@ -3,7 +3,6 @@ from collections import defaultdict
 from decimal import Decimal
 
 from twisted.internet import defer
-from twisted.python.failure import Failure
 from zope.interface import implements
 
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError
@@ -468,19 +467,14 @@ class DownloadRequest(RequestHelper):
         return request
 
     def _handle_download_request(self, client_blob_request):
-        reserved_points = self.reserve_funds_or_cancel(client_blob_request)
-        self.add_callbacks_to_download_request(client_blob_request, reserved_points)
+        rate = self.get_rate()
+        points_to_reserve = get_points(client_blob_request.max_pay_units, rate)
+        if points_to_reserve > 0:
+            log.warn("Data payments not support by this client. Proceeding anyways")
+        self.add_callbacks_to_download_request(client_blob_request)
         self.create_add_blob_request(client_blob_request)
 
-    def reserve_funds_or_cancel(self, client_blob_request):
-        reserved_points = self._reserve_points(client_blob_request.max_pay_units)
-        if reserved_points is not None:
-            return reserved_points
-        client_blob_request.cancel(InsufficientFundsError())
-        client_blob_request.finished_deferred.addErrback(lambda _: True)
-        raise InsufficientFundsError()
-
-    def add_callbacks_to_download_request(self, client_blob_request, reserved_points):
+    def add_callbacks_to_download_request(self, client_blob_request):
         # Note: The following three callbacks will be called when the blob has been
         # fully downloaded or canceled
         client_blob_request.finished_deferred.addCallbacks(
@@ -488,35 +482,8 @@ class DownloadRequest(RequestHelper):
             self._download_failed,
             callbackArgs=(client_blob_request.blob,),
         )
-        client_blob_request.finished_deferred.addBoth(
-            self._pay_or_cancel_payment, reserved_points, client_blob_request.blob)
         client_blob_request.finished_deferred.addErrback(
             _handle_download_error, self.peer, client_blob_request.blob)
-
-    def _pay_or_cancel_payment(self, arg, reserved_points, blob):
-        if self._can_pay_peer(blob, arg):
-            self._pay_peer(blob.length, reserved_points)
-            d = self.requestor.blob_manager.add_blob_to_download_history(
-                str(blob), str(self.peer.host), float(self.protocol_prices[self.protocol]))
-        else:
-            self._cancel_points(reserved_points)
-        return arg
-
-    def _can_pay_peer(self, blob, arg):
-        return (
-            blob.length != 0 and
-            (not isinstance(arg, Failure) or arg.check(DownloadCanceledError))
-        )
-
-    def _pay_peer(self, num_bytes, reserved_points):
-        assert num_bytes != 0
-        rate = self.get_rate()
-        point_amount = get_points(num_bytes, rate)
-        self.wallet.send_points(reserved_points, point_amount)
-        self.payment_rate_manager.record_points_paid(point_amount)
-
-    def _cancel_points(self, reserved_points):
-        self.wallet.cancel_point_reservation(reserved_points)
 
     def create_add_blob_request(self, client_blob_request):
         d = self.protocol.add_blob_request(client_blob_request)
@@ -530,16 +497,6 @@ class DownloadRequest(RequestHelper):
         # downloaded.
         d.addCallback(_handle_incoming_blob, self.peer, client_blob_request)
         d.addErrback(self._request_failed, "download request")
-
-    def _reserve_points(self, num_bytes):
-        # jobevers: there was an assertion here, but I don't think it
-        # was a valid assertion to make. It is possible for a rate to
-        # not yet been set for this protocol or for it to have been
-        # removed so instead I switched it to check if a rate has been set
-        # and calculate it if it has not
-        rate = self.get_rate()
-        points_to_reserve = get_points(num_bytes, rate)
-        return self.wallet.reserve_points(self.peer, points_to_reserve)
 
     def _download_succeeded(self, arg, blob):
         log.info("Blob %s has been successfully downloaded from %s", blob, self.peer)
