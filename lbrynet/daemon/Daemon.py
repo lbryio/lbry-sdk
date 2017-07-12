@@ -314,7 +314,8 @@ class Daemon(AuthJSONRPCServer):
                 self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
             except error.CannotListenError as e:
                 import traceback
-                log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for more details.", self.peer_port)
+                log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for"
+                          " more details.", self.peer_port)
                 log.error("%s", traceback.format_exc())
                 raise ValueError("%s lbrynet may already be running on your computer.", str(e))
         return defer.succeed(True)
