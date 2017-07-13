@@ -108,11 +108,11 @@ def configure_handler(handler, log, level):
 
 
 def disable_third_party_loggers():
-    logging.getLogger('requests').setLevel(logging.WARNING)
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    logging.getLogger('requests').setLevel(logging.CRITICAL)
+    logging.getLogger('urllib3').setLevel(logging.CRITICAL)
     logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
     logging.getLogger('lbryum').setLevel(logging.WARNING)
-    logging.getLogger('twisted').setLevel(logging.WARNING)
+    logging.getLogger('twisted').setLevel(logging.CRITICAL)
 
 
 @_log_decorator
