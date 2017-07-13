@@ -7,6 +7,8 @@ import sys
 import traceback
 
 from txrequests import Session
+from requests.exceptions import ConnectionError
+from twisted.internet import defer
 import twisted.python.log
 
 from lbrynet import __version__ as lbrynet_version, build_type, conf
@@ -32,11 +34,6 @@ _srcfile = os.path.normcase(_srcfile)
 TRACE = 5
 
 
-def bg_cb(sess, resp):
-    """ Don't do anything with the response """
-    pass
-
-
 class HTTPSHandler(logging.Handler):
     def __init__(self, url, fqdn=False, localname=None, facility=None, session=None):
         logging.Handler.__init__(self)
@@ -52,14 +49,16 @@ class HTTPSHandler(logging.Handler):
         else:
             return record.getMessage()
 
-    def emit(self, record):
+    @defer.inlineCallbacks
+    def _emit(self, record):
+        payload = self.format(record)
         try:
-            payload = self.format(record)
-            self.session.post(self.url, data=payload, background_callback=bg_cb)
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
-            self.handleError(record)
+            yield self.session.post(self.url, data=payload)
+        except ConnectionError:
+            pass
+
+    def emit(self, record):
+        return self._emit(record)
 
 
 DEFAULT_FORMAT = "%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s"
