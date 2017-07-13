@@ -209,7 +209,6 @@ class Daemon(AuthJSONRPCServer):
         self.query_handlers = {}
         self.waiting_on = {}
         self.streams = {}
-        self.name_cache = {}
         self.exchange_rate_manager = ExchangeRateManager()
         calls = {
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
@@ -655,12 +654,6 @@ class Daemon(AuthJSONRPCServer):
     def _get_long_count_timestamp(self):
         dt = utils.utcnow() - utils.datetime_obj(year=2012, month=12, day=21)
         return int(dt.total_seconds())
-
-    def _update_claim_cache(self):
-        f = open(os.path.join(self.db_dir, "stream_info_cache.json"), "w")
-        f.write(json.dumps(self.name_cache))
-        f.close()
-        return defer.succeed(True)
 
     @defer.inlineCallbacks
     def _resolve_name(self, name, force_refresh=False):
