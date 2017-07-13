@@ -367,7 +367,11 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     # i'm scared this may swallow important errors, but i get a million of these
                     # on Linux and it doesnt seem to affect anything  -grin
                     log.debug("Can't send data to dht: EWOULDBLOCK")
+                elif err.errno == errno.ENETUNREACH:
+                    # this should probably try to retransmit when the network connection is back
+                    log.error("Network is unreachable")
                 else:
+                    log.error("DHT socket error: %s (%i)", err.message, err.errno)
                     raise err
 
     def _sendResponse(self, contact, rpcID, response):
