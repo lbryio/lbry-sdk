@@ -91,11 +91,13 @@ class GetStream(object):
         log.info("Download lbry://%s status changed to %s" % (name, status))
         self.code = next(s for s in STREAM_STAGES if s[0] == status)
 
+    @defer.inlineCallbacks
     def check_fee_and_convert(self, fee):
         max_key_fee_amount = self.convert_max_fee()
         converted_fee_amount = self.exchange_rate_manager.convert_currency(fee.currency, "LBC",
                                                                            fee.amount)
-        if converted_fee_amount > self.wallet.get_balance():
+        balance = yield self.wallet.get_balance()
+        if converted_fee_amount > balance:
             raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee_amount)
         if converted_fee_amount > max_key_fee_amount:
             raise KeyFeeAboveMaxAllowed('Key fee %s above max allowed %s' % (converted_fee_amount,
@@ -105,7 +107,7 @@ class GetStream(object):
             'amount': converted_fee_amount,
             'address': fee.address
         }
-        return Fee(converted_fee)
+        defer.returnValue(Fee(converted_fee))
 
     def get_downloader_factory(self, factories):
         for factory in factories:

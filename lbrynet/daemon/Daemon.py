@@ -254,7 +254,8 @@ class Daemon(AuthJSONRPCServer):
         yield self._setup_lbry_file_manager()
         yield self._setup_query_handlers()
         yield self._setup_server()
-        log.info("Starting balance: " + str(self.session.wallet.get_balance()))
+        balance = yield self.session.wallet.get_balance()
+        log.info("Starting balance: " + str(balance))
         yield _announce_startup()
 
     def _get_platform(self):
@@ -1195,6 +1196,7 @@ class Daemon(AuthJSONRPCServer):
         """
         return self._render_response(sorted([command for command in self.callable_methods.keys()]))
 
+    @defer.inlineCallbacks
     @AuthJSONRPCServer.flags(include_unconfirmed='-u')
     def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
         """
@@ -1211,10 +1213,12 @@ class Daemon(AuthJSONRPCServer):
             (float) amount of lbry credits in wallet
         """
         if address is None:
-            return self._render_response(float(self.session.wallet.get_balance()))
+            balance = yield self.session.wallet.get_balance()
         else:
-            return self._render_response(float(
-                self.session.wallet.get_address_balance(address, include_unconfirmed)))
+            balance = self.session.wallet_get_address_balance(address, include_unconfirmed)
+
+        response = yield self._render_response(float(balance))
+        defer.returnValue(response)
 
     @defer.inlineCallbacks
     def jsonrpc_daemon_stop(self):
