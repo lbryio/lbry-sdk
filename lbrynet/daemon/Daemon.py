@@ -43,7 +43,7 @@ from lbrynet.core.Wallet import LBRYumWallet, SqliteStorage, ClaimOutpoint
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.core.Error import InsufficientFundsError, UnknownNameError, NoSuchSDHash
+from lbrynet.core.Error import UnknownNameError, NoSuchSDHash
 from lbrynet.core.Error import NoSuchStreamHash, UnknownClaimID, UnknownURI
 from lbrynet.core.Error import NullFundsError, NegativeFundsError
 
@@ -1680,8 +1680,6 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Invalid channel name")
         if amount <= 0:
             raise Exception("Invalid amount")
-        if amount > self.session.wallet.get_balance():
-            raise InsufficientFundsError()
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
         self.analytics_manager.send_new_channel()
@@ -1790,10 +1788,6 @@ class Daemon(AuthJSONRPCServer):
 
         if bid <= 0.0:
             raise Exception("Invalid bid")
-
-        if bid >= self.session.wallet.get_balance():
-            raise InsufficientFundsError('Insufficient funds. ' \
-                                         'Make sure you have enough LBC to deposit')
 
         metadata = metadata or {}
         if fee is not None:

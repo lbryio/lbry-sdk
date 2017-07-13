@@ -28,7 +28,7 @@ from lbrynet import conf
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
-from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError, UnknownNameError
+from lbrynet.core.Error import RequestCanceledError, UnknownNameError
 from lbrynet.core.Error import UnknownClaimID, UnknownURI
 from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 
@@ -754,9 +754,6 @@ class Wallet(object):
         decoded = ClaimDict.load_dict(metadata)
         serialized = decoded.serialized
 
-        if self.get_balance() < Decimal(bid):
-            raise InsufficientFundsError()
-
         claim = yield self._send_name_claim(name, serialized.encode('hex'),
                                             bid, certificate_id, claim_address, change_address)
 
@@ -789,9 +786,6 @@ class Wallet(object):
                 raise Exception(msg)
             claim_out = self._process_claim_out(claim_out)
             return defer.succeed(claim_out)
-
-        if self.get_balance() < amount:
-            raise InsufficientFundsError()
 
         d = self._support_claim(name, claim_id, amount)
         d.addCallback(lambda claim_out: _parse_support_claim_out(claim_out))
