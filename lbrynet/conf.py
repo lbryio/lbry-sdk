@@ -145,7 +145,7 @@ FIXED_SETTINGS = {
     },
     'DB_REVISION_FILE_NAME': 'db_revision',
     'ICON_PATH': ICON_PATH,
-    'LOGGLY_TOKEN': 'LJEzATH4AzRgAwxjAP00LwZ2YGx3MwVgZTMuBQZ3MQuxLmOv',
+    'LOGGLY_TOKEN': 'BQEzZmMzLJHgAGxkBF00LGD0YGuyATVgAmqxAQEuAQZ2BQH4',
     'LOG_FILE_NAME': 'lbrynet.log',
     'LOG_POST_URL': 'https://lbry.io/log-upload',
     'MAX_BLOB_REQUEST_SIZE': 64 * KB,
