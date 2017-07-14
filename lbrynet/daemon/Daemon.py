@@ -43,7 +43,7 @@ from lbrynet.core.Wallet import LBRYumWallet, SqliteStorage, ClaimOutpoint
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.core.Error import InsufficientFundsError, UnknownNameError, NoSuchSDHash
+from lbrynet.core.Error import UnknownNameError, NoSuchSDHash
 from lbrynet.core.Error import NoSuchStreamHash, UnknownClaimID, UnknownURI
 from lbrynet.core.Error import NullFundsError, NegativeFundsError
 
@@ -255,7 +255,8 @@ class Daemon(AuthJSONRPCServer):
         yield self._setup_lbry_file_manager()
         yield self._setup_query_handlers()
         yield self._setup_server()
-        log.info("Starting balance: " + str(self.session.wallet.get_balance()))
+        balance = yield self.session.wallet.get_balance()
+        log.info("Starting balance: " + str(balance))
         yield _announce_startup()
 
     def _get_platform(self):
@@ -1195,6 +1196,7 @@ class Daemon(AuthJSONRPCServer):
         """
         return self._render_response(sorted([command for command in self.callable_methods.keys()]))
 
+    @defer.inlineCallbacks
     @AuthJSONRPCServer.flags(include_unconfirmed='-u')
     def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
         """
@@ -1211,10 +1213,12 @@ class Daemon(AuthJSONRPCServer):
             (float) amount of lbry credits in wallet
         """
         if address is None:
-            return self._render_response(float(self.session.wallet.get_balance()))
+            balance = yield self.session.wallet.get_balance()
         else:
-            return self._render_response(float(
-                self.session.wallet.get_address_balance(address, include_unconfirmed)))
+            balance = self.session.wallet_get_address_balance(address, include_unconfirmed)
+
+        response = yield self._render_response(float(balance))
+        defer.returnValue(response)
 
     @defer.inlineCallbacks
     def jsonrpc_daemon_stop(self):
@@ -1676,8 +1680,6 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Invalid channel name")
         if amount <= 0:
             raise Exception("Invalid amount")
-        if amount > self.session.wallet.get_balance():
-            raise InsufficientFundsError()
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
         self.analytics_manager.send_new_channel()
@@ -1786,10 +1788,6 @@ class Daemon(AuthJSONRPCServer):
 
         if bid <= 0.0:
             raise Exception("Invalid bid")
-
-        if bid >= self.session.wallet.get_balance():
-            raise InsufficientFundsError('Insufficient funds. ' \
-                                         'Make sure you have enough LBC to deposit')
 
         metadata = metadata or {}
         if fee is not None:
@@ -2243,10 +2241,7 @@ class Daemon(AuthJSONRPCServer):
         elif not amount:
             raise NullFundsError()
 
-        reserved_points = self.session.wallet.reserve_points(address, amount)
-        if reserved_points is None:
-            raise InsufficientFundsError()
-        yield self.session.wallet.send_points_to_address(reserved_points, amount)
+        yield self.session.wallet.send_amount_to_address(amount, address)
         self.analytics_manager.send_credits_sent()
         defer.returnValue(True)
 

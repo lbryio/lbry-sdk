@@ -92,11 +92,13 @@ class GetStream(object):
         log.info("Download lbry://%s status changed to %s" % (name, status))
         self.code = next(s for s in STREAM_STAGES if s[0] == status)
 
+    @defer.inlineCallbacks
     def check_fee_and_convert(self, fee):
         max_key_fee_amount = self.convert_max_fee()
         converted_fee_amount = self.exchange_rate_manager.convert_currency(fee.currency, "LBC",
                                                                            fee.amount)
-        if converted_fee_amount > self.wallet.get_balance():
+        balance = yield self.wallet.get_balance()
+        if converted_fee_amount > balance:
             raise InsufficientFundsError('Unable to pay the key fee of %s' % converted_fee_amount)
         if converted_fee_amount > max_key_fee_amount and not self.disable_max_key_fee:
             raise KeyFeeAboveMaxAllowed('Key fee %s above max allowed %s' % (converted_fee_amount,
@@ -106,7 +108,7 @@ class GetStream(object):
             'amount': converted_fee_amount,
             'address': fee.address
         }
-        return Fee(converted_fee)
+        defer.returnValue(Fee(converted_fee))
 
     def get_downloader_factory(self, factories):
         for factory in factories:
@@ -129,10 +131,7 @@ class GetStream(object):
 
     def _pay_key_fee(self, address, fee_lbc, name):
         log.info("Pay key fee %f --> %s", fee_lbc, address)
-        reserved_points = self.wallet.reserve_points(address, fee_lbc)
-        if reserved_points is None:
-            raise InsufficientFundsError('Unable to pay the key fee of %s for %s' % (fee_lbc, name))
-        return self.wallet.send_points_to_address(reserved_points, fee_lbc)
+        return self.wallet.send_amount_to_address(fee_lbc, address)
 
     @defer.inlineCallbacks
     def pay_key_fee(self, fee, name):

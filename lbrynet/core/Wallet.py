@@ -5,6 +5,7 @@ import json
 import time
 
 from twisted.internet import threads, reactor, defer, task
+from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
 
@@ -27,17 +28,11 @@ from lbrynet import conf
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
-from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError, UnknownNameError
-from lbrynet.core.Error import UnknownClaimID, UnknownURI, NegativeFundsError
+from lbrynet.core.Error import RequestCanceledError, UnknownNameError
+from lbrynet.core.Error import UnknownClaimID, UnknownURI
+from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 
 log = logging.getLogger(__name__)
-
-
-class ReservedPoints(object):
-    def __init__(self, identifier, amount):
-        self.identifier = identifier
-        self.amount = amount
-
 
 class ClaimOutpoint(dict):
     def __init__(self, txid, nout):
@@ -429,34 +424,42 @@ class Wallet(object):
         if not isinstance(storage, MetaDataStorage):
             raise ValueError('storage must be an instance of MetaDataStorage')
         self._storage = storage
-        self.next_manage_call = None
-        self.wallet_balance = Decimal(0.0)
-        self.total_reserved_points = Decimal(0.0)
         self.peer_addresses = {}  # {Peer: string}
-        self.queued_payments = defaultdict(Decimal)  # {address(string): amount(Decimal)}
         self.expected_balances = defaultdict(Decimal)  # {address(string): amount(Decimal)}
         self.current_address_given_to_peer = {}  # {Peer: address(string)}
+
+        self.manage_looping_call = LoopingCall(self.manage)
+        self.manage_looping_call_interval = 30
+        self._manage_deferred = None
         # (Peer, address(string), amount(Decimal), time(datetime), count(int),
         # incremental_amount(float))
         self.expected_balance_at_time = deque()
         self.max_expected_payment_time = datetime.timedelta(minutes=3)
-        self.stopped = True
 
-        self.manage_running = False
-        self._manage_count = 0
         self._balance_refresh_time = 3
         self._batch_count = 20
 
+    @defer.inlineCallbacks
     def start(self):
-        def start_manage():
-            self.stopped = False
-            self.manage()
-            return True
+        yield self._storage.load()
+        yield self._start()
+        safe_start_looping_call(self.manage_looping_call, self.manage_looping_call_interval)
 
-        d = self._storage.load()
-        d.addCallback(lambda _: self._start())
-        d.addCallback(lambda _: start_manage())
-        return d
+    @defer.inlineCallbacks
+    def stop(self):
+        log.info("Stopping %s", self)
+        safe_stop_looping_call(self.manage_looping_call)
+        # wait for last manage call to finish
+        if self._manage_deferred:
+            yield self._manage_deferred
+        yield self._stop()
+
+    @defer.inlineCallbacks
+    def manage(self):
+        self._manage_deferred = defer.Deferred()
+        yield self._check_expected_balances()
+        self._manage_deferred.callback(None)
+        self._manage_deferred = None
 
     def _save_name_metadata(self, name, claim_outpoint, sd_hash):
         return self._storage.save_name_metadata(name, claim_outpoint, sd_hash)
@@ -467,176 +470,25 @@ class Wallet(object):
     def _update_claimid(self, claim_id, name, claim_outpoint):
         return self._storage.update_claimid(claim_id, name, claim_outpoint)
 
-    @staticmethod
-    def log_stop_error(err):
-        log.error("An error occurred stopping the wallet: %s", err.getTraceback())
-
-    def stop(self):
-        log.info("Stopping %s", self)
-        self.stopped = True
-        # If self.next_manage_call is None, then manage is currently running or else
-        # start has not been called, so set stopped and do nothing else.
-        if self.next_manage_call is not None:
-            self.next_manage_call.cancel()
-            self.next_manage_call = None
-
-        d = self.manage(do_full=True)
-        d.addErrback(self.log_stop_error)
-        d.addCallback(lambda _: self._stop())
-        d.addErrback(self.log_stop_error)
-        return d
-
-    def manage(self, do_full=False):
-        self.next_manage_call = None
-        have_set_manage_running = [False]
-        self._manage_count += 1
-        if self._manage_count % self._batch_count == 0:
-            self._manage_count = 0
-            do_full = True
-
-        def check_if_manage_running():
-
-            d = defer.Deferred()
-
-            def fire_if_not_running():
-                if self.manage_running is False:
-                    self.manage_running = True
-                    have_set_manage_running[0] = True
-                    d.callback(True)
-                elif do_full is False:
-                    d.callback(False)
-                else:
-                    task.deferLater(reactor, 1, fire_if_not_running)
-
-            fire_if_not_running()
-            return d
-
-        d = check_if_manage_running()
-
-        def do_manage():
-            if do_full:
-                d = self._check_expected_balances()
-                d.addCallback(lambda _: self._send_payments())
-            else:
-                d = defer.succeed(True)
-
-            def log_error(err):
-                if isinstance(err, AttributeError):
-                    log.warning("Failed to get an updated balance")
-                    log.warning("Last balance update: %s", str(self.wallet_balance))
-
-            d.addCallbacks(lambda _: self.update_balance(), log_error)
-            return d
-
-        d.addCallback(lambda should_run: do_manage() if should_run else None)
-
-        def set_next_manage_call():
-            if not self.stopped:
-                self.next_manage_call = reactor.callLater(self._balance_refresh_time, self.manage)
-
-        d.addCallback(lambda _: set_next_manage_call())
-
-        def log_error(err):
-            log.error("Something went wrong during manage. Error message: %s",
-                      err.getErrorMessage())
-            return err
-
-        d.addErrback(log_error)
-
-        def set_manage_not_running(arg):
-            if have_set_manage_running[0] is True:
-                self.manage_running = False
-            return arg
-
-        d.addBoth(set_manage_not_running)
-        return d
-
-    @defer.inlineCallbacks
-    def update_balance(self):
-        """ obtain balance from lbryum wallet and set self.wallet_balance
-        """
-        balance = yield self._update_balance()
-        if self.wallet_balance != balance:
-            log.debug("Got a new balance: %s", balance)
-        self.wallet_balance = balance
-
     def get_info_exchanger(self):
         return LBRYcrdAddressRequester(self)
 
     def get_wallet_info_query_handler_factory(self):
         return LBRYcrdAddressQueryHandlerFactory(self)
 
-    def reserve_points(self, identifier, amount):
-        """Ensure a certain amount of points are available to be sent as
-        payment, before the service is rendered
+    def send_amount_to_address(self, amount, address):
+        """
+        Send a payment of amount to address
 
-        @param identifier: The peer to which the payment will ultimately be sent
+        @param amount : amount to send in lbry credits
 
-        @param amount: The amount of points to reserve
+        @param address: address to send to
 
-        @return: A ReservedPoints object which is given to send_points
-            once the service has been rendered
+        @return: txid if successful , Exception will be thrown otherwise
         """
         rounded_amount = Decimal(str(round(amount, 8)))
-        if rounded_amount < 0:
-            raise NegativeFundsError(rounded_amount)
-        if self.get_balance() >= rounded_amount:
-            self.total_reserved_points += rounded_amount
-            return ReservedPoints(identifier, rounded_amount)
-        return None
-
-    def cancel_point_reservation(self, reserved_points):
-        """
-        Return all of the points that were reserved previously for some ReservedPoints object
-
-        @param reserved_points: ReservedPoints previously returned by reserve_points
-
-        @return: None
-        """
-        self.total_reserved_points -= reserved_points.amount
-
-    def send_points(self, reserved_points, amount):
-        """
-        Schedule a payment to be sent to a peer
-
-        @param reserved_points: ReservedPoints object previously returned by reserve_points
-
-        @param amount: amount of points to actually send, must be less than or equal to the
-            amount reserved in reserved_points
-
-        @return: Deferred which fires when the payment has been scheduled
-        """
-        rounded_amount = Decimal(str(round(amount, 8)))
-        peer = reserved_points.identifier
-        assert rounded_amount <= reserved_points.amount
-        assert peer in self.peer_addresses
-        self.queued_payments[self.peer_addresses[peer]] += rounded_amount
-        # make any unused points available
-        self.total_reserved_points -= (reserved_points.amount - rounded_amount)
-        log.debug("ordering that %s points be sent to %s", str(rounded_amount),
-                  str(self.peer_addresses[peer]))
-        peer.update_stats('points_sent', amount)
-        return defer.succeed(True)
-
-    def send_points_to_address(self, reserved_points, amount):
-        """
-        Schedule a payment to be sent to an address
-
-        @param reserved_points: ReservedPoints object previously returned by reserve_points
-
-        @param amount: amount of points to actually send. must be less than or equal to the
-            amount reselved in reserved_points
-
-        @return: Deferred which fires when the payment has been scheduled
-        """
-        rounded_amount = Decimal(str(round(amount, 8)))
-        address = reserved_points.identifier
-        assert rounded_amount <= reserved_points.amount
-        self.queued_payments[address] += rounded_amount
-        self.total_reserved_points -= (reserved_points.amount - rounded_amount)
-        log.debug("Ordering that %s points be sent to %s", str(rounded_amount),
-                  str(address))
-        return defer.succeed(True)
+        d = self._do_send_many({address:rounded_amount})
+        return d
 
     def add_expected_payment(self, peer, amount):
         """Increase the number of points expected to be paid by a peer"""
@@ -663,27 +515,6 @@ class Wallet(object):
         d = self.get_unused_address()
         d.addCallback(set_address_for_peer)
         return d
-
-    def _send_payments(self):
-        payments_to_send = {}
-        for address, points in self.queued_payments.items():
-            if points > 0:
-                log.debug("Should be sending %s points to %s", str(points), str(address))
-                payments_to_send[address] = points
-                self.total_reserved_points -= points
-            else:
-                log.info("Skipping dust")
-
-            del self.queued_payments[address]
-
-        if payments_to_send:
-            log.debug("Creating a transaction with outputs %s", str(payments_to_send))
-            d = self._do_send_many(payments_to_send)
-            d.addCallback(lambda txid: log.debug("Sent transaction %s", txid))
-            return d
-
-        log.debug("There were no payments to send")
-        return defer.succeed(True)
 
     ######
 
@@ -928,9 +759,6 @@ class Wallet(object):
         decoded = ClaimDict.load_dict(metadata)
         serialized = decoded.serialized
 
-        if self.get_balance() < Decimal(bid):
-            raise InsufficientFundsError()
-
         claim = yield self._send_name_claim(name, serialized.encode('hex'),
                                             bid, certificate_id, claim_address, change_address)
 
@@ -964,9 +792,6 @@ class Wallet(object):
             claim_out = self._process_claim_out(claim_out)
             return defer.succeed(claim_out)
 
-        if self.get_balance() < amount:
-            raise InsufficientFundsError()
-
         d = self._support_claim(name, claim_id, amount)
         d.addCallback(lambda claim_out: _parse_support_claim_out(claim_out))
         return d
@@ -991,7 +816,7 @@ class Wallet(object):
         return self._get_claim_metadata_for_sd_hash(sd_hash)
 
     def get_balance(self):
-        return self.wallet_balance - self.total_reserved_points - sum(self.queued_payments.values())
+        return self._get_balance()
 
     def _check_expected_balances(self):
         now = datetime.datetime.now()
@@ -1043,7 +868,7 @@ class Wallet(object):
 
     # ======== Must be overridden ======== #
 
-    def _update_balance(self):
+    def _get_balance(self):
         return defer.fail(NotImplementedError())
 
     def get_new_address(self):
@@ -1278,7 +1103,7 @@ class LBRYumWallet(Wallet):
         func = getattr(cmd_runner, cmd.name)
         return threads.deferToThread(func, *args, **kwargs)
 
-    def _update_balance(self):
+    def _get_balance(self):
         accounts = None
         exclude_claimtrietx = True
         d = self._run_cmd_as_defer_succeed('getbalance', accounts, exclude_claimtrietx)
@@ -1384,6 +1209,11 @@ class LBRYumWallet(Wallet):
         defer.returnValue(txid)
 
     def _do_send_many(self, payments_to_send):
+        """
+        Send transactions from wallet
+
+        payment_to_send - dictionary where key is address, value is amount in lbry credits
+        """
         def broadcast_send_many(paytomany_out):
             if 'hex' not in paytomany_out:
                 raise Exception('Unexpected paytomany output:{}'.format(paytomany_out))
