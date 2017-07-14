@@ -295,6 +295,42 @@ class SqliteStorage(MetaDataStorage):
             response = result[0][0]
         defer.returnValue(response)
 
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _fix_malformed_supports_amount(self, row_id, supports, amount):
+        """
+        this fixes malformed supports and amounts that were entering the cache
+        support list of [txid, nout, amount in deweys] instead of list of
+        {'txid':,'nout':,'amount':}, with amount specified in dewey
+
+        and also supports could be "[]" (brackets enclosed by double quotes)
+        This code can eventually be removed, as new versions should not have this problem
+        """
+        fixed_supports = None
+        fixed_amount = None
+        supports = [] if not supports else json.loads(supports)
+        if isinstance(supports, (str, unicode)) and supports == '[]':
+            fixed_supports = []
+        elif len(supports) > 0 and not isinstance(supports[0], dict):
+            fixed_supports = []
+            fixed_amount = amount / 100000000.0
+            for support in supports:
+                fixed_supports.append(
+                    {'txid':support[0], 'nout':support[1], 'amount':support[2]/100000000.0})
+        if fixed_supports is not None:
+            log.warn("Malformed support found, fixing it")
+            r = yield self.db.runOperation('UPDATE claim_cache SET supports=? WHERE row_id=?',
+                                        (json.dumps(fixed_supports), row_id))
+            supports = fixed_supports
+        if fixed_amount is not None:
+            log.warn("Malformed amount found, fixing it")
+            r = yield self.db.runOperation('UPDATE claim_cache SET amount=? WHERE row_id=?',
+                                        (fixed_amount, row_id))
+            amount = fixed_amount
+
+        defer.returnValue((json.dumps(supports), amount))
+
     @rerun_if_locked
     @defer.inlineCallbacks
     def _get_cached_claim(self, claim_id, check_expire=True):
@@ -303,7 +339,8 @@ class SqliteStorage(MetaDataStorage):
                                                "WHERE claimId=?", (claim_id, ))
         response = None
         if r and claim_tx_info:
-            _, _, seq, claim_address, height, amount, supports, raw, chan_name, valid, ts = r[0]
+            rid, _, seq, claim_address, height, amount, supports, raw, chan_name, valid, ts = r[0]
+            supports, amount = yield self._fix_malformed_supports_amount(rid, supports, amount)
             last_modified = int(ts)
             name, txid, nout = claim_tx_info[0]
             claim = ClaimDict.deserialize(raw.decode('hex'))
@@ -688,6 +725,39 @@ class Wallet(object):
         defer.returnValue(my_claim)
 
     @defer.inlineCallbacks
+    def _decode_and_cache_claim_result(self, claim, update_caches):
+        if 'has_signature' in claim and claim['has_signature']:
+            if not claim['signature_is_valid']:
+                log.warning("lbry://%s#%s has an invalid signature",
+                            claim['name'], claim['claim_id'])
+        try:
+            decoded = smart_decode(claim['value'])
+            claim_dict = decoded.claim_dict
+            outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
+            name = claim['name']
+            claim['value'] = claim_dict
+            claim['hex'] = decoded.serialized.encode('hex')
+            if update_caches:
+                if decoded.is_stream:
+                    yield self._save_name_metadata(name, outpoint, decoded.source_hash)
+                yield self._update_claimid(claim['claim_id'], name, outpoint)
+                yield self._storage.save_claim_to_cache(claim['claim_id'],
+                                                        claim['claim_sequence'],
+                                                        decoded, claim['address'],
+                                                        claim['height'],
+                                                        claim['amount'], claim['supports'],
+                                                        claim.get('channel_name', None),
+                                                        claim.get('signature_is_valid', None))
+        except DecodeError:
+            claim['hex'] = claim['value']
+            claim['value'] = None
+            claim['error'] = "Failed to decode value"
+
+        defer.returnValue(claim)
+
+
+
+    @defer.inlineCallbacks
     def _handle_claim_result(self, results, update_caches=True):
         if not results:
             raise UnknownNameError("No results to return")
@@ -702,94 +772,29 @@ class Wallet(object):
                     raise UnknownURI(results['uri'])
             raise Exception(results['error'])
 
-        if 'certificate' in results:
-            try:
-                decoded = smart_decode(results['certificate']['value'])
-                claim_dict = decoded.claim_dict
-                outpoint = ClaimOutpoint(results['certificate']['txid'],
-                                         results['certificate']['nout'])
-                name = results['certificate']['name']
-                results['certificate']['value'] = claim_dict
-                results['certificate']['hex'] = decoded.serialized.encode('hex')
-                if update_caches:
-                    if decoded.is_stream:
-                        yield self._save_name_metadata(name, outpoint, decoded.source_hash)
-                    yield self._update_claimid(results['certificate']['claim_id'], name, outpoint)
-                    yield self._storage.save_claim_to_cache(results['certificate']['claim_id'],
-                                                        results['certificate']['claim_sequence'],
-                                                        decoded, results['certificate']['address'],
-                                                        results['certificate']['height'],
-                                                        results['certificate']['amount'],
-                                                        results['certificate']['supports'],
-                                                        None,
-                                                        None)
-            except DecodeError:
-                pass
+        # case where return value is {'certificate:{'txid', 'value',...}}
+        elif 'certificate' in results:
+            results['certificate'] = yield self._decode_and_cache_claim_result(
+                                                                        results['certificate'],
+                                                                        update_caches)
 
-        if 'claim' in results:
-            claim = results['claim']
-            if 'has_signature' in claim and claim['has_signature']:
-                if not claim['signature_is_valid']:
-                    log.warning("lbry://%s#%s has an invalid signature",
-                                claim['name'], claim['claim_id'])
-            try:
-                decoded = smart_decode(claim['value'])
-                claim_dict = decoded.claim_dict
-                outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
-                name = claim['name']
-                claim['value'] = claim_dict
-                claim['hex'] = decoded.serialized.encode('hex')
-                if update_caches:
-                    if decoded.is_stream:
-                        yield self._save_name_metadata(name, outpoint, decoded.source_hash)
-                    yield self._update_claimid(claim['claim_id'], name, outpoint)
-                    yield self._storage.save_claim_to_cache(claim['claim_id'],
-                                                            claim['claim_sequence'],
-                                                            decoded, claim['address'],
-                                                            claim['height'],
-                                                            claim['amount'], claim['supports'],
-                                                            claim.get('channel_name', None),
-                                                            claim.get('signature_is_valid', None))
-            except DecodeError:
-                claim['hex'] = claim['value']
-                claim['value'] = None
-                claim['error'] = "Failed to decode value"
+        # case where return value is {'claim':{'txid','value',...}}
+        elif 'claim' in results:
+            results['claim'] = yield self._decode_and_cache_claim_result(
+                                                                     results['claim'],
+                                                                     update_caches)
 
-            results['claim'] = claim
-
+        # case where return value is {'txid','value',...}
+        # returned by queries that are not name resolve related
+        # (getclaimbyoutpoint, getclaimbyid, getclaimsfromtx)
+        # we do not update caches here because it should be missing
+        # some values such as claim_sequence, and supports
         elif 'value' in results:
-            if 'has_signature' in results and results['has_signature']:
-                if not results['signature_is_valid']:
-                    log.warning("lbry://%s#%s has an invalid signature",
-                                results['name'], results['claim_id'])
-            try:
-                decoded = ClaimDict.load_dict(results['value'])
-                claim_dict = decoded.claim_dict
-                claim_hex = decoded.serialized.encode('hex')
-                claim_err = None
-                outpoint = ClaimOutpoint(results['txid'], results['nout'])
-                name = results['name']
-                if update_caches:
-                    if decoded.is_stream:
-                        yield self._save_name_metadata(name, outpoint, decoded.source_hash)
-                    yield self._update_claimid(results['claim_id'], name, outpoint)
-                    yield self._storage.save_claim_to_cache(results['claim_id'],
-                                                            results.get('claim_sequence', None),
-                                                            decoded, results['address'],
-                                                            results['height'], results['amount'],
-                                                            results.get('supports', '[]'),
-                                                            results.get('channel_name', None),
-                                                            results.get('signature_is_valid',
-                                                                        None))
+            results = yield self._decode_and_cache_claim_result(results, update_caches=False)
 
-            except DecodeError:
-                claim_dict = None
-                claim_hex = results['value']
-                claim_err = "Failed to decode value"
-            if claim_err:
-                results['error'] = claim_err
-            results['hex'] = claim_hex
-            results['value'] = claim_dict
+        else:
+            msg = 'result in unexpected format:{}'.format(results)
+            assert False, msg
 
         defer.returnValue(results)
 
