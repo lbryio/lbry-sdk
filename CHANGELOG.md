@@ -12,15 +12,16 @@ at anytime.
   * Add link to instructions on how to change the default peer port
   * Add `peer_port` to settings configurable using `settings_set`
   * Added an option to disable max key fee check.
-  *
 
 ### Changed
-  *
+  * 
   *
 
 ### Fixed
   * Fix for https://github.com/lbryio/lbry/issues/750
   *
+  * Fixed daemon process hanging when started without an internet connection
+  * Fixed https://github.com/lbryio/lbry/issues/774
 
 ### Deprecated
   *

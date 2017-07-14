@@ -7,6 +7,8 @@ import sys
 import traceback
 
 from txrequests import Session
+from requests.exceptions import ConnectionError
+from twisted.internet import defer
 import twisted.python.log
 
 from lbrynet import __version__ as lbrynet_version, build_type, conf
@@ -32,11 +34,6 @@ _srcfile = os.path.normcase(_srcfile)
 TRACE = 5
 
 
-def bg_cb(sess, resp):
-    """ Don't do anything with the response """
-    pass
-
-
 class HTTPSHandler(logging.Handler):
     def __init__(self, url, fqdn=False, localname=None, facility=None, session=None):
         logging.Handler.__init__(self)
@@ -52,14 +49,16 @@ class HTTPSHandler(logging.Handler):
         else:
             return record.getMessage()
 
-    def emit(self, record):
+    @defer.inlineCallbacks
+    def _emit(self, record):
+        payload = self.format(record)
         try:
-            payload = self.format(record)
-            self.session.post(self.url, data=payload, background_callback=bg_cb)
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
-            self.handleError(record)
+            yield self.session.post(self.url, data=payload)
+        except ConnectionError:
+            pass
+
+    def emit(self, record):
+        return self._emit(record)
 
 
 DEFAULT_FORMAT = "%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s"
@@ -109,11 +108,11 @@ def configure_handler(handler, log, level):
 
 
 def disable_third_party_loggers():
-    logging.getLogger('requests').setLevel(logging.WARNING)
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    logging.getLogger('requests').setLevel(logging.CRITICAL)
+    logging.getLogger('urllib3').setLevel(logging.CRITICAL)
     logging.getLogger('BitcoinRPC').setLevel(logging.INFO)
     logging.getLogger('lbryum').setLevel(logging.WARNING)
-    logging.getLogger('twisted').setLevel(logging.WARNING)
+    logging.getLogger('twisted').setLevel(logging.CRITICAL)
 
 
 @_log_decorator
@@ -140,18 +139,27 @@ def get_loggly_url(token=None, version=None):
     return LOGGLY_URL.format(token=token, tag='lbrynet-' + version)
 
 
-def configure_loggly_handler(*args, **kwargs):
+def configure_loggly_handler():
     if build_type.BUILD == 'dev':
         return
-    level = kwargs.pop('level', logging.WARNING)
-    _configure_loggly_handler(*args, level=level, **kwargs)
+    level = logging.WARNING
+    handler = get_loggly_handler(level=level, installation_id=conf.settings.installation_id,
+                                 session_id=conf.settings.get_session_id())
+    log = logging.getLogger("lbrynet")
+    if handler.name:
+        remove_handlers(log, handler.name)
+    handler.setLevel(level)
+    log.addHandler(handler)
+    # need to reduce the logger's level down to the
+    # handler's level or else the handler won't
+    # get those messages
+    if log.level > level:
+        log.setLevel(level)
 
 
-@_log_decorator
-def _configure_loggly_handler(url=None, **kwargs):
-    url = url or get_loggly_url()
-    formatter = JsonFormatter(**kwargs)
-    handler = HTTPSHandler(url)
+def get_loggly_handler(level, installation_id, session_id):
+    formatter = JsonFormatter(level=level, installation_id=installation_id, session_id=session_id)
+    handler = HTTPSHandler(get_loggly_url())
     handler.setFormatter(formatter)
     handler.name = 'loggly'
     return handler
@@ -256,7 +264,6 @@ def configure_logging(file_name, console, verbose=None):
     verbose = convert_verbose(verbose)
     configure_twisted()
     configure_file_handler(file_name)
-    configure_loggly_handler()
     disable_third_party_loggers()
     if console:
         # if there are some loggers at the debug level, we need

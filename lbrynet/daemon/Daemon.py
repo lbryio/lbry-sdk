@@ -24,7 +24,7 @@ from lbrynet import conf, analytics
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
-
+from lbrynet.core.log_support import configure_loggly_handler
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
@@ -36,7 +36,7 @@ from lbrynet.daemon.Publisher import Publisher
 from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.core import log_support, utils, system_info
+from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.Session import Session
 from lbrynet.core.Wallet import LBRYumWallet, SqliteStorage, ClaimOutpoint
@@ -225,7 +225,7 @@ class Daemon(AuthJSONRPCServer):
     def setup(self):
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
-        self._modify_loggly_formatter()
+        configure_loggly_handler()
 
         @defer.inlineCallbacks
         def _announce_startup():
@@ -504,12 +504,6 @@ class Daemon(AuthJSONRPCServer):
             d.addCallback(lambda _: update_version_file_and_print_success())
             return d
         return defer.succeed(True)
-
-    def _modify_loggly_formatter(self):
-        log_support.configure_loggly_handler(
-            installation_id=conf.settings.installation_id,
-            session_id=self._session_id
-        )
 
     @defer.inlineCallbacks
     def _setup_lbry_file_manager(self):
