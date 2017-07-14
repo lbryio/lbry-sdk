@@ -179,6 +179,7 @@ class Daemon(AuthJSONRPCServer):
             self.blobfile_dir = conf.settings['BLOBFILES_DIR']
         self.data_rate = conf.settings['data_rate']
         self.max_key_fee = conf.settings['max_key_fee']
+        self.disable_max_key_fee = conf.settings['disable_max_key_fee']
         self.download_timeout = conf.settings['download_timeout']
         self.run_reflector_server = conf.settings['run_reflector_server']
         self.wallet_type = conf.settings['wallet']
@@ -429,6 +430,7 @@ class Daemon(AuthJSONRPCServer):
             'cache_time': int,
             'reflect_uploads': bool,
             'share_usage_data': bool,
+            'disable_max_key_fee': bool,
             'peer_search_timeout': int,
             'sd_download_timeout': int,
         }
@@ -455,6 +457,7 @@ class Daemon(AuthJSONRPCServer):
 
         self.data_rate = conf.settings['data_rate']
         self.max_key_fee = conf.settings['max_key_fee']
+        self.disable_max_key_fee = conf.settings['disable_max_key_fee']
         self.download_directory = conf.settings['download_directory']
         self.download_timeout = conf.settings['download_timeout']
 
@@ -628,6 +631,7 @@ class Daemon(AuthJSONRPCServer):
 
             self.streams[claim_id] = GetStream(self.sd_identifier, self.session,
                                                self.exchange_rate_manager, self.max_key_fee,
+                                               self.disable_max_key_fee,
                                                conf.settings['data_rate'], timeout,
                                                file_name)
             try:
@@ -1115,6 +1119,7 @@ class Daemon(AuthJSONRPCServer):
                          [<download_timeout> | --download_timeout=<download_timeout>]
                          [<peer_port> | --peer_port=<peer_port>]
                          [<max_key_fee> | --max_key_fee=<max_key_fee>]
+                         [<disable_max_key_fee> | --disable_max_key_fee=<disable_max_key_fee>]
                          [<use_upnp> | --use_upnp=<use_upnp>]
                          [<run_reflector_server> | --run_reflector_server=<run_reflector_server>]
                          [<cache_time> | --cache_time=<cache_time>]
@@ -1138,6 +1143,7 @@ class Daemon(AuthJSONRPCServer):
                                                                 LBC
                                                                 BTC
                                                                 USD
+            <disable_max_key_fee>, --disable_max_key_fee=<disable_max_key_fee> : (bool), False
             <use_upnp>, --use_upnp=<use_upnp>            : (bool), True
             <run_reflector_server>, --run_reflector_server=<run_reflector_server>  : (bool), False
             <cache_time>, --cache_time=<cache_time>  : (int), 150
