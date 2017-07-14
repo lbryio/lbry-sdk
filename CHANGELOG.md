@@ -10,14 +10,13 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Add link to instructions on how to change the default peer port
-  *
+  * Add `peer_port` to settings configurable using `settings_set`
 
 ### Changed
   *
   *
 
 ### Fixed
-  * peer_port is settable using `settings_set`
   * Fix for https://github.com/lbryio/lbry/issues/750
   *
 
