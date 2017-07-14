@@ -10,14 +10,15 @@ at anytime.
 ## [Unreleased]
 ### Added
   * Added an option to disable max key fee check.
-  *
+  * Add link to instructions on how to change the default peer port
+  * Add `peer_port` to settings configurable using `settings_set`
 
 ### Changed
   *
   *
 
 ### Fixed
-  * Fixed timeout behaviour when calling API command get
+  * Fix for https://github.com/lbryio/lbry/issues/750
   *
 
 ### Deprecated
@@ -27,6 +28,14 @@ at anytime.
 ### Removed
   *
   *
+
+## [0.14.1] - 2017-07-07
+
+### Fixed
+ * Fixed timeout behaviour when calling API command get
+ * Fixed https://github.com/lbryio/lbry/issues/765
+
+
 
 ## [0.14.0] - 2017-07-05
 

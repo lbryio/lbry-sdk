@@ -45,6 +45,7 @@ from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError, NoSuchSDHash
 from lbrynet.core.Error import NoSuchStreamHash, UnknownClaimID, UnknownURI
+from lbrynet.core.Error import NullFundsError, NegativeFundsError
 
 log = logging.getLogger(__name__)
 
@@ -310,10 +311,13 @@ class Daemon(AuthJSONRPCServer):
                                                    self.session.peer_manager)
 
             try:
+                log.info("Daemon bound to port: %d", self.peer_port)
                 self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
             except error.CannotListenError as e:
                 import traceback
-                log.error("Couldn't bind to port %d. %s", self.peer_port, traceback.format_exc())
+                log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for"
+                          " more details.", self.peer_port)
+                log.error("%s", traceback.format_exc())
                 raise ValueError("%s lbrynet may already be running on your computer.", str(e))
         return defer.succeed(True)
 
@@ -419,6 +423,7 @@ class Daemon(AuthJSONRPCServer):
             'download_directory': str,
             'data_rate': float,
             'download_timeout': int,
+            'peer_port': int,
             'max_key_fee': dict,
             'use_upnp': bool,
             'run_reflector_server': bool,
@@ -1112,6 +1117,7 @@ class Daemon(AuthJSONRPCServer):
             settings_set [<download_directory> | --download_directory=<download_directory>]
                          [<data_rate> | --data_rate=<data_rate>]
                          [<download_timeout> | --download_timeout=<download_timeout>]
+                         [<peer_port> | --peer_port=<peer_port>]
                          [<max_key_fee> | --max_key_fee=<max_key_fee>]
                          [<disable_max_key_fee> | --disable_max_key_fee=<disable_max_key_fee>]
                          [<use_upnp> | --use_upnp=<use_upnp>]
@@ -1126,6 +1132,7 @@ class Daemon(AuthJSONRPCServer):
             <download_directory>, --download_directory=<download_directory>  : (str)
             <data_rate>, --data_rate=<data_rate>                             : (float), 0.0001
             <download_timeout>, --download_timeout=<download_timeout>        : (int), 180
+            <peer_port>, --peer_port=<peer_port>                             : (int), 3333
             <max_key_fee>, --max_key_fee=<max_key_fee>   : (dict) maximum key fee for downloads,
                                                             in the format: {
                                                                 "currency": <currency_symbol>,
@@ -2236,6 +2243,11 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (bool) true if payment successfully scheduled
         """
+
+        if amount < 0:
+            raise NegativeFundsError()
+        elif not amount:
+            raise NullFundsError()
 
         reserved_points = self.session.wallet.reserve_points(address, amount)
         if reserved_points is None:
