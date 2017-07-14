@@ -9,6 +9,7 @@ at anytime.
 
 ## [Unreleased]
 ### Added
+  * Added an option to disable max key fee check.
   * Add link to instructions on how to change the default peer port
   * Add `peer_port` to settings configurable using `settings_set`
 

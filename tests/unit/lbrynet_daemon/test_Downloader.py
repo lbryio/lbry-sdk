@@ -73,10 +73,11 @@ class GetStreamTests(unittest.TestCase):
         exchange_rate_manager = DummyExchangeRateManager(market_feeds, rates)
         exchange_rate_manager = mock.Mock(spec=ExchangeRateManager)
         max_key_fee = {'currency':"LBC", 'amount':10, 'address':''}
+        disable_max_key_fee = False
         data_rate = {'currency':"LBC", 'amount':0, 'address':''}
 
         getstream = Downloader.GetStream(sd_identifier, session,
-            exchange_rate_manager, max_key_fee, timeout=3, data_rate=data_rate)
+            exchange_rate_manager, max_key_fee, disable_max_key_fee, timeout=3, data_rate=data_rate)
         getstream.pay_key_fee_called = False
 
         self.clock = task.Clock()
@@ -180,4 +181,3 @@ class GetStreamTests(unittest.TestCase):
         getstream.downloader.running_status = ManagedEncryptedFileDownloader.STATUS_STOPPED
         self.clock.advance(1)
         downloader, f_deferred = yield start
-
