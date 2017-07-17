@@ -62,6 +62,10 @@ class UnknownURI(Exception):
         Exception.__init__(self, 'URI {} cannot be resolved'.format(uri))
         self.name = uri
 
+class UnknownOutpoint(Exception):
+    def __init__(self, outpoint):
+        Exception.__init__(self, 'Outpoint {} cannot be resolved'.format(outpoint))
+        self.outpoint = outpoint
 
 class InvalidName(Exception):
     def __init__(self, name, invalid_characters):

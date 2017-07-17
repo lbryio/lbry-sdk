@@ -28,7 +28,7 @@ from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError, UnknownNameError
-from lbrynet.core.Error import UnknownClaimID, UnknownURI, NegativeFundsError
+from lbrynet.core.Error import UnknownClaimID, UnknownURI, NegativeFundsError, UnknownOutpoint
 
 log = logging.getLogger(__name__)
 
@@ -772,6 +772,8 @@ class Wallet(object):
                     raise UnknownNameError(results['name'])
                 elif 'uri' in results:
                     raise UnknownURI(results['uri'])
+                elif 'outpoint' in results:
+                    raise UnknownOutpoint(results['outpoint'])
             raise Exception(results['error'])
 
         # case where return value is {'certificate:{'txid', 'value',...}}
@@ -849,7 +851,7 @@ class Wallet(object):
             claim = yield self._get_claim_by_outpoint(txid, nout)
             try:
                 result = yield self._handle_claim_result(claim)
-            except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
+            except (UnknownOutpoint) as err:
                 result = {'error': err.message}
         else:
             result = cached_claim
