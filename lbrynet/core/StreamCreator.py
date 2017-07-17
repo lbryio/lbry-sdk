@@ -51,12 +51,17 @@ class StreamCreator(object):
             current_blob = self.current_blob
             d = current_blob.close()
             d.addCallback(self._blob_finished)
+            d.addErrback(self._error)
             self.finished_deferreds.append(d)
             self.current_blob = None
         self._finalize()
         dl = defer.DeferredList(self.finished_deferreds)
         dl.addCallback(lambda _: self._finished())
+        dl.addErrback(self._error)
         return dl
+
+    def _error(self, error):
+        log.error(error)
 
     def _finalize(self):
         pass
