@@ -28,7 +28,7 @@ from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError, UnknownNameError
-from lbrynet.core.Error import UnknownClaimID, UnknownURI, NegativeFundsError
+from lbrynet.core.Error import UnknownClaimID, UnknownURI, NegativeFundsError, UnknownOutpoint
 
 log = logging.getLogger(__name__)
 
@@ -693,18 +693,18 @@ class Wallet(object):
         defer.returnValue(results)
 
     @defer.inlineCallbacks
-    def get_claim(self, claim_id, check_expire=True):
+    def get_claim_by_claim_id(self, claim_id, check_expire=True):
         cached_claim = yield self.get_cached_claim(claim_id, check_expire)
         if cached_claim:
             result = cached_claim
         else:
             log.debug("Refreshing cached claim: %s", claim_id)
             claim = yield self._get_claim_by_claimid(claim_id)
-            result = None
-            if claim:
+            try:
                 result = yield self._handle_claim_result(claim)
-            else:
-                log.warning("Claim does not exist: %s", claim_id)
+            except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
+                result = {'error': err.message}
+
         defer.returnValue(result)
 
     @defer.inlineCallbacks
@@ -760,7 +760,9 @@ class Wallet(object):
     @defer.inlineCallbacks
     def _handle_claim_result(self, results, update_caches=True):
         if not results:
-            raise UnknownNameError("No results to return")
+            #TODO: cannot determine what name we searched for here
+            # we should fix lbryum commands that return None
+            raise UnknownNameError("")
 
         if 'error' in results:
             if results['error'] in ['name is not claimed', 'claim not found']:
@@ -770,6 +772,8 @@ class Wallet(object):
                     raise UnknownNameError(results['name'])
                 elif 'uri' in results:
                     raise UnknownURI(results['uri'])
+                elif 'outpoint' in results:
+                    raise UnknownOutpoint(results['outpoint'])
             raise Exception(results['error'])
 
         # case where return value is {'certificate:{'txid', 'value',...}}
@@ -847,7 +851,7 @@ class Wallet(object):
             claim = yield self._get_claim_by_outpoint(txid, nout)
             try:
                 result = yield self._handle_claim_result(claim)
-            except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
+            except (UnknownOutpoint) as err:
                 result = {'error': err.message}
         else:
             result = cached_claim

@@ -14,12 +14,12 @@ at anytime.
   * Added an option to disable max key fee check.
 
 ### Changed
-  * 
+  * claim_show API command no longer takes name as argument
   *
 
 ### Fixed
   * Fix for https://github.com/lbryio/lbry/issues/750
-  *
+  * Fixed inconsistencies in claim_show output
   * Fixed daemon process hanging when started without an internet connection
   * Fixed https://github.com/lbryio/lbry/issues/774
 
