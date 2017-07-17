@@ -16,7 +16,7 @@ import lbryum.wallet
 from lbryum.network import Network
 from lbryum.simple_config import SimpleConfig
 from lbryum.constants import COIN
-from lbryum.commands import known_commands, Commands
+from lbryum.commands import Commands
 
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.claim import ClaimDict
@@ -1269,7 +1269,7 @@ class LBRYumWallet(Wallet):
     # only makes a lbrum server query, use _run_cmd_as_defer_to_thread()
     def _run_cmd_as_defer_succeed(self, command_name, *args, **kwargs):
         cmd_runner = self._get_cmd_runner()
-        cmd = known_commands[command_name]
+        cmd = Commands.known_commands[command_name]
         func = getattr(cmd_runner, cmd.name)
         return defer.succeed(func(*args, **kwargs))
 
@@ -1279,7 +1279,7 @@ class LBRYumWallet(Wallet):
     #       otherwise the application will hang, waiting for threads to complete
     def _run_cmd_as_defer_to_thread(self, command_name, *args, **kwargs):
         cmd_runner = self._get_cmd_runner()
-        cmd = known_commands[command_name]
+        cmd = Commands.known_commands[command_name]
         func = getattr(cmd_runner, cmd.name)
         return threads.deferToThread(func, *args, **kwargs)
 
