@@ -18,6 +18,8 @@ from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError
 
+from lbryum.errors import InvalidPassword
+
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet import conf, analytics
@@ -166,7 +168,7 @@ class Daemon(AuthJSONRPCServer):
     """
 
     allowed_during_startup = [
-        'daemon_stop', 'status', 'version',
+        'daemon_stop', 'status', 'version', 'wallet_unlock'
     ]
 
     def __init__(self, root, analytics_manager):
@@ -1197,6 +1199,34 @@ class Daemon(AuthJSONRPCServer):
         else:
             return self._render_response(float(
                 self.session.wallet.get_address_balance(address, include_unconfirmed)))
+
+    @defer.inlineCallbacks
+    def jsonrpc_wallet_unlock(self, password):
+        """
+        Unlock an encrypted wallet
+
+        Usage:
+            wallet_unlock (<password>)
+
+        Returns:
+            (bool) true if wallet is unlocked, otherwise false
+        """
+
+        if not self.session.wallet._cmd_runner.locked:
+            result = True
+        elif self.session.wallet.wallet_pw_d is not None:
+            d = self.session.wallet.wallet_pw_d
+            if not d.called:
+                d.addCallback(lambda _: not self.session.wallet._cmd_runner.locked)
+                self.session.wallet.wallet_pw_d.callback(password)
+            try:
+                result = yield d
+            except InvalidPassword:
+                result = False
+        else:
+            result = self.session.wallet._cmd_runner.locked
+        response = yield self._render_response(result)
+        defer.returnValue(response)
 
     @defer.inlineCallbacks
     def jsonrpc_daemon_stop(self):
