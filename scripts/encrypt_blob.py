@@ -5,6 +5,8 @@ import sys
 
 from twisted.internet import defer
 from twisted.internet import reactor
+from twisted.protocols import basic
+from twisted.web.client import FileBodyProducer
 
 from lbrynet import conf
 from lbrynet.core import log_support
@@ -46,10 +48,8 @@ def encrypt_blob(filename, key, iv):
     yield manager.setup()
     creator = CryptStreamCreator(manager, filename, key, iv_generator(iv))
     with open(filename, 'r') as infile:
-        data = infile.read(2**14)
-        while data:
-            yield creator.write(data)
-            data = infile.read(2**14)
+        producer = FileBodyProducer(infile, readSize=2**22)
+        yield producer.startProducing(creator)
     yield creator.stop()
 
 
