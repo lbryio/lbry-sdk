@@ -385,19 +385,21 @@ class BlobFileCreator(HashBlobCreator):
     def __init__(self, blob_dir):
         HashBlobCreator.__init__(self)
         self.blob_dir = blob_dir
-        self.out_file = tempfile.NamedTemporaryFile(delete=False, dir=self.blob_dir)
+        self.buffer = StringIO()
 
     def _close(self):
-        temp_file_name = self.out_file.name
-        self.out_file.close()
         if self.blob_hash is not None:
-            shutil.move(temp_file_name, os.path.join(self.blob_dir, self.blob_hash))
-        else:
-            os.remove(temp_file_name)
+            def _twrite(data, blob_dir, blob_hash):
+                with open(os.path.join(blob_dir, blob_hash), 'w') as out_file:
+                    out_file.write(data.getvalue())
+            d = threads.deferToThread(_twrite, self.buffer,
+                                      self.blob_dir, self.blob_hash)
+            del self.buffer
+            return d
         return defer.succeed(True)
 
     def _write(self, data):
-        self.out_file.write(data)
+        self.buffer.write(data)
 
 
 class TempBlobCreator(HashBlobCreator):
