@@ -34,6 +34,7 @@ at anytime.
   * Don't include file names when logging information about streams, only include sd hashes
   * Re-use addresses used for lbrycrd info exchange, this was a significant source of address bloat in the wallet
   * Remove manual saving of the wallet in from lbrynet, let lbryum handle it
+  * Block wallet startup on being unlocked if it is encrypted
 
 ### Added
   * Added `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
@@ -43,6 +44,7 @@ at anytime.
   * Added user configurable `auto_renew_claim_height_delta` setting, defaults to 0 (off)
   * Added `lbrynet-console`, a tool to run or connect to lbrynet-daemon and launch an interactive python console with the api functions built in.
   * Added a table to the lbry file database to store the outpoint of the claim downloaded from
+  * Added `wallet_unlock`, a command available during startup to unlock an encrypted wallet
 
 ### Removed
   * Removed claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect`
