@@ -184,6 +184,7 @@ class DiskBlobManager(BlobManager):
         # threads.
 
         def create_tables(transaction):
+            transaction.execute('PRAGMA journal_mode=WAL')
             transaction.execute("create table if not exists blobs (" +
                                 "    blob_hash text primary key, " +
                                 "    blob_length integer, " +
