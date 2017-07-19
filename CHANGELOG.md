@@ -25,6 +25,7 @@ at anytime.
   * Fixed daemon process hanging when started without an internet connection
   * Fixed https://github.com/lbryio/lbry/issues/774
   * Fix XDG compliance on Linux
+  * Fixed https://github.com/lbryio/lbry/issues/760
 
 ### Deprecated
   *
