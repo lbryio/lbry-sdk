@@ -26,6 +26,7 @@ at anytime.
   * Fixed https://github.com/lbryio/lbry/issues/774
   * Fix XDG compliance on Linux
   * Fixed https://github.com/lbryio/lbry/issues/760
+  * Fixed default directories bug
 
 ### Deprecated
   *
