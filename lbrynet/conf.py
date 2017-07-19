@@ -78,9 +78,9 @@ def _get_old_directories(platform):
         dirs['lbryum'] = os.path.expanduser('~/.lbryum')
         dirs['download'] = os.path.expanduser('~/Downloads')
     elif platform == LINUX:
-        dirs['data'] = os.path.join(os.path.expanduser('~'), '~/.lbrynet')
-        dirs['lbryum'] = os.path.join(os.path.expanduser('~'), '~/.lbryum')
-        dirs['download'] = os.path.join(os.path.expanduser('~'), 'Downloads')
+        dirs['data'] = os.path.expanduser('~/.lbrynet')
+        dirs['lbryum'] = os.path.expanduser('~/.lbryum')
+        dirs['download'] = os.path.expanduser('~/Downloads')
     else:
         raise ValueError('unknown platform value')
     return dirs
