@@ -12,6 +12,10 @@ at anytime.
   *
   *
 
+### Added
+  * Added validation of currencies.
+  *
+
 ### Fixed
   *
   *
