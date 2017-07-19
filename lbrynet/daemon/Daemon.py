@@ -165,11 +165,12 @@ class Daemon(AuthJSONRPCServer):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
+    allowed_during_startup = [
+        'daemon_stop', 'status', 'version',
+    ]
+
     def __init__(self, root, analytics_manager):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
-        self.allowed_during_startup = [
-            'stop', 'status', 'version',
-        ]
         self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
         if conf.settings['BLOBFILES_DIR'] == "blobfiles":
