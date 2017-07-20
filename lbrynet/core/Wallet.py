@@ -1159,6 +1159,12 @@ class Wallet(object):
     def get_least_used_address(self, account=None, for_change=False, max_count=100):
         return defer.fail(NotImplementedError())
 
+    def decrypt_wallet(self):
+        return defer.fail(NotImplementedError())
+
+    def encrypt_wallet(self, new_password, update_keyring=True):
+        return defer.fail(NotImplementedError())
+
     def _start(self):
         pass
 
@@ -1549,6 +1555,24 @@ class LBRYumWallet(Wallet):
 
     def claim_renew(self, txid, nout):
         return self._run_cmd_as_defer_succeed('renewclaim', txid, nout)
+
+    def decrypt_wallet(self):
+        if not self.wallet.use_encryption:
+            return True
+        if not self._cmd_runner:
+            return False
+        if self._cmd_runner.locked:
+            return False
+        self._cmd_runner.decrypt_wallet()
+        return not self.wallet.use_encryption
+
+    def encrypt_wallet(self, new_password, update_keyring=True):
+        if not self._cmd_runner:
+            return False
+        if self._cmd_runner.locked:
+            return False
+        self._cmd_runner.update_password(new_password, update_keyring)
+        return not self.wallet.use_encryption
 
 
 class LBRYcrdAddressRequester(object):

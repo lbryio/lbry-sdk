@@ -45,6 +45,7 @@ at anytime.
   * Added `lbrynet-console`, a tool to run or connect to lbrynet-daemon and launch an interactive python console with the api functions built in.
   * Added a table to the lbry file database to store the outpoint of the claim downloaded from
   * Added `wallet_unlock`, a command available during startup to unlock an encrypted wallet
+  * Added support for wallet encryption via new commands `wallet_decrypt` and `wallet_encrypt`
 
 ### Removed
   * Removed claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect`
