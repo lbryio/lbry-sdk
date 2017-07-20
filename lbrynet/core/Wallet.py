@@ -796,7 +796,8 @@ class Wallet(object):
         elif 'value' in results:
             results = yield self._decode_and_cache_claim_result(results, update_caches=False)
 
-        else:
+        # case where there is no 'certificate', 'value', or 'claim' key
+        elif 'certificate' not in results:
             msg = 'result in unexpected format:{}'.format(results)
             assert False, msg
 
