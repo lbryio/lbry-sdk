@@ -776,14 +776,14 @@ class Wallet(object):
                     raise UnknownOutpoint(results['outpoint'])
             raise Exception(results['error'])
 
-        # case where return value is {'certificate:{'txid', 'value',...}}
-        elif 'certificate' in results:
+        # case where return value is {'certificate':{'txid', 'value',...},...}
+        if 'certificate' in results:
             results['certificate'] = yield self._decode_and_cache_claim_result(
                                                                         results['certificate'],
                                                                         update_caches)
 
-        # case where return value is {'claim':{'txid','value',...}}
-        elif 'claim' in results:
+        # case where return value is {'claim':{'txid','value',...},...}
+        if 'claim' in results:
             results['claim'] = yield self._decode_and_cache_claim_result(
                                                                      results['claim'],
                                                                      update_caches)
