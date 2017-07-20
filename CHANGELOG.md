@@ -12,6 +12,7 @@ at anytime.
   * Add link to instructions on how to change the default peer port
   * Add `peer_port` to settings configurable using `settings_set`
   * Added an option to disable max key fee check.
+  * Added validation of currencies.
 
 ### Changed
   * claim_show API command no longer takes name as argument
