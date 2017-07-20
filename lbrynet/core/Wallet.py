@@ -1122,6 +1122,12 @@ class Wallet(object):
     def send_claim_to_address(self, claim_id, destination, amount):
         return defer.fail(NotImplementedError())
 
+    def decrypt_wallet(self):
+        return defer.fail(NotImplementedError())
+
+    def encrypt_wallet(self, new_password, update_keyring=True):
+        return defer.fail(NotImplementedError())
+
     def _start(self):
         pass
 
@@ -1332,14 +1338,12 @@ class LBRYumWallet(Wallet):
         defer.returnValue(addr)
 
     # Get the balance of a given address.
-
     def get_address_balance(self, address, include_balance=False):
         c, u, x = self.wallet.get_addr_balance(address)
         if include_balance is False:
             return Decimal(float(c) / COIN)
         else:
             return Decimal((float(c) + float(u) + float(x)) / COIN)
-
 
     # Return an address with no balance in it, if
     # there is none, create a brand new address
@@ -1487,6 +1491,24 @@ class LBRYumWallet(Wallet):
     def _save_wallet(self, val=None):
         self.wallet.storage.write()
         return defer.succeed(val)
+
+    def decrypt_wallet(self):
+        if not self.wallet.use_encryption:
+            return True
+        if not self._cmd_runner:
+            return False
+        if self._cmd_runner.locked:
+            return False
+        self._cmd_runner.decrypt_wallet()
+        return not self.wallet.use_encryption
+
+    def encrypt_wallet(self, new_password, update_keyring=True):
+        if not self._cmd_runner:
+            return False
+        if self._cmd_runner.locked:
+            return False
+        self._cmd_runner.update_password(new_password, update_keyring)
+        return not self.wallet.use_encryption
 
 
 class LBRYcrdAddressRequester(object):
