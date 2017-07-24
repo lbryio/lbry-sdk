@@ -1,9 +1,9 @@
-from Crypto.Hash import SHA384
 import seccure
+import hashlib
 
 
 def get_lbry_hash_obj():
-    return SHA384.new()
+    return hashlib.sha384()
 
 
 def get_pub_key(pass_phrase):
