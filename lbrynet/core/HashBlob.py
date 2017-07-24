@@ -1,4 +1,5 @@
-from io import BytesIO, StringIO
+from StringIO import StringIO
+from io import BytesIO
 import logging
 import os
 import tempfile
