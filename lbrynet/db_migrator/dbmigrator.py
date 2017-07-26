@@ -10,6 +10,9 @@ def migrate_db(db_dir, start, end):
         elif current == 2:
             from lbrynet.db_migrator.migrate2to3 import do_migration
             do_migration(db_dir)
+        elif current == 3:
+            from lbrynet.db_migrator.migrate3to4 import do_migration
+            do_migration(db_dir)
         else:
             raise Exception(
                 "DB migration of version {} to {} is not available".format(current, current+1))

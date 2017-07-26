@@ -188,7 +188,10 @@ class DiskBlobManager(BlobManager):
                                 "    blob_hash text primary key, " +
                                 "    blob_length integer, " +
                                 "    last_verified_time real, " +
-                                "    next_announce_time real)")
+                                "    next_announce_time real, " +
+                                "    last_announce_time real, " +
+                                "    should_announce integer)")
+
 
             transaction.execute("create table if not exists download (" +
                                 "    id integer primary key autoincrement, " +
