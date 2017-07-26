@@ -197,7 +197,7 @@ class Daemon(AuthJSONRPCServer):
         self.connected_to_internet = True
         self.connection_status_code = None
         self.platform = None
-        self.current_db_revision = 3
+        self.current_db_revision = 4
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self.uploaded_temp_files = []
