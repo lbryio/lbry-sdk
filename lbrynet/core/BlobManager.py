@@ -11,73 +11,10 @@ from lbrynet.core.sqlite_helpers import rerun_if_locked
 
 log = logging.getLogger(__name__)
 
-
-class BlobManager(DHTHashSupplier):
-    """This class is subclassed by classes which keep track of which blobs are available
-       and which give access to new/existing blobs"""
-    def __init__(self, hash_announcer):
-        DHTHashSupplier.__init__(self, hash_announcer)
-
-    def setup(self):
-        pass
-
-    def get_blob(self, blob_hash, length=None):
-        pass
-
-    def get_blob_creator(self):
-        pass
-
-    def _make_new_blob(self, blob_hash, length):
-        pass
-
-    def blob_completed(self, blob, next_announce_time=None):
-        pass
-
-    def completed_blobs(self, blobhashes_to_check):
-        pass
-
-    def hashes_to_announce(self):
-        pass
-
-    def creator_finished(self, blob_creator):
-        pass
-
-    def delete_blob(self, blob_hash):
-        pass
-
-    def blob_requested(self, blob_hash):
-        pass
-
-    def blob_downloaded(self, blob_hash):
-        pass
-
-    def blob_searched_on(self, blob_hash):
-        pass
-
-    def blob_paid_for(self, blob_hash, amount):
-        pass
-
-    def get_all_verified_blobs(self):
-        pass
-
-    def add_blob_to_download_history(self, blob_hash, host, rate):
-        pass
-
-    def add_blob_to_upload_history(self, blob_hash, host, rate):
-        pass
-
-    def _immediate_announce(self, blob_hashes):
-        if self.hash_announcer:
-            return self.hash_announcer.immediate_announce(blob_hashes)
-
-
-# TODO: Having different managers for different blobs breaks the
-#       abstraction of a HashBlob. Why should the management of blobs
-#       care what kind of Blob it has?
-class DiskBlobManager(BlobManager):
+class DiskBlobManager(DHTHashSupplier):
     """This class stores blobs on the hard disk"""
     def __init__(self, hash_announcer, blob_dir, db_dir):
-        BlobManager.__init__(self, hash_announcer)
+        DHTHashSupplier.__init__(self, hash_announcer)
         self.blob_dir = blob_dir
         self.db_file = os.path.join(db_dir, "blobs.db")
         self.db_conn = adbapi.ConnectionPool('sqlite3', self.db_file, check_same_thread=False)
@@ -117,6 +54,10 @@ class DiskBlobManager(BlobManager):
         blob = self.blob_type(self.blob_dir, blob_hash, length)
         self.blobs[blob_hash] = blob
         return defer.succeed(blob)
+
+    def _immediate_announce(self, blob_hashes):
+        if self.hash_announcer:
+            return self.hash_announcer.immediate_announce(blob_hashes)
 
     def blob_completed(self, blob, next_announce_time=None):
         if next_announce_time is None:
