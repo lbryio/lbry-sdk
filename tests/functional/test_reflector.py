@@ -1,5 +1,6 @@
 import os
 import shutil
+import tempfile
 
 from twisted.internet import defer, threads, error
 from twisted.trial import unittest
@@ -19,7 +20,7 @@ from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager import EncryptedFileManager
 
 from tests import mocks
-
+from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 class TestReflector(unittest.TestCase):
     def setUp(self):
@@ -56,16 +57,14 @@ class TestReflector(unittest.TestCase):
             ),
         ]
 
-        db_dir = "client"
-        os.mkdir(db_dir)
-
+        self.db_dir, self.blob_dir = mk_db_and_blob_dir()
         self.session = Session.Session(
             conf.settings['data_rate'],
-            db_dir=db_dir,
+            db_dir=self.db_dir,
             lbryid="abcd",
             peer_finder=peer_finder,
             hash_announcer=hash_announcer,
-            blob_dir=None,
+            blob_dir=self.blob_dir,
             peer_port=5553,
             use_upnp=False,
             rate_limiter=rate_limiter,
@@ -74,12 +73,14 @@ class TestReflector(unittest.TestCase):
             dht_node_class=Node
         )
 
-        self.stream_info_manager = EncryptedFileMetadataManager.DBEncryptedFileMetadataManager(db_dir)
+        self.stream_info_manager = EncryptedFileMetadataManager.DBEncryptedFileMetadataManager(self.db_dir)
 
         self.lbry_file_manager = EncryptedFileManager.EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
 
-        self.server_blob_manager = BlobManager.TempBlobManager(hash_announcer)
+        self.server_db_dir, self.server_blob_dir = mk_db_and_blob_dir()
+        self.server_blob_manager = BlobManager.DiskBlobManager(
+                                    hash_announcer, self.server_blob_dir, self.server_db_dir)
 
         d = self.session.setup()
         d.addCallback(lambda _: self.stream_info_manager.setup())
@@ -149,7 +150,8 @@ class TestReflector(unittest.TestCase):
 
         def delete_test_env():
             try:
-                shutil.rmtree('client')
+                rm_db_and_blob_dir(self.db_dir, self.blob_dir)
+                rm_db_and_blob_dir(self.server_db_dir, self.server_blob_dir)
             except:
                 raise unittest.SkipTest("TODO: fix this for windows")
 
