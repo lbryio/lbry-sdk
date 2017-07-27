@@ -29,7 +29,7 @@ at anytime.
   *
 
 ### Removed
-  *
+  * Removed TempBlobManager
   *
 
 
