@@ -1,8 +1,9 @@
 import os
+import json
 
 from twisted.trial import unittest
 from lbrynet import conf
-
+from lbrynet.core.Error import InvalidCurrencyError
 
 class SettingsTest(unittest.TestCase):
     def setUp(self):
@@ -53,6 +54,21 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual('cli_test_string', settings['test'])
         settings.set('test', 'runtime_takes_precedence', data_types=(conf.TYPE_RUNTIME,))
         self.assertEqual('runtime_takes_precedence', settings['test'])
+
+    def test_max_key_fee_set(self):
+        fixed_default = {'CURRENCIES':{'BTC':{'type':'crypto'}}}
+        adjustable_settings = {'max_key_fee': (json.loads, {'currency':'USD', 'amount':1})}
+        env = conf.Env(**adjustable_settings)
+        settings = conf.Config(fixed_default, adjustable_settings, environment=env)
+
+        with self.assertRaises(InvalidCurrencyError):
+            settings.set('max_key_fee', {'currency':'USD', 'amount':1})
+
+        valid_setting= {'currency':'BTC', 'amount':1}
+        settings.set('max_key_fee', valid_setting )
+        out = settings.get('max_key_fee')
+        self.assertEqual(out, valid_setting)
+
 
     def test_data_dir(self):
         # check if these directories are returned as string and not unicode
