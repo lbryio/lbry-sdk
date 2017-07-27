@@ -47,7 +47,7 @@ class DiskBlobManager(DHTHashSupplier):
         return self._make_new_blob(blob_hash, length)
 
     def get_blob_creator(self):
-        return self.blob_creator_type(self, self.blob_dir)
+        return self.blob_creator_type(self.blob_dir)
 
     def _make_new_blob(self, blob_hash, length=None):
         log.debug('Making a new blob for %s', blob_hash)

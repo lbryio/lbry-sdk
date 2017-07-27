@@ -61,18 +61,20 @@ class CryptStreamCreator(StreamCreator):
         return defer.succeed(True)
 
     def _finalize(self):
+        """
+        Finalize a stream by adding an empty
+        blob at the end, this is to indicate that
+        the stream has ended. This empty blob is not
+        saved to the blob manager
+        """
         log.debug("_finalize has been called")
         self.blob_count += 1
         iv = self.iv_generator.next()
         final_blob_creator = self.blob_manager.get_blob_creator()
-        log.debug("Created the finished_deferred")
         final_blob = self._get_blob_maker(iv, final_blob_creator)
-        log.debug("Created the final blob")
-        log.debug("Calling close on final blob")
         d = final_blob.close()
         d.addCallback(self._blob_finished)
         self.finished_deferreds.append(d)
-        log.debug("called close on final blob, returning from make_final_blob")
 
     def _write(self, data):
         def close_blob(blob):
@@ -82,14 +84,17 @@ class CryptStreamCreator(StreamCreator):
 
         while len(data) > 0:
             if self.current_blob is None:
-                next_blob_creator = self.blob_manager.get_blob_creator()
+                self.next_blob_creator = self.blob_manager.get_blob_creator()
                 self.blob_count += 1
                 iv = self.iv_generator.next()
-                self.current_blob = self._get_blob_maker(iv, next_blob_creator)
+                self.current_blob = self._get_blob_maker(iv, self.next_blob_creator)
             done, num_bytes_written = self.current_blob.write(data)
             data = data[num_bytes_written:]
             if done is True:
-                close_blob(self.current_blob)
+                d = self.current_blob.close()
+                d.addCallback(self._blob_finished)
+                d.addCallback(lambda _: self.blob_manager.creator_finished(self.next_blob_creator))
+                self.finished_deferreds.append(d)
                 self.current_blob = None
 
     def _get_blob_maker(self, iv, blob_creator):

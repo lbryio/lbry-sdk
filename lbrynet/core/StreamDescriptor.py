@@ -1,7 +1,7 @@
 from collections import defaultdict
 import json
 import logging
-from twisted.internet import threads
+from twisted.internet import threads, defer
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.Error import UnknownStreamTypeError, InvalidStreamDescriptorError
 
@@ -101,12 +101,15 @@ class BlobStreamDescriptorWriter(StreamDescriptorWriter):
 
         self.blob_manager = blob_manager
 
+    @defer.inlineCallbacks
     def _write_stream_descriptor(self, raw_data):
         log.debug("Creating the new blob for the stream descriptor")
         blob_creator = self.blob_manager.get_blob_creator()
         blob_creator.write(raw_data)
         log.debug("Wrote the data to the new blob")
-        return blob_creator.close()
+        sd_hash = yield blob_creator.close()
+        yield self.blob_manager.creator_finished(blob_creator)
+        defer.returnValue(sd_hash)
 
 
 class StreamMetadata(object):
