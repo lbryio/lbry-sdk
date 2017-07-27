@@ -48,6 +48,7 @@ at anytime.
  * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
  * Linux folders moved from the home directory to `~/.local/share/lbry`
  * Windows folders moved from `%AppData%/Roaming` to `%AppData%/Local/lbry`
+ * Changed `claim_list_by_channel` to return the `claims_in_channel` count instead of the `claims_in_channel_pages` count
 
 ### Added
  * Add link to instructions on how to change the default peer port

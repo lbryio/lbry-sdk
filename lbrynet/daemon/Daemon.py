@@ -2019,7 +2019,7 @@ class Daemon(AuthJSONRPCServer):
                     If there was an error:
                     'error': (str) error message
 
-                    'claims_in_channel_pages': total number of pages with <page_size> results,
+                    'claims_in_channel': the total number of results for the channel,
 
                     If a page of results was requested:
                     'returned_page': page number returned,
@@ -2077,7 +2077,7 @@ class Daemon(AuthJSONRPCServer):
                 results[u] = resolved[u]
             else:
                 results[u] = {
-                        'claims_in_channel_pages': resolved[u]['claims_in_channel_pages']
+                        'claims_in_channel': resolved[u]['claims_in_channel']
                     }
                 if page:
                     results[u]['returned_page'] = page
