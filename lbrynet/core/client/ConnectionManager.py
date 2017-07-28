@@ -25,10 +25,12 @@ class ConnectionManager(object):
 
     def __init__(self, downloader, rate_limiter,
                  primary_request_creators, secondary_request_creators):
+
         self.downloader = downloader
         self.rate_limiter = rate_limiter
         self._primary_request_creators = primary_request_creators
         self._secondary_request_creators = secondary_request_creators
+        self.seek_head_blob_first = conf.settings['seek_head_blob_first']
         self._peer_connections = {}  # {Peer: PeerConnectionHandler}
         self._connections_closing = {}  # {Peer: deferred (fired when the connection is closed)}
         self._next_manage_call = None
@@ -150,10 +152,7 @@ class ConnectionManager(object):
             log.debug("%s have %d connections, looking for %d",
                         self._get_log_name(), len(self._peer_connections),
                         conf.settings['max_connections_per_stream'])
-            ordered_request_creators = self._rank_request_creator_connections()
-            peers = yield self._get_new_peers(ordered_request_creators)
-            new_conns = conf.settings['max_connections_per_stream'] - len(self._peer_connections)
-            peers = self._pick_best_peers(peers, new_conns)
+            peers = yield self._get_new_peers()
             for peer in peers:
                 self._connect_to_peer(peer)
         self._manage_deferred.callback(None)
@@ -161,42 +160,46 @@ class ConnectionManager(object):
         if not self.stopped and schedule_next_call:
             self._next_manage_call = utils.call_later(self.MANAGE_CALL_INTERVAL_SEC, self.manage)
 
-    def _rank_request_creator_connections(self):
-        """Returns an ordered list of our request creators, ranked according
-        to which has the least number of connections open that it
-        likes
-        """
-        def count_peers(request_creator):
-            return len([
-                p for p in self._peer_connections.itervalues()
-                if request_creator in p.request_creators])
-
-        return sorted(self._primary_request_creators, key=count_peers)
+    def return_shuffled_peers_not_connected_to(self, peers, new_conns_needed):
+        if peers is None:
+            # can happen if there is some error in the lookup
+            return []
+        out = [peer for peer in peers if peer not in self._peer_connections]
+        random.shuffle(out)
+        out = out[0:new_conns_needed]
+        return out
 
     @defer.inlineCallbacks
-    def _get_new_peers(self, request_creators):
+    def _get_new_peers(self):
+        new_conns_needed = conf.settings['max_connections_per_stream'] - len(self._peer_connections)
+        if new_conns_needed < 1:
+            defer.returnValue([])
+        # we always get the peer from the first request creator
+        # must be a type BlobRequester...
+        request_creator = self._primary_request_creators[0]
         log.debug("%s Trying to get a new peer to connect to", self._get_log_name())
-        if not request_creators:
-            defer.returnValue(None)
-        new_peers = yield request_creators[0].get_new_peers()
-        if not new_peers:
-            new_peers = yield self._get_new_peers(request_creators[1:])
-        defer.returnValue(new_peers)
 
-    def _pick_best_peers(self, peers, num_peers_to_pick):
-        # TODO: Eventually rank them based on past performance/reputation. For now
-        # TODO: just pick the first to which we don't have an open connection
+        # find peers for the head blob if configured to do so
+        if self.seek_head_blob_first is True:
+            peers = yield request_creator.get_new_peers_for_head_blob()
+            peers = self.return_shuffled_peers_not_connected_to(peers, new_conns_needed)
+        else:
+            peers = []
+
+        # we didn't find any new peers on the head blob,
+        # we have to look for the first unavailable blob
+        if len(peers) == 0:
+            peers = yield request_creator.get_new_peers_for_next_unavailable()
+            peers = self.return_shuffled_peers_not_connected_to(peers, new_conns_needed)
+
         log.debug("%s Got a list of peers to choose from: %s",
                     self._get_log_name(), peers)
         log.debug("%s Current connections: %s",
                     self._get_log_name(), self._peer_connections.keys())
         log.debug("%s List of connection states: %s", self._get_log_name(),
                     [p_c_h.connection.state for p_c_h in self._peer_connections.values()])
-        if peers is None:
-            return []
-        out = [peer for peer in peers if peer not in self._peer_connections]
-        random.shuffle(out)
-        return out[0:num_peers_to_pick]
+
+        defer.returnValue(peers)
 
 
     def _connect_to_peer(self, peer):

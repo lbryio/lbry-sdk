@@ -64,10 +64,19 @@ class BlobRequester(object):
             return defer.succeed(False)
         return self._send_next_request(peer, protocol)
 
-    def get_new_peers(self):
-        d = self._get_hash_for_peer_search()
-        d.addCallback(self._find_peers_for_hash)
-        return d
+    @defer.inlineCallbacks
+    def get_new_peers_for_head_blob(self):
+        """ look for peers for the head blob """
+        head_blob_hash = self._download_manager.get_head_blob_hash()
+        peers = yield self._find_peers_for_hash(head_blob_hash)
+        defer.returnValue(peers)
+
+    @defer.inlineCallbacks
+    def get_new_peers_for_next_unavailable(self):
+        """ look for peers for the next unavailable blob """
+        blob_hash = yield self._get_hash_for_peer_search()
+        peers = yield self._find_peers_for_hash(blob_hash)
+        defer.returnValue(peers)
 
     ######### internal calls #########
     def should_send_next_request(self, peer):

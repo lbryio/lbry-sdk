@@ -30,8 +30,9 @@ class MocDownloader(object):
 
 class MocRequestCreator(object):
     implements(IRequestCreator)
-    def __init__(self, peers_to_return):
+    def __init__(self, peers_to_return, peers_to_return_head_blob=[]):
         self.peers_to_return = peers_to_return
+        self.peers_to_return_head_blob = peers_to_return_head_blob
         self.sent_request = False
 
     def send_next_request(self, peer, protocol):
@@ -53,8 +54,11 @@ class MocRequestCreator(object):
         if isinstance(err.value, NoResponseError):
             return err
 
-    def get_new_peers(self):
+    def get_new_peers_for_next_unavailable(self):
         return self.peers_to_return
+
+    def get_new_peers_for_head_blob(self):
+        return self.peers_to_return_head_blob
 
 class MocFunctionalQueryHandler(object):
     implements(IQueryHandler)
@@ -125,12 +129,17 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.primary_request_creator = MocRequestCreator([self.TEST_PEER])
         self.clock = task.Clock()
         utils.call_later = self.clock.callLater
+        self.server_port = None
+
+    def _init_connection_manager(self, seek_head_blob_first=False):
+        # this import is requierd here so utils.call_later is replaced by self.clock.callLater
         from lbrynet.core.client.ConnectionManager import ConnectionManager
         self.connection_manager = ConnectionManager(self.downloader, self.rate_limiter,
                                                     [self.primary_request_creator], [])
 
+      
+        self.connection_manager.seek_head_blob_first = seek_head_blob_first
         self.connection_manager._start()
-        self.server_port = None
 
     def tearDown(self):
         if self.server_port is not None:
@@ -140,6 +149,7 @@ class TestIntegrationConnectionManager(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_success(self):
+        self._init_connection_manager()
         # test to see that if we setup a server, we get a connection
         self.server = MocServerProtocolFactory(self.clock)
         self.server_port = reactor.listenTCP(PEER_PORT, self.server, interface=LOCAL_HOST)
@@ -153,6 +163,7 @@ class TestIntegrationConnectionManager(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_server_with_improper_reply(self):
+        self._init_connection_manager()
         self.server = MocServerProtocolFactory(self.clock, is_good=False)
         self.server_port = reactor.listenTCP(PEER_PORT, self.server, interface=LOCAL_HOST)
         yield self.connection_manager.manage(schedule_next_call=False)
@@ -166,6 +177,8 @@ class TestIntegrationConnectionManager(unittest.TestCase):
     @defer.inlineCallbacks
     def test_non_existing_server(self):
         # Test to see that if we don't setup a server, we don't get a connection
+
+        self._init_connection_manager()
         yield self.connection_manager.manage(schedule_next_call=False)
         self.assertEqual(1, self.connection_manager.num_peer_connections())
         connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].factory.connection_was_made_deferred
@@ -180,6 +193,8 @@ class TestIntegrationConnectionManager(unittest.TestCase):
     def test_parallel_connections(self):
         # Test to see that we make two new connections at a manage call,
         # without it waiting for the connection to complete
+
+        self._init_connection_manager()
         test_peer2 = Peer(LOCAL_HOST, PEER_PORT+1)
         self.primary_request_creator.peers_to_return = [self.TEST_PEER, test_peer2]
         yield self.connection_manager.manage(schedule_next_call=False)
@@ -203,6 +218,7 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         # test to see that when we call stop, the ConnectionManager waits for the
         # current manage call to finish, closes connections,
         # and removes scheduled manage calls
+        self._init_connection_manager()
         self.connection_manager.manage(schedule_next_call=True)
         yield self.connection_manager.stop()
         self.assertEqual(0, self.TEST_PEER.success_count)
@@ -212,6 +228,7 @@ class TestIntegrationConnectionManager(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_closed_connection_when_server_is_slow(self):
+        self._init_connection_manager()
         self.server = MocServerProtocolFactory(self.clock, has_moc_query_handler=True,is_delayed=True)
         self.server_port = reactor.listenTCP(PEER_PORT, self.server, interface=LOCAL_HOST)
 
@@ -222,5 +239,26 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.assertEqual(True, connection_made)
         self.assertEqual(0, self.TEST_PEER.success_count)
         self.assertEqual(1, self.TEST_PEER.down_count)
+
+
+    """ test header first seeks """
+    @defer.inlineCallbacks  
+    def test_no_peer_for_head_blob(self):
+        # test that if we can't find blobs for the head blob, 
+        # it looks at the next unavailable and makes connection
+        self._init_connection_manager(seek_head_blob_first=True)
+        self.server = MocServerProtocolFactory(self.clock)
+        self.server_port = reactor.listenTCP(PEER_PORT, self.server, interface=LOCAL_HOST)
+ 
+        self.primary_request_creator.peers_to_return_head_blob = []
+        self.primary_request_creator.peers_to_return = [self.TEST_PEER]
+
+        yield self.connection_manager.manage(schedule_next_call=False)
+        self.assertEqual(1, self.connection_manager.num_peer_connections())
+        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].factory.connection_was_made_deferred
+        self.assertEqual(0, self.connection_manager.num_peer_connections())
+        self.assertTrue(connection_made)
+        self.assertEqual(1, self.TEST_PEER.success_count)
+        self.assertEqual(0, self.TEST_PEER.down_count)
 
 
