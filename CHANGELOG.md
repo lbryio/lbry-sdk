@@ -14,7 +14,7 @@ at anytime.
 
 ### Added
   * Added validation of currencies.
-  *
+  * Added blob_announce API command
 
 ### Fixed
   *
