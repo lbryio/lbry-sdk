@@ -2382,6 +2382,8 @@ class Daemon(AuthJSONRPCServer):
             blob_hashes = [blob_hash]
             yield self.session.blob_manager._immediate_announce(blob_hashes)
         elif blob_hashes:
+            if isinstance(blob_hashes,(str,unicode)):
+                blob_hashes = json.loads(blob_hashes)
             yield self.session.blob_manager._immediate_announce(blob_hashes)
         elif stream_hash:
             blobs = yield self.get_blobs_for_stream_hash(stream_hash)
