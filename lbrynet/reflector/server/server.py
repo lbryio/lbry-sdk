@@ -5,6 +5,8 @@ from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ServerFactory
 from lbrynet.core.utils import is_valid_blobhash
 from lbrynet.core.Error import DownloadCanceledError, InvalidBlobHashError
+from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
+from lbrynet.lbry_file.StreamDescriptor import save_sd_info
 from lbrynet.reflector.common import REFLECTOR_V1, REFLECTOR_V2
 from lbrynet.reflector.common import ReflectorRequestError, ReflectorClientVersionError
 
@@ -30,6 +32,7 @@ class ReflectorServer(Protocol):
         log.debug('Connection made to %s', peer_info)
         self.peer = self.factory.peer_manager.get_peer(peer_info.host, peer_info.port)
         self.blob_manager = self.factory.blob_manager
+        self.stream_info_manager = self.factory.stream_info_manager
         self.protocol_version = self.factory.protocol_version
         self.received_handshake = False
         self.peer_version = None
@@ -63,7 +66,23 @@ class ReflectorServer(Protocol):
 
     @defer.inlineCallbacks
     def _on_completed_blob(self, blob, response_key):
-        yield self.blob_manager.blob_completed(blob)
+        should_announce = False
+        if response_key == RECEIVED_SD_BLOB:
+            sd_info = yield BlobStreamDescriptorReader(blob).get_info()
+            yield save_sd_info(self.stream_info_manager, sd_info)
+            yield self.stream_info_manager.save_sd_blob_hash_to_stream(sd_info['stream_hash'],
+                                                                       blob.blob_hash)
+            should_announce = True
+
+        else:
+            stream_hash = yield self.stream_info_manager.get_stream_of_blob(blob.blob_hash)
+            if stream_hash is not None:
+                blob_num = yield self.stream_info_manager._get_blob_num_by_hash(stream_hash,
+                                                                                blob.blob_hash)
+                if blob_num == 0:
+                    should_announce = True
+
+        yield self.blob_manager.blob_completed(blob, should_announce=should_announce)
         yield self.close_blob()
         log.info("Received %s", blob)
         yield self.send_response({response_key: True})
@@ -318,9 +337,10 @@ class ReflectorServer(Protocol):
 class ReflectorServerFactory(ServerFactory):
     protocol = ReflectorServer
 
-    def __init__(self, peer_manager, blob_manager):
+    def __init__(self, peer_manager, blob_manager, stream_info_manager):
         self.peer_manager = peer_manager
         self.blob_manager = blob_manager
+        self.stream_info_manager = stream_info_manager
         self.protocol_version = REFLECTOR_V2
 
     def buildProtocol(self, addr):
