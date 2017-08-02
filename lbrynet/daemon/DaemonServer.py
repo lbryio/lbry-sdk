@@ -54,10 +54,9 @@ class DaemonServer(object):
 
     @defer.inlineCallbacks
     def stop(self):
-        if self._api is not None:
-            yield self._api._shutdown()
-        if self.server_port is not None:
-            yield self.server_port.stopListening()
+        if reactor.running:
+            log.info("Stopping the reactor")
+            reactor.fireSystemEvent("shutdown")
 
 
 def get_site_base(use_auth, root):

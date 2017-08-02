@@ -18,18 +18,8 @@ def test_internet_connection():
     return utils.check_connection()
 
 
-def stop():
-    conf.initialize_settings()
-    log_support.configure_console()
-    try:
-        LBRYAPIClient.get_client().call('stop')
-    except Exception:
-        log.exception('Failed to stop deamon')
-    else:
-        log.info("Shutting down lbrynet-daemon from command line")
-
-
 def start():
+    """The primary entry point for launching the daemon."""
     conf.initialize_settings()
 
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
@@ -107,10 +97,9 @@ def start_server_and_listen(use_auth, analytics_manager):
         yield daemon_server.start(use_auth)
         analytics_manager.send_server_startup_success()
     except Exception as e:
-        log.exception('Failed to startup')
-        yield daemon_server.stop()
+        log.exception('Failed to start')
         analytics_manager.send_server_startup_error(str(e))
-        reactor.fireSystemEvent("shutdown")
+        daemon_server.stop()
 
 
 if __name__ == "__main__":
