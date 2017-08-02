@@ -233,7 +233,7 @@ class Api(object):
     def track(self, event):
         """Send a single tracking event"""
         if not self._enabled:
-            return defer.succeed('analytics disabled')
+            return defer.succeed('Analytics disabled')
 
         def _log_error(failure, event):
             log.warning('Failed to send track event. %s (%s)', failure.getTraceback(), str(event))

@@ -448,6 +448,7 @@ class Wallet(object):
         self._batch_count = 20
 
     def start(self):
+        log.info("Starting wallet.")
         def start_manage():
             self.stopped = False
             self.manage()
@@ -472,7 +473,7 @@ class Wallet(object):
         log.error("An error occurred stopping the wallet: %s", err.getTraceback())
 
     def stop(self):
-        log.info("Stopping %s", self)
+        log.info("Stopping wallet.")
         self.stopped = True
         # If self.next_manage_call is None, then manage is currently running or else
         # start has not been called, so set stopped and do nothing else.

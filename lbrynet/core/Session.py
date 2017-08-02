@@ -140,7 +140,7 @@ class Session(object):
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
 
-        log.debug("Setting up the lbry session")
+        log.debug("Starting session.")
 
         if self.lbryid is None:
             self.lbryid = generate_id()
@@ -169,7 +169,7 @@ class Session(object):
 
     def shut_down(self):
         """Stop all services"""
-        log.info('Shutting down %s', self)
+        log.info('Stopping session.')
         ds = []
         if self.blob_tracker is not None:
             ds.append(defer.maybeDeferred(self.blob_tracker.stop))
@@ -319,7 +319,7 @@ class Session(object):
         return dl
 
     def _unset_upnp(self):
-        log.info("Unsetting upnp for %s", self)
+        log.info("Unsetting upnp for session")
 
         def threaded_unset_upnp():
             u = miniupnpc.UPnP()
