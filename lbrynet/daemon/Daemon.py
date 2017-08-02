@@ -1911,6 +1911,29 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
+    def jsonrpc_claim_send_tip(self, claim_id, amount):
+        """
+        Send a tip to the owner of a claim specified by uri. A tip is a claim support
+        where the recipient of the support is the claim address for the claim being supported.
+
+        Usage:
+            claim_send_tip (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
+
+        Return:
+            (dict) Dictionary containing the result of the support
+            {
+                txid : (str) txid of resulting support claim
+                nout : (int) nout of the resulting support claim
+                fee : (float) fee paid for the transaction
+            }
+        """
+
+        result = yield self.session.wallet.tip_claim(claim_id, amount)
+        self.analytics_manager.send_claim_action('new_support')
+        defer.returnValue(result)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
         """
         Send a name claim to an address
