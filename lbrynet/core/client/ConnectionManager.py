@@ -26,11 +26,13 @@ class ConnectionManager(object):
     def __init__(self, downloader, rate_limiter,
                  primary_request_creators, secondary_request_creators):
 
+        self.seek_head_blob_first = conf.settings['seek_head_blob_first']
+        self.max_connections_per_stream = conf.settings['max_connections_per_stream']
+
         self.downloader = downloader
         self.rate_limiter = rate_limiter
         self._primary_request_creators = primary_request_creators
         self._secondary_request_creators = secondary_request_creators
-        self.seek_head_blob_first = conf.settings['seek_head_blob_first']
         self._peer_connections = {}  # {Peer: PeerConnectionHandler}
         self._connections_closing = {}  # {Peer: deferred (fired when the connection is closed)}
         self._next_manage_call = None
@@ -148,10 +150,10 @@ class ConnectionManager(object):
     @defer.inlineCallbacks
     def manage(self, schedule_next_call=True):
         self._manage_deferred = defer.Deferred()
-        if len(self._peer_connections) < conf.settings['max_connections_per_stream']:
+        if len(self._peer_connections) < self.max_connections_per_stream:
             log.debug("%s have %d connections, looking for %d",
                         self._get_log_name(), len(self._peer_connections),
-                        conf.settings['max_connections_per_stream'])
+                        self.max_connections_per_stream)
             peers = yield self._get_new_peers()
             for peer in peers:
                 self._connect_to_peer(peer)
@@ -171,7 +173,7 @@ class ConnectionManager(object):
 
     @defer.inlineCallbacks
     def _get_new_peers(self):
-        new_conns_needed = conf.settings['max_connections_per_stream'] - len(self._peer_connections)
+        new_conns_needed = self.max_connections_per_stream - len(self._peer_connections)
         if new_conns_needed < 1:
             defer.returnValue([])
         # we always get the peer from the first request creator

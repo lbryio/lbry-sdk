@@ -136,8 +136,6 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         from lbrynet.core.client.ConnectionManager import ConnectionManager
         self.connection_manager = ConnectionManager(self.downloader, self.rate_limiter,
                                                     [self.primary_request_creator], [])
-
-      
         self.connection_manager.seek_head_blob_first = seek_head_blob_first
         self.connection_manager._start()
 
@@ -242,14 +240,14 @@ class TestIntegrationConnectionManager(unittest.TestCase):
 
 
     """ test header first seeks """
-    @defer.inlineCallbacks  
+    @defer.inlineCallbacks
     def test_no_peer_for_head_blob(self):
-        # test that if we can't find blobs for the head blob, 
+        # test that if we can't find blobs for the head blob,
         # it looks at the next unavailable and makes connection
         self._init_connection_manager(seek_head_blob_first=True)
         self.server = MocServerProtocolFactory(self.clock)
         self.server_port = reactor.listenTCP(PEER_PORT, self.server, interface=LOCAL_HOST)
- 
+
         self.primary_request_creator.peers_to_return_head_blob = []
         self.primary_request_creator.peers_to_return = [self.TEST_PEER]
 
