@@ -25,7 +25,7 @@ class DHTPeerFinder(object):
         self.next_manage_call = reactor.callLater(60, self.run_manage_loop)
 
     def stop(self):
-        log.info("Stopping %s", self)
+        log.info("Stopping DHT peer finder.")
         if self.next_manage_call is not None and self.next_manage_call.active():
             self.next_manage_call.cancel()
             self.next_manage_call = None

@@ -18,10 +18,11 @@ at anytime.
 
 ### Fixed
   * Fixed incorrect formatting of "amount" fields
-  *
+  * Fixed handling of SIGINT, SIGTERM.
+  * Fixed shutdown sequence
 
 ### Deprecated
-  *
+  * The API will no longer be served at the /lbryapi path. It will now be at the root.
   *
 
 ### Changed
@@ -33,7 +34,7 @@ at anytime.
   *
 
 ### Removed
-  *
+  * Removed old /view and /upload API paths
   *
 
 

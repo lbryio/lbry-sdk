@@ -9,7 +9,6 @@ from jsonrpc.proxy import JSONRPCProxy
 from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils, system_info
-from lbrynet.daemon.auth.client import LBRYAPIClient
 from lbrynet.daemon.DaemonServer import DaemonServer
 
 log = logging.getLogger(__name__)
@@ -19,18 +18,8 @@ def test_internet_connection():
     return utils.check_connection()
 
 
-def stop():
-    conf.initialize_settings()
-    log_support.configure_console()
-    try:
-        LBRYAPIClient.get_client().call('stop')
-    except Exception:
-        log.exception('Failed to stop deamon')
-    else:
-        log.info("Shutting down lbrynet-daemon from command line")
-
-
 def start():
+    """The primary entry point for launching the daemon."""
     conf.initialize_settings()
 
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
@@ -89,16 +78,15 @@ def start():
 
 
 def update_settings_from_args(args):
-    cli_settings = {}
-    cli_settings['use_auth_http'] = args.useauth
-    cli_settings['wallet'] = args.wallet
-    conf.settings.update(cli_settings, data_types=(conf.TYPE_CLI,))
+    conf.settings.update({
+        'use_auth_http': args.useauth,
+        'wallet': args.wallet,
+    }, data_types=(conf.TYPE_CLI,))
 
 
 @defer.inlineCallbacks
-def start_server_and_listen(use_auth, analytics_manager, max_tries=5):
-    """The primary entry point for launching the daemon.
-
+def start_server_and_listen(use_auth, analytics_manager):
+    """
     Args:
         use_auth: set to true to enable http authentication
         analytics_manager: to send analytics
@@ -109,10 +97,9 @@ def start_server_and_listen(use_auth, analytics_manager, max_tries=5):
         yield daemon_server.start(use_auth)
         analytics_manager.send_server_startup_success()
     except Exception as e:
-        log.exception('Failed to startup')
-        yield daemon_server.stop()
+        log.exception('Failed to start')
         analytics_manager.send_server_startup_error(str(e))
-        reactor.fireSystemEvent("shutdown")
+        daemon_server.stop()
 
 
 if __name__ == "__main__":

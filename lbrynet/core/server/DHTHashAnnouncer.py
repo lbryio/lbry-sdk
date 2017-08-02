@@ -28,7 +28,7 @@ class DHTHashAnnouncer(object):
         self.next_manage_call = utils.call_later(self.ANNOUNCE_CHECK_INTERVAL, self.run_manage_loop)
 
     def stop(self):
-        log.info("Stopping %s", self)
+        log.info("Stopping DHT hash announcer.")
         if self.next_manage_call is not None:
             self.next_manage_call.cancel()
             self.next_manage_call = None
