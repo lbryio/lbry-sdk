@@ -108,7 +108,7 @@ class BlobStreamDescriptorWriter(StreamDescriptorWriter):
         blob_creator.write(raw_data)
         log.debug("Wrote the data to the new blob")
         sd_hash = yield blob_creator.close()
-        yield self.blob_manager.creator_finished(blob_creator)
+        yield self.blob_manager.creator_finished(blob_creator, should_announce=True)
         defer.returnValue(sd_hash)
 
 

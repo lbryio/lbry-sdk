@@ -251,6 +251,7 @@ ADJUSTABLE_SETTINGS = {
     'download_directory': (str, default_download_dir),
     'download_timeout': (int, 180),
     'is_generous_host': (bool, True),
+    'announce_head_blobs_only': (bool, False),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_port),
     'lbryum_wallet_dir': (str, default_lbryum_dir),
     'max_connections_per_stream': (int, 5),

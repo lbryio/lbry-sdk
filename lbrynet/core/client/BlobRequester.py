@@ -79,7 +79,9 @@ class BlobRequester(object):
     def _send_next_request(self, peer, protocol):
         log.debug('Sending a blob request for %s and %s', peer, protocol)
         availability = AvailabilityRequest(self, peer, protocol, self.payment_rate_manager)
-        download = DownloadRequest(self, peer, protocol, self.payment_rate_manager, self.wallet)
+        head_blob_hash = self._download_manager.get_head_blob_hash()
+        download = DownloadRequest(self, peer, protocol, self.payment_rate_manager,
+                                   self.wallet, head_blob_hash)
         price = PriceRequest(self, peer, protocol, self.payment_rate_manager)
 
         sent_request = False
@@ -406,9 +408,10 @@ class PriceRequest(RequestHelper):
 
 class DownloadRequest(RequestHelper):
     """Choose a blob and download it from a peer and also pay the peer for the data."""
-    def __init__(self, requester, peer, protocol, payment_rate_manager, wallet):
+    def __init__(self, requester, peer, protocol, payment_rate_manager, wallet, head_blob_hash):
         RequestHelper.__init__(self, requester, peer, protocol, payment_rate_manager)
         self.wallet = wallet
+        self.head_blob_hash = head_blob_hash
 
     def can_make_request(self):
         if self.protocol in self.protocol_prices:
@@ -546,7 +549,8 @@ class DownloadRequest(RequestHelper):
         self.update_local_score(5.0)
         self.peer.update_stats('blobs_downloaded', 1)
         self.peer.update_score(5.0)
-        self.requestor.blob_manager.blob_completed(blob)
+        should_announce = blob.blob_hash == self.head_blob_hash
+        self.requestor.blob_manager.blob_completed(blob, should_announce=should_announce)
         return arg
 
     def _download_failed(self, reason):
