@@ -22,7 +22,7 @@ at anytime.
   *
 
 ### Deprecated
-  *
+  * The API will no longer be served at the /lbryapi path. It will now be at the root.
   *
 
 ### Changed
@@ -45,6 +45,8 @@ at anytime.
 
 ### Removed
  * Removed TempBlobManager
+  * Removed old /view and /upload API paths
+  *
 
 
 ## [0.14.2] - 2017-07-24
