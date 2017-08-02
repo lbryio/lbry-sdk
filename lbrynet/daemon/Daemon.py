@@ -169,7 +169,7 @@ class Daemon(AuthJSONRPCServer):
         'daemon_stop', 'status', 'version',
     ]
 
-    def __init__(self, root, analytics_manager):
+    def __init__(self, analytics_manager):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
