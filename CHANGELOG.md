@@ -29,7 +29,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * Added additional columns in BlobManager database for future blob announcement change
   *
 
 ### Removed
