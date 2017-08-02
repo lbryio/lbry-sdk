@@ -346,7 +346,7 @@ class Daemon(AuthJSONRPCServer):
         try:
             if self.lbry_server_port is not None:
                 self.lbry_server_port, old_port = None, self.lbry_server_port
-                log.info('Stop listening to %s', old_port)
+                log.info('Stop listening on port %s', old_port.port)
                 return defer.maybeDeferred(old_port.stopListening)
             else:
                 return defer.succeed(True)
