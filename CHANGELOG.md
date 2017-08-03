@@ -12,6 +12,10 @@ at anytime.
   *
   *
 
+### Added
+  * Added option to announce head blob only if seeding
+  *
+
 ### Fixed
   *
   *
