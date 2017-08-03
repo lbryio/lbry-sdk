@@ -71,6 +71,7 @@ def _get_old_directories(platform):
     dirs = {}
     if platform == WINDOWS:
         appdata = get_path(FOLDERID.RoamingAppData, UserHandle.current)
+        appdata = _win_path_to_bytes(appdata)
         dirs['data'] = os.path.join(appdata, 'lbrynet')
         dirs['lbryum'] = os.path.join(appdata, 'lbryum')
         dirs['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
