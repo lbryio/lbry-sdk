@@ -5,6 +5,7 @@ import tempfile
 from Crypto.Cipher import AES
 import mock
 from twisted.trial import unittest
+from twisted.internet import defer
 
 from lbrynet.core import BlobManager
 from lbrynet.core import Session
@@ -13,7 +14,7 @@ from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager import EncryptedFileManager
 
 from tests import mocks
-
+from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 MB = 2**20
 
@@ -27,16 +28,20 @@ class CreateEncryptedFileTest(unittest.TestCase):
     timeout = 5
     def setUp(self):
         mocks.mock_conf_settings(self)
-        self.tmp_dir = tempfile.mkdtemp()
+        self.tmp_db_dir, self.tmp_blob_dir = mk_db_and_blob_dir()
 
+    @defer.inlineCallbacks
     def tearDown(self):
-        shutil.rmtree(self.tmp_dir)
+        yield self.blob_manager.stop()
+        rm_db_and_blob_dir(self.tmp_db_dir, self.tmp_blob_dir)
 
     def create_file(self, filename):
         session = mock.Mock(spec=Session.Session)(None, None)
         hash_announcer = DHTHashAnnouncer.DHTHashAnnouncer(None, None)
-        session.blob_manager = BlobManager.TempBlobManager(hash_announcer)
-        session.db_dir = self.tmp_dir
+        self.blob_manager = BlobManager.DiskBlobManager(hash_announcer, self.tmp_blob_dir, self.tmp_db_dir)
+        session.blob_manager = self.blob_manager
+        session.blob_manager.setup()
+        session.db_dir = self.tmp_db_dir
         manager = mock.Mock(spec=EncryptedFileManager.EncryptedFileManager)()
         handle = mocks.GenFile(3*MB, '1')
         key = '2'*AES.block_size

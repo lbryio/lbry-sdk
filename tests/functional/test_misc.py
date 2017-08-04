@@ -33,6 +33,7 @@ from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 
 from tests import mocks
+from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 FakeNode = mocks.Node
 FakeWallet = mocks.Wallet
@@ -44,7 +45,6 @@ DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 log_format = "%(funcName)s(): %(message)s"
 logging.basicConfig(level=logging.CRITICAL, format=log_format)
-
 
 def require_system(system):
     def wrapper(fn):
@@ -111,13 +111,12 @@ class LbryUploader(object):
         hash_announcer = FakeAnnouncer()
         rate_limiter = RateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
-        db_dir = "server"
-        os.mkdir(db_dir)
+        self.db_dir, self.blob_dir = mk_db_and_blob_dir()
 
         self.session = Session(
-            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
-            peer_finder=peer_finder, hash_announcer=hash_announcer, peer_port=5553,
-            use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
+            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=self.db_dir, blob_dir=self.blob_dir,
+            lbryid="abcd", peer_finder=peer_finder, hash_announcer=hash_announcer,
+            peer_port=5553, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
             dht_node_class=Node, is_generous=self.is_generous)
         stream_info_manager = TempEncryptedFileMetadataManager()
@@ -173,6 +172,7 @@ class LbryUploader(object):
         self.kill_check.stop()
         self.dead_event.set()
         dl = defer.DeferredList(ds)
+        dl.addCallback(lambda _: rm_db_and_blob_dir(self.db_dir, self.blob_dir))
         dl.addCallback(lambda _: self.reactor.stop())
         return dl
 
@@ -216,15 +216,11 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
     rate_limiter = RateLimiter()
     sd_identifier = StreamDescriptorIdentifier()
 
-    db_dir = "server_" + str(n)
-    blob_dir = os.path.join(db_dir, "blobfiles")
-    os.mkdir(db_dir)
-    os.mkdir(blob_dir)
-
+    db_dir, blob_dir = mk_db_and_blob_dir()
     session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
                       lbryid="abcd" + str(n),
                       peer_finder=peer_finder, hash_announcer=hash_announcer,
-                      blob_dir=None, peer_port=peer_port,
+                      blob_dir=blob_dir, peer_port=peer_port,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                       blob_tracker_class=DummyBlobAvailabilityTracker,
                       is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
@@ -289,6 +285,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
             ds.append(lbry_file_manager.stop())
             if server_port:
                 ds.append(server_port.stopListening())
+            ds.append(rm_db_and_blob_dir(db_dir, blob_dir)) 
             kill_check.stop()
             dead_event.set()
             dl = defer.DeferredList(ds)
@@ -327,13 +324,11 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
 
     if slow is True:
         peer_port = 5553
-        db_dir = "server1"
     else:
         peer_port = 5554
-        db_dir = "server2"
-    blob_dir = os.path.join(db_dir, "blobfiles")
-    os.mkdir(db_dir)
-    os.mkdir(blob_dir)
+
+
+    db_dir, blob_dir = mk_db_and_blob_dir()
 
     session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="efgh",
                       peer_finder=peer_finder, hash_announcer=hash_announcer,
@@ -385,6 +380,7 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
             dead_event.set()
             dl = defer.DeferredList(ds)
             dl.addCallback(lambda _: reactor.stop())
+            dl.addCallback(lambda _: rm_db_and_blob_dir(db_dir, blob_dir))
             return dl
 
         def check_for_kill():
@@ -509,14 +505,10 @@ class TestTransfer(TestCase):
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
 
-        db_dir = "client"
-        blob_dir = os.path.join(db_dir, "blobfiles")
-        os.mkdir(db_dir)
-        os.mkdir(blob_dir)
-
+        db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(
-            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
-            peer_finder=peer_finder, hash_announcer=hash_announcer,
+            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
+            lbryid="abcd", peer_finder=peer_finder, hash_announcer=hash_announcer,
             blob_dir=blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
@@ -572,6 +564,7 @@ class TestTransfer(TestCase):
                 logging.info("Client is shutting down")
 
             d.addCallback(lambda _: print_shutting_down())
+            d.addCallback(lambda _: rm_db_and_blob_dir(db_dir, blob_dir))
             d.addCallback(lambda _: arg)
             return d
 
@@ -604,11 +597,7 @@ class TestTransfer(TestCase):
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
 
-        db_dir = "client"
-        blob_dir = os.path.join(db_dir, "blobfiles")
-        os.mkdir(db_dir)
-        os.mkdir(blob_dir)
-
+        db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
@@ -660,6 +649,7 @@ class TestTransfer(TestCase):
                 logging.info("Client is shutting down")
 
             dl.addCallback(lambda _: print_shutting_down())
+            dl.addCallback(lambda _: rm_db_and_blob_dir(db_dir, blob_dir))
             dl.addCallback(lambda _: arg)
             return dl
 
@@ -686,11 +676,7 @@ class TestTransfer(TestCase):
 
         downloaders = []
 
-        db_dir = "client"
-        blob_dir = os.path.join(db_dir, "blobfiles")
-        os.mkdir(db_dir)
-        os.mkdir(blob_dir)
-
+        db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
                                lbryid="abcd", peer_finder=peer_finder,
                                hash_announcer=hash_announcer, blob_dir=blob_dir, peer_port=5553,
@@ -781,6 +767,7 @@ class TestTransfer(TestCase):
                 logging.info("Client is shutting down")
 
             d.addCallback(lambda _: print_shutting_down())
+            d.addCallback(lambda _: rm_db_and_blob_dir(db_dir, blob_dir))
             d.addCallback(lambda _: arg)
             return d
 
@@ -811,14 +798,10 @@ class TestTransfer(TestCase):
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
 
-        db_dir = "client"
-        blob_dir = os.path.join(db_dir, "blobfiles")
-        os.mkdir(db_dir)
-        os.mkdir(blob_dir)
-
+        db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
                                lbryid="abcd", peer_finder=peer_finder,
-                               hash_announcer=hash_announcer, blob_dir=None,
+                               hash_announcer=hash_announcer, blob_dir=blob_dir,
                                peer_port=5553, use_upnp=False, rate_limiter=rate_limiter,
                                wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker,
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
@@ -892,6 +875,7 @@ class TestTransfer(TestCase):
                 logging.info("Client is shutting down")
 
             d.addCallback(lambda _: print_shutting_down())
+            d.addCallback(lambda _: rm_db_and_blob_dir(db_dir, blob_dir))
             d.addCallback(lambda _: arg)
             return d
 
