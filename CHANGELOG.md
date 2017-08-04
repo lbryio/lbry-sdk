@@ -12,12 +12,8 @@ at anytime.
   *
   *
 
-### Added
-  * Added validation of currencies.
-  * Added blob_announce API command
-
 ### Fixed
-  * Fixed incorrect formatting of "amount" fields
+  *
   *
 
 ### Deprecated
@@ -33,8 +29,20 @@ at anytime.
   *
 
 ### Removed
-  * Removed TempBlobManager
   *
+  *
+
+
+## [0.14.3] - 2017-08-04
+### Fixed
+ * Fixed incorrect formatting of "amount" fields
+
+### Added
+ * Added validation of currencies.
+ * Added blob_announce API command
+
+### Removed
+ * Removed TempBlobManager
 
 
 ## [0.14.2] - 2017-07-24
