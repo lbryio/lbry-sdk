@@ -1,6 +1,6 @@
 import logging
 import miniupnpc
-from lbrynet.core.BlobManager import DiskBlobManager, TempBlobManager
+from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.dht import node
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import RateLimiter
@@ -294,7 +294,8 @@ class Session(object):
 
         if self.blob_manager is None:
             if self.blob_dir is None:
-                self.blob_manager = TempBlobManager(self.hash_announcer)
+                raise Exception(
+                    "TempBlobManager is no longer supported, specify BlobManager or db_dir")
             else:
                 self.blob_manager = DiskBlobManager(self.hash_announcer,
                                                     self.blob_dir,

@@ -13,11 +13,11 @@ at anytime.
   *
 
 ### Added
-  * Added validation of currencies.
-  * Added blob_announce API command
+  * Added `claim_send_tip`, a command to tip the owner of a claim via a support transaction
+  *
 
 ### Fixed
-  * Fixed incorrect formatting of "amount" fields
+  *
   *
 
 ### Deprecated
@@ -35,6 +35,18 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.14.3] - 2017-08-04
+### Fixed
+ * Fixed incorrect formatting of "amount" fields
+
+### Added
+ * Added validation of currencies.
+ * Added blob_announce API command
+
+### Removed
+ * Removed TempBlobManager
 
 
 ## [0.14.2] - 2017-07-24
