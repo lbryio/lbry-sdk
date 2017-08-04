@@ -139,3 +139,9 @@ class InvalidAuthenticationToken(Exception):
 
 class NegotiationError(Exception):
     pass
+
+class InvalidCurrencyError(Exception):
+    def __init__(self, currency):
+        self.currency = currency
+        Exception.__init__(
+            self, 'Invalid currency: {} is not a supported currency.'.format(currency))

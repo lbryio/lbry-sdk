@@ -8,6 +8,7 @@ import yaml
 import envparse
 from appdirs import user_data_dir, user_config_dir
 from lbrynet.core import utils
+from lbrynet.core.Error import InvalidCurrencyError
 
 try:
     from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
@@ -351,6 +352,10 @@ class Config(object):
         assert name not in self._fixed_defaults, \
             ValueError('{} is not an editable setting'.format(name))
 
+    def _validate_currency(self, currency):
+        if currency not in self._fixed_defaults['CURRENCIES'].keys():
+            raise InvalidCurrencyError(currency)
+
     def get(self, name, data_type=None):
         """Get a config value
 
@@ -388,6 +393,10 @@ class Config(object):
         data types (e.g. PERSISTED values to save to a file, CLI values from parsed
         command-line options, etc), you can specify that with the data_types param
         """
+        if name == "max_key_fee":
+            currency = str(value["currency"]).upper()
+            self._validate_currency(currency)
+
         self._assert_editable_setting(name)
         for data_type in data_types:
             self._assert_valid_data_type(data_type)

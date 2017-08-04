@@ -1338,8 +1338,7 @@ class Daemon(AuthJSONRPCServer):
             claim_results = yield self.session.wallet.get_claim_by_outpoint(outpoint)
         else:
             raise Exception("Must specify either txid/nout, or claim_id")
-        result = format_json_out_amount_as_float(claim_results)
-        response = yield self._render_response(result)
+        response = yield self._render_response(claim_results)
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
@@ -1961,7 +1960,6 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_name_claims()
-        d.addCallback(format_json_out_amount_as_float)
         d.addCallback(lambda claims: self._render_response(claims))
         return d
 
@@ -2019,7 +2017,7 @@ class Daemon(AuthJSONRPCServer):
                     If there was an error:
                     'error': (str) error message
 
-                    'claims_in_channel_pages': total number of pages with <page_size> results,
+                    'claims_in_channel': the total number of results for the channel,
 
                     If a page of results was requested:
                     'returned_page': page number returned,
@@ -2077,7 +2075,7 @@ class Daemon(AuthJSONRPCServer):
                 results[u] = resolved[u]
             else:
                 results[u] = {
-                        'claims_in_channel_pages': resolved[u]['claims_in_channel_pages']
+                        'claims_in_channel': resolved[u]['claims_in_channel']
                     }
                 if page:
                     results[u]['returned_page'] = page
@@ -2351,6 +2349,53 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r))
         return d
 
+    @defer.inlineCallbacks
+    @AuthJSONRPCServer.flags(announce_all="-a")
+    def jsonrpc_blob_announce(self, announce_all=None, blob_hash=None,
+                              stream_hash=None, sd_hash=None):
+        """
+        Announce blobs to the DHT
+
+        Usage:
+            blob_announce [-a] [<blob_hash> | --blob_hash=<blob_hash>]
+                          [<stream_hash> | --stream_hash=<stream_hash>]
+                          [<sd_hash> | --sd_hash=<sd_hash>]
+
+        Options:
+            -a                                          : announce all the blobs possessed by user
+            <blob_hash>, --blob_hash=<blob_hash>        : announce a blob, specified by blob_hash
+            <stream_hash>, --stream_hash=<stream_hash>  : announce all blobs associated with
+                                                            stream_hash
+            <sd_hash>, --sd_hash=<sd_hash>              : announce all blobs associated with
+                                                            sd_hash and the sd_hash itself
+
+        Returns:
+            (bool) true if successful
+        """
+        if announce_all:
+            yield self.session.blob_manager.immediate_announce_all_blobs()
+        elif blob_hash:
+            blob_hashes = [blob_hash]
+            yield self.session.blob_manager._immediate_announce(blob_hashes)
+        elif stream_hash:
+            blobs = yield self.get_blobs_for_stream_hash(stream_hash)
+            blobs = [blob for blob in blobs if blob.is_validated()]
+            blob_hashes = [blob.blob_hash for blob in blobs]
+            yield self.session.blob_manager._immediate_announce(blob_hashes)
+        elif sd_hash:
+            blobs = yield self.get_blobs_for_sd_hash(sd_hash)
+            blobs = [blob for blob in blobs if blob.is_validated()]
+            blob_hashes = [blob.blob_hash for blob in blobs]
+            blob_hashes.append(sd_hash)
+            yield self.session.blob_manager._immediate_announce(blob_hashes)
+        else:
+            raise Exception('single argument must be specified')
+
+
+        response = yield self._render_response(True)
+        defer.returnValue(response)
+
+    # TODO: This command should be deprecated in favor of blob_announce
     def jsonrpc_blob_announce_all(self):
         """
         Announce all blobs to the DHT
@@ -2614,19 +2659,3 @@ def get_blob_payment_rate_manager(session, payment_rate_manager=None):
             payment_rate_manager = rate_managers[payment_rate_manager]
             log.info("Downloading blob with rate manager: %s", payment_rate_manager)
     return payment_rate_manager or session.payment_rate_manager
-
-
-# lbryum returns json loadeable object with amounts as decimal encoded string,
-# convert them into floats for the daemon
-# TODO: daemon should also use decimal encoded string
-def format_json_out_amount_as_float(obj):
-    if isinstance(obj, dict):
-        for k, v in obj.iteritems():
-            if k == 'amount' or k == 'effective_amount':
-                obj[k] = float(obj[k])
-            if isinstance(v, (dict, list)):
-                obj[k] = format_json_out_amount_as_float(v)
-
-    elif isinstance(obj, list):
-        obj = [format_json_out_amount_as_float(o) for o in obj]
-    return obj

@@ -191,7 +191,7 @@ Returns:
             If there was an error:
             'error': (str) error message
 
-            'claims_in_channel_pages': total number of pages with <page_size> results,
+            'claims_in_channel': the total number of results for the channel,
 
             If a page of results was requested:
             'returned_page': page number returned,
