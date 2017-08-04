@@ -29,7 +29,8 @@ def _reflect_stream(lbry_file, reflector_server):
     factory = ClientFactory(lbry_file)
     ip = yield resolve(reflector_address)
     yield reactor.connectTCP(ip, reflector_port, factory)
-    yield factory.finished_deferred
+    result = yield factory.finished_deferred
+    defer.returnValue(result)
 
 
 @defer.inlineCallbacks
@@ -38,14 +39,29 @@ def _reflect_blobs(blob_manager, blob_hashes, reflector_server):
     factory = BlobClientFactory(blob_manager, blob_hashes)
     ip = yield resolve(reflector_address)
     yield reactor.connectTCP(ip, reflector_port, factory)
-    yield factory.finished_deferred
+    result = yield factory.finished_deferred
+    defer.returnValue(result)
 
 
-def reflect_stream(lbry_file):
-    reflector_server = random.choice(conf.settings['reflector_servers'])
+def reflect_stream(lbry_file, reflector_server=None):
+    if reflector_server:
+        if len(reflector_server.split(":")) == 2:
+            host, port = tuple(reflector_server.split(":"))
+            reflector_server = host, int(port)
+        else:
+            reflector_server = reflector_server, 5566
+    else:
+        reflector_server = random.choice(conf.settings['reflector_servers'])
     return _reflect_stream(lbry_file, reflector_server)
 
 
-def reflect_blob_hashes(blob_hashes, blob_manager):
-    reflector_server = random.choice(conf.settings['reflector_servers'])
+def reflect_blob_hashes(blob_hashes, blob_manager, reflector_server=None):
+    if reflector_server:
+        if len(reflector_server.split(":")) == 2:
+            host, port = tuple(reflector_server.split(":"))
+            reflector_server = host, int(port)
+        else:
+            reflector_server = reflector_server, 5566
+    else:
+        reflector_server = random.choice(conf.settings['reflector_servers'])
     return _reflect_blobs(blob_manager, blob_hashes, reflector_server)
