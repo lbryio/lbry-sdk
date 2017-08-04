@@ -1,10 +1,14 @@
 from twisted.internet import defer
 from twisted.trial import unittest
+from lbrynet import conf
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from tests.util import random_lbry_hash
 
 class TestEncryptedFileManager(unittest.TestCase):
+
+    def setUp(self):
+        conf.initialize_settings()
 
     @defer.inlineCallbacks
     def test_database_operations(self):
