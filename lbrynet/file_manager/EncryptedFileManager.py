@@ -17,20 +17,11 @@ from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.cryptstream.client.CryptStreamDownloader import CurrentlyStoppingError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
+from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet import conf
 
 
 log = logging.getLogger(__name__)
-
-
-def safe_start_looping_call(looping_call, seconds=3600):
-    if not looping_call.running:
-        looping_call.start(seconds)
-
-
-def safe_stop_looping_call(looping_call):
-    if looping_call.running:
-        looping_call.stop()
 
 
 class EncryptedFileManager(object):
@@ -40,6 +31,9 @@ class EncryptedFileManager(object):
     """
 
     def __init__(self, session, stream_info_manager, sd_identifier, download_directory=None):
+
+        self.auto_re_reflect = conf.settings['auto_re_reflect']
+        self.auto_re_reflect_interval = conf.settings['auto_re_reflect_interval']
         self.session = session
         self.stream_info_manager = stream_info_manager
         # TODO: why is sd_identifier part of the file manager?
@@ -58,8 +52,8 @@ class EncryptedFileManager(object):
         yield self._open_db()
         yield self._add_to_sd_identifier()
         yield self._start_lbry_files()
-        if conf.settings['reflect_uploads']:
-            safe_start_looping_call(self.lbry_file_reflector)
+        if self.auto_re_reflect is True:
+            safe_start_looping_call(self.lbry_file_reflector, self.auto_re_reflect_interval)
 
     def get_lbry_file_status(self, lbry_file):
         return self._get_lbry_file_status(lbry_file.rowid)

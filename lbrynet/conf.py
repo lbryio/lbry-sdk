@@ -250,7 +250,12 @@ ADJUSTABLE_SETTINGS = {
     'peer_port': (int, 3333),
     'pointtrader_server': (str, 'http://127.0.0.1:2424'),
     'reflector_port': (int, 5566),
+    # if reflect_uploads is True, reflect files on publish
     'reflect_uploads': (bool, True),
+    # if auto_re_reflect is True, attempt to re-reflect files on startup and
+    # at every auto_re_reflect_interval seconds, useful if initial reflect is unreliable
+    'auto_re_reflect': (bool, True),
+    'auto_re_reflect_interval': (int, 3600),
     'reflector_servers': (list, [('reflector.lbry.io', 5566)], server_port),
     'run_reflector_server': (bool, False),
     'sd_download_timeout': (int, 3),
