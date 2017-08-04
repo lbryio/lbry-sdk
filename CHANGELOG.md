@@ -29,7 +29,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * Added configuration options for auto re-reflect
   *
 
 ### Removed
