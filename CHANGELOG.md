@@ -14,7 +14,8 @@ at anytime.
 
 ### Added
   * Added `claim_send_tip`, a command to tip the owner of a claim via a support transaction
-  *
+  * Added `reflector` keyword parameter to `file_reflect` command
+  * Added configuration options for auto re-reflect
 
 ### Fixed
   *
@@ -25,12 +26,9 @@ at anytime.
   *
 
 ### Changed
-  *
-  *
-
-### Added
-  * Added configuration options for auto re-reflect
-  *
+  * Renamed `reflect` command to `file_reflect`
+  * Allow IP addresses to be configured as reflector servers, not just host names.
+  * Return list of blobs that were reflected from `file_reflect`
 
 ### Removed
   *
