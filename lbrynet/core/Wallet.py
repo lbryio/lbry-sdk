@@ -976,6 +976,15 @@ class Wallet(object):
         d.addCallback(lambda claim_out: _parse_support_claim_out(claim_out))
         return d
 
+    @defer.inlineCallbacks
+    def tip_claim(self, claim_id, amount):
+        claim_out = yield self._tip_claim(claim_id, amount)
+        if claim_out:
+            result = self._process_claim_out(claim_out)
+            defer.returnValue(result)
+        else:
+            raise Exception("failed to send tip of %f to claim id %s" % (amount, claim_id))
+
     def get_block_info(self, height):
         d = self._get_blockhash(height)
         return d
@@ -1083,6 +1092,9 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def _support_claim(self, name, claim_id, amount):
+        return defer.fail(NotImplementedError())
+
+    def _tip_claim(self, claim_id, amount):
         return defer.fail(NotImplementedError())
 
     def _do_send_many(self, payments_to_send):
@@ -1369,6 +1381,14 @@ class LBRYumWallet(Wallet):
         log.debug("Support %s %s %f" % (name, claim_id, amount))
         broadcast = False
         tx = yield self._run_cmd_as_defer_succeed('support', name, claim_id, amount, broadcast)
+        claim_out = yield self._broadcast_claim_transaction(tx)
+        defer.returnValue(claim_out)
+
+    @defer.inlineCallbacks
+    def _tip_claim(self, claim_id, amount):
+        log.debug("Tip %s %f", claim_id, amount)
+        broadcast = False
+        tx = yield self._run_cmd_as_defer_succeed('sendwithsupport', claim_id, amount, broadcast)
         claim_out = yield self._broadcast_claim_transaction(tx)
         defer.returnValue(claim_out)
 
