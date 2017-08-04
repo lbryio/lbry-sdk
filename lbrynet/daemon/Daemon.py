@@ -2414,7 +2414,6 @@ class Daemon(AuthJSONRPCServer):
         else:
             raise Exception('single argument must be specified')
 
-
         response = yield self._render_response(True)
         defer.returnValue(response)
 
@@ -2435,22 +2434,43 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @defer.inlineCallbacks
-    def jsonrpc_reflect(self, sd_hash):
+    def jsonrpc_file_reflect(self, **kwargs):
         """
-        Reflect a stream
+        Reflect all the blobs in a file matching the filter criteria
 
         Usage:
-            reflect (<sd_hash> | --sd_hash=<sd_hash>)
+            file_reflect [--sd_hash=<sd_hash>] [--file_name=<file_name>]
+                         [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
+                         [--outpoint=<outpoint>] [--rowid=<rowid>] [--name=<name>]
+                         [--reflector=<reflector>]
+
+        Options:
+            --sd_hash=<sd_hash>          : get file with matching sd hash
+            --file_name=<file_name>      : get file with matching file name in the
+                                           downloads folder
+            --stream_hash=<stream_hash>  : get file with matching stream hash
+            --claim_id=<claim_id>        : get file with matching claim id
+            --outpoint=<outpoint>        : get file with matching claim outpoint
+            --rowid=<rowid>              : get file with matching row id
+            --name=<name>                : get file with matching associated name claim
+            --reflector=<reflector>      : reflector server, ip address or url
+                                           by default choose a server from the config
 
         Returns:
-            (bool) true if successful
+            (list) list of blobs reflected
         """
 
-        lbry_file = yield self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
-        if lbry_file is None:
-            raise Exception('No file found for give sd hash')
-        yield reupload.reflect_stream(lbry_file)
-        defer.returnValue("Reflect success")
+        reflector_server = kwargs.get('reflector', None)
+        lbry_files = yield self._get_lbry_files(**kwargs)
+
+        if len(lbry_files) > 1:
+            raise Exception('Too many (%i) files found, need one' % len(lbry_files))
+        elif not lbry_files:
+            raise Exception('No file found')
+        lbry_file = lbry_files[0]
+
+        results = yield reupload.reflect_stream(lbry_file, reflector_server=reflector_server)
+        defer.returnValue(results)
 
     @defer.inlineCallbacks
     @AuthJSONRPCServer.flags(needed="-n", finished="-f")
