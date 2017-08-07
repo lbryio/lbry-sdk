@@ -24,7 +24,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
         'BTCLBC': {'spot': 3.0, 'ts': util.DEFAULT_ISO_TIME + 1},
         'USDBTC': {'spot': 2.0, 'ts': util.DEFAULT_ISO_TIME + 2}
     }
-    daemon = LBRYDaemon(None, None)
+    daemon = LBRYDaemon(None)
     daemon.session = mock.Mock(spec=Session.Session)
     daemon.session.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
     market_feeds = [BTCLBCFeed(), USDBTCFeed()]
