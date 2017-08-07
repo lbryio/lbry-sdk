@@ -23,7 +23,7 @@ else:
     icns = None
 
 
-a = Entrypoint('lbrynet', 'console_scripts', 'lbrynet-cli', pathex=[cwd], datas=datas)
+a = Entrypoint('lbrynet', 'console_scripts', 'lbrynet-cli', pathex=[cwd])
 
 pyz = PYZ(a.pure, a.zipped_data)
 
