@@ -115,7 +115,7 @@ class WalletTest(unittest.TestCase):
             return threads.deferToThread(lambda: claim_out)
         MocLbryumWallet._abandon_claim = failed_abandon_claim
         wallet = MocLbryumWallet()
-        d = wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa")
+        d = wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa", None, None)
         self.assertFailure(d, Exception)
         return d
 
@@ -131,12 +131,12 @@ class WalletTest(unittest.TestCase):
             self.assertEqual(expected_abandon_out['fee'], claim_out['fee'])
             self.assertEqual(expected_abandon_out['txid'], claim_out['txid'])
 
-        def success_abandon_claim(self, claim_outpoint):
+        def success_abandon_claim(self, claim_outpoint, txid, nout):
             return threads.deferToThread(lambda: expected_abandon_out)
 
         MocLbryumWallet._abandon_claim = success_abandon_claim
         wallet = MocLbryumWallet()
-        d = wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa")
+        d = wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa", None, None)
         d.addCallback(lambda claim_out: check_out(claim_out))
         return d
 

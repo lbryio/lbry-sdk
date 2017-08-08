@@ -1858,12 +1858,13 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_claim_abandon(self, claim_id):
+    def jsonrpc_claim_abandon(self, claim_id=None, txid=None, nout=None):
         """
         Abandon a name and reclaim credits from the claim
 
         Usage:
-            claim_abandon (<claim_id> | --claim_id=<claim_id>)
+            claim_abandon [<claim_id> | --claim_id=<claim_id>]
+                          [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
 
         Return:
             (dict) Dictionary containing result of the claim
@@ -1872,9 +1873,15 @@ class Daemon(AuthJSONRPCServer):
                 fee : (float) fee paid for the transaction
             }
         """
+        if claim_id is None and txid is None and nout is None:
+            raise Exception('Must specify claim_id, or txid and nout')
+        if txid is None and nout is not None:
+            raise Exception('Must specify txid')
+        if nout is None and txid is not None:
+            raise Exception('Must specify nout')
 
         try:
-            abandon_claim_tx = yield self.session.wallet.abandon_claim(claim_id)
+            abandon_claim_tx = yield self.session.wallet.abandon_claim(claim_id, txid, nout)
             self.analytics_manager.send_claim_action('abandon')
             response = yield self._render_response(abandon_claim_tx)
         except BaseException as err:
