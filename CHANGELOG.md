@@ -16,6 +16,7 @@ at anytime.
   * Added `claim_send_tip`, a command to tip the owner of a claim via a support transaction
   * Added `reflector` keyword parameter to `file_reflect` command
   * Added configuration options for auto re-reflect
+  * Added option to abandon by txid/nout
 
 ### Fixed
   *
