@@ -4,12 +4,13 @@ import os
 
 import lbryum
 
-
 dir = 'build';
 cwd = os.getcwd()
 if os.path.basename(cwd) != dir:
     raise Exception('pyinstaller build needs to be run from the ' + dir + ' directory')
 repo_base = os.path.abspath(os.path.join(cwd, '..'))
+
+execfile(os.path.join(cwd, "entrypoint.py")) # ghetto import
 
 
 system = platform.system()
@@ -24,44 +25,15 @@ else:
     icns = None
 
 
-block_cipher = None
-
-
-languages = (
-    'chinese_simplified.txt', 'japanese.txt', 'spanish.txt',
-    'english.txt', 'portuguese.txt'
-)
-
-
 datas = [
-    (
-        os.path.join(os.path.dirname(lbryum.__file__), 'wordlist', language),
-        'lbryum/wordlist'
-    )
-    for language in languages
+    (os.path.join(os.path.dirname(lbryum.__file__), 'wordlist', language + '.txt'), 'lbryum/wordlist')
+    for language in ('chinese_simplified', 'japanese', 'spanish','english', 'portuguese')
 ]
 
 
-a = Analysis(
-    ['daemon.py'],
-    pathex=[cwd],
-    binaries=None,
-    datas=datas,
-    hiddenimports=[],
-    hookspath=[],
-    runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher
-)
+a = Entrypoint('lbrynet', 'console_scripts', 'lbrynet-daemon', pathex=[cwd], datas=datas)
 
-
-pyz = PYZ(
-    a.pure, a.zipped_data,
-    cipher=block_cipher
-)
-
+pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz,

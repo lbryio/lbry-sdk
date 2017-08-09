@@ -8,6 +8,7 @@ import urllib
 import json
 import textwrap
 import random
+import signal
 
 from twisted.web import server
 from twisted.internet import defer, threads, error, reactor
@@ -169,7 +170,7 @@ class Daemon(AuthJSONRPCServer):
         'daemon_stop', 'status', 'version',
     ]
 
-    def __init__(self, root, analytics_manager):
+    def __init__(self, analytics_manager):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
@@ -346,7 +347,7 @@ class Daemon(AuthJSONRPCServer):
         try:
             if self.lbry_server_port is not None:
                 self.lbry_server_port, old_port = None, self.lbry_server_port
-                log.info('Stop listening to %s', old_port)
+                log.info('Stop listening on port %s', old_port.port)
                 return defer.maybeDeferred(old_port.stopListening)
             else:
                 return defer.succeed(True)
@@ -385,7 +386,15 @@ class Daemon(AuthJSONRPCServer):
             except OSError:
                 pass
 
+    @staticmethod
+    def _already_shutting_down(sig_num, frame):
+        log.info("Already shutting down")
+
     def _shutdown(self):
+        # ignore INT/TERM signals once shutdown has started
+        signal.signal(signal.SIGINT, self._already_shutting_down)
+        signal.signal(signal.SIGTERM, self._already_shutting_down)
+
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
         self.looping_call_manager.shutdown()

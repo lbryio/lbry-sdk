@@ -28,12 +28,12 @@ class DiskBlobManager(DHTHashSupplier):
 
     @defer.inlineCallbacks
     def setup(self):
-        log.info("Setting up the DiskBlobManager. blob_dir: %s, db_file: %s", str(self.blob_dir),
+        log.info("Starting disk blob manager. blob_dir: %s, db_file: %s", str(self.blob_dir),
                  str(self.db_file))
         yield self._open_db()
 
     def stop(self):
-        log.info("Stopping the DiskBlobManager")
+        log.info("Stopping disk blob manager.")
         self.db_conn.close()
         return defer.succeed(True)
 
