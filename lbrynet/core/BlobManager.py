@@ -3,13 +3,14 @@ import os
 import time
 import sqlite3
 
-from twisted.internet import threads, defer
+from twisted.internet import threads, defer, reactor
 from twisted.enterprise import adbapi
 from lbrynet.core.HashBlob import BlobFile, BlobFileCreator
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
 log = logging.getLogger(__name__)
+
 
 class DiskBlobManager(DHTHashSupplier):
     """This class stores blobs on the hard disk"""
@@ -24,7 +25,6 @@ class DiskBlobManager(DHTHashSupplier):
         #       be thousands of blobs loaded up, many stale
         self.blobs = {}
         self.blob_hashes_to_delete = {} # {blob_hash: being_deleted (True/False)}
-
 
     @defer.inlineCallbacks
     def setup(self):
@@ -58,13 +58,14 @@ class DiskBlobManager(DHTHashSupplier):
     def _immediate_announce(self, blob_hashes):
         if self.hash_announcer:
             return self.hash_announcer.immediate_announce(blob_hashes)
+        raise Exception("Hash announcer not set")
 
+    @defer.inlineCallbacks
     def blob_completed(self, blob, next_announce_time=None):
         if next_announce_time is None:
             next_announce_time = self.get_next_announce_time()
-        d = self._add_completed_blob(blob.blob_hash, blob.length, next_announce_time)
-        d.addCallback(lambda _: self._immediate_announce([blob.blob_hash]))
-        return d
+        yield self._add_completed_blob(blob.blob_hash, blob.length, next_announce_time)
+        reactor.callLater(0, self._immediate_announce, [blob.blob_hash])
 
     def completed_blobs(self, blobhashes_to_check):
         return self._completed_blobs(blobhashes_to_check)
