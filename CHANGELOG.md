@@ -18,7 +18,7 @@ at anytime.
   * Added configuration options for auto re-reflect
 
 ### Fixed
-  *
+  * Fixed reflector server blocking the `received_blob` reply on the server announcing the blob to the dht
   *
   * Fixed incorrect formatting of "amount" fields
   * Fixed handling of SIGINT, SIGTERM.
