@@ -77,11 +77,9 @@ class JSONRPCError(object):
     def create_from_exception(cls, exception, code=CODE_APPLICATION_ERROR, traceback=None):
         return cls(exception.message, code=code, traceback=traceback)
 
-
 def default_decimal(obj):
     if isinstance(obj, Decimal):
         return float(obj)
-
 
 class UnknownAPIMethodError(Exception):
     pass
@@ -99,19 +97,16 @@ def trap(err, *to_trap):
     err.trap(*to_trap)
 
 
-def jsonrpc_dumps_pretty(obj, **kwargs):
-    try:
-        id_ = kwargs.pop("id")
-    except KeyError:
-        id_ = None
-
+def jsonrpc_dumps(obj, id_):
     if isinstance(obj, JSONRPCError):
         data = {"jsonrpc": "2.0", "error": obj.to_dict(), "id": id_}
     else:
         data = {"jsonrpc": "2.0", "result": obj, "id": id_}
-
     return json.dumps(data, cls=jsonrpclib.JSONRPCEncoder, sort_keys=True, indent=2,
-                      separators=(',', ': '), **kwargs) + "\n"
+                      separators=(',', ': '), default=default_decimal) + "\n"
+
+def jsonrpc_loads(obj):
+    return jsonrpclib.loads(obj, parse_float=Decimal)
 
 
 class JSONRPCServerType(type):
@@ -233,7 +228,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             # last resort, just cast it as a string
             error = JSONRPCError(str(failure))
 
-        response_content = jsonrpc_dumps_pretty(error, id=id_)
+        response_content = jsonrpc_dumps(error, id_)
 
         self._set_headers(request, response_content)
         try:
@@ -284,7 +279,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         request.content.seek(0, 0)
         content = request.content.read()
         try:
-            parsed = jsonrpclib.loads(content)
+            parsed = jsonrpc_loads(content)
         except ValueError:
             log.warning("Unable to decode request json")
             self._render_error(JSONRPCError(None, JSONRPCError.CODE_PARSE_ERROR), request, None)
@@ -530,7 +525,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _callback_render(self, result, request, id_, auth_required=False):
         try:
-            encoded_message = jsonrpc_dumps_pretty(result, id=id_, default=default_decimal)
+            encoded_message = jsonrpc_dumps(result, id_)
             request.setResponseCode(200)
             self._set_headers(request, encoded_message, auth_required)
             self._render_message(request, encoded_message)
