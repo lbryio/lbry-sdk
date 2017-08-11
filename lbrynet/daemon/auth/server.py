@@ -8,7 +8,6 @@ from twisted.web import server, resource
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.internet.error import ConnectionDone, ConnectionLost
-from txjsonrpc import jsonrpclib
 from traceback import format_exc
 
 from lbrynet import conf
@@ -101,7 +100,7 @@ def jsonrpc_dumps(obj, id_):
                       separators=(',', ': '), use_decimal=True) + "\n"
 
 def jsonrpc_loads(obj):
-    return jsonrpclib.loads(obj, parse_float=Decimal)
+    return simplejson.loads(obj, use_decimal=True)
 
 
 class JSONRPCServerType(type):
