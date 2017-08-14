@@ -133,6 +133,8 @@ def main():
 def guess_type(x, key=None):
     if not isinstance(x, (unicode, str)):
         return x
+    if key in ('uri', 'channel_name', 'name', 'file_name', 'download_directory'):
+        return x
     if x in ('true', 'True', 'TRUE'):
         return True
     if x in ('false', 'False', 'FALSE'):
@@ -143,8 +145,6 @@ def guess_type(x, key=None):
         except ValueError:
             # not a float
             pass
-    if key == "uri":
-        return x
     try:
         return int(x)
     except ValueError:
