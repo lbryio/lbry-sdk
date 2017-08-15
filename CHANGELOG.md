@@ -12,33 +12,49 @@ at anytime.
   *
   *
 
-### Added
-  * Added `wallet_send`, a command to send credits and tips
-  * Added `reflector` keyword parameter to `file_reflect` command
-  * Added configuration options for auto re-reflect
-  * Added option to abandon by txid/nout
-
 ### Fixed
-  * Fixed reflector server blocking the `received_blob` reply on the server announcing the blob to the dht
   *
-  * Fixed incorrect formatting of "amount" fields
-  * Fixed handling of SIGINT, SIGTERM.
-  * Fixed shutdown sequence
-  * Fix error when resolving an integer
   *
 
 ### Deprecated
-  * The API will no longer be served at the /lbryapi path. It will now be at the root.
-  * Deprecated `send_amount_to_address` in favor of `wallet_send`
+  *
+  *
 
 ### Changed
-  * Renamed `reflect` command to `file_reflect`
-  * Allow IP addresses to be configured as reflector servers, not just host names.
-  * Return list of blobs that were reflected from `file_reflect`
+  *
+  *
+
+### Added
+  *
+  *
 
 ### Removed
   *
   *
+
+
+## [0.15.0] - 2017-08-15
+### Fixed
+ * Fixed reflector server blocking the `received_blob` reply on the server announcing the blob to the dht
+ * Fixed incorrect formatting of "amount" fields
+ * Fixed handling of SIGINT, SIGTERM.
+ * Fixed shutdown sequence
+ * Fix error when resolving an integer
+
+### Deprecated
+ * The API will no longer be served at the /lbryapi path. It will now be at the root.
+ * Deprecated `send_amount_to_address` in favor of `wallet_send`
+
+### Changed
+ * Renamed `reflect` command to `file_reflect`
+ * Allow IP addresses to be configured as reflector servers, not just host names.
+ * Return list of blobs that were reflected from `file_reflect`
+
+### Added
+ * Added `wallet_send`, a command to send credits and tips
+ * Added `reflector` keyword parameter to `file_reflect` command
+ * Added configuration options for auto re-reflect
+ * Added option to abandon by txid/nout
 
 
 ## [0.14.3] - 2017-08-04
