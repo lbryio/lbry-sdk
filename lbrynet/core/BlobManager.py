@@ -142,7 +142,6 @@ class DiskBlobManager(DHTHashSupplier):
                                 "    blob_length integer, " +
                                 "    last_verified_time real, " +
                                 "    next_announce_time real, " +
-                                "    last_announce_time real, " +
                                 "    should_announce integer)")
 
 

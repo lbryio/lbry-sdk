@@ -15,8 +15,6 @@ def migrate_blobs_db(db_dir):
     """
     We migrate the blobs.db used in BlobManager to have a "should_announce" column,
     and set this to True for blobs that are sd_hash's or head blobs (first blob in stream)
-    We also add a "last_announce_time" column for when the blob as last announced
-    for debugging purposes
     """
 
     blobs_db = os.path.join(db_dir, "blobs.db")
@@ -42,14 +40,6 @@ def migrate_blobs_db(db_dir):
             "ALTER TABLE blobs ADD COLUMN should_announce integer NOT NULL DEFAULT 0")
     else:
         log.warn("should_announce already exists somehow, proceeding anyways")
-
-    try:
-        blobs_db_cursor.execute("SELECT last_announce_time FROM blobs")
-    except sqlite3.OperationalError:
-        blobs_db_cursor.execute("ALTER TABLE blobs ADD COLUMN last_announce_time")
-    else:
-        log.warn("last_announce_time already exist somehow, proceeding anyways")
-
 
     # if lbryfile_info.db doesn't exist, skip marking blobs as should_announce = True
     if not os.path.isfile(lbryfile_info_db):
@@ -84,11 +74,6 @@ def migrate_blobs_db(db_dir):
         blobs_db_cursor.execute("SELECT should_announce FROM blobs")
     except sqlite3.OperationalError:
         raise Exception('Migration failed, cannot find should_announce')
-
-    try:
-        blobs_db_cursor.execute("SELECT last_announce_time FROM blobs")
-    except sqlite3.OperationalError:
-        raise Exception('Migration failed, cannot find last_announce_time')
 
     blobs_db_cursor.execute("SELECT * FROM blobs WHERE should_announce=1")
     blobs = blobs_db_cursor.fetchall()
