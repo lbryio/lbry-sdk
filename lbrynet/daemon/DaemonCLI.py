@@ -56,8 +56,12 @@ def main():
         return
 
     if method not in Daemon.callable_methods:
-        print_error("\"%s\" is not a valid command." % method)
-        return
+        if method not in Daemon.deprecated_methods:
+            print_error("\"%s\" is not a valid command." % method)
+            return
+        new_method = Daemon.deprecated_methods[method]._new_command
+        print_error("\"%s\" is deprecated, using \"%s\"." % (method, new_method))
+        method = new_method
 
     fn = Daemon.callable_methods[method]
     if hasattr(fn, "_flags"):
