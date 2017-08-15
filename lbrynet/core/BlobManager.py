@@ -71,7 +71,7 @@ class DiskBlobManager(DHTHashSupplier):
         raise Exception("Hash announcer not set")
 
     @defer.inlineCallbacks
-    def blob_completed(self, blob, next_announce_time=None, should_announce=False):
+    def blob_completed(self, blob, next_announce_time=None, should_announce=True):
         if next_announce_time is None:
             next_announce_time = self.get_next_announce_time()
         yield self._add_completed_blob(blob.blob_hash, blob.length,
