@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed non-blocking call in `BlobFile._close_writer`
+  *
   *
 
 ### Deprecated
