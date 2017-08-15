@@ -20,7 +20,7 @@ at anytime.
 
 ### Fixed
   * Fixed reflector server blocking the `received_blob` reply on the server announcing the blob to the dht
-  *
+  * Fixed non-blocking call in `BlobFile._close_writer`
   * Fixed incorrect formatting of "amount" fields
   * Fixed handling of SIGINT, SIGTERM.
   * Fixed shutdown sequence
