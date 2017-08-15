@@ -28,12 +28,12 @@ def set_flag_vals(flag_names, parsed_args):
         elif key.startswith("--"):
             if remove_brackets(key[2:]) not in kwargs:
                 k = remove_brackets(key[2:])
-                kwargs[k] = guess_type(arg)
         elif key in flag_names:
             if remove_brackets(flag_names[key]) not in kwargs:
-                kwargs[remove_brackets(flag_names[key])] = guess_type(arg)
+                k = remove_brackets(flag_names[key])
         elif remove_brackets(key) not in kwargs:
-            kwargs[remove_brackets(key)] = guess_type(arg)
+            k = remove_brackets(key)
+        kwargs[k] = guess_type(arg, k)
     return kwargs
 
 
@@ -130,8 +130,10 @@ def main():
         return 1
 
 
-def guess_type(x):
+def guess_type(x, key=None):
     if not isinstance(x, (unicode, str)):
+        return x
+    if key in ('uri', 'channel_name', 'name', 'file_name', 'download_directory'):
         return x
     if x in ('true', 'True', 'TRUE'):
         return True

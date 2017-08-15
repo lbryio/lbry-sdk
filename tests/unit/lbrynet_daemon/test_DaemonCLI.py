@@ -16,3 +16,15 @@ class DaemonCLITests(unittest.TestCase):
         self.assertEqual(False, DaemonCLI.guess_type('false'))
         self.assertEqual(False, DaemonCLI.guess_type('False'))
 
+
+        self.assertEqual('3', DaemonCLI.guess_type('3', key="uri"))
+        self.assertEqual('0.3', DaemonCLI.guess_type('0.3', key="uri"))
+        self.assertEqual('True', DaemonCLI.guess_type('True', key="uri"))
+        self.assertEqual('False', DaemonCLI.guess_type('False', key="uri"))
+
+        self.assertEqual('3', DaemonCLI.guess_type('3', key="file_name"))
+        self.assertEqual('3', DaemonCLI.guess_type('3', key="name"))
+        self.assertEqual('3', DaemonCLI.guess_type('3', key="download_directory"))
+        self.assertEqual('3', DaemonCLI.guess_type('3', key="channel_name"))
+
+        self.assertEqual(3, DaemonCLI.guess_type('3', key="some_other_thing"))

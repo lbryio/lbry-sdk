@@ -24,6 +24,8 @@ at anytime.
   * Fixed incorrect formatting of "amount" fields
   * Fixed handling of SIGINT, SIGTERM.
   * Fixed shutdown sequence
+  * Fix error when resolving an integer
+  *
 
 ### Deprecated
   * The API will no longer be served at the /lbryapi path. It will now be at the root.
@@ -81,7 +83,7 @@ at anytime.
 ### Fixed
  * Fixed timeout behaviour when calling API command get
  * Fixed https://github.com/lbryio/lbry/issues/765
- 
+
 ### Removed
   * Removed stream_info_cache.json from daemon.py
 
