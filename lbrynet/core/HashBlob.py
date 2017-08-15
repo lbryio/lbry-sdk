@@ -273,12 +273,13 @@ class BlobFile(HashBlob):
             file_handle.close()
             self.readers -= 1
 
+    @defer.inlineCallbacks
     def _close_writer(self, writer):
         if writer.write_handle is not None:
             log.debug("Closing %s", str(self))
             name = writer.write_handle.name
             writer.write_handle.close()
-            threads.deferToThread(os.remove, name)
+            yield threads.deferToThread(os.remove, name)
             writer.write_handle = None
 
     def _save_verified_blob(self, writer):
