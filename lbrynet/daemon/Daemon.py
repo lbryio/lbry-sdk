@@ -2243,15 +2243,15 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_wallet_send(self, address=None, claim_id=None, amount=None):
+    def jsonrpc_wallet_send(self, amount, address=None, claim_id=None):
         """
         Send credits. If given an address, send credits to it. If given a claim id, send a tip
         to the owner of a claim specified by uri. A tip is a claim support where the recipient
         of the support is the claim address for the claim being supported.
 
         Usage:
-            wallet_send ((<address> | --address=<address>) | (<claim_id> | --claim_id=<claim_id>))
-                        (<amount> | --amount=<amount>)
+            wallet_send (<amount> | --amount=<amount>)
+                        ((<address> | --address=<address>) | (<claim_id> | --claim_id=<claim_id>))
 
         Return:
             If sending to an address:
@@ -2270,8 +2270,10 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Given both an address and a claim id")
         elif not address and not claim_id:
             raise Exception("Not given an address or a claim id")
-        if not amount:
-            raise Exception("Cannot send without an amount")
+        if amount < 0:
+            raise NegativeFundsError()
+        elif not amount:
+            raise NullFundsError()
 
         if address:
             result = yield self.jsonrpc_send_amount_to_address(amount, address)

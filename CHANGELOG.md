@@ -29,7 +29,7 @@ at anytime.
 
 ### Deprecated
   * The API will no longer be served at the /lbryapi path. It will now be at the root.
-  *
+  * Deprecated `send_amount_to_address` in favor of `wallet_send`
 
 ### Changed
   * Renamed `reflect` command to `file_reflect`
