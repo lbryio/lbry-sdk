@@ -952,11 +952,12 @@ class Wallet(object):
         defer.returnValue(claim)
 
     @defer.inlineCallbacks
-    def abandon_claim(self, claim_id):
-        claim_out = yield self._abandon_claim(claim_id)
+    def abandon_claim(self, claim_id, txid, nout):
+        claim_out = yield self._abandon_claim(claim_id, txid, nout)
 
         if not claim_out['success']:
-            msg = 'Abandon of {} failed: {}'.format(claim_id, claim_out['reason'])
+            msg = 'Abandon of {}/{}:{} failed: {}'.format(
+                            claim_id, txid, nout, claim_out['reason'])
             raise Exception(msg)
 
         claim_out = self._process_claim_out(claim_out)
@@ -1089,7 +1090,7 @@ class Wallet(object):
                          change_address=None):
         return defer.fail(NotImplementedError())
 
-    def _abandon_claim(self, claim_id):
+    def _abandon_claim(self, claim_id, txid, nout):
         return defer.fail(NotImplementedError())
 
     def _support_claim(self, name, claim_id, amount):
@@ -1372,9 +1373,9 @@ class LBRYumWallet(Wallet):
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
-    def _abandon_claim(self, claim_id):
+    def _abandon_claim(self, claim_id, txid, nout):
         log.debug("Abandon %s" % claim_id)
-        tx_out = yield self._run_cmd_as_defer_succeed('abandon', claim_id)
+        tx_out = yield self._run_cmd_as_defer_succeed('abandon', claim_id, txid, nout)
         defer.returnValue(tx_out)
 
     @defer.inlineCallbacks
