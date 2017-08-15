@@ -18,6 +18,8 @@ from twisted.python.failure import Failure
 from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError
+from lbryschema.validator import validate_claim_id
+from lbryschema.base import base_decode
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.core.system_info import get_lbrynet_version
@@ -2276,8 +2278,11 @@ class Daemon(AuthJSONRPCServer):
             raise NullFundsError()
 
         if address:
+            if not base_decode(address, 58):
+                raise Exception("Given an invalid address to send to")
             result = yield self.jsonrpc_send_amount_to_address(amount, address)
         else:
+            validate_claim_id(claim_id)
             result = yield self.session.wallet.tip_claim(claim_id, amount)
             self.analytics_manager.send_claim_action('new_support')
         defer.returnValue(result)
