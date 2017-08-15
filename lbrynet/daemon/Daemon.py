@@ -1918,29 +1918,6 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    def jsonrpc_claim_send_tip(self, claim_id, amount):
-        """
-        Send a tip to the owner of a claim specified by uri. A tip is a claim support
-        where the recipient of the support is the claim address for the claim being supported.
-
-        Usage:
-            claim_send_tip (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
-
-        Return:
-            (dict) Dictionary containing the result of the support
-            {
-                txid : (str) txid of resulting support claim
-                nout : (int) nout of the resulting support claim
-                fee : (float) fee paid for the transaction
-            }
-        """
-
-        result = yield self.session.wallet.tip_claim(claim_id, amount)
-        self.analytics_manager.send_claim_action('new_support')
-        defer.returnValue(result)
-
-    @AuthJSONRPCServer.auth_required
-    @defer.inlineCallbacks
     def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
         """
         Send a name claim to an address
@@ -2238,6 +2215,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda address: self._render_response(address))
         return d
 
+    @AuthJSONRPCServer.deprecated("wallet_send")
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
     def jsonrpc_send_amount_to_address(self, amount, address):
@@ -2262,6 +2240,45 @@ class Daemon(AuthJSONRPCServer):
         yield self.session.wallet.send_points_to_address(reserved_points, amount)
         self.analytics_manager.send_credits_sent()
         defer.returnValue(True)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_wallet_send(self, address=None, claim_id=None, amount=None):
+        """
+        Send credits. If given an address, send credits to it. If given a claim id, send a tip
+        to the owner of a claim specified by uri. A tip is a claim support where the recipient
+        of the support is the claim address for the claim being supported.
+
+        Usage:
+            wallet_send ((<address> | --address=<address>) | (<claim_id> | --claim_id=<claim_id>))
+                        (<amount> | --amount=<amount>)
+
+        Return:
+            If sending to an address:
+            (bool) true if payment successfully scheduled
+
+            If sending a claim tip:
+            (dict) Dictionary containing the result of the support
+            {
+                txid : (str) txid of resulting support claim
+                nout : (int) nout of the resulting support claim
+                fee : (float) fee paid for the transaction
+            }
+        """
+
+        if address and claim_id:
+            raise Exception("Given both an address and a claim id")
+        elif not address and not claim_id:
+            raise Exception("Not given an address or a claim id")
+        if not amount:
+            raise Exception("Cannot send without an amount")
+
+        if address:
+            result = yield self.jsonrpc_send_amount_to_address(amount, address)
+        else:
+            result = yield self.session.wallet.tip_claim(claim_id, amount)
+            self.analytics_manager.send_claim_action('new_support')
+        defer.returnValue(result)
 
     def jsonrpc_block_show(self, blockhash=None, height=None):
         """
