@@ -87,10 +87,6 @@ class UnknownAPIMethodError(Exception):
     pass
 
 
-class DeprecatedAPIMethodError(Exception):
-    pass
-
-
 class NotAllowedDuringStartupError(Exception):
     pass
 
@@ -339,12 +335,6 @@ class AuthJSONRPCServer(AuthorizedBase):
                 request, id_
             )
             return server.NOT_DONE_YET
-        except DeprecatedAPIMethodError:
-            self._render_error(
-                JSONRPCError(None, JSONRPCError.CODE_METHOD_NOT_FOUND),
-                request, id_
-            )
-            return server.NOT_DONE_YET
 
         if args == EMPTY_PARAMS or args == []:
             args_dict = {}
@@ -472,14 +462,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         else:
             return server_port[0], 80
 
-    def _check_deprecated(self, function_path):
-        if function_path in self.deprecated_methods:
-            new_command = self.deprecated_methods[function_path]._new_command
-            log.warning('API function \"%s\" is deprecated, please update to use \"%s\"',
-                        function_path, new_command)
-
-            raise DeprecatedAPIMethodError(function_path)
-
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
             raise UnknownAPIMethodError(function_path)
@@ -488,7 +470,11 @@ class AuthJSONRPCServer(AuthorizedBase):
                 raise NotAllowedDuringStartupError(function_path)
 
     def _get_jsonrpc_method(self, function_path):
-        self._check_deprecated(function_path)
+        if function_path in self.deprecated_methods:
+            new_command = self.deprecated_methods[function_path]._new_command
+            log.warning('API function \"%s\" is deprecated, please update to use \"%s\"',
+                        function_path, new_command)
+            function_path = new_command
         self._verify_method_is_callable(function_path)
         return self.callable_methods.get(function_path)
 
