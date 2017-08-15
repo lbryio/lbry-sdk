@@ -1,5 +1,27 @@
 # LBRY Command Line Documentation
 
+## blob_announce
+
+```text
+Announce blobs to the DHT
+
+Usage:
+    blob_announce [-a] [<blob_hash> | --blob_hash=<blob_hash>]
+                  [<stream_hash> | --stream_hash=<stream_hash>]
+                  [<sd_hash> | --sd_hash=<sd_hash>]
+
+Options:
+    -a                                          : announce all the blobs possessed by user
+    <blob_hash>, --blob_hash=<blob_hash>        : announce a blob, specified by blob_hash
+    <stream_hash>, --stream_hash=<stream_hash>  : announce all blobs associated with
+                                                    stream_hash
+    <sd_hash>, --sd_hash=<sd_hash>              : announce all blobs associated with
+                                                    sd_hash and the sd_hash itself
+
+Returns:
+    (bool) true if successful
+```
+
 ## blob_announce_all
 
 ```text
@@ -53,14 +75,20 @@ Returns
 ```text
 Returns blob hashes. If not given filters, returns all blobs known by the blob manager
 
-Args:
-    'uri' (optional): (str) filter by blobs in stream for winning claim
-    'stream_hash' (optional): (str) filter by blobs in given stream hash
-    'sd_hash' (optional): (str) filter by blobs in given sd hash
-    'needed' (optional): (bool) only return needed blobs
-    'finished' (optional): (bool) only return finished blobs
-    'page_size' (optional): (int) limit number of results returned
-    'page' (optional): (int) filter to page x of [page_size] results
+Usage:
+    blob_list [-n] [-f] [<uri> | --uri=<uri>] [<stream_hash> | --stream_hash=<stream_hash>]
+              [<sd_hash> | --sd_hash=<sd_hash>] [<page_size> | --page_size=<page_size>]
+              [<page> | --page=<page>]
+
+Options:
+    -n                                          : only return needed blobs
+    -f                                          : only return finished blobs
+    <uri>, --uri=<uri>                          : filter blobs by stream in a uri
+    <stream_hash>, --stream_hash=<stream_hash>  : filter blobs by stream hash
+    <sd_hash>, --sd_hash=<sd_hash>              : filter blobs by sd hash
+    <page_size>, --page_size=<page_size>        : results page size
+    <page>, --page=<page>                       : page of results to return
+
 Returns:
     (list) List of blob hashes
 ```
@@ -131,7 +159,8 @@ Returns:
 Abandon a name and reclaim credits from the claim
 
 Usage:
-    claim_abandon (<claim_id> | --claim_id=<claim_id>)
+    claim_abandon [<claim_id> | --claim_id=<claim_id>]
+                  [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
 
 Return:
     (dict) Dictionary containing result of the claim
@@ -260,7 +289,7 @@ Support a name claim
 
 Usage:
     claim_new_support (<name> | --name=<name>) (<claim_id> | --claim_id=<claim_id>)
-                      (<amount> | --amount<amount>)
+                      (<amount> | --amount=<amount>)
 
 Return:
     (dict) Dictionary containing result of the claim
@@ -289,20 +318,21 @@ Options:
 ## claim_show
 
 ```text
-Resolve claim info from a LBRY name
+Resolve claim info from txid/nout or with claim ID
 
 Usage:
-    claim_show <name> [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
-                      [<claim_id> | --claim_id=<claim_id>]
+    claim_show [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
+               [<claim_id> | --claim_id=<claim_id>]
 
 Options:
-    <txid>, --txid=<txid>              : look for claim with this txid
-    <nout>, --nout=<nout>              : look for claim with this nout
+    <txid>, --txid=<txid>              : look for claim with this txid, nout must
+                                            also be specified
+    <nout>, --nout=<nout>              : look for claim with this nout, txid must
+                                            also be specified
     <claim_id>, --claim_id=<claim_id>  : look for claim with this claim id
 
 Returns:
-    (dict) Dictionary contaning claim info, (bool) false if claim is not
-        resolvable
+    (dict) Dictionary containing claim info as below,
 
     {
         'txid': (str) txid of claim
@@ -312,6 +342,12 @@ Returns:
         'height' : (int) height of claim takeover
         'claim_id': (str) claim ID of claim
         'supports': (list) list of supports associated with claim
+    }
+
+    if claim cannot be resolved, dictionary as below will be returned
+
+    {
+        'error': (str) reason for error
     }
 ```
 
@@ -436,6 +472,33 @@ Returns:
     ]
 ```
 
+## file_reflect
+
+```text
+Reflect all the blobs in a file matching the filter criteria
+
+Usage:
+    file_reflect [--sd_hash=<sd_hash>] [--file_name=<file_name>]
+                 [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
+                 [--outpoint=<outpoint>] [--rowid=<rowid>] [--name=<name>]
+                 [--reflector=<reflector>]
+
+Options:
+    --sd_hash=<sd_hash>          : get file with matching sd hash
+    --file_name=<file_name>      : get file with matching file name in the
+                                   downloads folder
+    --stream_hash=<stream_hash>  : get file with matching stream hash
+    --claim_id=<claim_id>        : get file with matching claim id
+    --outpoint=<outpoint>        : get file with matching claim outpoint
+    --rowid=<rowid>              : get file with matching row id
+    --name=<name>                : get file with matching associated name claim
+    --reflector=<reflector>      : reflector server, ip address or url
+                                   by default choose a server from the config
+
+Returns:
+    (list) list of blobs reflected
+```
+
 ## file_set_status
 
 ```text
@@ -468,7 +531,7 @@ Download stream from a LBRY name.
 
 Usage:
     get <uri> [<file_name> | --file_name=<file_name>] [<timeout> | --timeout=<timeout>]
-              [<download_directory> | --download_directory=<download_directory>]
+
 
 Options:
     <file_name>           : specified name for the downloaded file
@@ -615,18 +678,6 @@ Returns:
     }
 ```
 
-## reflect
-
-```text
-Reflect a stream
-
-Usage:
-    reflect (<sd_hash> | --sd_hash=<sd_hash>)
-
-Returns:
-    (bool) true if successful
-```
-
 ## report_bug
 
 ```text
@@ -717,18 +768,6 @@ Returns:
             resolvable
 ```
 
-## send_amount_to_address
-
-```text
-Queue a payment of credits to an address
-
-Usage:
-    send_amount_to_address (<amount> | --amount=<amount>) (<address> | --address=<address>)
-
-Returns:
-    (bool) true if payment successfully scheduled
-```
-
 ## settings_get
 
 ```text
@@ -747,18 +786,45 @@ Returns:
 ```text
 Set daemon settings
 
-Args:
-    'run_on_startup': (bool) currently not supported
-    'data_rate': (float) data rate,
-    'max_key_fee': (float) maximum key fee,
-    'disable_max_key_fee': (bool) true to disable max_key_fee check,
-    'download_directory': (str) path of where files are downloaded,
-    'peer_port': (int) port through which daemon should connect,
-    'max_upload': (float), currently not supported
-    'max_download': (float), currently not supported
-    'download_timeout': (int) download timeout in seconds
-    'search_timeout': (float) search timeout in seconds
-    'cache_time': (int) cache timeout in seconds
+Usage:
+    settings_set [<download_directory> | --download_directory=<download_directory>]
+                 [<data_rate> | --data_rate=<data_rate>]
+                 [<download_timeout> | --download_timeout=<download_timeout>]
+                 [<peer_port> | --peer_port=<peer_port>]
+                 [<max_key_fee> | --max_key_fee=<max_key_fee>]
+                 [<disable_max_key_fee> | --disable_max_key_fee=<disable_max_key_fee>]
+                 [<use_upnp> | --use_upnp=<use_upnp>]
+                 [<run_reflector_server> | --run_reflector_server=<run_reflector_server>]
+                 [<cache_time> | --cache_time=<cache_time>]
+                 [<reflect_uploads> | --reflect_uploads=<reflect_uploads>]
+                 [<share_usage_data> | --share_usage_data=<share_usage_data>]
+                 [<peer_search_timeout> | --peer_search_timeout=<peer_search_timeout>]
+                 [<sd_download_timeout> | --sd_download_timeout=<sd_download_timeout>]
+
+Options:
+    <download_directory>, --download_directory=<download_directory>  : (str)
+    <data_rate>, --data_rate=<data_rate>                             : (float), 0.0001
+    <download_timeout>, --download_timeout=<download_timeout>        : (int), 180
+    <peer_port>, --peer_port=<peer_port>                             : (int), 3333
+    <max_key_fee>, --max_key_fee=<max_key_fee>   : (dict) maximum key fee for downloads,
+                                                    in the format: {
+                                                        "currency": <currency_symbol>,
+                                                        "amount": <amount>
+                                                    }. In the CLI, it must be an escaped
+                                                    JSON string
+                                                    Supported currency symbols:
+                                                        LBC
+                                                        BTC
+                                                        USD
+    <disable_max_key_fee>, --disable_max_key_fee=<disable_max_key_fee> : (bool), False
+    <use_upnp>, --use_upnp=<use_upnp>            : (bool), True
+    <run_reflector_server>, --run_reflector_server=<run_reflector_server>  : (bool), False
+    <cache_time>, --cache_time=<cache_time>  : (int), 150
+    <reflect_uploads>, --reflect_uploads=<reflect_uploads>  : (bool), True
+    <share_usage_data>, --share_usage_data=<share_usage_data>  : (bool), True
+    <peer_search_timeout>, --peer_search_timeout=<peer_search_timeout>  : (int), 3
+    <sd_download_timeout>, --sd_download_timeout=<sd_download_timeout>  : (int), 3
+
 Returns:
     (dict) Updated dictionary of daemon settings
 ```
@@ -944,6 +1010,30 @@ Usage:
 Returns:
     (list) list of public keys associated with address.
         Could contain more than one public key if multisig.
+```
+
+## wallet_send
+
+```text
+Send credits. If given an address, send credits to it. If given a claim id, send a tip
+to the owner of a claim specified by uri. A tip is a claim support where the recipient
+of the support is the claim address for the claim being supported.
+
+Usage:
+    wallet_send (<amount> | --amount=<amount>)
+                ((<address> | --address=<address>) | (<claim_id> | --claim_id=<claim_id>))
+
+Return:
+    If sending to an address:
+    (bool) true if payment successfully scheduled
+
+    If sending a claim tip:
+    (dict) Dictionary containing the result of the support
+    {
+        txid : (str) txid of resulting support claim
+        nout : (int) nout of the resulting support claim
+        fee : (float) fee paid for the transaction
+    }
 ```
 
 ## wallet_unused_address
