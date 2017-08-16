@@ -168,8 +168,7 @@ class ConnectionManager(object):
             return []
         out = [peer for peer in peers if peer not in self._peer_connections]
         random.shuffle(out)
-        out = out[0:new_conns_needed]
-        return out
+        return out[0:new_conns_needed]
 
     @defer.inlineCallbacks
     def _get_new_peers(self):
@@ -182,7 +181,7 @@ class ConnectionManager(object):
         log.debug("%s Trying to get a new peer to connect to", self._get_log_name())
 
         # find peers for the head blob if configured to do so
-        if self.seek_head_blob_first is True:
+        if self.seek_head_blob_first:
             peers = yield request_creator.get_new_peers_for_head_blob()
             peers = self.return_shuffled_peers_not_connected_to(peers, new_conns_needed)
         else:
@@ -190,7 +189,7 @@ class ConnectionManager(object):
 
         # we didn't find any new peers on the head blob,
         # we have to look for the first unavailable blob
-        if len(peers) == 0:
+        if not peers:
             peers = yield request_creator.get_new_peers_for_next_unavailable()
             peers = self.return_shuffled_peers_not_connected_to(peers, new_conns_needed)
 
