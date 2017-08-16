@@ -73,8 +73,13 @@ class BlobRequester(object):
 
     @defer.inlineCallbacks
     def get_new_peers_for_next_unavailable(self):
-        """ look for peers for the next unavailable blob """
+        """
+        Look for peers for the next unavailable blob, if we have
+        all blobs, return an empty list
+        """
         blob_hash = yield self._get_hash_for_peer_search()
+        if blob_hash is None:
+            defer.returnValue([])
         peers = yield self._find_peers_for_hash(blob_hash)
         defer.returnValue(peers)
 
@@ -112,6 +117,10 @@ class BlobRequester(object):
         return defer.succeed(sent_request)
 
     def _get_hash_for_peer_search(self):
+        """
+        Get next unavailable hash for blob,
+        returns None if there is nothing left to download
+        """
         r = None
         blobs_to_download = self._blobs_to_download()
         if blobs_to_download:
@@ -125,26 +134,23 @@ class BlobRequester(object):
         return defer.succeed(r)
 
     def _find_peers_for_hash(self, h):
-        if h is None:
-            return None
-        else:
-            d = self.peer_finder.find_peers_for_blob(h)
+        d = self.peer_finder.find_peers_for_blob(h)
 
-            def choose_best_peers(peers):
-                bad_peers = self._get_bad_peers()
-                without_bad_peers = [p for p in peers if not p in bad_peers]
-                without_maxed_out_peers = [
-                    p for p in without_bad_peers if p not in self._maxed_out_peers]
-                return without_maxed_out_peers
+        def choose_best_peers(peers):
+            bad_peers = self._get_bad_peers()
+            without_bad_peers = [p for p in peers if not p in bad_peers]
+            without_maxed_out_peers = [
+                p for p in without_bad_peers if p not in self._maxed_out_peers]
+            return without_maxed_out_peers
 
-            d.addCallback(choose_best_peers)
+        d.addCallback(choose_best_peers)
 
-            def lookup_failed(err):
-                log.error("An error occurred looking up peers for a hash: %s", err.getTraceback())
-                return []
+        def lookup_failed(err):
+            log.error("An error occurred looking up peers for a hash: %s", err.getTraceback())
+            return []
 
-            d.addErrback(lookup_failed)
-            return d
+        d.addErrback(lookup_failed)
+        return d
 
     def _should_send_request_to(self, peer):
         if self._peers[peer] < -5.0:

@@ -163,9 +163,6 @@ class ConnectionManager(object):
             self._next_manage_call = utils.call_later(self.MANAGE_CALL_INTERVAL_SEC, self.manage)
 
     def return_shuffled_peers_not_connected_to(self, peers, new_conns_needed):
-        if peers is None:
-            # can happen if there is some error in the lookup
-            return []
         out = [peer for peer in peers if peer not in self._peer_connections]
         random.shuffle(out)
         return out[0:new_conns_needed]
@@ -204,7 +201,7 @@ class ConnectionManager(object):
 
 
     def _connect_to_peer(self, peer):
-        if peer is None or self.stopped:
+        if self.stopped:
             return
 
         log.debug("%s Trying to connect to %s", self._get_log_name(), peer)
