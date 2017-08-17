@@ -273,6 +273,7 @@ class Config(object):
 
         self._installation_id = None
         self._session_id = base58.b58encode(utils.generate_id())
+        self._node_id = None
 
         self._fixed_defaults = fixed_defaults
         self._adjustable_defaults = adjustable_defaults
@@ -514,6 +515,18 @@ class Config(object):
                 install_id_file.write(self._installation_id)
         return self._installation_id
 
+    def get_node_id(self):
+        node_id_filename = os.path.join(self.ensure_data_dir(), "node_id")
+        if not self._node_id:
+            if os.path.isfile(node_id_filename):
+                with open(node_id_filename, "r") as node_id_file:
+                    self._node_id = base58.b58decode(node_id_file.read())
+        if not self._node_id:
+            self._node_id = utils.generate_id()
+            with open(node_id_filename, "w") as node_id_file:
+                node_id_file.write(base58.b58encode(self._node_id))
+        return self._node_id
+
     def get_session_id(self):
         return self._session_id
 
@@ -538,5 +551,6 @@ def initialize_settings(load_conf_file=True):
         settings = Config(FIXED_SETTINGS, ADJUSTABLE_SETTINGS,
                           environment=get_default_env())
         settings.installation_id = settings.get_installation_id()
+        settings.node_id = settings.get_node_id()
         if load_conf_file:
             settings.load_conf_file_settings()
