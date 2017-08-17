@@ -1392,6 +1392,9 @@ class Daemon(AuthJSONRPCServer):
                         'value': ClaimDict if decoded, otherwise hex string
                     }
 
+                    If the uri resolves to a channel:
+                    'claims_in_channel': (int) number of claims in the channel,
+
                     If the uri resolves to a claim:
                     'claim': {
                         'address': (str) claim address,
