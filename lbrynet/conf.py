@@ -9,7 +9,10 @@ import envparse
 from appdirs import user_data_dir, user_config_dir
 from lbrynet.core import utils
 from lbrynet.core.Error import InvalidCurrencyError
-from lbrynet.androidhelpers.paths import android_internal_storage_dir, android_app_internal_storage_dir
+from lbrynet.androidhelpers.paths import (
+    android_internal_storage_dir,
+    android_app_internal_storage_dir
+)
 
 try:
     from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
