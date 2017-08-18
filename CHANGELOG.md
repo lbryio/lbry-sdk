@@ -25,8 +25,8 @@ at anytime.
   *
 
 ### Added
-  *
-  *
+  * Android platform detection in lbrynet/conf.py
+  * androidhelpers module for determining base file paths
 
 ### Removed
   *
