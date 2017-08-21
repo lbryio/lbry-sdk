@@ -25,7 +25,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * Added `exclude_claimtrie` parameter to `wallet_balance`
   *
 
 ### Removed
