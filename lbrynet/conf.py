@@ -9,10 +9,15 @@ import envparse
 from appdirs import user_data_dir, user_config_dir
 from lbrynet.core import utils
 from lbrynet.core.Error import InvalidCurrencyError
+from lbrynet.androidhelpers.paths import (
+    android_internal_storage_dir,
+    android_app_internal_storage_dir
+)
 
 try:
     from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
-except (ImportError, ValueError):
+except (ImportError, ValueError, NameError):
+    # Android platform: NameError: name 'c_wchar' is not defined
     pass
 
 log = logging.getLogger(__name__)
@@ -31,6 +36,7 @@ APP_NAME = 'LBRY'
 LINUX = 1
 DARWIN = 2
 WINDOWS = 3
+ANDROID = 4
 KB = 2 ** 10
 MB = 2 ** 20
 
@@ -89,7 +95,11 @@ def _get_old_directories(platform):
 
 def _get_new_directories(platform):
     dirs = {}
-    if platform == WINDOWS:
+    if platform == ANDROID:
+        dirs['data'] = '%s/lbrynet' % android_app_internal_storage_dir()
+        dirs['lbryum'] = '%s/lbryum' % android_app_internal_storage_dir()
+        dirs['download'] = '%s/Download' % android_internal_storage_dir()
+    elif platform == WINDOWS:
         dirs['data'] = user_data_dir('lbrynet', 'lbry')
         dirs['lbryum'] = user_data_dir('lbryum', 'lbry')
         dirs['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
@@ -113,7 +123,11 @@ def _get_new_directories(platform):
     return dirs
 
 
-if 'darwin' in sys.platform:
+if 'ANDROID_ARGUMENT' in os.environ:
+    # https://github.com/kivy/kivy/blob/master/kivy/utils.py#L417-L421
+    platform = ANDROID
+    dirs = _get_new_directories(ANDROID)
+elif 'darwin' in sys.platform:
     platform = DARWIN
     dirs = _get_old_directories(DARWIN)
 elif 'win' in sys.platform:
@@ -533,7 +547,6 @@ class Config(object):
 
 # type: Config
 settings = None
-
 
 def get_default_env():
     env_defaults = {}
