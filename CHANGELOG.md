@@ -21,16 +21,27 @@ at anytime.
   *
 
 ### Changed
-  * Persist DHT node id
+  *
   *
 
 ### Added
-  * Android platform detection in lbrynet/conf.py
-  * androidhelpers module for determining base file paths
+  *
+  *
 
 ### Removed
   *
   *
+
+
+## [0.15.1] - 2017-08-22
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.10 [see changelog](https://github.com/lbryschema/lbryschema/blob/master/CHANGELOG.md#0010---2017-08-22)
+ * Bumped `lbryum` requirement to 3.1.6 [see changelog](https://github.com/lbryum/lbryum/blob/master/CHANGELOG.md#316---2017-08-22)
+ * Persist DHT node id
+
+### Added
+ * Android platform detection in lbrynet/conf.py
+ * androidhelpers module for determining base file paths
 
 
 ## [0.15.0] - 2017-08-15
