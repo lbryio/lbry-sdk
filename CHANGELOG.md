@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Persist DHT node id
   *
 
 ### Added

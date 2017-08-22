@@ -207,7 +207,7 @@ class Daemon(AuthJSONRPCServer):
         # of the daemon, but I don't want to deal with that now
 
         self.analytics_manager = analytics_manager
-        self.lbryid = utils.generate_id()
+        self.lbryid = conf.settings.node_id
 
         self.wallet_user = None
         self.wallet_password = None
