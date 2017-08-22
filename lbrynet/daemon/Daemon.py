@@ -2128,6 +2128,22 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @AuthJSONRPCServer.auth_required
+    def jsonrpc_is_address(self, address):
+        """
+        Checks if the given string is a valid wallet address.
+
+        Usage:
+            is_address (<address> | --address=<address>)
+
+        Returns:
+            (bool) true, if address is valid
+        """
+
+        d = self.session.wallet.address_is_mine(address)
+        d.addCallback(lambda is_mine: self._render_response(is_mine))
+        return d
+
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_wallet_is_address_mine(self, address):
         """
         Checks if an address is associated with the current wallet.
