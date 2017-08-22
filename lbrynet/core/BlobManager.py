@@ -231,6 +231,14 @@ class DiskBlobManager(DHTHashSupplier):
         return d
 
     @rerun_if_locked
+    @defer.inlineCallbacks
+    def _get_all_should_announce_blob_hashes(self):
+        # return a list of blob hashes where should_announce is True
+        blob_hashes = yield self.db_conn.runQuery(
+            "select blob_hash from blobs where should_announce = 1")
+        defer.returnValue([d[0] for d in blob_hashes])
+
+    @rerun_if_locked
     def _get_all_verified_blob_hashes(self):
         d = self._get_all_blob_hashes()
 
