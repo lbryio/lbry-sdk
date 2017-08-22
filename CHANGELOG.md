@@ -25,7 +25,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * is_address RPC method (checks if address is valid using lbryum)
   *
 
 ### Removed
