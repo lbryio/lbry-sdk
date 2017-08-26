@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed spelling error in documentation.
   *
 
 ### Deprecated
