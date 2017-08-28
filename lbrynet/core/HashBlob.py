@@ -347,8 +347,7 @@ class TempBlob(HashBlob):
 
 
 class HashBlobCreator(object):
-    def __init__(self, blob_manager):
-        self.blob_manager = blob_manager
+    def __init__(self):
         self._hashsum = get_lbry_hash_obj()
         self.len_so_far = 0
         self.blob_hash = None
@@ -365,7 +364,6 @@ class HashBlobCreator(object):
             self.blob_hash = self._hashsum.hexdigest()
         d = self._close()
         if self.blob_hash is not None:
-            d.addCallback(lambda _: self.blob_manager.creator_finished(self))
             d.addCallback(lambda _: self.blob_hash)
         else:
             d.addCallback(lambda _: None)
@@ -384,8 +382,8 @@ class HashBlobCreator(object):
 
 
 class BlobFileCreator(HashBlobCreator):
-    def __init__(self, blob_manager, blob_dir):
-        HashBlobCreator.__init__(self, blob_manager)
+    def __init__(self, blob_dir):
+        HashBlobCreator.__init__(self)
         self.blob_dir = blob_dir
         self.out_file = tempfile.NamedTemporaryFile(delete=False, dir=self.blob_dir)
 
@@ -403,8 +401,8 @@ class BlobFileCreator(HashBlobCreator):
 
 
 class TempBlobCreator(HashBlobCreator):
-    def __init__(self, blob_manager):
-        HashBlobCreator.__init__(self, blob_manager)
+    def __init__(self):
+        HashBlobCreator.__init__(self)
         # TODO: use StringIO
         self.data_buffer = ''
 

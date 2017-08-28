@@ -98,3 +98,6 @@ class DownloadManager(object):
             return self.calculate_total_bytes()
         else:
             return sum([b.length for b in self.needed_blobs() if b.length is not None])
+
+    def get_head_blob_hash(self):
+        return self.blobs[0].blob_hash

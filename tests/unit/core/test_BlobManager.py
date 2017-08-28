@@ -9,6 +9,7 @@ from tests.util import random_lbry_hash
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
 from lbrynet.core.Peer import Peer
+from lbrynet import conf
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from twisted.trial import unittest
 
@@ -16,6 +17,7 @@ from twisted.internet import defer
 
 class BlobManagerTest(unittest.TestCase):
     def setUp(self):
+        conf.initialize_settings()
         self.blob_dir = tempfile.mkdtemp()
         self.db_dir = tempfile.mkdtemp()
         hash_announcer  = DummyHashAnnouncer()

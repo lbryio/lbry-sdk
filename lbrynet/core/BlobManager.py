@@ -5,6 +5,7 @@ import sqlite3
 
 from twisted.internet import threads, defer, reactor
 from twisted.enterprise import adbapi
+from lbrynet import conf
 from lbrynet.core.HashBlob import BlobFile, BlobFileCreator
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
 from lbrynet.core.sqlite_helpers import rerun_if_locked
@@ -13,9 +14,18 @@ log = logging.getLogger(__name__)
 
 
 class DiskBlobManager(DHTHashSupplier):
-    """This class stores blobs on the hard disk"""
     def __init__(self, hash_announcer, blob_dir, db_dir):
+
+        """
+        This class stores blobs on the hard disk,
+        blob_dir - directory where blobs are stored
+        db_dir - directory where sqlite database of blob information is stored
+        """
+
         DHTHashSupplier.__init__(self, hash_announcer)
+
+        self.announce_head_blobs_only = conf.settings['announce_head_blobs_only']
+
         self.blob_dir = blob_dir
         self.db_file = os.path.join(db_dir, "blobs.db")
         self.db_conn = adbapi.ConnectionPool('sqlite3', self.db_file, check_same_thread=False)
@@ -47,7 +57,7 @@ class DiskBlobManager(DHTHashSupplier):
         return self._make_new_blob(blob_hash, length)
 
     def get_blob_creator(self):
-        return self.blob_creator_type(self, self.blob_dir)
+        return self.blob_creator_type(self.blob_dir)
 
     def _make_new_blob(self, blob_hash, length=None):
         log.debug('Making a new blob for %s', blob_hash)
@@ -61,11 +71,15 @@ class DiskBlobManager(DHTHashSupplier):
         raise Exception("Hash announcer not set")
 
     @defer.inlineCallbacks
-    def blob_completed(self, blob, next_announce_time=None):
+    def blob_completed(self, blob, next_announce_time=None, should_announce=True):
         if next_announce_time is None:
             next_announce_time = self.get_next_announce_time()
-        yield self._add_completed_blob(blob.blob_hash, blob.length, next_announce_time)
-        reactor.callLater(0, self._immediate_announce, [blob.blob_hash])
+        yield self._add_completed_blob(blob.blob_hash, blob.length,
+                                       next_announce_time, should_announce)
+        # we announce all blobs immediately, if announce_head_blob_only is False
+        # otherwise, announce only if marked as should_announce
+        if not self.announce_head_blobs_only or should_announce:
+            reactor.callLater(0, self._immediate_announce, [blob.blob_hash])
 
     def completed_blobs(self, blobhashes_to_check):
         return self._completed_blobs(blobhashes_to_check)
@@ -73,16 +87,15 @@ class DiskBlobManager(DHTHashSupplier):
     def hashes_to_announce(self):
         return self._get_blobs_to_announce()
 
-    def creator_finished(self, blob_creator):
+    def creator_finished(self, blob_creator, should_announce):
         log.debug("blob_creator.blob_hash: %s", blob_creator.blob_hash)
         assert blob_creator.blob_hash is not None
         assert blob_creator.blob_hash not in self.blobs
         assert blob_creator.length is not None
         new_blob = self.blob_type(self.blob_dir, blob_creator.blob_hash, blob_creator.length)
         self.blobs[blob_creator.blob_hash] = new_blob
-        self._immediate_announce([blob_creator.blob_hash])
         next_announce_time = self.get_next_announce_time()
-        d = self.blob_completed(new_blob, next_announce_time)
+        d = self.blob_completed(new_blob, next_announce_time, should_announce)
         return d
 
     def immediate_announce_all_blobs(self):
@@ -128,7 +141,9 @@ class DiskBlobManager(DHTHashSupplier):
                                 "    blob_hash text primary key, " +
                                 "    blob_length integer, " +
                                 "    last_verified_time real, " +
-                                "    next_announce_time real)")
+                                "    next_announce_time real, " +
+                                "    should_announce integer)")
+
 
             transaction.execute("create table if not exists download (" +
                                 "    id integer primary key autoincrement, " +
@@ -147,11 +162,13 @@ class DiskBlobManager(DHTHashSupplier):
         return self.db_conn.runInteraction(create_tables)
 
     @rerun_if_locked
-    def _add_completed_blob(self, blob_hash, length, next_announce_time):
+    def _add_completed_blob(self, blob_hash, length, next_announce_time, should_announce):
         log.debug("Adding a completed blob. blob_hash=%s, length=%s", blob_hash, str(length))
+        should_announce = 1 if should_announce else 0
         d = self.db_conn.runQuery(
-            "insert into blobs (blob_hash, blob_length, next_announce_time) values (?, ?, ?)",
-            (blob_hash, length, next_announce_time)
+            "insert into blobs (blob_hash, blob_length, next_announce_time, should_announce) "+
+            "values (?, ?, ?, ?)",
+            (blob_hash, length, next_announce_time, should_announce)
         )
         d.addErrback(lambda err: err.trap(sqlite3.IntegrityError))
         return d
@@ -173,9 +190,16 @@ class DiskBlobManager(DHTHashSupplier):
 
         def get_and_update(transaction):
             timestamp = time.time()
-            r = transaction.execute("select blob_hash from blobs " +
+            if self.announce_head_blobs_only is True:
+                r = transaction.execute("select blob_hash from blobs " +
+                                    "where next_announce_time < ? and blob_hash is not null "+
+                                    "and should_announce = 1",
+                                    (timestamp,))
+            else:
+                r = transaction.execute("select blob_hash from blobs " +
                                     "where next_announce_time < ? and blob_hash is not null",
                                     (timestamp,))
+
             blobs = [b for b, in r.fetchall()]
             next_announce_time = self.get_next_announce_time(len(blobs))
             transaction.execute(
