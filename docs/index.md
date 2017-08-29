@@ -188,7 +188,7 @@ Returns
 Support a name claim
 
 Args:
-    'name': (str) name
+    'name': (str) Name of claim
     'claim_id': (str) claim ID of claim to support
     'amount': (float) amount to support by
 Return:
