@@ -15,6 +15,7 @@ at anytime.
 ### Added
   * Added option to announce head blob only if seeding
   * Added option to download by seeking head blob first
+  * Added `include_tip_info` param to `transaction_list` API call
   *
 
 ### Fixed
@@ -26,10 +27,6 @@ at anytime.
   *
 
 ### Changed
-  *
-  *
-
-### Added
   *
   *
 
