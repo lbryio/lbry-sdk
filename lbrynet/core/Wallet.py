@@ -995,6 +995,10 @@ class Wallet(object):
         d = self._get_history()
         return d
 
+    def is_address(self, address):
+        d = self._is_address(address)
+        return d
+
     def address_is_mine(self, address):
         d = self._address_is_mine(address)
         return d
@@ -1112,6 +1116,9 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def _get_history(self):
+        return defer.fail(NotImplementedError())
+
+    def _is_address(self, address):
         return defer.fail(NotImplementedError())
 
     def _address_is_mine(self, address):
@@ -1458,6 +1465,9 @@ class LBRYumWallet(Wallet):
 
     def _get_history(self):
         return self._run_cmd_as_defer_succeed('history')
+
+    def _is_address(self, address):
+        return self._run_cmd_as_defer_succeed('validateaddress', address)
 
     def _address_is_mine(self, address):
         return self._run_cmd_as_defer_succeed('ismine', address)
