@@ -14,7 +14,7 @@ at anytime.
 
 ### Added
   * Added option to announce head blob only if seeding
-  * Adeed option to download by seeking head blob first
+  * Added option to download by seeking head blob first
   *
 
 ### Fixed
