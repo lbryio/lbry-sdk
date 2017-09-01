@@ -52,7 +52,6 @@ class DaemonServer(object):
         yield self._setup_server(use_auth)
         yield self._daemon.setup()
 
-    @defer.inlineCallbacks
     def stop(self):
         if reactor.running:
             log.info("Stopping the reactor")

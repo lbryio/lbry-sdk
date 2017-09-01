@@ -97,7 +97,7 @@ def start_server_and_listen(use_auth, analytics_manager):
         yield daemon_server.start(use_auth)
         analytics_manager.send_server_startup_success()
     except Exception as e:
-        log.exception('Failed to start')
+        log.exception('Failed to start lbrynet-daemon')
         analytics_manager.send_server_startup_error(str(e))
         daemon_server.stop()
 

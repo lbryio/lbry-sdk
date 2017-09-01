@@ -488,7 +488,8 @@ class Daemon(AuthJSONRPCServer):
             old_revision = int(open(self.db_revision_file).read().strip())
 
         if old_revision > self.current_db_revision:
-            raise Exception('This version of lbrynet is not compatible with the database')
+            raise Exception('This version of lbrynet is not compatible with the database\n'
+                            'Your database is revision %i, expected %i' % (old_revision, self.current_db_revision))
 
         def update_version_file_and_print_success():
             self._write_db_revision_file(self.current_db_revision)
