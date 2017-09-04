@@ -49,7 +49,7 @@ def package_files(directory):
 package_name = "lbrynet"
 base_dir = os.path.abspath(os.path.dirname(__file__))
 # Get the long description from the README file
-with open(os.path.join(base_dir, 'README.md')) as f:
+with open(os.path.join(base_dir, 'README.md'), 'rb') as f:
     long_description = f.read().decode('utf-8')
 
 setup(
