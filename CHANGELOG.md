@@ -12,6 +12,10 @@ at anytime.
   *
   *
 
+### Added
+  * Added ability for reflector to store stream information for head blob announce
+  *
+
 ### Fixed
   *
   *
