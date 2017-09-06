@@ -251,11 +251,11 @@ ADJUSTABLE_SETTINGS = {
     'download_directory': (str, default_download_dir),
     'download_timeout': (int, 180),
     'is_generous_host': (bool, True),
-    'announce_head_blobs_only': (bool, False),
+    'announce_head_blobs_only': (bool, True),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_port),
     'lbryum_wallet_dir': (str, default_lbryum_dir),
     'max_connections_per_stream': (int, 5),
-    'seek_head_blob_first': (bool, False),
+    'seek_head_blob_first': (bool, True),
     # TODO: writing json on the cmd line is a pain, come up with a nicer
     # parser for this data structure. maybe 'USD:25'
     'max_key_fee': (json.loads, {'currency': 'USD', 'amount': 50.0}),
