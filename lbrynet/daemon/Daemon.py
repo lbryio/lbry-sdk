@@ -19,7 +19,7 @@ from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError
 from lbryschema.validator import validate_claim_id
-from lbryschema.base import base_decode
+from lbryschema.address import decode_address
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.core.system_info import get_lbrynet_version
@@ -2312,8 +2312,8 @@ class Daemon(AuthJSONRPCServer):
             raise NullFundsError()
 
         if address:
-            if not base_decode(address, 58):
-                raise Exception("Given an invalid address to send to")
+            # raises an error if the address is invalid
+            decode_address(address)
             result = yield self.jsonrpc_send_amount_to_address(amount, address)
         else:
             validate_claim_id(claim_id)
