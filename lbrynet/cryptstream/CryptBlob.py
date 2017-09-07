@@ -58,7 +58,11 @@ class StreamBlobDecryptor(object):
                 write_func(self.cipher.update(data_to_decrypt))
 
         def finish_decrypt():
-            assert len(self.buff) % (AES.block_size / 8) == 0
+            bytes_left = len(self.buff) % (AES.block_size / 8)
+            if bytes_left != 0:
+                log.warning(self.buff[-1 * (AES.block_size / 8):].encode('hex'))
+                raise Exception("blob %s has incorrect padding: %i bytes left" %
+                                (self.blob.blob_hash, bytes_left))
             data_to_decrypt, self.buff = self.buff, b''
             last_chunk = self.cipher.update(data_to_decrypt) + self.cipher.finalize()
             write_func(remove_padding(last_chunk))
