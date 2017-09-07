@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  * Use lbry.io exchange rate API instead of google finance
+  *
   *
 
 ### Added
@@ -31,6 +31,11 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.15.2] - 2017-09-07
+### Changed
+ * Use lbry.io exchange rate API instead of google finance
 
 
 ## [0.15.1] - 2017-08-22
