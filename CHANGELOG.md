@@ -35,6 +35,11 @@ at anytime.
   *
 
 
+## [0.15.2] - 2017-09-07
+### Changed
+ * Use lbry.io exchange rate API instead of google finance
+
+
 ## [0.15.1] - 2017-08-22
 ### Changed
  * Bumped `lbryschema` requirement to 0.0.10 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0010---2017-08-22)
