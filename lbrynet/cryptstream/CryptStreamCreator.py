@@ -89,8 +89,8 @@ class CryptStreamCreator(StreamCreator):
                 should_announce = self.blob_count == 0
                 d = self.current_blob.close()
                 d.addCallback(self._blob_finished)
-                d.addCallback(lambda _: self.blob_manager.creator_finished(
-                                                    self.next_blob_creator, should_announce))
+                d.addCallback(lambda blob_info: self.blob_manager.creator_finished(blob_info,
+                                                                           should_announce))
                 self.finished_deferreds.append(d)
                 self.current_blob = None
 

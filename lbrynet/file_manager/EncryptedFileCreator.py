@@ -29,8 +29,9 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
         self.blob_infos = []
 
     def _blob_finished(self, blob_info):
-        log.debug("length: %s", str(blob_info.length))
+        log.debug("length: %s", blob_info.length)
         self.blob_infos.append(blob_info)
+        return blob_info
 
     def _save_stream_info(self):
         stream_info_manager = self.lbry_file_manager.stream_info_manager
