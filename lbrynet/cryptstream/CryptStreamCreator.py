@@ -77,12 +77,6 @@ class CryptStreamCreator(StreamCreator):
         self.finished_deferreds.append(d)
 
     def _write(self, data):
-        def close_blob(blob):
-            d = blob.close()
-            d.addCallback(self._blob_finished)
-            d.addErrback(self._error)
-            self.finished_deferreds.append(d)
-
         while len(data) > 0:
             if self.current_blob is None:
                 self.next_blob_creator = self.blob_manager.get_blob_creator()

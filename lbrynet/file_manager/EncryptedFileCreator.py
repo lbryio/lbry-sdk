@@ -40,10 +40,6 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
                                             self.blob_infos)
         return d
 
-    def setup(self):
-        d = CryptStreamCreator.setup(self)
-        return d
-
     def _get_blobs_hashsum(self):
         blobs_hashsum = get_lbry_hash_obj()
         for blob_info in sorted(self.blob_infos, key=lambda b_i: b_i.blob_num):
