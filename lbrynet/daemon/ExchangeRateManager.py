@@ -135,7 +135,7 @@ class GoogleBTCFeed(MarketFeed):
             self,
             "USDBTC",
             "Coinbase via Google finance",
-            'http://finance.google.com/finance/info',
+            'http://finance.google.com/finance',
             {'client':'ig', 'q':'CURRENCY:USDBTC'},
             COINBASE_FEE
         )
