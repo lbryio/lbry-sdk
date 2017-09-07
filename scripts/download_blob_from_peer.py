@@ -2,7 +2,7 @@
 import argparse
 import logging
 import sys
-import tempfile
+import os
 
 from twisted.internet import defer
 from twisted.internet import reactor
@@ -31,13 +31,14 @@ def main(args=None):
     parser.add_argument('--timeout', type=int, default=30)
     parser.add_argument('peer')
     parser.add_argument('blob_hash')
+    parser.add_argument('directory', type=str, default=os.getcwd())
     args = parser.parse_args(args)
 
     log_support.configure_console(level='DEBUG')
 
     announcer = HashAnnouncer.DummyHashAnnouncer()
     blob_manager = MyBlobManager(announcer)
-    blob = HashBlob.TempBlob(args.blob_hash, False)
+    blob = HashBlob.BlobFile(args.directory, args.blob_hash)
     download_manager = SingleBlobDownloadManager(blob)
     peer = Peer.Peer(*conf.server_port(args.peer))
     payment_rate_manager = DumbPaymentRateManager()

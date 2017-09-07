@@ -1,7 +1,6 @@
 from twisted.trial import unittest
 from twisted.internet import defer
 from lbrynet.cryptstream import CryptBlob
-from lbrynet.core.HashBlob import TempBlobCreator
 from lbrynet import conf
 
 from tests.mocks import mock_conf_settings
