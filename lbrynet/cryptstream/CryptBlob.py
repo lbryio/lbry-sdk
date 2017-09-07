@@ -1,5 +1,6 @@
 import binascii
 import logging
+from twisted.internet import defer
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
@@ -115,23 +116,19 @@ class CryptStreamBlobMaker(object):
         self.blob.write(encrypted_data)
         return done, num_bytes_to_write
 
+    @defer.inlineCallbacks
     def close(self):
         log.debug("closing blob %s with plaintext len %s", str(self.blob_num), str(self.length))
         if self.length != 0:
-            self._close_buffer()
-        d = self.blob.close()
-        d.addCallback(self._return_info)
+            self.length += (AES.block_size / 8) - (self.length % (AES.block_size / 8))
+            padded_data = self.padder.finalize()
+            encrypted_data = self.cipher.update(padded_data) + self.cipher.finalize()
+            self.blob.write(encrypted_data)
+
+        blob_hash = yield self.blob.close()
         log.debug("called the finished_callback from CryptStreamBlobMaker.close")
-        return d
-
-    def _close_buffer(self):
-        self.length += (AES.block_size / 8) - (self.length % (AES.block_size / 8))
-        padded_data = self.padder.finalize()
-        encrypted_data = self.cipher.update(padded_data) + self.cipher.finalize()
-        self.blob.write(encrypted_data)
-
-    def _return_info(self, blob_hash):
-        return CryptBlobInfo(blob_hash, self.blob_num, self.length, binascii.hexlify(self.iv))
+        blob = CryptBlobInfo(blob_hash, self.blob_num, self.length, binascii.hexlify(self.iv))
+        defer.returnValue(blob)
 
 
 def greatest_multiple(a, b):
