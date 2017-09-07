@@ -1,7 +1,6 @@
 from lbryschema.fee import Fee
 from lbrynet.daemon import ExchangeRateManager
 from lbrynet.core.Error import InvalidExchangeRateResponse
-
 from twisted.trial import unittest
 from twisted.internet import defer
 from tests import util
@@ -77,23 +76,7 @@ class FeeTest(unittest.TestCase):
         market_feeds = [BTCLBCFeed()]
         manager = DummyExchangeRateManager(market_feeds,rates)
         with self.assertRaises(Exception):
-            result = manager.convert_currency(fee.currency, "LBC", fee.amount)
-
-
-class GoogleBTCFeedTest(unittest.TestCase):
-
-    @defer.inlineCallbacks
-    def test_handle_response(self):
-        feed = ExchangeRateManager.GoogleBTCFeed()
-
-        response = '// [ { "id": "-2001" ,"t" : "USDBTC" ,"e" : "CURRENCY" ,"l" : "0.0008" ,"l_fix" : "" ,"l_cur" : "" ,"s": "0" ,"ltt":"" ,"lt" : "Feb 27, 10:21PM GMT" ,"lt_dts" : "2017-02-27T22:21:39Z" ,"c" : "-0.00001" ,"c_fix" : "" ,"cp" : "-0.917" ,"cp_fix" : "" ,"ccol" : "chr" ,"pcls_fix" : "" } ]'
-        out = yield feed._handle_response(response)
-        self.assertEqual(0.0008, out)
-
-        # check negative trade price throws exception
-        response = '// [ { "id": "-2001" ,"t" : "USDBTC" ,"e" : "CURRENCY" ,"l" : "-0.0008" ,"l_fix" : "" ,"l_cur" : "" ,"s": "0" ,"ltt":"" ,"lt" : "Feb 27, 10:21PM GMT" ,"lt_dts" : "2017-02-27T22:21:39Z" ,"c" : "-0.00001" ,"c_fix" : "" ,"cp" : "-0.917" ,"cp_fix" : "" ,"ccol" : "chr" ,"pcls_fix" : "" } ]'
-        with self.assertRaises(InvalidExchangeRateResponse):
-            out = yield feed._handle_response(response)
+            manager.convert_currency(fee.currency, "LBC", fee.amount)
 
 
 class LBRYioFeedTest(unittest.TestCase):
@@ -115,4 +98,20 @@ class LBRYioFeedTest(unittest.TestCase):
             out = yield feed._handle_response(response)
 
 
+class LBRYioBTCFeedTest(unittest.TestCase):
+    @defer.inlineCallbacks
+    def test_handle_response(self):
+        feed = ExchangeRateManager.LBRYioBTCFeed()
 
+        response ='{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, \"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, \"success\": true, \"error\": null}'
+        out = yield feed._handle_response(response)
+        expected = 1.0 / 1157.498
+        self.assertEqual(expected, out)
+
+        response='{}'
+        with self.assertRaises(InvalidExchangeRateResponse):
+            out = yield feed._handle_response(response)
+
+        response='{"success":true,"result":[]}'
+        with self.assertRaises(InvalidExchangeRateResponse):
+            out = yield feed._handle_response(response)

@@ -27,12 +27,17 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Updated exchange rate tests for the lbry.io api
   *
 
 ### Removed
   *
   *
+
+
+## [0.15.2] - 2017-09-07
+### Changed
+ * Use lbry.io exchange rate API instead of google finance
 
 
 ## [0.15.1] - 2017-08-22
