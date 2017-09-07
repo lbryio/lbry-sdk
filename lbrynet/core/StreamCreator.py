@@ -27,7 +27,7 @@ class StreamCreator(object):
         self.finished_deferreds = []
 
     def _blob_finished(self, blob_info):
-        pass
+        raise NotImplementedError()
 
     def registerProducer(self, producer, streaming):
 
