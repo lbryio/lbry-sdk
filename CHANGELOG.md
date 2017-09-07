@@ -27,7 +27,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Updated exchange rate tests for the lbry.io api
   *
 
 ### Removed
