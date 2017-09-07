@@ -154,10 +154,11 @@ class FullStreamProgressManager(StreamProgressManager):
             d.addCallback(lambda _: check_if_finished())
 
             def log_error(err):
-                log.warning("Error occurred in the output loop. Error: %s", err.getErrorMessage())
+                log.warning("Error occurred in the output loop. Error: %s", err)
                 if self.outputting_d is not None and not self.outputting_d.called:
                     self.outputting_d.callback(True)
                     self.outputting_d = None
+                    self.stop()
 
             d.addErrback(log_error)
         else:
