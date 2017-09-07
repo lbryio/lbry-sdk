@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Use lbry.io exchange rate API instead of google finance
   *
 
 ### Added
