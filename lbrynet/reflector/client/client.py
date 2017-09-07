@@ -112,7 +112,7 @@ class EncryptedFileReflectorClient(Protocol):
     def get_validated_blobs(self, blobs_in_stream):
         def get_blobs(blobs):
             for (blob, _, _, blob_len) in blobs:
-                if blob:
+                if blob and blob_len:
                     yield self.blob_manager.get_blob(blob, blob_len)
 
         dl = defer.DeferredList(list(get_blobs(blobs_in_stream)), consumeErrors=True)
