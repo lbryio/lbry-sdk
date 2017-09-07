@@ -20,7 +20,7 @@ at anytime.
 
 ### Fixed
   * Fixed uncaught error when shutting down after a failed daemon startup
-  * Fixed Google Finance BTCUSD Feed Link
+  * Fixed Google Finance Feed Link
   *
 
 ### Deprecated
