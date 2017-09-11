@@ -15,6 +15,7 @@ at anytime.
 ### Added
   * Added option to announce head blob only if seeding
   * Added option to download by seeking head blob first
+  * By default, option to download seeking head blob first is turned on
   * Added `include_tip_info` param to `transaction_list` API call
   *
 
