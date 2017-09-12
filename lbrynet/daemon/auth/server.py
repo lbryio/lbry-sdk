@@ -346,8 +346,6 @@ class AuthJSONRPCServer(AuthorizedBase):
             # TODO: also delete EMPTY_PARAMS then
             args_dict = args[0]
             _args, _kwargs = (), args
-        elif isinstance(args, list):
-            _args, _kwargs = args, {}
         else:
             # d = defer.maybeDeferred(function, *args)  # if we want to support positional args too
             raise ValueError('Args must be a dict')
