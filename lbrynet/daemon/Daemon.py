@@ -1458,7 +1458,7 @@ class Daemon(AuthJSONRPCServer):
             <download_directory>  : path to directory where file will be saved
 
         Returns:
-            (dict) Dictionary contaning information about the stream
+            (dict) Dictionary containing information about the stream
             {
                 'completed': (bool) true if download is completed,
                 'file_name': (str) name of file,

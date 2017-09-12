@@ -21,6 +21,7 @@ at anytime.
 
 ### Fixed
   * Fixed uncaught error when shutting down after a failed daemon startup
+  * Fixed spelling error in documentation.
   *
 
 ### Deprecated
