@@ -1,4 +1,5 @@
 from StringIO import StringIO
+from io import BytesIO
 import logging
 import os
 import tempfile
@@ -6,6 +7,7 @@ import threading
 import shutil
 from twisted.internet import interfaces, defer, threads
 from twisted.protocols.basic import FileSender
+from twisted.web.client import FileBodyProducer
 from twisted.python.failure import Failure
 from zope.interface import implements
 from lbrynet import conf
@@ -385,19 +387,18 @@ class BlobFileCreator(HashBlobCreator):
     def __init__(self, blob_dir):
         HashBlobCreator.__init__(self)
         self.blob_dir = blob_dir
-        self.out_file = tempfile.NamedTemporaryFile(delete=False, dir=self.blob_dir)
+        self.buffer = BytesIO()
 
     def _close(self):
-        temp_file_name = self.out_file.name
-        self.out_file.close()
         if self.blob_hash is not None:
-            shutil.move(temp_file_name, os.path.join(self.blob_dir, self.blob_hash))
-        else:
-            os.remove(temp_file_name)
+            self.buffer.seek(0)
+            out_path = os.path.join(self.blob_dir, self.blob_hash)
+            producer = FileBodyProducer(self.buffer)
+            return producer.startProducing(open(out_path, 'wb'))
         return defer.succeed(True)
 
     def _write(self, data):
-        self.out_file.write(data)
+        self.buffer.write(data)
 
 
 class TempBlobCreator(HashBlobCreator):
