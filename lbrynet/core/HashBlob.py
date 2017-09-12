@@ -15,7 +15,6 @@ from lbrynet.core.utils import is_valid_blobhash
 
 log = logging.getLogger(__name__)
 
-
 class HashBlobReader(object):
     implements(interfaces.IConsumer)
 
@@ -142,8 +141,8 @@ class HashBlob(object):
             self._verified = True
             for p, (w, finished_deferred) in self.writers.items():
                 if w == writer:
-                    finished_deferred.callback(self)
                     del self.writers[p]
+                    finished_deferred.callback(self)
                     return True
             log.warning(
                 "Somehow, the writer that was accepted as being valid was already removed: %s",
@@ -153,8 +152,8 @@ class HashBlob(object):
         def errback_finished_deferred(err):
             for p, (w, finished_deferred) in self.writers.items():
                 if w == writer:
-                    finished_deferred.errback(err)
                     del self.writers[p]
+                    finished_deferred.errback(err)
 
         def cancel_other_downloads():
             for p, (w, finished_deferred) in self.writers.items():
