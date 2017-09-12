@@ -43,8 +43,8 @@ class HashBlobReader(object):
 
 
 class HashBlobWriter(object):
-    def __init__(self, write_handle, length_getter, finished_cb):
-        self.write_handle = write_handle
+    def __init__(self, length_getter, finished_cb):
+        self.write_handle = BytesIO()
         self.length_getter = length_getter
         self.finished_cb = finished_cb
         self._hashsum = get_lbry_hash_obj()
@@ -218,7 +218,6 @@ class BlobFile(HashBlob):
         self.file_path = os.path.join(blob_dir, self.blob_hash)
         self.setting_verified_blob_lock = threading.Lock()
         self.moved_verified_blob = False
-        self.buffer = BytesIO()
         if os.path.isfile(self.file_path):
             self.set_length(os.path.getsize(self.file_path))
             # This assumes that the hash of the blob has already been
@@ -243,7 +242,7 @@ class BlobFile(HashBlob):
         if not peer in self.writers:
             log.debug("Opening %s to be written by %s", str(self), str(peer))
             finished_deferred = defer.Deferred()
-            writer = HashBlobWriter(self.buffer, self.get_length, self.writer_finished)
+            writer = HashBlobWriter(self.get_length, self.writer_finished)
             self.writers[peer] = (writer, finished_deferred)
             return finished_deferred, writer.write, writer.cancel
         log.warning("Tried to download the same file twice simultaneously from the same peer")
@@ -311,9 +310,9 @@ class BlobFile(HashBlob):
     def _save_verified_blob(self, writer):
         with self.setting_verified_blob_lock:
             if self.moved_verified_blob is False:
-                self.buffer.seek(0)
+                writer.write_handle.seek(0)
                 out_path = os.path.join(self.blob_dir, self.blob_hash)
-                producer = FileBodyProducer(self.buffer)
+                producer = FileBodyProducer(writer.write_handle)
                 yield producer.startProducing(open(out_path, 'wb'))
                 self.moved_verified_blob = True
                 defer.returnValue(True)
