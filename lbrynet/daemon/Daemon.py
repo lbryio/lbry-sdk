@@ -819,7 +819,7 @@ class Daemon(AuthJSONRPCServer):
                 written_file.seek(0, os.SEEK_END)
                 written_bytes = written_file.tell()
         else:
-            written_bytes = False
+            written_bytes = 0
 
         if full_status:
             size = yield lbry_file.get_total_bytes()
