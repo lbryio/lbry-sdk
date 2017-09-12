@@ -92,7 +92,12 @@ class HashBlob(object):
 
     @property
     def verified(self):
-        # protect verified from being modified by other classes
+        """
+        Protect verified from being modified by other classes.
+        verified is True if a write to a blob has completed succesfully,
+        or a blob has been read to have the same length as specified
+        in init
+        """
         return self._verified
 
     def set_length(self, length):
@@ -203,8 +208,11 @@ class HashBlob(object):
 
 
 class BlobFile(HashBlob):
-    """A HashBlob which will be saved to the hard disk of the downloader"""
-
+    """
+    This class is used to create blobs on the local filesystem
+    when we already know the blob hash before hand (i.e., when downloading blobs)
+    Also can be used for reading from blobs on the local filesystem
+    """
     def __init__(self, blob_dir, blob_hash, length=None):
         HashBlob.__init__(self, blob_hash, length)
         self.blob_dir = blob_dir
@@ -222,6 +230,17 @@ class BlobFile(HashBlob):
             self._verified = True
 
     def open_for_writing(self, peer):
+        """
+        open a blob file to be written by peer, supports concurrent
+        writers, as long as they are from differnt peers.
+
+        returns tuple of (finished_deferred, writer.writer, writer.cancel)
+
+        finished_deferred - deferred that is fired when write is finished and returns
+            a instance of itself as HashBlob
+        writer.write - function used to write to file, argument is data to be written
+        writer.cancel - function used to cancel the write, takes no argument
+        """
         if not peer in self.writers:
             log.debug("Opening %s to be written by %s", str(self), str(peer))
             finished_deferred = defer.Deferred()
@@ -232,6 +251,13 @@ class BlobFile(HashBlob):
         return None, None, None
 
     def open_for_reading(self):
+        """
+        open blob for reading
+
+        returns a file handle that can be read() from.
+        once finished with the file handle, user must call close_read_handle()
+        otherwise blob cannot be deleted.
+        """
         if self._verified is True:
             file_handle = None
             try:
@@ -244,6 +270,12 @@ class BlobFile(HashBlob):
         return None
 
     def delete(self):
+        """
+        delete blob file from file system, prevent deletion
+        if a blob is being read from or written to
+
+        returns a deferred that firesback when delete is completed
+        """
         if not self.writers and not self.readers:
             self._verified = False
             self.moved_verified_blob = False
@@ -289,8 +321,12 @@ class BlobFile(HashBlob):
             else:
                 raise DownloadCanceledError()
 
-
 class BlobFileCreator(object):
+    """
+    This class is used to create blobs on the local filesystem
+    when we do not know the blob hash beforehand (i.e, when creating
+    a new stream)
+    """
     def __init__(self, blob_dir):
         self.blob_dir = blob_dir
         self.buffer = BytesIO()
