@@ -19,7 +19,7 @@ from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError
 from lbryschema.validator import validate_claim_id
-from lbryschema.base import base_decode
+from lbryschema.address import decode_address
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.core.system_info import get_lbrynet_version
@@ -197,7 +197,7 @@ class Daemon(AuthJSONRPCServer):
         self.connected_to_internet = True
         self.connection_status_code = None
         self.platform = None
-        self.current_db_revision = 3
+        self.current_db_revision = 4
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self.uploaded_temp_files = []
@@ -488,7 +488,9 @@ class Daemon(AuthJSONRPCServer):
             old_revision = int(open(self.db_revision_file).read().strip())
 
         if old_revision > self.current_db_revision:
-            raise Exception('This version of lbrynet is not compatible with the database')
+            raise Exception('This version of lbrynet is not compatible with the database\n'
+                            'Your database is revision %i, expected %i' %
+                            (old_revision, self.current_db_revision))
 
         def update_version_file_and_print_success():
             self._write_db_revision_file(self.current_db_revision)
@@ -1383,9 +1385,9 @@ class Daemon(AuthJSONRPCServer):
                         'depth': (int) claim depth,
                         'has_signature': (bool) included if decoded_claim
                         'name': (str) claim name,
-                        'supports: (list) list of supports [{'txid': txid,
-                                                             'nout': nout,
-                                                             'amount': amount}],
+                        'supports: (list) list of supports [{'txid': (str) txid,
+                                                             'nout': (int) nout,
+                                                             'amount': (float) amount}],
                         'txid': (str) claim txid,
                         'nout': (str) claim nout,
                         'signature_is_valid': (bool), included if has_signature,
@@ -1408,9 +1410,9 @@ class Daemon(AuthJSONRPCServer):
                         'has_signature': (bool) included if decoded_claim
                         'name': (str) claim name,
                         'channel_name': (str) channel name if claim is in a channel
-                        'supports: (list) list of supports [{'txid': txid,
-                                                             'nout': nout,
-                                                             'amount': amount}]
+                        'supports: (list) list of supports [{'txid': (str) txid,
+                                                             'nout': (int) nout,
+                                                             'amount': (float) amount}]
                         'txid': (str) claim txid,
                         'nout': (str) claim nout,
                         'signature_is_valid': (bool), included if has_signature,
@@ -2048,9 +2050,9 @@ class Daemon(AuthJSONRPCServer):
                             'depth': (int) claim depth,
                             'has_signature': (bool) included if decoded_claim
                             'name': (str) claim name,
-                            'supports: (list) list of supports [{'txid': txid,
-                                                                 'nout': nout,
-                                                                 'amount': amount}],
+                            'supports: (list) list of supports [{'txid': (str) txid,
+                                                                 'nout': (int) nout,
+                                                                 'amount': (float) amount}],
                             'txid': (str) claim txid,
                             'nout': (str) claim nout,
                             'signature_is_valid': (bool), included if has_signature,
@@ -2097,18 +2099,47 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
-    def jsonrpc_transaction_list(self):
+    @AuthJSONRPCServer.flags(include_tip_info='-t')
+    def jsonrpc_transaction_list(self, include_tip_info=False):
         """
         List transactions belonging to wallet
 
         Usage:
-            transaction_list
+            transaction_list [-t]
+
+        Options:
+            -t : Include claim tip information
 
         Returns:
-            (list) List of transactions
+            (list) List of transactions, where is_tip is null by default,
+             and set to a boolean if include_tip_info is true
+
+            {
+                "claim_info": (list) claim info if in txn [{"amount": (float) claim amount,
+                                                            "claim_id": (str) claim id,
+                                                            "claim_name": (str) claim name,
+                                                            "nout": (int) nout}],
+                "confirmations": (int) number of confirmations for the txn,
+                "date": (str) date and time of txn,
+                "fee": (float) txn fee,
+                "support_info": (list) support info if in txn [{"amount": (float) support amount,
+                                                                "claim_id": (str) claim id,
+                                                                "claim_name": (str) claim name,
+                                                                "is_tip": (null) default,
+                                                                (bool) if include_tip_info is true,
+                                                                "nout": (int) nout}],
+                "timestamp": (int) timestamp,
+                "txid": (str) txn id,
+                "update_info": (list) update info if in txn [{"amount": (float) updated amount,
+                                                              "claim_id": (str) claim id,
+                                                              "claim_name": (str) claim name,
+                                                              "nout": (int) nout}],
+                "value": (float) value of txn
+            }
+
         """
 
-        d = self.session.wallet.get_history()
+        d = self.session.wallet.get_history(include_tip_info)
         d.addCallback(lambda r: self._render_response(r))
         return d
 
@@ -2281,8 +2312,8 @@ class Daemon(AuthJSONRPCServer):
             raise NullFundsError()
 
         if address:
-            if not base_decode(address, 58):
-                raise Exception("Given an invalid address to send to")
+            # raises an error if the address is invalid
+            decode_address(address)
             result = yield self.jsonrpc_send_amount_to_address(amount, address)
         else:
             validate_claim_id(claim_id)

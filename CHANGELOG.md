@@ -12,7 +12,15 @@ at anytime.
   *
   *
 
+### Added
+  * Added option to announce head blob only if seeding
+  * Added option to download by seeking head blob first
+  * By default, option to download seeking head blob first is turned on
+  * Added `include_tip_info` param to `transaction_list` API call
+  *
+
 ### Fixed
+  * Fixed uncaught error when shutting down after a failed daemon startup
   * Fixed spelling error in documentation.
   *
 
@@ -21,16 +29,17 @@ at anytime.
   *
 
 ### Changed
-  *
-  *
-
-### Added
-  *
+  * Updated exchange rate tests for the lbry.io api
   *
 
 ### Removed
   *
   *
+
+
+## [0.15.2] - 2017-09-07
+### Changed
+ * Use lbry.io exchange rate API instead of google finance
 
 
 ## [0.15.1] - 2017-08-22

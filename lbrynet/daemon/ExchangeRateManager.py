@@ -129,26 +129,22 @@ class LBRYioFeed(MarketFeed):
         return defer.succeed(1.0 / json_response['data']['lbc_btc'])
 
 
-class GoogleBTCFeed(MarketFeed):
+class LBRYioBTCFeed(MarketFeed):
     def __init__(self):
         MarketFeed.__init__(
             self,
             "USDBTC",
-            "Coinbase via Google finance",
-            'http://finance.google.com/finance/info',
-            {'client':'ig', 'q':'CURRENCY:USDBTC'},
-            COINBASE_FEE
+            "lbry.io",
+            "https://api.lbry.io/lbc/exchange_rate",
+            {},
+            0.0,
         )
 
     def _handle_response(self, response):
-        response = response[3:] # response starts with "// "
-        json_response = json.loads(response)[0]
-        if 'l' not in json_response:
-            raise InvalidExchangeRateResponse(self.name, 'last trade not found')
-        last_trade_price = float(json_response['l'])
-        if last_trade_price <= 0:
-            raise InvalidExchangeRateResponse(self.name, 'trade price was not positive')
-        return defer.succeed(last_trade_price)
+        json_response = json.loads(response)
+        if 'data' not in json_response:
+            raise InvalidExchangeRateResponse(self.name, 'result not found')
+        return defer.succeed(1.0 / json_response['data']['btc_usd'])
 
 
 def get_default_market_feed(currency_pair):
@@ -160,7 +156,7 @@ def get_default_market_feed(currency_pair):
     assert currencies is not None
 
     if currencies == ("USD", "BTC"):
-        return GoogleBTCFeed()
+        return LBRYioBTCFeed()
     elif currencies == ("BTC", "LBC"):
         return LBRYioFeed()
 
@@ -199,6 +195,3 @@ class ExchangeRateManager(object):
 
     def fee_dict(self):
         return {market: market.rate.as_dict() for market in self.market_feeds}
-
-
-

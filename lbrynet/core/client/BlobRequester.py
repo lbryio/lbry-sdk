@@ -64,10 +64,24 @@ class BlobRequester(object):
             return defer.succeed(False)
         return self._send_next_request(peer, protocol)
 
-    def get_new_peers(self):
-        d = self._get_hash_for_peer_search()
-        d.addCallback(self._find_peers_for_hash)
-        return d
+    @defer.inlineCallbacks
+    def get_new_peers_for_head_blob(self):
+        """ look for peers for the head blob """
+        head_blob_hash = self._download_manager.get_head_blob_hash()
+        peers = yield self._find_peers_for_hash(head_blob_hash)
+        defer.returnValue(peers)
+
+    @defer.inlineCallbacks
+    def get_new_peers_for_next_unavailable(self):
+        """
+        Look for peers for the next unavailable blob, if we have
+        all blobs, return an empty list
+        """
+        blob_hash = yield self._get_hash_for_peer_search()
+        if blob_hash is None:
+            defer.returnValue([])
+        peers = yield self._find_peers_for_hash(blob_hash)
+        defer.returnValue(peers)
 
     ######### internal calls #########
     def should_send_next_request(self, peer):
@@ -79,7 +93,9 @@ class BlobRequester(object):
     def _send_next_request(self, peer, protocol):
         log.debug('Sending a blob request for %s and %s', peer, protocol)
         availability = AvailabilityRequest(self, peer, protocol, self.payment_rate_manager)
-        download = DownloadRequest(self, peer, protocol, self.payment_rate_manager, self.wallet)
+        head_blob_hash = self._download_manager.get_head_blob_hash()
+        download = DownloadRequest(self, peer, protocol, self.payment_rate_manager,
+                                   self.wallet, head_blob_hash)
         price = PriceRequest(self, peer, protocol, self.payment_rate_manager)
 
         sent_request = False
@@ -101,6 +117,10 @@ class BlobRequester(object):
         return defer.succeed(sent_request)
 
     def _get_hash_for_peer_search(self):
+        """
+        Get next unavailable hash for blob,
+        returns None if there is nothing left to download
+        """
         r = None
         blobs_to_download = self._blobs_to_download()
         if blobs_to_download:
@@ -114,26 +134,23 @@ class BlobRequester(object):
         return defer.succeed(r)
 
     def _find_peers_for_hash(self, h):
-        if h is None:
-            return None
-        else:
-            d = self.peer_finder.find_peers_for_blob(h)
+        d = self.peer_finder.find_peers_for_blob(h)
 
-            def choose_best_peers(peers):
-                bad_peers = self._get_bad_peers()
-                without_bad_peers = [p for p in peers if not p in bad_peers]
-                without_maxed_out_peers = [
-                    p for p in without_bad_peers if p not in self._maxed_out_peers]
-                return without_maxed_out_peers
+        def choose_best_peers(peers):
+            bad_peers = self._get_bad_peers()
+            without_bad_peers = [p for p in peers if not p in bad_peers]
+            without_maxed_out_peers = [
+                p for p in without_bad_peers if p not in self._maxed_out_peers]
+            return without_maxed_out_peers
 
-            d.addCallback(choose_best_peers)
+        d.addCallback(choose_best_peers)
 
-            def lookup_failed(err):
-                log.error("An error occurred looking up peers for a hash: %s", err.getTraceback())
-                return []
+        def lookup_failed(err):
+            log.error("An error occurred looking up peers for a hash: %s", err.getTraceback())
+            return []
 
-            d.addErrback(lookup_failed)
-            return d
+        d.addErrback(lookup_failed)
+        return d
 
     def _should_send_request_to(self, peer):
         if self._peers[peer] < -5.0:
@@ -406,9 +423,10 @@ class PriceRequest(RequestHelper):
 
 class DownloadRequest(RequestHelper):
     """Choose a blob and download it from a peer and also pay the peer for the data."""
-    def __init__(self, requester, peer, protocol, payment_rate_manager, wallet):
+    def __init__(self, requester, peer, protocol, payment_rate_manager, wallet, head_blob_hash):
         RequestHelper.__init__(self, requester, peer, protocol, payment_rate_manager)
         self.wallet = wallet
+        self.head_blob_hash = head_blob_hash
 
     def can_make_request(self):
         if self.protocol in self.protocol_prices:
@@ -546,7 +564,8 @@ class DownloadRequest(RequestHelper):
         self.update_local_score(5.0)
         self.peer.update_stats('blobs_downloaded', 1)
         self.peer.update_score(5.0)
-        self.requestor.blob_manager.blob_completed(blob)
+        should_announce = blob.blob_hash == self.head_blob_hash
+        self.requestor.blob_manager.blob_completed(blob, should_announce=should_announce)
         return arg
 
     def _download_failed(self, reason):
