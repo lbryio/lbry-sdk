@@ -13,7 +13,7 @@ from lbrynet import conf
 from lbrynet.core import log_support
 from lbrynet.core import BlobManager
 from lbrynet.core import HashAnnouncer
-from lbrynet.core import HashBlob
+from lbrynet.blob import BlobFile
 from lbrynet.core import RateLimiter
 from lbrynet.core import Peer
 from lbrynet.core import Wallet
@@ -38,7 +38,7 @@ def main(args=None):
 
     announcer = HashAnnouncer.DummyHashAnnouncer()
     blob_manager = MyBlobManager(announcer)
-    blob = HashBlob.BlobFile(args.directory, args.blob_hash)
+    blob = BlobFile(args.directory, args.blob_hash)
     download_manager = SingleBlobDownloadManager(blob)
     peer = Peer.Peer(*conf.server_port(args.peer))
     payment_rate_manager = DumbPaymentRateManager()

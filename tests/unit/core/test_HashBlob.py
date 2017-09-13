@@ -1,4 +1,4 @@
-from lbrynet.core.HashBlob import BlobFile
+from lbrynet.blob import BlobFile
 from lbrynet.core.Error import DownloadCanceledError, InvalidDataError
 
 

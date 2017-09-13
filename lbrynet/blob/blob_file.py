@@ -1,91 +1,18 @@
-from io import BytesIO
 import logging
 import os
 import threading
-from twisted.internet import interfaces, defer, threads
+from twisted.internet import defer, threads
 from twisted.protocols.basic import FileSender
 from twisted.web.client import FileBodyProducer
 from twisted.python.failure import Failure
-from zope.interface import implements
 from lbrynet import conf
 from lbrynet.core.Error import DownloadCanceledError, InvalidDataError, InvalidBlobHashError
-from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from lbrynet.core.utils import is_valid_blobhash
+from lbrynet.blob.writer import HashBlobWriter
+from lbrynet.blob.reader import HashBlobReader
 
 
 log = logging.getLogger(__name__)
-
-
-class HashBlobReader(object):
-    implements(interfaces.IConsumer)
-
-    def __init__(self, write_func):
-        self.write_func = write_func
-
-    def registerProducer(self, producer, streaming):
-        from twisted.internet import reactor
-
-        self.producer = producer
-        self.streaming = streaming
-        if self.streaming is False:
-            reactor.callLater(0, self.producer.resumeProducing)
-
-    def unregisterProducer(self):
-        pass
-
-    def write(self, data):
-        from twisted.internet import reactor
-
-        self.write_func(data)
-        if self.streaming is False:
-            reactor.callLater(0, self.producer.resumeProducing)
-
-
-class HashBlobWriter(object):
-    def __init__(self, length_getter, finished_cb):
-        self.write_handle = BytesIO()
-        self.length_getter = length_getter
-        self.finished_cb = finished_cb
-        self.finished_cb_d = None
-        self._hashsum = get_lbry_hash_obj()
-        self.len_so_far = 0
-
-    @property
-    def blob_hash(self):
-        return self._hashsum.hexdigest()
-
-    def write(self, data):
-        if self.write_handle is None:
-            log.info("writer has already been closed")
-            # can this be changed to IOError?
-            raise ValueError('I/O operation on closed file')
-
-        self._hashsum.update(data)
-        self.len_so_far += len(data)
-        if self.len_so_far > self.length_getter():
-            self.finished_cb_d = self.finished_cb(
-                self,
-                Failure(InvalidDataError("Length so far is greater than the expected length."
-                                         " %s to %s" % (self.len_so_far,
-                                                        self.length_getter()))))
-        else:
-            self.write_handle.write(data)
-            if self.len_so_far == self.length_getter():
-                self.finished_cb_d = self.finished_cb(self)
-
-    def close_handle(self):
-        if self.write_handle is not None:
-            self.write_handle.close()
-            self.write_handle = None
-
-    def close(self, reason=None):
-        # if we've already called finished_cb because we either finished writing
-        # or closed already, do nothing
-        if self.finished_cb_d is not None:
-            return
-        if reason is None:
-            reason = Failure(DownloadCanceledError())
-        self.finished_cb_d = self.finished_cb(self, reason)
 
 
 class BlobFile(object):
@@ -299,38 +226,3 @@ class BlobFile(object):
                 defer.returnValue(True)
             else:
                 raise DownloadCanceledError()
-
-
-class BlobFileCreator(object):
-    """
-    This class is used to create blobs on the local filesystem
-    when we do not know the blob hash beforehand (i.e, when creating
-    a new stream)
-    """
-    def __init__(self, blob_dir):
-        self.blob_dir = blob_dir
-        self.buffer = BytesIO()
-        self._is_open = True
-        self._hashsum = get_lbry_hash_obj()
-        self.len_so_far = 0
-        self.blob_hash = None
-        self.length = None
-
-    @defer.inlineCallbacks
-    def close(self):
-        self.length = self.len_so_far
-        self.blob_hash = self._hashsum.hexdigest()
-        if self.blob_hash and self._is_open:
-            self.buffer.seek(0)
-            out_path = os.path.join(self.blob_dir, self.blob_hash)
-            producer = FileBodyProducer(self.buffer)
-            yield producer.startProducing(open(out_path, 'wb'))
-            self._is_open = False
-        defer.returnValue(self.blob_hash)
-
-    def write(self, data):
-        if not self._is_open:
-            raise IOError
-        self._hashsum.update(data)
-        self.len_so_far += len(data)
-        self.buffer.write(data)

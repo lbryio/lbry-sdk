@@ -6,7 +6,8 @@ import sqlite3
 from twisted.internet import threads, defer, reactor
 from twisted.enterprise import adbapi
 from lbrynet import conf
-from lbrynet.core.HashBlob import BlobFile, BlobFileCreator
+from lbrynet.blob.blob_file import BlobFile
+from lbrynet.blob.creator import BlobFileCreator
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
