@@ -47,6 +47,7 @@ class HashBlobWriter(object):
         self.write_handle = BytesIO()
         self.length_getter = length_getter
         self.finished_cb = finished_cb
+        self.finished_cb_d = None
         self._hashsum = get_lbry_hash_obj()
         self.len_so_far = 0
 
@@ -62,7 +63,7 @@ class HashBlobWriter(object):
         self._hashsum.update(data)
         self.len_so_far += len(data)
         if self.len_so_far > self.length_getter():
-            self.finished_cb(
+            self.finished_cb_d = self.finished_cb(
                 self,
                 Failure(InvalidDataError("Length so far is greater than the expected length."
                                          " %s to %s" % (self.len_so_far,
@@ -70,7 +71,7 @@ class HashBlobWriter(object):
         else:
             self.write_handle.write(data)
             if self.len_so_far == self.length_getter():
-                self.finished_cb(self)
+                self.finished_cb_d = self.finished_cb(self)
 
     def close_handle(self):
         if self.write_handle is not None:
@@ -78,12 +79,13 @@ class HashBlobWriter(object):
             self.write_handle = None
 
     def close(self, reason=None):
-        # we've already closed, so do nothing
-        if self.write_handle is None:
+        # if we've already called finished_cb because we either finished writing
+        # or closed already, do nothing
+        if self.finished_cb_d is not None:
             return
         if reason is None:
             reason = Failure(DownloadCanceledError())
-        self.finished_cb(self, reason)
+        self.finished_cb_d = self.finished_cb(self, reason)
 
 
 class HashBlob(object):
