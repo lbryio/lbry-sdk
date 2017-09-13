@@ -55,6 +55,10 @@ class HashBlobWriter(object):
         return self._hashsum.hexdigest()
 
     def write(self, data):
+        if self.write_handle is None:
+            log.info("writer has already been closed")
+            raise ValueError('I/O operation on closed file')
+
         self._hashsum.update(data)
         self.len_so_far += len(data)
         if self.len_so_far > self.length_getter():
@@ -64,9 +68,6 @@ class HashBlobWriter(object):
                                          " %s to %s" % (self.len_so_far,
                                                         self.length_getter()))))
         else:
-            if self.write_handle is None:
-                log.debug("Tried to write to a write_handle that was None.")
-                return
             self.write_handle.write(data)
             if self.len_so_far == self.length_getter():
                 self.finished_cb(self)
