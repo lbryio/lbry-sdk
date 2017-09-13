@@ -71,13 +71,17 @@ class HashBlobWriter(object):
             if self.len_so_far == self.length_getter():
                 self.finished_cb(self)
 
-    def close(self, reason=None):
-        if reason is None:
-            reason = Failure(DownloadCanceledError())
+    def close_handle(self):
         if self.write_handle is not None:
             self.write_handle.close()
             self.write_handle = None
 
+    def close(self, reason=None):
+        # we've already closed, so do nothing
+        if self.write_handle is None:
+            return
+        if reason is None:
+            reason = Failure(DownloadCanceledError())
         self.finished_cb(self, reason)
 
 
@@ -180,7 +184,7 @@ class HashBlob(object):
         else:
             errback_finished_deferred(err)
             d = defer.succeed(True)
-
+        d.addBoth(lambda _: writer.close_handle())
         return d
 
     def open_for_writing(self, peer):
