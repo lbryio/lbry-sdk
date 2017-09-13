@@ -1,4 +1,4 @@
-from lbrynet.core.HashBlob import HashBlob, BlobFile
+from lbrynet.core.HashBlob import BlobFile
 from lbrynet.core.Error import DownloadCanceledError, InvalidDataError
 
 
@@ -9,7 +9,6 @@ import os
 import time
 
 
-
 class BlobFileTest(unittest.TestCase):
     def setUp(self):
         self.db_dir, self.blob_dir = mk_db_and_blob_dir()
@@ -17,10 +16,8 @@ class BlobFileTest(unittest.TestCase):
         self.fake_content = bytearray('0'*self.fake_content_len)
         self.fake_content_hash = '53871b26a08e90cb62142f2a39f0b80de41792322b0ca5602b6eb7b5cf067c49498a7492bb9364bbf90f40c1c5412105'
 
-
     def tearDown(self):
         rm_db_and_blob_dir(self.db_dir, self.blob_dir)
-
 
     @defer.inlineCallbacks
     def test_good_write_and_read(self):
@@ -32,7 +29,7 @@ class BlobFileTest(unittest.TestCase):
         writer.write(self.fake_content)
         writer.close()
         out = yield finished_d
-        self.assertTrue(isinstance(out,HashBlob))
+        self.assertTrue(isinstance(out, BlobFile))
         self.assertTrue(out.verified)
         self.assertEqual(self.fake_content_len, out.get_length())
 
@@ -118,7 +115,7 @@ class BlobFileTest(unittest.TestCase):
         out_2 = yield finished_d_2
         out_1 = yield self.assertFailure(finished_d_1, DownloadCanceledError)
 
-        self.assertTrue(isinstance(out_2,HashBlob))
+        self.assertTrue(isinstance(out_2, BlobFile))
         self.assertTrue(out_2.verified)
         self.assertEqual(self.fake_content_len, out_2.get_length())
 
