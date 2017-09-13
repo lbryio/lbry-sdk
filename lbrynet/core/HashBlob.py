@@ -71,9 +71,10 @@ class HashBlobWriter(object):
             if self.len_so_far == self.length_getter():
                 self.finished_cb(self)
 
-    def cancel(self, reason=None):
+    def close(self, reason=None):
         if reason is None:
             reason = Failure(DownloadCanceledError())
+
         self.finished_cb(self, reason)
 
 
@@ -157,7 +158,7 @@ class HashBlob(object):
 
         def cancel_other_downloads():
             for p, (w, finished_deferred) in self.writers.items():
-                w.cancel()
+                w.close()
 
         if err is None:
             if writer.len_so_far == self.length and writer.blob_hash == self.blob_hash:
@@ -232,19 +233,19 @@ class BlobFile(HashBlob):
         open a blob file to be written by peer, supports concurrent
         writers, as long as they are from differnt peers.
 
-        returns tuple of (finished_deferred, writer.writer, writer.cancel)
+        returns tuple of (finished_deferred, writer.writer, writer.close)
 
         finished_deferred - deferred that is fired when write is finished and returns
             a instance of itself as HashBlob
         writer.write - function used to write to file, argument is data to be written
-        writer.cancel - function used to cancel the write, takes no argument
+        writer.close - function used to cancel the write, takes no argument
         """
         if not peer in self.writers:
             log.debug("Opening %s to be written by %s", str(self), str(peer))
             finished_deferred = defer.Deferred()
             writer = HashBlobWriter(self.get_length, self.writer_finished)
             self.writers[peer] = (writer, finished_deferred)
-            return finished_deferred, writer.write, writer.cancel
+            return finished_deferred, writer.write, writer.close
         log.warning("Tried to download the same file twice simultaneously from the same peer")
         return None, None, None
 
