@@ -29,7 +29,6 @@ from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.core.log_support import configure_loggly_handler
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
-from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
@@ -578,17 +577,8 @@ class Daemon(AuthJSONRPCServer):
             self.session.wallet,
             self.download_directory
         )
-        self.sd_identifier.add_stream_downloader_factory(
-            EncryptedFileStreamType, file_saver_factory)
-        file_opener_factory = EncryptedFileOpenerFactory(
-            self.session.peer_finder,
-            self.session.rate_limiter,
-            self.session.blob_manager,
-            self.stream_info_manager,
-            self.session.wallet
-        )
-        self.sd_identifier.add_stream_downloader_factory(
-            EncryptedFileStreamType, file_opener_factory)
+        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType,
+                                                         file_saver_factory)
         return defer.succeed(None)
 
     def _download_blob(self, blob_hash, rate_manager=None, timeout=None):
