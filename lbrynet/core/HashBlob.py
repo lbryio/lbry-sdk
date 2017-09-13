@@ -74,6 +74,9 @@ class HashBlobWriter(object):
     def close(self, reason=None):
         if reason is None:
             reason = Failure(DownloadCanceledError())
+        if self.write_handle is not None:
+            self.write_handle.close()
+            self.write_handle = None
 
         self.finished_cb(self, reason)
 
@@ -137,7 +140,6 @@ class HashBlob(object):
         return d
 
     def writer_finished(self, writer, err=None):
-
         def fire_finished_deferred():
             self._verified = True
             for p, (w, finished_deferred) in self.writers.items():
@@ -179,7 +181,6 @@ class HashBlob(object):
             errback_finished_deferred(err)
             d = defer.succeed(True)
 
-        d.addBoth(lambda _: self._close_writer(writer))
         return d
 
     def open_for_writing(self, peer):
@@ -192,9 +193,6 @@ class HashBlob(object):
         raise NotImplementedError()
 
     def close_read_handle(self, file_handle):
-        raise NotImplementedError()
-
-    def _close_writer(self, writer):
         raise NotImplementedError()
 
     def _save_verified_blob(self, writer):
@@ -300,12 +298,6 @@ class BlobFile(HashBlob):
         if file_handle is not None:
             file_handle.close()
             self.readers -= 1
-
-    def _close_writer(self, writer):
-        if writer.write_handle is not None:
-            log.debug("Closing %s", str(self))
-            writer.write_handle.close()
-            writer.write_handle = None
 
     @defer.inlineCallbacks
     def _save_verified_blob(self, writer):
