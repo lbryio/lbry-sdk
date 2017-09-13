@@ -30,6 +30,7 @@ class BlobFileTest(unittest.TestCase):
 
         writer, finished_d = blob_file.open_for_writing(peer=1)
         writer.write(self.fake_content)
+        writer.close()
         out = yield finished_d
         self.assertTrue(isinstance(out,HashBlob))
         self.assertTrue(out.verified)
@@ -83,6 +84,26 @@ class BlobFileTest(unittest.TestCase):
         writer.write(content)
         yield self.assertFailure(finished_d, InvalidDataError)
 
+    @defer.inlineCallbacks
+    def test_close_on_incomplete_write(self):
+        # write all but 1 byte of data,
+        blob_file = BlobFile(self.blob_dir, self.fake_content_hash, self.fake_content_len)
+        writer, finished_d = blob_file.open_for_writing(peer=1)
+        writer.write(self.fake_content[:self.fake_content_len-1])
+        writer.close()
+        yield self.assertFailure(finished_d, DownloadCanceledError)
+
+        # writes after close will throw a ValueError exception
+        with self.assertRaises(ValueError):
+            writer.write(self.fake_content)
+
+        # another call to close will do nothing
+        writer.close()
+
+        # file should not exist, since we did not finish write
+        blob_file_2 = BlobFile(self.blob_dir, self.fake_content_hash, self.fake_content_len)
+        out = blob_file_2.open_for_reading()
+        self.assertEqual(None, out)
 
     @defer.inlineCallbacks
     def test_multiple_writers(self):
