@@ -17,7 +17,6 @@ from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 MB = 2**20
 
-
 def iv_generator():
     while True:
         yield '3' * AES.block_size
@@ -34,18 +33,20 @@ class CreateEncryptedFileTest(unittest.TestCase):
         yield self.blob_manager.stop()
         rm_db_and_blob_dir(self.tmp_db_dir, self.tmp_blob_dir)
 
+    @defer.inlineCallbacks
     def create_file(self, filename):
         session = mock.Mock(spec=Session.Session)(None, None)
         hash_announcer = DHTHashAnnouncer.DHTHashAnnouncer(None, None)
         self.blob_manager = BlobManager.DiskBlobManager(hash_announcer, self.tmp_blob_dir, self.tmp_db_dir)
         session.blob_manager = self.blob_manager
-        session.blob_manager.setup()
+        yield session.blob_manager.setup()
         session.db_dir = self.tmp_db_dir
         manager = mock.Mock(spec=EncryptedFileManager.EncryptedFileManager)()
         handle = mocks.GenFile(3*MB, '1')
         key = '2'*AES.block_size
-        return EncryptedFileCreator.create_lbry_file(
+        out = yield EncryptedFileCreator.create_lbry_file(
             session, manager, filename, handle, key, iv_generator())
+        defer.returnValue(out)
 
     def test_can_create_file(self):
         expected_stream_hash = ('41e6b247d923d191b154fb6f1b8529d6ddd6a73d65c357b1acb7'
