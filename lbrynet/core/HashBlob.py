@@ -238,21 +238,20 @@ class BlobFile(HashBlob):
         open a blob file to be written by peer, supports concurrent
         writers, as long as they are from differnt peers.
 
-        returns tuple of (finished_deferred, writer.writer, writer.close)
+        returns tuple of (writer, finished_deferred)
 
+        writer - a file like object with a write() function, close() when finished
         finished_deferred - deferred that is fired when write is finished and returns
             a instance of itself as HashBlob
-        writer.write - function used to write to file, argument is data to be written
-        writer.close - function used to cancel the write, takes no argument
         """
         if not peer in self.writers:
             log.debug("Opening %s to be written by %s", str(self), str(peer))
             finished_deferred = defer.Deferred()
             writer = HashBlobWriter(self.get_length, self.writer_finished)
             self.writers[peer] = (writer, finished_deferred)
-            return finished_deferred, writer.write, writer.close
+            return (writer, finished_deferred)
         log.warning("Tried to download the same file twice simultaneously from the same peer")
-        return None, None, None
+        return None, None
 
     def open_for_reading(self):
         """

@@ -28,8 +28,8 @@ class BlobFileTest(unittest.TestCase):
         blob_file = BlobFile(self.blob_dir, self.fake_content_hash, self.fake_content_len)
         self.assertFalse(blob_file.verified)
 
-        finished_d, write_func, cancel_func = blob_file.open_for_writing(peer=1)
-        write_func(self.fake_content)
+        writer, finished_d = blob_file.open_for_writing(peer=1)
+        writer.write(self.fake_content)
         out = yield finished_d
         self.assertTrue(isinstance(out,HashBlob))
         self.assertTrue(out.verified)
@@ -52,8 +52,8 @@ class BlobFileTest(unittest.TestCase):
     @defer.inlineCallbacks
     def test_delete(self):
         blob_file = BlobFile(self.blob_dir, self.fake_content_hash, self.fake_content_len)
-        finished_d, write_func, cancel_func = blob_file.open_for_writing(peer=1)
-        write_func(self.fake_content)
+        writer, finished_d = blob_file.open_for_writing(peer=1)
+        writer.write(self.fake_content)
         out = yield finished_d
         out = yield blob_file.delete()
 
@@ -67,8 +67,8 @@ class BlobFileTest(unittest.TestCase):
         content = bytearray('0'*32)
         blob_hash = random_lbry_hash()
         blob_file = BlobFile(self.blob_dir, blob_hash, expected_length)
-        finished_d, write_func, cancel_func = blob_file.open_for_writing(peer=1)
-        write_func(content)
+        writer, finished_d = blob_file.open_for_writing(peer=1)
+        writer.write(content)
         out = yield self.assertFailure(finished_d, InvalidDataError)
 
     @defer.inlineCallbacks
@@ -79,8 +79,8 @@ class BlobFileTest(unittest.TestCase):
         content = bytearray('0'*length)
         blob_hash = random_lbry_hash()
         blob_file = BlobFile(self.blob_dir, blob_hash, length)
-        finished_d, write_func, cancel_func = blob_file.open_for_writing(peer=1)
-        write_func(content)
+        writer, finished_d = blob_file.open_for_writing(peer=1)
+        writer.write(content)
         yield self.assertFailure(finished_d, InvalidDataError)
 
 
@@ -89,11 +89,11 @@ class BlobFileTest(unittest.TestCase):
         # start first writer and write half way, and then start second writer and write everything
         blob_hash = self.fake_content_hash
         blob_file = BlobFile(self.blob_dir, blob_hash, self.fake_content_len)
-        finished_d_1, write_func_1, cancel_func_1 = blob_file.open_for_writing(peer=1)
-        write_func_1(self.fake_content[:self.fake_content_len/2])
+        writer_1, finished_d_1 = blob_file.open_for_writing(peer=1)
+        writer_1.write(self.fake_content[:self.fake_content_len/2])
 
-        finished_d_2, write_func_2, cancel_func_2 = blob_file.open_for_writing(peer=2)
-        write_func_2(self.fake_content)
+        writer_2, finished_d_2 = blob_file.open_for_writing(peer=2)
+        writer_2.write(self.fake_content)
         out_2 = yield finished_d_2
         out_1 = yield self.assertFailure(finished_d_1, DownloadCanceledError)
 

@@ -466,9 +466,9 @@ class DownloadRequest(RequestHelper):
             if blob.is_validated():
                 log.debug('Skipping blob %s as its already validated', blob)
                 continue
-            d, write_func, cancel_func = blob.open_for_writing(self.peer)
+            writer, d = blob.open_for_writing(self.peer)
             if d is not None:
-                return BlobDownloadDetails(blob, d, write_func, cancel_func, self.peer)
+                return BlobDownloadDetails(blob, d, writer.write, writer.close, self.peer)
             log.debug('Skipping blob %s as there was an issue opening it for writing', blob)
         return None
 
