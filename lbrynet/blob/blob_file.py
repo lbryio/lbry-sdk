@@ -36,7 +36,6 @@ class BlobFile(object):
         self.blob_hash = blob_hash
         self.length = length
         self.writers = {}  # {Peer: writer, finished_deferred}
-        self.finished_deferred = None
         self._verified = False
         self.readers = 0
         self.blob_dir = blob_dir
