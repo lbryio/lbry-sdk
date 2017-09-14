@@ -27,13 +27,21 @@ class BlobFileCreator(object):
     def close(self):
         self.length = self.len_so_far
         self.blob_hash = self._hashsum.hexdigest()
-        if self.blob_hash and self._is_open:
+        if self.blob_hash and self._is_open and self.length > 0:
+            # do not save 0 length files (empty tail blob in streams)
+            # or if its been closed already
             self.buffer.seek(0)
             out_path = os.path.join(self.blob_dir, self.blob_hash)
             producer = FileBodyProducer(self.buffer)
             yield producer.startProducing(open(out_path, 'wb'))
             self._is_open = False
-        defer.returnValue(self.blob_hash)
+        if self.length > 0:
+            defer.returnValue(self.blob_hash)
+        else:
+            # 0 length files (empty tail blob in streams )
+            # must return None as their blob_hash for
+            # it to be saved properly by EncryptedFileMetadataManagers
+            defer.returnValue(None)
 
     def write(self, data):
         if not self._is_open:
