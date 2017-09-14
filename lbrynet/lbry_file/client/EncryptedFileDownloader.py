@@ -1,4 +1,3 @@
-import subprocess
 import binascii
 
 from zope.interface import implements
@@ -10,8 +9,7 @@ from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbry_file.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
 import os
-from twisted.internet import defer, threads, reactor
-from twisted.python.procutils import which
+from twisted.internet import defer, threads
 import logging
 import traceback
 
