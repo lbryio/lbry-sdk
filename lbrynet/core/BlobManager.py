@@ -51,7 +51,8 @@ class DiskBlobManager(DHTHashSupplier):
         """Return a blob identified by blob_hash, which may be a new blob or a
         blob that is already on the hard disk
         """
-        assert length is None or isinstance(length, int)
+        if length is not None and not isinstance(length, int):
+            raise Exception("invalid length type: %s (%s)", length, str(type(length)))
         if blob_hash in self.blobs:
             return defer.succeed(self.blobs[blob_hash])
         return self._make_new_blob(blob_hash, length)
