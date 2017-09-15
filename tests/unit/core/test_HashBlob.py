@@ -90,8 +90,8 @@ class BlobFileTest(unittest.TestCase):
         writer.close()
         yield self.assertFailure(finished_d, DownloadCanceledError)
 
-        # writes after close will throw a ValueError exception
-        with self.assertRaises(ValueError):
+        # writes after close will throw a IOError exception
+        with self.assertRaises(IOError):
             writer.write(self.fake_content)
 
         # another call to close will do nothing

@@ -161,7 +161,7 @@ class BlobFile(object):
             d = file_sender.beginFileTransfer(file_handle, reader)
             d.addCallback(close_self)
         else:
-            d = defer.fail(ValueError("Could not read the blob"))
+            d = defer.fail(IOError("Could not read the blob"))
         return d
 
     def writer_finished(self, writer, err=None):
