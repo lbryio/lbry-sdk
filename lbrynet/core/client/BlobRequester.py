@@ -226,7 +226,8 @@ class RequestHelper(object):
         self.requestor._update_local_score(self.peer, score)
 
     def _request_failed(self, reason, request_type):
-        if reason.check(DownloadCanceledError, RequestCanceledError, ConnectionAborted):
+        if reason.check(DownloadCanceledError, RequestCanceledError, ConnectionAborted,
+                        ConnectionClosedBeforeResponseError):
             return
         if reason.check(NoResponseError):
             self.requestor._incompatible_peers.append(self.peer)
