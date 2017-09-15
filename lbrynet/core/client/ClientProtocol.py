@@ -50,15 +50,20 @@ class ClientProtocol(Protocol, TimeoutMixin):
         log.debug("Data receieved from %s", self.peer)
         self.setTimeout(None)
         self._rate_limiter.report_dl_bytes(len(data))
+
+        def in_case_IOError():
+            #TODO: writes can raise IOError if another peer finished
+            #writing and closes the other peeer's writers. Fix this
+            #by preventing peers from downloading the same blobs
+            msg = "Failed to write, blob is likely closed by another peer finishing download"
+            log.warn(msg)
+            self.transport.loseConnection()
+
         if self._downloading_blob is True:
             try:
                 self._blob_download_request.write(data)
             except IOError as e:
-                #TODO: we need to fix this so that we do not even
-                #attempt to download the same blob from different peers
-                msg = "Failed to write, blob is likely closed by another peer finishing download"
-                log.warn(msg)
-                self.transport.loseConnection()
+                in_case_IOError()
         else:
             self._response_buff += data
             if len(self._response_buff) > conf.settings['MAX_RESPONSE_INFO_SIZE']:
@@ -70,7 +75,12 @@ class ClientProtocol(Protocol, TimeoutMixin):
                 self._response_buff = ''
                 self._handle_response(response)
                 if self._downloading_blob is True and len(extra_data) != 0:
-                    self._blob_download_request.write(extra_data)
+                    try:
+                        self._blob_download_request.write(extra_data)
+                    except IOError as e:
+                        in_case_IOError()
+
+
 
     def timeoutConnection(self):
         log.info("Connection timed out to %s", self.peer)
