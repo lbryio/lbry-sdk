@@ -51,7 +51,14 @@ class ClientProtocol(Protocol, TimeoutMixin):
         self.setTimeout(None)
         self._rate_limiter.report_dl_bytes(len(data))
         if self._downloading_blob is True:
-            self._blob_download_request.write(data)
+            try:
+                self._blob_download_request.write(data)
+            except IOError as e:
+                #TODO: we need to fix this so that we do not even
+                #attempt to download the same blob from different peers
+                msg = "Failed to write, blob is likely closed by another peer finishing download"
+                log.warn(msg)
+                self.transport.loseConnection()
         else:
             self._response_buff += data
             if len(self._response_buff) > conf.settings['MAX_RESPONSE_INFO_SIZE']:
