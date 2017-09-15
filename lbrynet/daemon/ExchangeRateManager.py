@@ -65,8 +65,8 @@ class MarketFeed(object):
 
     def _log_error(self, err):
         log.warning(
-            "There was a problem updating %s exchange rate information from %s",
-            self.market, self.name)
+            "There was a problem updating %s exchange rate information from %s\n%s",
+            self.market, self.name, err)
 
     def _update_price(self):
         d = threads.deferToThread(self._make_request)
