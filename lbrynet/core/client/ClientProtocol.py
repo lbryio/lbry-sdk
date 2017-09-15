@@ -100,9 +100,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
         if self._blob_download_request is None:
             d = self.add_request(blob_request)
             self._blob_download_request = blob_request
-            blob_request.finished_deferred.addCallbacks(self._downloading_finished,
-                                                        self._downloading_failed)
-            blob_request.finished_deferred.addErrback(self._handle_response_error)
+            blob_request.finished_deferred.addCallbacks(self._downloading_finished, self._handle_response_error)
             return d
         else:
             raise ValueError("There is already a blob download request active")
@@ -110,12 +108,14 @@ class ClientProtocol(Protocol, TimeoutMixin):
     def cancel_requests(self):
         self.connection_closing = True
         ds = []
-        err = failure.Failure(RequestCanceledError())
+        err = RequestCanceledError()
         for key, d in self._response_deferreds.items():
             del self._response_deferreds[key]
+            log.info("cancel download response")
             d.errback(err)
             ds.append(d)
         if self._blob_download_request is not None:
+            log.info("cancel download request")
             self._blob_download_request.cancel(err)
             ds.append(self._blob_download_request.finished_deferred)
             self._blob_download_request = None
@@ -176,14 +176,20 @@ class ClientProtocol(Protocol, TimeoutMixin):
 
     def _handle_response_error(self, err):
         # If an error gets to this point, log it and kill the connection.
-        expected_errors = (MisbehavingPeerError, ConnectionClosedBeforeResponseError,
-                           DownloadCanceledError, RequestCanceledError)
-        if not err.check(expected_errors):
+        if err.check(DownloadCanceledError, RequestCanceledError):
+            # TODO: (wish-list) it seems silly to close the connection over this, and it shouldn't
+            # TODO: always be this way. it's done this way now because the client has no other way
+            # TODO: of telling the server it wants the download to stop. It would be great if the
+            # TODO: protocol had such a mechanism.
+            log.info("Closing the connection to %s because the download of blob %s was canceled",
+                     self.peer, self._blob_download_request.blob)
+            return
+        elif not err.check(MisbehavingPeerError, ConnectionClosedBeforeResponseError):
+            log.warning("The connection to %s is closing due to: %s", err)
+            return err
+        else:
             log.error("The connection to %s is closing due to an unexpected error: %s",
-                      self.peer, err.getErrorMessage())
-        if not err.check(RequestCanceledError):
-            # The connection manager is closing the connection, so
-            # there's no need to do it here.
+                      self.peer, err)
             return err
 
     def _handle_response(self, response):
@@ -235,16 +241,6 @@ class ClientProtocol(Protocol, TimeoutMixin):
         self._blob_download_request = None
         self._downloading_blob = False
         return arg
-
-    def _downloading_failed(self, err):
-        if err.check(DownloadCanceledError):
-            # TODO: (wish-list) it seems silly to close the connection over this, and it shouldn't
-            # TODO: always be this way. it's done this way now because the client has no other way
-            # TODO: of telling the server it wants the download to stop. It would be great if the
-            # TODO: protocol had such a mechanism.
-            log.debug("Closing the connection to %s because the download of blob %s was canceled",
-                     self.peer, self._blob_download_request.blob)
-        return err
 
     ######### IRateLimited #########
 
