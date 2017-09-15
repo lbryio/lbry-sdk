@@ -469,7 +469,7 @@ class DownloadRequest(RequestHelper):
             writer, d = blob.open_for_writing(self.peer)
             if d is not None:
                 return BlobDownloadDetails(blob, d, writer.write, writer.close, self.peer)
-            log.debug('Skipping blob %s as there was an issue opening it for writing', blob)
+            log.warning('Skipping blob %s as there was an issue opening it for writing', blob)
         return None
 
     def _make_request(self, blob_details):

@@ -64,8 +64,7 @@ class MarketFeed(object):
         self.rate = ExchangeRate(self.market, price, int(time.time()))
 
     def _log_error(self, err):
-        log.warning(
-            "There was a problem updating %s exchange rate information from %s\n%s",
+        log.warning("There was a problem updating %s exchange rate information from %s\n%s",
             self.market, self.name, err)
 
     def _update_price(self):
@@ -141,7 +140,10 @@ class LBRYioBTCFeed(MarketFeed):
         )
 
     def _handle_response(self, response):
-        json_response = json.loads(response)
+        try:
+            json_response = json.loads(response)
+        except ValueError:
+            raise InvalidExchangeRateResponse("invalid rate response : %s" % response)
         if 'data' not in json_response:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
         return defer.succeed(1.0 / json_response['data']['btc_usd'])
