@@ -89,10 +89,13 @@ class DiskBlobManager(DHTHashSupplier):
 
     def creator_finished(self, blob_creator, should_announce):
         log.debug("blob_creator.blob_hash: %s", blob_creator.blob_hash)
-        assert blob_creator.blob_hash is not None
-        assert blob_creator.blob_hash not in self.blobs
-        assert blob_creator.length is not None
-        new_blob = self.blob_type(self.blob_dir, blob_creator.blob_hash, blob_creator.length)
+        if blob_creator.blob_hash is None:
+            raise Exception("Blob hash is None")
+        if blob_creator.blob_hash in self.blobs:
+            raise Exception("Creator finished for blob that is already marked as completed")
+        if blob_creator.length is None:
+            raise Exception("Blob has a length of 0")
+        new_blob = BlobFile(self.blob_dir, blob_creator.blob_hash, blob_creator.length)
         self.blobs[blob_creator.blob_hash] = new_blob
         next_announce_time = self.get_next_announce_time()
         d = self.blob_completed(new_blob, next_announce_time, should_announce)
@@ -256,5 +259,3 @@ class DiskBlobManager(DHTHashSupplier):
             "insert into upload values (null, ?, ?, ?, ?) ",
             (blob_hash, str(host), float(rate), ts))
         return d
-
-
