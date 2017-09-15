@@ -134,6 +134,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
             self._blob_download_request.cancel(err)
             ds.append(self._blob_download_request.finished_deferred)
             self._blob_download_request = None
+        self._downloading_blob = False
         return defer.DeferredList(ds)
 
     ######### Internal request handling #########
@@ -191,21 +192,24 @@ class ClientProtocol(Protocol, TimeoutMixin):
 
     def _handle_response_error(self, err):
         # If an error gets to this point, log it and kill the connection.
-        if err.check(DownloadCanceledError, RequestCanceledError):
+        if err.check(DownloadCanceledError, RequestCanceledError, error.ConnectionAborted):
             # TODO: (wish-list) it seems silly to close the connection over this, and it shouldn't
             # TODO: always be this way. it's done this way now because the client has no other way
             # TODO: of telling the server it wants the download to stop. It would be great if the
             # TODO: protocol had such a mechanism.
             log.info("Closing the connection to %s because the download of blob %s was canceled",
                      self.peer, self._blob_download_request.blob)
-            return
+            result = None
         elif not err.check(MisbehavingPeerError, ConnectionClosedBeforeResponseError):
             log.warning("The connection to %s is closing due to: %s", err)
-            return err
+            result = err
         else:
             log.error("The connection to %s is closing due to an unexpected error: %s",
                       self.peer, err)
-            return err
+            result = err
+
+        self.transport.loseConnection()
+        return result
 
     def _handle_response(self, response):
         ds = []
@@ -246,7 +250,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
                 log.debug("Asking for another request from %s", self.peer)
                 self._ask_for_request()
             else:
-                log.debug("Not asking for another request from %s", self.peer)
+                log.warning("Not asking for another request from %s", self.peer)
                 self.transport.loseConnection()
 
         dl.addCallback(get_next_request)

@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from twisted.internet import defer
 from twisted.python.failure import Failure
+from twisted.internet.error import ConnectionAborted
 from zope.interface import implements
 
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError
@@ -225,7 +226,7 @@ class RequestHelper(object):
         self.requestor._update_local_score(self.peer, score)
 
     def _request_failed(self, reason, request_type):
-        if reason.check(RequestCanceledError):
+        if reason.check(DownloadCanceledError, RequestCanceledError, ConnectionAborted):
             return
         if reason.check(NoResponseError):
             self.requestor._incompatible_peers.append(self.peer)
