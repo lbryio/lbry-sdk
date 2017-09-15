@@ -117,7 +117,8 @@ class ClientProtocol(Protocol, TimeoutMixin):
         if self._blob_download_request is None:
             d = self.add_request(blob_request)
             self._blob_download_request = blob_request
-            blob_request.finished_deferred.addCallbacks(self._downloading_finished, self._handle_response_error)
+            blob_request.finished_deferred.addCallbacks(self._downloading_finished,
+                                                        self._handle_response_error)
             return d
         else:
             raise ValueError("There is already a blob download request active")
@@ -201,7 +202,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
                      self.peer, self._blob_download_request.blob)
             result = None
         elif not err.check(MisbehavingPeerError, ConnectionClosedBeforeResponseError):
-            log.warning("The connection to %s is closing due to: %s", err)
+            log.warning("The connection to %s is closing due to: %s", self.peer, err)
             result = err
         else:
             log.error("The connection to %s is closing due to an unexpected error: %s",

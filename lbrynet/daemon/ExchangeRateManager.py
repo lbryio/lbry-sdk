@@ -143,7 +143,7 @@ class LBRYioBTCFeed(MarketFeed):
         try:
             json_response = json.loads(response)
         except ValueError:
-            raise InvalidExchangeRateResponse("invalid rate response : %s" % response)
+            raise InvalidExchangeRateResponse(self.name, "invalid rate response : %s" % response)
         if 'data' not in json_response:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
         return defer.succeed(1.0 / json_response['data']['btc_usd'])
