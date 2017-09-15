@@ -30,7 +30,6 @@ class DiskBlobManager(DHTHashSupplier):
         self.blob_dir = blob_dir
         self.db_file = os.path.join(db_dir, "blobs.db")
         self.db_conn = adbapi.ConnectionPool('sqlite3', self.db_file, check_same_thread=False)
-        self.blob_type = BlobFile
         self.blob_creator_type = BlobFileCreator
         # TODO: consider using an LRU for blobs as there could potentially
         #       be thousands of blobs loaded up, many stale
@@ -62,7 +61,7 @@ class DiskBlobManager(DHTHashSupplier):
 
     def _make_new_blob(self, blob_hash, length=None):
         log.debug('Making a new blob for %s', blob_hash)
-        blob = self.blob_type(self.blob_dir, blob_hash, length)
+        blob = BlobFile(self.blob_dir, blob_hash, length)
         self.blobs[blob_hash] = blob
         return defer.succeed(blob)
 
