@@ -111,11 +111,9 @@ class ClientProtocol(Protocol, TimeoutMixin):
         err = RequestCanceledError()
         for key, d in self._response_deferreds.items():
             del self._response_deferreds[key]
-            log.info("cancel download response")
             d.errback(err)
             ds.append(d)
         if self._blob_download_request is not None:
-            log.info("cancel download request")
             self._blob_download_request.cancel(err)
             ds.append(self._blob_download_request.finished_deferred)
             self._blob_download_request = None
