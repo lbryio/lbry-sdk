@@ -17,7 +17,7 @@ at anytime.
   * Added option to download by seeking head blob first
   * By default, option to download seeking head blob first is turned on
   * Added `include_tip_info` param to `transaction_list` API call
-  *
+  * Added ability for reflector to store stream information for head blob announce
 
 ### Fixed
   * Fixed uncaught error when shutting down after a failed daemon startup
