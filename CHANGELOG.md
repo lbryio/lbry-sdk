@@ -12,16 +12,8 @@ at anytime.
   *
   *
 
-### Added
-  * Added option to announce head blob only if seeding
-  * Added option to download by seeking head blob first
-  * By default, option to download seeking head blob first is turned on
-  * Added `include_tip_info` param to `transaction_list` API call
-  *
-
 ### Fixed
-  * Fixed uncaught error when shutting down after a failed daemon startup
-  * Fixed spelling error in documentation.
+  *
   *
 
 ### Deprecated
@@ -29,12 +21,33 @@ at anytime.
   *
 
 ### Changed
-  * Updated exchange rate tests for the lbry.io api
+  *
+  *
+
+### Added
+  *
   *
 
 ### Removed
   *
   *
+
+
+## [0.16.0] - 2017-09-18
+### Fixed
+ * Fixed uncaught error when shutting down after a failed daemon startup
+ * Fixed spelling error in documentation.
+
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.11 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0011---2017-09-18)
+ * Bumped `lbryum` requirement to 3.1.7 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#317---2017-09-18)
+ * Updated exchange rate tests for the lbry.io api
+
+### Added
+ * Added option to announce head blob only if seeding
+ * Added option to download by seeking head blob first
+ * By default, option to download seeking head blob first is turned on
+ * Added `include_tip_info` param to `transaction_list` API call
 
 
 ## [0.15.2] - 2017-09-07
