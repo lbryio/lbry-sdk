@@ -9,6 +9,7 @@ import json
 import textwrap
 import random
 import signal
+import decimal
 
 from twisted.web import server
 from twisted.internet import defer, threads, error, reactor
@@ -1190,26 +1191,38 @@ class Daemon(AuthJSONRPCServer):
         """
         return self._render_response(sorted([command for command in self.callable_methods.keys()]))
 
-    @AuthJSONRPCServer.flags(include_unconfirmed='-u')
-    def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
+    @defer.inlineCallbacks
+    @AuthJSONRPCServer.flags(include_unconfirmed='-u', exclude_claimtrie='-c')
+    def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False,
+                               exclude_claimtrie=False):
         """
         Return the balance of the wallet
 
         Usage:
-            wallet_balance [<address> | --address=<address>] [-u]
+            wallet_balance [<address> | --address=<address>] [-u] [-c]
 
         Options:
             <address>  :  If provided only the balance for this address will be given
             -u         :  Include unconfirmed
+            -c         :  Include claimtrie transactions
 
         Returns:
             (float) amount of lbry credits in wallet
         """
+
         if address is None:
-            return self._render_response(float(self.session.wallet.get_balance()))
+            result = float(self.session.wallet.get_balance())
         else:
-            return self._render_response(float(
-                self.session.wallet.get_address_balance(address, include_unconfirmed)))
+            if not include_unconfirmed and not exclude_claimtrie:
+                result = self.session.wallet.get_address_balance(address, include_unconfirmed,
+                                                                 exclude_claimtrie)
+            else:
+                wallet_info = yield self.session.wallet.get_wallet_info()
+                result = decimal.Decimal(wallet_info['confirmed'])
+                if include_unconfirmed:
+                    result += decimal.Decimal(result.get('unconfirmed', 0.0))
+        response = yield self._render_response(float(result))
+        defer.returnValue(response)
 
     @defer.inlineCallbacks
     def jsonrpc_daemon_stop(self):

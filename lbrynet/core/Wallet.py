@@ -1066,7 +1066,7 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def get_address_balance(self, address):
-        return defer.fail(NotImplementedError())
+        raise NotImplementedError()
 
     def get_block(self, blockhash):
         return defer.fail(NotImplementedError())
@@ -1133,6 +1133,9 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def send_claim_to_address(self, claim_id, destination, amount):
+        return defer.fail(NotImplementedError())
+
+    def get_wallet_info(self, exclude_claimtrie=False):
         return defer.fail(NotImplementedError())
 
     def _start(self):
@@ -1314,13 +1317,11 @@ class LBRYumWallet(Wallet):
 
     # Get the balance of a given address.
 
-    def get_address_balance(self, address, include_balance=False):
-        c, u, x = self.wallet.get_addr_balance(address)
-        if include_balance is False:
-            return Decimal(float(c) / COIN)
-        else:
+    def get_address_balance(self, address, include_unconfirmed=False, exclude_claimtrie=False):
+        c, u, x = self.wallet.get_addr_balance(address, exclude_claimtrietx=exclude_claimtrie)
+        if include_unconfirmed:
             return Decimal((float(c) + float(u) + float(x)) / COIN)
-
+        return Decimal(float(c) / COIN)
 
     # Return an address with no balance in it, if
     # there is none, create a brand new address
@@ -1474,6 +1475,10 @@ class LBRYumWallet(Wallet):
 
     def send_claim_to_address(self, claim_id, destination, amount):
         return self._run_cmd_as_defer_succeed('sendclaimtoaddress', claim_id, destination, amount)
+
+    def get_wallet_info(self, exclude_claimtrie=False):
+        accounts = None
+        return self._run_cmd_as_defer_succeed('getbalance', accounts, exclude_claimtrie)
 
     def _save_wallet(self, val=None):
         self.wallet.storage.write()
