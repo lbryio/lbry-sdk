@@ -13,8 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed `transaction_list` doc string
-  * Fixed ([in lbryum](https://github.com/lbryio/lbryum/pull/156)) batched queries responsible for making transaction and tip histories slow
+  *
   *
 
 ### Deprecated
@@ -33,6 +32,14 @@ at anytime.
   *
   *
 
+
+## [0.16.1] - 2017-09-20
+### Fixed
+ * Fixed `transaction_list` doc string
+ * Fixed ([in lbryum](https://github.com/lbryio/lbryum/pull/156)) batched queries responsible for making transaction and tip histories slow
+
+### Changed
+ * Bumped `lbryum` requirement to 3.1.8 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#318---2017-09-20)
 
 ## [0.16.0] - 2017-09-18
 ### Fixed
