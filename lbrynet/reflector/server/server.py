@@ -231,7 +231,7 @@ class ReflectorServer(Protocol):
         return d
 
     def get_descriptor_response(self, sd_blob):
-        if sd_blob.is_validated():
+        if sd_blob.get_is_verified():
             d = defer.succeed({SEND_SD_BLOB: False})
             d.addCallback(self.request_needed_blobs, sd_blob)
         else:
@@ -267,7 +267,7 @@ class ReflectorServer(Protocol):
             if 'blob_hash' in blob and 'length' in blob:
                 blob_hash, blob_len = blob['blob_hash'], blob['length']
                 d = self.blob_manager.get_blob(blob_hash, blob_len)
-                d.addCallback(lambda blob: blob_hash if not blob.is_validated() else None)
+                d.addCallback(lambda blob: blob_hash if not blob.get_is_verified() else None)
                 yield d
 
     def handle_blob_request(self, request_dict):
@@ -305,7 +305,7 @@ class ReflectorServer(Protocol):
         return d
 
     def get_blob_response(self, blob):
-        if blob.is_validated():
+        if blob.get_is_verified():
             return defer.succeed({SEND_BLOB: False})
         else:
             self.incoming_blob = blob

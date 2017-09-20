@@ -182,7 +182,7 @@ class TestReflector(unittest.TestCase):
             return factory.finished_deferred
 
         def verify_blob_completed(blob, blob_size):
-            self.assertTrue(blob.is_validated())
+            self.assertTrue(blob.get_is_verified())
             self.assertEqual(blob_size, blob.length)
             return
 
@@ -213,7 +213,7 @@ class TestReflector(unittest.TestCase):
             return factory.finished_deferred
 
         def verify_blob_completed(blob, blob_size):
-            self.assertTrue(blob.is_validated())
+            self.assertTrue(blob.get_is_verified())
             self.assertEqual(blob_size, blob.length)
 
         d = send_to_server([x[0] for x in self.expected_blobs])
@@ -244,7 +244,7 @@ class TestReflector(unittest.TestCase):
             return factory.finished_deferred
 
         def verify_blob_completed(blob, blob_size):
-            self.assertTrue(blob.is_validated())
+            self.assertTrue(blob.get_is_verified())
             self.assertEqual(blob_size, blob.length)
 
         d = send_to_server([x[0] for x in self.expected_blobs])

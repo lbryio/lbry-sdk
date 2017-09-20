@@ -141,8 +141,8 @@ class BlobFile(object):
     def get_length(self):
         return self.length
 
-    def is_validated(self):
-        return bool(self._verified)
+    def get_is_verified(self):
+        return self.verified
 
     def is_downloading(self):
         if self.writers:

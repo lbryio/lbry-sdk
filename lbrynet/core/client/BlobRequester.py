@@ -465,7 +465,7 @@ class DownloadRequest(RequestHelper):
     def find_blob(self, to_download):
         """Return the first blob in `to_download` that is successfully opened for write."""
         for blob in to_download:
-            if blob.is_validated():
+            if blob.get_is_verified():
                 log.debug('Skipping blob %s as its already validated', blob)
                 continue
             writer, d = blob.open_for_writing(self.peer)

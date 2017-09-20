@@ -53,7 +53,7 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
 
     def test_blob_unavailable_when_blob_not_validated(self):
         blob = mock.Mock()
-        blob.is_validated.return_value = False
+        blob.get_is_verified.return_value = False
         self.blob_manager.get_blob.return_value = defer.succeed(blob)
         query = {
             'blob_data_payment_rate': 1.0,
@@ -68,7 +68,7 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
 
     def test_blob_unavailable_when_blob_cannot_be_opened(self):
         blob = mock.Mock()
-        blob.is_validated.return_value = True
+        blob.get_is_verified.return_value = True
         blob.open_for_reading.return_value = None
         self.blob_manager.get_blob.return_value = defer.succeed(blob)
         query = {
@@ -84,7 +84,7 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
 
     def test_blob_details_are_set_when_all_conditions_are_met(self):
         blob = mock.Mock()
-        blob.is_validated.return_value = True
+        blob.get_is_verified.return_value = True
         blob.open_for_reading.return_value = True
         blob.blob_hash = 'DEADBEEF'
         blob.length = 42
