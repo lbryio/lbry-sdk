@@ -248,6 +248,15 @@ class TestReflector(unittest.TestCase):
         return d
 
     def test_blob_reflector_v1(self):
+        @defer.inlineCallbacks
+        def verify_stream_on_reflector():
+            # this protocol should not have any impact on stream info manager
+            streams = yield self.server_stream_info_manager.get_all_streams()
+            self.assertEqual(0, len(streams))
+            # there should be no should announce blobs here
+            blob_hashes = yield self.server_blob_manager._get_all_should_announce_blob_hashes()
+            self.assertEqual(0, len(blob_hashes))
+
         def verify_data_on_reflector():
             check_blob_ds = []
             for blob_hash, blob_size in self.expected_blobs:
