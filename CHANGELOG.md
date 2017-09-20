@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed `transaction_list` doc string
   *
 
 ### Deprecated

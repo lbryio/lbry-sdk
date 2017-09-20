@@ -2108,7 +2108,7 @@ class Daemon(AuthJSONRPCServer):
             transaction_list [-t]
 
         Options:
-            -t : Include claim tip information
+            -t  : Include claim tip information
 
         Returns:
             (list) List of transactions, where is_tip is null by default,
