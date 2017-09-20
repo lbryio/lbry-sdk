@@ -22,18 +22,6 @@ Returns:
     (bool) true if successful
 ```
 
-## blob_announce_all
-
-```text
-Announce all blobs to the DHT
-
-Usage:
-    blob_announce_all
-
-Returns:
-    (str) Success/fail message
-```
-
 ## blob_delete
 
 ```text
@@ -239,9 +227,9 @@ Returns:
                     'depth': (int) claim depth,
                     'has_signature': (bool) included if decoded_claim
                     'name': (str) claim name,
-                    'supports: (list) list of supports [{'txid': txid,
-                                                         'nout': nout,
-                                                         'amount': amount}],
+                    'supports: (list) list of supports [{'txid': (str) txid,
+                                                         'nout': (int) nout,
+                                                         'amount': (float) amount}],
                     'txid': (str) claim txid,
                     'nout': (str) claim nout,
                     'signature_is_valid': (bool), included if has_signature,
@@ -719,14 +707,17 @@ Returns:
                 'depth': (int) claim depth,
                 'has_signature': (bool) included if decoded_claim
                 'name': (str) claim name,
-                'supports: (list) list of supports [{'txid': txid,
-                                                     'nout': nout,
-                                                     'amount': amount}],
+                'supports: (list) list of supports [{'txid': (str) txid,
+                                                     'nout': (int) nout,
+                                                     'amount': (float) amount}],
                 'txid': (str) claim txid,
                 'nout': (str) claim nout,
                 'signature_is_valid': (bool), included if has_signature,
                 'value': ClaimDict if decoded, otherwise hex string
             }
+
+            If the uri resolves to a channel:
+            'claims_in_channel': (int) number of claims in the channel,
 
             If the uri resolves to a claim:
             'claim': {
@@ -741,9 +732,9 @@ Returns:
                 'has_signature': (bool) included if decoded_claim
                 'name': (str) claim name,
                 'channel_name': (str) channel name if claim is in a channel
-                'supports: (list) list of supports [{'txid': txid,
-                                                     'nout': nout,
-                                                     'amount': amount}]
+                'supports: (list) list of supports [{'txid': (str) txid,
+                                                     'nout': (int) nout,
+                                                     'amount': (float) amount}]
                 'txid': (str) claim txid,
                 'nout': (str) claim nout,
                 'signature_is_valid': (bool), included if has_signature,
@@ -905,10 +896,37 @@ Returns:
 List transactions belonging to wallet
 
 Usage:
-    transaction_list
+    transaction_list [-t]
+
+Options:
+    -t  : Include claim tip information
 
 Returns:
-    (list) List of transactions
+    (list) List of transactions, where is_tip is null by default,
+     and set to a boolean if include_tip_info is true
+
+    {
+        "claim_info": (list) claim info if in txn [{"amount": (float) claim amount,
+                                                    "claim_id": (str) claim id,
+                                                    "claim_name": (str) claim name,
+                                                    "nout": (int) nout}],
+        "confirmations": (int) number of confirmations for the txn,
+        "date": (str) date and time of txn,
+        "fee": (float) txn fee,
+        "support_info": (list) support info if in txn [{"amount": (float) support amount,
+                                                        "claim_id": (str) claim id,
+                                                        "claim_name": (str) claim name,
+                                                        "is_tip": (null) default,
+                                                        (bool) if include_tip_info is true,
+                                                        "nout": (int) nout}],
+        "timestamp": (int) timestamp,
+        "txid": (str) txn id,
+        "update_info": (list) update info if in txn [{"amount": (float) updated amount,
+                                                      "claim_id": (str) claim id,
+                                                      "claim_name": (str) claim name,
+                                                      "nout": (int) nout}],
+        "value": (float) value of txn
+    }
 ```
 
 ## transaction_show
