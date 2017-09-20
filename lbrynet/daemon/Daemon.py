@@ -2462,27 +2462,23 @@ class Daemon(AuthJSONRPCServer):
         """
         if announce_all:
             yield self.session.blob_manager.immediate_announce_all_blobs()
-        elif blob_hash:
-            blob_hashes = [blob_hash]
-            yield self.session.blob_manager._immediate_announce(blob_hashes)
-        elif stream_hash:
-            blobs = yield self.get_blobs_for_stream_hash(stream_hash)
-            blobs = [blob for blob in blobs if blob.is_validated()]
-            blob_hashes = [blob.blob_hash for blob in blobs]
-            yield self.session.blob_manager._immediate_announce(blob_hashes)
-        elif sd_hash:
-            blobs = yield self.get_blobs_for_sd_hash(sd_hash)
-            blobs = [blob for blob in blobs if blob.is_validated()]
-            blob_hashes = [blob.blob_hash for blob in blobs]
-            blob_hashes.append(sd_hash)
-            yield self.session.blob_manager._immediate_announce(blob_hashes)
         else:
-            raise Exception('single argument must be specified')
+            if blob_hash:
+                blob_hashes = [blob_hash]
+            elif stream_hash:
+                blobs = yield self.get_blobs_for_stream_hash(stream_hash)
+                blob_hashes = [blob.blob_hash for blob in blobs if blob.is_validated()]
+            elif sd_hash:
+                blobs = yield self.get_blobs_for_sd_hash(sd_hash)
+                blob_hashes = [sd_hash] + [blob.blob_hash for blob in blobs if blob.is_validated()]
+            else:
+                raise Exception('single argument must be specified')
+            yield self.session.blob_manager._immediate_announce(blob_hashes)
 
         response = yield self._render_response(True)
         defer.returnValue(response)
 
-    # TODO: This command should be deprecated in favor of blob_announce
+    @AuthJSONRPCServer.deprecated("blob_announce")
     def jsonrpc_blob_announce_all(self):
         """
         Announce all blobs to the DHT
@@ -2493,10 +2489,7 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (str) Success/fail message
         """
-
-        d = self.session.blob_manager.immediate_announce_all_blobs()
-        d.addCallback(lambda _: self._render_response("Announced"))
-        return d
+        return self.jsonrpc_blob_announce(announce_all=True)
 
     @defer.inlineCallbacks
     def jsonrpc_file_reflect(self, **kwargs):

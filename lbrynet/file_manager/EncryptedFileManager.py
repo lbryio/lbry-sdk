@@ -250,7 +250,7 @@ class EncryptedFileManager(object):
         if self.sql_db:
             yield self.sql_db.close()
         self.sql_db = None
-        log.info("Stopped %s", self)
+        log.info("Stopped encrypted file manager")
         defer.returnValue(True)
 
     def get_count_for_stream_hash(self, stream_hash):

@@ -17,7 +17,7 @@ at anytime.
   *
 
 ### Deprecated
-  *
+  * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
   *
 
 ### Changed
