@@ -25,7 +25,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Announcing by head blob is turned on by default
   *
 
 ### Added
