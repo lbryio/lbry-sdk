@@ -14,6 +14,7 @@ at anytime.
 
 ### Fixed
   * Fixed `transaction_list` doc string
+  * Fixed ([in lbryum](https://github.com/lbryio/lbryum/pull/156)) batched queries responsible for making transaction and tip histories slow
   *
 
 ### Deprecated

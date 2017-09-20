@@ -1457,7 +1457,9 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_to_thread('getclaimtrie')
 
     def _get_history(self, include_tip_info):
-        return self._run_cmd_as_defer_succeed('history', include_tip_info)
+        if include_tip_info:
+            return self._run_cmd_as_defer_succeed('tiphistory')
+        return self._run_cmd_as_defer_succeed('claimhistory')
 
     def _address_is_mine(self, address):
         return self._run_cmd_as_defer_succeed('ismine', address)
