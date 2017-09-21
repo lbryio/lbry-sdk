@@ -88,6 +88,18 @@ class DiskBlobManager(DHTHashSupplier):
     def hashes_to_announce(self):
         return self._get_blobs_to_announce()
 
+    def set_should_announce(self, blob_hash, should_announce):
+        if blob_hash in self.blobs:
+            blob = self.blobs[blob_hash]
+            if blob.get_is_verified():
+                return self._set_should_announce(blob_hash,
+                                                 self.get_next_announce_time(),
+                                                 should_announce)
+        return defer.succeed(False)
+
+    def get_should_announce(self, blob_hash):
+        return self._should_announce(blob_hash)
+
     def creator_finished(self, blob_creator, should_announce):
         log.debug("blob_creator.blob_hash: %s", blob_creator.blob_hash)
         if blob_creator.blob_hash is None:
@@ -170,13 +182,28 @@ class DiskBlobManager(DHTHashSupplier):
     def _add_completed_blob(self, blob_hash, length, next_announce_time, should_announce):
         log.debug("Adding a completed blob. blob_hash=%s, length=%s", blob_hash, str(length))
         should_announce = 1 if should_announce else 0
-        d = self.db_conn.runQuery(
-            "insert into blobs (blob_hash, blob_length, next_announce_time, should_announce) "+
-            "values (?, ?, ?, ?)",
-            (blob_hash, length, next_announce_time, should_announce)
-        )
+        d = self.db_conn.runQuery("insert into blobs (blob_hash, blob_length, next_announce_time, "
+                                  "should_announce) values (?, ?, ?, ?)", (blob_hash, length,
+                                                                           next_announce_time,
+                                                                           should_announce))
+        # TODO: why is this here?
         d.addErrback(lambda err: err.trap(sqlite3.IntegrityError))
         return d
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _set_should_announce(self, blob_hash, next_announce_time, should_announce):
+        yield self.db_conn.runOperation("update blobs set next_announce_time=?, should_announce=? "
+                                        "where blob_hash=?", (next_announce_time, should_announce,
+                                                              blob_hash))
+        defer.returnValue(True)
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _should_announce(self, blob_hash):
+        result = yield self.db_conn.runQuery("select should_announce from blobs where blob_hash=?",
+                                             (blob_hash,))
+        defer.returnValue(result[0][0])
 
     @defer.inlineCallbacks
     def _completed_blobs(self, blobhashes_to_check):
@@ -192,7 +219,6 @@ class DiskBlobManager(DHTHashSupplier):
 
     @rerun_if_locked
     def _get_blobs_to_announce(self):
-
         def get_and_update(transaction):
             timestamp = time.time()
             if self.announce_head_blobs_only is True:
