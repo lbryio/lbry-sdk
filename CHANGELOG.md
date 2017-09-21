@@ -26,7 +26,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * Added redundant API server for currency conversion
   *
 
 ### Removed
