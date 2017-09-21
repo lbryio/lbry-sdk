@@ -12,6 +12,10 @@ at anytime.
   *
   *
 
+### Added
+  * Added ability for reflector to store stream information for head blob announce
+  *
+
 ### Fixed
   *
   *
@@ -21,7 +25,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Announcing by head blob is turned on by default
   *
 
 ### Added
