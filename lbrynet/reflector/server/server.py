@@ -4,7 +4,9 @@ from twisted.python import failure
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ServerFactory
 from lbrynet.core.utils import is_valid_blobhash
-from lbrynet.core.Error import DownloadCanceledError, InvalidBlobHashError
+from lbrynet.core.Error import DownloadCanceledError, InvalidBlobHashError, NoSuchSDHash
+from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
+from lbrynet.lbry_file.StreamDescriptor import save_sd_info
 from lbrynet.reflector.common import REFLECTOR_V1, REFLECTOR_V2
 from lbrynet.reflector.common import ReflectorRequestError, ReflectorClientVersionError
 
@@ -30,6 +32,7 @@ class ReflectorServer(Protocol):
         log.debug('Connection made to %s', peer_info)
         self.peer = self.factory.peer_manager.get_peer(peer_info.host, peer_info.port)
         self.blob_manager = self.factory.blob_manager
+        self.stream_info_manager = self.factory.stream_info_manager
         self.protocol_version = self.factory.protocol_version
         self.received_handshake = False
         self.peer_version = None
@@ -62,9 +65,73 @@ class ReflectorServer(Protocol):
             log.exception(err)
 
     @defer.inlineCallbacks
+    def check_head_blob_announce(self, stream_hash):
+        blob_infos = yield self.stream_info_manager.get_blobs_for_stream(stream_hash)
+        blob_hash, blob_num, blob_iv, blob_length = blob_infos[0]
+        if blob_hash in self.blob_manager.blobs:
+            head_blob = self.blob_manager.blobs[blob_hash]
+            if head_blob.get_is_verified():
+                should_announce = yield self.blob_manager.get_should_announce(blob_hash)
+                if should_announce == 0:
+                    yield self.blob_manager.set_should_announce(blob_hash, 1)
+                    log.info("Discovered previously completed head blob (%s), "
+                             "setting it to be announced", blob_hash[:8])
+        defer.returnValue(None)
+
+    @defer.inlineCallbacks
+    def check_sd_blob_announce(self, sd_hash):
+        if sd_hash in self.blob_manager.blobs:
+            sd_blob = self.blob_manager.blobs[sd_hash]
+            if sd_blob.get_is_verified():
+                should_announce = yield self.blob_manager.get_should_announce(sd_hash)
+                if should_announce == 0:
+                    yield self.blob_manager.set_should_announce(sd_hash, 1)
+                    log.info("Discovered previously completed sd blob (%s), "
+                             "setting it to be announced", sd_hash[:8])
+                    try:
+                        yield self.stream_info_manager.get_stream_hash_for_sd_hash(sd_hash)
+                    except NoSuchSDHash:
+                        log.info("Adding blobs to stream")
+                        sd_info = yield BlobStreamDescriptorReader(sd_blob).get_info()
+                        yield save_sd_info(self.stream_info_manager, sd_info)
+                        yield self.stream_info_manager.save_sd_blob_hash_to_stream(
+                            sd_info['stream_hash'],
+                            sd_hash)
+        defer.returnValue(None)
+
+    @defer.inlineCallbacks
     def _on_completed_blob(self, blob, response_key):
-        yield self.blob_manager.blob_completed(blob)
+        should_announce = False
+        if response_key == RECEIVED_SD_BLOB:
+            sd_info = yield BlobStreamDescriptorReader(blob).get_info()
+            yield save_sd_info(self.stream_info_manager, sd_info)
+            yield self.stream_info_manager.save_sd_blob_hash_to_stream(sd_info['stream_hash'],
+                                                                       blob.blob_hash)
+            should_announce = True
+
+            # if we already have the head blob, set it to be announced now that we know it's
+            # a head blob
+            d = self.check_head_blob_announce(sd_info['stream_hash'])
+
+        else:
+            d = defer.succeed(None)
+            stream_hash = yield self.stream_info_manager.get_stream_of_blob(blob.blob_hash)
+            if stream_hash is not None:
+                blob_num = yield self.stream_info_manager._get_blob_num_by_hash(stream_hash,
+                                                                                blob.blob_hash)
+                if blob_num == 0:
+                    should_announce = True
+                    sd_hashes = yield self.stream_info_manager.get_sd_blob_hashes_for_stream(
+                        stream_hash)
+
+                    # if we already have the sd blob, set it to be announced now that we know it's
+                    # a sd blob
+                    for sd_hash in sd_hashes:
+                        d.addCallback(lambda _: self.check_sd_blob_announce(sd_hash))
+
+        yield self.blob_manager.blob_completed(blob, should_announce=should_announce)
         yield self.close_blob()
+        yield d
         log.info("Received %s", blob)
         yield self.send_response({response_key: True})
 
@@ -230,16 +297,29 @@ class ReflectorServer(Protocol):
             d = self.blob_finished_d
         return d
 
+    @defer.inlineCallbacks
     def get_descriptor_response(self, sd_blob):
         if sd_blob.get_is_verified():
-            d = defer.succeed({SEND_SD_BLOB: False})
-            d.addCallback(self.request_needed_blobs, sd_blob)
+            # if we already have the sd blob being offered, make sure we have it and the head blob
+            # marked as such for announcement now that we know it's an sd blob that we have.
+            yield self.check_sd_blob_announce(sd_blob.blob_hash)
+            try:
+                stream_hash = yield self.stream_info_manager.get_stream_hash_for_sd_hash(
+                    sd_blob.blob_hash)
+            except NoSuchSDHash:
+                sd_info = yield BlobStreamDescriptorReader(sd_blob).get_info()
+                stream_hash = sd_info['stream_hash']
+                yield save_sd_info(self.stream_info_manager, sd_info)
+                yield self.stream_info_manager.save_sd_blob_hash_to_stream(stream_hash,
+                                                                           sd_blob.blob_hash)
+            yield self.check_head_blob_announce(stream_hash)
+            response = yield self.request_needed_blobs({SEND_SD_BLOB: False}, sd_blob)
         else:
             self.incoming_blob = sd_blob
             self.receiving_blob = True
             self.handle_incoming_blob(RECEIVED_SD_BLOB)
-            d = defer.succeed({SEND_SD_BLOB: True})
-        return d
+            response = {SEND_SD_BLOB: True}
+        defer.returnValue(response)
 
     def request_needed_blobs(self, response, sd_blob):
         def _add_needed_blobs_to_response(needed_blobs):
@@ -318,9 +398,10 @@ class ReflectorServer(Protocol):
 class ReflectorServerFactory(ServerFactory):
     protocol = ReflectorServer
 
-    def __init__(self, peer_manager, blob_manager):
+    def __init__(self, peer_manager, blob_manager, stream_info_manager):
         self.peer_manager = peer_manager
         self.blob_manager = blob_manager
+        self.stream_info_manager = stream_info_manager
         self.protocol_version = REFLECTOR_V2
 
     def buildProtocol(self, addr):
