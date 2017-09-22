@@ -303,8 +303,10 @@ class EncryptedFileManager(object):
 
     @rerun_if_locked
     def _change_file_status(self, rowid, new_status):
-        return self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
+        d = self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
                                     (new_status, rowid))
+        d.addCallback(lambda _: new_status)
+        return d
 
     @rerun_if_locked
     def _get_lbry_file_status(self, rowid):

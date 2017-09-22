@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from twisted.internet import defer
 from twisted.python.failure import Failure
+from twisted.internet.error import ConnectionAborted
 from zope.interface import implements
 
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError
@@ -225,7 +226,8 @@ class RequestHelper(object):
         self.requestor._update_local_score(self.peer, score)
 
     def _request_failed(self, reason, request_type):
-        if reason.check(RequestCanceledError):
+        if reason.check(DownloadCanceledError, RequestCanceledError, ConnectionAborted,
+                        ConnectionClosedBeforeResponseError):
             return
         if reason.check(NoResponseError):
             self.requestor._incompatible_peers.append(self.peer)
@@ -463,13 +465,13 @@ class DownloadRequest(RequestHelper):
     def find_blob(self, to_download):
         """Return the first blob in `to_download` that is successfully opened for write."""
         for blob in to_download:
-            if blob.is_validated():
+            if blob.get_is_verified():
                 log.debug('Skipping blob %s as its already validated', blob)
                 continue
-            d, write_func, cancel_func = blob.open_for_writing(self.peer)
+            writer, d = blob.open_for_writing(self.peer)
             if d is not None:
-                return BlobDownloadDetails(blob, d, write_func, cancel_func, self.peer)
-            log.debug('Skipping blob %s as there was an issue opening it for writing', blob)
+                return BlobDownloadDetails(blob, d, writer.write, writer.close, self.peer)
+            log.warning('Skipping blob %s as there was an issue opening it for writing', blob)
         return None
 
     def _make_request(self, blob_details):

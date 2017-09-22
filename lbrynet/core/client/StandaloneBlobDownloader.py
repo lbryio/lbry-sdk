@@ -64,14 +64,14 @@ class SingleProgressManager(object):
 
     def stream_position(self):
         blobs = self.download_manager.blobs
-        if blobs and blobs[0].is_validated():
+        if blobs and blobs[0].get_is_verified():
             return 1
         return 0
 
     def needed_blobs(self):
         blobs = self.download_manager.blobs
         assert len(blobs) == 1
-        return [b for b in blobs.itervalues() if not b.is_validated()]
+        return [b for b in blobs.itervalues() if not b.get_is_verified()]
 
 
 class DummyBlobHandler(object):

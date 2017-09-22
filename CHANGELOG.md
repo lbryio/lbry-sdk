@@ -13,8 +13,8 @@ at anytime.
   *
 
 ### Fixed
-  *
-  *
+  * Fixed handling cancelled blob and availability requests
+  * Fixed redundant blob requests to a peer
 
 ### Deprecated
   * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
@@ -25,12 +25,19 @@ at anytime.
   *
 
 ### Added
-  *
-  *
+  * Added WAL pragma to sqlite3
+  * Added unit tests for `BlobFile`
+  * Updated exchange rate tests for the lbry.io api
+  * Use `hashlib` for sha384 instead of `pycrypto`
+  * Use `cryptography` instead of `pycrypto` for blob encryption and decryption
+  * Use `cryptography` for PKCS7 instead of doing it manually
+  * Use `BytesIO` buffers instead of temp files when processing blobs
+  * Refactored and pruned blob related classes into `lbrynet.blobs`
+  * Changed several `assert`s to raise more useful errors
 
 ### Removed
-  *
-  *
+  * Removed `TempBlobFile`
+  * Removed unused `EncryptedFileOpener`
 
 
 ## [0.16.1] - 2017-09-20

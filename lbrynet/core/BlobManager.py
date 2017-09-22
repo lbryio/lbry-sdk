@@ -6,7 +6,8 @@ import sqlite3
 from twisted.internet import threads, defer, reactor
 from twisted.enterprise import adbapi
 from lbrynet import conf
-from lbrynet.core.HashBlob import BlobFile, BlobFileCreator
+from lbrynet.blob.blob_file import BlobFile
+from lbrynet.blob.creator import BlobFileCreator
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 
@@ -29,7 +30,6 @@ class DiskBlobManager(DHTHashSupplier):
         self.blob_dir = blob_dir
         self.db_file = os.path.join(db_dir, "blobs.db")
         self.db_conn = adbapi.ConnectionPool('sqlite3', self.db_file, check_same_thread=False)
-        self.blob_type = BlobFile
         self.blob_creator_type = BlobFileCreator
         # TODO: consider using an LRU for blobs as there could potentially
         #       be thousands of blobs loaded up, many stale
@@ -51,7 +51,8 @@ class DiskBlobManager(DHTHashSupplier):
         """Return a blob identified by blob_hash, which may be a new blob or a
         blob that is already on the hard disk
         """
-        assert length is None or isinstance(length, int)
+        if length is not None and not isinstance(length, int):
+            raise Exception("invalid length type: %s (%s)", length, str(type(length)))
         if blob_hash in self.blobs:
             return defer.succeed(self.blobs[blob_hash])
         return self._make_new_blob(blob_hash, length)
@@ -61,7 +62,7 @@ class DiskBlobManager(DHTHashSupplier):
 
     def _make_new_blob(self, blob_hash, length=None):
         log.debug('Making a new blob for %s', blob_hash)
-        blob = self.blob_type(self.blob_dir, blob_hash, length)
+        blob = BlobFile(self.blob_dir, blob_hash, length)
         self.blobs[blob_hash] = blob
         return defer.succeed(blob)
 
@@ -89,10 +90,13 @@ class DiskBlobManager(DHTHashSupplier):
 
     def creator_finished(self, blob_creator, should_announce):
         log.debug("blob_creator.blob_hash: %s", blob_creator.blob_hash)
-        assert blob_creator.blob_hash is not None
-        assert blob_creator.blob_hash not in self.blobs
-        assert blob_creator.length is not None
-        new_blob = self.blob_type(self.blob_dir, blob_creator.blob_hash, blob_creator.length)
+        if blob_creator.blob_hash is None:
+            raise Exception("Blob hash is None")
+        if blob_creator.blob_hash in self.blobs:
+            raise Exception("Creator finished for blob that is already marked as completed")
+        if blob_creator.length is None:
+            raise Exception("Blob has a length of 0")
+        new_blob = BlobFile(self.blob_dir, blob_creator.blob_hash, blob_creator.length)
         self.blobs[blob_creator.blob_hash] = new_blob
         next_announce_time = self.get_next_announce_time()
         d = self.blob_completed(new_blob, next_announce_time, should_announce)
@@ -137,6 +141,7 @@ class DiskBlobManager(DHTHashSupplier):
         # threads.
 
         def create_tables(transaction):
+            transaction.execute('PRAGMA journal_mode=WAL')
             transaction.execute("create table if not exists blobs (" +
                                 "    blob_hash text primary key, " +
                                 "    blob_length integer, " +
@@ -255,5 +260,3 @@ class DiskBlobManager(DHTHashSupplier):
             "insert into upload values (null, ?, ?, ?, ?) ",
             (blob_hash, str(host), float(rate), ts))
         return d
-
-

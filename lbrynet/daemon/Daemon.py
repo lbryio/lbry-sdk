@@ -29,7 +29,6 @@ from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.core.log_support import configure_loggly_handler
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
-from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileOpenerFactory
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
@@ -578,17 +577,8 @@ class Daemon(AuthJSONRPCServer):
             self.session.wallet,
             self.download_directory
         )
-        self.sd_identifier.add_stream_downloader_factory(
-            EncryptedFileStreamType, file_saver_factory)
-        file_opener_factory = EncryptedFileOpenerFactory(
-            self.session.peer_finder,
-            self.session.rate_limiter,
-            self.session.blob_manager,
-            self.stream_info_manager,
-            self.session.wallet
-        )
-        self.sd_identifier.add_stream_downloader_factory(
-            EncryptedFileStreamType, file_opener_factory)
+        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType,
+                                                         file_saver_factory)
         return defer.succeed(None)
 
     def _download_blob(self, blob_hash, rate_manager=None, timeout=None):
@@ -2467,10 +2457,11 @@ class Daemon(AuthJSONRPCServer):
                 blob_hashes = [blob_hash]
             elif stream_hash:
                 blobs = yield self.get_blobs_for_stream_hash(stream_hash)
-                blob_hashes = [blob.blob_hash for blob in blobs if blob.is_validated()]
+                blob_hashes = [blob.blob_hash for blob in blobs if blob.get_is_verified()]
             elif sd_hash:
                 blobs = yield self.get_blobs_for_sd_hash(sd_hash)
-                blob_hashes = [sd_hash] + [blob.blob_hash for blob in blobs if blob.is_validated()]
+                blob_hashes = [sd_hash] + [blob.blob_hash for blob in blobs if
+                                           blob.get_is_verified()]
             else:
                 raise Exception('single argument must be specified')
             yield self.session.blob_manager._immediate_announce(blob_hashes)
@@ -2573,9 +2564,9 @@ class Daemon(AuthJSONRPCServer):
             blobs = self.session.blob_manager.blobs.itervalues()
 
         if needed:
-            blobs = [blob for blob in blobs if not blob.is_validated()]
+            blobs = [blob for blob in blobs if not blob.get_is_verified()]
         if finished:
-            blobs = [blob for blob in blobs if blob.is_validated()]
+            blobs = [blob for blob in blobs if blob.get_is_verified()]
 
         blob_hashes = [blob.blob_hash for blob in blobs]
         page_size = page_size or len(blob_hashes)

@@ -93,7 +93,7 @@ class FullStreamProgressManager(StreamProgressManager):
         return (
             i not in blobs or
             (
-                not blobs[i].is_validated() and
+                not blobs[i].get_is_verified() and
                 i not in self.provided_blob_nums
             )
         )
@@ -112,7 +112,7 @@ class FullStreamProgressManager(StreamProgressManager):
         blobs = self.download_manager.blobs
         return [
             b for n, b in blobs.iteritems()
-            if not b.is_validated() and not n in self.provided_blob_nums
+            if not b.get_is_verified() and not n in self.provided_blob_nums
         ]
 
     ######### internal #########
@@ -145,7 +145,7 @@ class FullStreamProgressManager(StreamProgressManager):
 
         current_blob_num = self.last_blob_outputted + 1
 
-        if current_blob_num in blobs and blobs[current_blob_num].is_validated():
+        if current_blob_num in blobs and blobs[current_blob_num].get_is_verified():
             log.debug("Outputting blob %s", str(self.last_blob_outputted + 1))
             self.provided_blob_nums.append(self.last_blob_outputted + 1)
             d = self.download_manager.handle_blob(self.last_blob_outputted + 1)
@@ -154,10 +154,11 @@ class FullStreamProgressManager(StreamProgressManager):
             d.addCallback(lambda _: check_if_finished())
 
             def log_error(err):
-                log.warning("Error occurred in the output loop. Error: %s", err.getErrorMessage())
+                log.warning("Error occurred in the output loop. Error: %s", err)
                 if self.outputting_d is not None and not self.outputting_d.called:
                     self.outputting_d.callback(True)
                     self.outputting_d = None
+                    self.stop()
 
             d.addErrback(log_error)
         else:
