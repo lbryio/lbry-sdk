@@ -5,9 +5,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
 from cryptography.hazmat.backends import default_backend
-from lbrynet import conf
 from lbrynet.core.BlobInfo import BlobInfo
-
+from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
 log = logging.getLogger(__name__)
 backend = default_backend()
@@ -114,7 +113,7 @@ class CryptStreamBlobMaker(object):
         max bytes are written. num_bytes_to_write is the number
         of bytes that will be written from data in this call
         """
-        max_bytes_to_write = conf.settings['BLOB_SIZE'] - self.length - 1
+        max_bytes_to_write = MAX_BLOB_SIZE - self.length - 1
         done = False
         if max_bytes_to_write <= len(data):
             num_bytes_to_write = max_bytes_to_write

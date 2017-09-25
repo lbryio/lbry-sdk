@@ -1,7 +1,7 @@
 from twisted.trial import unittest
 from twisted.internet import defer
 from lbrynet.cryptstream import CryptBlob
-from lbrynet import conf
+from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
 from lbrynet.tests.mocks import mock_conf_settings
 
@@ -57,7 +57,7 @@ class TestCryptBlob(unittest.TestCase):
         expected_encrypted_blob_size = ((size_of_data / AES.block_size) + 1) * AES.block_size
         self.assertEqual(expected_encrypted_blob_size, len(blob.data))
 
-        if size_of_data < conf.settings['BLOB_SIZE']-1:
+        if size_of_data < MAX_BLOB_SIZE-1:
             self.assertFalse(done)
         else:
             self.assertTrue(done)

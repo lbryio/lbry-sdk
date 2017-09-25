@@ -3,15 +3,14 @@ import os
 from twisted.internet import defer, threads
 from twisted.web.client import FileBodyProducer
 from twisted.python.failure import Failure
-from lbrynet import conf
 from lbrynet.core.Error import DownloadCanceledError, InvalidDataError, InvalidBlobHashError
 from lbrynet.core.utils import is_valid_blobhash
 from lbrynet.blob.writer import HashBlobWriter
 from lbrynet.blob.reader import HashBlobReader
 
-
 log = logging.getLogger(__name__)
 
+MAX_BLOB_SIZE = 2 * 2 ** 20
 
 class BlobFile(object):
     """
@@ -124,7 +123,7 @@ class BlobFile(object):
     def set_length(self, length):
         if self.length is not None and length == self.length:
             return True
-        if self.length is None and 0 <= length <= conf.settings['BLOB_SIZE']:
+        if self.length is None and 0 <= length <= MAX_BLOB_SIZE:
             self.length = length
             return True
         log.warning("Got an invalid length. Previous length: %s, Invalid length: %s",
