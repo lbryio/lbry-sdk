@@ -272,7 +272,7 @@ ADJUSTABLE_SETTINGS = {
     # at every auto_re_reflect_interval seconds, useful if initial reflect is unreliable
     'auto_re_reflect': (bool, True),
     'auto_re_reflect_interval': (int, 3600),
-    'reflector_servers': (list, [('reflector.lbry.io', 5566)], server_port),
+    'reflector_servers': (list, [('reflector2.lbry.io', 5566)], server_port),
     'run_reflector_server': (bool, False),
     'sd_download_timeout': (int, 3),
     'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
