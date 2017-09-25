@@ -26,7 +26,7 @@ at anytime.
 
 ### Changed
   * Announcing by head blob is turned on by default
-  *
+  * Updated reflector server dns
 
 ### Added
   * Added WAL pragma to sqlite3
