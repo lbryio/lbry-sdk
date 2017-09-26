@@ -9,7 +9,7 @@ from lbrynet import conf
 from lbrynet.core.Error import DownloadCanceledError, InvalidDataError, InvalidBlobHashError
 from lbrynet.core.utils import is_valid_blobhash
 from lbrynet.blob.writer import HashBlobWriter
-from lbrynet.blob.reader import HashBlobReader
+from lbrynet.blob.reader import HashBlobReader, HashBlobReader_v0
 
 
 log = logging.getLogger(__name__)
@@ -155,7 +155,7 @@ class BlobFile(object):
             return args[0]
 
         file_sender = FileSender()
-        reader = HashBlobReader(write_func)
+        reader = HashBlobReader_v0(write_func)
         file_handle = self.open_for_reading()
         if file_handle is not None:
             d = file_sender.beginFileTransfer(file_handle, reader)
