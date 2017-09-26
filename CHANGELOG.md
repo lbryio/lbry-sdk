@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed https://github.com/lbryio/lbry/issues/771 (handle when a certificate is missing for a signed claim in `claim_list_mine`)
+  *
   *
 
 ### Deprecated
@@ -31,6 +31,11 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.16.2] - 2017-09-26
+### Fixed
+ * Fixed https://github.com/lbryio/lbry/issues/771 (handle when a certificate is missing for a signed claim in `claim_list_mine`)
 
 
 ## [0.16.1] - 2017-09-20
