@@ -112,6 +112,16 @@ class DiskBlobManager(DHTHashSupplier):
         d = self._add_blob_to_download_history(blob_hash, host, rate)
         return d
 
+    @defer.inlineCallbacks
+    def get_host_downloaded_from(self, blob_hash):
+        query_str = "SELECT host FROM download WHERE blob=? ORDER BY ts DESC LIMIT 1"
+        host = yield self.db_conn.runQuery(query_str, (blob_hash,))
+        if host:
+            result = host[0][0]
+        else:
+            result = None
+        defer.returnValue(result)
+
     def add_blob_to_upload_history(self, blob_hash, host, rate):
         d = self._add_blob_to_upload_history(blob_hash, host, rate)
         return d
