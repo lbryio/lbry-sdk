@@ -75,19 +75,17 @@ class BlobFile(object):
         """
         open blob for reading
 
-        returns a file handle that can be read() from.
-        once finished with the file handle, user must call close_read_handle()
-        otherwise blob cannot be deleted.
+        returns a file like object that can be read() from, and closed() when
+        finished
         """
         if self._verified is True:
-            file_handle = None
             try:
-                file_handle = open(self.file_path, 'rb')
+                reader = HashBlobReader(self.file_path, self.reader_finished)
                 self.readers += 1
-                return file_handle
+                return reader
             except IOError:
                 log.exception('Failed to open %s', self.file_path)
-                self.close_read_handle(file_handle)
+                reader.close()
         return None
 
     def delete(self):
@@ -163,6 +161,10 @@ class BlobFile(object):
         else:
             d = defer.fail(IOError("Could not read the blob"))
         return d
+
+    def reader_finished(self, reader):
+        self.readers -= 1
+        return defer.succeed(True)
 
     def writer_finished(self, writer, err=None):
         def fire_finished_deferred():
