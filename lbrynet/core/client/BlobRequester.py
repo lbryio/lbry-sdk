@@ -514,8 +514,6 @@ class DownloadRequest(RequestHelper):
     def _pay_or_cancel_payment(self, arg, reserved_points, blob):
         if self._can_pay_peer(blob, arg):
             self._pay_peer(blob.length, reserved_points)
-            d = self.requestor.blob_manager.add_blob_to_download_history(
-                str(blob), str(self.peer.host), float(self.protocol_prices[self.protocol]))
         else:
             self._cancel_points(reserved_points)
         return arg
@@ -565,8 +563,11 @@ class DownloadRequest(RequestHelper):
         self.peer.update_stats('blobs_downloaded', 1)
         self.peer.update_score(5.0)
         should_announce = blob.blob_hash == self.head_blob_hash
-        self.requestor.blob_manager.blob_completed(blob, should_announce=should_announce)
-        return arg
+        d = self.requestor.blob_manager.blob_completed(blob, should_announce=should_announce)
+        d.addCallback(lambda _: self.requestor.blob_manager.add_blob_to_download_history(
+            blob.blob_hash, self.peer.host, self.protocol_prices[self.protocol]))
+        d.addCallback(lambda _: arg)
+        return d
 
     def _download_failed(self, reason):
         if not reason.check(DownloadCanceledError, PriceDisagreementError):
