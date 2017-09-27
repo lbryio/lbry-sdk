@@ -59,7 +59,7 @@ def main(args=None):
             use_upnp=False,
             wallet=wallet
         )
-        api = analytics.Api.new_instance()
+        api = analytics.Api.new_instance(conf.settings['share_usage_data'])
         run(args, session, api)
         reactor.run()
     finally:
