@@ -19,6 +19,7 @@ at anytime.
 ### Fixed
   * Fixed handling cancelled blob and availability requests
   * Fixed redundant blob requests to a peer
+  * Fixed https://github.com/lbryio/lbry/issues/923
 
 ### Deprecated
   * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
