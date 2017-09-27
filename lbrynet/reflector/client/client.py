@@ -191,6 +191,7 @@ class EncryptedFileReflectorClient(Protocol):
         assert self.read_handle is not None, \
             "self.read_handle was None when trying to start the transfer"
         d = self.file_sender.beginFileTransfer(self.read_handle, self)
+        d.addCallback(lambda _: self.read_handle.close())
         return d
 
     def handle_handshake_response(self, response_dict):
