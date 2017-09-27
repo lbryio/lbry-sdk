@@ -79,13 +79,9 @@ class BlobFile(object):
         finished
         """
         if self._verified is True:
-            try:
-                reader = HashBlobReader(self.file_path, self.reader_finished)
-                self.readers += 1
-                return reader
-            except IOError:
-                log.exception('Failed to open %s', self.file_path)
-                reader.close()
+            reader = HashBlobReader(self.file_path, self.reader_finished)
+            self.readers += 1
+            return reader
         return None
 
     def delete(self):
