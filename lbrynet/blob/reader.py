@@ -6,6 +6,10 @@ log = logging.getLogger(__name__)
 
 
 class HashBlobReader_v0(object):
+    """
+    This is a class that is only used in StreamBlobDecryptor
+    and should be deprecated
+    """
     implements(interfaces.IConsumer)
 
     def __init__(self, write_func):
@@ -30,6 +34,10 @@ class HashBlobReader_v0(object):
             reactor.callLater(0, self.producer.resumeProducing)
 
 class HashBlobReader(object):
+    """
+    This is a file like reader class that supports
+    read(size) and close()
+    """
     def __init__(self, file_path, finished_cb):
         self.finished_cb = finished_cb
         self.finished_cb_d = None

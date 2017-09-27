@@ -144,6 +144,10 @@ class BlobFile(object):
         return False
 
     def read(self, write_func):
+        """
+        This function is only used in StreamBlobDecryptor
+        and should be deprecated in favor of open_for_reading()
+        """
         def close_self(*args):
             self.close_read_handle(file_handle)
             return args[0]
@@ -157,6 +161,15 @@ class BlobFile(object):
         else:
             d = defer.fail(IOError("Could not read the blob"))
         return d
+
+    def close_read_handle(self, file_handle):
+        """
+        This function is only used in StreamBlobDecryptor
+        and should be deprecated in favor of open_for_reading()
+        """
+        if file_handle is not None:
+            file_handle.close()
+            self.readers -= 1
 
     def reader_finished(self, reader):
         self.readers -= 1
@@ -205,11 +218,6 @@ class BlobFile(object):
             d = defer.succeed(True)
         d.addBoth(lambda _: writer.close_handle())
         return d
-
-    def close_read_handle(self, file_handle):
-        if file_handle is not None:
-            file_handle.close()
-            self.readers -= 1
 
     @defer.inlineCallbacks
     def _save_verified_blob(self, writer):
