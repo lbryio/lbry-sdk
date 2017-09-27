@@ -76,7 +76,7 @@ class GetStream(object):
         Check if we've got the first data blob in the stream yet
         """
         self.timeout_counter += 1
-        if self.timeout_counter >= self.timeout:
+        if self.timeout_counter > self.timeout:
             if not self.data_downloading_deferred.called:
                 self.data_downloading_deferred.errback(DownloadDataTimeout(self.sd_hash))
 
@@ -213,9 +213,8 @@ class GetStream(object):
 
         try:
             yield self.data_downloading_deferred
-        except Exception as err:
-            self.downloader.stop()
+        except DownloadDataTimeout as err:
             safe_stop_looping_call(self.checker)
-            raise
+            raise err
 
         defer.returnValue((self.downloader, self.finished_deferred))
