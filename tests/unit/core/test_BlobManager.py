@@ -50,10 +50,10 @@ class BlobManagerTest(unittest.TestCase):
         finished_d, write, cancel =yield blob.open_for_writing(self.peer)
         yield write(data)
         yield self.bm.blob_completed(blob)
-        yield self.bm.add_blob_to_upload_history(blob_hash,'test',len(data))
+        yield self.bm.add_blob_to_upload_history(blob_hash, 'test', len(data))
 
         # check to see if blob is there
-        self.assertTrue(os.path.isfile(os.path.join(self.blob_dir,blob_hash)))
+        self.assertTrue(os.path.isfile(os.path.join(self.blob_dir, blob_hash)))
         blobs = yield self.bm.get_all_verified_blobs()
         self.assertTrue(blob_hash in blobs)
         defer.returnValue(blob_hash)
