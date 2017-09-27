@@ -10,7 +10,6 @@ from lbrynet.core.Error import DownloadDataTimeout, DownloadCanceledError
 from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet import conf
 
 INITIALIZING_CODE = 'initializing'
@@ -62,9 +61,7 @@ class GetStream(object):
         return os.path.join(self.download_directory, self.downloader.file_name)
 
     def _check_status(self, status):
-        stop_condition = (status.num_completed > 0 or
-                status.running_status == ManagedEncryptedFileDownloader.STATUS_STOPPED)
-        if stop_condition and not self.data_downloading_deferred.called:
+        if status.num_completed > 0 and not self.data_downloading_deferred.called:
             self.data_downloading_deferred.callback(True)
         if self.data_downloading_deferred.called:
             safe_stop_looping_call(self.checker)
