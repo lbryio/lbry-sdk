@@ -15,6 +15,9 @@ at anytime.
 ### Fixed
   *
   *
+  * Fixed handling cancelled blob and availability requests
+  * Fixed redundant blob requests to a peer
+  * Fixed blob download history
 
 ### Deprecated
   *
@@ -23,6 +26,10 @@ at anytime.
 ### Changed
   *
   *
+  * Announcing by head blob is turned on by default
+  * Updated reflector server dns
+  * Improved download analytics
+  * Improved download errors by distinguishing a data timeout from a sd timeout
 
 ### Added
   *
