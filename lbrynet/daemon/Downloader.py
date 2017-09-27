@@ -5,7 +5,8 @@ from twisted.internet.task import LoopingCall
 
 from lbryschema.fee import Fee
 
-from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, DownloadTimeoutError
+from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
+from lbrynet.core.Error import DownloadDataTimeout, DownloadCanceledError
 from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
@@ -68,7 +69,7 @@ class GetStream(object):
         if self.data_downloading_deferred.called:
             safe_stop_looping_call(self.checker)
         else:
-            log.info("Downloading stream data (%i seconds)", self.timeout_counter)
+            log.info("Waiting for stream data (%i seconds)", self.timeout_counter)
 
     def check_status(self):
         """
@@ -77,7 +78,8 @@ class GetStream(object):
         self.timeout_counter += 1
         if self.timeout_counter >= self.timeout:
             if not self.data_downloading_deferred.called:
-                self.data_downloading_deferred.errback(DownloadTimeoutError(self.file_name))
+                self.data_downloading_deferred.errback(DownloadDataTimeout(self.sd_hash))
+
             safe_stop_looping_call(self.checker)
         else:
             d = self.downloader.status()
@@ -150,6 +152,12 @@ class GetStream(object):
         self._check_status(status)
         defer.returnValue(self.download_path)
 
+    def fail(self, err):
+        safe_stop_looping_call(self.checker)
+        if not err.check(DownloadDataTimeout):
+            raise err
+        return DownloadCanceledError()
+
     @defer.inlineCallbacks
     def _initialize(self, stream_info):
         # Set sd_hash and return key_fee from stream_info
@@ -179,7 +187,8 @@ class GetStream(object):
 
         log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
         self.finished_deferred = self.downloader.start()
-        self.finished_deferred.addCallback(self.finish, name)
+        self.finished_deferred.addCallbacks(lambda result: self.finish(result, name),
+                                            self.fail)
 
     @defer.inlineCallbacks
     def start(self, stream_info, name):
