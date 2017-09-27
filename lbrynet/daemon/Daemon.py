@@ -2375,7 +2375,7 @@ class Daemon(AuthJSONRPCServer):
         if encoding and encoding in decoders:
             blob_file = blob.open_for_reading()
             result = decoders[encoding](blob_file.read())
-            blob.close_read_handle(blob_file)
+            blob_file.close()
         else:
             result = "Downloaded blob %s" % blob_hash
 
@@ -2624,7 +2624,7 @@ class Daemon(AuthJSONRPCServer):
         def read_sd_blob(sd_blob):
             sd_blob_file = sd_blob.open_for_reading()
             decoded_sd_blob = json.loads(sd_blob_file.read())
-            sd_blob.close_read_handle(sd_blob_file)
+            sd_blob_file.close()
             return decoded_sd_blob
 
         resolved_result = yield self.session.wallet.resolve(uri)
