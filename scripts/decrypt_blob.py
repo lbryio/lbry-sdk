@@ -10,7 +10,7 @@ from twisted.internet import reactor
 
 from lbrynet import conf
 from lbrynet.cryptstream import CryptBlob
-from lbrynet.core import HashBlob
+from lbrynet.blob import BlobFile
 from lbrynet.core import log_support
 
 
@@ -46,7 +46,7 @@ def decrypt_blob(blob_file, key, iv, output):
     filename = os.path.abspath(blob_file)
     length = os.path.getsize(filename)
     directory, blob_hash = os.path.split(filename)
-    blob = HashBlob.BlobFile(directory, blob_hash, True, length)
+    blob = BlobFile(directory, blob_hash, length)
     decryptor = CryptBlob.StreamBlobDecryptor(
         blob, binascii.unhexlify(key), binascii.unhexlify(iv), length)
     with open(output, 'w') as f:

@@ -29,8 +29,9 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
         self.blob_infos = []
 
     def _blob_finished(self, blob_info):
-        log.debug("length: %s", str(blob_info.length))
+        log.debug("length: %s", blob_info.length)
         self.blob_infos.append(blob_info)
+        return blob_info
 
     def _save_stream_info(self):
         stream_info_manager = self.lbry_file_manager.stream_info_manager
@@ -38,10 +39,6 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
                                             hexlify(self.key),
                                             hexlify(self.suggested_file_name),
                                             self.blob_infos)
-        return d
-
-    def setup(self):
-        d = CryptStreamCreator.setup(self)
         return d
 
     def _get_blobs_hashsum(self):

@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from twisted.internet import defer
 from twisted.python.failure import Failure
+from twisted.internet.error import ConnectionAborted
 from zope.interface import implements
 
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError
@@ -225,7 +226,8 @@ class RequestHelper(object):
         self.requestor._update_local_score(self.peer, score)
 
     def _request_failed(self, reason, request_type):
-        if reason.check(RequestCanceledError):
+        if reason.check(DownloadCanceledError, RequestCanceledError, ConnectionAborted,
+                        ConnectionClosedBeforeResponseError):
             return
         if reason.check(NoResponseError):
             self.requestor._incompatible_peers.append(self.peer)
@@ -463,13 +465,13 @@ class DownloadRequest(RequestHelper):
     def find_blob(self, to_download):
         """Return the first blob in `to_download` that is successfully opened for write."""
         for blob in to_download:
-            if blob.is_validated():
+            if blob.get_is_verified():
                 log.debug('Skipping blob %s as its already validated', blob)
                 continue
-            d, write_func, cancel_func = blob.open_for_writing(self.peer)
+            writer, d = blob.open_for_writing(self.peer)
             if d is not None:
-                return BlobDownloadDetails(blob, d, write_func, cancel_func, self.peer)
-            log.debug('Skipping blob %s as there was an issue opening it for writing', blob)
+                return BlobDownloadDetails(blob, d, writer.write, writer.close, self.peer)
+            log.warning('Skipping blob %s as there was an issue opening it for writing', blob)
         return None
 
     def _make_request(self, blob_details):
@@ -514,8 +516,6 @@ class DownloadRequest(RequestHelper):
     def _pay_or_cancel_payment(self, arg, reserved_points, blob):
         if self._can_pay_peer(blob, arg):
             self._pay_peer(blob.length, reserved_points)
-            d = self.requestor.blob_manager.add_blob_to_download_history(
-                str(blob), str(self.peer.host), float(self.protocol_prices[self.protocol]))
         else:
             self._cancel_points(reserved_points)
         return arg
@@ -565,8 +565,11 @@ class DownloadRequest(RequestHelper):
         self.peer.update_stats('blobs_downloaded', 1)
         self.peer.update_score(5.0)
         should_announce = blob.blob_hash == self.head_blob_hash
-        self.requestor.blob_manager.blob_completed(blob, should_announce=should_announce)
-        return arg
+        d = self.requestor.blob_manager.blob_completed(blob, should_announce=should_announce)
+        d.addCallback(lambda _: self.requestor.blob_manager.add_blob_to_download_history(
+            blob.blob_hash, self.peer.host, self.protocol_prices[self.protocol]))
+        d.addCallback(lambda _: arg)
+        return d
 
     def _download_failed(self, reason):
         if not reason.check(DownloadCanceledError, PriceDisagreementError):

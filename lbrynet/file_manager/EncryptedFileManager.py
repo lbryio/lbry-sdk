@@ -250,7 +250,7 @@ class EncryptedFileManager(object):
         if self.sql_db:
             yield self.sql_db.close()
         self.sql_db = None
-        log.info("Stopped %s", self)
+        log.info("Stopped encrypted file manager")
         defer.returnValue(True)
 
     def get_count_for_stream_hash(self, stream_hash):
@@ -303,8 +303,10 @@ class EncryptedFileManager(object):
 
     @rerun_if_locked
     def _change_file_status(self, rowid, new_status):
-        return self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
+        d = self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
                                     (new_status, rowid))
+        d.addCallback(lambda _: new_status)
+        return d
 
     @rerun_if_locked
     def _get_lbry_file_status(self, rowid):

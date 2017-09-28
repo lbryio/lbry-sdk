@@ -112,11 +112,11 @@ class EncryptedFileReflectorClient(Protocol):
     def get_validated_blobs(self, blobs_in_stream):
         def get_blobs(blobs):
             for (blob, _, _, blob_len) in blobs:
-                if blob:
+                if blob and blob_len:
                     yield self.blob_manager.get_blob(blob, blob_len)
 
         dl = defer.DeferredList(list(get_blobs(blobs_in_stream)), consumeErrors=True)
-        dl.addCallback(lambda blobs: [blob for r, blob in blobs if r and blob.is_validated()])
+        dl.addCallback(lambda blobs: [blob for r, blob in blobs if r and blob.get_is_verified()])
         return dl
 
     def set_blobs_to_send(self, blobs_to_send):
@@ -253,7 +253,7 @@ class EncryptedFileReflectorClient(Protocol):
                 return self.set_not_uploading()
 
     def open_blob_for_reading(self, blob):
-        if blob.is_validated():
+        if blob.get_is_verified():
             read_handle = blob.open_for_reading()
             if read_handle is not None:
                 log.debug('Getting ready to send %s', blob.blob_hash)

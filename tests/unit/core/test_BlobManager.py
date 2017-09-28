@@ -47,13 +47,13 @@ class BlobManagerTest(unittest.TestCase):
         yield self.bm.setup()
         blob = yield self.bm.get_blob(blob_hash,len(data))
 
-        finished_d, write, cancel =yield blob.open_for_writing(self.peer)
-        yield write(data)
+        writer, finished_d = yield blob.open_for_writing(self.peer)
+        yield writer.write(data)
         yield self.bm.blob_completed(blob)
-        yield self.bm.add_blob_to_upload_history(blob_hash,'test',len(data))
+        yield self.bm.add_blob_to_upload_history(blob_hash, 'test', len(data))
 
         # check to see if blob is there
-        self.assertTrue(os.path.isfile(os.path.join(self.blob_dir,blob_hash)))
+        self.assertTrue(os.path.isfile(os.path.join(self.blob_dir, blob_hash)))
         blobs = yield self.bm.get_all_verified_blobs()
         self.assertTrue(blob_hash in blobs)
         defer.returnValue(blob_hash)
@@ -105,7 +105,7 @@ class BlobManagerTest(unittest.TestCase):
 
         # open the last blob
         blob = yield self.bm.get_blob(blob_hashes[-1])
-        finished_d, write, cancel = yield blob.open_for_writing(self.peer)
+        writer, finished_d = yield blob.open_for_writing(self.peer)
 
         # delete the last blob and check if it still exists
         out = yield self.bm.delete_blobs([blob_hash])
@@ -114,4 +114,3 @@ class BlobManagerTest(unittest.TestCase):
         self.assertTrue(blob_hashes[-1] in blobs)
         self.assertTrue(os.path.isfile(os.path.join(self.blob_dir,blob_hashes[-1])))
 
-        blob._close_writer(blob.writers[self.peer][0])

@@ -251,7 +251,7 @@ ADJUSTABLE_SETTINGS = {
     'download_directory': (str, default_download_dir),
     'download_timeout': (int, 180),
     'is_generous_host': (bool, True),
-    'announce_head_blobs_only': (bool, False),
+    'announce_head_blobs_only': (bool, True),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_port),
     'lbryum_wallet_dir': (str, default_lbryum_dir),
     'max_connections_per_stream': (int, 5),
@@ -272,7 +272,7 @@ ADJUSTABLE_SETTINGS = {
     # at every auto_re_reflect_interval seconds, useful if initial reflect is unreliable
     'auto_re_reflect': (bool, True),
     'auto_re_reflect_interval': (int, 3600),
-    'reflector_servers': (list, [('reflector.lbry.io', 5566)], server_port),
+    'reflector_servers': (list, [('reflector2.lbry.io', 5566)], server_port),
     'run_reflector_server': (bool, False),
     'sd_download_timeout': (int, 3),
     'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
