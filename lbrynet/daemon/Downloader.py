@@ -151,9 +151,7 @@ class GetStream(object):
 
     def fail(self, err):
         safe_stop_looping_call(self.checker)
-        if not err.check(DownloadDataTimeout):
-            raise err
-        return DownloadCanceledError()
+        raise err
 
     @defer.inlineCallbacks
     def _initialize(self, stream_info):
@@ -184,8 +182,7 @@ class GetStream(object):
 
         log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
         self.finished_deferred = self.downloader.start()
-        self.finished_deferred.addCallbacks(lambda result: self.finish(result, name),
-                                            self.fail)
+        self.finished_deferred.addCallbacks(lambda result: self.finish(result, name), self.fail)
 
     @defer.inlineCallbacks
     def start(self, stream_info, name):
@@ -215,3 +212,13 @@ class GetStream(object):
             raise err
 
         defer.returnValue((self.downloader, self.finished_deferred))
+
+    def cancel(self, reason=None):
+        if reason:
+            msg = "download stream cancelled: %s" % reason
+        else:
+            msg = "download stream cancelled"
+        if self.finished_deferred and not self.finished_deferred.called:
+            self.finished_deferred.errback(DownloadCanceledError(msg))
+        if self.data_downloading_deferred and not self.data_downloading_deferred.called:
+            self.data_downloading_deferred.errback(DownloadCanceledError(msg))

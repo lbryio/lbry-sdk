@@ -392,6 +392,11 @@ class Daemon(AuthJSONRPCServer):
     def _already_shutting_down(sig_num, frame):
         log.info("Already shutting down")
 
+    def _stop_streams(self):
+        """stop pending GetStream downloads"""
+        for claim_id, stream in self.streams.iteritems():
+            stream.cancel(reason="daemon shutdown")
+
     def _shutdown(self):
         # ignore INT/TERM signals once shutdown has started
         signal.signal(signal.SIGINT, self._already_shutting_down)
@@ -399,6 +404,9 @@ class Daemon(AuthJSONRPCServer):
 
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
+
+        self._stop_streams()
+
         self.looping_call_manager.shutdown()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
