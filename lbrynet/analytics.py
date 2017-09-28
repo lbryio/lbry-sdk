@@ -171,11 +171,15 @@ class Manager(object):
 
     @staticmethod
     def _download_error_properties(error, id_, name, claim_dict, report):
+        def error_name(err):
+            if not hasattr(type(err), "__name__"):
+                return str(type(err))
+            return type(err).__name__
         return {
             'download_id': id_,
             'name': name,
             'stream_info': claim_dict.source_hash,
-            'error': str(type(error)),
+            'error': error_name(error),
             'reason': error.message,
             'report': report
         }
