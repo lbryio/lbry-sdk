@@ -2,7 +2,7 @@ from lbrynet.blob import BlobFile
 from lbrynet.core.Error import DownloadCanceledError, InvalidDataError
 
 
-from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir, random_lbry_hash
+from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir, random_lbry_hash
 from twisted.trial import unittest
 from twisted.internet import defer
 import os

@@ -3,9 +3,9 @@ from lbrynet.daemon import ExchangeRateManager
 from lbrynet.core.Error import InvalidExchangeRateResponse
 from twisted.trial import unittest
 from twisted.internet import defer
-from tests import util
-from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
-from tests.mocks import BTCLBCFeed, USDBTCFeed
+from lbrynet.tests import util
+from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
+from lbrynet.tests.mocks import BTCLBCFeed, USDBTCFeed
 
 
 class FeeFormatTest(unittest.TestCase):

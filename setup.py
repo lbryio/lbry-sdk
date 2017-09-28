@@ -62,7 +62,7 @@ setup(
     long_description=long_description,
     keywords="lbry protocol media",
     license='MIT',
-    packages=find_packages(base_dir, exclude=['tests']),
+    packages=find_packages(base_dir),
     install_requires=requires,
     entry_points={'console_scripts': console_scripts},
     package_data={

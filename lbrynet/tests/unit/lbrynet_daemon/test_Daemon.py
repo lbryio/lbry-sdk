@@ -10,11 +10,11 @@ from lbrynet.core import Session, PaymentRateManager, Wallet
 from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
 from lbrynet.daemon import ExchangeRateManager
 
-from tests import util
-from tests.mocks import mock_conf_settings, FakeNetwork
-from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
-from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
-from tests.mocks import BTCLBCFeed, USDBTCFeed
+from lbrynet.tests import util
+from lbrynet.tests.mocks import mock_conf_settings, FakeNetwork
+from lbrynet.tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
+from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
+from lbrynet.tests.mocks import BTCLBCFeed, USDBTCFeed
 
 def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     if data_rate is None:

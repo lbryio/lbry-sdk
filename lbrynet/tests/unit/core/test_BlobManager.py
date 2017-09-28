@@ -5,7 +5,7 @@ import os
 import random
 import string
 
-from tests.util import random_lbry_hash
+from lbrynet.tests.util import random_lbry_hash
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
 from lbrynet.core.Peer import Peer

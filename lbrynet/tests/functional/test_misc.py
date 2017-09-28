@@ -32,8 +32,8 @@ from lbrynet.core.RateLimiter import DummyRateLimiter, RateLimiter
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 
-from tests import mocks
-from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
+from lbrynet.tests import mocks
+from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 FakeNode = mocks.Node
 FakeWallet = mocks.Wallet

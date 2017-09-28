@@ -12,8 +12,8 @@ from lbrynet.core import Session
 from lbrynet.core.server import DHTHashAnnouncer
 from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager import EncryptedFileManager
-from tests import mocks
-from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
+from lbrynet.tests import mocks
+from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 MB = 2**20
 

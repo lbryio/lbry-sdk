@@ -1,7 +1,7 @@
 import mock
 from twisted.trial import unittest
 
-from tests.mocks import mock_conf_settings
+from lbrynet.tests.mocks import mock_conf_settings
 from lbrynet.daemon.auth import server
 
 

@@ -3,7 +3,7 @@ from twisted.internet import defer
 from lbrynet.cryptstream import CryptBlob
 from lbrynet import conf
 
-from tests.mocks import mock_conf_settings
+from lbrynet.tests.mocks import mock_conf_settings
 
 from Crypto import Random
 from Crypto.Cipher import AES

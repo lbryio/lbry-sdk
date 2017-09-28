@@ -6,7 +6,7 @@ from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetada
 from lbrynet.core import utils
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 from lbrynet.core.Error import NoSuchStreamHash
-from tests.util import random_lbry_hash
+from lbrynet.tests.util import random_lbry_hash
 
 class DBEncryptedFileMetadataManagerTest(unittest.TestCase):
     def setUp(self):

@@ -16,10 +16,10 @@ from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusRe
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader, ManagedEncryptedFileDownloaderFactory
 from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
 
-from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
-from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
-from tests.mocks import BTCLBCFeed, USDBTCFeed
-from tests.mocks import mock_conf_settings
+from lbrynet.tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
+from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
+from lbrynet.tests.mocks import BTCLBCFeed, USDBTCFeed
+from lbrynet.tests.mocks import mock_conf_settings
 
 class MocDownloader(object):
     def __init__(self):

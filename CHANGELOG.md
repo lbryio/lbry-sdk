@@ -27,6 +27,7 @@ at anytime.
 ### Changed
   * Announcing by head blob is turned on by default
   * Updated reflector server dns
+  * Moved tests into the lbrynet package.
 
 ### Added
   * Added WAL pragma to sqlite3
