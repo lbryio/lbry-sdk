@@ -46,7 +46,7 @@ from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError, NoSuchSDHash
-from lbrynet.core.Error import NoSuchStreamHash
+from lbrynet.core.Error import NoSuchStreamHash, DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.core.Error import NullFundsError, NegativeFundsError
 
 log = logging.getLogger(__name__)
@@ -392,6 +392,11 @@ class Daemon(AuthJSONRPCServer):
     def _already_shutting_down(sig_num, frame):
         log.info("Already shutting down")
 
+    def _stop_streams(self):
+        """stop pending GetStream downloads"""
+        for claim_id, stream in self.streams.iteritems():
+            stream.cancel(reason="daemon shutdown")
+
     def _shutdown(self):
         # ignore INT/TERM signals once shutdown has started
         signal.signal(signal.SIGINT, self._already_shutting_down)
@@ -399,6 +404,9 @@ class Daemon(AuthJSONRPCServer):
 
         log.info("Closing lbrynet session")
         log.info("Status at time of shutdown: " + self.startup_status[0])
+
+        self._stop_streams()
+
         self.looping_call_manager.shutdown()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
@@ -600,11 +608,55 @@ class Daemon(AuthJSONRPCServer):
         return download_sd_blob(self.session, blob_hash, rate_manager, timeout)
 
     @defer.inlineCallbacks
+    def _get_stream_analytics_report(self, claim_dict):
+        sd_hash = claim_dict.source_hash
+        try:
+            stream_hash = yield self.stream_info_manager.get_stream_hash_for_sd_hash(sd_hash)
+        except Exception:
+            stream_hash = None
+        report = {
+            "sd_hash": sd_hash,
+            "stream_hash": stream_hash,
+        }
+        blobs = {}
+        try:
+            sd_host = yield self.session.blob_manager.get_host_downloaded_from(sd_hash)
+        except Exception:
+            sd_host = None
+        report["sd_blob"] = sd_host
+        if stream_hash:
+            blob_infos = yield self.stream_info_manager.get_blobs_for_stream(stream_hash)
+            report["known_blobs"] = len(blob_infos)
+        else:
+            blob_infos = []
+            report["known_blobs"] = 0
+        for blob_hash, blob_num, iv, length in blob_infos:
+            try:
+                host = yield self.session.blob_manager.get_host_downloaded_from(blob_hash)
+            except Exception:
+                host = None
+            if host:
+                blobs[blob_num] = host
+        report["blobs"] = json.dumps(blobs)
+        defer.returnValue(report)
+
+    @defer.inlineCallbacks
     def _download_name(self, name, claim_dict, claim_id, timeout=None, file_name=None):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
+
+        @defer.inlineCallbacks
+        def _download_finished(download_id, name, claim_dict):
+            report = yield self._get_stream_analytics_report(claim_dict)
+            self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
+
+        @defer.inlineCallbacks
+        def _download_failed(error, download_id, name, claim_dict):
+            report = yield self._get_stream_analytics_report(claim_dict)
+            self.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
+                                                         report)
 
         if claim_id in self.streams:
             downloader = self.streams[claim_id]
@@ -621,17 +673,23 @@ class Daemon(AuthJSONRPCServer):
                                                file_name)
             try:
                 lbry_file, finished_deferred = yield self.streams[claim_id].start(claim_dict, name)
-                finished_deferred.addCallback(
-                    lambda _: self.analytics_manager.send_download_finished(download_id,
-                                                                            name,
-                                                                            claim_dict))
+                finished_deferred.addCallbacks(lambda _: _download_finished(download_id, name,
+                                                                            claim_dict),
+                                               lambda e: _download_failed(e, download_id, name,
+                                                                          claim_dict))
+
                 result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
-                del self.streams[claim_id]
             except Exception as err:
-                log.warning('Failed to get %s: %s', name, err)
-                self.analytics_manager.send_download_errored(download_id, name, claim_dict)
-                del self.streams[claim_id]
+                yield _download_failed(err, download_id, name, claim_dict)
+                if isinstance(err, (DownloadDataTimeout, DownloadSDTimeout)):
+                    log.warning('Failed to get %s (%s)', name, err)
+                else:
+                    log.error('Failed to get %s (%s)', name, err)
+                if self.streams[claim_id].downloader:
+                    yield self.streams[claim_id].downloader.stop(err)
                 result = {'error': err.message}
+            finally:
+                del self.streams[claim_id]
             defer.returnValue(result)
 
     @defer.inlineCallbacks
