@@ -631,7 +631,7 @@ class Daemon(AuthJSONRPCServer):
             host = yield self.session.blob_manager.get_host_downloaded_from(blob_hash)
             if host:
                 blobs[blob_num] = host
-        report["blobs"] = blobs
+        report["blobs"] = json.dumps(blobs)
         defer.returnValue(report)
 
     @defer.inlineCallbacks
