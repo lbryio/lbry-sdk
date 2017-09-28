@@ -6,7 +6,7 @@ from twisted.internet.task import LoopingCall
 from lbryschema.fee import Fee
 
 from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
-from lbrynet.core.Error import DownloadDataTimeout, DownloadCanceledError
+from lbrynet.core.Error import DownloadDataTimeout, DownloadCanceledError, DownloadSDTimeout
 from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
@@ -66,7 +66,7 @@ class GetStream(object):
         if self.data_downloading_deferred.called:
             safe_stop_looping_call(self.checker)
         else:
-            log.info("Waiting for stream data (%i seconds)", self.timeout_counter)
+            log.debug("Waiting for stream data (%i seconds)", self.timeout_counter)
 
     def check_status(self):
         """
@@ -75,12 +75,17 @@ class GetStream(object):
         self.timeout_counter += 1
         if self.timeout_counter > self.timeout:
             if not self.data_downloading_deferred.called:
-                self.data_downloading_deferred.errback(DownloadDataTimeout(self.sd_hash))
-
+                if self.downloader:
+                    err = DownloadDataTimeout(self.sd_hash)
+                else:
+                    err = DownloadSDTimeout(self.sd_hash)
+                self.data_downloading_deferred.errback(err)
             safe_stop_looping_call(self.checker)
-        else:
+        elif self.downloader:
             d = self.downloader.status()
             d.addCallback(self._check_status)
+        else:
+            log.debug("Waiting for stream descriptor (%i seconds)", self.timeout_counter)
 
     def convert_max_fee(self):
         currency, amount = self.max_key_fee['currency'], self.max_key_fee['amount']
@@ -179,7 +184,6 @@ class GetStream(object):
     def _download(self, sd_blob, name, key_fee):
         self.downloader = yield self._create_downloader(sd_blob)
         yield self.pay_key_fee(key_fee, name)
-
         log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
         self.finished_deferred = self.downloader.start()
         self.finished_deferred.addCallbacks(lambda result: self.finish(result, name), self.fail)
@@ -198,12 +202,12 @@ class GetStream(object):
         self.set_status(INITIALIZING_CODE, name)
         key_fee = yield self._initialize(stream_info)
 
+        safe_start_looping_call(self.checker, 1)
         self.set_status(DOWNLOAD_METADATA_CODE, name)
         sd_blob = yield self._download_sd_blob()
 
         yield self._download(sd_blob, name, key_fee)
         self.set_status(DOWNLOAD_RUNNING_CODE, name)
-        safe_start_looping_call(self.checker, 1)
 
         try:
             yield self.data_downloading_deferred
@@ -218,7 +222,5 @@ class GetStream(object):
             msg = "download stream cancelled: %s" % reason
         else:
             msg = "download stream cancelled"
-        if self.finished_deferred and not self.finished_deferred.called:
-            self.finished_deferred.errback(DownloadCanceledError(msg))
         if self.data_downloading_deferred and not self.data_downloading_deferred.called:
             self.data_downloading_deferred.errback(DownloadCanceledError(msg))
