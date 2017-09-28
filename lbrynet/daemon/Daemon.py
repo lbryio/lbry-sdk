@@ -612,14 +612,17 @@ class Daemon(AuthJSONRPCServer):
         sd_hash = claim_dict.source_hash
         try:
             stream_hash = yield self.stream_info_manager.get_stream_hash_for_sd_hash(sd_hash)
-        except NoSuchSDHash:
+        except Exception:
             stream_hash = None
         report = {
             "sd_hash": sd_hash,
             "stream_hash": stream_hash,
         }
         blobs = {}
-        sd_host = yield self.session.blob_manager.get_host_downloaded_from(sd_hash)
+        try:
+            sd_host = yield self.session.blob_manager.get_host_downloaded_from(sd_hash)
+        except Exception:
+            sd_host = None
         report["sd_blob"] = sd_host
         if stream_hash:
             blob_infos = yield self.stream_info_manager.get_blobs_for_stream(stream_hash)
@@ -628,7 +631,10 @@ class Daemon(AuthJSONRPCServer):
             blob_infos = []
             report["known_blobs"] = 0
         for blob_hash, blob_num, iv, length in blob_infos:
-            host = yield self.session.blob_manager.get_host_downloaded_from(blob_hash)
+            try:
+                host = yield self.session.blob_manager.get_host_downloaded_from(blob_hash)
+            except Exception:
+                host = None
             if host:
                 blobs[blob_num] = host
         report["blobs"] = json.dumps(blobs)
@@ -643,13 +649,11 @@ class Daemon(AuthJSONRPCServer):
 
         @defer.inlineCallbacks
         def _download_finished(download_id, name, claim_dict):
-            log.info("Finished: %s", name)
             report = yield self._get_stream_analytics_report(claim_dict)
             self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
 
         @defer.inlineCallbacks
         def _download_failed(error, download_id, name, claim_dict):
-            log.warning("Failed %s: %s", name, error)
             report = yield self._get_stream_analytics_report(claim_dict)
             self.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
                                                          report)
@@ -684,7 +688,8 @@ class Daemon(AuthJSONRPCServer):
                     yield self.streams[claim_id].downloader.stop(err)
                 yield _download_failed(err, download_id, name, claim_dict)
                 result = {'error': err.message}
-            del self.streams[claim_id]
+            finally:
+                del self.streams[claim_id]
             defer.returnValue(result)
 
     @defer.inlineCallbacks
