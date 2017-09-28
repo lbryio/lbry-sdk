@@ -13,8 +13,8 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed redundant blob requests to a peer
   * Fixed blob download history
+  *
 
 ### Deprecated
   *
