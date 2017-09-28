@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed blob download history
+  *
   *
 
 ### Deprecated
@@ -21,8 +21,8 @@ at anytime.
   *
 
 ### Changed
-  * Improved download analytics
-  * Improved download errors by distinguishing a data timeout from a sd timeout
+  *
+  *
 
 ### Added
   *
@@ -31,6 +31,15 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.16.3] - 2017-09-28
+### Fixed
+ * Fixed blob download history
+
+### Changed
+ * Improved download analytics
+ * Improved download errors by distinguishing a data timeout from a sd timeout
 
 
 ## [0.16.2] - 2017-09-26
