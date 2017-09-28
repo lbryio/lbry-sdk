@@ -635,17 +635,24 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(report)
 
     @defer.inlineCallbacks
-    def _download_finished(self, download_id, name, claim_dict):
-        report = yield self._get_stream_analytics_report(claim_dict)
-        self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
-
-    @defer.inlineCallbacks
-    def _download_name(self, name, claim_dict, claim_id, timeout=None, file_name=None,
-                       delete_on_timeout=True):
+    def _download_name(self, name, claim_dict, claim_id, timeout=None, file_name=None):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
         """
+
+        @defer.inlineCallbacks
+        def _download_finished(download_id, name, claim_dict):
+            log.info("Finished: %s", name)
+            report = yield self._get_stream_analytics_report(claim_dict)
+            self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
+
+        @defer.inlineCallbacks
+        def _download_failed(error, download_id, name, claim_dict):
+            log.warning("Failed %s: %s", name, error)
+            report = yield self._get_stream_analytics_report(claim_dict)
+            self.analytics_manager.send_download_errored(error, download_id, name, claim_dict,
+                                                         report)
 
         if claim_id in self.streams:
             downloader = self.streams[claim_id]
@@ -662,18 +669,20 @@ class Daemon(AuthJSONRPCServer):
                                                file_name)
             try:
                 lbry_file, finished_deferred = yield self.streams[claim_id].start(claim_dict, name)
-                finished_deferred.addCallback(lambda _: self._download_finished(download_id, name,
-                                                                                claim_dict))
+                finished_deferred.addCallbacks(lambda _: _download_finished(download_id, name,
+                                                                            claim_dict),
+                                               lambda e: _download_failed(e, download_id, name,
+                                                                          claim_dict))
+
                 result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
-            except (DownloadDataTimeout, DownloadSDTimeout) as err:
-                log.warning('Failed to get %s (%s)', name, err)
-                report = yield self._get_stream_analytics_report(claim_dict)
-                if isinstance(err, DownloadDataTimeout) and delete_on_timeout:
-                    yield self.lbry_file_manager.delete_lbry_file(self.streams[claim_id].downloader)
-                elif self.streams[claim_id].downloader:
+            except Exception as err:
+                if isinstance(err, (DownloadDataTimeout, DownloadSDTimeout)):
+                    log.warning('Failed to get %s (%s)', name, err)
+                else:
+                    log.error('Failed to get %s (%s)', name, err)
+                if self.streams[claim_id].downloader:
                     yield self.streams[claim_id].downloader.stop(err)
-                self.analytics_manager.send_download_errored(err, download_id, name, claim_dict,
-                                                             report)
+                yield _download_failed(err, download_id, name, claim_dict)
                 result = {'error': err.message}
             del self.streams[claim_id]
             defer.returnValue(result)
