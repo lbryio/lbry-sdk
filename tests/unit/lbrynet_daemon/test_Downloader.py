@@ -115,26 +115,26 @@ class GetStreamTests(unittest.TestCase):
             yield getstream.start(stream_info,name)
         self.assertFalse(getstream.pay_key_fee_called)
 
-    # @defer.inlineCallbacks
-    # def test_timeout(self):
-    #     """
-    #     test that timeout (set to 2 here) exception is raised
-    #     when download times out while downloading first blob, and key fee is paid
-    #     """
-    #     getstream  = self.init_getstream_with_mocs()
-    #     getstream._initialize = types.MethodType(moc_initialize, getstream)
-    #     getstream._download_sd_blob = types.MethodType(moc_download_sd_blob, getstream)
-    #     getstream._download = types.MethodType(moc_download, getstream)
-    #     getstream.pay_key_fee = types.MethodType(moc_pay_key_fee, getstream)
-    #     name='test'
-    #     stream_info = None
-    #     start = getstream.start(stream_info,name)
-    #     self.clock.advance(1)
-    #     self.clock.advance(1)
-    #     with self.assertRaises(DownloadDataTimeout):
-    #         yield start
-    #     self.assertTrue(getstream.downloader.stop_called)
-    #     self.assertTrue(getstream.pay_key_fee_called)
+    @defer.inlineCallbacks
+    def test_timeout(self):
+        """
+        test that timeout (set to 3 here) exception is raised
+        when download times out while downloading first blob, and key fee is paid
+        """
+        getstream  = self.init_getstream_with_mocs()
+        getstream._initialize = types.MethodType(moc_initialize, getstream)
+        getstream._download_sd_blob = types.MethodType(moc_download_sd_blob, getstream)
+        getstream._download = types.MethodType(moc_download, getstream)
+        getstream.pay_key_fee = types.MethodType(moc_pay_key_fee, getstream)
+        name='test'
+        stream_info = None
+        start = getstream.start(stream_info,name)
+        self.clock.advance(1)
+        self.clock.advance(1)
+        self.clock.advance(1)
+        with self.assertRaises(DownloadDataTimeout):
+            yield start
+        self.assertTrue(getstream.pay_key_fee_called)
 
     @defer.inlineCallbacks
     def test_finish_one_blob(self):
