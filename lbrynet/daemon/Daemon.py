@@ -689,13 +689,13 @@ class Daemon(AuthJSONRPCServer):
 
                 result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
             except Exception as err:
+                yield _download_failed(err, download_id, name, claim_dict)
                 if isinstance(err, (DownloadDataTimeout, DownloadSDTimeout)):
                     log.warning('Failed to get %s (%s)', name, err)
                 else:
                     log.error('Failed to get %s (%s)', name, err)
                 if self.streams[claim_id].downloader:
                     yield self.streams[claim_id].downloader.stop(err)
-                yield _download_failed(err, download_id, name, claim_dict)
                 result = {'error': err.message}
             finally:
                 del self.streams[claim_id]
