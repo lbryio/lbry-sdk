@@ -1,6 +1,6 @@
 import binascii
 import logging
-from twisted.internet import defer
+from twisted.internet import defer, threads
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
@@ -46,6 +46,10 @@ class StreamBlobDecryptor(object):
 
         write_func - function that takes decrypted string as
             arugment and writes it somewhere
+
+        Returns:
+
+        deferred that returns after decrypting blob and writing content
         """
 
         def remove_padding(data):
@@ -67,13 +71,17 @@ class StreamBlobDecryptor(object):
             last_chunk = self.cipher.update(data_to_decrypt) + self.cipher.finalize()
             write_func(remove_padding(last_chunk))
 
-        def decrypt_bytes(data):
+
+        read_handle = self.blob.open_for_reading()
+
+        def decrypt_bytes():
+            data = read_handle.read()
             self.buff += data
             self.len_read += len(data)
             write_bytes()
+            finish_decrypt()
 
-        d = self.blob.read(decrypt_bytes)
-        d.addCallback(lambda _: finish_decrypt())
+        d = threads.deferToThread(decrypt_bytes)
         return d
 
 
