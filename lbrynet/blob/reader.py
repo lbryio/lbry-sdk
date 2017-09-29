@@ -40,11 +40,15 @@ class HashBlobReader(object):
     read(size) and close()
     """
     def __init__(self, file_path, finished_cb):
+        self.file_path = file_path
         self.finished_cb = finished_cb
         self.finished_cb_d = None
-        self.read_handle = open(file_path, 'rb')
+        self.read_handle = open(self.file_path, 'rb')
 
     def __del__(self):
+        if self.finished_cb_d is None:
+            log.warn("Garbage collection was called, but reader for %s was not closed yet",
+                        self.file_path)
         self.close()
 
     def read(self, size=-1):
