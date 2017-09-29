@@ -17,7 +17,7 @@ from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 from lbrynet.lbry_file.StreamDescriptor import get_sd_info
 from lbrynet.core.PeerManager import PeerManager
-from lbrynet.core.RateLimiter import DummyRateLimiter, RateLimiter
+from lbrynet.core.RateLimiter import DummyRateLimiter
 
 from lbrynet.tests import mocks
 

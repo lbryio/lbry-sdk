@@ -1,7 +1,7 @@
 import datetime
 import time
 import binascii
-import os 
+import os
 import tempfile
 import shutil
 import mock

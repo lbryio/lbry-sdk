@@ -19,13 +19,14 @@ class TestEncryptedFileManager(unittest.TestCase):
 
         session = MocSession()
         session.db_dir = '.'
-        stream_info_manager  = None
+        stream_info_manager = None
         sd_identifier = None
         download_directory = '.'
-        manager = EncryptedFileManager(session, stream_info_manager, sd_identifier, download_directory)
+        manager = EncryptedFileManager(
+            session, stream_info_manager, sd_identifier, download_directory)
         yield manager._open_db()
         out = yield manager._get_all_lbry_files()
-        self.assertEqual(len(out),0)
+        self.assertEqual(len(out), 0)
 
         stream_hash = random_lbry_hash()
         blob_data_rate = 0

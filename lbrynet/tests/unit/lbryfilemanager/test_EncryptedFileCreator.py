@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-import shutil
-import tempfile
-
 from Crypto.Cipher import AES
 import mock
 from twisted.trial import unittest
@@ -37,7 +34,8 @@ class CreateEncryptedFileTest(unittest.TestCase):
     def create_file(self, filename):
         session = mock.Mock(spec=Session.Session)(None, None)
         hash_announcer = DHTHashAnnouncer.DHTHashAnnouncer(None, None)
-        self.blob_manager = BlobManager.DiskBlobManager(hash_announcer, self.tmp_blob_dir, self.tmp_db_dir)
+        self.blob_manager = BlobManager.DiskBlobManager(
+            hash_announcer, self.tmp_blob_dir, self.tmp_db_dir)
         session.blob_manager = self.blob_manager
         yield session.blob_manager.setup()
         session.db_dir = self.tmp_db_dir

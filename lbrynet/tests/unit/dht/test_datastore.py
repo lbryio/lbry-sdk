@@ -6,8 +6,6 @@
 
 import unittest
 import time
-import datetime
-import random
 
 import lbrynet.dht.datastore
 import lbrynet.dht.constants
@@ -35,7 +33,7 @@ class DictDataStoreTest(unittest.TestCase):
                       (hashKey2, 'test4'),
                       (hashKey3, 'test5'),
                       (hashKey3, 'test6'))
-    
+
     def testReadWrite(self):
         # Test write ability
         for key, value in self.cases:
@@ -44,23 +42,32 @@ class DictDataStoreTest(unittest.TestCase):
                 self.ds.addPeerToBlob(key, value, now, now, 'node1')
             except Exception:
                 import traceback
-                self.fail('Failed writing the following data: key: "%s", data: "%s"\n  The error was: %s:' % (key, value, traceback.format_exc(5)))
-        
+                self.fail(''.join(('Failed writing the following data: key: "%s", ',
+                                   'data: "%s"\n  The error was: %s:')) %
+                          (key, value, traceback.format_exc(5)))
+
         # Verify writing (test query ability)
         for key, value in self.cases:
             try:
-                self.failUnless(self.ds.hasPeersForBlob(key), 'Key "%s" not found in DataStore! DataStore key dump: %s' % (key, self.ds.keys()))
+                self.failUnless(self.ds.hasPeersForBlob(key),
+                                'Key "%s" not found in DataStore! DataStore key dump: %s' %
+                                (key, self.ds.keys()))
             except Exception:
                 import traceback
-                self.fail('Failed verifying that the following key exists: "%s"\n  The error was: %s:' % (key, traceback.format_exc(5)))
-        
+                self.fail(
+                    'Failed verifying that the following key exists: "%s"\n  The error was: %s:' %
+                    (key, traceback.format_exc(5)))
+
         # Read back the data
         for key, value in self.cases:
-            self.failUnless(value in self.ds.getPeersForBlob(key), 'DataStore returned invalid data! Expected "%s", got "%s"' % (value, self.ds.getPeersForBlob(key)))
-    
+            self.failUnless(value in self.ds.getPeersForBlob(key),
+                            'DataStore returned invalid data! Expected "%s", got "%s"' %
+                            (value, self.ds.getPeersForBlob(key)))
+
     def testNonExistentKeys(self):
         for key, value in self.cases:
-            self.failIf(key in self.ds.keys(), 'DataStore reports it has non-existent key: "%s"' % key)
+            self.failIf(key in self.ds.keys(), 'DataStore reports it has non-existent key: "%s"' %
+                        key)
 
     def testExpires(self):
         now = int(time.time())
@@ -78,11 +85,25 @@ class DictDataStoreTest(unittest.TestCase):
         self.ds.addPeerToBlob(h2, 'val3', now - td2, now - td2, '3')
         self.ds.addPeerToBlob(h2, 'val4', now, now, '4')
         self.ds.removeExpiredPeers()
-        self.failUnless('val1' in self.ds.getPeersForBlob(h1), 'DataStore deleted an unexpired value! Value %s, publish time %s, current time %s'  % ('val1', str(now - td), str(now)))
-        self.failIf('val2' in self.ds.getPeersForBlob(h1),  'DataStore failed to delete an expired value! Value %s, publish time %s, current time %s'  % ('val2', str(now - td2), str(now)))
-        self.failIf('val3' in self.ds.getPeersForBlob(h2), 'DataStore failed to delete an expired value! Value %s, publish time %s, current time %s'  % ('val3', str(now - td2), str(now)))
-        self.failUnless('val4' in self.ds.getPeersForBlob(h2), 'DataStore deleted an unexpired value! Value %s, publish time %s, current time %s'  % ('val4', str(now), str(now)))
-            
+        self.failUnless(
+            'val1' in self.ds.getPeersForBlob(h1),
+            'DataStore deleted an unexpired value! Value %s, publish time %s, current time %s' %
+            ('val1', str(now - td), str(now)))
+        self.failIf(
+            'val2' in self.ds.getPeersForBlob(h1),
+            ''.join(('DataStore failed to delete an expired value! ',
+                     'Value %s, publish time %s, current time %s')) %
+            ('val2', str(now - td2), str(now)))
+        self.failIf(
+            'val3' in self.ds.getPeersForBlob(h2),
+            ''.join(('DataStore failed to delete an expired value! ',
+                     'Value %s, publish time %s, current time %s')) %
+            ('val3', str(now - td2), str(now)))
+        self.failUnless(
+            'val4' in self.ds.getPeersForBlob(h2),
+            'DataStore deleted an unexpired value! Value %s, publish time %s, current time %s' %
+            ('val4', str(now), str(now)))
+
 #        # First write with fake values
 #        for key, value in self.cases:
 #            except Exception:

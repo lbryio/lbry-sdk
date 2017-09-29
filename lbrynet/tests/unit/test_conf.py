@@ -64,8 +64,8 @@ class SettingsTest(unittest.TestCase):
         with self.assertRaises(InvalidCurrencyError):
             settings.set('max_key_fee', {'currency':'USD', 'amount':1})
 
-        valid_setting= {'currency':'BTC', 'amount':1}
-        settings.set('max_key_fee', valid_setting )
+        valid_setting = {'currency':'BTC', 'amount':1}
+        settings.set('max_key_fee', valid_setting)
         out = settings.get('max_key_fee')
         self.assertEqual(out, valid_setting)
 

@@ -7,7 +7,8 @@ class DaemonCLITests(unittest.TestCase):
         self.assertEqual('0.3.8', DaemonCLI.guess_type('0.3.8'))
         self.assertEqual(0.3, DaemonCLI.guess_type('0.3'))
         self.assertEqual(3, DaemonCLI.guess_type('3'))
-        self.assertEqual('VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA==', DaemonCLI.guess_type('VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA=='))
+        self.assertEqual('VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA==',
+                         DaemonCLI.guess_type('VdNmakxFORPSyfCprAD/eDDPk5TY9QYtSA=='))
         self.assertEqual(0.3, DaemonCLI.guess_type('0.3'))
         self.assertEqual(True, DaemonCLI.guess_type('TRUE'))
         self.assertEqual(True, DaemonCLI.guess_type('true'))

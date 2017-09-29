@@ -1,24 +1,18 @@
 import types
 import mock
-import json
 from twisted.trial import unittest
 from twisted.internet import defer, task
-
-from lbryschema.claim import ClaimDict
 
 from lbrynet.core import Session, PaymentRateManager, Wallet
 from lbrynet.core.Error import DownloadTimeoutError
 from lbrynet.daemon import Downloader
-from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier,StreamMetadata
-from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 
 from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
-from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader, ManagedEncryptedFileDownloaderFactory
+from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
 
-from lbrynet.tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
-from lbrynet.tests.mocks import BTCLBCFeed, USDBTCFeed
 from lbrynet.tests.mocks import mock_conf_settings
 
 class MocDownloader(object):
@@ -33,7 +27,8 @@ class MocDownloader(object):
 
     @defer.inlineCallbacks
     def status(self):
-        out = yield EncryptedFileStatusReport(self.name, self.num_completed, self.num_known, self.running_status)
+        out = yield EncryptedFileStatusReport(self.name, self.num_completed, self.num_known,
+                                              self.running_status)
         defer.returnValue(out)
 
     def start(self):
@@ -43,8 +38,9 @@ class MocDownloader(object):
         self.stop_called = True
         self.finish_deferred.callback(True)
 
-def moc_initialize(self,stream_info):
-    self.sd_hash ="d5169241150022f996fa7cd6a9a1c421937276a3275eb912790bd07ba7aec1fac5fd45431d226b8fb402691e79aeb24b"
+def moc_initialize(self, stream_info):
+    self.sd_hash = ''.join(('d5169241150022f996fa7cd6a9a1c421937276a3275eb912',
+                            '790bd07ba7aec1fac5fd45431d226b8fb402691e79aeb24b'))
     return None
 
 def moc_download_sd_blob(self):
@@ -69,7 +65,7 @@ class GetStreamTests(unittest.TestCase):
         prm = mock.Mock(spec=PaymentRateManager.NegotiatedPaymentRateManager)
         session.payment_rate_manager = prm
         market_feeds = []
-        rates={}
+        rates = {}
         exchange_rate_manager = DummyExchangeRateManager(market_feeds, rates)
         exchange_rate_manager = mock.Mock(spec=ExchangeRateManager)
         max_key_fee = {'currency':"LBC", 'amount':10, 'address':''}
@@ -96,7 +92,7 @@ class GetStreamTests(unittest.TestCase):
         stream_info = None
 
         with self.assertRaises(AttributeError):
-            yield getstream.start(stream_info,name)
+            yield getstream.start(stream_info, name)
 
 
     @defer.inlineCallbacks
@@ -108,15 +104,15 @@ class GetStreamTests(unittest.TestCase):
         def download_sd_blob(self):
             raise DownloadTimeoutError(self.file_name)
 
-        getstream  = self.init_getstream_with_mocs()
+        getstream = self.init_getstream_with_mocs()
         getstream._initialize = types.MethodType(moc_initialize, getstream)
         getstream._download_sd_blob = types.MethodType(download_sd_blob, getstream)
         getstream._download = types.MethodType(moc_download, getstream)
         getstream.pay_key_fee = types.MethodType(moc_pay_key_fee, getstream)
-        name='test'
+        name = 'test'
         stream_info = None
         with self.assertRaises(DownloadTimeoutError):
-            yield getstream.start(stream_info,name)
+            yield getstream.start(stream_info, name)
         self.assertFalse(getstream.pay_key_fee_called)
 
 
@@ -126,14 +122,14 @@ class GetStreamTests(unittest.TestCase):
         test that timeout (set to 2 here) exception is raised
         when download times out while downloading first blob, and key fee is paid
         """
-        getstream  = self.init_getstream_with_mocs()
+        getstream = self.init_getstream_with_mocs()
         getstream._initialize = types.MethodType(moc_initialize, getstream)
         getstream._download_sd_blob = types.MethodType(moc_download_sd_blob, getstream)
         getstream._download = types.MethodType(moc_download, getstream)
         getstream.pay_key_fee = types.MethodType(moc_pay_key_fee, getstream)
-        name='test'
+        name = 'test'
         stream_info = None
-        start = getstream.start(stream_info,name)
+        start = getstream.start(stream_info, name)
         self.clock.advance(1)
         self.clock.advance(1)
         with self.assertRaises(DownloadTimeoutError):
@@ -147,15 +143,15 @@ class GetStreamTests(unittest.TestCase):
         test that if we have 1 completed blob, start() returns
         and key fee is paid
         """
-        getstream  = self.init_getstream_with_mocs()
+        getstream = self.init_getstream_with_mocs()
         getstream._initialize = types.MethodType(moc_initialize, getstream)
 
         getstream._download_sd_blob = types.MethodType(moc_download_sd_blob, getstream)
         getstream._download = types.MethodType(moc_download, getstream)
         getstream.pay_key_fee = types.MethodType(moc_pay_key_fee, getstream)
-        name='test'
+        name = 'test'
         stream_info = None
-        start = getstream.start(stream_info,name)
+        start = getstream.start(stream_info, name)
 
         getstream.downloader.num_completed = 1
         self.clock.advance(1)
@@ -170,13 +166,13 @@ class GetStreamTests(unittest.TestCase):
         test that if we have a stopped downloader, beforfe a blob is downloaded,
         start() returns
         """
-        getstream  = self.init_getstream_with_mocs()
+        getstream = self.init_getstream_with_mocs()
         getstream._initialize = types.MethodType(moc_initialize, getstream)
         getstream._download_sd_blob = types.MethodType(moc_download_sd_blob, getstream)
         getstream._download = types.MethodType(moc_download, getstream)
-        name='test'
+        name = 'test'
         stream_info = None
-        start = getstream.start(stream_info,name)
+        start = getstream.start(stream_info, name)
 
         getstream.downloader.running_status = ManagedEncryptedFileDownloader.STATUS_STOPPED
         self.clock.advance(1)

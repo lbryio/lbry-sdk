@@ -1,16 +1,14 @@
 from twisted.trial import unittest
-from twisted.internet import defer,task
+from twisted.internet import defer, task
 
-from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer,DHTHashSupplier
-from lbrynet.core.utils import random_string
-from lbrynet.core import log_support, utils
+from lbrynet.core import utils
 from lbrynet.tests.util import random_lbry_hash
 
 class MocDHTNode(object):
     def __init__(self):
         self.blobs_announced = 0
 
-    def announceHaveBlob(self,blob,port):
+    def announceHaveBlob(self, blob, port):
         self.blobs_announced += 1
         return defer.succeed(True)
 
@@ -35,14 +33,14 @@ class DHTHashAnnouncerTest(unittest.TestCase):
         self.clock = task.Clock()
         self.dht_node = MocDHTNode()
         utils.call_later = self.clock.callLater
-        from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer,DHTHashSupplier
+        from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
         self.announcer = DHTHashAnnouncer(self.dht_node, peer_port=3333)
         self.supplier = MocSupplier(self.blobs_to_announce)
         self.announcer.add_supplier(self.supplier)
 
     def test_basic(self):
         self.announcer._announce_available_hashes()
-        self.assertEqual(self.announcer.hash_queue_size(),self.announcer.CONCURRENT_ANNOUNCERS)
+        self.assertEqual(self.announcer.hash_queue_size(), self.announcer.CONCURRENT_ANNOUNCERS)
         self.clock.advance(1)
         self.assertEqual(self.dht_node.blobs_announced, self.num_blobs)
         self.assertEqual(self.announcer.hash_queue_size(), 0)
@@ -52,6 +50,6 @@ class DHTHashAnnouncerTest(unittest.TestCase):
         self.announcer._announce_available_hashes()
         blob_hash = random_lbry_hash()
         self.announcer.immediate_announce([blob_hash])
-        self.assertEqual(self.announcer.hash_queue_size(),self.announcer.CONCURRENT_ANNOUNCERS+1)
+        self.assertEqual(self.announcer.hash_queue_size(), self.announcer.CONCURRENT_ANNOUNCERS+1)
         self.assertEqual(blob_hash, self.announcer.hash_queue[0][0])
 

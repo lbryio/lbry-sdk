@@ -20,7 +20,10 @@ test_metadata = {
 test_claim_dict = {
     'version':'_0_0_1',
     'claimType':'streamType',
-    'stream':{'metadata':test_metadata, 'version':'_0_0_1','source':{'source':'8655f713819344980a9a0d67b198344e2c462c90f813e86f0c63789ab0868031f25c54d0bb31af6658e997e2041806eb','sourceType':'lbry_sd_hash','contentType':'video/mp4','version':'_0_0_1'},
+    'stream':{'metadata':test_metadata, 'version':'_0_0_1', 'source':
+        {'source': ''.join(('8655f713819344980a9a0d67b198344e2c462c90f813e86f',
+                            '0c63789ab0868031f25c54d0bb31af6658e997e2041806eb')),
+         'sourceType': 'lbry_sd_hash', 'contentType': 'video/mp4', 'version': '_0_0_1'},
 }}
 
 
@@ -84,7 +87,7 @@ class WalletTest(unittest.TestCase):
         MocLbryumWallet._support_claim = failed_support_claim
         wallet = MocLbryumWallet()
         d = wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 1)
-        self.assertFailure(d,Exception)
+        self.assertFailure(d, Exception)
         return d
 
     def test_succesful_support(self):
@@ -150,20 +153,20 @@ class WalletTest(unittest.TestCase):
         d = wallet.update_balance()
         # test point reservation
         d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
-        d.addCallback(lambda _: wallet.reserve_points('testid',2))
+        d.addCallback(lambda _: wallet.reserve_points('testid', 2))
         d.addCallback(lambda _: self.assertEqual(3, wallet.get_balance()))
         d.addCallback(lambda _: self.assertEqual(2, wallet.total_reserved_points))
         # test reserved points cancellation
-        d.addCallback(lambda _: wallet.cancel_point_reservation(ReservedPoints('testid',2)))
+        d.addCallback(lambda _: wallet.cancel_point_reservation(ReservedPoints('testid', 2)))
         d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
         d.addCallback(lambda _: self.assertEqual(0, wallet.total_reserved_points))
         # test point sending
-        d.addCallback(lambda _: wallet.reserve_points('testid',2))
-        d.addCallback(lambda reserve_points: wallet.send_points_to_address(reserve_points,1))
+        d.addCallback(lambda _: wallet.reserve_points('testid', 2))
+        d.addCallback(lambda reserve_points: wallet.send_points_to_address(reserve_points, 1))
         d.addCallback(lambda _: self.assertEqual(3, wallet.get_balance()))
         # test failed point reservation
-        d.addCallback(lambda _: wallet.reserve_points('testid',4))
-        d.addCallback(lambda out: self.assertEqual(None,out))
+        d.addCallback(lambda _: wallet.reserve_points('testid', 4))
+        d.addCallback(lambda out: self.assertEqual(None, out))
         return d
 
     def test_point_reservation_and_claim(self):
@@ -174,9 +177,9 @@ class WalletTest(unittest.TestCase):
         wallet._update_balance = update_balance
         d = wallet.update_balance()
         d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
-        d.addCallback(lambda _: wallet.reserve_points('testid',2))
+        d.addCallback(lambda _: wallet.reserve_points('testid', 2))
         d.addCallback(lambda _: wallet.claim_name('test', 4, test_claim_dict))
-        self.assertFailure(d,InsufficientFundsError)
+        self.assertFailure(d, InsufficientFundsError)
         return d
 
     def test_point_reservation_and_support(self):
@@ -187,7 +190,8 @@ class WalletTest(unittest.TestCase):
         wallet._update_balance = update_balance
         d = wallet.update_balance()
         d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
-        d.addCallback(lambda _: wallet.reserve_points('testid',2))
-        d.addCallback(lambda _: wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 4))
-        self.assertFailure(d,InsufficientFundsError)
+        d.addCallback(lambda _: wallet.reserve_points('testid', 2))
+        d.addCallback(lambda _: wallet.support_claim(
+            'test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 4))
+        self.assertFailure(d, InsufficientFundsError)
         return d

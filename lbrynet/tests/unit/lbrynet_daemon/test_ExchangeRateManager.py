@@ -58,7 +58,7 @@ class FeeTest(unittest.TestCase):
         }
 
         market_feeds = [BTCLBCFeed(), USDBTCFeed()]
-        manager = DummyExchangeRateManager(market_feeds,rates)
+        manager = DummyExchangeRateManager(market_feeds, rates)
         result = manager.convert_currency(fee.currency, "LBC", fee.amount)
         self.assertEqual(60.0, result)
 
@@ -74,7 +74,7 @@ class FeeTest(unittest.TestCase):
             'BTCLBC': {'spot': 1.0, 'ts': util.DEFAULT_ISO_TIME + 1},
         }
         market_feeds = [BTCLBCFeed()]
-        manager = DummyExchangeRateManager(market_feeds,rates)
+        manager = DummyExchangeRateManager(market_feeds, rates)
         with self.assertRaises(Exception):
             manager.convert_currency(fee.currency, "LBC", fee.amount)
 
@@ -84,16 +84,18 @@ class LBRYioFeedTest(unittest.TestCase):
     def test_handle_response(self):
         feed = ExchangeRateManager.LBRYioFeed()
 
-        response ='{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, \"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, \"success\": true, \"error\": null}'
+        response = ''.join(('{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, ',
+                            '\"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, ',
+                            '\"success\": true, \"error\": null}'))
         out = yield feed._handle_response(response)
         expected = 1.0 / 5.065289549855739e-05
         self.assertEqual(expected, out)
 
-        response='{}'
+        response = '{}'
         with self.assertRaises(InvalidExchangeRateResponse):
             out = yield feed._handle_response(response)
 
-        response='{"success":true,"result":[]}'
+        response = '{"success":true,"result":[]}'
         with self.assertRaises(InvalidExchangeRateResponse):
             out = yield feed._handle_response(response)
 
@@ -103,15 +105,17 @@ class LBRYioBTCFeedTest(unittest.TestCase):
     def test_handle_response(self):
         feed = ExchangeRateManager.LBRYioBTCFeed()
 
-        response ='{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, \"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, \"success\": true, \"error\": null}'
+        response = ''.join(('{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, ',
+                            '\"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, ',
+                            '\"success\": true, \"error\": null}'))
         out = yield feed._handle_response(response)
         expected = 1.0 / 1157.498
         self.assertEqual(expected, out)
 
-        response='{}'
+        response = '{}'
         with self.assertRaises(InvalidExchangeRateResponse):
             out = yield feed._handle_response(response)
 
-        response='{"success":true,"result":[]}'
+        response = '{"success":true,"result":[]}'
         with self.assertRaises(InvalidExchangeRateResponse):
             out = yield feed._handle_response(response)

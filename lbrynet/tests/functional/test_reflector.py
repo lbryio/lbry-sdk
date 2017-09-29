@@ -1,7 +1,3 @@
-import os
-import shutil
-import tempfile
-
 from twisted.internet import defer, threads, error
 from twisted.trial import unittest
 
@@ -73,7 +69,8 @@ class TestReflector(unittest.TestCase):
             dht_node_class=Node
         )
 
-        self.stream_info_manager = EncryptedFileMetadataManager.DBEncryptedFileMetadataManager(self.db_dir)
+        self.stream_info_manager = EncryptedFileMetadataManager.DBEncryptedFileMetadataManager(
+                                    self.db_dir)
 
         self.lbry_file_manager = EncryptedFileManager.EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
@@ -81,7 +78,8 @@ class TestReflector(unittest.TestCase):
         self.server_db_dir, self.server_blob_dir = mk_db_and_blob_dir()
         self.server_blob_manager = BlobManager.DiskBlobManager(
                                     hash_announcer, self.server_blob_dir, self.server_db_dir)
-        self.server_stream_info_manager = EncryptedFileMetadataManager.DBEncryptedFileMetadataManager(self.server_db_dir)
+        self.server_stream_info_manager = \
+            EncryptedFileMetadataManager.DBEncryptedFileMetadataManager(self.server_db_dir)
 
 
         d = self.session.setup()
@@ -124,7 +122,8 @@ class TestReflector(unittest.TestCase):
             return d
 
         def start_server():
-            server_factory = reflector.ServerFactory(peer_manager, self.server_blob_manager, self.server_stream_info_manager)
+            server_factory = reflector.ServerFactory(
+                peer_manager, self.server_blob_manager, self.server_stream_info_manager)
             from twisted.internet import reactor
             port = 8943
             while self.reflector_port is None:
@@ -181,7 +180,8 @@ class TestReflector(unittest.TestCase):
             blob_hashes = [b[0] for b in blobs if b[0] is not None]
             expected_blob_hashes = [b[0] for b in self.expected_blobs[:-1] if b[0] is not None]
             self.assertEqual(expected_blob_hashes, blob_hashes)
-            sd_hashes = yield self.server_stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
+            sd_hashes = yield self.server_stream_info_manager.get_sd_blob_hashes_for_stream(
+                self.stream_hash)
             self.assertEqual(1, len(sd_hashes))
             expected_sd_hash = self.expected_blobs[-1][0]
             self.assertEqual(self.sd_hash, sd_hashes[0])
@@ -309,7 +309,8 @@ class TestReflector(unittest.TestCase):
             blob_hashes = [b[0] for b in blobs if b[0] is not None]
             expected_blob_hashes = [b[0] for b in self.expected_blobs[:-1] if b[0] is not None]
             self.assertEqual(expected_blob_hashes, blob_hashes)
-            sd_hashes = yield self.server_stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
+            sd_hashes = yield self.server_stream_info_manager.get_sd_blob_hashes_for_stream(
+                self.stream_hash)
             self.assertEqual(1, len(sd_hashes))
             expected_sd_hash = self.expected_blobs[-1][0]
             self.assertEqual(self.sd_hash, sd_hashes[0])

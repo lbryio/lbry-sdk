@@ -1,7 +1,6 @@
 import io
 
 from Crypto.PublicKey import RSA
-from decimal import Decimal
 from twisted.internet import defer
 
 from lbrynet.core import PTCWallet
@@ -220,16 +219,37 @@ class BlobAvailabilityTracker(BlobAvailability.BlobAvailabilityTracker):
 
     def __init__(self, blob_manager=None, peer_finder=None, dht_node=None):
         self.availability = {
-            '91dc64cf1ff42e20d627b033ad5e4c3a4a96856ed8a6e3fb4cd5fa1cfba4bf72eefd325f579db92f45f4355550ace8e7': ['1.2.3.4'],
-            'b2e48bb4c88cf46b76adf0d47a72389fae0cd1f19ed27dc509138c99509a25423a4cef788d571dca7988e1dca69e6fa0': ['1.2.3.4', '1.2.3.4'],
-            '6af95cd062b4a179576997ef1054c9d2120f8592eea045e9667bea411d520262cd5a47b137eabb7a7871f5f8a79c92dd': ['1.2.3.4', '1.2.3.4', '1.2.3.4'],
-            '6d8017aba362e5c5d0046625a039513419810a0397d728318c328a5cc5d96efb589fbca0728e54fe5adbf87e9545ee07': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
-            '5a450b416275da4bdff604ee7b58eaedc7913c5005b7184fc3bc5ef0b1add00613587f54217c91097fc039ed9eace9dd': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
-            'd7c82e6cac093b3f16107d2ae2b2c75424f1fcad2c7fbdbe66e4a13c0b6bd27b67b3a29c403b82279ab0f7c1c48d6787': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
-            '9dbda74a472a2e5861a5d18197aeba0f5de67c67e401124c243d2f0f41edf01d7a26aeb0b5fc9bf47f6361e0f0968e2c': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
-            '8c70d5e2f5c3a6085006198e5192d157a125d92e7378794472007a61947992768926513fc10924785bdb1761df3c37e6': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
-            'f99d24cd50d4bfd77c2598bfbeeb8415bf0feef21200bdf0b8fbbde7751a77b7a2c68e09c25465a2f40fba8eecb0b4e0': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
-            'c84aa1fd8f5009f7c4e71e444e40d95610abc1480834f835eefb267287aeb10025880a3ce22580db8c6d92efb5bc0c9c': ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
+            ''.join(('91dc64cf1ff42e20d627b033ad5e4c3a4a96856ed8a6e3fb',
+                     '4cd5fa1cfba4bf72eefd325f579db92f45f4355550ace8e7')): ['1.2.3.4'],
+            ''.join(('b2e48bb4c88cf46b76adf0d47a72389fae0cd1f19ed27dc5',
+                     '09138c99509a25423a4cef788d571dca7988e1dca69e6fa0')): ['1.2.3.4', '1.2.3.4'],
+            ''.join(('6af95cd062b4a179576997ef1054c9d2120f8592eea045e9',
+                     '667bea411d520262cd5a47b137eabb7a7871f5f8a79c92dd')):
+                ['1.2.3.4', '1.2.3.4', '1.2.3.4'],
+            ''.join(('6d8017aba362e5c5d0046625a039513419810a0397d72831',
+                     '8c328a5cc5d96efb589fbca0728e54fe5adbf87e9545ee07')):
+                ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
+            ''.join(('5a450b416275da4bdff604ee7b58eaedc7913c5005b7184f',
+                     'c3bc5ef0b1add00613587f54217c91097fc039ed9eace9dd')):
+                ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
+            ''.join(('d7c82e6cac093b3f16107d2ae2b2c75424f1fcad2c7fbdbe',
+                     '66e4a13c0b6bd27b67b3a29c403b82279ab0f7c1c48d6787')):
+                ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
+            ''.join(('9dbda74a472a2e5861a5d18197aeba0f5de67c67e401124c',
+                     '243d2f0f41edf01d7a26aeb0b5fc9bf47f6361e0f0968e2c')):
+                ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4'],
+            ''.join(('8c70d5e2f5c3a6085006198e5192d157a125d92e73787944',
+                     '72007a61947992768926513fc10924785bdb1761df3c37e6')):
+                ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4',
+                 '1.2.3.4'],
+            ''.join(('f99d24cd50d4bfd77c2598bfbeeb8415bf0feef21200bdf0',
+                     'b8fbbde7751a77b7a2c68e09c25465a2f40fba8eecb0b4e0')):
+                ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4',
+                 '1.2.3.4', '1.2.3.4'],
+            ''.join(('c84aa1fd8f5009f7c4e71e444e40d95610abc1480834f835',
+                     'eefb267287aeb10025880a3ce22580db8c6d92efb5bc0c9c')):
+                ['1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4', '1.2.3.4',
+                 '1.2.3.4', '1.2.3.4', '1.2.3.4'],
         }
         self._blob_manager = None
         self._peer_finder = PeerFinder(11223, 11224, 2)
@@ -252,19 +272,22 @@ create_stream_sd_file = {
         {
             'length': 2097152,
             'blob_num': 0,
-            'blob_hash': 'dc4708f76a5e7af0f1cae0ee96b824e2ed9250c9346c093b441f0a20d3607c17948b6fcfb4bc62020fe5286693d08586',
+            'blob_hash': ''.join(('dc4708f76a5e7af0f1cae0ee96b824e2ed9250c9346c093b',
+                                  '441f0a20d3607c17948b6fcfb4bc62020fe5286693d08586')),
             'iv': '30303030303030303030303030303031'
         },
         {
             'length': 2097152,
             'blob_num': 1,
-            'blob_hash': 'f4067522c1b49432a2a679512e3917144317caa1abba0c041e0cd2cf9f635d4cf127ce1824fa04189b63916174951f70',
+            'blob_hash': ''.join(('f4067522c1b49432a2a679512e3917144317caa1abba0c04',
+                                  '1e0cd2cf9f635d4cf127ce1824fa04189b63916174951f70')),
             'iv': '30303030303030303030303030303032'
         },
         {
             'length': 1015056,
             'blob_num': 2,
-            'blob_hash': '305486c434260484fcb2968ce0e963b72f81ba56c11b08b1af0789b55b44d78422600f9a38e3cf4f2e9569897e5646a9',
+            'blob_hash': ''.join(('305486c434260484fcb2968ce0e963b72f81ba56c11b08b1',
+                                  'af0789b55b44d78422600f9a38e3cf4f2e9569897e5646a9')),
             'iv': '30303030303030303030303030303033'
         },
         {'length': 0, 'blob_num': 3, 'iv': '30303030303030303030303030303034'}
@@ -272,7 +295,8 @@ create_stream_sd_file = {
     'stream_type': 'lbryfile',
     'key': '30313233343536373031323334353637',
     'suggested_file_name': '746573745f66696c65',
-    'stream_hash': '6d27fbe10c86d81aacfb897c7a426d0a2214f5a299455a6d315c0f998c4b3545c2dc60906122d94653c23b1898229e3f'
+    'stream_hash': ''.join(('6d27fbe10c86d81aacfb897c7a426d0a2214f5a299455a6d',
+                            '315c0f998c4b3545c2dc60906122d94653c23b1898229e3f'))
 }
 
 

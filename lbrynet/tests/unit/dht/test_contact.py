@@ -36,7 +36,7 @@ class ContactOperatorsTest(unittest.TestCase):
     def testIllogicalComparisons(self):
         """ Test comparisons with non-Contact and non-str types """
         msg = '"{}" operator: Contact object should not be equal to {} type'
-        for item in (123, [1,2,3], {'key': 'value'}):
+        for item in (123, [1, 2, 3], {'key': 'value'}):
             self.failIfEqual(
                 self.firstContact, item,
                 msg.format('eq', type(item).__name__))

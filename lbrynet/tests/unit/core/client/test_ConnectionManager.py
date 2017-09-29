@@ -1,20 +1,15 @@
-import sys
-import time
-import logging
-
-from lbrynet.core import log_support
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.server.ServerProtocol import ServerProtocol
 from lbrynet.core.client.ClientProtocol import ClientProtocol
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.Peer import Peer
 from lbrynet.core.PeerManager import PeerManager
-from lbrynet.core.Error import ConnectionClosedBeforeResponseError, NoResponseError
+from lbrynet.core.Error import NoResponseError
 
 from twisted.trial import unittest
 from twisted.internet import defer, reactor, task
 from twisted.internet.task import deferLater
-from twisted.internet.protocol import Protocol, ServerFactory
+from twisted.internet.protocol import ServerFactory
 from lbrynet import conf
 from lbrynet.core import utils
 from lbrynet.interfaces  import IQueryHandlerFactory, IQueryHandler, IRequestCreator
@@ -153,7 +148,8 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.server_port = reactor.listenTCP(PEER_PORT, self.server, interface=LOCAL_HOST)
         yield self.connection_manager.manage(schedule_next_call=False)
         self.assertEqual(1, self.connection_manager.num_peer_connections())
-        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].factory.connection_was_made_deferred
+        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].\
+            factory.connection_was_made_deferred
         self.assertEqual(0, self.connection_manager.num_peer_connections())
         self.assertTrue(connection_made)
         self.assertEqual(1, self.TEST_PEER.success_count)
@@ -166,7 +162,8 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.server_port = reactor.listenTCP(PEER_PORT, self.server, interface=LOCAL_HOST)
         yield self.connection_manager.manage(schedule_next_call=False)
         self.assertEqual(1, self.connection_manager.num_peer_connections())
-        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].factory.connection_was_made_deferred
+        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].\
+            factory.connection_was_made_deferred
         self.assertEqual(0, self.connection_manager.num_peer_connections())
         self.assertTrue(connection_made)
         self.assertEqual(0, self.TEST_PEER.success_count)
@@ -179,7 +176,8 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self._init_connection_manager()
         yield self.connection_manager.manage(schedule_next_call=False)
         self.assertEqual(1, self.connection_manager.num_peer_connections())
-        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].factory.connection_was_made_deferred
+        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].\
+            factory.connection_was_made_deferred
         self.assertEqual(0, self.connection_manager.num_peer_connections())
         self.assertFalse(connection_made)
         self.assertEqual(0, self.connection_manager.num_peer_connections())
@@ -199,12 +197,14 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.assertEqual(2, self.connection_manager.num_peer_connections())
         self.assertIn(self.TEST_PEER, self.connection_manager._peer_connections)
         self.assertIn(test_peer2, self.connection_manager._peer_connections)
-        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].factory.connection_was_made_deferred
+        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].\
+            factory.connection_was_made_deferred
         self.assertFalse(connection_made)
         self.assertEqual(1, self.connection_manager.num_peer_connections())
         self.assertEqual(0, self.TEST_PEER.success_count)
         self.assertEqual(1, self.TEST_PEER.down_count)
-        connection_made = yield self.connection_manager._peer_connections[test_peer2].factory.connection_was_made_deferred
+        connection_made = yield self.connection_manager._peer_connections[test_peer2].\
+            factory.connection_was_made_deferred
         self.assertFalse(connection_made)
         self.assertEqual(0, self.connection_manager.num_peer_connections())
         self.assertEqual(0, test_peer2.success_count)
@@ -227,19 +227,21 @@ class TestIntegrationConnectionManager(unittest.TestCase):
     @defer.inlineCallbacks
     def test_closed_connection_when_server_is_slow(self):
         self._init_connection_manager()
-        self.server = MocServerProtocolFactory(self.clock, has_moc_query_handler=True,is_delayed=True)
+        self.server = MocServerProtocolFactory(
+            self.clock, has_moc_query_handler=True, is_delayed=True)
         self.server_port = reactor.listenTCP(PEER_PORT, self.server, interface=LOCAL_HOST)
 
         yield self.connection_manager.manage(schedule_next_call=False)
         self.assertEqual(1, self.connection_manager.num_peer_connections())
-        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].factory.connection_was_made_deferred
+        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].\
+            factory.connection_was_made_deferred
         self.assertEqual(0, self.connection_manager.num_peer_connections())
         self.assertEqual(True, connection_made)
         self.assertEqual(0, self.TEST_PEER.success_count)
         self.assertEqual(1, self.TEST_PEER.down_count)
 
 
-    """ test header first seeks """
+    # test header first seeks
     @defer.inlineCallbacks
     def test_no_peer_for_head_blob(self):
         # test that if we can't find blobs for the head blob,
@@ -253,7 +255,8 @@ class TestIntegrationConnectionManager(unittest.TestCase):
 
         yield self.connection_manager.manage(schedule_next_call=False)
         self.assertEqual(1, self.connection_manager.num_peer_connections())
-        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].factory.connection_was_made_deferred
+        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].\
+            factory.connection_was_made_deferred
         self.assertEqual(0, self.connection_manager.num_peer_connections())
         self.assertTrue(connection_made)
         self.assertEqual(1, self.TEST_PEER.success_count)

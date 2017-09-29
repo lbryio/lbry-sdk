@@ -5,8 +5,6 @@ from lbrynet.core.Error import DownloadCanceledError, InvalidDataError
 from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir, random_lbry_hash
 from twisted.trial import unittest
 from twisted.internet import defer
-import os
-import time
 
 
 class BlobFileTest(unittest.TestCase):
@@ -14,7 +12,8 @@ class BlobFileTest(unittest.TestCase):
         self.db_dir, self.blob_dir = mk_db_and_blob_dir()
         self.fake_content_len = 64
         self.fake_content = bytearray('0'*self.fake_content_len)
-        self.fake_content_hash = '53871b26a08e90cb62142f2a39f0b80de41792322b0ca5602b6eb7b5cf067c49498a7492bb9364bbf90f40c1c5412105'
+        self.fake_content_hash = ''.join(('53871b26a08e90cb62142f2a39f0b80de41792322b0ca560',
+                                          '2b6eb7b5cf067c49498a7492bb9364bbf90f40c1c5412105'))
 
     def tearDown(self):
         rm_db_and_blob_dir(self.db_dir, self.blob_dir)
@@ -61,7 +60,7 @@ class BlobFileTest(unittest.TestCase):
     @defer.inlineCallbacks
     def test_too_much_write(self):
         # writing too much data should result in failure
-        expected_length= 16
+        expected_length = 16
         content = bytearray('0'*32)
         blob_hash = random_lbry_hash()
         blob_file = BlobFile(self.blob_dir, blob_hash, expected_length)
@@ -73,7 +72,7 @@ class BlobFileTest(unittest.TestCase):
     def test_bad_hash(self):
         # test a write that should fail because its content's hash
         # does not equal the blob_hash
-        length= 64
+        length = 64
         content = bytearray('0'*length)
         blob_hash = random_lbry_hash()
         blob_file = BlobFile(self.blob_dir, blob_hash, length)

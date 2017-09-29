@@ -8,7 +8,6 @@ from lbryschema.decode import smart_decode
 from lbrynet import conf
 from lbrynet.core import Session, PaymentRateManager, Wallet
 from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
-from lbrynet.daemon import ExchangeRateManager
 
 from lbrynet.tests import util
 from lbrynet.tests.mocks import mock_conf_settings, FakeNetwork
@@ -43,7 +42,8 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
         "license_url": "fake license url",
         "nsfw": False,
         "sources": {
-            "lbry_sd_hash": "d2b8b6e907dde95245fe6d144d16c2fdd60c4e0c6463ec98b85642d06d8e9414e8fcfdcb7cb13532ec5454fb8fe7f280"
+            "lbry_sd_hash": ''.join(('d2b8b6e907dde95245fe6d144d16c2fdd60c4e0c6463ec98',
+                                     'b85642d06d8e9414e8fcfdcb7cb13532ec5454fb8fe7f280'))
         },
         "thumbnail": "fake thumbnail",
         "title": "fake title",
@@ -54,7 +54,8 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
             {"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
     daemon._resolve_name = lambda _: defer.succeed(metadata)
     migrated = smart_decode(json.dumps(metadata))
-    daemon.session.wallet.resolve = lambda *_: defer.succeed({"test": {'claim': {'value': migrated.claim_dict}}})
+    daemon.session.wallet.resolve = lambda *_: defer.succeed(
+        {"test": {'claim': {'value': migrated.claim_dict}}})
     return daemon
 
 

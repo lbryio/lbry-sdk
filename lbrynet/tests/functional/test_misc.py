@@ -285,7 +285,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
             ds.append(lbry_file_manager.stop())
             if server_port:
                 ds.append(server_port.stopListening())
-            ds.append(rm_db_and_blob_dir(db_dir, blob_dir)) 
+            ds.append(rm_db_and_blob_dir(db_dir, blob_dir))
             kill_check.stop()
             dead_event.set()
             dl = defer.DeferredList(ds)

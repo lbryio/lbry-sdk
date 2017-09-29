@@ -22,8 +22,9 @@ class TestEncryptedFileSaver(unittest.TestCase):
         wallet = None
         download_directory = '.'
         upload_allowed = False
-        saver = EncryptedFileSaver(stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
-                         payment_rate_manager, wallet, download_directory, file_name)
+        saver = EncryptedFileSaver(
+            stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
+            payment_rate_manager, wallet, download_directory, file_name)
 
         yield saver._setup_output()
         self.assertTrue(os.path.isfile(file_name))

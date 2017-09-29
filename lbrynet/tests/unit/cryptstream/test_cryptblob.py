@@ -7,11 +7,8 @@ from lbrynet.tests.mocks import mock_conf_settings
 
 from Crypto import Random
 from Crypto.Cipher import AES
-import tempfile
 import random
 import string
-import StringIO
-import time
 
 class MocBlob(object):
     def __init__(self):
@@ -30,7 +27,7 @@ class MocBlob(object):
 
 
 def random_string(length):
-   return ''.join(random.choice(string.lowercase) for i in range(length))
+    return ''.join(random.choice(string.lowercase) for i in range(length))
 
 
 class TestCryptBlob(unittest.TestCase):
@@ -50,9 +47,9 @@ class TestCryptBlob(unittest.TestCase):
         string_to_encrypt = random_string(size_of_data)
 
         # encrypt string
-        done,num_bytes = maker.write(string_to_encrypt)
+        done, num_bytes = maker.write(string_to_encrypt)
         yield maker.close()
-        self.assertEqual(size_of_data,num_bytes)
+        self.assertEqual(size_of_data, num_bytes)
         expected_encrypted_blob_size = ((size_of_data / AES.block_size) + 1) * AES.block_size
         self.assertEqual(expected_encrypted_blob_size, len(blob.data))
 
@@ -68,7 +65,7 @@ class TestCryptBlob(unittest.TestCase):
         # decrypt string
         decryptor = CryptBlob.StreamBlobDecryptor(blob, key, iv, size_of_data)
         decryptor.decrypt(write_func)
-        self.assertEqual(self.data_buf,string_to_encrypt)
+        self.assertEqual(self.data_buf, string_to_encrypt)
 
     @defer.inlineCallbacks
     def test_encrypt_decrypt(self):
