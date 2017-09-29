@@ -1,14 +1,13 @@
 import logging
 import os
 from twisted.internet import defer, threads
-from twisted.protocols.basic import FileSender
 from twisted.web.client import FileBodyProducer
 from twisted.python.failure import Failure
 from lbrynet import conf
 from lbrynet.core.Error import DownloadCanceledError, InvalidDataError, InvalidBlobHashError
 from lbrynet.core.utils import is_valid_blobhash
 from lbrynet.blob.writer import HashBlobWriter
-from lbrynet.blob.reader import HashBlobReader, HashBlobReader_v0
+from lbrynet.blob.reader import HashBlobReader
 
 
 log = logging.getLogger(__name__)
@@ -142,33 +141,6 @@ class BlobFile(object):
         if self.writers:
             return True
         return False
-
-    def read(self, write_func):
-        """
-        This function is only used in StreamBlobDecryptor
-        and should be deprecated in favor of open_for_reading()
-        """
-        def close_self(*args):
-            self.close_read_handle(file_handle)
-            return args[0]
-
-        file_sender = FileSender()
-        reader = HashBlobReader_v0(write_func)
-        file_handle = self.open_for_reading()
-        if file_handle is not None:
-            d = file_sender.beginFileTransfer(file_handle, reader)
-            d.addCallback(close_self)
-        else:
-            d = defer.fail(IOError("Could not read the blob"))
-        return d
-
-    def close_read_handle(self, file_handle):
-        """
-        This function is only used in StreamBlobDecryptor
-        and should be deprecated in favor of open_for_reading()
-        """
-        if file_handle is not None:
-            file_handle.close()
 
     def reader_finished(self, reader):
         self.readers -= 1
