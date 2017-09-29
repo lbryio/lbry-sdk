@@ -55,7 +55,7 @@ class BlobStreamDescriptorReader(StreamDescriptorReader):
             f = self.blob.open_for_reading()
             if f is not None:
                 raw_data = f.read()
-                self.blob.close_read_handle(f)
+                f.close()
                 return raw_data
             else:
                 raise ValueError("Could not open the blob for reading")

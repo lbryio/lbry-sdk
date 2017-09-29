@@ -89,7 +89,7 @@ class BlobRequestHandler(object):
 
     def cancel_send(self, err):
         if self.currently_uploading is not None:
-            self.currently_uploading.close_read_handle(self.read_handle)
+            self.read_handle.close()
         self.read_handle = None
         self.currently_uploading = None
         return err
@@ -225,7 +225,7 @@ class BlobRequestHandler(object):
 
         def set_not_uploading(reason=None):
             if self.currently_uploading is not None:
-                self.currently_uploading.close_read_handle(self.read_handle)
+                self.read_handle.close()
                 self.read_handle = None
                 self.currently_uploading = None
             self.file_sender = None

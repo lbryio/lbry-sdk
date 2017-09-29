@@ -9,7 +9,7 @@ from lbrynet import conf
 from lbrynet.core.Error import DownloadCanceledError, InvalidDataError, InvalidBlobHashError
 from lbrynet.core.utils import is_valid_blobhash
 from lbrynet.blob.writer import HashBlobWriter
-from lbrynet.blob.reader import HashBlobReader
+from lbrynet.blob.reader import HashBlobReader, HashBlobReader_v0
 
 
 log = logging.getLogger(__name__)
@@ -75,19 +75,13 @@ class BlobFile(object):
         """
         open blob for reading
 
-        returns a file handle that can be read() from.
-        once finished with the file handle, user must call close_read_handle()
-        otherwise blob cannot be deleted.
+        returns a file like object that can be read() from, and closed() when
+        finished
         """
         if self._verified is True:
-            file_handle = None
-            try:
-                file_handle = open(self.file_path, 'rb')
-                self.readers += 1
-                return file_handle
-            except IOError:
-                log.exception('Failed to open %s', self.file_path)
-                self.close_read_handle(file_handle)
+            reader = HashBlobReader(self.file_path, self.reader_finished)
+            self.readers += 1
+            return reader
         return None
 
     def delete(self):
@@ -150,12 +144,16 @@ class BlobFile(object):
         return False
 
     def read(self, write_func):
+        """
+        This function is only used in StreamBlobDecryptor
+        and should be deprecated in favor of open_for_reading()
+        """
         def close_self(*args):
             self.close_read_handle(file_handle)
             return args[0]
 
         file_sender = FileSender()
-        reader = HashBlobReader(write_func)
+        reader = HashBlobReader_v0(write_func)
         file_handle = self.open_for_reading()
         if file_handle is not None:
             d = file_sender.beginFileTransfer(file_handle, reader)
@@ -163,6 +161,19 @@ class BlobFile(object):
         else:
             d = defer.fail(IOError("Could not read the blob"))
         return d
+
+    def close_read_handle(self, file_handle):
+        """
+        This function is only used in StreamBlobDecryptor
+        and should be deprecated in favor of open_for_reading()
+        """
+        if file_handle is not None:
+            file_handle.close()
+            self.readers -= 1
+
+    def reader_finished(self, reader):
+        self.readers -= 1
+        return defer.succeed(True)
 
     def writer_finished(self, writer, err=None):
         def fire_finished_deferred():
@@ -207,11 +218,6 @@ class BlobFile(object):
             d = defer.succeed(True)
         d.addBoth(lambda _: writer.close_handle())
         return d
-
-    def close_read_handle(self, file_handle):
-        if file_handle is not None:
-            file_handle.close()
-            self.readers -= 1
 
     @defer.inlineCallbacks
     def _save_verified_blob(self, writer):
