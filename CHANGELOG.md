@@ -19,7 +19,6 @@ at anytime.
 ### Fixed
   * Fixed handling cancelled blob and availability requests
   * Fixed redundant blob requests to a peer
-  * Fixed blob download history
 
 ### Deprecated
   * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
@@ -28,8 +27,6 @@ at anytime.
 ### Changed
   * Announcing by head blob is turned on by default
   * Updated reflector server dns
-  * Improved download analytics
-  * Improved download errors by distinguishing a data timeout from a sd timeout
 
 ### Added
   * Added WAL pragma to sqlite3
@@ -47,6 +44,20 @@ at anytime.
   * Removed unused `EncryptedFileOpener`
 
 
+## [0.16.3] - 2017-09-28
+### Fixed
+ * Fixed blob download history
+
+### Changed
+ * Improved download analytics
+ * Improved download errors by distinguishing a data timeout from a sd timeout
+
+
+## [0.16.2] - 2017-09-26
+### Fixed
+ * Fixed https://github.com/lbryio/lbry/issues/771 (handle when a certificate is missing for a signed claim in `claim_list_mine`)
+
+
 ## [0.16.1] - 2017-09-20
 ### Fixed
  * Fixed `transaction_list` doc string
@@ -54,6 +65,7 @@ at anytime.
 
 ### Changed
  * Bumped `lbryum` requirement to 3.1.8 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#318---2017-09-20)
+
 
 ## [0.16.0] - 2017-09-18
 ### Fixed
