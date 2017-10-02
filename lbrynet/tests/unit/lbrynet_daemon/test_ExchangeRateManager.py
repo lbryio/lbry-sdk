@@ -84,9 +84,9 @@ class LBRYioFeedTest(unittest.TestCase):
     def test_handle_response(self):
         feed = ExchangeRateManager.LBRYioFeed()
 
-        response = ''.join(('{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, ',
-                            '\"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, ',
-                            '\"success\": true, \"error\": null}'))
+        response = '{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, ' \
+                   '\"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, ' \
+                   '\"success\": true, \"error\": null}'
         out = yield feed._handle_response(response)
         expected = 1.0 / 5.065289549855739e-05
         self.assertEqual(expected, out)
@@ -105,9 +105,9 @@ class LBRYioBTCFeedTest(unittest.TestCase):
     def test_handle_response(self):
         feed = ExchangeRateManager.LBRYioBTCFeed()
 
-        response = ''.join(('{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, ',
-                            '\"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, ',
-                            '\"success\": true, \"error\": null}'))
+        response = '{\"data\": {\"fresh\": 0, \"lbc_usd\": 0.05863062523378918, ' \
+                   '\"lbc_btc\": 5.065289549855739e-05, \"btc_usd\": 1157.498}, ' \
+                   '\"success\": true, \"error\": null}'
         out = yield feed._handle_response(response)
         expected = 1.0 / 1157.498
         self.assertEqual(expected, out)

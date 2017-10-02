@@ -23,26 +23,26 @@ def get_random_sample(list_to_sample):
 def calculate_negotation_turns(client_base, host_base, host_is_generous=True,
                                client_is_generous=True):
     blobs = [
-        ''.join(('b2e48bb4c88cf46b76adf0d47a72389fae0cd1f19ed27dc5',
-                 '09138c99509a25423a4cef788d571dca7988e1dca69e6fa0')),
-        ''.join(('d7c82e6cac093b3f16107d2ae2b2c75424f1fcad2c7fbdbe',
-                 '66e4a13c0b6bd27b67b3a29c403b82279ab0f7c1c48d6787')),
-        ''.join(('5a450b416275da4bdff604ee7b58eaedc7913c5005b7184f',
-                 'c3bc5ef0b1add00613587f54217c91097fc039ed9eace9dd')),
-        ''.join(('f99d24cd50d4bfd77c2598bfbeeb8415bf0feef21200bdf0',
-                 'b8fbbde7751a77b7a2c68e09c25465a2f40fba8eecb0b4e0')),
-        ''.join(('9dbda74a472a2e5861a5d18197aeba0f5de67c67e401124c',
-                 '243d2f0f41edf01d7a26aeb0b5fc9bf47f6361e0f0968e2c')),
-        ''.join(('91dc64cf1ff42e20d627b033ad5e4c3a4a96856ed8a6e3fb',
-                 '4cd5fa1cfba4bf72eefd325f579db92f45f4355550ace8e7')),
-        ''.join(('6d8017aba362e5c5d0046625a039513419810a0397d72831',
-                 '8c328a5cc5d96efb589fbca0728e54fe5adbf87e9545ee07')),
-        ''.join(('6af95cd062b4a179576997ef1054c9d2120f8592eea045e9',
-                 '667bea411d520262cd5a47b137eabb7a7871f5f8a79c92dd')),
-        ''.join(('8c70d5e2f5c3a6085006198e5192d157a125d92e73787944',
-                 '72007a61947992768926513fc10924785bdb1761df3c37e6')),
-        ''.join(('c84aa1fd8f5009f7c4e71e444e40d95610abc1480834f835',
-                 'eefb267287aeb10025880a3ce22580db8c6d92efb5bc0c9c'))
+        'b2e48bb4c88cf46b76adf0d47a72389fae0cd1f19ed27dc5'
+        '09138c99509a25423a4cef788d571dca7988e1dca69e6fa0',
+        'd7c82e6cac093b3f16107d2ae2b2c75424f1fcad2c7fbdbe'
+        '66e4a13c0b6bd27b67b3a29c403b82279ab0f7c1c48d6787',
+        '5a450b416275da4bdff604ee7b58eaedc7913c5005b7184f'
+        'c3bc5ef0b1add00613587f54217c91097fc039ed9eace9dd',
+        'f99d24cd50d4bfd77c2598bfbeeb8415bf0feef21200bdf0'
+        'b8fbbde7751a77b7a2c68e09c25465a2f40fba8eecb0b4e0',
+        '9dbda74a472a2e5861a5d18197aeba0f5de67c67e401124c'
+        '243d2f0f41edf01d7a26aeb0b5fc9bf47f6361e0f0968e2c',
+        '91dc64cf1ff42e20d627b033ad5e4c3a4a96856ed8a6e3fb'
+        '4cd5fa1cfba4bf72eefd325f579db92f45f4355550ace8e7',
+        '6d8017aba362e5c5d0046625a039513419810a0397d72831'
+        '8c328a5cc5d96efb589fbca0728e54fe5adbf87e9545ee07',
+        '6af95cd062b4a179576997ef1054c9d2120f8592eea045e9'
+        '667bea411d520262cd5a47b137eabb7a7871f5f8a79c92dd',
+        '8c70d5e2f5c3a6085006198e5192d157a125d92e73787944'
+        '72007a61947992768926513fc10924785bdb1761df3c37e6',
+        'c84aa1fd8f5009f7c4e71e444e40d95610abc1480834f835'
+        'eefb267287aeb10025880a3ce22580db8c6d92efb5bc0c9c'
     ]
 
     host = mock.Mock()

@@ -42,8 +42,8 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
         "license_url": "fake license url",
         "nsfw": False,
         "sources": {
-            "lbry_sd_hash": ''.join(('d2b8b6e907dde95245fe6d144d16c2fdd60c4e0c6463ec98',
-                                     'b85642d06d8e9414e8fcfdcb7cb13532ec5454fb8fe7f280'))
+            "lbry_sd_hash": 'd2b8b6e907dde95245fe6d144d16c2fdd60c4e0c6463ec98'
+                            'b85642d06d8e9414e8fcfdcb7cb13532ec5454fb8fe7f280'
         },
         "thumbnail": "fake thumbnail",
         "title": "fake title",

@@ -63,8 +63,8 @@ class DefaultFormatTranslatorTest(unittest.TestCase):
             for key in msgPrimitive:
                 self.failUnlessEqual(
                     translatedObj[key], msgPrimitive[key],
-                    ''.join(('Message object type %s not translated correctly into primitive on ',
-                             'key "%s"; expected "%s", got "%s"')) %
+                    'Message object type %s not translated correctly into primitive on '
+                    'key "%s"; expected "%s", got "%s"' %
                     (msg.__class__.__name__, key, msgPrimitive[key], translatedObj[key]))
 
     def testFromPrimitive(self):
@@ -78,8 +78,8 @@ class DefaultFormatTranslatorTest(unittest.TestCase):
             for key in msg.__dict__:
                 self.failUnlessEqual(
                     msg.__dict__[key], translatedObj.__dict__[key],
-                    ''.join(('Message instance variable "%s" not translated correctly; ',
-                             'expected "%s", got "%s"')) %
+                    'Message instance variable "%s" not translated correctly; '
+                    'expected "%s", got "%s"' %
                     (key, msg.__dict__[key], translatedObj.__dict__[key]))
 
 

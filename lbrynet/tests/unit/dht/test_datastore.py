@@ -42,8 +42,8 @@ class DictDataStoreTest(unittest.TestCase):
                 self.ds.addPeerToBlob(key, value, now, now, 'node1')
             except Exception:
                 import traceback
-                self.fail(''.join(('Failed writing the following data: key: "%s", ',
-                                   'data: "%s"\n  The error was: %s:')) %
+                self.fail('Failed writing the following data: key: "%s" '
+                          'data: "%s"\n  The error was: %s:' %
                           (key, value, traceback.format_exc(5)))
 
         # Verify writing (test query ability)
@@ -91,13 +91,13 @@ class DictDataStoreTest(unittest.TestCase):
             ('val1', str(now - td), str(now)))
         self.failIf(
             'val2' in self.ds.getPeersForBlob(h1),
-            ''.join(('DataStore failed to delete an expired value! ',
-                     'Value %s, publish time %s, current time %s')) %
+            'DataStore failed to delete an expired value! '
+            'Value %s, publish time %s, current time %s' %
             ('val2', str(now - td2), str(now)))
         self.failIf(
             'val3' in self.ds.getPeersForBlob(h2),
-            ''.join(('DataStore failed to delete an expired value! ',
-                     'Value %s, publish time %s, current time %s')) %
+            'DataStore failed to delete an expired value! '
+            'Value %s, publish time %s, current time %s' %
             ('val3', str(now - td2), str(now)))
         self.failUnless(
             'val4' in self.ds.getPeersForBlob(h2),
