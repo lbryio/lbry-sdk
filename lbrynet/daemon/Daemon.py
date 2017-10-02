@@ -630,14 +630,14 @@ class Daemon(AuthJSONRPCServer):
         else:
             blob_infos = []
             report["known_blobs"] = 0
-        for blob_hash, blob_num, iv, length in blob_infos:
-            try:
-                host = yield self.session.blob_manager.get_host_downloaded_from(blob_hash)
-            except Exception:
-                host = None
-            if host:
-                blobs[blob_num] = host
-        report["blobs"] = json.dumps(blobs)
+        # for blob_hash, blob_num, iv, length in blob_infos:
+        #     try:
+        #         host = yield self.session.blob_manager.get_host_downloaded_from(blob_hash)
+        #     except Exception:
+        #         host = None
+        #     if host:
+        #         blobs[blob_num] = host
+        # report["blobs"] = json.dumps(blobs)
         defer.returnValue(report)
 
     @defer.inlineCallbacks
