@@ -3,7 +3,7 @@ import logging
 import requests
 import os
 import base64
-import json
+import simplejson
 
 from lbrynet.daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
 from lbrynet import conf
@@ -52,7 +52,7 @@ class AuthAPIClient(object):
         to_auth = get_auth_message(pre_auth_post_data)
         token = self.__api_key.get_hmac(to_auth)
         pre_auth_post_data.update({'hmac': token})
-        post_data = json.dumps(pre_auth_post_data)
+        post_data = simplejson.dumps(pre_auth_post_data, use_decimal=True)
         service_url = self.__service_url
         auth_header = self.__auth_header
         cookies = self.__cookies

@@ -1,9 +1,12 @@
 import mock
+import json
+from decimal import Decimal
+
 from twisted.trial import unittest
 
 from tests.mocks import mock_conf_settings
 from lbrynet.daemon.auth import server
-
+from lbrynet.daemon.auth.server import jsonrpc_dumps, jsonrpc_loads
 
 class AuthJSONRPCServerTest(unittest.TestCase):
     # TODO: move to using a base class for tests
@@ -64,3 +67,30 @@ class AuthJSONRPCServerTest(unittest.TestCase):
         # note the ports don't match
         request.getHeader = mock.Mock(return_value='http://example.com:1235')
         self.assertFalse(self.server._check_header_source(request, 'Origin'))
+
+
+    def test_json_dumps_loads(self):
+        # make sure floats are parsed as decimals, and do not lose precision
+        num ='0.111111111111111111111111111111'
+        out = jsonrpc_loads(num)
+        self.assertTrue(isinstance(out,Decimal))
+        self.assertEqual(Decimal(num),out)
+
+        num ='1353118103.108893381'
+        out = jsonrpc_loads(num)
+        self.assertTrue(isinstance(out,Decimal))
+        self.assertEqual(Decimal(num),out)
+
+
+        # makes sure dumped json includes proper keys
+        out = jsonrpc_dumps('something', 1)
+        parsed = json.loads(out)
+        self.assertEqual(parsed, {'jsonrpc':'2.0','result':'something', 'id':1})
+
+        # make sure decimals are dumped properly without precision loss
+        num = Decimal('0.111111111111111111111111111111')
+        out = jsonrpc_dumps(num, 1)
+        parsed = json.loads(out, parse_float=Decimal)
+        self.assertEqual(num, parsed['result'])
+
+
