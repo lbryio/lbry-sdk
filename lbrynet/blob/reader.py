@@ -39,16 +39,15 @@ class HashBlobReader(object):
     This is a file like reader class that supports
     read(size) and close()
     """
-    def __init__(self, file_path, finished_cb):
-        self.file_path = file_path
+    def __init__(self, read_handle, finished_cb):
         self.finished_cb = finished_cb
         self.finished_cb_d = None
-        self.read_handle = open(self.file_path, 'rb')
+        self.read_handle = read_handle
 
     def __del__(self):
         if self.finished_cb_d is None:
             log.warn("Garbage collection was called, but reader for %s was not closed yet",
-                        self.file_path)
+                        self.read_handle.name)
         self.close()
 
     def read(self, size=-1):

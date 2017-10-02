@@ -78,7 +78,8 @@ class BlobFile(object):
         finished
         """
         if self._verified is True:
-            reader = HashBlobReader(self.file_path, self.reader_finished)
+            f = open(self.file_path, 'rb')
+            reader = HashBlobReader(f, self.reader_finished)
             self.readers += 1
             return reader
         return None
