@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Temporarily disable blob analytics report
   *
 
 ### Added
