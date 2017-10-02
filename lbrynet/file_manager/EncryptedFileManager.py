@@ -25,10 +25,12 @@ log = logging.getLogger(__name__)
 
 
 class EncryptedFileManager(object):
-    """Keeps track of currently opened LBRY Files, their options, and
-    their LBRY File specific metadata.
-
     """
+    Keeps track of currently opened LBRY Files, their options, and
+    their LBRY File specific metadata.
+    """
+    # when reflecting files, reflect up to this many files at a time
+    CONCURRENT_REFLECTS = 5
 
     def __init__(self, session, stream_info_manager, sd_identifier, download_directory=None):
 
@@ -235,13 +237,13 @@ class EncryptedFileManager(object):
                 return l.toggle_running()
         return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
-    def _reflect_lbry_files(self):
-        for lbry_file in self.lbry_files:
-            yield reflect_stream(lbry_file)
-
     @defer.inlineCallbacks
     def reflect_lbry_files(self):
-        yield defer.DeferredList(list(self._reflect_lbry_files()))
+        sem = defer.DeferredSemaphore(self.CONCURRENT_REFLECTS)
+        ds = []
+        for lbry_file in self.lbry_files:
+            ds.append(sem.run(reflect_stream, lbry_file))
+        yield defer.DeferredList(ds)
 
     @defer.inlineCallbacks
     def stop(self):
