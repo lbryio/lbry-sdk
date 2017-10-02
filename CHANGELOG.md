@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  * Temporarily disable blob analytics report
+  *
   *
 
 ### Added
@@ -31,6 +31,11 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.16.4] - 2017-10-02
+### Changed
+ * Temporarily disable blob analytics report
 
 
 ## [0.16.3] - 2017-09-28
