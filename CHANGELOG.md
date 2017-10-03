@@ -21,6 +21,7 @@ at anytime.
   * Fixed redundant blob requests to a peer
   * Fixed https://github.com/lbryio/lbry/issues/923
   * Fixed concurrent reflects opening too many files
+  * Fixed cases when reflecting would fail on error conditions
 
 ### Deprecated
   * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
