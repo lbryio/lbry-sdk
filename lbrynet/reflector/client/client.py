@@ -71,6 +71,9 @@ class EncryptedFileReflectorClient(Protocol):
             d.addErrback(self.response_failure_handler)
 
     def connectionLost(self, reason):
+        # make sure blob file readers get closed
+        self.set_not_uploading()
+
         if reason.check(error.ConnectionDone):
             if not self.needed_blobs:
                 log.info("Reflector has all blobs for %s (%s)",
