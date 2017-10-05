@@ -32,7 +32,7 @@ class BlobManagerTest(unittest.TestCase):
         shutil.rmtree(self.db_dir)
 
     @defer.inlineCallbacks
-    def _create_and_add_blob(self):
+    def _create_and_add_blob(self, should_announce=False):
         # create and add blob to blob manager
         data_len = random.randint(1, 1000)
         data = ''.join(random.choice(string.lowercase) for data_len in range(data_len))
@@ -48,7 +48,7 @@ class BlobManagerTest(unittest.TestCase):
 
         writer, finished_d = yield blob.open_for_writing(self.peer)
         yield writer.write(data)
-        yield self.bm.blob_completed(blob)
+        yield self.bm.blob_completed(blob, should_announce)
         yield self.bm.add_blob_to_upload_history(blob_hash, 'test', len(data))
 
         # check to see if blob is there
@@ -112,3 +112,20 @@ class BlobManagerTest(unittest.TestCase):
         self.assertEqual(len(blobs), 10)
         self.assertTrue(blob_hashes[-1] in blobs)
         self.assertTrue(os.path.isfile(os.path.join(self.blob_dir, blob_hashes[-1])))
+
+    @defer.inlineCallbacks
+    def test_should_announce(self):
+        # create blob with should announce
+        blob_hash = yield self._create_and_add_blob(should_announce=True)
+        out = yield self.bm.get_should_announce(blob_hash)
+        self.assertTrue(out)
+        count = yield self.bm.count_should_announce_blobs()
+        self.assertEqual(1, count)
+
+        # set should annouce to False
+        out = yield self.bm.set_should_announce(blob_hash, should_announce=False)
+        out = yield self.bm.get_should_announce(blob_hash)
+        self.assertFalse(out)
+        count = yield self.bm.count_should_announce_blobs()
+        self.assertEqual(0, count)
+
