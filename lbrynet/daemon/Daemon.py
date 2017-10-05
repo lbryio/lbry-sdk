@@ -1029,6 +1029,8 @@ class Daemon(AuthJSONRPCServer):
                     'session_status': {
                         'managed_blobs': count of blobs in the blob manager,
                         'managed_streams': count of streams in the file manager
+                        'announce_queue_size': number of blobs currently queued to be announced
+                        'should_announce_blobs': number of blobs that should be announced
                     }
 
                 If given the dht status option:
@@ -1077,9 +1079,13 @@ class Daemon(AuthJSONRPCServer):
         }
         if session_status:
             blobs = yield self.session.blob_manager.get_all_verified_blobs()
+            announce_queue_size = self.session.hash_announcer.hash_queue_size()
+            should_announce_blobs = yield self.session.blob_manager.count_should_announce_blobs()
             response['session_status'] = {
                 'managed_blobs': len(blobs),
                 'managed_streams': len(self.lbry_file_manager.lbry_files),
+                'announce_queue_size': announce_queue_size,
+                'should_announce_blobs': should_announce_blobs,
             }
         if dht_status:
             response['dht_status'] = self.session.dht_node.get_bandwidth_stats()
