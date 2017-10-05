@@ -331,8 +331,9 @@ class ReflectorServer(Protocol):
         return d
 
     def determine_missing_blobs(self, sd_blob):
-        with sd_blob.open_for_reading() as sd_file:
-            sd_blob_data = sd_file.read()
+        reader = sd_blob.open_for_reading()
+        sd_blob_data = reader.read()
+        reader.close()
         decoded_sd_blob = json.loads(sd_blob_data)
         return self.get_unvalidated_blobs_in_stream(decoded_sd_blob)
 
