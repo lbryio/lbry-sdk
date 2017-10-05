@@ -12,10 +12,6 @@ at anytime.
   *
   *
 
-### Added
-  * Added ability for reflector to store stream information for head blob announce
-  *
-
 ### Fixed
   * Fixed handling cancelled blob and availability requests
   * Fixed redundant blob requests to a peer
@@ -42,6 +38,7 @@ at anytime.
   * Use `BytesIO` buffers instead of temp files when processing blobs
   * Refactored and pruned blob related classes into `lbrynet.blobs`
   * Changed several `assert`s to raise more useful errors
+  * Added ability for reflector to store stream information for head blob announce
 
 ### Removed
   * Removed `TempBlobFile`
