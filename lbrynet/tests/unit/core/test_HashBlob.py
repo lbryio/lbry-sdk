@@ -150,7 +150,7 @@ class BlobFileTest(unittest.TestCase):
         writer_1, finished_d_1 = blob_file.open_for_writing(peer=1)
         writer_2, finished_d_2 = blob_file.open_for_writing(peer=2)
 
-        blob_file._save_verified_blob(writer_1)
+        blob_file.save_verified_blob(writer_1)
         # second write should fail to save
-        yield self.assertFailure(blob_file._save_verified_blob(writer_2), DownloadCanceledError)
+        yield self.assertFailure(blob_file.save_verified_blob(writer_2), DownloadCanceledError)
 
