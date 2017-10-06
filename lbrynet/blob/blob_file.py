@@ -67,6 +67,7 @@ class BlobFile(object):
             finished_deferred = defer.Deferred()
             writer = HashBlobWriter(self.get_length, self.writer_finished)
             self.writers[peer] = (writer, finished_deferred)
+            log.debug("%i writers for %s", len(self.writers), self.blob_hash)
             return (writer, finished_deferred)
         log.warning("Tried to download the same file twice simultaneously from the same peer")
         return None, None
@@ -221,6 +222,7 @@ class BlobFile(object):
 
     @defer.inlineCallbacks
     def _save_verified_blob(self, writer):
+        log.debug("Obtaining lock for writer %s", writer)
         with self.setting_verified_blob_lock:
             if self.moved_verified_blob is False:
                 writer.write_handle.seek(0)
