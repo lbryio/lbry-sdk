@@ -40,7 +40,7 @@ class BlobFile(object):
         self.blob_dir = blob_dir
         self.file_path = os.path.join(blob_dir, self.blob_hash)
         self.blob_write_lock = defer.DeferredLock()
-        self.moved_verified_blob = False
+        self.saved_verified_blob = False
         if os.path.isfile(self.file_path):
             self.set_length(os.path.getsize(self.file_path))
             # This assumes that the hash of the blob has already been
@@ -92,7 +92,7 @@ class BlobFile(object):
         """
         if not self.writers and not self.readers:
             self._verified = False
-            self.moved_verified_blob = False
+            self.saved_verified_blob = False
 
             def delete_from_file_system():
                 if os.path.isfile(self.file_path):
@@ -225,12 +225,12 @@ class BlobFile(object):
 
     @defer.inlineCallbacks
     def _save_verified_blob(self, writer):
-        if self.moved_verified_blob is False:
+        if self.saved_verified_blob is False:
             writer.write_handle.seek(0)
             out_path = os.path.join(self.blob_dir, self.blob_hash)
             producer = FileBodyProducer(writer.write_handle)
             yield producer.startProducing(open(out_path, 'wb'))
-            self.moved_verified_blob = True
+            self.saved_verified_blob = True
             defer.returnValue(True)
         else:
             raise DownloadCanceledError()
