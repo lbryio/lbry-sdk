@@ -119,3 +119,43 @@ class LBRYioBTCFeedTest(unittest.TestCase):
         response = '{"success":true,"result":[]}'
         with self.assertRaises(InvalidExchangeRateResponse):
             out = yield feed._handle_response(response)
+
+class CryptonatorFeedTest(unittest.TestCase):
+    @defer.inlineCallbacks
+    def test_handle_response(self):
+        feed = ExchangeRateManager.CryptonatorFeed()
+
+        response = '{\"ticker\":{\"base\":\"BTC\",\"target\":\"LBC\",\"price\":\"23657.44026496\"' \
+                   ',\"volume\":\"\",\"change\":\"-5.59806916\"},\"timestamp\":1507470422' \
+                   ',\"success\":true,\"error\":\"\"}'
+        out = yield feed._handle_response(response)
+        expected = 23657.44026496
+        self.assertEqual(expected, out)
+
+        response = '{}'
+        with self.assertRaises(InvalidExchangeRateResponse):
+            out = yield feed._handle_response(response)
+
+        response = '{"success":true,"ticker":{}}'
+        with self.assertRaises(InvalidExchangeRateResponse):
+            out = yield feed._handle_response(response)
+
+class CryptonatorBTCFeedTest(unittest.TestCase):
+    @defer.inlineCallbacks
+    def test_handle_response(self):
+        feed = ExchangeRateManager.CryptonatorBTCFeed()
+
+        response = '{\"ticker\":{\"base\":\"USD\",\"target\":\"BTC\",\"price\":\"0.00022123\",' \
+                   '\"volume\":\"\",\"change\":\"-0.00000259\"},\"timestamp\":1507471141,' \
+                   '\"success\":true,\"error\":\"\"}'
+        out = yield feed._handle_response(response)
+        expected = 0.00022123
+        self.assertEqual(expected, out)
+
+        response = '{}'
+        with self.assertRaises(InvalidExchangeRateResponse):
+            out = yield feed._handle_response(response)
+
+        response = '{"success":true,"ticker":{}}'
+        with self.assertRaises(InvalidExchangeRateResponse):
+            out = yield feed._handle_response(response)

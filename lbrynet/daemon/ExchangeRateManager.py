@@ -173,9 +173,12 @@ class CryptonatorBTCFeed(MarketFeed):
         )
 
     def _handle_response(self, response):
-        json_response = json.loads(response)
-        if 'ticker' not in json_response or 'success' not in json_response or \
-                        json_response['success'] is not True:
+        try:
+            json_response = json.loads(response)
+        except ValueError:
+            raise InvalidExchangeRateResponse(self.name, "invalid rate response : %s" % response)
+        if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
+                        'success' not in json_response or json_response['success'] is not True:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
         return defer.succeed(float(json_response['ticker']['price']))
 
@@ -193,9 +196,12 @@ class CryptonatorFeed(MarketFeed):
         )
 
     def _handle_response(self, response):
-        json_response = json.loads(response)
-        if 'ticker' not in json_response or 'success' not in json_response or \
-                        json_response['success'] is not True:
+        try:
+            json_response = json.loads(response)
+        except ValueError:
+            raise InvalidExchangeRateResponse(self.name, "invalid rate response : %s" % response)
+        if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
+                        'success' not in json_response or json_response['success'] is not True:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
         return defer.succeed(float(json_response['ticker']['price']))
 
