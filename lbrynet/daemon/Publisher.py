@@ -43,6 +43,8 @@ class Publisher(object):
         claim_dict['stream']['source']['source'] = sd_hash
         claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
+        claim_dict['stream']['source']['contentDuration'] = get_content_duration(file_path) 
+     
         claim_dict['stream']['source']['version'] = "_0_0_1" # need current version here
 
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
@@ -68,3 +70,6 @@ class Publisher(object):
 
 def get_content_type(filename):
     return mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+
+def get_content_duration(filename):
+    return 0
