@@ -13,24 +13,50 @@ at anytime.
   *
 
 ### Fixed
-  *
-  *
+  * Fixed handling cancelled blob and availability requests
+  * Fixed redundant blob requests to a peer
+  * Fixed https://github.com/lbryio/lbry/issues/923
+  * Fixed concurrent reflects opening too many files
+  * Fixed cases when reflecting would fail on error conditions
 
 ### Deprecated
   * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
   *
 
 ### Changed
-  *
-  *
+  * Announcing by head blob is turned on by default
+  * Updated reflector server dns
+  * Moved tests into the lbrynet package.
 
 ### Added
-  *
-  *
+  * Added WAL pragma to sqlite3
+  * Added unit tests for `BlobFile`
+  * Updated exchange rate tests for the lbry.io api
+  * Use `hashlib` for sha384 instead of `pycrypto`
+  * Use `cryptography` instead of `pycrypto` for blob encryption and decryption
+  * Use `cryptography` for PKCS7 instead of doing it manually
+  * Use `BytesIO` buffers instead of temp files when processing blobs
+  * Refactored and pruned blob related classes into `lbrynet.blobs`
+  * Changed several `assert`s to raise more useful errors
+  * Added ability for reflector to store stream information for head blob announce
 
 ### Removed
-  *
-  *
+  * Removed `TempBlobFile`
+  * Removed unused `EncryptedFileOpener`
+
+
+## [0.16.3] - 2017-09-28
+### Fixed
+ * Fixed blob download history
+
+### Changed
+ * Improved download analytics
+ * Improved download errors by distinguishing a data timeout from a sd timeout
+
+
+## [0.16.2] - 2017-09-26
+### Fixed
+ * Fixed https://github.com/lbryio/lbry/issues/771 (handle when a certificate is missing for a signed claim in `claim_list_mine`)
 
 
 ## [0.16.1] - 2017-09-20
@@ -45,6 +71,7 @@ at anytime.
  * Added redundant API server for currency conversion
  
  
+
 ## [0.16.0] - 2017-09-18
 ### Fixed
  * Fixed uncaught error when shutting down after a failed daemon startup

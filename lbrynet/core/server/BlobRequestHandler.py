@@ -89,7 +89,7 @@ class BlobRequestHandler(object):
 
     def cancel_send(self, err):
         if self.currently_uploading is not None:
-            self.currently_uploading.close_read_handle(self.read_handle)
+            self.read_handle.close()
         self.read_handle = None
         self.currently_uploading = None
         return err
@@ -143,7 +143,7 @@ class BlobRequestHandler(object):
     def open_blob_for_reading(self, blob, response):
         response_fields = {}
         d = defer.succeed(None)
-        if blob.is_validated():
+        if blob.get_is_verified():
             read_handle = blob.open_for_reading()
             if read_handle is not None:
                 self.currently_uploading = blob
@@ -162,7 +162,7 @@ class BlobRequestHandler(object):
 
     def record_transaction(self, blob):
         d = self.blob_manager.add_blob_to_upload_history(
-            str(blob), self.peer.host, self.blob_data_payment_rate)
+            blob.blob_hash, self.peer.host, self.blob_data_payment_rate)
         return d
 
     def _reply_to_send_request(self, response, incoming):
@@ -225,7 +225,7 @@ class BlobRequestHandler(object):
 
         def set_not_uploading(reason=None):
             if self.currently_uploading is not None:
-                self.currently_uploading.close_read_handle(self.read_handle)
+                self.read_handle.close()
                 self.read_handle = None
                 self.currently_uploading = None
             self.file_sender = None

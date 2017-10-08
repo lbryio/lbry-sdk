@@ -5,7 +5,7 @@ from lbrynet.core.BlobInfo import BlobInfo
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.ConnectionManager import ConnectionManager
 from lbrynet.core.client.DownloadManager import DownloadManager
-from lbrynet.core.Error import InvalidBlobHashError, DownloadTimeoutError
+from lbrynet.core.Error import InvalidBlobHashError, DownloadSDTimeout
 from lbrynet.core.utils import is_valid_blobhash, safe_start_looping_call, safe_stop_looping_call
 from twisted.python.failure import Failure
 from twisted.internet import defer
@@ -64,14 +64,14 @@ class SingleProgressManager(object):
 
     def stream_position(self):
         blobs = self.download_manager.blobs
-        if blobs and blobs[0].is_validated():
+        if blobs and blobs[0].get_is_verified():
             return 1
         return 0
 
     def needed_blobs(self):
         blobs = self.download_manager.blobs
         assert len(blobs) == 1
-        return [b for b in blobs.itervalues() if not b.is_validated()]
+        return [b for b in blobs.itervalues() if not b.get_is_verified()]
 
 
 class DummyBlobHandler(object):
@@ -136,7 +136,7 @@ class StandaloneBlobDownloader(object):
     def _download_timedout(self):
         self.stop()
         if not self.finished_deferred.called:
-            self.finished_deferred.errback(DownloadTimeoutError(self.blob_hash))
+            self.finished_deferred.errback(DownloadSDTimeout(self.blob_hash))
 
     def insufficient_funds(self, err):
         self.stop()

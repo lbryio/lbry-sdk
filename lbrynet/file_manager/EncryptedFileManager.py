@@ -25,10 +25,12 @@ log = logging.getLogger(__name__)
 
 
 class EncryptedFileManager(object):
-    """Keeps track of currently opened LBRY Files, their options, and
-    their LBRY File specific metadata.
-
     """
+    Keeps track of currently opened LBRY Files, their options, and
+    their LBRY File specific metadata.
+    """
+    # when reflecting files, reflect up to this many files at a time
+    CONCURRENT_REFLECTS = 5
 
     def __init__(self, session, stream_info_manager, sd_identifier, download_directory=None):
 
@@ -235,13 +237,13 @@ class EncryptedFileManager(object):
                 return l.toggle_running()
         return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
-    def _reflect_lbry_files(self):
-        for lbry_file in self.lbry_files:
-            yield reflect_stream(lbry_file)
-
     @defer.inlineCallbacks
     def reflect_lbry_files(self):
-        yield defer.DeferredList(list(self._reflect_lbry_files()))
+        sem = defer.DeferredSemaphore(self.CONCURRENT_REFLECTS)
+        ds = []
+        for lbry_file in self.lbry_files:
+            ds.append(sem.run(reflect_stream, lbry_file))
+        yield defer.DeferredList(ds)
 
     @defer.inlineCallbacks
     def stop(self):
@@ -303,8 +305,10 @@ class EncryptedFileManager(object):
 
     @rerun_if_locked
     def _change_file_status(self, rowid, new_status):
-        return self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
+        d = self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
                                     (new_status, rowid))
+        d.addCallback(lambda _: new_status)
+        return d
 
     @rerun_if_locked
     def _get_lbry_file_status(self, rowid):

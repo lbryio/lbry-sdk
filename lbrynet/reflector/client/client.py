@@ -71,6 +71,9 @@ class EncryptedFileReflectorClient(Protocol):
             d.addErrback(self.response_failure_handler)
 
     def connectionLost(self, reason):
+        # make sure blob file readers get closed
+        self.set_not_uploading()
+
         if reason.check(error.ConnectionDone):
             if not self.needed_blobs:
                 log.info("Reflector has all blobs for %s (%s)",
@@ -112,17 +115,17 @@ class EncryptedFileReflectorClient(Protocol):
     def get_validated_blobs(self, blobs_in_stream):
         def get_blobs(blobs):
             for (blob, _, _, blob_len) in blobs:
-                if blob:
+                if blob and blob_len:
                     yield self.blob_manager.get_blob(blob, blob_len)
 
         dl = defer.DeferredList(list(get_blobs(blobs_in_stream)), consumeErrors=True)
-        dl.addCallback(lambda blobs: [blob for r, blob in blobs if r and blob.is_validated()])
+        dl.addCallback(lambda blobs: [blob for r, blob in blobs if r and blob.get_is_verified()])
         return dl
 
     def set_blobs_to_send(self, blobs_to_send):
         for blob in blobs_to_send:
-            if blob not in self.blob_hashes_to_send:
-                self.blob_hashes_to_send.append(blob)
+            if blob.blob_hash not in self.blob_hashes_to_send:
+                self.blob_hashes_to_send.append(blob.blob_hash)
 
     def get_blobs_to_send(self):
         def _show_missing_blobs(filtered):
@@ -179,7 +182,7 @@ class EncryptedFileReflectorClient(Protocol):
     def set_not_uploading(self):
         if self.next_blob_to_send is not None:
             log.debug("Close %s", self.next_blob_to_send)
-            self.next_blob_to_send.close_read_handle(self.read_handle)
+            self.read_handle.close()
             self.read_handle = None
             self.next_blob_to_send = None
         if self.file_sender is not None:
@@ -191,6 +194,7 @@ class EncryptedFileReflectorClient(Protocol):
         assert self.read_handle is not None, \
             "self.read_handle was None when trying to start the transfer"
         d = self.file_sender.beginFileTransfer(self.read_handle, self)
+        d.addCallback(lambda _: self.read_handle.close())
         return d
 
     def handle_handshake_response(self, response_dict):
@@ -253,7 +257,7 @@ class EncryptedFileReflectorClient(Protocol):
                 return self.set_not_uploading()
 
     def open_blob_for_reading(self, blob):
-        if blob.is_validated():
+        if blob.get_is_verified():
             read_handle = blob.open_for_reading()
             if read_handle is not None:
                 log.debug('Getting ready to send %s', blob.blob_hash)
@@ -304,9 +308,10 @@ class EncryptedFileReflectorClient(Protocol):
             return d
         elif self.blob_hashes_to_send:
             # open the next blob to send
-            blob = self.blob_hashes_to_send[0]
+            blob_hash = self.blob_hashes_to_send[0]
             self.blob_hashes_to_send = self.blob_hashes_to_send[1:]
-            d = self.open_blob_for_reading(blob)
+            d = self.blob_manager.get_blob(blob_hash)
+            d.addCallback(self.open_blob_for_reading)
             d.addCallbacks(lambda _: self.send_blob_info(),
                            lambda err: self.skip_missing_blob(err, blob.blob_hash))
             return d
