@@ -1230,7 +1230,7 @@ class Daemon(AuthJSONRPCServer):
             )
 
         return self._render_response({
-            'help': textwrap.dedent(fn.__doc__)
+            'help': textwrap.dedent(fn.__doc__ or '')
         })
 
     def jsonrpc_commands(self):
