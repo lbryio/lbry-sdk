@@ -40,6 +40,7 @@ at anytime.
   * Refactored and pruned blob related classes into `lbrynet.blobs`
   * Changed several `assert`s to raise more useful errors
   * Added ability for reflector to store stream information for head blob announce
+  * Added blob announcement information to API call status with session flag
 
 ### Removed
   * Removed `TempBlobFile`

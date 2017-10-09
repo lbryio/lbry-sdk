@@ -88,6 +88,9 @@ class DiskBlobManager(DHTHashSupplier):
     def hashes_to_announce(self):
         return self._get_blobs_to_announce()
 
+    def count_should_announce_blobs(self):
+        return self._count_should_announce_blobs()
+
     def set_should_announce(self, blob_hash, should_announce):
         if blob_hash in self.blobs:
             blob = self.blobs[blob_hash]
@@ -213,6 +216,12 @@ class DiskBlobManager(DHTHashSupplier):
     def _should_announce(self, blob_hash):
         result = yield self.db_conn.runQuery("select should_announce from blobs where blob_hash=?",
                                              (blob_hash,))
+        defer.returnValue(result[0][0])
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def _count_should_announce_blobs(self):
+        result = yield self.db_conn.runQuery("select count(*) from blobs where should_announce=1")
         defer.returnValue(result[0][0])
 
     @defer.inlineCallbacks
