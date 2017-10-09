@@ -6,7 +6,6 @@ from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir, random_lb
 from twisted.trial import unittest
 from twisted.internet import defer
 
-
 class BlobFileTest(unittest.TestCase):
     def setUp(self):
         self.db_dir, self.blob_dir = mk_db_and_blob_dir()
@@ -144,4 +143,14 @@ class BlobFileTest(unittest.TestCase):
         self.assertEqual(self.fake_content_len, len(c))
         self.assertEqual(bytearray(c), self.fake_content)
 
+    @defer.inlineCallbacks
+    def test_multiple_writers_save_at_same_time(self):
+        blob_hash = self.fake_content_hash
+        blob_file = BlobFile(self.blob_dir, blob_hash, self.fake_content_len)
+        writer_1, finished_d_1 = blob_file.open_for_writing(peer=1)
+        writer_2, finished_d_2 = blob_file.open_for_writing(peer=2)
+
+        blob_file.save_verified_blob(writer_1)
+        # second write should fail to save
+        yield self.assertFailure(blob_file.save_verified_blob(writer_2), DownloadCanceledError)
 
