@@ -1,6 +1,5 @@
 import logging
 import os
-import threading
 from twisted.internet import defer, threads
 from twisted.protocols.basic import FileSender
 from twisted.web.client import FileBodyProducer
@@ -40,8 +39,8 @@ class BlobFile(object):
         self.readers = 0
         self.blob_dir = blob_dir
         self.file_path = os.path.join(blob_dir, self.blob_hash)
-        self.setting_verified_blob_lock = threading.Lock()
-        self.moved_verified_blob = False
+        self.blob_write_lock = defer.DeferredLock()
+        self.saved_verified_blob = False
         if os.path.isfile(self.file_path):
             self.set_length(os.path.getsize(self.file_path))
             # This assumes that the hash of the blob has already been
@@ -93,7 +92,7 @@ class BlobFile(object):
         """
         if not self.writers and not self.readers:
             self._verified = False
-            self.moved_verified_blob = False
+            self.saved_verified_blob = False
 
             def delete_from_file_system():
                 if os.path.isfile(self.file_path):
@@ -201,7 +200,7 @@ class BlobFile(object):
         if err is None:
             if writer.len_so_far == self.length and writer.blob_hash == self.blob_hash:
                 if self._verified is False:
-                    d = self._save_verified_blob(writer)
+                    d = self.save_verified_blob(writer)
                     d.addCallbacks(lambda _: fire_finished_deferred(), errback_finished_deferred)
                     d.addCallback(lambda _: cancel_other_downloads())
                 else:
@@ -219,15 +218,19 @@ class BlobFile(object):
         d.addBoth(lambda _: writer.close_handle())
         return d
 
+    def save_verified_blob(self, writer):
+        # we cannot have multiple _save_verified_blob interrupting
+        # each other, can happen since startProducing is a deferred
+        return self.blob_write_lock.run(self._save_verified_blob, writer)
+
     @defer.inlineCallbacks
     def _save_verified_blob(self, writer):
-        with self.setting_verified_blob_lock:
-            if self.moved_verified_blob is False:
-                writer.write_handle.seek(0)
-                out_path = os.path.join(self.blob_dir, self.blob_hash)
-                producer = FileBodyProducer(writer.write_handle)
-                yield producer.startProducing(open(out_path, 'wb'))
-                self.moved_verified_blob = True
-                defer.returnValue(True)
-            else:
-                raise DownloadCanceledError()
+        if self.saved_verified_blob is False:
+            writer.write_handle.seek(0)
+            out_path = os.path.join(self.blob_dir, self.blob_hash)
+            producer = FileBodyProducer(writer.write_handle)
+            yield producer.startProducing(open(out_path, 'wb'))
+            self.saved_verified_blob = True
+            defer.returnValue(True)
+        else:
+            raise DownloadCanceledError()

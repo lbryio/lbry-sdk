@@ -33,6 +33,7 @@ class HashBlobReader_v0(object):
         if self.streaming is False:
             reactor.callLater(0, self.producer.resumeProducing)
 
+
 class HashBlobReader(object):
     """
     This is a file like reader class that supports
