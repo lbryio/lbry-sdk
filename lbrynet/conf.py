@@ -352,7 +352,8 @@ class Config(object):
         return env_settings
 
     def _assert_valid_data_type(self, data_type):
-        assert data_type in self._data, KeyError('{} in is not a valid data type'.format(data_type))
+        if not data_type in self._data:
+            raise AssertionError(KeyError('{} in is not a valid data type'.format(data_type)))
 
     def get_valid_setting_names(self):
         return self._data[TYPE_DEFAULT].keys()
