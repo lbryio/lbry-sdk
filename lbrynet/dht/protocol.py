@@ -155,7 +155,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                  C{ErrorMessage}).
         @rtype: twisted.internet.defer.Deferred
         """
-        msg = msgtypes.RequestMessage(self._node.id, method, args)
+        msg = msgtypes.RequestMessage(self._node.node_id, method, args)
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)
 
@@ -342,7 +342,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
     def _sendResponse(self, contact, rpcID, response):
         """ Send a RPC response to the specified contact
         """
-        msg = msgtypes.ResponseMessage(rpcID, self._node.id, response)
+        msg = msgtypes.ResponseMessage(rpcID, self._node.node_id, response)
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)
         self._send(encodedMsg, rpcID, (contact.address, contact.port))
@@ -350,7 +350,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
     def _sendError(self, contact, rpcID, exceptionType, exceptionMessage):
         """ Send an RPC error message to the specified contact
         """
-        msg = msgtypes.ErrorMessage(rpcID, self._node.id, exceptionType, exceptionMessage)
+        msg = msgtypes.ErrorMessage(rpcID, self._node.node_id, exceptionType, exceptionMessage)
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)
         self._send(encodedMsg, rpcID, (contact.address, contact.port))

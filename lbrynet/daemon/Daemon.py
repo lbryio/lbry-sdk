@@ -206,7 +206,7 @@ class Daemon(AuthJSONRPCServer):
         # of the daemon, but I don't want to deal with that now
 
         self.analytics_manager = analytics_manager
-        self.lbryid = conf.settings.node_id
+        self.node_id = conf.settings.node_id
 
         self.wallet_user = None
         self.wallet_password = None
@@ -562,7 +562,7 @@ class Daemon(AuthJSONRPCServer):
             self.session = Session(
                 conf.settings['data_rate'],
                 db_dir=self.db_dir,
-                lbryid=self.lbryid,
+                node_id=self.node_id,
                 blob_dir=self.blobfile_dir,
                 dht_node_port=self.dht_node_port,
                 known_dht_nodes=conf.settings['known_dht_nodes'],
@@ -1054,7 +1054,7 @@ class Daemon(AuthJSONRPCServer):
         best_hash = (yield self.session.wallet.get_best_blockhash()) if has_wallet else None
 
         response = {
-            'lbry_id': base58.b58encode(self.lbryid),
+            'lbry_id': base58.b58encode(self.node_id),
             'installation_id': conf.settings.installation_id,
             'is_running': self.announced_startup,
             'is_first_run': self.session.wallet.is_first_run if has_wallet else None,
