@@ -467,8 +467,7 @@ class Node(object):
             contact = kwargs['_rpcNodeContact']
             compact_ip = contact.compact_ip()
         else:
-            return 'Not OK'
-            # raise TypeError, 'No contact info available'
+            raise TypeError, 'No contact info available'
 
         if ((self_store is False) and
                 ('token' not in value or not self.verify_token(value['token'], compact_ip))):
