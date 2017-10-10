@@ -382,9 +382,13 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 log.debug("DHT RECV CALL %s %s:%i", method, senderContact.address,
                           senderContact.port)
             try:
-                kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
-                result = func(*args, **kwargs)
+                if method != 'ping':
+                    kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
+                    result = func(*args, **kwargs)
+                else:
+                    result = func()
             except Exception, e:
+                log.exception("error handling request for %s: %s", senderContact.address, method)
                 df.errback(e)
             else:
                 df.callback(result)
