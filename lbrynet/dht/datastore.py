@@ -1,33 +1,13 @@
-#!/usr/bin/env python
-#
-# This library is free software, distributed under the terms of
-# the GNU Lesser General Public License Version 3, or any later version.
-# See the COPYING file included in this archive
-#
-# The docstrings in this module contain epytext markup; API documentation
-# may be created by processing this file with epydoc: http://epydoc.sf.net
-
 import UserDict
 import time
 import constants
+from interface import IDataStore
+from zope.interface import implements
 
 
-class DataStore(UserDict.DictMixin):
-    """ Interface for classes implementing physical storage (for data
-    published via the "STORE" RPC) for the Kademlia DHT
-
-    @note: This provides an interface for a dict-like object
-    """
-
-    def keys(self):
-        """ Return a list of the keys in this data store """
-
-    def addPeerToBlob(self, key, value, lastPublished, originallyPublished, originalPublisherID):
-        pass
-
-
-class DictDataStore(DataStore):
+class DictDataStore(UserDict.DictMixin):
     """ A datastore using an in-memory Python dictionary """
+    implements(IDataStore)
 
     def __init__(self):
         # Dictionary format:
