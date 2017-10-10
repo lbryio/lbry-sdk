@@ -44,3 +44,9 @@ class DictDataStore(UserDict.DictMixin):
     def getPeersForBlob(self, key):
         if key in self._dict:
             return [val[0] for val in self._dict[key]]
+
+    def removePeer(self, value):
+        for key in self._dict:
+            self._dict[key] = [val for val in self._dict[key] if val[0] != value]
+            if not self._dict[key]:
+                del self._dict[key]

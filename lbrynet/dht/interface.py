@@ -24,6 +24,9 @@ class IDataStore(Interface):
     def getPeersForBlob(self, key):
         pass
 
+    def removePeer(self, key):
+        pass
+
 
 class IRoutingTable(Interface):
     """ Interface for RPC message translators/formatters
