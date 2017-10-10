@@ -218,7 +218,8 @@ class Node(object):
                 for peer in result[blob_hash]:
                     if self.node_id != peer[6:]:
                         host = ".".join([str(ord(d)) for d in peer[:4]])
-                        if host == "127.0.0.1" and "from_peer" in result and result["from_peer"] != "self":
+                        if host == "127.0.0.1" and "from_peer" in result \
+                                and result["from_peer"] != "self":
                             host = result["from_peer"]
                         port, = struct.unpack('>H', peer[4:6])
                         if (host, port) not in expanded_peers:

@@ -18,6 +18,7 @@ def shell_command(command):
     FNULL = open(os.devnull, 'w')
     p = subprocess.Popen(command,shell=False,stdout=FNULL,stderr=subprocess.STDOUT)
 
+
 def lbrynet_cli(commands):
     cli_cmd=['lbrynet-cli']
     for cmd in commands:
@@ -65,7 +66,6 @@ class TestIntegration(unittest.TestCase):
         out = json.loads(out)
         self.assertTrue(out['is_running'])
 
-
     def test_cli_docopts(self):
         out,err = lbrynet_cli(['cli_test_command'])
         self.assertEqual('',out)
@@ -83,7 +83,6 @@ class TestIntegration(unittest.TestCase):
         out = json.loads(out)
         self.assertEqual([1,[],1,None,False,False], out)
 
-
         out,err = lbrynet_cli(['cli_test_command','1', '--pos_arg2=2','--pos_arg3=3'])
         out = json.loads(out)
         self.assertEqual([1,[],2,3,False,False], out)
@@ -93,7 +92,6 @@ class TestIntegration(unittest.TestCase):
         # TODO: variable length arguments don't have guess_type() on them
         self.assertEqual([1,['2','3'],None,None,False,False], out)
 
-
         out,err = lbrynet_cli(['cli_test_command','1','-a'])
         out = json.loads(out)
         self.assertEqual([1,[],None,None,True,False], out)
@@ -102,12 +100,9 @@ class TestIntegration(unittest.TestCase):
         out = json.loads(out)
         self.assertEqual([1,[],None,None,True,False], out)
 
-
         out,err = lbrynet_cli(['cli_test_command','1','-a','-b'])
         out = json.loads(out)
         self.assertEqual([1,[],None,None,True,True], out)
-
-
 
     def test_status(self):
         out = lbrynet.status()

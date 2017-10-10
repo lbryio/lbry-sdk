@@ -15,6 +15,10 @@ from lbrynet.tests.mocks import BlobAvailabilityTracker as DummyBlobAvailability
 from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from lbrynet.tests.mocks import BTCLBCFeed, USDBTCFeed
 
+import logging
+logging.getLogger("lbryum").setLevel(logging.WARNING)
+
+
 def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     if data_rate is None:
         data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
@@ -68,7 +72,6 @@ class TestCostEst(unittest.TestCase):
         size = 10000000
         correct_result = 4.5
         daemon = get_test_daemon(generous=True, with_fee=True)
-        print daemon.get_est_cost("test", size)
         self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
 
     def test_fee_and_ungenerous_data(self):
