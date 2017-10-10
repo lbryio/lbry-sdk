@@ -578,11 +578,12 @@ class Node(object):
         findValue = rpc != 'findNode'
 
         if startupShortlist is None:
-            shortlist = self._routingTable.findCloseNodes(key, constants.alpha)
+            shortlist = self._routingTable.findCloseNodes(key, constants.k)
             if key != self.node_id:
                 # Update the "last accessed" timestamp for the appropriate k-bucket
                 self._routingTable.touchKBucket(key)
             if len(shortlist) == 0:
+                log.warning("This node doesnt know any other nodes")
                 # This node doesn't know of any other nodes
                 fakeDf = defer.Deferred()
                 fakeDf.callback([])
