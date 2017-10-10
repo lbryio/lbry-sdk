@@ -123,7 +123,11 @@ class TreeRoutingTable(object):
         @rtype: list
         """
         bucketIndex = self._kbucketIndex(key)
-        closestNodes = self._buckets[bucketIndex].getContacts(constants.k, _rpcNodeID)
+
+        if bucketIndex < len(self._buckets):
+            closestNodes = self._buckets[bucketIndex].getContacts(count, _rpcNodeID)
+        else:
+            closestNodes = []
         # This method must return k contacts (even if we have the node
         # with the specified key as node ID), unless there is less
         # than k remote nodes in the routing table
