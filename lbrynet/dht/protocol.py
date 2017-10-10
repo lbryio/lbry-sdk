@@ -11,7 +11,7 @@ import encoding
 import msgtypes
 import msgformat
 from contact import Contact
-from error import UnknownRemoteException, TimeoutError
+from error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError
 from delay import Delay
 
 log = logging.getLogger(__name__)
@@ -246,7 +246,12 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     df.callback((message, address))
                 elif isinstance(message, msgtypes.ErrorMessage):
                     # The RPC request raised a remote exception; raise it locally
-                    remoteException = Exception(message.response)
+                    if message.exceptionType in BUILTIN_EXCEPTIONS:
+                        exception_type = BUILTIN_EXCEPTIONS[message.exceptionType]
+                    else:
+                        exception_type = UnknownRemoteException
+                    remoteException = exception_type(message.response)
+                    log.error("Remote exception (%s): %s", address, remoteException)
                     df.errback(remoteException)
                 else:
                     # We got a result from the RPC
