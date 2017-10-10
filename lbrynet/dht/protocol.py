@@ -399,7 +399,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
     def _msgTimeout(self, messageID):
         """ Called when an RPC request message times out """
         # Find the message that timed out
-        if not self._sentMessages.has_key(messageID):
+        if messageID not in self._sentMessages:
             # This should never be reached
             log.error("deferred timed out, but is not present in sent messages list!")
             return

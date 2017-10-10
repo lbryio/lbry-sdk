@@ -84,7 +84,7 @@ class TreeRoutingTable(object):
                     @type failure: twisted.python.failure.Failure
                     """
                     failure.trap(TimeoutError)
-                    print '==replacing contact=='
+                    log.warning('==replacing contact==')
                     # Remove the old contact...
                     deadContactID = failure.getErrorMessage()
                     try:
