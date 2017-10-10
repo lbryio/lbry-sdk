@@ -171,7 +171,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, msg.id)
         # Transmit the data
         self._send(encodedMsg, msg.id, (contact.address, contact.port))
-        self._sentMessages[msg.id] = (contact.id, df, timeoutCall)
+        self._sentMessages[msg.id] = (contact.id, df, timeoutCall, method, args)
         return df
 
     def startProtocol(self):
@@ -403,10 +403,10 @@ class KademliaProtocol(protocol.DatagramProtocol):
             # This should never be reached
             log.error("deferred timed out, but is not present in sent messages list!")
             return
-        remoteContactID, df = self._sentMessages[messageID][0:2]
+        remoteContactID, df, timeout_call, method, args = self._sentMessages[messageID]
         if self._partialMessages.has_key(messageID):
             # We are still receiving this message
-            self._msgTimeoutInProgress(messageID, remoteContactID, df)
+            self._msgTimeoutInProgress(messageID, remoteContactID, df, method, args)
             return
         del self._sentMessages[messageID]
         # The message's destination node is now considered to be dead;
@@ -414,12 +414,12 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._node.removeContact(remoteContactID)
         df.errback(TimeoutError(remoteContactID))
 
-    def _msgTimeoutInProgress(self, messageID, remoteContactID, df):
+    def _msgTimeoutInProgress(self, messageID, remoteContactID, df, method, args):
         # See if any progress has been made; if not, kill the message
         if self._hasProgressBeenMade(messageID):
             # Reset the RPC timeout timer
             timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, messageID)
-            self._sentMessages[messageID] = (remoteContactID, df, timeoutCall)
+            self._sentMessages[messageID] = (remoteContactID, df, timeoutCall, method, args)
         else:
             # No progress has been made
             del self._partialMessagesProgress[messageID]
