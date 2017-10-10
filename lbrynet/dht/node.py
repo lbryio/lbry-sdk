@@ -171,6 +171,14 @@ class Node(object):
         self.hash_watcher.tick()
         yield self._joinDeferred
 
+    @property
+    def contacts(self):
+        def _inner():
+            for i in range(len(self._routingTable._buckets)):
+                for contact in self._routingTable._buckets[i]._contacts:
+                    yield contact
+        return list(_inner())
+
     def printContacts(self, *args):
         print '\n\nNODE CONTACTS\n==============='
         for i in range(len(self._routingTable._buckets)):
