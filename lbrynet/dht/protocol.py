@@ -158,7 +158,10 @@ class KademliaProtocol(protocol.DatagramProtocol):
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)
 
-        log.debug("DHT SEND CALL %s(%s)", method, args[0].encode('hex'))
+        if args:
+            log.debug("DHT SEND CALL %s(%s)", method, args[0].encode('hex'))
+        else:
+            log.debug("DHT SEND CALL %s", method)
 
         df = defer.Deferred()
         if rawResponse:
@@ -372,8 +375,12 @@ class KademliaProtocol(protocol.DatagramProtocol):
         func = getattr(self._node, method, None)
         if callable(func) and hasattr(func, 'rpcmethod'):
             # Call the exposed Node method and return the result to the deferred callback chain
-            log.debug("DHT RECV CALL %s(%s) %s:%i", method, args[0].encode('hex'),
-                      senderContact.address, senderContact.port)
+            if args:
+                log.debug("DHT RECV CALL %s(%s) %s:%i", method, args[0].encode('hex'),
+                          senderContact.address, senderContact.port)
+            else:
+                log.debug("DHT RECV CALL %s %s:%i", method, senderContact.address,
+                          senderContact.port)
             try:
                 kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
                 result = func(*args, **kwargs)
