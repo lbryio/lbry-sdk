@@ -9,7 +9,7 @@ import json
 import textwrap
 import random
 import signal
-
+from copy import deepcopy
 from twisted.web import server
 from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
@@ -2657,6 +2657,78 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(reupload.reflect_blob_hashes, self.session.blob_manager)
         d.addCallback(lambda r: self._render_response(r))
         return d
+
+    def jsonrpc_routing_table_get(self):
+        """
+        Get DHT routing information
+
+        Usage:
+            routing_table_get
+
+        Returns:
+            (dict) dictionary containing routing and contact information
+            {
+                "buckets": {
+                    <bucket index>: [
+                        {
+                            "address": (str) peer address,
+                            "node_id": (str) peer node id,
+                            "blobs": (list) blob hashes announced by peer
+                        }
+                "contacts": (list) contact node ids,
+                "blob_hashes": (list) all of the blob hashes stored by peers in the list of buckets
+                "node_id": (str) the local dht node id
+        """
+
+        result = {}
+        data_store = deepcopy(self.session.dht_node._dataStore._dict)
+        datastore_len = len(data_store)
+        hosts = {}
+
+        if datastore_len:
+            for k, v in data_store.iteritems():
+                for value, lastPublished, originallyPublished, originalPublisherID in v:
+                    try:
+                        contact = self.session.dht_node._routingTable.getContact(
+                            originalPublisherID)
+                    except ValueError:
+                        continue
+                    if contact in hosts:
+                        blobs = hosts[contact]
+                    else:
+                        blobs = []
+                    blobs.append(k.encode('hex'))
+                    hosts[contact] = blobs
+
+        contact_set = []
+        blob_hashes = []
+        result['buckets'] = {}
+
+        for i in range(len(self.session.dht_node._routingTable._buckets)):
+            for contact in self.session.dht_node._routingTable._buckets[i]._contacts:
+                contacts = result['buckets'].get(i, [])
+                if contact in hosts:
+                    blobs = hosts[contact]
+                    del hosts[contact]
+                else:
+                    blobs = []
+                host = {
+                    "address": contact.address,
+                    "node_id": contact.id.encode("hex"),
+                    "blobs": blobs,
+                }
+                for blob_hash in blobs:
+                    if blob_hash not in blob_hashes:
+                        blob_hashes.append(blob_hash)
+                contacts.append(host)
+                result['buckets'][i] = contacts
+                if contact.id.encode('hex') not in contact_set:
+                    contact_set.append(contact.id.encode("hex"))
+
+        result['contacts'] = contact_set
+        result['blob_hashes'] = blob_hashes
+        result['node_id'] = self.session.dht_node.node_id.encode('hex')
+        return self._render_response(result)
 
     @defer.inlineCallbacks
     def jsonrpc_get_availability(self, uri, sd_timeout=None, peer_timeout=None):
