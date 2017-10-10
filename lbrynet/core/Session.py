@@ -43,7 +43,7 @@ class Session(object):
                  blob_manager=None, peer_port=None, use_upnp=True,
                  rate_limiter=None, wallet=None,
                  dht_node_class=node.Node, blob_tracker_class=None,
-                 payment_rate_manager_class=None, is_generous=True):
+                 payment_rate_manager_class=None, is_generous=True, external_ip=None):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
         @param db_dir: The directory in which levelDB files should be stored
@@ -124,7 +124,7 @@ class Session(object):
 
         self.rate_limiter = rate_limiter
 
-        self.external_ip = '127.0.0.1'
+        self.external_ip = external_ip
 
         self.upnp_redirects = []
 
