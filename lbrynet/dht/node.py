@@ -204,28 +204,21 @@ class Node(object):
     def announceHaveBlob(self, key, port):
         return self.iterativeAnnounceHaveBlob(key, {'port': port, 'lbryid': self.lbryid})
 
+    @defer.inlineCallbacks
     def getPeersForBlob(self, blob_hash):
-        def expand_and_filter(result):
-            expanded_peers = []
-            if isinstance(result, dict):
-                if blob_hash in result:
-                    for peer in result[blob_hash]:
-                        if self.lbryid != peer[6:]:
-                            host = ".".join([str(ord(d)) for d in peer[:4]])
-                            if host == "127.0.0.1":
-                                if "from_peer" in result:
-                                    if result["from_peer"] != "self":
-                                        host = result["from_peer"]
-                            port, = struct.unpack('>H', peer[4:6])
+        result = yield self.iterativeFindValue(blob_hash)
+        expanded_peers = []
+        if result:
+            if blob_hash in result:
+                for peer in result[blob_hash]:
+                    if self.lbryid != peer[6:]:
+                        host = ".".join([str(ord(d)) for d in peer[:4]])
+                        if host == "127.0.0.1" and "from_peer" in result and result["from_peer"] != "self":
+                            host = result["from_peer"]
+                        port, = struct.unpack('>H', peer[4:6])
+                        if (host, port) not in expanded_peers:
                             expanded_peers.append((host, port))
-            return expanded_peers
-
-        def find_failed(err):
-            return []
-
-        d = self.iterativeFindValue(blob_hash)
-        d.addCallbacks(expand_and_filter, find_failed)
-        return d
+        defer.returnValue(expanded_peers)
 
     def get_most_popular_hashes(self, num_to_return):
         return self.hash_watcher.most_popular_hashes(num_to_return)
