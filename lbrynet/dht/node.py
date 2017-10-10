@@ -12,7 +12,7 @@ import operator
 import struct
 import time
 
-from twisted.internet import defer, error, reactor, threads
+from twisted.internet import defer, error, reactor, threads, task
 
 import constants
 import routingtable
@@ -88,7 +88,7 @@ class Node(object):
         # operations before the node has finished joining the network)
         self._joinDeferred = None
         self.next_refresh_call = None
-        self.next_change_token_call = None
+        self.change_token_lc = task.LoopingCall(self.change_token)
         # Create k-buckets (for storing contacts)
         if routingTableClass is None:
             self._routingTable = routingtable.OptimizedTreeRoutingTable(self.id)
@@ -103,7 +103,6 @@ class Node(object):
         # Initialize the data storage mechanism used by this node
         self.token_secret = self._generateID()
         self.old_token_secret = None
-        self.change_token()
         if dataStore is None:
             self._dataStore = datastore.DictDataStore()
         else:
@@ -128,9 +127,8 @@ class Node(object):
         if self.next_refresh_call is not None:
             self.next_refresh_call.cancel()
             self.next_refresh_call = None
-        if self.next_change_token_call is not None:
-            self.next_change_token_call.cancel()
-            self.next_change_token_call = None
+        if self.change_token_lc.running:
+            self.change_token_lc.stop()
         if self._listeningPort is not None:
             self._listeningPort.stopListening()
         self.hash_watcher.stop()
@@ -163,6 +161,10 @@ class Node(object):
                 bootstrapContacts.append(contact)
         else:
             bootstrapContacts = None
+
+        # Start the token looping call
+        self.change_token_lc.start(constants.tokenSecretChangeInterval)
+
         # Initiate the Kademlia joining sequence - perform a search for this node's own ID
         self._joinDeferred = self._iterativeFind(self.id, bootstrapContacts)
         #        #TODO: Refresh all k-buckets further away than this node's closest neighbour
@@ -295,8 +297,6 @@ class Node(object):
     def change_token(self):
         self.old_token_secret = self.token_secret
         self.token_secret = self._generateID()
-        self.next_change_token_call = reactor.callLater(constants.tokenSecretChangeInterval,
-                                                        self.change_token)
 
     def make_token(self, compact_ip):
         h = hashlib.new('sha384')
