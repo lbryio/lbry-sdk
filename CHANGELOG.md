@@ -19,6 +19,13 @@ at anytime.
   * Fixed concurrent reflects opening too many files
   * Fixed cases when reflecting would fail on error conditions
   * Fixed deadlocks from occuring during blob writes
+  * Fixed and updated`lbrynet.tests.dht`
+  * Fixed redundant dht id
+  * Fixed dht `ping` method
+  * Fixed raising remote exceptions in dht
+  * Fixed hanging delayedCall in dht node class
+  * Fixed logging error in dht when calling or receiving methods with no arguments
+  * Fixed IndexError in routingTable.findCloseNodes which would cause an empty list to be returned
 
 ### Deprecated
   * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
