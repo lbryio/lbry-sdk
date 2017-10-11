@@ -16,12 +16,9 @@ class Duration:
 def get_video_length(path):
     process = subprocess.Popen(['/usr/bin/ffmpeg',  '-i', path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     stdout, stderr = process.communicate()
-    #print(stdout)
     for line in stdout.splitlines():
         if 'Duration' in line:
             line = line.replace(',','')
             duration = Duration(line.split()[1].split(":"))
-            print('DURATION')
-            print(duration.all_in_millisec())
             return duration.all_in_millisec()
 
