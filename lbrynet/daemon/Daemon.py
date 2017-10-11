@@ -2675,9 +2675,12 @@ class Daemon(AuthJSONRPCServer):
                             "node_id": (str) peer node id,
                             "blobs": (list) blob hashes announced by peer
                         }
+                    ]
+                },
                 "contacts": (list) contact node ids,
-                "blob_hashes": (list) all of the blob hashes stored by peers in the list of buckets
+                "blob_hashes": (list) all of the blob hashes stored by peers in the list of buckets,
                 "node_id": (str) the local dht node id
+            }
         """
 
         result = {}
