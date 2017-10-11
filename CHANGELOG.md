@@ -11,6 +11,10 @@ at anytime.
 ### Security
   *
   *
+### Added
+  * Added video duration support updated only via publisher. It requires ffmpeg to be
+  * installed on the system
+  *
 
 ### Added
   * Added ability for reflector to store stream information for head blob announce
