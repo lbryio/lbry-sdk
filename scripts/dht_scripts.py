@@ -22,7 +22,7 @@ def join_network(udp_port, known_nodes):
     lbryid = generate_id()
 
     log.info('Creating node')
-    node = Node(udpPort=udp_port, lbryid=lbryid)
+    node = Node(udpPort=udp_port, node_id=lbryid)
 
     log.info('Joining network')
     yield node.joinNetwork(known_nodes)

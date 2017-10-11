@@ -37,18 +37,18 @@ class Session(object):
     """
 
     def __init__(self, blob_data_payment_rate, db_dir=None,
-                 lbryid=None, peer_manager=None, dht_node_port=None,
+                 node_id=None, peer_manager=None, dht_node_port=None,
                  known_dht_nodes=None, peer_finder=None,
                  hash_announcer=None, blob_dir=None,
                  blob_manager=None, peer_port=None, use_upnp=True,
                  rate_limiter=None, wallet=None,
                  dht_node_class=node.Node, blob_tracker_class=None,
-                 payment_rate_manager_class=None, is_generous=True):
+                 payment_rate_manager_class=None, is_generous=True, external_ip=None):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
         @param db_dir: The directory in which levelDB files should be stored
 
-        @param lbryid: The unique ID of this node
+        @param node_id: The unique ID of this node
 
         @param peer_manager: An object which keeps track of all known
             peers. If None, a PeerManager will be created
@@ -101,7 +101,7 @@ class Session(object):
         """
         self.db_dir = db_dir
 
-        self.lbryid = lbryid
+        self.node_id = node_id
 
         self.peer_manager = peer_manager
 
@@ -124,7 +124,7 @@ class Session(object):
 
         self.rate_limiter = rate_limiter
 
-        self.external_ip = '127.0.0.1'
+        self.external_ip = external_ip
 
         self.upnp_redirects = []
 
@@ -142,8 +142,8 @@ class Session(object):
 
         log.debug("Starting session.")
 
-        if self.lbryid is None:
-            self.lbryid = generate_id()
+        if self.node_id is None:
+            self.node_id = generate_id()
 
         if self.wallet is None:
             from lbrynet.core.PTCWallet import PTCWallet
@@ -274,7 +274,7 @@ class Session(object):
 
         self.dht_node = self.dht_node_class(
             udpPort=self.dht_node_port,
-            lbryid=self.lbryid,
+            node_id=self.node_id,
             externalIP=self.external_ip
         )
         self.peer_finder = DHTPeerFinder(self.dht_node, self.peer_manager)

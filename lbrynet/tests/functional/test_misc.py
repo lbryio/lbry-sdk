@@ -46,6 +46,7 @@ DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 log_format = "%(funcName)s(): %(message)s"
 logging.basicConfig(level=logging.CRITICAL, format=log_format)
 
+
 def require_system(system):
     def wrapper(fn):
         return fn
@@ -115,10 +116,10 @@ class LbryUploader(object):
 
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=self.db_dir, blob_dir=self.blob_dir,
-            lbryid="abcd", peer_finder=peer_finder, hash_announcer=hash_announcer,
+            node_id="abcd", peer_finder=peer_finder, hash_announcer=hash_announcer,
             peer_port=5553, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
-            dht_node_class=Node, is_generous=self.is_generous)
+            dht_node_class=Node, is_generous=self.is_generous, external_ip="127.0.0.1")
         stream_info_manager = TempEncryptedFileMetadataManager()
         self.lbry_file_manager = EncryptedFileManager(
             self.session, stream_info_manager, self.sd_identifier)
@@ -218,12 +219,13 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
 
     db_dir, blob_dir = mk_db_and_blob_dir()
     session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
-                      lbryid="abcd" + str(n),
+                      node_id="abcd" + str(n),
                       peer_finder=peer_finder, hash_announcer=hash_announcer,
                       blob_dir=blob_dir, peer_port=peer_port,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                       blob_tracker_class=DummyBlobAvailabilityTracker,
-                      is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
+                      is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1],
+                      external_ip="127.0.0.1")
 
     stream_info_manager = TempEncryptedFileMetadataManager()
 
@@ -330,12 +332,13 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
 
     db_dir, blob_dir = mk_db_and_blob_dir()
 
-    session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="efgh",
+    session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, node_id="efgh",
                       peer_finder=peer_finder, hash_announcer=hash_announcer,
                       blob_dir=blob_dir, peer_port=peer_port,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                       blob_tracker_class=DummyBlobAvailabilityTracker,
-                      is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
+                      is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1],
+                      external_ip="127.0.0.1")
 
     if slow is True:
         session.rate_limiter.set_ul_limit(2 ** 11)
@@ -508,11 +511,11 @@ class TestTransfer(TestCase):
         db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
-            lbryid="abcd", peer_finder=peer_finder, hash_announcer=hash_announcer,
+            node_id="abcd", peer_finder=peer_finder, hash_announcer=hash_announcer,
             blob_dir=blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
-            dht_node_class=Node, is_generous=self.is_generous)
+            dht_node_class=Node, is_generous=self.is_generous, external_ip="127.0.0.1")
 
         self.stream_info_manager = TempEncryptedFileMetadataManager()
 
@@ -599,12 +602,12 @@ class TestTransfer(TestCase):
 
         db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(
-            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, lbryid="abcd",
+            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, node_id="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
             blob_dir=blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
-            is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
+            is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1], external_ip="127.0.0.1")
 
         d1 = self.wait_for_hash_from_queue(blob_hash_queue_1)
         d2 = self.wait_for_hash_from_queue(blob_hash_queue_2)
@@ -678,11 +681,12 @@ class TestTransfer(TestCase):
 
         db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
-                               lbryid="abcd", peer_finder=peer_finder,
+                               node_id="abcd", peer_finder=peer_finder,
                                hash_announcer=hash_announcer, blob_dir=blob_dir, peer_port=5553,
                                use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                                blob_tracker_class=DummyBlobAvailabilityTracker,
-                               is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
+                               is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1],
+                               external_ip="127.0.0.1")
 
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
         self.lbry_file_manager = EncryptedFileManager(self.session, self.stream_info_manager,
@@ -800,11 +804,12 @@ class TestTransfer(TestCase):
 
         db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
-                               lbryid="abcd", peer_finder=peer_finder,
+                               node_id="abcd", peer_finder=peer_finder,
                                hash_announcer=hash_announcer, blob_dir=blob_dir,
                                peer_port=5553, use_upnp=False, rate_limiter=rate_limiter,
                                wallet=wallet, blob_tracker_class=DummyBlobAvailabilityTracker,
-                               is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1])
+                               is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1],
+                               external_ip="127.0.0.1")
 
         self.stream_info_manager = TempEncryptedFileMetadataManager()
 
