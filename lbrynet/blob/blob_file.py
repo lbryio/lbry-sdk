@@ -168,7 +168,6 @@ class BlobFile(object):
         """
         if file_handle is not None:
             file_handle.close()
-            self.readers -= 1
 
     def reader_finished(self, reader):
         self.readers -= 1
