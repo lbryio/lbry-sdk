@@ -37,9 +37,7 @@ class PlainStreamDescriptorReader(StreamDescriptorReader):
 
         def get_data():
             with open(self.stream_descriptor_filename) as file_handle:
-                print(self.stream_descriptor_filename)
                 raw_data = file_handle.read()
-                print(raw_data)
                 return raw_data
 
         return threads.deferToThread(get_data)
