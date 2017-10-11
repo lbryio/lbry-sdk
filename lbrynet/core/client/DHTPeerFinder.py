@@ -46,7 +46,10 @@ class DHTPeerFinder(object):
         if timeout is not None:
             reactor.callLater(timeout, _trigger_timeout)
 
-        peer_list = yield finished_deferred
+        try:
+            peer_list = yield finished_deferred
+        except defer.CancelledError:
+            peer_list = []
 
         peers = set(peer_list)
         good_peers = []
