@@ -43,9 +43,8 @@ class Publisher(object):
         claim_dict['stream']['source']['source'] = sd_hash
         claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
-        claim_dict['stream']['source']['contentDuration'] = int(get_content_duration(file_path, 
-                                                                claim_dict['stream']['source']['contentType'])) 
-     
+        duration = int(get_content_duration(file_path, claim_dict['stream']['source']['contentType'])) #line was too long
+        claim_dict['stream']['source']['contentDuration'] = duration  
         claim_dict['stream']['source']['version'] = "_0_0_1" # need current version here
 
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
