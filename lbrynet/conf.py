@@ -353,7 +353,7 @@ class Config(object):
 
     def _assert_valid_data_type(self, data_type):
         if not data_type in self._data:
-            raise AssertionError(KeyError('{} in is not a valid data type'.format(data_type)))
+            raise KeyError('{} in is not a valid data type'.format(data_type))
 
     def get_valid_setting_names(self):
         return self._data[TYPE_DEFAULT].keys()
@@ -363,7 +363,7 @@ class Config(object):
 
     def _assert_valid_setting(self, name):
         if not self._is_valid_setting(name):
-            raise AssertionError(KeyError('{} is not a valid setting'.format(name)))
+            raise KeyError('{} is not a valid setting'.format(name))
 
     def _validate_settings(self, data):
         invalid_settings = set(data.keys()) - set(self.get_valid_setting_names())
@@ -373,7 +373,7 @@ class Config(object):
     def _assert_editable_setting(self, name):
         self._assert_valid_setting(name)
         if name in self._fixed_defaults:
-            raise AssertionError(ValueError('{} is not an editable setting'.format(name)))
+            raise ValueError('{} is not an editable setting'.format(name))
 
     def _validate_currency(self, currency):
         if currency not in self._fixed_defaults['CURRENCIES'].keys():
