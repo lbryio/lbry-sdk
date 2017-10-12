@@ -46,18 +46,23 @@ class CreateEncryptedFileTest(unittest.TestCase):
             session, manager, filename, handle, key, iv_generator())
         defer.returnValue(out)
 
+    @defer.inlineCallbacks
     def test_can_create_file(self):
         expected_stream_hash = ('41e6b247d923d191b154fb6f1b8529d6ddd6a73d65c357b1acb7'
                                 '42dd83151fb66393a7709e9f346260a4f4db6de10c25')
         filename = 'test.file'
-        d = self.create_file(filename)
-        d.addCallback(self.assertEqual, expected_stream_hash)
-        return d
+        stream_hash = yield self.create_file(filename)
+        self.assertEqual(expected_stream_hash, stream_hash)
 
+        blobs = yield self.blob_manager.get_all_verified_blobs()
+        self.assertEqual(2, len(blobs))
+        num_should_announce_blobs = yield self.blob_manager.count_should_announce_blobs()
+        self.assertEqual(1, num_should_announce_blobs)
+
+    @defer.inlineCallbacks
     def test_can_create_file_with_unicode_filename(self):
         expected_stream_hash = ('d1da4258f3ce12edb91d7e8e160d091d3ab1432c2e55a6352dce0'
                                 '2fd5adb86fe144e93e110075b5865fff8617776c6c0')
         filename = u'☃.file'
-        d = self.create_file(filename)
-        d.addCallback(self.assertEqual, expected_stream_hash)
-        return d
+        stream_hash = yield self.create_file(filename)
+        self.assertEqual(expected_stream_hash, stream_hash)

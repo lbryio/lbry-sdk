@@ -26,6 +26,7 @@ at anytime.
   * Fixed hanging delayedCall in dht node class
   * Fixed logging error in dht when calling or receiving methods with no arguments
   * Fixed IndexError in routingTable.findCloseNodes which would cause an empty list to be returned
+  * Fixed bug where last blob in a stream was not saved to blob manager
 
 ### Deprecated
   * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.

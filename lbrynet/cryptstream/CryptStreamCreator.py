@@ -69,21 +69,26 @@ class CryptStreamCreator(object):
         self.stopped = True
         self.producer = None
 
+    def _close_current_blob(self):
+        # close the blob that was being written to
+        # and save it to blob manager
+        should_announce = self.blob_count == 0
+        d = self.current_blob.close()
+        d.addCallback(self._blob_finished)
+        d.addCallback(lambda blob_info: self.blob_manager.creator_finished(blob_info,
+                                                                   should_announce))
+        self.finished_deferreds.append(d)
+        self.current_blob = None
+
     def stop(self):
         """Stop creating the stream. Create the terminating zero-length blob."""
         log.debug("stop has been called for StreamCreator")
         self.stopped = True
         if self.current_blob is not None:
-            current_blob = self.current_blob
-            d = current_blob.close()
-            d.addCallback(self._blob_finished)
-            d.addErrback(self._error)
-            self.finished_deferreds.append(d)
-            self.current_blob = None
+            self._close_current_blob()
         self._finalize()
         dl = defer.DeferredList(self.finished_deferreds)
         dl.addCallback(lambda _: self._finished())
-        dl.addErrback(self._error)
         return dl
 
     # TODO: move the stream creation process to its own thread and
@@ -123,6 +128,7 @@ class CryptStreamCreator(object):
         d.addCallback(self._blob_finished)
         self.finished_deferreds.append(d)
 
+
     def _write(self, data):
         while len(data) > 0:
             if self.current_blob is None:
@@ -133,19 +139,10 @@ class CryptStreamCreator(object):
             done, num_bytes_written = self.current_blob.write(data)
             data = data[num_bytes_written:]
             if done is True:
-                should_announce = self.blob_count == 0
-                d = self.current_blob.close()
-                d.addCallback(self._blob_finished)
-                d.addCallback(lambda blob_info: self.blob_manager.creator_finished(blob_info,
-                                                                           should_announce))
-                self.finished_deferreds.append(d)
-                self.current_blob = None
+                self._close_current_blob()
 
     def _get_blob_maker(self, iv, blob_creator):
         return CryptStreamBlobMaker(self.key, iv, self.blob_count, blob_creator)
-
-    def _error(self, error):
-        log.error(error)
 
     def _finished(self):
         raise NotImplementedError()
