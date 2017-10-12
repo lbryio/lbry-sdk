@@ -89,7 +89,6 @@ class CryptStreamCreator(object):
         self._finalize()
         dl = defer.DeferredList(self.finished_deferreds)
         dl.addCallback(lambda _: self._finished())
-        dl.addErrback(self._error)
         return dl
 
     # TODO: move the stream creation process to its own thread and
@@ -144,9 +143,6 @@ class CryptStreamCreator(object):
 
     def _get_blob_maker(self, iv, blob_creator):
         return CryptStreamBlobMaker(self.key, iv, self.blob_count, blob_creator)
-
-    def _error(self, error):
-        log.error(error)
 
     def _finished(self):
         raise NotImplementedError()
