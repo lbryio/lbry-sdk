@@ -71,6 +71,9 @@ class EncryptedFileReflectorClient(Protocol):
             d.addErrback(self.response_failure_handler)
 
     def connectionLost(self, reason):
+        # make sure blob file readers get closed
+        self.set_not_uploading()
+
         if reason.check(error.ConnectionDone):
             if not self.needed_blobs:
                 log.info("Reflector has all blobs for %s (%s)",
@@ -121,8 +124,8 @@ class EncryptedFileReflectorClient(Protocol):
 
     def set_blobs_to_send(self, blobs_to_send):
         for blob in blobs_to_send:
-            if blob not in self.blob_hashes_to_send:
-                self.blob_hashes_to_send.append(blob)
+            if blob.blob_hash not in self.blob_hashes_to_send:
+                self.blob_hashes_to_send.append(blob.blob_hash)
 
     def get_blobs_to_send(self):
         def _show_missing_blobs(filtered):
@@ -305,9 +308,10 @@ class EncryptedFileReflectorClient(Protocol):
             return d
         elif self.blob_hashes_to_send:
             # open the next blob to send
-            blob = self.blob_hashes_to_send[0]
+            blob_hash = self.blob_hashes_to_send[0]
             self.blob_hashes_to_send = self.blob_hashes_to_send[1:]
-            d = self.open_blob_for_reading(blob)
+            d = self.blob_manager.get_blob(blob_hash)
+            d.addCallback(self.open_blob_for_reading)
             d.addCallbacks(lambda _: self.send_blob_info(),
                            lambda err: self.skip_missing_blob(err, blob.blob_hash))
             return d

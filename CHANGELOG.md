@@ -16,37 +16,70 @@ at anytime.
   * installed on the system
   *
 
-### Added
-  * Added ability for reflector to store stream information for head blob announce
+### Fixed
+  *
   *
 
-### Fixed
-  * Fixed handling cancelled blob and availability requests
-  * Fixed redundant blob requests to a peer
-  * Fixed https://github.com/lbryio/lbry/issues/923
-
 ### Deprecated
-  * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
+  *
   *
 
 ### Changed
-  * Announcing by head blob is turned on by default
-  * Updated reflector server dns
+  *
+  *
 
 ### Added
-  * Added WAL pragma to sqlite3
-  * Added unit tests for `BlobFile`
-  * Updated exchange rate tests for the lbry.io api
-  * Use `hashlib` for sha384 instead of `pycrypto`
-  * Use `cryptography` instead of `pycrypto` for blob encryption and decryption
-  * Use `cryptography` for PKCS7 instead of doing it manually
-  * Use `BytesIO` buffers instead of temp files when processing blobs
-  * Refactored and pruned blob related classes into `lbrynet.blobs`
-  * Changed several `assert`s to raise more useful errors
+  *
+  *
 
 ### Removed
-  * Removed `TempBlobFile`
-  * Removed unused `EncryptedFileOpener`
+  *
+  *
+
+
+## [0.17.0] - 2017-10-12
+### Fixed
+ * Fixed handling cancelled blob and availability requests
+ * Fixed redundant blob requests to a peer
+ * Fixed https://github.com/lbryio/lbry/issues/923
+ * Fixed concurrent reflects opening too many files
+ * Fixed cases when reflecting would fail on error conditions
+ * Fixed deadlocks from occuring during blob writes
+ * Fixed and updated`lbrynet.tests.dht`
+ * Fixed redundant dht id
+ * Fixed dht `ping` method
+ * Fixed raising remote exceptions in dht
+ * Fixed hanging delayedCall in dht node class
+ * Fixed logging error in dht when calling or receiving methods with no arguments
+ * Fixed IndexError in routingTable.findCloseNodes which would cause an empty list to be returned
+ * Fixed bug where last blob in a stream was not saved to blob manager
+
+### Deprecated
+ * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
+
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.12 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0012---2017-10-12)
+ * Bumped `lbryum` requirement to 3.1.9 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#319---2017-10-12)
+ * Announcing by head blob is turned on by default
+ * Updated reflector server dns
+ * Moved tests into the lbrynet package.
+
+### Added
+ * Added WAL pragma to sqlite3
+ * Added unit tests for `BlobFile`
+ * Updated exchange rate tests for the lbry.io api
+ * Use `hashlib` for sha384 instead of `pycrypto`
+ * Use `cryptography` instead of `pycrypto` for blob encryption and decryption
+ * Use `cryptography` for PKCS7 instead of doing it manually
+ * Use `BytesIO` buffers instead of temp files when processing blobs
+ * Refactored and pruned blob related classes into `lbrynet.blobs`
+ * Changed several `assert`s to raise more useful errors
+ * Added ability for reflector to store stream information for head blob announce
+ * Added blob announcement information to API call status with session flag
+
+### Removed
+ * Removed `TempBlobFile`
+ * Removed unused `EncryptedFileOpener`
 
 
 ## [0.16.3] - 2017-09-28
