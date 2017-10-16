@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Bumped jsonschema requirement to 2.6.0
   *
 
 ### Added
