@@ -35,9 +35,9 @@ class ExchangeRateTest(unittest.TestCase):
         util.resetTime(self)
 
     def test_invalid_rates(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             ExchangeRateManager.ExchangeRate('USDBTC', 0, util.DEFAULT_ISO_TIME)
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             ExchangeRateManager.ExchangeRate('USDBTC', -1, util.DEFAULT_ISO_TIME)
 
 

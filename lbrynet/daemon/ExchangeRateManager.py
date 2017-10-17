@@ -18,9 +18,9 @@ COINBASE_FEE = 0.0 #add fee
 class ExchangeRate(object):
     def __init__(self, market, spot, ts):
         if not int(time.time()) - ts < 600:
-            raise AssertionError()
+            raise ValueError('The timestamp is too dated.')
         if not spot > 0:
-            raise AssertionError()
+            raise ValueError('Spot must be greater than 0.')
         self.currency_pair = (market[0:3], market[3:6])
         self.spot = spot
         self.ts = ts

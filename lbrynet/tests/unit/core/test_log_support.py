@@ -2,13 +2,15 @@ import StringIO
 import logging
 
 import mock
+import unittest
 from twisted.internet import defer
-from twisted.trial import unittest
+from twisted import trial
 
 from lbrynet.core import log_support
+from lbrynet.tests.util import is_android
 
 
-class TestLogger(unittest.TestCase):
+class TestLogger(trial.unittest.TestCase):
     def raiseError(self):
         raise Exception('terrible things happened')
 
@@ -26,12 +28,15 @@ class TestLogger(unittest.TestCase):
         handler.setFormatter(logging.Formatter("%(filename)s:%(lineno)d - %(message)s"))
         self.log.addHandler(handler)
 
+    @unittest.skipIf(is_android(),
+                     'Test cannot pass on Android because the tests package is compiled '
+                     'which results in a different method call stack')
     def test_can_log_failure(self):
         def output_lines():
             return self.stream.getvalue().split('\n')
 
         # the line number could change if this file gets refactored
-        expected_first_line = 'test_log_support.py:18 - My message: terrible things happened'
+        expected_first_line = 'test_log_support.py:20 - My message: terrible things happened'
 
         # testing the entirety of the message is futile as the
         # traceback will depend on the system the test is being run on
