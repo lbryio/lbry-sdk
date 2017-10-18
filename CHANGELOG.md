@@ -25,7 +25,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * Added `wallet_prefill_addresses` command, which creates distributes credits to multiple addresses
   *
 
 ### Removed
