@@ -626,7 +626,7 @@ class Wallet(object):
         @param reserved_points: ReservedPoints object previously returned by reserve_points
 
         @param amount: amount of points to actually send. must be less than or equal to the
-            amount reselved in reserved_points
+            amount reserved in reserved_points
 
         @return: Deferred which fires when the payment has been scheduled
         """
@@ -1321,6 +1321,23 @@ class LBRYumWallet(Wallet):
         else:
             return Decimal((float(c) + float(u) + float(x)) / COIN)
 
+    @defer.inlineCallbacks
+    def create_addresses_with_balance(self, num_addresses, amount, broadcast=True):
+        addresses = self.wallet.get_unused_addresses(account=None)
+        if len(addresses) > num_addresses:
+            addresses = addresses[:num_addresses]
+        elif len(addresses) < num_addresses:
+            for i in range(len(addresses), num_addresses):
+                address = self.wallet.create_new_address(account=None)
+                addresses.append(address)
+            yield self._save_wallet()
+
+        outputs = [[address, amount] for address in addresses]
+        # should this be defer_to_thread or defer_succeed ??
+        tx = yield self._run_cmd_as_defer_to_thread('paytomany', outputs)
+        if broadcast and tx['complete']:
+            yield self._broadcast_transaction(tx)
+        defer.returnValue(tx)
 
     # Return an address with no balance in it, if
     # there is none, create a brand new address
