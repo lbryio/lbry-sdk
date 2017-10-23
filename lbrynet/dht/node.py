@@ -477,6 +477,28 @@ class Node(object):
         """
         return 'pong'
 
+    @defer.inlineCallbacks
+    @rpcmethod
+    def pingback(self, contact=None):
+        """
+        A ping handshake used to verify contact between two Kademlia nodes
+
+        --------> pingback
+          <------ ping
+            ----> pong
+              <-- pong
+
+        @rtype: str
+        """
+
+        if not contact:
+            raise ValueError("pingback called without a contact")
+        result = yield contact.ping()
+        if result == "pong":
+            defer.returnValue("pong")
+        else:
+            raise ValueError("invalid ping response: %s" % result)
+
     @rpcmethod
     def store(self, key, value, originalPublisherID=None, self_store=False, **kwargs):
         """ Store the received data in this node's local hash table
