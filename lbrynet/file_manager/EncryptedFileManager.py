@@ -53,9 +53,9 @@ class EncryptedFileManager(object):
     def setup(self):
         yield self._open_db()
         yield self._add_to_sd_identifier()
-        yield self._start_lbry_files()
-        if self.auto_re_reflect is True:
-            safe_start_looping_call(self.lbry_file_reflector, self.auto_re_reflect_interval)
+        # don't block on starting the lbry files
+        self._start_lbry_files()
+        log.info("Started file manager")
 
     def get_lbry_file_status(self, lbry_file):
         return self._get_lbry_file_status(lbry_file.rowid)
@@ -119,6 +119,9 @@ class EncryptedFileManager(object):
             self._set_options_and_restore(rowid, stream_hash, options)
             for rowid, stream_hash, options in files_and_options
         ])
+
+        if self.auto_re_reflect is True:
+            safe_start_looping_call(self.lbry_file_reflector, self.auto_re_reflect_interval)
         log.info("Started %i lbry files", len(self.lbry_files))
 
     @defer.inlineCallbacks
