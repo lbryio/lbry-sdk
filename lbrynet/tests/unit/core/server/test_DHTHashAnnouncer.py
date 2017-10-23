@@ -1,21 +1,30 @@
 from twisted.trial import unittest
-from twisted.internet import defer, task
+from twisted.internet import defer, task, reactor
 
 from lbrynet.core import utils
 from lbrynet.tests.util import random_lbry_hash
+from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
+
 
 class MocDHTNode(object):
     def __init__(self):
+        self.can_store = True
         self.blobs_announced = 0
 
+    @defer.inlineCallbacks
     def announceHaveBlob(self, blob):
         self.blobs_announced += 1
-        return defer.succeed(True)
+        d = defer.Deferred(None)
+        reactor.callLater(1, d.callback, {blob: ["ab" * 48]})
+        result = yield d
+        defer.returnValue(result)
+
 
 class MocSupplier(object):
     def __init__(self, blobs_to_announce):
         self.blobs_to_announce = blobs_to_announce
         self.announced = False
+
     def hashes_to_announce(self):
         if not self.announced:
             self.announced = True
@@ -23,8 +32,8 @@ class MocSupplier(object):
         else:
             return defer.succeed([])
 
-class DHTHashAnnouncerTest(unittest.TestCase):
 
+class DHTHashAnnouncerTest(unittest.TestCase):
     def setUp(self):
         self.num_blobs = 10
         self.blobs_to_announce = []
@@ -33,23 +42,26 @@ class DHTHashAnnouncerTest(unittest.TestCase):
         self.clock = task.Clock()
         self.dht_node = MocDHTNode()
         utils.call_later = self.clock.callLater
-        from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
         self.announcer = DHTHashAnnouncer(self.dht_node, peer_port=3333)
         self.supplier = MocSupplier(self.blobs_to_announce)
         self.announcer.add_supplier(self.supplier)
 
+    @defer.inlineCallbacks
     def test_basic(self):
-        self.announcer._announce_available_hashes()
+        d = self.announcer._announce_available_hashes()
         self.assertEqual(self.announcer.hash_queue_size(), self.announcer.CONCURRENT_ANNOUNCERS)
         self.clock.advance(1)
+        yield d
         self.assertEqual(self.dht_node.blobs_announced, self.num_blobs)
         self.assertEqual(self.announcer.hash_queue_size(), 0)
 
+    @defer.inlineCallbacks
     def test_immediate_announce(self):
         # Test that immediate announce puts a hash at the front of the queue
-        self.announcer._announce_available_hashes()
+        d = self.announcer._announce_available_hashes()
+        self.assertEqual(self.announcer.hash_queue_size(), self.announcer.CONCURRENT_ANNOUNCERS)
         blob_hash = random_lbry_hash()
         self.announcer.immediate_announce([blob_hash])
         self.assertEqual(self.announcer.hash_queue_size(), self.announcer.CONCURRENT_ANNOUNCERS+1)
         self.assertEqual(blob_hash, self.announcer.hash_queue[0][0])
-
+        yield d

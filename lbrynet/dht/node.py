@@ -117,9 +117,16 @@ class Node(object):
         self.peerPort = peerPort
         self.hash_watcher = HashWatcher()
 
+        # will be used later
+        self._can_store = True
+
     def __del__(self):
         if self._listeningPort is not None:
             self._listeningPort.stopListening()
+
+    @property
+    def can_store(self):
+        return self._can_store is True
 
     def stop(self):
         # stop LoopingCalls:
@@ -252,20 +259,7 @@ class Node(object):
     def iterativeAnnounceHaveBlob(self, blob_hash, value):
         known_nodes = {}
 
-        def log_error(err, n):
-            if err.check(protocol.TimeoutError):
-                log.debug(
-                    "Timeout while storing blob_hash %s at %s",
-                    binascii.hexlify(blob_hash), n)
-            else:
-                log.error(
-                    "Unexpected error while storing blob_hash %s at %s: %s",
-                    binascii.hexlify(blob_hash), n, err.getErrorMessage())
-
-        def log_success(res):
-            log.debug("Response to store request: %s", str(res))
-            return res
-
+        @defer.inlineCallbacks
         def announce_to_peer(responseTuple):
             """ @type responseMsg: kademlia.msgtypes.ResponseMessage """
             # The "raw response" tuple contains the response message,
@@ -274,40 +268,65 @@ class Node(object):
             originAddress = responseTuple[1]  # tuple: (ip adress, udp port)
             # Make sure the responding node is valid, and abort the operation if it isn't
             if not responseMsg.nodeID in known_nodes:
-                return responseMsg.nodeID
-
+                log.warning("Responding node was not expected")
+                defer.returnValue(responseMsg.nodeID)
             n = known_nodes[responseMsg.nodeID]
 
             result = responseMsg.response
+            announced = False
             if 'token' in result:
                 value['token'] = result['token']
-                d = n.store(blob_hash, value, self.node_id, 0)
-                d.addCallback(log_success)
-                d.addErrback(log_error, n)
+                try:
+                    res = yield n.store(blob_hash, value, self.node_id)
+                    log.debug("Response to store request: %s", str(res))
+                    announced = True
+                except protocol.TimeoutError:
+                    log.debug("Timeout while storing blob_hash %s at %s",
+                                blob_hash.encode('hex')[:16], n.id.encode('hex'))
+                except Exception as err:
+                    log.error("Unexpected error while storing blob_hash %s at %s: %s",
+                              blob_hash.encode('hex')[:16], n.id.encode('hex'), err)
             else:
-                d = defer.succeed(False)
-            return d
+                log.warning("missing token")
+            defer.returnValue(announced)
 
+        @defer.inlineCallbacks
         def requestPeers(contacts):
             if self.externalIP is not None and len(contacts) >= constants.k:
                 is_closer = Distance(blob_hash).is_closer(self.node_id, contacts[-1].id)
                 if is_closer:
                     contacts.pop()
-                    self.store(blob_hash, value, self_store=True, originalPublisherID=self.node_id)
+                    yield self.store(blob_hash, value, originalPublisherID=self.node_id,
+                                     self_store=True)
             elif self.externalIP is not None:
-                self.store(blob_hash, value, self_store=True, originalPublisherID=self.node_id)
-            ds = []
+                yield self.store(blob_hash, value, originalPublisherID=self.node_id,
+                                 self_store=True)
+            else:
+                raise Exception("Cannot determine external IP: %s" % self.externalIP)
+
+            contacted = []
             for contact in contacts:
                 known_nodes[contact.id] = contact
                 rpcMethod = getattr(contact, "findValue")
-                df = rpcMethod(blob_hash, rawResponse=True)
-                df.addCallback(announce_to_peer)
-                df.addErrback(log_error, contact)
-                ds.append(df)
-            return defer.DeferredList(ds)
+                try:
+                    response = yield rpcMethod(blob_hash, rawResponse=True)
+                    stored = yield announce_to_peer(response)
+                    if stored:
+                        contacted.append(contact)
+                except protocol.TimeoutError:
+                    log.debug("Timeout while storing blob_hash %s at %s",
+                              binascii.hexlify(blob_hash), contact)
+                except Exception as err:
+                    log.error("Unexpected error while storing blob_hash %s at %s: %s",
+                              binascii.hexlify(blob_hash), contact, err)
+            log.debug("Stored %s to %i of %i attempted peers", blob_hash.encode('hex')[:16],
+                     len(contacted), len(contacts))
+
+            contacted_node_ids = [c.id.encode('hex') for c in contacts]
+            defer.returnValue(contacted_node_ids)
 
         d = self.iterativeFindNode(blob_hash)
-        d.addCallbacks(requestPeers)
+        d.addCallback(requestPeers)
         return d
 
     def change_token(self):
@@ -638,28 +657,13 @@ class Node(object):
         self._dataStore.removeExpiredPeers()
         defer.returnValue(None)
 
+    @defer.inlineCallbacks
     def _refreshRoutingTable(self):
         nodeIDs = self._routingTable.getRefreshList(0, False)
-        outerDf = defer.Deferred()
-
-        def searchForNextNodeID(dfResult=None):
-            if len(nodeIDs) > 0:
-                searchID = nodeIDs.pop()
-                df = self.iterativeFindNode(searchID)
-                df.addCallback(searchForNextNodeID)
-            else:
-                # If this is reached, we have finished refreshing the routing table
-                outerDf.callback(None)
-
-        # Start the refreshing cycle
-        searchForNextNodeID()
-        return outerDf
-
-
-    # args put here because _refreshRoutingTable does outerDF.callback(None)
-    def _removeExpiredPeers(self, *args):
-        df = threads.deferToThread(self._dataStore.removeExpiredPeers)
-        return df
+        while nodeIDs:
+            searchID = nodeIDs.pop()
+            yield self.iterativeFindNode(searchID)
+        defer.returnValue(None)
 
 
 # This was originally a set of nested methods in _iterativeFind
