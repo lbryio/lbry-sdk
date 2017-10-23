@@ -367,6 +367,13 @@ class Node(object):
 
             contacted = []
             for contact in contacts:
+                try:
+                    yield contact.ping()
+                except protocol.TimeoutError:
+                    log.debug("Skip %s after ping timeout", contact.address)
+                    self.removeContact(contact.id)
+                    continue
+
                 known_nodes[contact.id] = contact
                 rpcMethod = getattr(contact, "findValue")
                 try:
