@@ -4,6 +4,7 @@ import socket
 import errno
 
 from twisted.internet import protocol, defer, error, reactor, task
+from twisted.python.failure import Failure
 
 import constants
 import encoding
@@ -377,10 +378,6 @@ class KademliaProtocol(protocol.DatagramProtocol):
         def handleResult(result):
             self._sendResponse(senderContact, rpcID, result)
 
-        df = defer.Deferred()
-        df.addCallback(handleResult)
-        df.addErrback(handleError)
-
         # Execute the RPC
         func = getattr(self._node, method, None)
         if callable(func) and hasattr(func, 'rpcmethod'):
@@ -392,19 +389,20 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 log.debug("DHT RECV CALL %s %s:%i", method, senderContact.address,
                           senderContact.port)
             try:
-                if method != 'ping':
-                    kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
-                    result = func(*args, **kwargs)
+                if method == 'ping':
+                    df = defer.maybeDeferred(func)
                 else:
-                    result = func()
+                    kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
+                    df = defer.maybeDeferred(func, *args, **kwargs)
+
+                df.addCallback(handleResult)
+                df.addErrback(handleError)
             except Exception, e:
                 log.exception("error handling request for %s: %s", senderContact.address, method)
-                df.errback(e)
-            else:
-                df.callback(result)
+                handleError(Failure(e))
         else:
             # No such exposed method
-            df.errback(AttributeError('Invalid method: %s' % method))
+            handleError(Failure(AttributeError('Invalid method: %s' % method)))
 
     def _msgTimeout(self, messageID):
         """ Called when an RPC request message times out """
