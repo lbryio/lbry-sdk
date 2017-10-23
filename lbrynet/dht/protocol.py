@@ -17,6 +17,25 @@ from delay import Delay
 log = logging.getLogger(__name__)
 
 
+def trap_remote(error_message, address, port):
+    trapped_remote_exceptions = {
+        # this error is returned by nodes that can be contacted but have an old
+        # and broken version of the ping command, if they return it the node can
+        # be contacted, so we'll treat it as a successful ping
+        ("ping() got an unexpected keyword argument '_rpcNodeContact'", TypeError, 'pong'),
+    }
+    if error_message.exceptionType in BUILTIN_EXCEPTIONS:
+        exception_type = BUILTIN_EXCEPTIONS[error_message.exceptionType]
+    else:
+        exception_type = UnknownRemoteException
+    remote_exception = exception_type(error_message.response)
+    for remote_msg, remote_type, cb in trapped_remote_exceptions:
+        if isinstance(remote_exception, remote_type) and remote_msg in remote_exception.message:
+            return cb
+    log.error("DHT RECV REMOTE EXCEPTION FROM %s:%i: %s", address, port, remote_exception)
+    return remote_exception
+
+
 class KademliaProtocol(protocol.DatagramProtocol):
     """ Implements all low-level network-related functions of a Kademlia node """
 
@@ -249,23 +268,11 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     df.callback((message, address))
                 elif isinstance(message, msgtypes.ErrorMessage):
                     # The RPC request raised a remote exception; raise it locally
-                    if message.exceptionType in BUILTIN_EXCEPTIONS:
-                        exception_type = BUILTIN_EXCEPTIONS[message.exceptionType]
+                    err = trap_remote(message, address[0], address[1])
+                    if isinstance(err, Exception):
+                        df.errback(err)
                     else:
-                        exception_type = UnknownRemoteException
-                    remoteException = exception_type(message.response)
-                    # this error is returned by nodes that can be contacted but have an old
-                    # and broken version of the ping command, if they return it the node can
-                    # be contacted, so we'll treat it as a successful ping
-                    old_ping_error = "ping() got an unexpected keyword argument '_rpcNodeContact'"
-                    if isinstance(remoteException, TypeError) and \
-                                    remoteException.message == old_ping_error:
-                        log.debug("old pong error")
-                        df.callback('pong')
-                    else:
-                        log.error("DHT RECV REMOTE EXCEPTION FROM %s:%i: %s", address[0],
-                                  address[1], remoteException)
-                        df.errback(remoteException)
+                        df.callback(err)
                 else:
                     # We got a result from the RPC
                     df.callback(message.response)
