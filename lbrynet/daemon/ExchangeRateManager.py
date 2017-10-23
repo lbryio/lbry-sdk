@@ -203,20 +203,6 @@ class CryptonatorFeed(MarketFeed):
         return defer.succeed(float(json_response['ticker']['price']))
 
 
-def get_default_market_feed(currency_pair):
-    currencies = None
-    if isinstance(currency_pair, str):
-        currencies = (currency_pair[0:3], currency_pair[3:6])
-    elif isinstance(currency_pair, tuple):
-        currencies = currency_pair
-    assert currencies is not None
-
-    if currencies == ("USD", "BTC"):
-        return LBRYioBTCFeed()
-    elif currencies == ("BTC", "LBC"):
-        return LBRYioFeed()
-
-
 class ExchangeRateManager(object):
     def __init__(self):
         self.market_feeds = [
