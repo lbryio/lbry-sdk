@@ -20,6 +20,7 @@ at anytime.
   * Fixed lbryid length validation
   * Fixed an old print statement that polluted logs
   * Fixed rpc id length for dht requests
+  * Fixed a few old print statements that polluted logs
   * Fixed handling error from dht clients with old ping method
 
 ### Deprecated
@@ -36,11 +37,15 @@ at anytime.
   * Return storing peer information from the hash announcer after finishing an announce call
   * Convert `DHTHashAnnouncer` and `Node` manage functions to `LoopingCall`s.
   * Restore previous dht contacts and node state on startup
+  * Filter dht queries from unreachable peers
+  * Check dht peers requesting to store can be contacted before accepting
+  * Use `pingback` to check connectivity on startup, don't try to send `store` queries if this fails
+  * Improved logging of dht errors and non-typical behavior
 
 ### Added
   * Added `wallet_prefill_addresses` command, which distributes credits to multiple addresses
   * Added `JSONFileDataStore` to persist dht node state and contacts
-  *
+  * Added `pingback` dht method to test connectivity
 
 ### Removed
   *
