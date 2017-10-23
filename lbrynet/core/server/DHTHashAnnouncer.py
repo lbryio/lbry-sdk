@@ -11,10 +11,10 @@ log = logging.getLogger(__name__)
 
 
 class DHTHashAnnouncer(object):
+    """This class announces to the DHT that this peer has certain blobs"""
+
     ANNOUNCE_CHECK_INTERVAL = 60
     CONCURRENT_ANNOUNCERS = 5
-
-    """This class announces to the DHT that this peer has certain blobs"""
     STORE_RETRIES = 3
 
     def __init__(self, dht_node, peer_port):
@@ -95,13 +95,12 @@ class DHTHashAnnouncer(object):
         with self._lock:
             for h in hashes:
                 announce_deferred = defer.Deferred()
+
                 if immediate:
                     self.hash_queue.appendleft((h, announce_deferred))
                 else:
                     self.hash_queue.append((h, announce_deferred))
-            if not self._total:
-                self._total = len(hashes)
-
+            self._total = (self._total or 0) + len(hashes)
         log.debug('There are now %s hashes remaining to be announced', self.hash_queue_size())
 
         @defer.inlineCallbacks

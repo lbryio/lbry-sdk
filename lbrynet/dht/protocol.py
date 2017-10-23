@@ -46,6 +46,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._encoder = encoding.Bencode()
         self._translator = msgformat.DefaultFormat()
         self._sentMessages = {}
+        self._completedMessages = []
+        self._timedOutMessages = {}
         self._partialMessages = {}
         self._partialMessagesProgress = {}
         self._delay = Delay()
@@ -179,9 +181,11 @@ class KademliaProtocol(protocol.DatagramProtocol):
         encodedMsg = self._encoder.encode(msgPrimitive)
 
         if args:
-            log.debug("DHT SEND CALL %s(%s)", method, args[0].encode('hex'))
+            log.debug("DHT SEND CALL %s(%s) --> %s (%s)", method, args[0].encode('hex')[:16],
+                      contact.address, contact.id.encode('hex')[:16])
         else:
-            log.debug("DHT SEND CALL %s", method)
+            log.debug("DHT SEND CALL %s() --> %s (%s)", method, contact.address,
+                      contact.id.encode('hex')[:16])
 
         df = defer.Deferred()
         if rawResponse:
@@ -228,6 +232,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             message = self._translator.fromPrimitive(msgPrimitive)
         except (encoding.DecodeError, ValueError):
             # We received some rubbish here
+            log.warning("Decode error (%s:%i): %s", address[0], address[1], err)
             return
         except IndexError:
             log.warning("Couldn't decode dht datagram from %s", address)
@@ -249,6 +254,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
         # Refresh the remote node's details in the local node's k-buckets
         self._node.addContact(remoteContact)
+
         if isinstance(message, msgtypes.RequestMessage):
             # This is an RPC method request
             self._handleRPC(remoteContact, message.id, message.request, message.args)
@@ -257,14 +263,21 @@ class KademliaProtocol(protocol.DatagramProtocol):
             # Find the message that triggered this response
             if message.id in self._sentMessages:
                 # Cancel timeout timer for this RPC
-                df, timeoutCall = self._sentMessages[message.id][1:3]
+                df, timeoutCall, method, args = self._sentMessages[message.id][1:]
                 timeoutCall.cancel()
                 del self._sentMessages[message.id]
+                self._completedMessages.append(message.id)
 
                 if hasattr(df, '_rpcRawResponse'):
                     # The RPC requested that the raw response message
                     # and originating address be returned; do not
                     # interpret it
+                    if args:
+                        log.debug("DHT RECV RAW RESPONSE %s(%s) FROM %s%i", method,
+                                  args[0].encode('hex')[:16], address[0], address[1])
+                    else:
+                        log.debug("DHT RECV RAW RESPONSE %s() FROM %s%i", method, address[0],
+                                  address[1])
                     df.callback((message, address))
                 elif isinstance(message, msgtypes.ErrorMessage):
                     # The RPC request raised a remote exception; raise it locally
@@ -275,11 +288,29 @@ class KademliaProtocol(protocol.DatagramProtocol):
                         df.callback(err)
                 else:
                     # We got a result from the RPC
+                    if args:
+                        log.debug("DHT RECV RESPONSE %s(%s) FROM %s:%i", method,
+                                  args[0].encode('hex')[:16], address[0], address[1])
+                    else:
+                        log.debug("DHT RECV RESPONSE %s() FROM %s:%i", method, address[0],
+                                  address[1])
                     df.callback(message.response)
             else:
                 # If the original message isn't found, it must have timed out
                 # TODO: we should probably do something with this...
-                pass
+                if message.id in self._timedOutMessages:
+                    remote, method, args = self._timedOutMessages[message.id]
+                    if args:
+                        a = "(%s)" % args[0].encode('hex')[:16]
+                    else:
+                        a = "()"
+                    log.debug("Response to timed out message %s%s to %s", method, a,
+                                remote.encode('hex')[:16])
+                elif message.id in self._completedMessages:
+                    log.warning("Response to already completed request")
+                else:
+                    log.warning("Response to unknown request from %s:%i (%s)", address[0],
+                                address[1], message.nodeID.encode('hex'))
 
     def _send(self, data, rpcID, address):
         """ Transmit the specified data over UDP, breaking it up into several
@@ -351,7 +382,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 if err.errno == errno.EWOULDBLOCK:
                     # i'm scared this may swallow important errors, but i get a million of these
                     # on Linux and it doesnt seem to affect anything  -grin
-                    log.debug("Can't send data to dht: EWOULDBLOCK")
+                    log.warning("Can't send data to dht: EWOULDBLOCK (dropped %i bytes)",
+                                len(txData))
                 elif err.errno == errno.ENETUNREACH:
                     # this should probably try to retransmit when the network connection is back
                     log.error("Network is unreachable")
@@ -383,6 +415,12 @@ class KademliaProtocol(protocol.DatagramProtocol):
             self._sendError(senderContact, rpcID, f.type, f.getErrorMessage())
 
         def handleResult(result):
+            if args:
+                log.debug("DHT SEND RESPONSE %s(%s) %s:%i", method, args[0].encode('hex'),
+                          senderContact.address, senderContact.port)
+            else:
+                log.debug("DHT SEND RESPONSE %s %s:%i", method, senderContact.address,
+                          senderContact.port)
             self._sendResponse(senderContact, rpcID, result)
 
         # Execute the RPC
@@ -426,6 +464,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             self._msgTimeoutInProgress(messageID, remoteContactID, df, method, args)
             return
         del self._sentMessages[messageID]
+        self._timedOutMessages[messageID] = (remoteContactID, method, args)
         # The message's destination node is now considered to be dead;
         # raise an (asynchronous) TimeoutError exception and update the host node
         self._node.removeContact(remoteContactID)
