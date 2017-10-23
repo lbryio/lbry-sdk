@@ -71,7 +71,7 @@ class MarketFeed(object):
         return defer.succeed(from_amount / (1.0 - self.fee))
 
     def _save_price(self, price):
-        log.debug("Saving price update %f for %s" % (price, self.market))
+        log.debug("Saving price update %f for %s from %s" % (price, self.market, self.name))
         self.rate = ExchangeRate(self.market, price, int(time.time()))
 
     def _log_error(self, err):
