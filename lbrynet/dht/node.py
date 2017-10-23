@@ -484,8 +484,9 @@ class Node(object):
             raise TypeError, 'No port available'
 
         if 'lbryid' in value:
-            if len(value['lbryid']) > constants.key_bits:
-                raise ValueError, 'Invalid lbryid'
+            if len(value['lbryid']) != constants.key_bits / 8:
+                raise ValueError('Invalid lbryid (%i bytes): %s' % (len(value['lbryid']),
+                                                                    value['lbryid'].encode('hex')))
             else:
                 compact_address = compact_ip + compact_port + value['lbryid']
         else:
