@@ -164,6 +164,23 @@ class Node(object):
                                    C{(<ip address>, (udp port>)}
         @type knownNodeAddresses: tuple
         """
+
+        def get_real_contacts(known_node_addresses):
+            real_bootstrap_contacts = []
+            bootstrap = known_node_addresses or []
+            _contacts = self.contacts
+            for address, port in bootstrap:
+                if address in [x.address for x in _contacts]:
+                    _real_contacts = [x for x in _contacts
+                                        if x.address == address and x.port == port]
+                    if _real_contacts:
+                        real_contact = _real_contacts[0]
+                    else:
+                        real_contact = False
+                    if real_contact and real_contact not in real_bootstrap_contacts:
+                        real_bootstrap_contacts.append(real_contact)
+            return real_bootstrap_contacts
+
         # Prepare the underlying Kademlia protocol
         if self.port is not None:
             try:
@@ -174,17 +191,32 @@ class Node(object):
                 raise ValueError("%s lbrynet may already be running." % str(e))
         # IGNORE:E1101
         # Create temporary contact information for the list of addresses of known nodes
-        if knownNodeAddresses != None:
+        contacts = self.contacts
+
+        # used in case the restored contacts cannot be reached
+        if knownNodeAddresses is not None:
+            failsafeNodeAddresses = knownNodeAddresses
+        else:
+            failsafeNodeAddresses = []
+
+        if contacts:  # connect to the network via previous closest contacts
+            bootstrapContacts = []
+            knownNodeAddresses = failsafeNodeAddresses
+            for contact in contacts:
+                knownNodeAddresses.append((contact.address, contact.port))
+                bootstrapContacts.append(contact)
+            log.info("Attemping to reconnect to %i previous known peers", len(bootstrapContacts))
+        elif not contacts and knownNodeAddresses is not None:  # connect using fixed known peers
             bootstrapContacts = []
             for address, port in knownNodeAddresses:
                 contact = Contact(self._generateID(), address, port, self._protocol)
                 bootstrapContacts.append(contact)
+            log.info("Bootstrap contacts: %i", len(knownNodeAddresses))
         else:
             bootstrapContacts = None
 
         # Start the token looping call
         self.change_token_lc.start(constants.tokenSecretChangeInterval)
-
         # Initiate the Kademlia joining sequence - perform a search for this node's own ID
         self._joinDeferred = self._iterativeFind(self.node_id, bootstrapContacts)
         #        #TODO: Refresh all k-buckets further away than this node's closest neighbour
@@ -192,7 +224,28 @@ class Node(object):
         self.hash_watcher.tick()
         result = yield self._joinDeferred
 
-        can_store = True
+        bootstrap_contacts = get_real_contacts(knownNodeAddresses)
+        log.info("Checking DHT connectivity...")
+        can_store = False
+
+        if bootstrap_contacts:
+            for contact in get_real_contacts(knownNodeAddresses):
+                try:
+                    if (contact.address, contact.port) in failsafeNodeAddresses:
+                        result = yield contact.pingback()
+                    else:
+                        raise ValueError("remove this when enough nodes support pingback")
+                    if result != "pong":
+                        raise ValueError("invalid pingback response: %s" % result)
+                    can_store = True
+                    log.info("Found bootstrap contact: %s (%s:%i)", contact.id.encode('hex')[:8],
+                             contact.address, contact.port)
+                    break
+                except (ValueError, protocol.TimeoutError):
+                    continue
+                except AttributeError:
+                    log.warning("seed node %s:%i does not support pingback",
+                                contact.address, contact.port)
         if can_store:
             log.info("Connected to DHT!")
         else:
@@ -200,9 +253,7 @@ class Node(object):
                         "Check your network and firewall settings")
 
         self._can_store = can_store
-
         self.refresh_node_lc.start(constants.checkRefreshInterval)
-
         defer.returnValue(result)
 
     @property
