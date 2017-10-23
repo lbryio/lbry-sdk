@@ -56,11 +56,7 @@ class MarketFeed(object):
 
     def _make_request(self):
         r = requests.get(self.url, self.params, timeout=self.REQUESTS_TIMEOUT)
-        if r.status_code == 200:
-            self._online = True
-            return r.text
-        self._online = False
-        return ""
+        return r.text
 
     def _handle_response(self, response):
         return NotImplementedError
@@ -72,18 +68,20 @@ class MarketFeed(object):
     def _save_price(self, price):
         log.debug("Saving price update %f for %s from %s" % (price, self.market, self.name))
         self.rate = ExchangeRate(self.market, price, int(time.time()))
+        self._online = True
 
-    def _log_error(self, err):
+    def _on_error(self, err):
         log.warning(
             "There was a problem updating %s exchange rate information from %s: %s",
             self.market, self.name, err)
+        self._online = False
 
     def _update_price(self):
         d = threads.deferToThread(self._make_request)
         d.addCallback(self._handle_response)
         d.addCallback(self._subtract_fee)
         d.addCallback(self._save_price)
-        d.addErrback(self._log_error)
+        d.addErrback(self._on_error)
         return d
 
     def start(self):
