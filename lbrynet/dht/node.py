@@ -11,6 +11,7 @@ import hashlib
 import operator
 import struct
 import time
+import os
 from twisted.internet import defer, error, reactor, task
 
 import constants
@@ -51,7 +52,7 @@ class Node(object):
 
     def __init__(self, node_id=None, udpPort=4000, dataStore=None,
                  routingTableClass=None, networkProtocol=None,
-                 externalIP=None):
+                 externalIP=None, dataDirectory=None, fileName=None):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -83,8 +84,34 @@ class Node(object):
         # network (add callbacks to this deferred if scheduling such
         # operations before the node has finished joining the network)
         self._joinDeferred = None
+        self._can_store = None
         self.change_token_lc = task.LoopingCall(self.change_token)
         self.refresh_node_lc = task.LoopingCall(self._refreshNode)
+
+        # Initialize the data storage mechanism used by this node
+        self.token_secret = self._generateID()
+        self.old_token_secret = None
+
+        if dataStore is None:
+            if not dataDirectory:
+                self._dataStore = datastore.DictDataStore()
+            else:
+                if not os.path.isdir(dataDirectory):
+                    self._dataStore = datastore.DictDataStore()
+                else:
+                    self._dataStore = datastore.JSONFileDataStore(self, dataDirectory, fileName)
+        else:
+            self._dataStore = dataStore
+
+        # Try to restore the node's state...
+        self._dataStore.Load()
+        nodeState = self._dataStore.getNodeState()
+        if nodeState:
+            log.info("Loading node state")
+            self.node_id = nodeState['node_id']
+        else:
+            log.warning("No node state to load")
+
         # Create k-buckets (for storing contacts)
         if routingTableClass is None:
             self._routingTable = routingtable.OptimizedTreeRoutingTable(self.node_id)
@@ -96,28 +123,18 @@ class Node(object):
             self._protocol = protocol.KademliaProtocol(self)
         else:
             self._protocol = networkProtocol
-        # Initialize the data storage mechanism used by this node
-        self.token_secret = self._generateID()
-        self.old_token_secret = None
-        if dataStore is None:
-            self._dataStore = datastore.DictDataStore()
-        else:
-            self._dataStore = dataStore
-            # Try to restore the node's state...
-            if 'nodeState' in self._dataStore:
-                state = self._dataStore['nodeState']
-                self.node_id = state['id']
-                for contactTriple in state['closestNodes']:
-                    contact = Contact(
-                        contactTriple[0], contactTriple[1], contactTriple[2], self._protocol)
-                    self._routingTable.addContact(contact)
+
+        if 'closestNodes' in nodeState:
+            for (contact_id, contact_address, contact_port) in nodeState['closestNodes']:
+                contact = Contact(contact_id, contact_address, contact_port, self._protocol)
+                self._routingTable.addContact(contact)
+            log.info("Loaded %i contacts", len(nodeState['closestNodes']))
+
         self.externalIP = externalIP
         self.hash_watcher = HashWatcher()
 
-        # will be used later
-        self._can_store = True
-
     def __del__(self):
+        self._dataStore.Save(self.contacts)
         if self._listeningPort is not None:
             self._listeningPort.stopListening()
 
@@ -127,6 +144,7 @@ class Node(object):
 
     def stop(self):
         # stop LoopingCalls:
+        self._dataStore.Save(self.contacts)
         if self.refresh_node_lc.running:
             self.refresh_node_lc.stop()
         if self.change_token_lc.running:
@@ -172,8 +190,20 @@ class Node(object):
         #        #TODO: Refresh all k-buckets further away than this node's closest neighbour
         # Start refreshing k-buckets periodically, if necessary
         self.hash_watcher.tick()
-        yield self._joinDeferred
+        result = yield self._joinDeferred
+
+        can_store = True
+        if can_store:
+            log.info("Connected to DHT!")
+        else:
+            log.warning("Connected to DHT, but unable to store. "
+                        "Check your network and firewall settings")
+
+        self._can_store = can_store
+
         self.refresh_node_lc.start(constants.checkRefreshInterval)
+
+        defer.returnValue(result)
 
     @property
     def contacts(self):
