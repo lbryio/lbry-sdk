@@ -13,8 +13,9 @@ at anytime.
   *
 
 ### Fixed
-  *
-  *
+  * Fixed slow startup for nodes with many lbry files
+  * Fixed setting the external ip on startup
+  * Fixed session startup not blocking on joining the dht
 
 ### Deprecated
   *
