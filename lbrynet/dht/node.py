@@ -492,6 +492,7 @@ class Node(object):
         @type contactID: str
         """
         self._routingTable.removeContact(contactID)
+        self._dataStore.removePeer(contactID)
 
     def findContact(self, contactID):
         """ Find a entangled.kademlia.contact.Contact object for the specified
