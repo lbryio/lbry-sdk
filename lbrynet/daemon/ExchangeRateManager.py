@@ -5,7 +5,6 @@ import json
 from twisted.internet import defer, threads
 from twisted.internet.task import LoopingCall
 
-from lbrynet import conf
 from lbrynet.core.Error import InvalidExchangeRateResponse
 
 log = logging.getLogger(__name__)
@@ -102,7 +101,7 @@ class BittrexFeed(MarketFeed):
             self,
             "BTCLBC",
             "Bittrex",
-            conf.settings['bittrex_feed'],
+            "https://bittrex.com/api/v1.1/public/getmarkethistory",
             {'market': 'BTC-LBC', 'count': 50},
             BITTREX_FEE
         )
@@ -223,7 +222,7 @@ def get_default_market_feed(currency_pair):
 class ExchangeRateManager(object):
     def __init__(self):
         self.market_feeds = [
-           LBRYioBTCFeed(), LBRYioFeed(), CryptonatorBTCFeed(), CryptonatorFeed()]
+           LBRYioBTCFeed(), LBRYioFeed(), BittrexFeed(), CryptonatorBTCFeed(), CryptonatorFeed()]
 
     def start(self):
         log.info("Starting exchange rate manager")
