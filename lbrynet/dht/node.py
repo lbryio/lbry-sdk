@@ -295,7 +295,7 @@ class Node(object):
         return self.iterativeAnnounceHaveBlob(key, {'port': port, 'lbryid': self.node_id})
 
     @defer.inlineCallbacks
-    def getPeersForBlob(self, blob_hash):
+    def getPeersForBlob(self, blob_hash, include_node_ids=False):
         result = yield self.iterativeFindValue(blob_hash)
         expanded_peers = []
         if result:
@@ -307,8 +307,11 @@ class Node(object):
                                 and result["from_peer"] != "self":
                             host = result["from_peer"]
                         port, = struct.unpack('>H', peer[4:6])
-                        if (host, port) not in expanded_peers:
-                            expanded_peers.append((host, port))
+                        if (host, port) not in [(x[0], x[1]) for x in expanded_peers]:
+                            if not include_node_ids:
+                                expanded_peers.append((host, port))
+                            else:
+                                expanded_peers.append((host, port, peer[6:].encode('hex')))
         defer.returnValue(expanded_peers)
 
     def get_most_popular_hashes(self, num_to_return):
