@@ -11,7 +11,6 @@ from zope.interface import implements
 import constants
 import kbucket
 from interface import IRoutingTable
-from error import TimeoutError
 import logging
 
 log = logging.getLogger(__name__)
@@ -83,11 +82,16 @@ class TreeRoutingTable(object):
 
                     @type failure: twisted.python.failure.Failure
                     """
-                    failure.trap(TimeoutError)
-                    log.warning('==replacing contact==')
-                    # Remove the old contact...
-                    deadContactID = failure.getErrorMessage()
+                    # 'failure' is a Failure with an error message in the format:
+                    # "Timeout connecting to <node id hex>"
+                    error_message = failure.getErrorMessage()
+                    deadContactID = error_message[22:].decode('hex')
+
+                    if len(deadContactID) != constants.key_bits / 8:
+                        raise ValueError("invalid contact id")
+                    log.debug("Replacing dead contact: %s", deadContactID.encode('hex'))
                     try:
+                        # Remove the old contact...
                         self._buckets[bucketIndex].removeContact(deadContactID)
                     except ValueError:
                         # The contact has already been removed (probably due to a timeout)
