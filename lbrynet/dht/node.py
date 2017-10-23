@@ -619,11 +619,28 @@ class Node(object):
         else:
             raise TypeError, 'No lbryid given'
 
+        def _trap(err):
+            if err.trap(protocol.TimeoutError):
+                log.debug("Refusing to store %s for %s after host failed to reply to ping",
+                            key.encode('hex')[:8], contact.address)
+            else:
+                log.exception("Refusing to store %s for %s after host returned unexpected error",
+                            key.encode('hex')[:8], contact.address)
+            self.removeContact(contact.id)
+            return "NOT OK"
+
+        if not self_store:
+            d = contact.ping()
+            d.addErrback(_trap)
+
         now = int(time.time())
         originallyPublished = now  # - age
         self._dataStore.addPeerToBlob(key, compact_address, now, originallyPublished,
                                       originalPublisherID)
-        return 'OK'
+        log.debug("Store %s (%s) to %s", key.encode('hex')[:16],
+                     originalPublisherID.encode('hex')[:16],
+                     contact.address)
+        return "OK"
 
     @rpcmethod
     def findNode(self, key, **kwargs):
