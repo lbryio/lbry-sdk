@@ -260,8 +260,7 @@ class Session(object):
                     addresses.append(value)
             return addresses
 
-        def start_dht(addresses):
-            self.dht_node.joinNetwork(addresses)
+        def start_dht(join_network_result):
             self.peer_finder.run_manage_loop()
             self.hash_announcer.run_manage_loop()
             return True
@@ -283,6 +282,7 @@ class Session(object):
 
         dl = defer.DeferredList(ds)
         dl.addCallback(join_resolved_addresses)
+        dl.addCallback(self.dht_node.joinNetwork)
         dl.addCallback(start_dht)
         return dl
 
