@@ -16,7 +16,7 @@ at anytime.
   * Fixed slow startup for nodes with many lbry files
   * Fixed setting the external ip on startup
   * Fixed session startup not blocking on joining the dht
-  * Fixed a bug that prevented replacing dht contacts
+  * Fixed several parsing bugs that prevented replacing dead dht contacts
   * Fixed lbryid length validation
   * Fixed an old print statement that polluted logs
 
