@@ -1,60 +1,19 @@
-#!/usr/bin/env python
-#
-# This library is free software, distributed under the terms of
-# the GNU Lesser General Public License Version 3, or any later version.
-# See the COPYING file included in this archive
-#
-# The docstrings in this module contain epytext markup; API documentation
-# may be created by processing this file with epydoc: http://epydoc.sf.net
-
 import logging
-import binascii
 import time
 import socket
 import errno
 
 from twisted.internet import protocol, defer, error, reactor, task
-from twisted.python import failure
 
 import constants
 import encoding
 import msgtypes
 import msgformat
 from contact import Contact
+from error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError
+from delay import Delay
 
 log = logging.getLogger(__name__)
-
-
-class TimeoutError(Exception):
-    """ Raised when a RPC times out """
-
-    def __init__(self, remote_contact_id):
-        # remote_contact_id is a binary blob so we need to convert it
-        # into something more readable
-        msg = 'Timeout connecting to {}'.format(binascii.hexlify(remote_contact_id))
-        Exception.__init__(self, msg)
-        self.remote_contact_id = remote_contact_id
-
-
-class Delay(object):
-    maxToSendDelay = 10 ** -3  # 0.05
-    minToSendDelay = 10 ** -5  # 0.01
-
-    def __init__(self, start=0):
-        self._next = start
-
-    # TODO: explain why this logic is like it is. And add tests that
-    #       show that it actually does what it needs to do.
-    def __call__(self):
-        ts = time.time()
-        delay = 0
-        if ts >= self._next:
-            delay = self.minToSendDelay
-            self._next = ts + self.minToSendDelay
-        else:
-            delay = (self._next - ts) + self.maxToSendDelay
-            self._next += self.maxToSendDelay
-        return delay
 
 
 class KademliaProtocol(protocol.DatagramProtocol):
@@ -195,11 +154,14 @@ class KademliaProtocol(protocol.DatagramProtocol):
                  C{ErrorMessage}).
         @rtype: twisted.internet.defer.Deferred
         """
-        msg = msgtypes.RequestMessage(self._node.id, method, args)
+        msg = msgtypes.RequestMessage(self._node.node_id, method, args)
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)
 
-        log.debug("DHT SEND CALL %s(%s)", method, args[0].encode('hex'))
+        if args:
+            log.debug("DHT SEND CALL %s(%s)", method, args[0].encode('hex'))
+        else:
+            log.debug("DHT SEND CALL %s", method)
 
         df = defer.Deferred()
         if rawResponse:
@@ -209,7 +171,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, msg.id)
         # Transmit the data
         self._send(encodedMsg, msg.id, (contact.address, contact.port))
-        self._sentMessages[msg.id] = (contact.id, df, timeoutCall)
+        self._sentMessages[msg.id] = (contact.id, df, timeoutCall, method, args)
         return df
 
     def startProtocol(self):
@@ -243,14 +205,14 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 return
         try:
             msgPrimitive = self._encoder.decode(datagram)
-        except encoding.DecodeError:
+            message = self._translator.fromPrimitive(msgPrimitive)
+        except (encoding.DecodeError, ValueError):
             # We received some rubbish here
             return
         except IndexError:
             log.warning("Couldn't decode dht datagram from %s", address)
             return
 
-        message = self._translator.fromPrimitive(msgPrimitive)
         remoteContact = Contact(message.nodeID, address[0], address[1], self)
 
         now = time.time()
@@ -286,7 +248,12 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     df.callback((message, address))
                 elif isinstance(message, msgtypes.ErrorMessage):
                     # The RPC request raised a remote exception; raise it locally
-                    remoteException = Exception(message.response)
+                    if message.exceptionType in BUILTIN_EXCEPTIONS:
+                        exception_type = BUILTIN_EXCEPTIONS[message.exceptionType]
+                    else:
+                        exception_type = UnknownRemoteException
+                    remoteException = exception_type(message.response)
+                    log.error("Remote exception (%s): %s", address, remoteException)
                     df.errback(remoteException)
                 else:
                     # We got a result from the RPC
@@ -377,7 +344,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
     def _sendResponse(self, contact, rpcID, response):
         """ Send a RPC response to the specified contact
         """
-        msg = msgtypes.ResponseMessage(rpcID, self._node.id, response)
+        msg = msgtypes.ResponseMessage(rpcID, self._node.node_id, response)
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)
         self._send(encodedMsg, rpcID, (contact.address, contact.port))
@@ -385,7 +352,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
     def _sendError(self, contact, rpcID, exceptionType, exceptionMessage):
         """ Send an RPC error message to the specified contact
         """
-        msg = msgtypes.ErrorMessage(rpcID, self._node.id, exceptionType, exceptionMessage)
+        msg = msgtypes.ErrorMessage(rpcID, self._node.node_id, exceptionType, exceptionMessage)
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)
         self._send(encodedMsg, rpcID, (contact.address, contact.port))
@@ -408,48 +375,58 @@ class KademliaProtocol(protocol.DatagramProtocol):
         func = getattr(self._node, method, None)
         if callable(func) and hasattr(func, 'rpcmethod'):
             # Call the exposed Node method and return the result to the deferred callback chain
-            log.debug("DHT RECV CALL %s(%s) %s:%i", method, args[0].encode('hex'),
-                      senderContact.address, senderContact.port)
+            if args:
+                log.debug("DHT RECV CALL %s(%s) %s:%i", method, args[0].encode('hex'),
+                          senderContact.address, senderContact.port)
+            else:
+                log.debug("DHT RECV CALL %s %s:%i", method, senderContact.address,
+                          senderContact.port)
             try:
-                kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
-                result = func(*args, **kwargs)
+                if method != 'ping':
+                    kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
+                    result = func(*args, **kwargs)
+                else:
+                    result = func()
             except Exception, e:
-                df.errback(failure.Failure(e))
+                log.exception("error handling request for %s: %s", senderContact.address, method)
+                df.errback(e)
             else:
                 df.callback(result)
         else:
             # No such exposed method
-            df.errback(failure.Failure(AttributeError('Invalid method: %s' % method)))
+            df.errback(AttributeError('Invalid method: %s' % method))
 
     def _msgTimeout(self, messageID):
         """ Called when an RPC request message times out """
         # Find the message that timed out
-        if not self._sentMessages.has_key(messageID):
+        if messageID not in self._sentMessages:
             # This should never be reached
             log.error("deferred timed out, but is not present in sent messages list!")
             return
-        remoteContactID, df = self._sentMessages[messageID][0:2]
+        remoteContactID, df, timeout_call, method, args = self._sentMessages[messageID]
         if self._partialMessages.has_key(messageID):
             # We are still receiving this message
-            self._msgTimeoutInProgress(messageID, remoteContactID, df)
+            self._msgTimeoutInProgress(messageID, remoteContactID, df, method, args)
             return
         del self._sentMessages[messageID]
         # The message's destination node is now considered to be dead;
         # raise an (asynchronous) TimeoutError exception and update the host node
         self._node.removeContact(remoteContactID)
-        df.errback(failure.Failure(TimeoutError(remoteContactID)))
+        df.errback(TimeoutError(remoteContactID))
 
-    def _msgTimeoutInProgress(self, messageID, remoteContactID, df):
+    def _msgTimeoutInProgress(self, messageID, remoteContactID, df, method, args):
         # See if any progress has been made; if not, kill the message
         if self._hasProgressBeenMade(messageID):
             # Reset the RPC timeout timer
             timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, messageID)
-            self._sentMessages[messageID] = (remoteContactID, df, timeoutCall)
+            self._sentMessages[messageID] = (remoteContactID, df, timeoutCall, method, args)
         else:
             # No progress has been made
-            del self._partialMessagesProgress[messageID]
-            del self._partialMessages[messageID]
-            df.errback(failure.Failure(TimeoutError(remoteContactID)))
+            if messageID in self._partialMessagesProgress:
+                del self._partialMessagesProgress[messageID]
+            if messageID in self._partialMessages:
+                del self._partialMessages[messageID]
+            df.errback(TimeoutError(remoteContactID))
 
     def _hasProgressBeenMade(self, messageID):
         return (

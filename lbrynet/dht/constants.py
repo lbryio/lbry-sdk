@@ -21,8 +21,14 @@ alpha = 3
 #: Maximum number of contacts stored in a bucket; this should be an even number
 k = 8
 
+#: Maximum number of contacts stored in the replacement cache
+replacementCacheSize = 8
+
 #: Timeout for network operations (in seconds)
 rpcTimeout = 5
+
+# number of rpc attempts to make before a timeout results in the node being removed as a contact
+rpcAttempts = 5
 
 # Delay between iterations of iterative node lookups (for loose parallelism)  (in seconds)
 iterativeLookupDelay = rpcTimeout / 2
@@ -53,3 +59,5 @@ from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 h = get_lbry_hash_obj()
 key_bits = h.digest_size * 8  # 384 bits
+
+rpc_id_length = 20

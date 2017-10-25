@@ -140,9 +140,8 @@ class ClientProtocol(Protocol, TimeoutMixin):
                 self._send_request_message(request_msg)
             else:
                 # The connection manager has indicated that this connection should be terminated
-                log.info(
-                    "Closing the connection to %s due to having no further requests to send",
-                    self.peer)
+                log.debug("Closing the connection to %s due to having no further requests to send",
+                          self.peer)
                 self.peer.report_success()
                 self.transport.loseConnection()
         d = self._connection_manager.get_next_request(self.peer, self)

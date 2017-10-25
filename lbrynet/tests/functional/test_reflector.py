@@ -9,7 +9,6 @@ from lbrynet.core import PeerManager
 from lbrynet.core import RateLimiter
 from lbrynet.core import Session
 from lbrynet.core import StreamDescriptor
-from lbrynet.dht.node import Node
 from lbrynet.lbry_file import EncryptedFileMetadataManager
 from lbrynet.lbry_file.client import EncryptedFileOptions
 from lbrynet.file_manager import EncryptedFileCreator
@@ -17,6 +16,7 @@ from lbrynet.file_manager import EncryptedFileManager
 
 from lbrynet.tests import mocks
 from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
+
 
 class TestReflector(unittest.TestCase):
     def setUp(self):
@@ -57,7 +57,7 @@ class TestReflector(unittest.TestCase):
         self.session = Session.Session(
             conf.settings['data_rate'],
             db_dir=self.db_dir,
-            lbryid="abcd",
+            node_id="abcd",
             peer_finder=peer_finder,
             hash_announcer=hash_announcer,
             blob_dir=self.blob_dir,
@@ -66,7 +66,7 @@ class TestReflector(unittest.TestCase):
             rate_limiter=rate_limiter,
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
-            dht_node_class=Node
+            external_ip="127.0.0.1"
         )
 
         self.stream_info_manager = EncryptedFileMetadataManager.DBEncryptedFileMetadataManager(

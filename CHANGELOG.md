@@ -13,39 +13,77 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed handling cancelled blob and availability requests
-  * Fixed redundant blob requests to a peer
-  * Fixed https://github.com/lbryio/lbry/issues/923
-  * Fixed concurrent reflects opening too many files
-  * Fixed cases when reflecting would fail on error conditions
-  * Fixed deadlocks from occuring during blob writes
+  * Fixed slow startup for nodes with many lbry files
+  * Fixed setting the external ip on startup
+  * Fixed session startup not blocking on joining the dht
+  * Fixed several parsing bugs that prevented replacing dead dht contacts
+  * Fixed lbryid length validation
+  * Fixed an old print statement that polluted logs
+  * Fixed rpc id length for dht requests
 
 ### Deprecated
-  * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
+  *
   *
 
 ### Changed
-  * Announcing by head blob is turned on by default
-  * Updated reflector server dns
+  * Use the first port available for the peer and dht ports, starting with the provided values (defaults of 3333 and 4444). This allows multiple lbrynet instances in a LAN with UPnP.
+  * Detect a UPnP redirect that didn't get cleaned up on a previous run and use it
+  * Bumped jsonschema requirement to 2.6.0
   * Moved tests into the lbrynet package.
   * Refactor some assert statements to accommodate the PYTHONOPTIMIZE flag set for Android.
-
+  
 ### Added
-  * Added WAL pragma to sqlite3
-  * Added unit tests for `BlobFile`
-  * Updated exchange rate tests for the lbry.io api
-  * Use `hashlib` for sha384 instead of `pycrypto`
-  * Use `cryptography` instead of `pycrypto` for blob encryption and decryption
-  * Use `cryptography` for PKCS7 instead of doing it manually
-  * Use `BytesIO` buffers instead of temp files when processing blobs
-  * Refactored and pruned blob related classes into `lbrynet.blobs`
-  * Changed several `assert`s to raise more useful errors
-  * Added ability for reflector to store stream information for head blob announce
-  * Added blob announcement information to API call status with session flag
+  *
+  *
 
 ### Removed
-  * Removed `TempBlobFile`
-  * Removed unused `EncryptedFileOpener`
+  *
+  *
+
+
+## [0.17.0] - 2017-10-12
+### Fixed
+ * Fixed handling cancelled blob and availability requests
+ * Fixed redundant blob requests to a peer
+ * Fixed https://github.com/lbryio/lbry/issues/923
+ * Fixed concurrent reflects opening too many files
+ * Fixed cases when reflecting would fail on error conditions
+ * Fixed deadlocks from occuring during blob writes
+ * Fixed and updated`lbrynet.tests.dht`
+ * Fixed redundant dht id
+ * Fixed dht `ping` method
+ * Fixed raising remote exceptions in dht
+ * Fixed hanging delayedCall in dht node class
+ * Fixed logging error in dht when calling or receiving methods with no arguments
+ * Fixed IndexError in routingTable.findCloseNodes which would cause an empty list to be returned
+ * Fixed bug where last blob in a stream was not saved to blob manager
+
+### Deprecated
+ * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
+
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.12 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0012---2017-10-12)
+ * Bumped `lbryum` requirement to 3.1.9 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#319---2017-10-12)
+ * Announcing by head blob is turned on by default
+ * Updated reflector server dns
+ * Moved tests into the lbrynet package.
+
+### Added
+ * Added WAL pragma to sqlite3
+ * Added unit tests for `BlobFile`
+ * Updated exchange rate tests for the lbry.io api
+ * Use `hashlib` for sha384 instead of `pycrypto`
+ * Use `cryptography` instead of `pycrypto` for blob encryption and decryption
+ * Use `cryptography` for PKCS7 instead of doing it manually
+ * Use `BytesIO` buffers instead of temp files when processing blobs
+ * Refactored and pruned blob related classes into `lbrynet.blobs`
+ * Changed several `assert`s to raise more useful errors
+ * Added ability for reflector to store stream information for head blob announce
+ * Added blob announcement information to API call status with session flag
+
+### Removed
+ * Removed `TempBlobFile`
+ * Removed unused `EncryptedFileOpener`
 
 
 ## [0.16.3] - 2017-09-28

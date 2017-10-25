@@ -759,6 +759,32 @@ Returns:
             resolvable
 ```
 
+## routing_table_get
+
+```text
+Get DHT routing information
+
+Usage:
+    routing_table_get
+
+Returns:
+    (dict) dictionary containing routing and contact information
+    {
+        "buckets": {
+            <bucket index>: [
+                {
+                    "address": (str) peer address,
+                    "node_id": (str) peer node id,
+                    "blobs": (list) blob hashes announced by peer
+                }
+            ]
+        },
+        "contacts": (list) contact node ids,
+        "blob_hashes": (list) all of the blob hashes stored by peers in the list of buckets,
+        "node_id": (str) the local dht node id
+    }
+```
+
 ## settings_get
 
 ```text
@@ -857,6 +883,8 @@ Returns:
             'session_status': {
                 'managed_blobs': count of blobs in the blob manager,
                 'managed_streams': count of streams in the file manager
+                'announce_queue_size': number of blobs currently queued to be announced
+                'should_announce_blobs': number of blobs that should be announced
             }
 
         If given the dht status option:

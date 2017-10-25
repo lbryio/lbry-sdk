@@ -51,7 +51,7 @@ def main(args=None):
         session = Session.Session(
             0,
             db_dir=db_dir,
-            lbryid=utils.generate_id(),
+            node_id=utils.generate_id(),
             blob_dir=blob_dir,
             dht_node_port=4444,
             known_dht_nodes=conf.settings['known_dht_nodes'],
