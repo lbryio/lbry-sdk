@@ -3,9 +3,9 @@ dist: trusty
 language: python
 python: 2.7
 
-addons:
-    srcclr:
-        debug: true
+branches:
+  except:
+    - gh-pages
 
 notifications:
   slack:
@@ -18,14 +18,16 @@ cache:
     - $TRAVIS_BUILD_DIR/cache/wheel
 
 addons:
-  apt:
+ srcclr:
+   debug: true
+ apt:
     packages:
     - libgmp3-dev
     - build-essential
     - git
     - libssl-dev
     - libffi-dev
-  
+
 before_install:
   - virtualenv venv
   - source venv/bin/activate
