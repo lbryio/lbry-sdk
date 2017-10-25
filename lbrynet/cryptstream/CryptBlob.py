@@ -1,6 +1,8 @@
 import binascii
 import logging
-from twisted.internet import defer, threads
+from io import BytesIO
+from twisted.internet import defer
+from twisted.web.client import FileBodyProducer
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
@@ -73,14 +75,17 @@ class StreamBlobDecryptor(object):
 
         read_handle = self.blob.open_for_reading()
 
+        @defer.inlineCallbacks
         def decrypt_bytes():
-            data = read_handle.read()
-            self.buff += data
-            self.len_read += len(data)
+            producer = FileBodyProducer(read_handle)
+            buff = BytesIO()
+            yield producer.startProducing(buff)
+            self.buff = buff.getvalue()
+            self.len_read += len(self.buff)
             write_bytes()
             finish_decrypt()
 
-        d = threads.deferToThread(decrypt_bytes)
+        d = decrypt_bytes()
         return d
 
 
