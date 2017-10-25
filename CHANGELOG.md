@@ -19,6 +19,7 @@ at anytime.
   * Fixed several parsing bugs that prevented replacing dead dht contacts
   * Fixed lbryid length validation
   * Fixed an old print statement that polluted logs
+  * Fixed rpc id length for dht requests
 
 ### Deprecated
   *
