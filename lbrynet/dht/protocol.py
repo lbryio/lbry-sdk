@@ -205,14 +205,14 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 return
         try:
             msgPrimitive = self._encoder.decode(datagram)
-        except encoding.DecodeError:
+            message = self._translator.fromPrimitive(msgPrimitive)
+        except (encoding.DecodeError, ValueError):
             # We received some rubbish here
             return
         except IndexError:
             log.warning("Couldn't decode dht datagram from %s", address)
             return
 
-        message = self._translator.fromPrimitive(msgPrimitive)
         remoteContact = Contact(message.nodeID, address[0], address[1], self)
 
         now = time.time()
