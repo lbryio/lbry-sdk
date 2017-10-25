@@ -2377,6 +2377,33 @@ class Daemon(AuthJSONRPCServer):
             self.analytics_manager.send_claim_action('new_support')
         defer.returnValue(result)
 
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    @AuthJSONRPCServer.flags(no_broadcast='--no_broadcast')
+    def jsonrpc_wallet_prefill_addresses(self, num_addresses, amount, no_broadcast=False):
+        """
+        Create new addresses, each containing `amount` credits
+
+        Usage:
+            wallet_prefill_addresses [--no_broadcast]
+                                     (<num_addresses> | --num_addresses=<num_addresses>)
+                                     (<amount> | --amount=<amount>)
+
+        Returns:
+            (dict) the resulting transaction
+        """
+
+        if amount < 0:
+            raise NegativeFundsError()
+        elif not amount:
+            raise NullFundsError()
+
+        broadcast = not no_broadcast
+        tx = yield self.session.wallet.create_addresses_with_balance(
+            num_addresses, amount, broadcast=broadcast)
+        tx['broadcast'] = broadcast
+        defer.returnValue(tx)
+
     def jsonrpc_block_show(self, blockhash=None, height=None):
         """
         Get contents of a block
