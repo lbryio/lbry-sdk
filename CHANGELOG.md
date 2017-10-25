@@ -32,7 +32,7 @@ at anytime.
   * Refactor some assert statements to accommodate the PYTHONOPTIMIZE flag set for Android.
   
 ### Added
-  *
+  * Added `wallet_prefill_addresses` command, which creates distributes credits to multiple addresses
   *
 
 ### Removed
