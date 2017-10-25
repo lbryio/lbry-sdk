@@ -36,3 +36,6 @@ def resetTime(test_case, timestamp=DEFAULT_TIMESTAMP):
     patcher = mock.patch('lbrynet.core.utils.utcnow')
     patcher.start().return_value = timestamp
     test_case.addCleanup(patcher.stop)
+
+def is_android():
+    return 'ANDROID_ARGUMENT' in os.environ # detect Android using the Kivy way

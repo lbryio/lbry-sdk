@@ -33,7 +33,7 @@ from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 
 from lbrynet.tests import mocks
-from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
+from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir, is_android
 
 FakeNode = mocks.Node
 FakeWallet = mocks.Wallet
@@ -490,6 +490,9 @@ class TestTransfer(TestCase):
 
         return d
 
+    @unittest.skipIf(is_android(),
+                     'Test cannot pass on Android because multiprocessing '
+                     'is not supported at the OS level.')
     def test_lbry_transfer(self):
         sd_hash_queue = Queue()
         kill_event = Event()
@@ -577,6 +580,9 @@ class TestTransfer(TestCase):
 
         return d
 
+    @unittest.skipIf(is_android(),
+                     'Test cannot pass on Android because multiprocessing '
+                     'is not supported at the OS level.')
     def test_last_blob_retrieval(self):
         kill_event = Event()
         dead_event_1 = Event()
@@ -659,6 +665,9 @@ class TestTransfer(TestCase):
         d.addBoth(stop)
         return d
 
+    @unittest.skipIf(is_android(),
+                     'Test cannot pass on Android because multiprocessing '
+                     'is not supported at the OS level.')
     def test_double_download(self):
         sd_hash_queue = Queue()
         kill_event = Event()

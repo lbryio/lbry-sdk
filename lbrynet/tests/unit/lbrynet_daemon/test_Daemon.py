@@ -1,8 +1,9 @@
 import mock
 import json
+import unittest
 
 from twisted.internet import defer
-from twisted.trial import unittest
+from twisted import trial
 
 from lbryschema.decode import smart_decode
 from lbrynet import conf
@@ -14,6 +15,8 @@ from lbrynet.tests.mocks import mock_conf_settings, FakeNetwork
 from lbrynet.tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from lbrynet.tests.mocks import BTCLBCFeed, USDBTCFeed
+from lbrynet.tests.util import is_android
+
 
 import logging
 logging.getLogger("lbryum").setLevel(logging.WARNING)
@@ -63,7 +66,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     return daemon
 
 
-class TestCostEst(unittest.TestCase):
+class TestCostEst(trial.unittest.TestCase):
     def setUp(self):
         mock_conf_settings(self)
         util.resetTime(self)
@@ -96,7 +99,7 @@ class TestCostEst(unittest.TestCase):
         self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
 
 
-class TestJsonRpc(unittest.TestCase):
+class TestJsonRpc(trial.unittest.TestCase):
     def setUp(self):
         def noop():
             return None
@@ -112,6 +115,8 @@ class TestJsonRpc(unittest.TestCase):
         d = defer.maybeDeferred(self.test_daemon.jsonrpc_status)
         d.addCallback(lambda status: self.assertDictContainsSubset({'is_running': False}, status))
 
+    @unittest.skipIf(is_android(),
+                     'Test cannot pass on Android because PYTHONOPTIMIZE removes the docstrings.')
     def test_help(self):
         d = defer.maybeDeferred(self.test_daemon.jsonrpc_help, command='status')
         d.addCallback(lambda result: self.assertSubstring('daemon status', result['help']))

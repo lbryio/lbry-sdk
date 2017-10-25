@@ -39,12 +39,12 @@ class SettingsTest(unittest.TestCase):
 
     def test_invalid_setting_raises_exception(self):
         settings = self.get_mock_config_instance()
-        self.assertRaises(AssertionError, settings.set, 'invalid_name', 123)
+        self.assertRaises(KeyError, settings.set, 'invalid_name', 123)
 
     def test_invalid_data_type_raises_exception(self):
         settings = self.get_mock_config_instance()
         self.assertIsNone(settings.set('test', 123))
-        self.assertRaises(AssertionError, settings.set, 'test', 123, ('fake_data_type',))
+        self.assertRaises(KeyError, settings.set, 'test', 123, ('fake_data_type',))
 
     def test_setting_precedence(self):
         settings = self.get_mock_config_instance()
