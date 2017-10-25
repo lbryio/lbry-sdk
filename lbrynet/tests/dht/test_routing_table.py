@@ -27,6 +27,9 @@ class FakeDeferred(object):
     def addErrback(self, *args, **kwargs):
         return
 
+    def addCallbacks(self, *args, **kwargs):
+        return
+
 
 class TreeRoutingTableTest(unittest.TestCase):
     """ Test case for the RoutingTable class """

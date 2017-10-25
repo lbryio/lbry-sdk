@@ -62,6 +62,7 @@ class NodeDataTest(unittest.TestCase):
             self.cases.append((h.digest(), 5000+2*i))
             self.cases.append((h.digest(), 5001+2*i))
 
+    @defer.inlineCallbacks
     def testStore(self):
         """ Tests if the node can store (and privately retrieve) some data """
         for key, value in self.cases:
@@ -70,7 +71,7 @@ class NodeDataTest(unittest.TestCase):
                 'lbryid': self.contact.id,
                 'token': self.token
             }
-            self.node.store(key, request, self.contact.id, _rpcNodeContact=self.contact)
+            yield self.node.store(key, request, self.contact.id, _rpcNodeContact=self.contact)
         for key, value in self.cases:
             expected_result = self.contact.compact_ip() + str(struct.pack('>H', value)) + \
                               self.contact.id
@@ -90,7 +91,7 @@ class NodeContactTest(unittest.TestCase):
         """ Tests if a contact can be added and retrieved correctly """
         import lbrynet.dht.contact
         # Create the contact
-        h = hashlib.sha1()
+        h = hashlib.sha384()
         h.update('node1')
         contactID = h.digest()
         contact = lbrynet.dht.contact.Contact(contactID, '127.0.0.1', 91824, self.node._protocol)
@@ -133,6 +134,10 @@ class FakeRPCProtocol(protocol.DatagramProtocol):
     def sendRPC(self, contact, method, args, rawResponse=False):
         """ Fake RPC protocol; allows entangled.kademlia.contact.Contact objects to "send" RPCs"""
 
+        h = hashlib.sha384()
+        h.update('rpcId')
+        rpc_id = h.digest()[:20]
+
         if method == "findNode":
             # get the specific contacts closest contacts
             closestContacts = []
@@ -144,7 +149,8 @@ class FakeRPCProtocol(protocol.DatagramProtocol):
             # Pack the closest contacts into a ResponseMessage
             for closeContact in closestContactsList:
                 closestContacts.append((closeContact.id, closeContact.address, closeContact.port))
-            message = ResponseMessage("rpcId", contact.id, closestContacts)
+
+            message = ResponseMessage(rpc_id, contact.id, closestContacts)
             df = defer.Deferred()
             df.callback((message, (contact.address, contact.port)))
             return df
@@ -171,7 +177,7 @@ class FakeRPCProtocol(protocol.DatagramProtocol):
                             response = closestContacts
 
             # Create the response message
-            message = ResponseMessage("rpcId", contact.id, response)
+            message = ResponseMessage(rpc_id, contact.id, response)
             df = defer.Deferred()
             df.callback((message, (contact.address, contact.port)))
             return df
@@ -189,7 +195,10 @@ class NodeLookupTest(unittest.TestCase):
         # Note: The reactor is never started for this test. All deferred calls run sequentially,
         # since there is no asynchronous network communication
         # create the node to be tested in isolation
-        self.node = lbrynet.dht.node.Node('12345678901234567800', 4000, None, None, self._protocol)
+        h = hashlib.sha384()
+        h.update('node1')
+        node_id = str(h.digest())
+        self.node = lbrynet.dht.node.Node(node_id, 4000, None, None, self._protocol)
         self.updPort = 81173
         self.contactsAmount = 80
         # Reinitialise the routing table
@@ -198,16 +207,16 @@ class NodeLookupTest(unittest.TestCase):
 
         # create 160 bit node ID's for test purposes
         self.testNodeIDs = []
-        idNum = int(self.node.node_id)
+        idNum = int(self.node.node_id.encode('hex'), 16)
         for i in range(self.contactsAmount):
             # create the testNodeIDs in ascending order, away from the actual node ID,
             # with regards to the distance metric
-            self.testNodeIDs.append(idNum + i + 1)
+            self.testNodeIDs.append(str("%X" % (idNum + i + 1)).decode('hex'))
 
         # generate contacts
         self.contacts = []
         for i in range(self.contactsAmount):
-            contact = lbrynet.dht.contact.Contact(str(self.testNodeIDs[i]), "127.0.0.1",
+            contact = lbrynet.dht.contact.Contact(self.testNodeIDs[i], "127.0.0.1",
                                                   self.updPort + i + 1, self._protocol)
             self.contacts.append(contact)
 
@@ -241,23 +250,24 @@ class NodeLookupTest(unittest.TestCase):
                                              lbrynet.dht.datastore.DictDataStore()))
         self._protocol.createNetwork(contacts_with_datastores)
 
+    @defer.inlineCallbacks
     def testNodeBootStrap(self):
         """  Test bootstrap with the closest possible contacts """
 
-        df = self.node._iterativeFind(self.node.node_id, self.contacts[0:8])
+        activeContacts = yield self.node._iterativeFind(self.node.node_id, self.contacts[0:8])
         # Set the expected result
-        expectedResult = []
+        expectedResult = set()
         for item in self.contacts[0:6]:
-            expectedResult.append(item.id)
+            expectedResult.add(item.id)
         # Get the result from the deferred
-        activeContacts = df.result
 
         # Check the length of the active contacts
         self.failUnlessEqual(activeContacts.__len__(), expectedResult.__len__(),
                              "More active contacts should exist, there should be %d "
-                             "contacts" % expectedResult.__len__())
+                             "contacts but there are %d" % (len(expectedResult),
+                                                            len(activeContacts)))
 
         # Check that the received active contacts are the same as the input contacts
-        self.failUnlessEqual(activeContacts, expectedResult,
+        self.failUnlessEqual({contact.id for contact in activeContacts}, expectedResult,
                              "Active should only contain the closest possible contacts"
                              " which were used as input for the boostrap")

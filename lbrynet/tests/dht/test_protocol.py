@@ -16,7 +16,7 @@ class KademliaProtocolTest(unittest.TestCase):
     def setUp(self):
         del lbrynet.dht.protocol.reactor
         lbrynet.dht.protocol.reactor = twisted.internet.selectreactor.SelectReactor()
-        self.node = Node(node_id='node1', udpPort=9182, externalIP="127.0.0.1")
+        self.node = Node(node_id='1' * 48, udpPort=9182, externalIP="127.0.0.1")
         self.protocol = lbrynet.dht.protocol.KademliaProtocol(self.node)
 
     def testReactor(self):
@@ -39,7 +39,7 @@ class KademliaProtocolTest(unittest.TestCase):
         lbrynet.dht.constants.rpcAttempts = 1
         lbrynet.dht.constants.rpcTimeout = 1
         self.node.ping = fake_ping
-        deadContact = lbrynet.dht.contact.Contact('node2', '127.0.0.1', 9182, self.protocol)
+        deadContact = lbrynet.dht.contact.Contact('2' * 48, '127.0.0.1', 9182, self.protocol)
         self.node.addContact(deadContact)
         # Make sure the contact was added
         self.failIf(deadContact not in self.node.contacts,
@@ -73,7 +73,7 @@ class KademliaProtocolTest(unittest.TestCase):
 
     def testRPCRequest(self):
         """ Tests if a valid RPC request is executed and responded to correctly """
-        remoteContact = lbrynet.dht.contact.Contact('node2', '127.0.0.1', 9182, self.protocol)
+        remoteContact = lbrynet.dht.contact.Contact('2' * 48, '127.0.0.1', 9182, self.protocol)
         self.node.addContact(remoteContact)
         self.error = None
 
@@ -105,7 +105,7 @@ class KademliaProtocolTest(unittest.TestCase):
         Verifies that a RPC request for an existing but unpublished
         method is denied, and that the associated (remote) exception gets
         raised locally """
-        remoteContact = lbrynet.dht.contact.Contact('node2', '127.0.0.1', 9182, self.protocol)
+        remoteContact = lbrynet.dht.contact.Contact('2' * 48, '127.0.0.1', 9182, self.protocol)
         self.node.addContact(remoteContact)
         self.error = None
 
@@ -126,7 +126,7 @@ class KademliaProtocolTest(unittest.TestCase):
         # Publish the "local" node on the network
         lbrynet.dht.protocol.reactor.listenUDP(9182, self.protocol)
         # Simulate the RPC
-        df = remoteContact.pingNoRPC()
+        df = remoteContact.not_a_rpc_function()
         df.addCallback(handleResult)
         df.addErrback(handleError)
         df.addBoth(lambda _: lbrynet.dht.protocol.reactor.stop())
@@ -139,7 +139,7 @@ class KademliaProtocolTest(unittest.TestCase):
 
     def testRPCRequestArgs(self):
         """ Tests if an RPC requiring arguments is executed correctly """
-        remoteContact = lbrynet.dht.contact.Contact('node2', '127.0.0.1', 9182, self.protocol)
+        remoteContact = lbrynet.dht.contact.Contact('2' * 48, '127.0.0.1', 9182, self.protocol)
         self.node.addContact(remoteContact)
         self.error = None
 
