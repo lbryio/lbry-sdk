@@ -11,8 +11,8 @@ import hashlib
 import operator
 import struct
 import time
-
-from twisted.internet import defer, error, reactor, threads, task
+import os
+from twisted.internet import defer, error, reactor, task
 
 import constants
 import routingtable
@@ -21,8 +21,9 @@ import protocol
 
 from contact import Contact
 from hashwatcher import HashWatcher
-import logging
+from distance import Distance
 
+import logging
 from lbrynet.core.utils import generate_id
 
 log = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ class Node(object):
 
     def __init__(self, node_id=None, udpPort=4000, dataStore=None,
                  routingTableClass=None, networkProtocol=None,
-                 externalIP=None):
+                 externalIP=None, dataDirectory=None, fileName=None):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -83,8 +84,34 @@ class Node(object):
         # network (add callbacks to this deferred if scheduling such
         # operations before the node has finished joining the network)
         self._joinDeferred = None
-        self.next_refresh_call = None
+        self._can_store = None
         self.change_token_lc = task.LoopingCall(self.change_token)
+        self.refresh_node_lc = task.LoopingCall(self._refreshNode)
+
+        # Initialize the data storage mechanism used by this node
+        self.token_secret = self._generateID()
+        self.old_token_secret = None
+
+        if dataStore is None:
+            if not dataDirectory:
+                self._dataStore = datastore.DictDataStore()
+            else:
+                if not os.path.isdir(dataDirectory):
+                    self._dataStore = datastore.DictDataStore()
+                else:
+                    self._dataStore = datastore.JSONFileDataStore(self, dataDirectory, fileName)
+        else:
+            self._dataStore = dataStore
+
+        # Try to restore the node's state...
+        self._dataStore.Load()
+        nodeState = self._dataStore.getNodeState()
+        if nodeState:
+            log.info("Loading node state")
+            self.node_id = nodeState['node_id']
+        else:
+            log.warning("No node state to load")
+
         # Create k-buckets (for storing contacts)
         if routingTableClass is None:
             self._routingTable = routingtable.OptimizedTreeRoutingTable(self.node_id)
@@ -96,33 +123,30 @@ class Node(object):
             self._protocol = protocol.KademliaProtocol(self)
         else:
             self._protocol = networkProtocol
-        # Initialize the data storage mechanism used by this node
-        self.token_secret = self._generateID()
-        self.old_token_secret = None
-        if dataStore is None:
-            self._dataStore = datastore.DictDataStore()
-        else:
-            self._dataStore = dataStore
-            # Try to restore the node's state...
-            if 'nodeState' in self._dataStore:
-                state = self._dataStore['nodeState']
-                self.node_id = state['id']
-                for contactTriple in state['closestNodes']:
-                    contact = Contact(
-                        contactTriple[0], contactTriple[1], contactTriple[2], self._protocol)
-                    self._routingTable.addContact(contact)
+
+        if 'closestNodes' in nodeState:
+            for (contact_id, contact_address, contact_port) in nodeState['closestNodes']:
+                contact = Contact(contact_id, contact_address, contact_port, self._protocol)
+                self._routingTable.addContact(contact)
+            log.info("Loaded %i contacts", len(nodeState['closestNodes']))
+
         self.externalIP = externalIP
         self.hash_watcher = HashWatcher()
 
     def __del__(self):
+        self._dataStore.Save(self.contacts)
         if self._listeningPort is not None:
             self._listeningPort.stopListening()
 
+    @property
+    def can_store(self):
+        return self._can_store is True
+
     def stop(self):
-        # cancel callLaters:
-        if self.next_refresh_call is not None:
-            self.next_refresh_call.cancel()
-            self.next_refresh_call = None
+        # stop LoopingCalls:
+        self._dataStore.Save(self.contacts)
+        if self.refresh_node_lc.running:
+            self.refresh_node_lc.stop()
         if self.change_token_lc.running:
             self.change_token_lc.stop()
         if self._listeningPort is not None:
@@ -140,6 +164,23 @@ class Node(object):
                                    C{(<ip address>, (udp port>)}
         @type knownNodeAddresses: tuple
         """
+
+        def get_real_contacts(known_node_addresses):
+            real_bootstrap_contacts = []
+            bootstrap = known_node_addresses or []
+            _contacts = self.contacts
+            for address, port in bootstrap:
+                if address in [x.address for x in _contacts]:
+                    _real_contacts = [x for x in _contacts
+                                        if x.address == address and x.port == port]
+                    if _real_contacts:
+                        real_contact = _real_contacts[0]
+                    else:
+                        real_contact = False
+                    if real_contact and real_contact not in real_bootstrap_contacts:
+                        real_bootstrap_contacts.append(real_contact)
+            return real_bootstrap_contacts
+
         # Prepare the underlying Kademlia protocol
         if self.port is not None:
             try:
@@ -150,26 +191,70 @@ class Node(object):
                 raise ValueError("%s lbrynet may already be running." % str(e))
         # IGNORE:E1101
         # Create temporary contact information for the list of addresses of known nodes
-        if knownNodeAddresses != None:
+        contacts = self.contacts
+
+        # used in case the restored contacts cannot be reached
+        if knownNodeAddresses is not None:
+            failsafeNodeAddresses = knownNodeAddresses
+        else:
+            failsafeNodeAddresses = []
+
+        if contacts:  # connect to the network via previous closest contacts
+            bootstrapContacts = []
+            knownNodeAddresses = failsafeNodeAddresses
+            for contact in contacts:
+                knownNodeAddresses.append((contact.address, contact.port))
+                bootstrapContacts.append(contact)
+            log.info("Attemping to reconnect to %i previous known peers", len(bootstrapContacts))
+        elif not contacts and knownNodeAddresses is not None:  # connect using fixed known peers
             bootstrapContacts = []
             for address, port in knownNodeAddresses:
                 contact = Contact(self._generateID(), address, port, self._protocol)
                 bootstrapContacts.append(contact)
+            log.info("Bootstrap contacts: %i", len(knownNodeAddresses))
         else:
             bootstrapContacts = None
 
         # Start the token looping call
         self.change_token_lc.start(constants.tokenSecretChangeInterval)
-
         # Initiate the Kademlia joining sequence - perform a search for this node's own ID
         self._joinDeferred = self._iterativeFind(self.node_id, bootstrapContacts)
         #        #TODO: Refresh all k-buckets further away than this node's closest neighbour
         # Start refreshing k-buckets periodically, if necessary
-        self.next_refresh_call = reactor.callLater(constants.checkRefreshInterval,
-                                                   self._refreshNode)
-
         self.hash_watcher.tick()
-        yield self._joinDeferred
+        result = yield self._joinDeferred
+
+        bootstrap_contacts = get_real_contacts(knownNodeAddresses)
+        log.info("Checking DHT connectivity...")
+        can_store = False
+
+        if bootstrap_contacts:
+            for contact in get_real_contacts(knownNodeAddresses):
+                try:
+                    if (contact.address, contact.port) in failsafeNodeAddresses:
+                        result = yield contact.pingback()
+                    else:
+                        raise ValueError("remove this when enough nodes support pingback")
+                    if result != "pong":
+                        raise ValueError("invalid pingback response: %s" % result)
+                    can_store = True
+                    log.info("Found bootstrap contact: %s (%s:%i)", contact.id.encode('hex')[:8],
+                             contact.address, contact.port)
+                    break
+                except (ValueError, protocol.TimeoutError):
+                    continue
+                except AttributeError:
+                    log.warning("seed node %s:%i does not support pingback",
+                                contact.address, contact.port)
+        if can_store:
+            log.info("Connected to DHT!")
+        else:
+            log.warning("Connected to DHT, but unable to store. "
+                        "Check your network and firewall settings")
+
+        self._can_store = can_store
+        self.refresh_node_lc.start(constants.checkRefreshInterval)
+        defer.returnValue(result)
 
     @property
     def contacts(self):
@@ -210,7 +295,7 @@ class Node(object):
         return self.iterativeAnnounceHaveBlob(key, {'port': port, 'lbryid': self.node_id})
 
     @defer.inlineCallbacks
-    def getPeersForBlob(self, blob_hash):
+    def getPeersForBlob(self, blob_hash, include_node_ids=False):
         result = yield self.iterativeFindValue(blob_hash)
         expanded_peers = []
         if result:
@@ -222,8 +307,11 @@ class Node(object):
                                 and result["from_peer"] != "self":
                             host = result["from_peer"]
                         port, = struct.unpack('>H', peer[4:6])
-                        if (host, port) not in expanded_peers:
-                            expanded_peers.append((host, port))
+                        if (host, port) not in [(x[0], x[1]) for x in expanded_peers]:
+                            if not include_node_ids:
+                                expanded_peers.append((host, port))
+                            else:
+                                expanded_peers.append((host, port, peer[6:].encode('hex')))
         defer.returnValue(expanded_peers)
 
     def get_most_popular_hashes(self, num_to_return):
@@ -235,20 +323,7 @@ class Node(object):
     def iterativeAnnounceHaveBlob(self, blob_hash, value):
         known_nodes = {}
 
-        def log_error(err, n):
-            if err.check(protocol.TimeoutError):
-                log.debug(
-                    "Timeout while storing blob_hash %s at %s",
-                    binascii.hexlify(blob_hash), n)
-            else:
-                log.error(
-                    "Unexpected error while storing blob_hash %s at %s: %s",
-                    binascii.hexlify(blob_hash), n, err.getErrorMessage())
-
-        def log_success(res):
-            log.debug("Response to store request: %s", str(res))
-            return res
-
+        @defer.inlineCallbacks
         def announce_to_peer(responseTuple):
             """ @type responseMsg: kademlia.msgtypes.ResponseMessage """
             # The "raw response" tuple contains the response message,
@@ -257,40 +332,72 @@ class Node(object):
             originAddress = responseTuple[1]  # tuple: (ip adress, udp port)
             # Make sure the responding node is valid, and abort the operation if it isn't
             if not responseMsg.nodeID in known_nodes:
-                return responseMsg.nodeID
-
+                log.warning("Responding node was not expected")
+                defer.returnValue(responseMsg.nodeID)
             n = known_nodes[responseMsg.nodeID]
 
             result = responseMsg.response
+            announced = False
             if 'token' in result:
                 value['token'] = result['token']
-                d = n.store(blob_hash, value, self.node_id, 0)
-                d.addCallback(log_success)
-                d.addErrback(log_error, n)
+                try:
+                    res = yield n.store(blob_hash, value, self.node_id)
+                    log.debug("Response to store request: %s", str(res))
+                    announced = True
+                except protocol.TimeoutError:
+                    log.debug("Timeout while storing blob_hash %s at %s",
+                                blob_hash.encode('hex')[:16], n.id.encode('hex'))
+                except Exception as err:
+                    log.error("Unexpected error while storing blob_hash %s at %s: %s",
+                              blob_hash.encode('hex')[:16], n.id.encode('hex'), err)
             else:
-                d = defer.succeed(False)
-            return d
+                log.warning("missing token")
+            defer.returnValue(announced)
 
+        @defer.inlineCallbacks
         def requestPeers(contacts):
             if self.externalIP is not None and len(contacts) >= constants.k:
                 is_closer = Distance(blob_hash).is_closer(self.node_id, contacts[-1].id)
                 if is_closer:
                     contacts.pop()
-                    self.store(blob_hash, value, self_store=True, originalPublisherID=self.node_id)
+                    yield self.store(blob_hash, value, originalPublisherID=self.node_id,
+                                     self_store=True)
             elif self.externalIP is not None:
-                self.store(blob_hash, value, self_store=True, originalPublisherID=self.node_id)
-            ds = []
+                yield self.store(blob_hash, value, originalPublisherID=self.node_id,
+                                 self_store=True)
+            else:
+                raise Exception("Cannot determine external IP: %s" % self.externalIP)
+
+            contacted = []
             for contact in contacts:
+                try:
+                    yield contact.ping()
+                except protocol.TimeoutError:
+                    log.debug("Skip %s after ping timeout", contact.address)
+                    self.removeContact(contact.id)
+                    continue
+
                 known_nodes[contact.id] = contact
                 rpcMethod = getattr(contact, "findValue")
-                df = rpcMethod(blob_hash, rawResponse=True)
-                df.addCallback(announce_to_peer)
-                df.addErrback(log_error, contact)
-                ds.append(df)
-            return defer.DeferredList(ds)
+                try:
+                    response = yield rpcMethod(blob_hash, rawResponse=True)
+                    stored = yield announce_to_peer(response)
+                    if stored:
+                        contacted.append(contact)
+                except protocol.TimeoutError:
+                    log.debug("Timeout while storing blob_hash %s at %s",
+                              binascii.hexlify(blob_hash), contact)
+                except Exception as err:
+                    log.error("Unexpected error while storing blob_hash %s at %s: %s",
+                              binascii.hexlify(blob_hash), contact, err)
+            log.debug("Stored %s to %i of %i attempted peers", blob_hash.encode('hex')[:16],
+                     len(contacted), len(contacts))
+
+            contacted_node_ids = [c.id.encode('hex') for c in contacts]
+            defer.returnValue(contacted_node_ids)
 
         d = self.iterativeFindNode(blob_hash)
-        d.addCallbacks(requestPeers)
+        d.addCallback(requestPeers)
         return d
 
     def change_token(self):
@@ -395,6 +502,7 @@ class Node(object):
         @type contactID: str
         """
         self._routingTable.removeContact(contactID)
+        self._dataStore.removePeer(contactID)
 
     def findContact(self, contactID):
         """ Find a entangled.kademlia.contact.Contact object for the specified
@@ -431,6 +539,28 @@ class Node(object):
         """
         return 'pong'
 
+    @defer.inlineCallbacks
+    @rpcmethod
+    def pingback(self, contact=None):
+        """
+        A ping handshake used to verify contact between two Kademlia nodes
+
+        --------> pingback
+          <------ ping
+            ----> pong
+              <-- pong
+
+        @rtype: str
+        """
+
+        if not contact:
+            raise ValueError("pingback called without a contact")
+        result = yield contact.ping()
+        if result == "pong":
+            defer.returnValue("pong")
+        else:
+            raise ValueError("invalid ping response: %s" % result)
+
     @rpcmethod
     def store(self, key, value, originalPublisherID=None, self_store=False, **kwargs):
         """ Store the received data in this node's local hash table
@@ -462,7 +592,7 @@ class Node(object):
                 raise TypeError, 'No NodeID given. Therefore we can\'t store this node'
 
         if self_store is True and self.externalIP:
-            contact = Contact(self.node_id, self.externalIP, self.port, None, None)
+            contact = Contact(self.node_id, self.externalIP, self.port, self._protocol)
             compact_ip = contact.compact_ip()
         elif '_rpcNodeContact' in kwargs:
             contact = kwargs['_rpcNodeContact']
@@ -492,11 +622,28 @@ class Node(object):
         else:
             raise TypeError, 'No lbryid given'
 
+        def _trap(err):
+            if err.trap(protocol.TimeoutError):
+                log.debug("Refusing to store %s for %s after host failed to reply to ping",
+                            key.encode('hex')[:8], contact.address)
+            else:
+                log.exception("Refusing to store %s for %s after host returned unexpected error",
+                            key.encode('hex')[:8], contact.address)
+            self.removeContact(contact.id)
+            return "NOT OK"
+
+        if not self_store:
+            d = contact.ping()
+            d.addErrback(_trap)
+
         now = int(time.time())
         originallyPublished = now  # - age
         self._dataStore.addPeerToBlob(key, compact_address, now, originallyPublished,
                                       originalPublisherID)
-        return 'OK'
+        log.debug("Store %s (%s) to %s", key.encode('hex')[:16],
+                     originalPublisherID.encode('hex')[:16],
+                     contact.address)
+        return "OK"
 
     @rpcmethod
     def findNode(self, key, **kwargs):
@@ -612,39 +759,22 @@ class Node(object):
         result = yield outerDf
         defer.returnValue(result)
 
+    @defer.inlineCallbacks
     def _refreshNode(self):
         """ Periodically called to perform k-bucket refreshes and data
         replication/republishing as necessary """
 
-        df = self._refreshRoutingTable()
-        df.addCallback(self._removeExpiredPeers)
-        df.addCallback(self._scheduleNextNodeRefresh)
+        yield self._refreshRoutingTable()
+        self._dataStore.removeExpiredPeers()
+        defer.returnValue(None)
 
+    @defer.inlineCallbacks
     def _refreshRoutingTable(self):
         nodeIDs = self._routingTable.getRefreshList(0, False)
-        outerDf = defer.Deferred()
-
-        def searchForNextNodeID(dfResult=None):
-            if len(nodeIDs) > 0:
-                searchID = nodeIDs.pop()
-                df = self.iterativeFindNode(searchID)
-                df.addCallback(searchForNextNodeID)
-            else:
-                # If this is reached, we have finished refreshing the routing table
-                outerDf.callback(None)
-
-        # Start the refreshing cycle
-        searchForNextNodeID()
-        return outerDf
-
-    def _scheduleNextNodeRefresh(self, *args):
-        self.next_refresh_call = reactor.callLater(constants.checkRefreshInterval,
-                                                   self._refreshNode)
-
-    # args put here because _refreshRoutingTable does outerDF.callback(None)
-    def _removeExpiredPeers(self, *args):
-        df = threads.deferToThread(self._dataStore.removeExpiredPeers)
-        return df
+        while nodeIDs:
+            searchID = nodeIDs.pop()
+            yield self.iterativeFindNode(searchID)
+        defer.returnValue(None)
 
 
 # This was originally a set of nested methods in _iterativeFind
@@ -850,30 +980,6 @@ class _IterativeFindHelper(object):
                 len(self.active_probes) == self.slow_node_count[0]
             )
         )
-
-
-class Distance(object):
-    """Calculate the XOR result between two string variables.
-
-    Frequently we re-use one of the points so as an optimization
-    we pre-calculate the long value of that point.
-    """
-
-    def __init__(self, key):
-        self.key = key
-        self.val_key_one = long(key.encode('hex'), 16)
-
-    def __call__(self, key_two):
-        val_key_two = long(key_two.encode('hex'), 16)
-        return self.val_key_one ^ val_key_two
-
-    def is_closer(self, a, b):
-        """Returns true is `a` is closer to `key` than `b` is"""
-        return self(a) < self(b)
-
-    def to_contact(self, contact):
-        """A convenience function for calculating the distance to a contact"""
-        return self(contact.id)
 
 
 class ExpensiveSort(object):

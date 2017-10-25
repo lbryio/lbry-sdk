@@ -34,14 +34,14 @@ class DHTPeerFinder(object):
         pass
 
     @defer.inlineCallbacks
-    def find_peers_for_blob(self, blob_hash, timeout=None):
+    def find_peers_for_blob(self, blob_hash, timeout=None, get_node_ids=False):
         def _trigger_timeout():
             if not finished_deferred.called:
                 log.debug("Peer search for %s timed out", short_hash(blob_hash))
                 finished_deferred.cancel()
 
         bin_hash = binascii.unhexlify(blob_hash)
-        finished_deferred = self.dht_node.getPeersForBlob(bin_hash)
+        finished_deferred = self.dht_node.getPeersForBlob(bin_hash, True)
 
         if timeout is not None:
             reactor.callLater(timeout, _trigger_timeout)
@@ -53,10 +53,13 @@ class DHTPeerFinder(object):
 
         peers = set(peer_list)
         good_peers = []
-        for host, port in peers:
+        for host, port, node_id in peers:
             peer = self.peer_manager.get_peer(host, port)
             if peer.is_available() is True:
-                good_peers.append(peer)
+                if not get_node_ids:
+                    good_peers.append(peer)
+                else:
+                    good_peers.append((peer, node_id))
 
         defer.returnValue(good_peers)
 

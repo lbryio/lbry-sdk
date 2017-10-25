@@ -20,6 +20,8 @@ at anytime.
   * Fixed lbryid length validation
   * Fixed an old print statement that polluted logs
   * Fixed rpc id length for dht requests
+  * Fixed a few old print statements that polluted logs
+  * Fixed handling error from dht clients with old ping method
 
 ### Deprecated
   *
@@ -30,10 +32,20 @@ at anytime.
   * Detect a UPnP redirect that didn't get cleaned up on a previous run and use it
   * Bumped jsonschema requirement to 2.6.0
   * Refactor some assert statements to accommodate the PYTHONOPTIMIZE flag set for Android.
-  
+  * Refactor several dht internals to inlineCallbacks
+  * Retry announcing a blob up to three times if no peers store the announcement
+  * Return storing peer information from the hash announcer after finishing an announce call
+  * Convert `DHTHashAnnouncer` and `Node` manage functions to `LoopingCall`s.
+  * Restore previous dht contacts and node state on startup
+  * Filter dht queries from unreachable peers
+  * Check dht peers requesting to store can be contacted before accepting
+  * Use `pingback` to check connectivity on startup, don't try to send `store` queries if this fails
+  * Improved logging of dht errors and non-typical behavior
+
 ### Added
   * Added `wallet_prefill_addresses` command, which distributes credits to multiple addresses
-  *
+  * Added `JSONFileDataStore` to persist dht node state and contacts
+  * Added `pingback` dht method to test connectivity
 
 ### Removed
   *

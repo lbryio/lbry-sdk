@@ -57,11 +57,13 @@ class TreeRoutingTable(object):
         bucketIndex = self._kbucketIndex(contact.id)
         try:
             self._buckets[bucketIndex].addContact(contact)
+            log.debug("Added %s", contact.id.encode('hex'))
         except kbucket.BucketFull:
             # The bucket is full; see if it can be split (by checking
             # if its range includes the host node's id)
             if self._buckets[bucketIndex].keyInRange(self._parentNodeID):
                 self._splitBucket(bucketIndex)
+                log.debug("Split bucket %i", bucketIndex)
                 # Retry the insertion attempt
                 self.addContact(contact)
             else:
@@ -86,7 +88,8 @@ class TreeRoutingTable(object):
                     failure.trap(protocol.TimeoutError)
                     if len(deadContactID) != constants.key_bits / 8:
                         raise ValueError("invalid contact id")
-                    log.debug("Replacing dead contact: %s", deadContactID.encode('hex'))
+                    log.debug("Replacing dead contact: %s with %s", deadContactID.encode('hex'),
+                              contact.id.encode('hex'))
                     try:
                         # Remove the old contact...
                         self._buckets[bucketIndex].removeContact(deadContactID)
@@ -96,12 +99,17 @@ class TreeRoutingTable(object):
                     # ...and add the new one at the tail of the bucket
                     self.addContact(contact)
 
+                def success(result):
+                    log.debug("Result: %s, peer doesnt need to be replaced", result)
+
+                log.debug("Cant split bucket, trying to replace")
                 # Ping the least-recently seen contact in this k-bucket
                 head_contact = self._buckets[bucketIndex]._contacts[0]
                 df = head_contact.ping()
                 # If there's an error (i.e. timeout), remove the head
                 # contact, and append the new one
-                df.addErrback(replaceContact, head_contact.id)
+                df.addCallbacks(success, lambda err: replaceContact(err, head_contact.id))
+                df.addErrback(log.exception)
 
     def findCloseNodes(self, key, count, _rpcNodeID=None):
         """ Finds a number of known nodes closest to the node/value with the

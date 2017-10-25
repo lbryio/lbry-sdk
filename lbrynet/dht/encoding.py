@@ -75,7 +75,6 @@ class Bencode(Encoding):
             # to the original Bencode algorithm
             return 'n'
         else:
-            print data
             raise TypeError("Cannot bencode '%s' object" % type(data))
 
     def decode(self, data):
