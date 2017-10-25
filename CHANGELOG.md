@@ -28,6 +28,7 @@ at anytime.
 ### Changed
   * Use the first port available for the peer and dht ports, starting with the provided values (defaults of 3333 and 4444). This allows multiple lbrynet instances in a LAN with UPnP.
   * Detect a UPnP redirect that didn't get cleaned up on a previous run and use it
+  * Bumped jsonschema requirement to 2.6.0
 
 ### Added
   *
