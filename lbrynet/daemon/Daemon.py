@@ -2390,7 +2390,7 @@ class Daemon(AuthJSONRPCServer):
                                      (<amount> | --amount=<amount>)
 
         Returns:
-            (bool) true if addresses were created successfully
+            (dict) the resulting transaction
         """
 
         if amount < 0:

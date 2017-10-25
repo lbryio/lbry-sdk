@@ -1333,10 +1333,9 @@ class LBRYumWallet(Wallet):
             yield self._save_wallet()
 
         outputs = [[address, amount] for address in addresses]
-        # should this be defer_to_thread or defer_succeed ??
-        tx = yield self._run_cmd_as_defer_to_thread('paytomany', outputs)
+        tx = yield self._run_cmd_as_defer_succeed('paytomany', outputs)
         if broadcast and tx['complete']:
-            yield self._broadcast_transaction(tx)
+            tx['txid'] = yield self._broadcast_transaction(tx)
         defer.returnValue(tx)
 
     # Return an address with no balance in it, if
@@ -1492,6 +1491,7 @@ class LBRYumWallet(Wallet):
     def send_claim_to_address(self, claim_id, destination, amount):
         return self._run_cmd_as_defer_succeed('sendclaimtoaddress', claim_id, destination, amount)
 
+    # TODO: get rid of this function. lbryum should take care of it
     def _save_wallet(self, val=None):
         self.wallet.storage.write()
         return defer.succeed(val)
