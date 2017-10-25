@@ -13,31 +13,46 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed slow startup for nodes with many lbry files
-  * Fixed setting the external ip on startup
-  * Fixed session startup not blocking on joining the dht
-  * Fixed several parsing bugs that prevented replacing dead dht contacts
-  * Fixed lbryid length validation
-  * Fixed an old print statement that polluted logs
-  * Fixed rpc id length for dht requests
+  *
+  *
 
 ### Deprecated
   *
   *
 
 ### Changed
-  * Use the first port available for the peer and dht ports, starting with the provided values (defaults of 3333 and 4444). This allows multiple lbrynet instances in a LAN with UPnP.
-  * Detect a UPnP redirect that didn't get cleaned up on a previous run and use it
-  * Bumped jsonschema requirement to 2.6.0
-  * Refactor some assert statements to accommodate the PYTHONOPTIMIZE flag set for Android.
-  
+  *
+  *
+
 ### Added
-  * Added `wallet_prefill_addresses` command, which distributes credits to multiple addresses
+  *
   *
 
 ### Removed
   *
   *
+
+
+## [0.17.1] - 2017-10-25
+### Fixed
+ * Fixed slow startup for nodes with many lbry files
+ * Fixed setting the external ip on startup
+ * Fixed session startup not blocking on joining the dht
+ * Fixed several parsing bugs that prevented replacing dead dht contacts
+ * Fixed lbryid length validation
+ * Fixed an old print statement that polluted logs
+ * Fixed rpc id length for dht requests
+
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.13 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0013---2017-10-25)
+ * Bumped `lbryum` requirement to 3.1.10 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#3110---2017-10-25)
+ * Use the first port available for the peer and dht ports, starting with the provided values (defaults of 3333 and 4444). This allows multiple lbrynet instances in a LAN with UPnP.
+ * Detect a UPnP redirect that didn't get cleaned up on a previous run and use it
+ * Bumped jsonschema requirement to 2.6.0
+ * Refactor some assert statements to accommodate the PYTHONOPTIMIZE flag set for Android.
+
+### Added
+ * Added `wallet_prefill_addresses` command, which distributes credits to multiple addresses
 
 
 ## [0.17.0] - 2017-10-12
