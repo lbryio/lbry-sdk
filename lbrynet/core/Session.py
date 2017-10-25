@@ -193,6 +193,31 @@ class Session(object):
 
         log.debug("In _try_upnp")
 
+        def get_free_port(upnp, port, protocol):
+            # returns an existing mapping if it exists
+            mapping = upnp.getspecificportmapping(port, protocol)
+            if not mapping:
+                return port
+            if upnp.lanaddr == mapping[0]:
+                return mapping
+            return get_free_port(upnp, port + 1, protocol)
+
+        def get_port_mapping(upnp, internal_port, protocol, description):
+            # try to map to the requested port, if there is already a mapping use the next external
+            # port available
+            if protocol not in ['UDP', 'TCP']:
+                raise Exception("invalid protocol")
+            external_port = get_free_port(upnp, internal_port, protocol)
+            if isinstance(external_port, tuple):
+                log.info("Found existing UPnP redirect %s:%i (%s) to %s:%i, using it",
+                         self.external_ip, external_port[1], protocol, upnp.lanaddr, internal_port)
+                return external_port[1], protocol
+            upnp.addportmapping(external_port, protocol, upnp.lanaddr, internal_port,
+                                description, '')
+            log.info("Set UPnP redirect %s:%i (%s) to %s:%i", self.external_ip, external_port,
+                     protocol, upnp.lanaddr, internal_port)
+            return external_port, protocol
+
         def threaded_try_upnp():
             if self.use_upnp is False:
                 log.debug("Not using upnp")
@@ -202,40 +227,15 @@ class Session(object):
             if num_devices_found > 0:
                 u.selectigd()
                 external_ip = u.externalipaddress()
-                if external_ip != '0.0.0.0':
+                if external_ip != '0.0.0.0' and not self.external_ip:
+                    # best not to rely on this external ip, the router can be behind layers of NATs
                     self.external_ip = external_ip
-                if self.peer_port is not None:
-                    if u.getspecificportmapping(self.peer_port, 'TCP') is None:
-                        u.addportmapping(
-                            self.peer_port, 'TCP', u.lanaddr, self.peer_port,
-                            'LBRY peer port', '')
-                        self.upnp_redirects.append((self.peer_port, 'TCP'))
-                        log.info("Set UPnP redirect for TCP port %d", self.peer_port)
-                    else:
-                        # see comment below
-                        log.warning("UPnP redirect already set for TCP port %d", self.peer_port)
-                        self.upnp_redirects.append((self.peer_port, 'TCP'))
-                if self.dht_node_port is not None:
-                    if u.getspecificportmapping(self.dht_node_port, 'UDP') is None:
-                        u.addportmapping(
-                            self.dht_node_port, 'UDP', u.lanaddr, self.dht_node_port,
-                            'LBRY DHT port', '')
-                        self.upnp_redirects.append((self.dht_node_port, 'UDP'))
-                        log.info("Set UPnP redirect for UDP port %d", self.dht_node_port)
-                    else:
-                        # TODO: check that the existing redirect was
-                        # put up by an old lbrynet session before
-                        # grabbing it if such a disconnected redirect
-                        # exists, then upnp won't work unless the
-                        # redirect is appended or is torn down and set
-                        # back up. a bad shutdown of lbrynet could
-                        # leave such a redirect up and cause problems
-                        # on the next start.  this could be
-                        # problematic if a previous lbrynet session
-                        # didn't make the redirect, and it was made by
-                        # another application
-                        log.warning("UPnP redirect already set for UDP port %d", self.dht_node_port)
-                        self.upnp_redirects.append((self.dht_node_port, 'UDP'))
+                if self.peer_port:
+                    self.upnp_redirects.append(get_port_mapping(u, self.peer_port, 'TCP',
+                                                                'LBRY peer port'))
+                if self.dht_node_port:
+                    self.upnp_redirects.append(get_port_mapping(u, self.dht_node_port, 'UDP',
+                                                                'LBRY DHT port'))
                 return True
             return False
 
@@ -260,8 +260,7 @@ class Session(object):
                     addresses.append(value)
             return addresses
 
-        def start_dht(addresses):
-            self.dht_node.joinNetwork(addresses)
+        def start_dht(join_network_result):
             self.peer_finder.run_manage_loop()
             self.hash_announcer.run_manage_loop()
             return True
@@ -283,6 +282,7 @@ class Session(object):
 
         dl = defer.DeferredList(ds)
         dl.addCallback(join_resolved_addresses)
+        dl.addCallback(self.dht_node.joinNetwork)
         dl.addCallback(start_dht)
         return dl
 

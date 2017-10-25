@@ -59,3 +59,5 @@ from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 h = get_lbry_hash_obj()
 key_bits = h.digest_size * 8  # 384 bits
+
+rpc_id_length = 20

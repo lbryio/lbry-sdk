@@ -13,16 +13,22 @@ at anytime.
   *
 
 ### Fixed
-  *
-  *
+  * Fixed slow startup for nodes with many lbry files
+  * Fixed setting the external ip on startup
+  * Fixed session startup not blocking on joining the dht
+  * Fixed several parsing bugs that prevented replacing dead dht contacts
+  * Fixed lbryid length validation
+  * Fixed an old print statement that polluted logs
+  * Fixed rpc id length for dht requests
 
 ### Deprecated
   *
   *
 
 ### Changed
+  * Use the first port available for the peer and dht ports, starting with the provided values (defaults of 3333 and 4444). This allows multiple lbrynet instances in a LAN with UPnP.
+  * Detect a UPnP redirect that didn't get cleaned up on a previous run and use it
   * Bumped jsonschema requirement to 2.6.0
-  *
 
 ### Added
   *

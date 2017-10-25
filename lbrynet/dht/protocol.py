@@ -205,14 +205,14 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 return
         try:
             msgPrimitive = self._encoder.decode(datagram)
-        except encoding.DecodeError:
+            message = self._translator.fromPrimitive(msgPrimitive)
+        except (encoding.DecodeError, ValueError):
             # We received some rubbish here
             return
         except IndexError:
             log.warning("Couldn't decode dht datagram from %s", address)
             return
 
-        message = self._translator.fromPrimitive(msgPrimitive)
         remoteContact = Contact(message.nodeID, address[0], address[1], self)
 
         now = time.time()
@@ -422,8 +422,10 @@ class KademliaProtocol(protocol.DatagramProtocol):
             self._sentMessages[messageID] = (remoteContactID, df, timeoutCall, method, args)
         else:
             # No progress has been made
-            del self._partialMessagesProgress[messageID]
-            del self._partialMessages[messageID]
+            if messageID in self._partialMessagesProgress:
+                del self._partialMessagesProgress[messageID]
+            if messageID in self._partialMessages:
+                del self._partialMessages[messageID]
             df.errback(TimeoutError(remoteContactID))
 
     def _hasProgressBeenMade(self, messageID):

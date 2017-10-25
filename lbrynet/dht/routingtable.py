@@ -10,8 +10,8 @@ import random
 from zope.interface import implements
 import constants
 import kbucket
+import protocol
 from interface import IRoutingTable
-from error import TimeoutError
 import logging
 
 log = logging.getLogger(__name__)
@@ -77,17 +77,18 @@ class TreeRoutingTable(object):
                 # the k-bucket. This implementation follows section
                 # 2.2 regarding this point.
 
-                def replaceContact(failure):
+                def replaceContact(failure, deadContactID):
                     """ Callback for the deferred PING RPC to see if the head
                     node in the k-bucket is still responding
 
                     @type failure: twisted.python.failure.Failure
                     """
-                    failure.trap(TimeoutError)
-                    log.warning('==replacing contact==')
-                    # Remove the old contact...
-                    deadContactID = failure.getErrorMessage()
+                    failure.trap(protocol.TimeoutError)
+                    if len(deadContactID) != constants.key_bits / 8:
+                        raise ValueError("invalid contact id")
+                    log.debug("Replacing dead contact: %s", deadContactID.encode('hex'))
                     try:
+                        # Remove the old contact...
                         self._buckets[bucketIndex].removeContact(deadContactID)
                     except ValueError:
                         # The contact has already been removed (probably due to a timeout)
@@ -100,7 +101,7 @@ class TreeRoutingTable(object):
                 df = head_contact.ping()
                 # If there's an error (i.e. timeout), remove the head
                 # contact, and append the new one
-                df.addErrback(replaceContact)
+                df.addErrback(replaceContact, head_contact.id)
 
     def findCloseNodes(self, key, count, _rpcNodeID=None):
         """ Finds a number of known nodes closest to the node/value with the

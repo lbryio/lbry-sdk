@@ -569,7 +569,8 @@ class Daemon(AuthJSONRPCServer):
                 peer_port=self.peer_port,
                 use_upnp=self.use_upnp,
                 wallet=wallet,
-                is_generous=conf.settings['is_generous_host']
+                is_generous=conf.settings['is_generous_host'],
+                external_ip=self.platform['ip']
             )
             self.startup_status = STARTUP_STAGES[2]
 

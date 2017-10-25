@@ -484,8 +484,9 @@ class Node(object):
             raise TypeError, 'No port available'
 
         if 'lbryid' in value:
-            if len(value['lbryid']) > constants.key_bits:
-                raise ValueError, 'Invalid lbryid'
+            if len(value['lbryid']) != constants.key_bits / 8:
+                raise ValueError('Invalid lbryid (%i bytes): %s' % (len(value['lbryid']),
+                                                                    value['lbryid'].encode('hex')))
             else:
                 compact_address = compact_ip + compact_port + value['lbryid']
         else:
@@ -752,10 +753,11 @@ class _IterativeFindHelper(object):
             if testContact not in self.shortlist:
                 self.shortlist.append(testContact)
 
-    def removeFromShortlist(self, failure):
+    def removeFromShortlist(self, failure, deadContactID):
         """ @type failure: twisted.python.failure.Failure """
         failure.trap(protocol.TimeoutError)
-        deadContactID = failure.getErrorMessage()
+        if len(deadContactID) != constants.key_bits / 8:
+            raise ValueError("invalid lbry id")
         if deadContactID in self.shortlist:
             self.shortlist.remove(deadContactID)
         return deadContactID
@@ -825,7 +827,7 @@ class _IterativeFindHelper(object):
         rpcMethod = getattr(contact, self.rpc)
         df = rpcMethod(self.key, rawResponse=True)
         df.addCallback(self.extendShortlist)
-        df.addErrback(self.removeFromShortlist)
+        df.addErrback(self.removeFromShortlist, contact.id)
         df.addCallback(self.cancelActiveProbe)
         df.addErrback(lambda _: log.exception('Failed to contact %s', contact))
         self.already_contacted.append(contact.id)
