@@ -1045,6 +1045,20 @@ Returns:
     (str) New wallet address in base58
 ```
 
+## wallet_prefill_addresses
+
+```text
+Create new addresses, each containing `amount` credits
+
+Usage:
+    wallet_prefill_addresses [--no_broadcast]
+                             (<num_addresses> | --num_addresses=<num_addresses>)
+                             (<amount> | --amount=<amount>)
+
+Returns:
+    (dict) the resulting transaction
+```
+
 ## wallet_public_key
 
 ```text
