@@ -20,6 +20,7 @@ at anytime.
   * Fixed lbryid length validation
   * Fixed an old print statement that polluted logs
   * Fixed rpc id length for dht requests
+  * Fixed local node ID reporting in peer list
 
 ### Deprecated
   *
