@@ -422,8 +422,10 @@ class KademliaProtocol(protocol.DatagramProtocol):
             self._sentMessages[messageID] = (remoteContactID, df, timeoutCall, method, args)
         else:
             # No progress has been made
-            del self._partialMessagesProgress[messageID]
-            del self._partialMessages[messageID]
+            if messageID in self._partialMessagesProgress:
+                del self._partialMessagesProgress[messageID]
+            if messageID in self._partialMessages:
+                del self._partialMessages[messageID]
             df.errback(TimeoutError(remoteContactID))
 
     def _hasProgressBeenMade(self, messageID):
