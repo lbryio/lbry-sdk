@@ -216,14 +216,13 @@ class Node(object):
         if result:
             if blob_hash in result:
                 for peer in result[blob_hash]:
-                    if self.node_id != peer[6:]:
-                        host = ".".join([str(ord(d)) for d in peer[:4]])
-                        if host == "127.0.0.1" and "from_peer" in result \
-                                and result["from_peer"] != "self":
-                            host = result["from_peer"]
-                        port, = struct.unpack('>H', peer[4:6])
-                        if (host, port) not in expanded_peers:
-                            expanded_peers.append((host, port))
+                    host = ".".join([str(ord(d)) for d in peer[:4]])
+                    if host == "127.0.0.1" and "from_peer" in result \
+                            and result["from_peer"] != "self":
+                        host = result["from_peer"]
+                    port, = struct.unpack('>H', peer[4:6])
+                    if (host, port) not in expanded_peers:
+                        expanded_peers.append((host, port))
         defer.returnValue(expanded_peers)
 
     def get_most_popular_hashes(self, num_to_return):
