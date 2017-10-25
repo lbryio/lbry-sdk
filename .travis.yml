@@ -18,9 +18,9 @@ cache:
     - $TRAVIS_BUILD_DIR/cache/wheel
 
 addons:
- srcclr:
-   debug: true
- apt:
+  #srcclr:
+  #  debug: true
+  apt:
     packages:
     - libgmp3-dev
     - build-essential
