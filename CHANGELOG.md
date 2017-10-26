@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed handling error from dht clients with old ping method
   *
 
 ### Deprecated
@@ -21,8 +21,10 @@ at anytime.
   *
 
 ### Changed
-  *
-  *
+  * Refactor several dht internals to inlineCallbacks
+  * Retry announcing a blob up to three times if no peers store the announcement
+  * Return storing peer information from the hash announcer after finishing an announce call
+  * Convert `DHTHashAnnouncer` and `Node` manage functions to `LoopingCall`s.
 
 ### Added
   *
