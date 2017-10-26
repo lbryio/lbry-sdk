@@ -633,7 +633,7 @@ Returns:
 Get estimated cost for a lbry stream
 
 Args:
-    'name': (str) lbry name
+    'uri': (str) lbry uri
     'size' (optional): (int) stream size, in bytes. if provided an sd blob
                         won't be downloaded.
 Returns:
