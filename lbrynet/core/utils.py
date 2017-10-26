@@ -127,3 +127,14 @@ def get_sd_hash(stream_info):
 
 def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
+
+
+class DeferredLockContextManager(object):
+    def __init__(self, lock):
+        self._lock = lock
+
+    def __enter__(self):
+        yield self._lock.aquire()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        yield self._lock.release()
