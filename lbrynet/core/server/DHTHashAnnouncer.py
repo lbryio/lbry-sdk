@@ -76,7 +76,7 @@ class DHTHashAnnouncer(object):
             if len(self.hash_queue):
                 h, announce_deferred = self.hash_queue.popleft()
                 log.debug('Announcing blob %s to dht', h)
-                d = self.dht_node.announceHaveBlob(binascii.unhexlify(h), self.peer_port)
+                d = self.dht_node.announceHaveBlob(binascii.unhexlify(h))
                 d.chainDeferred(announce_deferred)
                 d.addBoth(lambda _: utils.call_later(0, announce))
             else:

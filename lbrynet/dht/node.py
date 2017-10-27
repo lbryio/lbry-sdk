@@ -51,7 +51,7 @@ class Node(object):
 
     def __init__(self, node_id=None, udpPort=4000, dataStore=None,
                  routingTableClass=None, networkProtocol=None,
-                 externalIP=None):
+                 externalIP=None, peerPort=None):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -73,6 +73,8 @@ class Node(object):
                                 change the format of the physical RPC messages
                                 being transmitted.
         @type networkProtocol: entangled.kademlia.protocol.KademliaProtocol
+        @param externalIP: the IP at which this node can be contacted
+        @param peerPort: the port at which this node announces it has a blob for
         """
         self.node_id = node_id or self._generateID()
         self.port = udpPort
@@ -112,6 +114,7 @@ class Node(object):
                         contactTriple[0], contactTriple[1], contactTriple[2], self._protocol)
                     self._routingTable.addContact(contact)
         self.externalIP = externalIP
+        self.peerPort = peerPort
         self.hash_watcher = HashWatcher()
 
     def __del__(self):
@@ -206,8 +209,8 @@ class Node(object):
             return 0
         return num_in_data_store * self.getApproximateTotalDHTNodes() / 8
 
-    def announceHaveBlob(self, key, port):
-        return self.iterativeAnnounceHaveBlob(key, {'port': port, 'lbryid': self.node_id})
+    def announceHaveBlob(self, key):
+        return self.iterativeAnnounceHaveBlob(key, {'port': self.peerPort, 'lbryid': self.node_id})
 
     @defer.inlineCallbacks
     def getPeersForBlob(self, blob_hash):

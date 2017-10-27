@@ -132,7 +132,7 @@ class PeerFinder(object):
         self.num_peers = num_peers
         self.count = 0
 
-    def find_peers_for_blob(self, *args):
+    def find_peers_for_blob(self, h, filter_self=False):
         peer_port = self.start_port + self.count
         self.count += 1
         if self.count >= self.num_peers:

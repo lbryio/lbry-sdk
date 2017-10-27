@@ -8,7 +8,7 @@ class MocDHTNode(object):
     def __init__(self):
         self.blobs_announced = 0
 
-    def announceHaveBlob(self, blob, port):
+    def announceHaveBlob(self, blob):
         self.blobs_announced += 1
         return defer.succeed(True)
 
