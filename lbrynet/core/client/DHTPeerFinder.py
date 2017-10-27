@@ -15,6 +15,10 @@ class DHTPeerFinder(object):
     implements(IPeerFinder)
 
     def __init__(self, dht_node, peer_manager):
+        """
+        dht_node - an instance of dht.Node class
+        peer_manager - an instance of PeerManager class
+        """
         self.dht_node = dht_node
         self.peer_manager = peer_manager
         self.peers = []
@@ -34,7 +38,17 @@ class DHTPeerFinder(object):
         pass
 
     @defer.inlineCallbacks
-    def find_peers_for_blob(self, blob_hash, timeout=None):
+    def find_peers_for_blob(self, blob_hash, timeout=None, filter_self=False):
+        """
+        Find peers for blob in the DHT
+        blob_hash (str): blob hash to look for
+        timeout (int): seconds to timeout after
+        filter_self (bool): if True, and if a peer for a blob is itself, filter it
+                from the result
+
+        Returns:
+        list of peers for the blob
+        """
         def _trigger_timeout():
             if not finished_deferred.called:
                 log.debug("Peer search for %s timed out", short_hash(blob_hash))
@@ -54,6 +68,8 @@ class DHTPeerFinder(object):
         peers = set(peer_list)
         good_peers = []
         for host, port in peers:
+            if filter_self and (host, port) == (self.dht_node.externalIP, self.dht_node.peerPort):
+                continue
             peer = self.peer_manager.get_peer(host, port)
             if peer.is_available() is True:
                 good_peers.append(peer)
