@@ -13,16 +13,8 @@ at anytime.
   *
 
 ### Fixed
+  * Fixed amount of close nodes to add to list in case of extension to neighbouring k-buckets
   *
-  *
-  * Fixed slow startup for nodes with many lbry files
-  * Fixed setting the external ip on startup
-  * Fixed session startup not blocking on joining the dht
-  * Fixed several parsing bugs that prevented replacing dead dht contacts
-  * Fixed lbryid length validation
-  * Fixed an old print statement that polluted logs
-  * Fixed rpc id length for dht requests
-  * Fixed amount of closed nodes to add to list in case of extension to neighbouring k-buckets
 
 ### Deprecated
   *
