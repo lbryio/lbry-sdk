@@ -7,7 +7,7 @@ from twisted.internet import defer
 from lbrynet.core import file_utils
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbry_file.StreamDescriptor import publish_sd_blob
-
+from lbrynet.daemon.MediaDescriptor import get_video_length
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +43,9 @@ class Publisher(object):
         claim_dict['stream']['source']['source'] = sd_hash
         claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
+        duration = int(get_content_duration(file_path,
+                      claim_dict['stream']['source']['contentType'])) #line was too long
+        claim_dict['stream']['source']['contentDuration'] = duration
         claim_dict['stream']['source']['version'] = "_0_0_1" # need current version here
 
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
@@ -65,6 +68,9 @@ class Publisher(object):
                                                  change_address=change_address)
         defer.returnValue(claim_out)
 
-
 def get_content_type(filename):
     return mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+
+def get_content_duration(filename, fileType):
+    return get_video_length(filename)
+    #if fileType not in mediaTypesWithDuration:

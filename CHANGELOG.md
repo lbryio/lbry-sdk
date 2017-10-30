@@ -11,6 +11,10 @@ at anytime.
 ### Security
   *
   *
+### Added
+  * Added video duration support updated only via publisher. It requires ffmpeg to be
+  * installed on the system
+  *
 
 ### Fixed
   * Fixed amount of close nodes to add to list in case of extension to neighbouring k-buckets
