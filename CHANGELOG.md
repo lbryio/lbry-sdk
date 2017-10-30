@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed race condition during UPnP setup between 'check' and 'set' of the new mapping
   *
 
 ### Deprecated
@@ -25,7 +25,8 @@ at anytime.
   *
 
 ### Added
-  *
+  * Added error detection in UPnP setup
+  * Updated miniupnpc from 1.9 to 2.0.2 (provides upnp.addanyportmapping)
   *
 
 ### Removed

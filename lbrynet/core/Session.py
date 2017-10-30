@@ -193,27 +193,33 @@ class Session(object):
 
         log.debug("In _try_upnp")
 
-        def get_free_port(upnp, port, protocol):
-            # returns an existing mapping if it exists
+        def get_mapped_port(upnp, port, protocol):
+            # return the external port mapped to this host:port/protocol, if any
             mapping = upnp.getspecificportmapping(port, protocol)
-            if not mapping:
-                return port
-            if upnp.lanaddr == mapping[0]:
-                return mapping
-            return get_free_port(upnp, port + 1, protocol)
+            # `mapping` is a pair where [0] is the internal IP and [1] is the internal port
+            if mapping is not None and upnp.lanaddr == mapping[0]:
+                return mapping[1]
+	    return None
 
         def get_port_mapping(upnp, internal_port, protocol, description):
             # try to map to the requested port, if there is already a mapping use the next external
             # port available
             if protocol not in ['UDP', 'TCP']:
                 raise Exception("invalid protocol")
-            external_port = get_free_port(upnp, internal_port, protocol)
-            if isinstance(external_port, tuple):
+
+            external_port = get_mapped_port(upnp, internal_port, protocol)
+            if external_port is not None:
                 log.info("Found existing UPnP redirect %s:%i (%s) to %s:%i, using it",
                          self.external_ip, external_port[1], protocol, upnp.lanaddr, internal_port)
-                return external_port[1], protocol
-            upnp.addportmapping(external_port, protocol, upnp.lanaddr, internal_port,
-                                description, '')
+                return external_port, protocol
+
+            # create a new mapping by asking the upnp server to allocate any port if the requested
+            # one is already mapped
+            external_port = upnp.addanyportmapping(internal_port, protocol, upnp.lanaddr,
+                                                   internal_port, description, '')
+            if external_port is None:
+                raise Exception("Can't setup UPnP mapping")
+
             log.info("Set UPnP redirect %s:%i (%s) to %s:%i", self.external_ip, external_port,
                      protocol, upnp.lanaddr, internal_port)
             return external_port, protocol
