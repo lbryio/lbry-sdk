@@ -46,11 +46,9 @@ class MarketFeed(object):
         self._updater = LoopingCall(self._update_price)
         self._online = True
 
-    @property
     def rate_is_initialized(self):
         return self.rate is not None
 
-    @property
     def is_online(self):
         return self._online
 
@@ -225,11 +223,11 @@ class ExchangeRateManager(object):
             return amount
 
         for market in self.market_feeds:
-            if (market.rate_is_initialized and market.is_online and
+            if (market.rate_is_initialized() and market.is_online() and
                 market.rate.currency_pair == (from_currency, to_currency)):
                 return amount * market.rate.spot
         for market in self.market_feeds:
-            if (market.rate_is_initialized and market.is_online and
+            if (market.rate_is_initialized() and market.is_online() and
                 market.rate.currency_pair[0] == from_currency):
                 return self.convert_currency(
                     market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
