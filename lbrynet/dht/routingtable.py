@@ -135,18 +135,23 @@ class TreeRoutingTable(object):
         i = 1
         canGoLower = bucketIndex - i >= 0
         canGoHigher = bucketIndex + i < len(self._buckets)
+
+        def get_remain(closest):
+            return min(count, constants.k) - len(closest)
+
         # Fill up the node list to k nodes, starting with the closest neighbouring nodes known
         while len(closestNodes) < min(count, constants.k) and (canGoLower or canGoHigher):
             # TODO: this may need to be optimized
-            if canGoLower:
+            # TODO: add "key" kwarg to getContacts() to sort contacts returned by xor distance
+            # to the key
+            if canGoLower and len(closestNodes) < min(count, constants.k):
                 closestNodes.extend(
-                    self._buckets[bucketIndex - i].getContacts(
-                        constants.k - len(closestNodes), _rpcNodeID))
-                canGoLower = bucketIndex - (i + 1) >= 0
-            if canGoHigher:
-                closestNodes.extend(
-                    self._buckets[bucketIndex + i].getContacts(constants.k - len(closestNodes),
+                    self._buckets[bucketIndex - i].getContacts(get_remain(closestNodes),
                                                                _rpcNodeID))
+                canGoLower = bucketIndex - (i + 1) >= 0
+            if canGoHigher and len(closestNodes) < min(count, constants.k):
+                closestNodes.extend(self._buckets[bucketIndex + i].getContacts(
+                    get_remain(closestNodes), _rpcNodeID))
                 canGoHigher = bucketIndex + (i + 1) < len(self._buckets)
             i += 1
         return closestNodes
