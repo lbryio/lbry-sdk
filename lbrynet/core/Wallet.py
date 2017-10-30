@@ -1217,7 +1217,10 @@ class LBRYumWallet(Wallet):
                 network_start_d.errback(ValueError("Failed to connect to network."))
 
         def get_cmd_runner():
-            self._cmd_runner = Commands(self.config, self.wallet, self.network)
+            if self._cmd_runner is None:
+                self._cmd_runner = Commands(self.config, self.wallet, self.network)
+
+            return self._cmd_runner
 
         def unlock(password):
             if self._cmd_runner and self._cmd_runner.locked:
@@ -1558,7 +1561,7 @@ class LBRYumWallet(Wallet):
 
     def decrypt_wallet(self):
         if not self.wallet.use_encryption:
-            return True
+            return False
         if not self._cmd_runner:
             return False
         if self._cmd_runner.locked:
