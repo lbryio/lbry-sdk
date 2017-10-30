@@ -991,10 +991,8 @@ class Daemon(AuthJSONRPCServer):
         local_height = self.session.wallet.network.get_local_height() if has_wallet else 0
         remote_height = self.session.wallet.network.get_server_height() if has_wallet else 0
         best_hash = (yield self.session.wallet.get_best_blockhash()) if has_wallet else None
-        if has_wallet and self.session.wallet.wallet:
-            wallet_is_encrypted = self.session.wallet.wallet.use_encryption
-        else:
-            wallet_is_encrypted = False
+        wallet_is_encrypted = has_wallet and self.session.wallet.wallet and \
+                              self.session.wallet.wallet.use_encryption
 
         response = {
             'lbry_id': base58.b58encode(self.lbryid),
@@ -1218,7 +1216,8 @@ class Daemon(AuthJSONRPCServer):
             (bool) true if wallet is unlocked, otherwise false
         """
 
-        if not self.session.wallet._cmd_runner.locked:
+        cmd_runner = self.session.wallet.get_cmd_runner()
+        if cmd_runner is not None and cmd_runner.locked:
             result = True
         elif self.session.wallet.wallet_pw_d is not None:
             d = self.session.wallet.wallet_pw_d
