@@ -22,7 +22,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Moved BLOB_SIZE from conf.py to MAX_BLOB_SIZE in blob/blob_file.py
   *
 
 ### Added
@@ -30,7 +30,7 @@ at anytime.
   *
 
 ### Removed
-  *
+  * Removed some alternate methods of reading from blob files
   *
 
 

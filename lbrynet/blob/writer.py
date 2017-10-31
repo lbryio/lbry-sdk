@@ -16,6 +16,11 @@ class HashBlobWriter(object):
         self._hashsum = get_lbry_hash_obj()
         self.len_so_far = 0
 
+    def __del__(self):
+        if self.finished_cb_d is None:
+            log.warn("Garbage collection was called, but writer was not closed yet")
+        self.close()
+
     @property
     def blob_hash(self):
         return self._hashsum.hexdigest()
