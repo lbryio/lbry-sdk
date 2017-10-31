@@ -103,8 +103,8 @@ def check_connection(server="lbry.io", port=80, timeout=2):
         log.debug('Connection successful')
         return True
     except (socket.gaierror, socket.herror) as ex:
-        log.info("Failed to connect to %s:%s. Unable to resolve domain. Trying to bypass DNS",
-                 server, port, exc_info=True)
+        log.warning("Failed to connect to %s:%s. Unable to resolve domain. Trying to bypass DNS",
+                    server, port)
         try:
             server = "8.8.8.8"
             port = 53
@@ -112,14 +112,12 @@ def check_connection(server="lbry.io", port=80, timeout=2):
             log.debug('Connection successful')
             return True
         except Exception as ex:
-            log.info(
-                "Failed to connect to %s:%s. Maybe the internet connection is not working",
-                server, port, exc_info=True)
+            log.error("Failed to connect to %s:%s. Maybe the internet connection is not working",
+                      server, port)
             return False
     except Exception as ex:
-        log.info(
-            "Failed to connect to %s:%s. Maybe the internet connection is not working",
-            server, port, exc_info=True)
+        log.error("Failed to connect to %s:%s. Maybe the internet connection is not working",
+                      server, port)
         return False
 
 
