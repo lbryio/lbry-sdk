@@ -94,12 +94,11 @@ def obfuscate(plain):
     return base64.b64encode(plain).encode('rot13')
 
 
-def check_connection(server="lbry.io", port=80, timeout=2, bypass_dns=False):
+def check_connection(server="lbry.io", port=80, timeout=2):
     """Attempts to open a socket to server:port and returns True if successful."""
     log.debug('Checking connection to %s:%s', server, port)
     try:
-        if not bypass_dns:
-            server = socket.gethostbyname(server)
+        server = socket.gethostbyname(server)
         socket.create_connection((server, port), timeout)
         log.debug('Connection successful')
         return True
