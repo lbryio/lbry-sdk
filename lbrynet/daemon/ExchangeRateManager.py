@@ -5,7 +5,6 @@ import json
 from twisted.internet import defer, threads
 from twisted.internet.task import LoopingCall
 
-from lbrynet import conf
 from lbrynet.core.Error import InvalidExchangeRateResponse
 
 log = logging.getLogger(__name__)
@@ -45,10 +44,13 @@ class MarketFeed(object):
         self.fee = fee
         self.rate = None
         self._updater = LoopingCall(self._update_price)
+        self._online = True
 
-    @property
     def rate_is_initialized(self):
         return self.rate is not None
+
+    def is_online(self):
+        return self._online
 
     def _make_request(self):
         r = requests.get(self.url, self.params, timeout=self.REQUESTS_TIMEOUT)
@@ -62,19 +64,22 @@ class MarketFeed(object):
         return defer.succeed(from_amount / (1.0 - self.fee))
 
     def _save_price(self, price):
-        log.debug("Saving price update %f for %s" % (price, self.market))
+        log.debug("Saving price update %f for %s from %s" % (price, self.market, self.name))
         self.rate = ExchangeRate(self.market, price, int(time.time()))
+        self._online = True
 
-    def _log_error(self, err):
-        log.warning("There was a problem updating %s exchange rate information from %s\n%s",
+    def _on_error(self, err):
+        log.warning(
+            "There was a problem updating %s exchange rate information from %s: %s",
             self.market, self.name, err)
+        self._online = False
 
     def _update_price(self):
         d = threads.deferToThread(self._make_request)
         d.addCallback(self._handle_response)
         d.addCallback(self._subtract_fee)
         d.addCallback(self._save_price)
-        d.addErrback(self._log_error)
+        d.addErrback(self._on_error)
         return d
 
     def start(self):
@@ -92,7 +97,7 @@ class BittrexFeed(MarketFeed):
             self,
             "BTCLBC",
             "Bittrex",
-            conf.settings['bittrex_feed'],
+            "https://bittrex.com/api/v1.1/public/getmarkethistory",
             {'market': 'BTC-LBC', 'count': 50},
             BITTREX_FEE
         )
@@ -151,24 +156,55 @@ class LBRYioBTCFeed(MarketFeed):
         return defer.succeed(1.0 / json_response['data']['btc_usd'])
 
 
-def get_default_market_feed(currency_pair):
-    currencies = None
-    if isinstance(currency_pair, str):
-        currencies = (currency_pair[0:3], currency_pair[3:6])
-    elif isinstance(currency_pair, tuple):
-        currencies = currency_pair
-    assert currencies is not None
+class CryptonatorBTCFeed(MarketFeed):
+    def __init__(self):
+        MarketFeed.__init__(
+            self,
+            "USDBTC",
+            "cryptonator.com",
+            "https://api.cryptonator.com/api/ticker/usd-btc",
+            {},
+            0.0,
+        )
 
-    if currencies == ("USD", "BTC"):
-        return LBRYioBTCFeed()
-    elif currencies == ("BTC", "LBC"):
-        return LBRYioFeed()
+    def _handle_response(self, response):
+        try:
+            json_response = json.loads(response)
+        except ValueError:
+            raise InvalidExchangeRateResponse(self.name, "invalid rate response : %s" % response)
+        if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
+                        'success' not in json_response or json_response['success'] is not True:
+            raise InvalidExchangeRateResponse(self.name, 'result not found')
+        return defer.succeed(float(json_response['ticker']['price']))
+
+
+
+class CryptonatorFeed(MarketFeed):
+    def __init__(self):
+        MarketFeed.__init__(
+            self,
+            "BTCLBC",
+            "cryptonator.com",
+            "https://api.cryptonator.com/api/ticker/btc-lbc",
+            {},
+            0.0,
+        )
+
+    def _handle_response(self, response):
+        try:
+            json_response = json.loads(response)
+        except ValueError:
+            raise InvalidExchangeRateResponse(self.name, "invalid rate response : %s" % response)
+        if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
+                        'success' not in json_response or json_response['success'] is not True:
+            raise InvalidExchangeRateResponse(self.name, 'result not found')
+        return defer.succeed(float(json_response['ticker']['price']))
 
 
 class ExchangeRateManager(object):
     def __init__(self):
         self.market_feeds = [
-            get_default_market_feed(currency_pair) for currency_pair in CURRENCY_PAIRS]
+           LBRYioBTCFeed(), LBRYioFeed(), BittrexFeed(), CryptonatorBTCFeed(), CryptonatorFeed()]
 
     def start(self):
         log.info("Starting exchange rate manager")
@@ -185,12 +221,13 @@ class ExchangeRateManager(object):
         log.info("Converting %f %s to %s, rates: %s" % (amount, from_currency, to_currency, rates))
         if from_currency == to_currency:
             return amount
+
         for market in self.market_feeds:
-            if (market.rate_is_initialized and
+            if (market.rate_is_initialized() and market.is_online() and
                 market.rate.currency_pair == (from_currency, to_currency)):
                 return amount * market.rate.spot
         for market in self.market_feeds:
-            if (market.rate_is_initialized and
+            if (market.rate_is_initialized() and market.is_online() and
                 market.rate.currency_pair[0] == from_currency):
                 return self.convert_currency(
                     market.rate.currency_pair[1], to_currency, amount * market.rate.spot)
