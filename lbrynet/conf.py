@@ -208,6 +208,9 @@ TYPE_ENV = 'env'
 TYPE_CLI = 'cli'
 TYPE_RUNTIME = 'runtime'
 
+DEFAULT_PEER_PORT = 3333
+DEFAULT_DHT_NODE_PORT = 4444
+
 FIXED_SETTINGS = {
     'ANALYTICS_ENDPOINT': 'https://api.segment.io/v1',
     'ANALYTICS_TOKEN': 'Ax5LZzR1o3q3Z3WjATASDwR5rKyHH0qOIRIbLmMXn2H=',
@@ -258,7 +261,7 @@ ADJUSTABLE_SETTINGS = {
     'data_dir': (str, default_data_dir),
     'data_rate': (float, .0001),  # points/megabyte
     'delete_blobs_on_remove': (bool, True),
-    'dht_node_port': (int, 4444),
+    'dht_node_port': (int, DEFAULT_DHT_NODE_PORT),
     'download_directory': (str, default_download_dir),
     'download_timeout': (int, 180),
     'is_generous_host': (bool, True),
@@ -274,7 +277,7 @@ ADJUSTABLE_SETTINGS = {
     'min_info_rate': (float, .02),  # points/1000 infos
     'min_valuable_hash_rate': (float, .05),  # points/1000 infos
     'min_valuable_info_rate': (float, .05),  # points/1000 infos
-    'peer_port': (int, 3333),
+    'peer_port': (int, DEFAULT_PEER_PORT),
     'pointtrader_server': (str, 'http://127.0.0.1:2424'),
     'reflector_port': (int, 5566),
     # if reflect_uploads is True, send files to reflector (after publishing as well as a
