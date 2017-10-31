@@ -39,7 +39,7 @@ def get_platform(get_ip=True):
 
     if get_ip:
         try:
-            p['ip'] = json.load(urlopen('http://jsonip.com'))['ip']
+            p['ip'] = json.load(urlopen('http://ipv4.jsonip.com'))['ip']
         except:
             p['ip'] = "Could not determine IP"
 

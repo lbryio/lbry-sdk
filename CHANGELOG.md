@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed external IP detection via jsonip.com (avoid detecting IPv6)
   *
 
 ### Deprecated
