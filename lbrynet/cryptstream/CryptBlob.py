@@ -1,13 +1,14 @@
 import binascii
 import logging
+from io import BytesIO
 from twisted.internet import defer
+from twisted.web.client import FileBodyProducer
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
 from cryptography.hazmat.backends import default_backend
-from lbrynet import conf
 from lbrynet.core.BlobInfo import BlobInfo
-
+from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
 log = logging.getLogger(__name__)
 backend = default_backend()
@@ -46,6 +47,10 @@ class StreamBlobDecryptor(object):
 
         write_func - function that takes decrypted string as
             arugment and writes it somewhere
+
+        Returns:
+
+        deferred that returns after decrypting blob and writing content
         """
 
         def remove_padding(data):
@@ -67,13 +72,20 @@ class StreamBlobDecryptor(object):
             last_chunk = self.cipher.update(data_to_decrypt) + self.cipher.finalize()
             write_func(remove_padding(last_chunk))
 
-        def decrypt_bytes(data):
-            self.buff += data
-            self.len_read += len(data)
-            write_bytes()
 
-        d = self.blob.read(decrypt_bytes)
-        d.addCallback(lambda _: finish_decrypt())
+        read_handle = self.blob.open_for_reading()
+
+        @defer.inlineCallbacks
+        def decrypt_bytes():
+            producer = FileBodyProducer(read_handle)
+            buff = BytesIO()
+            yield producer.startProducing(buff)
+            self.buff = buff.getvalue()
+            self.len_read += len(self.buff)
+            write_bytes()
+            finish_decrypt()
+
+        d = decrypt_bytes()
         return d
 
 
@@ -106,7 +118,7 @@ class CryptStreamBlobMaker(object):
         max bytes are written. num_bytes_to_write is the number
         of bytes that will be written from data in this call
         """
-        max_bytes_to_write = conf.settings['BLOB_SIZE'] - self.length - 1
+        max_bytes_to_write = MAX_BLOB_SIZE - self.length - 1
         done = False
         if max_bytes_to_write <= len(data):
             num_bytes_to_write = max_bytes_to_write

@@ -1,7 +1,7 @@
 from twisted.trial import unittest
 from twisted.internet import defer
 from lbrynet.cryptstream import CryptBlob
-from lbrynet import conf
+from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
 from lbrynet.tests.mocks import mock_conf_settings
 
@@ -9,6 +9,7 @@ from Crypto import Random
 from Crypto.Cipher import AES
 import random
 import string
+import StringIO
 
 class MocBlob(object):
     def __init__(self):
@@ -18,6 +19,9 @@ class MocBlob(object):
         data = self.data
         write_func(data)
         return defer.succeed(True)
+
+    def open_for_reading(self):
+        return StringIO.StringIO(self.data)
 
     def write(self, data):
         self.data += data
@@ -53,7 +57,7 @@ class TestCryptBlob(unittest.TestCase):
         expected_encrypted_blob_size = ((size_of_data / AES.block_size) + 1) * AES.block_size
         self.assertEqual(expected_encrypted_blob_size, len(blob.data))
 
-        if size_of_data < conf.settings['BLOB_SIZE']-1:
+        if size_of_data < MAX_BLOB_SIZE-1:
             self.assertFalse(done)
         else:
             self.assertTrue(done)
@@ -64,7 +68,7 @@ class TestCryptBlob(unittest.TestCase):
 
         # decrypt string
         decryptor = CryptBlob.StreamBlobDecryptor(blob, key, iv, size_of_data)
-        decryptor.decrypt(write_func)
+        yield decryptor.decrypt(write_func)
         self.assertEqual(self.data_buf, string_to_encrypt)
 
     @defer.inlineCallbacks

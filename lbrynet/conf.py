@@ -206,7 +206,6 @@ FIXED_SETTINGS = {
     'API_ADDRESS': 'lbryapi',
     'APP_NAME': APP_NAME,
     'BLOBFILES_DIR': 'blobfiles',
-    'BLOB_SIZE': 2 * MB,
     'CRYPTSD_FILE_EXTENSION': '.cryptsd',
     'CURRENCIES': {
         'BTC': {'type': 'crypto'},

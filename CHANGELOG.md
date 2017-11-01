@@ -22,15 +22,16 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Moved BLOB_SIZE from conf.py to MAX_BLOB_SIZE in blob/blob_file.py
   *
 
 ### Added
   * Added `wallet_list_unspent` command
+  * Added redundant API server for currency conversion
   *
 
 ### Removed
-  *
+  * Removed some alternate methods of reading from blob files
   *
 
 
