@@ -26,7 +26,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * Added `wallet_list_unspent` command
   *
 
 ### Removed

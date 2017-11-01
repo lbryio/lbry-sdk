@@ -1488,6 +1488,9 @@ class LBRYumWallet(Wallet):
     def list_addresses(self):
         return self._run_cmd_as_defer_succeed('listaddresses')
 
+    def list_unspent(self):
+        return self._run_cmd_as_defer_succeed('listunspent')
+
     def send_claim_to_address(self, claim_id, destination, amount):
         return self._run_cmd_as_defer_succeed('sendclaimtoaddress', claim_id, destination, amount)
 
