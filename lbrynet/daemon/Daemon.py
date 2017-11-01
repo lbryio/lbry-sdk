@@ -2404,6 +2404,42 @@ class Daemon(AuthJSONRPCServer):
         tx['broadcast'] = broadcast
         defer.returnValue(tx)
 
+    @defer.inlineCallbacks
+    def jsonrpc_wallet_list_unspent(self):
+        """
+        List unspent transaction outputs
+
+        Usage:
+            wallet_prefill_addresses
+
+        Returns:
+            (list) List of UTXOs
+            [
+                {
+                    "address": (str) the output address
+                    "amount": (float) unspent amount
+                    "height": (int) block height
+                    "is_claim": (bool) is the tx a claim
+                    "is_coinbase": (bool) is the tx a coinbase tx
+                    "is_support": (bool) is the tx a support
+                    "is_update": (bool) is the tx an update
+                    "nout": (int) nout of the output
+                    "txid": (str) txid of the output
+                },
+                ...
+            ]
+        """
+
+        unspent = yield self.session.wallet.list_unspent()
+        for i, utxo in enumerate(unspent):
+            utxo['txid'] = utxo.pop('prevout_hash')
+            utxo['nout'] = utxo.pop('prevout_n')
+            utxo['amount'] = utxo.pop('value')
+            utxo['is_coinbase'] = utxo.pop('coinbase')
+            unspent[i] = utxo
+
+        defer.returnValue(unspent)
+
     def jsonrpc_block_show(self, blockhash=None, height=None):
         """
         Get contents of a block

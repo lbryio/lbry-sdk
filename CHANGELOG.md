@@ -26,6 +26,7 @@ at anytime.
   *
 
 ### Added
+  * Added `wallet_list_unspent` command
   * Added redundant API server for currency conversion
   *
 
