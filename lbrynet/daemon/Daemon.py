@@ -112,12 +112,9 @@ class Checker(object):
 
 class _FileID(IterableContainer):
     """The different ways a file can be identified"""
-    NAME = 'name'
     SD_HASH = 'sd_hash'
     FILE_NAME = 'file_name'
     STREAM_HASH = 'stream_hash'
-    CLAIM_ID = "claim_id"
-    OUTPOINT = "outpoint"
     ROWID = "rowid"
 
 
@@ -880,32 +877,6 @@ class Daemon(AuthJSONRPCServer):
             size = None
             message = None
 
-        claim = yield self.session.wallet.get_claim_by_claim_id(lbry_file.claim_id,
-                                                                check_expire=False)
-
-        if claim and 'value' in claim:
-            metadata = claim['value']
-        else:
-            metadata = None
-
-        if claim and 'channel_name' in claim:
-            channel_name = claim['channel_name']
-        else:
-            channel_name = None
-
-        if lbry_file.txid and lbry_file.nout is not None:
-            outpoint = repr(ClaimOutpoint(lbry_file.txid, lbry_file.nout))
-        else:
-            outpoint = None
-
-        if claim and 'has_signature' in claim:
-            has_signature = claim['has_signature']
-        else:
-            has_signature = None
-        if claim and 'signature_is_valid' in claim:
-            signature_is_valid = claim['signature_is_valid']
-        else:
-            signature_is_valid = None
 
         result = {
             'completed': lbry_file.completed,
@@ -917,23 +888,13 @@ class Daemon(AuthJSONRPCServer):
             'stream_name': lbry_file.stream_name,
             'suggested_file_name': lbry_file.suggested_file_name,
             'sd_hash': lbry_file.sd_hash,
-            'name': lbry_file.name,
-            'outpoint': outpoint,
-            'claim_id': lbry_file.claim_id,
             'download_path': full_path,
             'mime_type': mime_type,
             'key': key,
             'total_bytes': size,
             'written_bytes': written_bytes,
             'message': message,
-            'metadata': metadata
         }
-        if channel_name is not None:
-            result['channel_name'] = channel_name
-        if has_signature is not None:
-            result['has_signature'] = has_signature
-        if signature_is_valid is not None:
-            result['signature_is_valid'] = signature_is_valid
         defer.returnValue(result)
 
     @defer.inlineCallbacks
@@ -1292,8 +1253,7 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
-                      [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--rowid=<rowid>]
-                      [--name=<name>]
+                      [--rowid=<rowid>]
                       [-f]
 
         Options:
@@ -1301,10 +1261,7 @@ class Daemon(AuthJSONRPCServer):
             --file_name=<file_name>      : get file with matching file name in the
                                            downloads folder
             --stream_hash=<stream_hash>  : get file with matching stream hash
-            --claim_id=<claim_id>        : get file with matching claim id
-            --outpoint=<outpoint>        : get file with matching claim outpoint
             --rowid=<rowid>              : get file with matching row id
-            --name=<name>                : get file with matching associated name claim
             -f                           : full status, populate the 'message' and 'size' fields
 
         Returns:
@@ -1321,16 +1278,12 @@ class Daemon(AuthJSONRPCServer):
                     'stream_name': (str) stream name ,
                     'suggested_file_name': (str) suggested file name,
                     'sd_hash': (str) sd hash of file,
-                    'name': (str) name claim attached to file
-                    'outpoint': (str) claim outpoint attached to file
-                    'claim_id': (str) claim ID attached to file,
                     'download_path': (str) download path of file,
                     'mime_type': (str) mime type of file,
                     'key': (str) key attached to file,
                     'total_bytes': (int) file size in bytes, None if full_status is false
                     'written_bytes': (int) written size in bytes
                     'message': (str), None if full_status is false
-                    'metadata': (dict) Metadata dictionary
                 },
             ]
         """
@@ -1644,10 +1597,7 @@ class Daemon(AuthJSONRPCServer):
             --sd_hash=<sd_hash>             : delete by file sd hash
             --file_name<file_name>          : delete by file name in downloads folder
             --stream_hash=<stream_hash>     : delete by file stream hash
-            --claim_id=<claim_id>           : delete by file claim id
-            --outpoint=<outpoint>           : delete by file claim outpoint
             --rowid=<rowid>                 : delete by file row id
-            --name=<name>                   : delete by associated name claim of file
 
         Returns:
             (bool) true if deletion was successful
@@ -2699,10 +2649,7 @@ class Daemon(AuthJSONRPCServer):
             --file_name=<file_name>      : get file with matching file name in the
                                            downloads folder
             --stream_hash=<stream_hash>  : get file with matching stream hash
-            --claim_id=<claim_id>        : get file with matching claim id
-            --outpoint=<outpoint>        : get file with matching claim outpoint
             --rowid=<rowid>              : get file with matching row id
-            --name=<name>                : get file with matching associated name claim
             --reflector=<reflector>      : reflector server, ip address or url
                                            by default choose a server from the config
 
