@@ -39,8 +39,8 @@ class EncryptedFileReflectorClient(Protocol):
             lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
 
     @property
-    def name(self):
-        return "lbry://%s" % self.factory.name
+    def file_name(self):
+        return self.factory.file_name
 
     @property
     def blob_manager(self):
@@ -77,20 +77,20 @@ class EncryptedFileReflectorClient(Protocol):
         if reason.check(error.ConnectionDone):
             if not self.needed_blobs:
                 log.info("Reflector has all blobs for %s (%s)",
-                         self.name, self.stream_descriptor)
+                         self.file_name, self.stream_descriptor)
             elif not self.reflected_blobs:
                 log.info("No more completed blobs for %s (%s) to reflect, %i are still needed",
-                         self.name, self.stream_descriptor, len(self.needed_blobs))
+                         self.file_name, self.stream_descriptor, len(self.needed_blobs))
             else:
                 log.info('Finished sending reflector %i blobs for %s (%s)',
-                         len(self.reflected_blobs), self.name, self.stream_descriptor)
+                         len(self.reflected_blobs), self.file_name, self.stream_descriptor)
             self.factory.finished_deferred.callback(self.reflected_blobs)
         elif reason.check(error.ConnectionLost):
-            log.warning("Stopped reflecting %s (%s) after sending %i blobs", self.name,
+            log.warning("Stopped reflecting %s (%s) after sending %i blobs", self.file_name,
                         self.stream_descriptor, len(self.reflected_blobs))
             self.factory.finished_deferred.callback(self.reflected_blobs)
         else:
-            log.info('Reflector finished for %s (%s): %s', self.name, self.stream_descriptor,
+            log.info('Reflector finished for %s (%s): %s', self.file_name, self.stream_descriptor,
                      reason)
             self.factory.finished_deferred.callback(reason)
 
@@ -134,7 +134,7 @@ class EncryptedFileReflectorClient(Protocol):
                 log.info("Reflector needs %s%i blobs for %s",
                          needs_desc,
                          len(filtered),
-                         self.name)
+                         self.file_name)
             return filtered
 
         d = self.factory.stream_info_manager.get_blobs_for_stream(self.factory.stream_hash)
@@ -227,7 +227,7 @@ class EncryptedFileReflectorClient(Protocol):
                     log.info("Sent reflector descriptor %s", self.next_blob_to_send)
                 else:
                     log.warning("Reflector failed to receive descriptor %s for %s",
-                                self.next_blob_to_send, self.name)
+                                self.next_blob_to_send, self.file_name)
                     self.blob_hashes_to_send.append(self.next_blob_to_send.blob_hash)
                 return self.set_not_uploading()
 
@@ -240,7 +240,7 @@ class EncryptedFileReflectorClient(Protocol):
                 return defer.succeed(True)
             else:
                 log.warning("Reflector already has %s for %s", self.next_blob_to_send,
-                            self.name)
+                            self.file_name)
                 return self.set_not_uploading()
         else:  # Expecting Server Blob Response
             if 'received_blob' not in response_dict:
@@ -249,10 +249,10 @@ class EncryptedFileReflectorClient(Protocol):
                 if response_dict['received_blob']:
                     self.reflected_blobs.append(self.next_blob_to_send.blob_hash)
                     log.debug("Sent reflector blob %s for %s", self.next_blob_to_send,
-                              self.name)
+                              self.file_name)
                 else:
                     log.warning("Reflector failed to receive blob %s for %s",
-                                self.next_blob_to_send, self.name)
+                                self.next_blob_to_send, self.file_name)
                     self.blob_hashes_to_send.append(self.next_blob_to_send.blob_hash)
                 return self.set_not_uploading()
 
@@ -288,12 +288,12 @@ class EncryptedFileReflectorClient(Protocol):
         err.trap(ValueError)
         if blob_hash not in self.failed_blob_hashes:
             log.warning("Failed to reflect blob %s for %s, reason: %s",
-                        str(blob_hash)[:16], self.name, err.getTraceback())
+                        str(blob_hash)[:16], self.file_name, err.getTraceback())
             self.blob_hashes_to_send.append(blob_hash)
             self.failed_blob_hashes.append(blob_hash)
         else:
             log.warning("Failed second try reflecting blob %s for %s, giving up, reason: %s",
-                        str(blob_hash)[:16], self.name, err.getTraceback())
+                        str(blob_hash)[:16], self.file_name, err.getTraceback())
 
     def send_next_request(self):
         if self.file_sender is not None:
@@ -340,8 +340,8 @@ class EncryptedFileReflectorClientFactory(ClientFactory):
         return self._lbry_file.stream_hash
 
     @property
-    def name(self):
-        return self._lbry_file.name
+    def file_name(self):
+        return self._lbry_file.file_name
 
     @property
     def protocol_version(self):
