@@ -26,7 +26,7 @@ at anytime.
   *
 
 ### Added
-  * Added `wallet_list_unspent` command
+  * Added `utxo_list` command to list unspent transaction outputs
   * Added redundant API server for currency conversion
   *
 

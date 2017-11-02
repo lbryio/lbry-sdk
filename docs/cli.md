@@ -969,6 +969,32 @@ Returns:
     (dict) JSON formatted transaction
 ```
 
+## utxo_list
+
+```text
+List unspent transaction outputs
+
+Usage:
+    utxo_list
+
+Returns:
+    (list) List of unspent transaction outputs (UTXOs)
+    [
+        {
+            "address": (str) the output address
+            "amount": (float) unspent amount
+            "height": (int) block height
+            "is_claim": (bool) is the tx a claim
+            "is_coinbase": (bool) is the tx a coinbase tx
+            "is_support": (bool) is the tx a support
+            "is_update": (bool) is the tx an update
+            "nout": (int) nout of the output
+            "txid": (str) txid of the output
+        },
+        ...
+    ]
+```
+
 ## version
 
 ```text

@@ -2405,15 +2405,15 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(tx)
 
     @defer.inlineCallbacks
-    def jsonrpc_wallet_list_unspent(self):
+    def jsonrpc_utxo_list(self):
         """
         List unspent transaction outputs
 
         Usage:
-            wallet_prefill_addresses
+            utxo_list
 
         Returns:
-            (list) List of UTXOs
+            (list) List of unspent transaction outputs (UTXOs)
             [
                 {
                     "address": (str) the output address
