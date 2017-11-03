@@ -365,7 +365,7 @@ class Node(object):
                     # Ok, we have the value locally, so use that
                     peers = self._dataStore.getPeersForBlob(key)
                     # Send this value to the closest node without it
-                    outerDf.callback({key: peers, "from_peer": 'self'})
+                    outerDf.callback({key: peers})
                 else:
                     # Ok, value does not exist in DHT at all
                     outerDf.callback(result)
@@ -705,7 +705,6 @@ class _IterativeFindHelper(object):
         if self.find_value is True and self.key in result and not 'contacts' in result:
             # We have found the value
             self.find_value_result[self.key] = result[self.key]
-            self.find_value_result['from_peer'] = aContact.address
         else:
             if self.find_value is True:
                 self._setClosestNodeValue(responseMsg, aContact)
