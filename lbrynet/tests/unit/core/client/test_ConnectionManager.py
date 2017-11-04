@@ -184,7 +184,6 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.assertEqual(0, self.TEST_PEER.success_count)
         self.assertEqual(1, self.TEST_PEER.down_count)
 
-    @unittest.SkipTest
     @defer.inlineCallbacks
     def test_parallel_connections(self):
         # Test to see that we make two new connections at a manage call,
@@ -197,16 +196,21 @@ class TestIntegrationConnectionManager(unittest.TestCase):
         self.assertEqual(2, self.connection_manager.num_peer_connections())
         self.assertIn(self.TEST_PEER, self.connection_manager._peer_connections)
         self.assertIn(test_peer2, self.connection_manager._peer_connections)
-        connection_made = yield self.connection_manager._peer_connections[self.TEST_PEER].\
+
+        deferred_conn_made_peer1 = self.connection_manager._peer_connections[self.TEST_PEER].\
             factory.connection_was_made_deferred
-        self.assertFalse(connection_made)
-        self.assertEqual(1, self.connection_manager.num_peer_connections())
+        deferred_conn_made_peer1.addCallback(lambda conn_made: self.assertFalse(conn_made))
+
+        deferred_conn_made_peer2 = self.connection_manager._peer_connections[test_peer2].\
+            factory.connection_was_made_deferred
+        deferred_conn_made_peer2.addCallback(lambda conn_made: self.assertFalse(conn_made))
+
+        yield deferred_conn_made_peer1
+        yield deferred_conn_made_peer2
+
+        self.assertEqual(0, self.connection_manager.num_peer_connections())
         self.assertEqual(0, self.TEST_PEER.success_count)
         self.assertEqual(1, self.TEST_PEER.down_count)
-        connection_made = yield self.connection_manager._peer_connections[test_peer2].\
-            factory.connection_was_made_deferred
-        self.assertFalse(connection_made)
-        self.assertEqual(0, self.connection_manager.num_peer_connections())
         self.assertEqual(0, test_peer2.success_count)
         self.assertEqual(1, test_peer2.down_count)
 
