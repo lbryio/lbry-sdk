@@ -191,12 +191,12 @@ class AuthJSONRPCServer(AuthorizedBase):
     allowed_during_startup = []
 
     def __init__(self, use_authentication=None):
-        self._call_lock = {}
         self._use_authentication = (
             use_authentication if use_authentication is not None else conf.settings['use_auth_http']
         )
         self.announced_startup = False
         self.sessions = {}
+        self._queued_lock = defer.DeferredSemaphore(1)
 
     def setup(self):
         return NotImplementedError()
@@ -319,7 +319,7 @@ class AuthJSONRPCServer(AuthorizedBase):
                 reply_with_next_secret = True
 
         try:
-            function = self._get_jsonrpc_method(function_name)
+            fn = self._get_jsonrpc_method(function_name)
         except UnknownAPIMethodError as err:
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
@@ -350,7 +350,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             # d = defer.maybeDeferred(function, *args)  # if we want to support positional args too
             raise ValueError('Args must be a dict')
 
-        params_error, erroneous_params = self._check_params(function, args_dict)
+        params_error, erroneous_params = self._check_params(fn, args_dict)
         if params_error is not None:
             params_error_message = '{} for {} command: {}'.format(
                 params_error, function_name, ', '.join(erroneous_params)
@@ -363,26 +363,9 @@ class AuthJSONRPCServer(AuthorizedBase):
             return server.NOT_DONE_YET
 
         if is_queued:
-            d_lock = self._call_lock.get(function_name, False)
-            if not d_lock:
-                d = defer.maybeDeferred(function, self, **args_dict)
-                self._call_lock[function_name] = finished_deferred
-
-                def _del_lock(*args):
-                    if function_name in self._call_lock:
-                        del self._call_lock[function_name]
-                    if args:
-                        return args
-
-                finished_deferred.addCallback(_del_lock)
-
-            else:
-                log.info("queued %s", function_name)
-                d = d_lock
-                d.addBoth(lambda _: log.info("running %s from queue", function_name))
-                d.addCallback(lambda _: defer.maybeDeferred(function, self, **args_dict))
+            d = self._queued_lock.run(fn, self, **args_dict)
         else:
-            d = defer.maybeDeferred(function, self, **args_dict)
+            d = defer.maybeDeferred(fn, self, **args_dict)
 
         # finished_deferred will callback when the request is finished
         # and errback if something went wrong. If the errback is

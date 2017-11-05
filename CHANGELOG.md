@@ -17,6 +17,7 @@ at anytime.
   * Fixed external IP detection via jsonip.com (avoid detecting IPv6)
   * Fixed failing ConnectionManager unit test for parallel connections
   *
+  * Fixed race condition between `publish` and `channel_new`
 
 ### Deprecated
   *
@@ -24,7 +25,7 @@ at anytime.
 
 ### Changed
   * Moved BLOB_SIZE from conf.py to MAX_BLOB_SIZE in blob/blob_file.py
-  *
+  * Use shared deferredSemaphore for api methods decorated with `@AuthJSONRPCServer.queued`
 
 ### Added
   * Added `utxo_list` command to list unspent transaction outputs
