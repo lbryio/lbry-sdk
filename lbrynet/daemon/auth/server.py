@@ -319,7 +319,7 @@ class AuthJSONRPCServer(AuthorizedBase):
                 reply_with_next_secret = True
 
         try:
-            function = self._get_jsonrpc_method(function_name)
+            fn = self._get_jsonrpc_method(function_name)
         except UnknownAPIMethodError as err:
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
@@ -350,7 +350,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             # d = defer.maybeDeferred(function, *args)  # if we want to support positional args too
             raise ValueError('Args must be a dict')
 
-        params_error, erroneous_params = self._check_params(function, args_dict)
+        params_error, erroneous_params = self._check_params(fn, args_dict)
         if params_error is not None:
             params_error_message = '{} for {} command: {}'.format(
                 params_error, function_name, ', '.join(erroneous_params)
@@ -363,9 +363,9 @@ class AuthJSONRPCServer(AuthorizedBase):
             return server.NOT_DONE_YET
 
         if is_queued:
-            d = self._queued_lock.run(function, self, **args_dict)
+            d = self._queued_lock.run(fn, self, **args_dict)
         else:
-            d = defer.maybeDeferred(function, self, **args_dict)
+            d = defer.maybeDeferred(fn, self, **args_dict)
 
         # finished_deferred will callback when the request is finished
         # and errback if something went wrong. If the errback is
