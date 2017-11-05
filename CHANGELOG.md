@@ -15,6 +15,7 @@ at anytime.
 ### Fixed
   * Fixed amount of close nodes to add to list in case of extension to neighbouring k-buckets
   * Fixed external IP detection via jsonip.com (avoid detecting IPv6)
+  * Fixed failing ConnectionManager unit test for parallel connections
   *
 
 ### Deprecated
