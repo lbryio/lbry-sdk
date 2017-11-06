@@ -649,7 +649,6 @@ class Daemon(AuthJSONRPCServer):
         def _download_finished(download_id, name, claim_dict):
             report = yield self._get_stream_analytics_report(claim_dict)
             self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
-
         @defer.inlineCallbacks
         def _download_failed(error, download_id, name, claim_dict):
             report = yield self._get_stream_analytics_report(claim_dict)
@@ -1509,12 +1508,13 @@ class Daemon(AuthJSONRPCServer):
         name = resolved['name']
         claim_id = resolved['claim_id']
         claim_dict = ClaimDict.load_dict(resolved['value'])
+        sd_hash = claim_dict.source_hash
 
         if claim_id in self.streams:
             log.info("Already waiting on lbry://%s to start downloading", name)
             yield self.streams[claim_id].data_downloading_deferred
 
-        lbry_file = yield self._get_lbry_file(FileID.CLAIM_ID, claim_id, return_json=False)
+        lbry_file = yield self._get_lbry_file(FileID.SD_HASH, sd_hash, return_json=False)
 
         if lbry_file:
             if not os.path.isfile(os.path.join(lbry_file.download_directory, lbry_file.file_name)):
