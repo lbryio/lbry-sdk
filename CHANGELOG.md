@@ -20,6 +20,7 @@ at anytime.
   * Fixed incorrect response on attempting to delete blob twice
   * Fixed local node ID reporting in peer list
   *
+  * Fixed lbryum race condition between combinations of `publish` and `channel_new`
 
 ### Deprecated
   *
@@ -27,16 +28,14 @@ at anytime.
 
 ### Changed
   * Moved BLOB_SIZE from conf.py to MAX_BLOB_SIZE in blob/blob_file.py
-  * Use shared deferredSemaphore for api methods decorated with `@AuthJSONRPCServer.queued`
 
 ### Added
   * Added `utxo_list` command to list unspent transaction outputs
   * Added redundant API server for currency conversion
-  *
 
 ### Removed
   * Removed some alternate methods of reading from blob files
-  *
+  * Removed `@AuthJSONRPCServer.queued` decorator
 
 
 ## [0.17.1] - 2017-10-25

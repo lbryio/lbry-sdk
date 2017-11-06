@@ -116,7 +116,6 @@ class JSONRPCServerType(type):
         klass.callable_methods = {}
         klass.deprecated_methods = {}
         klass.authorized_functions = []
-        klass.queued_methods = []
 
         for methodname in dir(klass):
             if methodname.startswith("jsonrpc_"):
@@ -125,8 +124,6 @@ class JSONRPCServerType(type):
                     klass.callable_methods.update({methodname.split("jsonrpc_")[1]: method})
                     if hasattr(method, '_auth_required'):
                         klass.authorized_functions.append(methodname.split("jsonrpc_")[1])
-                    if hasattr(method, '_queued'):
-                        klass.queued_methods.append(methodname.split("jsonrpc_")[1])
                 else:
                     klass.deprecated_methods.update({methodname.split("jsonrpc_")[1]: method})
         return klass
@@ -138,11 +135,6 @@ class AuthorizedBase(object):
     @staticmethod
     def auth_required(f):
         f._auth_required = True
-        return f
-
-    @staticmethod
-    def queued(f):
-        f._queued = True
         return f
 
     @staticmethod
@@ -196,7 +188,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         )
         self.announced_startup = False
         self.sessions = {}
-        self._queued_lock = defer.DeferredSemaphore(1)
 
     def setup(self):
         return NotImplementedError()
@@ -289,7 +280,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         id_ = None
         try:
             function_name = parsed.get('method')
-            is_queued = function_name in self.queued_methods
             args = parsed.get('params', {})
             id_ = parsed.get('id', None)
             token = parsed.pop('hmac', None)
@@ -362,10 +352,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             )
             return server.NOT_DONE_YET
 
-        if is_queued:
-            d = self._queued_lock.run(fn, self, **args_dict)
-        else:
-            d = defer.maybeDeferred(fn, self, **args_dict)
+        d = defer.maybeDeferred(fn, self, **args_dict)
 
         # finished_deferred will callback when the request is finished
         # and errback if something went wrong. If the errback is
