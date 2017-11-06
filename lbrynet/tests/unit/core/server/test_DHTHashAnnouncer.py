@@ -32,6 +32,8 @@ class MocSupplier(object):
         else:
             return defer.succeed([])
 
+    def set_single_hash_announce_duration(self, seconds):
+        pass
 
 class DHTHashAnnouncerTest(unittest.TestCase):
     def setUp(self):

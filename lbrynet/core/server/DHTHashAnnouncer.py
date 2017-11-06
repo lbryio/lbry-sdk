@@ -156,6 +156,9 @@ class DHTHashAnnouncer(object):
         for _, announced_to in announcer_results:
             stored_to.update(announced_to)
         log.info('Took %s seconds to announce %s hashes', time.time() - start, len(hashes))
+        seconds_per_blob = (time.time() - start) / len(hashes)
+        for supplier in self.suppliers:
+            supplier.set_single_hash_announce_duration(seconds_per_blob)
         defer.returnValue(stored_to)
 
 
@@ -164,7 +167,7 @@ class DHTHashSupplier(object):
     MIN_HASH_REANNOUNCE_TIME = 60 * 60
     # conservative assumption of the time it takes to announce
     # a single hash
-    SINGLE_HASH_ANNOUNCE_DURATION = 5
+    DEFAULT_SINGLE_HASH_ANNOUNCE_DURATION = 1
 
     """Classes derived from this class give hashes to a hash announcer"""
 
@@ -172,9 +175,19 @@ class DHTHashSupplier(object):
         if announcer is not None:
             announcer.add_supplier(self)
         self.hash_announcer = announcer
+        self.single_hash_announce_duration = self.DEFAULT_SINGLE_HASH_ANNOUNCE_DURATION
 
     def hashes_to_announce(self):
         pass
+
+    def set_single_hash_announce_duration(self, seconds):
+        """
+        Set the duration it takes to announce a single hash
+        in seconds, cannot be less than the default single
+        hash announce duration
+        """
+        seconds = max(seconds, self.DEFAULT_SINGLE_HASH_ANNOUNCE_DURATION)
+        self.single_hash_announce_duration = seconds
 
     def get_next_announce_time(self, num_hashes_to_announce=1):
         """
@@ -191,5 +204,5 @@ class DHTHashSupplier(object):
         """
         queue_size = self.hash_announcer.hash_queue_size() + num_hashes_to_announce
         reannounce = max(self.MIN_HASH_REANNOUNCE_TIME,
-                         queue_size * self.SINGLE_HASH_ANNOUNCE_DURATION)
+                         queue_size * self.single_hash_announce_duration)
         return time.time() + reannounce
