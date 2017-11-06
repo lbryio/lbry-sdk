@@ -17,6 +17,7 @@ at anytime.
   * Fixed external IP detection via jsonip.com (avoid detecting IPv6)
   * Fixed failing ConnectionManager unit test for parallel connections
   * Fixed race condition between `publish` and `channel_new`
+  * Fixed incorrect response on attempting to delete blob twice
 
 ### Deprecated
   *
