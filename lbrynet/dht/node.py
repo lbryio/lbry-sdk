@@ -492,7 +492,7 @@ class Node(object):
 
         if 'port' in value:
             port = int(value['port'])
-            if 0 <= port <= 65536:
+            if 1 <= port <= 65535:
                 compact_port = str(struct.pack('>H', port))
             else:
                 raise TypeError, 'Invalid port'
