@@ -83,6 +83,10 @@ class BlobManagerTest(unittest.TestCase):
         self.assertEqual(len(blobs), 0)
         blobs = yield self.bm._get_all_blob_hashes()
         self.assertEqual(len(blobs), 0)
+        self.assertFalse(blob_hash in self.bm.blobs)
+
+        # delete blob that was already deleted once
+        out = yield self.bm.delete_blobs([blob_hash])
 
         # delete blob that does not exist, nothing will
         # happen

@@ -153,6 +153,7 @@ class DiskBlobManager(DHTHashSupplier):
                 blob = yield self.get_blob(blob_hash)
                 yield blob.delete()
                 bh_to_delete_from_db.append(blob_hash)
+                del self.blobs[blob_hash]
             except Exception as e:
                 log.warning("Failed to delete blob file. Reason: %s", e)
         yield self._delete_blobs_from_db(bh_to_delete_from_db)
