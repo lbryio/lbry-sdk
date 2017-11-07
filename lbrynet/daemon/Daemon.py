@@ -1701,7 +1701,6 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(cost)
 
     @AuthJSONRPCServer.auth_required
-    @AuthJSONRPCServer.queued
     @defer.inlineCallbacks
     def jsonrpc_channel_new(self, channel_name, amount):
         """
@@ -1759,7 +1758,6 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
-    @AuthJSONRPCServer.queued
     @defer.inlineCallbacks
     def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
                         description=None, author=None, language=None, license=None,
