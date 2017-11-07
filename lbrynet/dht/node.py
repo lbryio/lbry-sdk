@@ -270,7 +270,7 @@ class Node(object):
             # The "raw response" tuple contains the response message,
             # and the originating address info
             responseMsg = responseTuple[0]
-            originAddress = responseTuple[1]  # tuple: (ip adress, udp port)
+            originAddress = responseTuple[1]  # tuple: (ip address, udp port)
             # Make sure the responding node is valid, and abort the operation if it isn't
             if not responseMsg.nodeID in known_nodes:
                 return responseMsg.nodeID
@@ -701,7 +701,7 @@ class _IterativeFindHelper(object):
         # The "raw response" tuple contains the response message,
         # and the originating address info
         responseMsg = responseTuple[0]
-        originAddress = responseTuple[1]  # tuple: (ip adress, udp port)
+        originAddress = responseTuple[1]  # tuple: (ip address, udp port)
         # Make sure the responding node is valid, and abort the operation if it isn't
         if responseMsg.nodeID in self.active_contacts or responseMsg.nodeID == self.node.node_id:
             return responseMsg.nodeID
