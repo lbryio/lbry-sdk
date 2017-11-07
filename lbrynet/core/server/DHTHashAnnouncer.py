@@ -27,7 +27,6 @@ class DHTHashAnnouncer(object):
         self._manage_call_lc = task.LoopingCall(self.manage_lc)
         self._lock = utils.DeferredLockContextManager(defer.DeferredLock())
         self._last_checked = time.time(), self.CONCURRENT_ANNOUNCERS
-        self._retries = {}
         self._total = None
 
     def run_manage_loop(self):
@@ -105,18 +104,16 @@ class DHTHashAnnouncer(object):
         log.debug('There are now %s hashes remaining to be announced', self.hash_queue_size())
 
         @defer.inlineCallbacks
-        def do_store(blob_hash, announce_d):
+        def do_store(blob_hash, announce_d, retry_count=0):
             if announce_d.called:
                 defer.returnValue(announce_deferred.result)
             try:
                 store_nodes = yield self.dht_node.announceHaveBlob(binascii.unhexlify(blob_hash))
                 if not store_nodes:
-                    retries = self._retries.get(blob_hash, 0)
-                    retries += 1
-                    self._retries[blob_hash] = retries
-                    if retries <= self.STORE_RETRIES:
+                    retry_count += 1
+                    if retry_count <= self.STORE_RETRIES:
                         log.debug("No nodes stored %s, retrying", blob_hash)
-                        result = yield do_store(blob_hash, announce_d)
+                        result = yield do_store(blob_hash, announce_d, retry_count)
                     else:
                         result = {}
                         log.warning("No nodes stored %s", blob_hash)
