@@ -20,7 +20,7 @@ class DHTHashAnnouncer(object):
     def __init__(self, dht_node, peer_port):
         self.dht_node = dht_node
         self.peer_port = peer_port
-        self.suppliers = []
+        self.supplier = None
         self.next_manage_call = None
         self.hash_queue = collections.deque()
         self._concurrent_announcers = 0
@@ -62,7 +62,7 @@ class DHTHashAnnouncer(object):
             self._manage_call_lc.stop()
 
     def add_supplier(self, supplier):
-        self.suppliers.append(supplier)
+        self.supplier = supplier
 
     def immediate_announce(self, blob_hashes):
         if self.peer_port is not None:
@@ -76,8 +76,8 @@ class DHTHashAnnouncer(object):
     @defer.inlineCallbacks
     def _announce_available_hashes(self):
         log.debug('Announcing available hashes')
-        for supplier in self.suppliers:
-            hashes = yield supplier.hashes_to_announce()
+        if self.supplier:
+            hashes = yield self.supplier.hashes_to_announce()
             yield self._announce_hashes(hashes)
 
     @defer.inlineCallbacks
@@ -155,10 +155,10 @@ class DHTHashAnnouncer(object):
         stored_to = {}
         for _, announced_to in announcer_results:
             stored_to.update(announced_to)
+
         log.info('Took %s seconds to announce %s hashes', time.time() - start, len(hashes))
         seconds_per_blob = (time.time() - start) / len(hashes)
-        for supplier in self.suppliers:
-            supplier.set_single_hash_announce_duration(seconds_per_blob)
+        self.supplier.set_single_hash_announce_duration(seconds_per_blob)
         defer.returnValue(stored_to)
 
 
