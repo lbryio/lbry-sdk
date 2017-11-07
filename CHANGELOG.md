@@ -18,6 +18,8 @@ at anytime.
   * Fixed failing ConnectionManager unit test for parallel connections
   * Fixed race condition between `publish` and `channel_new`
   * Fixed incorrect response on attempting to delete blob twice
+  * Fixed local node ID reporting in peer list
+  *
 
 ### Deprecated
   *

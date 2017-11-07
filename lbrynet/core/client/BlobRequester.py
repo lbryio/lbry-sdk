@@ -135,7 +135,7 @@ class BlobRequester(object):
         return defer.succeed(r)
 
     def _find_peers_for_hash(self, h):
-        d = self.peer_finder.find_peers_for_blob(h)
+        d = self.peer_finder.find_peers_for_blob(h, filter_self=True)
 
         def choose_best_peers(peers):
             bad_peers = self._get_bad_peers()

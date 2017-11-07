@@ -51,7 +51,7 @@ class Node(object):
 
     def __init__(self, node_id=None, udpPort=4000, dataStore=None,
                  routingTableClass=None, networkProtocol=None,
-                 externalIP=None):
+                 externalIP=None, peerPort=None):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -73,6 +73,8 @@ class Node(object):
                                 change the format of the physical RPC messages
                                 being transmitted.
         @type networkProtocol: entangled.kademlia.protocol.KademliaProtocol
+        @param externalIP: the IP at which this node can be contacted
+        @param peerPort: the port at which this node announces it has a blob for
         """
         self.node_id = node_id or self._generateID()
         self.port = udpPort
@@ -112,6 +114,7 @@ class Node(object):
                         contactTriple[0], contactTriple[1], contactTriple[2], self._protocol)
                     self._routingTable.addContact(contact)
         self.externalIP = externalIP
+        self.peerPort = peerPort
         self.hash_watcher = HashWatcher()
 
     def __del__(self):
@@ -206,8 +209,8 @@ class Node(object):
             return 0
         return num_in_data_store * self.getApproximateTotalDHTNodes() / 8
 
-    def announceHaveBlob(self, key, port):
-        return self.iterativeAnnounceHaveBlob(key, {'port': port, 'lbryid': self.node_id})
+    def announceHaveBlob(self, key):
+        return self.iterativeAnnounceHaveBlob(key, {'port': self.peerPort, 'lbryid': self.node_id})
 
     @defer.inlineCallbacks
     def getPeersForBlob(self, blob_hash):
@@ -216,14 +219,10 @@ class Node(object):
         if result:
             if blob_hash in result:
                 for peer in result[blob_hash]:
-                    if self.node_id != peer[6:]:
-                        host = ".".join([str(ord(d)) for d in peer[:4]])
-                        if host == "127.0.0.1" and "from_peer" in result \
-                                and result["from_peer"] != "self":
-                            host = result["from_peer"]
-                        port, = struct.unpack('>H', peer[4:6])
-                        if (host, port) not in expanded_peers:
-                            expanded_peers.append((host, port))
+                    host = ".".join([str(ord(d)) for d in peer[:4]])
+                    port, = struct.unpack('>H', peer[4:6])
+                    if (host, port) not in expanded_peers:
+                        expanded_peers.append((host, port))
         defer.returnValue(expanded_peers)
 
     def get_most_popular_hashes(self, num_to_return):
@@ -366,7 +365,7 @@ class Node(object):
                     # Ok, we have the value locally, so use that
                     peers = self._dataStore.getPeersForBlob(key)
                     # Send this value to the closest node without it
-                    outerDf.callback({key: peers, "from_peer": 'self'})
+                    outerDf.callback({key: peers})
                 else:
                     # Ok, value does not exist in DHT at all
                     outerDf.callback(result)
@@ -706,7 +705,6 @@ class _IterativeFindHelper(object):
         if self.find_value is True and self.key in result and not 'contacts' in result:
             # We have found the value
             self.find_value_result[self.key] = result[self.key]
-            self.find_value_result['from_peer'] = aContact.address
         else:
             if self.find_value is True:
                 self._setClosestNodeValue(responseMsg, aContact)
