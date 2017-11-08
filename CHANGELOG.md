@@ -13,27 +13,47 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed amount of close nodes to add to list in case of extension to neighbouring k-buckets
-  * Fixed external IP detection via jsonip.com (avoid detecting IPv6)
-  * Fixed failing ConnectionManager unit test for parallel connections
-  * Fixed race condition between `publish` and `channel_new`
-  * Fixed incorrect response on attempting to delete blob twice
-  * Fixed local node ID reporting in peer list
+  *
+  *
 
 ### Deprecated
   *
   *
 
 ### Changed
-  * Moved BLOB_SIZE from conf.py to MAX_BLOB_SIZE in blob/blob_file.py
+  *
+  *
 
 ### Added
-  * Added `utxo_list` command to list unspent transaction outputs
-  * Added redundant API server for currency conversion
+  *
+  *
 
 ### Removed
-  * Removed some alternate methods of reading from blob files
-  * Removed `@AuthJSONRPCServer.queued` decorator
+  *
+  *
+
+
+## [0.18.0] - 2017-11-08
+### Fixed
+ * Fixed amount of close nodes to add to list in case of extension to neighbouring k-buckets
+ * Fixed external IP detection via jsonip.com (avoid detecting IPv6)
+ * Fixed failing ConnectionManager unit test for parallel connections
+ * Fixed race condition between `publish` and `channel_new`
+ * Fixed incorrect response on attempting to delete blob twice
+ * Fixed local node ID reporting in peer list
+
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.14 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0014---2017-11-08)
+ * Bumped `lbryum` requirement to 3.1.11 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#3111---2017-11-08)
+ * Moved BLOB_SIZE from conf.py to MAX_BLOB_SIZE in blob/blob_file.py
+
+### Added
+ * Added `utxo_list` command to list unspent transaction outputs
+ * Added redundant API server for currency conversion
+
+### Removed
+ * Removed some alternate methods of reading from blob files
+ * Removed `@AuthJSONRPCServer.queued` decorator
 
 
 ## [0.17.1] - 2017-10-25
