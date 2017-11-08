@@ -19,8 +19,6 @@ at anytime.
   * Fixed race condition between `publish` and `channel_new`
   * Fixed incorrect response on attempting to delete blob twice
   * Fixed local node ID reporting in peer list
-  *
-  * Fixed lbryum race condition between combinations of `publish` and `channel_new`
 
 ### Deprecated
   *
