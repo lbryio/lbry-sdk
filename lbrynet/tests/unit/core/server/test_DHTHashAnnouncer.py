@@ -1,7 +1,6 @@
 from twisted.trial import unittest
-from twisted.internet import defer, task, reactor
+from twisted.internet import defer, reactor
 
-from lbrynet.core import utils
 from lbrynet.tests.util import random_lbry_hash
 from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
 
@@ -41,9 +40,7 @@ class DHTHashAnnouncerTest(unittest.TestCase):
         self.blobs_to_announce = []
         for i in range(0, self.num_blobs):
             self.blobs_to_announce.append(random_lbry_hash())
-        self.clock = task.Clock()
         self.dht_node = MocDHTNode()
-        utils.call_later = self.clock.callLater
         self.announcer = DHTHashAnnouncer(self.dht_node, peer_port=3333)
         self.supplier = MocSupplier(self.blobs_to_announce)
         self.announcer.add_supplier(self.supplier)
@@ -52,7 +49,6 @@ class DHTHashAnnouncerTest(unittest.TestCase):
     def test_basic(self):
         d = self.announcer._announce_available_hashes()
         self.assertEqual(self.announcer.hash_queue_size(), self.announcer.CONCURRENT_ANNOUNCERS)
-        self.clock.advance(1)
         yield d
         self.assertEqual(self.dht_node.blobs_announced, self.num_blobs)
         self.assertEqual(self.announcer.hash_queue_size(), 0)
