@@ -17,7 +17,7 @@ from twisted.python.failure import Failure
 
 from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
-from lbryschema.error import URIParseError
+from lbryschema.error import URIParseError, DecodeError
 from lbryschema.validator import validate_claim_id
 from lbryschema.address import decode_address
 
@@ -1793,8 +1793,9 @@ class Daemon(AuthJSONRPCServer):
             --metadata=<metadata>          : ClaimDict to associate with the claim.
             --file_path=<file_path>        : path to file to be associated with name. If provided,
                                              a lbry stream of this file will be used in 'sources'.
-                                             If no path is given but a metadata dict is provided,
-                                             the source from the given metadata will be used.
+                                             If no path is given but a sources dict is provided,
+                                             it will be used. If neither are provided, an
+                                             error is raised.
             --fee=<fee>                    : Dictionary representing key fee to download content:
                                               {
                                                 'currency': currency_symbol,
@@ -1895,8 +1896,32 @@ class Daemon(AuthJSONRPCServer):
             }
         }
 
+        # this will be used to verify the format with lbryschema
+        claim_copy = deepcopy(claim_dict)
         if sources is not None:
             claim_dict['stream']['source'] = sources
+            claim_copy['stream']['source'] = sources
+        elif file_path is not None:
+            if not os.path.isfile(file_path):
+                raise Exception("invalid file path to publish")
+            # since the file hasn't yet been made into a stream, we don't have
+            # a valid Source for the claim when validating the format, we'll use a fake one
+            claim_copy['stream']['source'] = {
+                'version': '_0_0_1',
+                'sourceType': 'lbry_sd_hash',
+                'source': '0' * 96,
+                'contentType': ''
+            }
+        else:
+            # there is no existing source to use, and a file was not provided to make a new one
+            raise Exception("no source provided to publish")
+        try:
+            ClaimDict.load_dict(claim_copy)
+            # the metadata to use in the claim can be serialized by lbryschema
+        except DecodeError as err:
+            # there was a problem with a metadata field, raise an error here rather than
+            # waiting to find out when we go to publish the claim (after having made the stream)
+            raise Exception("invalid publish metadata: %s" % err.message)
 
         log.info("Publish: %s", {
             'name': name,
