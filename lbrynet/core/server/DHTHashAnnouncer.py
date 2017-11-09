@@ -118,6 +118,7 @@ class DHTHashAnnouncer(object):
                         log.debug("No nodes stored %s, retrying", blob_hash)
                         result = yield do_store(blob_hash, announce_d)
                     else:
+                        result = {}
                         log.warning("No nodes stored %s", blob_hash)
                 else:
                     result = store_nodes
