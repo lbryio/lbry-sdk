@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * Check claim schema in `publish` before trying to make the claim, return better error messages
   *
 
 ### Added
