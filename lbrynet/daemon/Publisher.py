@@ -34,10 +34,9 @@ class Publisher(object):
         with file_utils.get_read_handle(file_path) as read_handle:
             stream_hash = yield create_lbry_file(self.session, self.lbry_file_manager, file_name,
                                                  read_handle)
-        prm = self.session.payment_rate_manager
         sd_hash = yield publish_sd_blob(self.lbry_file_manager.stream_info_manager,
                             self.session.blob_manager, stream_hash)
-        self.lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash, prm)
+        self.lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash)
         if 'source' not in claim_dict['stream']:
             claim_dict['stream']['source'] = {}
         claim_dict['stream']['source']['source'] = sd_hash
