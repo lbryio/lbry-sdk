@@ -6,6 +6,7 @@ from lbrynet.lbry_file.StreamDescriptor import save_sd_info
 from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.core.StreamDescriptor import StreamMetadata
+from lbrynet.core.Error import NoSuchStreamHash
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbry_file.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
 import os
@@ -28,21 +29,22 @@ class EncryptedFileDownloader(CryptStreamDownloader):
         self.stream_info_manager = stream_info_manager
         self.suggested_file_name = None
         self._calculated_total_bytes = None
+        self.sd_hash = None
 
+    @defer.inlineCallbacks
     def set_stream_info(self):
         if self.key is None:
-            d = self.stream_info_manager.get_stream_info(self.stream_hash)
+            out = yield self.stream_info_manager.get_stream_info(self.stream_hash)
+            key, stream_name, suggested_file_name = out
+            self.key = binascii.unhexlify(key)
+            self.stream_name = binascii.unhexlify(stream_name)
+            self.suggested_file_name = binascii.unhexlify(suggested_file_name)
 
-            def set_stream_info(stream_info):
-                key, stream_name, suggested_file_name = stream_info
-                self.key = binascii.unhexlify(key)
-                self.stream_name = binascii.unhexlify(stream_name)
-                self.suggested_file_name = binascii.unhexlify(suggested_file_name)
-
-            d.addCallback(set_stream_info)
-            return d
-        else:
-            return defer.succeed(True)
+            out = yield self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
+            if out:
+                self.sd_hash = out[0]
+            else:
+                raise NoSuchStreamHash(self.stream_hash)
 
     def delete_data(self):
         d1 = self.stream_info_manager.get_blobs_for_stream(self.stream_hash)

@@ -35,9 +35,9 @@ class Publisher(object):
             stream_hash = yield create_lbry_file(self.session, self.lbry_file_manager, file_name,
                                                  read_handle)
         prm = self.session.payment_rate_manager
-        self.lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash, prm)
         sd_hash = yield publish_sd_blob(self.lbry_file_manager.stream_info_manager,
-                            self.session.blob_manager, self.lbry_file.stream_hash)
+                            self.session.blob_manager, stream_hash)
+        self.lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash, prm)
         if 'source' not in claim_dict['stream']:
             claim_dict['stream']['source'] = {}
         claim_dict['stream']['source']['source'] = sd_hash
@@ -47,7 +47,6 @@ class Publisher(object):
 
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
         self.lbry_file.completed = True
-        yield self.lbry_file.load_file_attributes(sd_hash)
         yield self.lbry_file.save_status()
         defer.returnValue(claim_out)
 
