@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
   *
 
 ### Deprecated

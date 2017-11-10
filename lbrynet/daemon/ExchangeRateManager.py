@@ -69,9 +69,9 @@ class MarketFeed(object):
         self._online = True
 
     def _on_error(self, err):
-        log.warning(
-            "There was a problem updating %s exchange rate information from %s: %s",
-            self.market, self.name, err)
+        log.warning("There was a problem updating %s exchange rate information from %s: %s",
+                    self.market, self.name)
+        log.debug("Exchange rate error (%s from %s): %s", self.market, self.name, err)
         self._online = False
 
     def _update_price(self):
