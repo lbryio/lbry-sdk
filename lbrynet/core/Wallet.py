@@ -1195,6 +1195,12 @@ class LBRYumWallet(Wallet):
         return (not self.printed_retrieving_headers and
                 self.network.blockchain.retrieving_headers)
 
+    def get_cmd_runner(self):
+        if self._cmd_runner is None:
+            self._cmd_runner = Commands(self.config, self.wallet, self.network)
+
+        return self._cmd_runner
+
     def _start(self):
         network_start_d = defer.Deferred()
 
@@ -1215,12 +1221,6 @@ class LBRYumWallet(Wallet):
                 network_start_d.callback(True)
             else:
                 network_start_d.errback(ValueError("Failed to connect to network."))
-
-        def get_cmd_runner():
-            if self._cmd_runner is None:
-                self._cmd_runner = Commands(self.config, self.wallet, self.network)
-
-            return self._cmd_runner
 
         def unlock(password):
             if self._cmd_runner and self._cmd_runner.locked:
@@ -1260,7 +1260,7 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda _: log.info("Subscribing to addresses"))
         d.addCallback(lambda _: self.wallet.wait_until_synchronized(lambda _: None))
         d.addCallback(lambda _: log.info("Synchronized wallet"))
-        d.addCallback(lambda _: get_cmd_runner())
+        d.addCallback(lambda _: self.get_cmd_runner())
         d.addCallbacks(lambda _: log.info("Set up lbryum command runner"))
         d.addCallbacks(lambda _: check_locked())
         return d
