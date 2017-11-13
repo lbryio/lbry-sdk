@@ -1,10 +1,16 @@
+import os
+import tempfile
+import lbryum.wallet
+
 from decimal import Decimal
 from collections import defaultdict
 from twisted.trial import unittest
 from twisted.internet import threads, defer
 
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.Wallet import Wallet, ReservedPoints, InMemoryStorage
+from lbrynet.core.Wallet import Wallet, LBRYumWallet, ReservedPoints, InMemoryStorage
+from lbryum.commands import Commands
+
 
 test_metadata = {
 'license': 'NASA',
@@ -37,6 +43,13 @@ class MocLbryumWallet(Wallet):
     def _save_name_metadata(self, name, claim_outpoint, sd_hash):
         return defer.succeed(True)
 
+
+class MocEncryptedWallet(LBRYumWallet):
+    def __init__(self):
+        LBRYumWallet.__init__(self, InMemoryStorage())
+        self.wallet_balance = Decimal(10.0)
+        self.total_reserved_points = Decimal(0.0)
+        self.queued_payments = defaultdict(Decimal)
 
 class WalletTest(unittest.TestCase):
 
@@ -191,3 +204,39 @@ class WalletTest(unittest.TestCase):
         d.addCallback(lambda _: wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 4))
         self.assertFailure(d,InsufficientFundsError)
         return d
+
+    def test_unlock_wallet(self):
+        wallet = MocEncryptedWallet()
+        seed_text = "travel nowhere air position hill peace suffer parent beautiful rise blood power home crumble teach"
+        password = "secret"
+
+        user_dir = tempfile.mkdtemp()
+        path = os.path.join(user_dir, "somewallet")
+        storage = lbryum.wallet.WalletStorage(path)
+        wallet.wallet = lbryum.wallet.NewWallet(storage)
+        wallet.wallet.add_seed(seed_text, password)
+        wallet.wallet.create_master_keys(password)
+        wallet.wallet.create_main_account()
+
+        wallet._cmd_runner = Commands(wallet.config, wallet.wallet, wallet.network, None, password)
+        cmd_runner = wallet.get_cmd_runner()
+        cmd_runner.unlock_wallet(password)
+        self.assertIsNone(cmd_runner.new_password)
+        self.assertEqual(cmd_runner._password, password)
+
+    def test_encrypt_decrypt_wallet(self):
+        wallet = MocEncryptedWallet()
+        seed_text = "travel nowhere air position hill peace suffer parent beautiful rise blood power home crumble teach"
+        password = "secret1"
+
+        user_dir = tempfile.mkdtemp()
+        path = os.path.join(user_dir, "somewallet")
+        storage = lbryum.wallet.WalletStorage(path)
+        wallet.wallet = lbryum.wallet.NewWallet(storage)
+        wallet.wallet.add_seed(seed_text, password)
+        wallet.wallet.create_master_keys(password)
+        wallet.wallet.create_main_account()
+
+        wallet._cmd_runner = Commands(wallet.config, wallet.wallet, wallet.network, None, password)
+        wallet.encrypt_wallet("secret2", False)
+        wallet.decrypt_wallet()
