@@ -1,6 +1,6 @@
 import logging
 
-__version__ = "0.18.1rc8"
+__version__ = "0.18.1rc9"
 version = tuple(__version__.split('.'))
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
