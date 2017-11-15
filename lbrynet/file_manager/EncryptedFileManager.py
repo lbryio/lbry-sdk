@@ -186,7 +186,7 @@ class EncryptedFileManager(object):
     def add_lbry_file(self, stream_hash, payment_rate_manager=None, blob_data_rate=None,
                       download_directory=None, file_name=None):
         if not payment_rate_manager:
-            payment_rate_manager = self.sesion.payment_rate_manager
+            payment_rate_manager = self.session.payment_rate_manager
         rowid = yield self._save_lbry_file(stream_hash, blob_data_rate)
         lbry_file = yield self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
                                                blob_data_rate, download_directory,

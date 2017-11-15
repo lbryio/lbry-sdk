@@ -33,6 +33,7 @@ class ReflectorServer(Protocol):
         self.peer = self.factory.peer_manager.get_peer(peer_info.host, peer_info.port)
         self.blob_manager = self.factory.blob_manager
         self.stream_info_manager = self.factory.stream_info_manager
+        self.lbry_file_manager = self.factory.lbry_file_manager
         self.protocol_version = self.factory.protocol_version
         self.received_handshake = False
         self.peer_version = None
@@ -107,6 +108,7 @@ class ReflectorServer(Protocol):
             yield save_sd_info(self.stream_info_manager, sd_info)
             yield self.stream_info_manager.save_sd_blob_hash_to_stream(sd_info['stream_hash'],
                                                                        blob.blob_hash)
+            yield self.lbry_file_manager.add_lbry_file(sd_info['stream_hash'])
             should_announce = True
 
             # if we already have the head blob, set it to be announced now that we know it's
@@ -399,10 +401,11 @@ class ReflectorServer(Protocol):
 class ReflectorServerFactory(ServerFactory):
     protocol = ReflectorServer
 
-    def __init__(self, peer_manager, blob_manager, stream_info_manager):
+    def __init__(self, peer_manager, blob_manager, stream_info_manager, lbry_file_manager):
         self.peer_manager = peer_manager
         self.blob_manager = blob_manager
         self.stream_info_manager = stream_info_manager
+        self.lbry_file_manager = lbry_file_manager
         self.protocol_version = REFLECTOR_V2
 
     def buildProtocol(self, addr):
