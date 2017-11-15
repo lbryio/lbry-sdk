@@ -14,8 +14,8 @@ gmpy==1.17
 jsonrpc==1.2
 jsonrpclib==0.1.7
 jsonschema==2.6.0
-git+https://github.com/lbryio/lbryum.git@v3.1.12rc5#egg=lbryum
-git+https://github.com/lbryio/lbryschema.git@v0.0.15rc1#egg=lbryschema
+git+https://github.com/lbryio/lbryum.git@v3.1.12rc6#egg=lbryum
+git+https://github.com/lbryio/lbryschema.git@v0.0.15rc2#egg=lbryschema
 miniupnpc==1.9
 pbkdf2==1.3
 pycrypto==2.6.1
