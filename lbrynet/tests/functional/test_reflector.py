@@ -162,25 +162,17 @@ class TestReflector(unittest.TestCase):
     def take_down_env(self):
         d = defer.succeed(True)
         ## Close client classes ##
-        if self.lbry_file_manager is not None:
-            d.addCallback(lambda _: self.lbry_file_manager.stop())
-        if self.session is not None:
-            d.addCallback(lambda _: self.session.shut_down())
-        if self.stream_info_manager is not None:
-            d.addCallback(lambda _: self.stream_info_manager.stop())
+        d.addCallback(lambda _: self.lbry_file_manager.stop())
+        d.addCallback(lambda _: self.session.shut_down())
+        d.addCallback(lambda _: self.stream_info_manager.stop())
 
         ## Close server classes ##
-        if self.server_blob_manager is not None:
-            d.addCallback(lambda _: self.server_blob_manager.stop())
-        if self.server_lbry_file_manager is not None:
-            d.addCallback(lambda _: self.server_lbry_file_manager.stop())
-        if self.server_session is not None:
-            d.addCallback(lambda _: self.server_session.shut_down())
-        if self.server_stream_info_manager is not None:
-            d.addCallback(lambda _: self.server_stream_info_manager.stop())
+        d.addCallback(lambda _: self.server_blob_manager.stop())
+        d.addCallback(lambda _: self.server_lbry_file_manager.stop())
+        d.addCallback(lambda _: self.server_session.shut_down())
+        d.addCallback(lambda _: self.server_stream_info_manager.stop())
 
-        if self.reflector_port is not None:
-            d.addCallback(lambda _: self.reflector_port.stopListening())
+        d.addCallback(lambda _: self.reflector_port.stopListening())
 
         def delete_test_env():
             try:
