@@ -14,6 +14,7 @@ at anytime.
 
 ### Fixed
   * Fixed unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
+  * Merged two sepereate dht test folders into one
   *
 
 ### Deprecated
