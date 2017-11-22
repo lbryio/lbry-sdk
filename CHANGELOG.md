@@ -18,16 +18,17 @@ at anytime.
   *
 
 ### Deprecated
-  *
+  * `channel_list_mine`, replaced with `channel_list`
   *
 
 ### Changed
   * Check claim schema in `publish` before trying to make the claim, return better error messages
-  *
+  * Renamed `channel_list_mine` to `channel_list`
+  * Changed `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet
 
 ### Added
-  *
-  *
+  * Added `channel_import` and `channel_export` commands
+  * Added `is_mine` field to `channel_list` results
 
 ### Removed
   *

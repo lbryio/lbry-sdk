@@ -904,7 +904,7 @@ class Wallet(object):
 
     @defer.inlineCallbacks
     def channel_list(self):
-        certificates = yield self._get_certificate_claims()
+        certificates = yield self.get_certificates_for_signing()
         results = []
         for claim in certificates:
             formatted = yield self._handle_claim_result(claim)
@@ -1133,6 +1133,15 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def send_claim_to_address(self, claim_id, destination, amount):
+        return defer.fail(NotImplementedError())
+
+    def import_certificate_info(self, serialized_certificate_info):
+        return defer.fail(NotImplementedError())
+
+    def export_certificate_info(self, certificate_claim_id):
+        return defer.fail(NotImplementedError())
+
+    def get_certificates_for_signing(self):
         return defer.fail(NotImplementedError())
 
     def _start(self):
@@ -1493,6 +1502,15 @@ class LBRYumWallet(Wallet):
 
     def send_claim_to_address(self, claim_id, destination, amount):
         return self._run_cmd_as_defer_succeed('sendclaimtoaddress', claim_id, destination, amount)
+
+    def import_certificate_info(self, serialized_certificate_info):
+        return self._run_cmd_as_defer_succeed('importcertificateinfo', serialized_certificate_info)
+
+    def export_certificate_info(self, certificate_claim_id):
+        return self._run_cmd_as_defer_succeed('exportcertificateinfo', certificate_claim_id)
+
+    def get_certificates_for_signing(self):
+        return self._run_cmd_as_defer_succeed('getcertificatesforsigning')
 
     # TODO: get rid of this function. lbryum should take care of it
     def _save_wallet(self, val=None):
