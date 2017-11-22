@@ -27,7 +27,7 @@ at anytime.
 
 ### Added
   *
-  *
+  * Added `channel_import` and `channel_export` commands
 
 ### Removed
   *
