@@ -904,7 +904,7 @@ class Wallet(object):
 
     @defer.inlineCallbacks
     def channel_list(self):
-        certificates = yield self._get_certificate_claims()
+        certificates = yield self.get_certificates_for_signing()
         results = []
         for claim in certificates:
             formatted = yield self._handle_claim_result(claim)

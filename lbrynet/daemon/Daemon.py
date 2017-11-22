@@ -1742,9 +1742,27 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
+    def jsonrpc_channel_list(self):
+        """
+        Get certificate claim infos for channels that can be published to
+
+        Usage:
+            channel_list
+
+        Returns:
+            (list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim
+            is in the wallet.
+        """
+
+        result = yield self.session.wallet.channel_list()
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
+    @AuthJSONRPCServer.deprecated("channel_list")
+    @AuthJSONRPCServer.auth_required
     def jsonrpc_channel_list_mine(self):
         """
-        Get my channels
+        Get certificate claim infos for channels that can be published to (deprecated)
 
         Usage:
             channel_list_mine
@@ -1753,9 +1771,7 @@ class Daemon(AuthJSONRPCServer):
             (list) ClaimDict
         """
 
-        result = yield self.session.wallet.channel_list()
-        response = yield self._render_response(result)
-        defer.returnValue(response)
+        return self.jsonrpc_channel_list()
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
