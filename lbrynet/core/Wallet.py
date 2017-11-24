@@ -364,7 +364,7 @@ class SqliteStorage(MetaDataStorage):
                                    "                        last_modified)"
                                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                    (claim_sequence, claim_id, claim_address, height, amount,
-                                   supports, serialized, channel_name, signature_is_valid, now))
+                                    supports, serialized, channel_name, signature_is_valid, now))
         defer.returnValue(None)
 
     @rerun_if_locked
@@ -377,7 +377,7 @@ class SqliteStorage(MetaDataStorage):
 
         if certificate_id:
             certificate_result = yield self.db.runQuery("SELECT row_id FROM claim_cache "
-                                        "WHERE claim_id=?", (certificate_id, ))
+                                                        "WHERE claim_id=?", (certificate_id, ))
         if certificate_id is not None and certificate_result is None:
             log.warning("Certificate is not in cache")
         elif certificate_result:
@@ -449,6 +449,7 @@ class Wallet(object):
         self._batch_count = 20
 
     def start(self):
+        log.info("Starting wallet.")
         def start_manage():
             self.stopped = False
             self.manage()
@@ -473,7 +474,7 @@ class Wallet(object):
         log.error("An error occurred stopping the wallet: %s", err.getTraceback())
 
     def stop(self):
-        log.info("Stopping %s", self)
+        log.info("Stopping wallet.")
         self.stopped = True
         # If self.next_manage_call is None, then manage is currently running or else
         # start has not been called, so set stopped and do nothing else.
@@ -626,7 +627,7 @@ class Wallet(object):
         @param reserved_points: ReservedPoints object previously returned by reserve_points
 
         @param amount: amount of points to actually send. must be less than or equal to the
-            amount reselved in reserved_points
+            amount reserved in reserved_points
 
         @return: Deferred which fires when the payment has been scheduled
         """
@@ -904,7 +905,7 @@ class Wallet(object):
 
     @defer.inlineCallbacks
     def channel_list(self):
-        certificates = yield self._get_certificate_claims()
+        certificates = yield self.get_certificates_for_signing()
         results = []
         for claim in certificates:
             formatted = yield self._handle_claim_result(claim)
@@ -952,11 +953,12 @@ class Wallet(object):
         defer.returnValue(claim)
 
     @defer.inlineCallbacks
-    def abandon_claim(self, claim_id):
-        claim_out = yield self._abandon_claim(claim_id)
+    def abandon_claim(self, claim_id, txid, nout):
+        claim_out = yield self._abandon_claim(claim_id, txid, nout)
 
         if not claim_out['success']:
-            msg = 'Abandon of {} failed: {}'.format(claim_id, claim_out['reason'])
+            msg = 'Abandon of {}/{}:{} failed: {}'.format(
+                            claim_id, txid, nout, claim_out['reason'])
             raise Exception(msg)
 
         claim_out = self._process_claim_out(claim_out)
@@ -977,12 +979,21 @@ class Wallet(object):
         d.addCallback(lambda claim_out: _parse_support_claim_out(claim_out))
         return d
 
+    @defer.inlineCallbacks
+    def tip_claim(self, claim_id, amount):
+        claim_out = yield self._tip_claim(claim_id, amount)
+        if claim_out:
+            result = self._process_claim_out(claim_out)
+            defer.returnValue(result)
+        else:
+            raise Exception("failed to send tip of %f to claim id %s" % (amount, claim_id))
+
     def get_block_info(self, height):
         d = self._get_blockhash(height)
         return d
 
-    def get_history(self):
-        d = self._get_history()
+    def get_history(self, include_tip_info):
+        d = self._get_history(include_tip_info)
         return d
 
     def address_is_mine(self, address):
@@ -1080,10 +1091,13 @@ class Wallet(object):
                          change_address=None):
         return defer.fail(NotImplementedError())
 
-    def _abandon_claim(self, claim_id):
+    def _abandon_claim(self, claim_id, txid, nout):
         return defer.fail(NotImplementedError())
 
     def _support_claim(self, name, claim_id, amount):
+        return defer.fail(NotImplementedError())
+
+    def _tip_claim(self, claim_id, amount):
         return defer.fail(NotImplementedError())
 
     def _do_send_many(self, payments_to_send):
@@ -1098,7 +1112,7 @@ class Wallet(object):
     def _get_balance_for_address(self, address):
         return defer.fail(NotImplementedError())
 
-    def _get_history(self):
+    def _get_history(self, include_tip_info):
         return defer.fail(NotImplementedError())
 
     def _address_is_mine(self, address):
@@ -1126,6 +1140,15 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def encrypt_wallet(self, new_password, update_keyring=True):
+        return defer.fail(NotImplementedError())
+
+    def import_certificate_info(self, serialized_certificate_info):
+        return defer.fail(NotImplementedError())
+
+    def export_certificate_info(self, certificate_claim_id):
+        return defer.fail(NotImplementedError())
+
+    def get_certificates_for_signing(self):
         return defer.fail(NotImplementedError())
 
     def _start(self):
@@ -1348,6 +1371,23 @@ class LBRYumWallet(Wallet):
         else:
             return Decimal((float(c) + float(u) + float(x)) / COIN)
 
+    @defer.inlineCallbacks
+    def create_addresses_with_balance(self, num_addresses, amount, broadcast=True):
+        addresses = self.wallet.get_unused_addresses(account=None)
+        if len(addresses) > num_addresses:
+            addresses = addresses[:num_addresses]
+        elif len(addresses) < num_addresses:
+            for i in range(len(addresses), num_addresses):
+                address = self.wallet.create_new_address(account=None)
+                addresses.append(address)
+            yield self._save_wallet()
+
+        outputs = [[address, amount] for address in addresses]
+        tx = yield self._run_cmd_as_defer_succeed('paytomany', outputs)
+        if broadcast and tx['complete']:
+            tx['txid'] = yield self._broadcast_transaction(tx)
+        defer.returnValue(tx)
+
     # Return an address with no balance in it, if
     # there is none, create a brand new address
     @defer.inlineCallbacks
@@ -1399,9 +1439,9 @@ class LBRYumWallet(Wallet):
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
-    def _abandon_claim(self, claim_id):
+    def _abandon_claim(self, claim_id, txid, nout):
         log.debug("Abandon %s" % claim_id)
-        tx_out = yield self._run_cmd_as_defer_succeed('abandon', claim_id)
+        tx_out = yield self._run_cmd_as_defer_succeed('abandon', claim_id, txid, nout)
         defer.returnValue(tx_out)
 
     @defer.inlineCallbacks
@@ -1409,6 +1449,14 @@ class LBRYumWallet(Wallet):
         log.debug("Support %s %s %f" % (name, claim_id, amount))
         broadcast = False
         tx = yield self._run_cmd_as_defer_succeed('support', name, claim_id, amount, broadcast)
+        claim_out = yield self._broadcast_claim_transaction(tx)
+        defer.returnValue(claim_out)
+
+    @defer.inlineCallbacks
+    def _tip_claim(self, claim_id, amount):
+        log.debug("Tip %s %f", claim_id, amount)
+        broadcast = False
+        tx = yield self._run_cmd_as_defer_succeed('sendwithsupport', claim_id, amount, broadcast)
         claim_out = yield self._broadcast_claim_transaction(tx)
         defer.returnValue(claim_out)
 
@@ -1474,8 +1522,10 @@ class LBRYumWallet(Wallet):
     def get_nametrie(self):
         return self._run_cmd_as_defer_to_thread('getclaimtrie')
 
-    def _get_history(self):
-        return self._run_cmd_as_defer_succeed('history')
+    def _get_history(self, include_tip_info):
+        if include_tip_info:
+            return self._run_cmd_as_defer_succeed('tiphistory')
+        return self._run_cmd_as_defer_succeed('claimhistory')
 
     def _address_is_mine(self, address):
         return self._run_cmd_as_defer_succeed('ismine', address)
@@ -1488,9 +1538,22 @@ class LBRYumWallet(Wallet):
     def list_addresses(self):
         return self._run_cmd_as_defer_succeed('listaddresses')
 
+    def list_unspent(self):
+        return self._run_cmd_as_defer_succeed('listunspent')
+
     def send_claim_to_address(self, claim_id, destination, amount):
         return self._run_cmd_as_defer_succeed('sendclaimtoaddress', claim_id, destination, amount)
 
+    def import_certificate_info(self, serialized_certificate_info):
+        return self._run_cmd_as_defer_succeed('importcertificateinfo', serialized_certificate_info)
+
+    def export_certificate_info(self, certificate_claim_id):
+        return self._run_cmd_as_defer_succeed('exportcertificateinfo', certificate_claim_id)
+
+    def get_certificates_for_signing(self):
+        return self._run_cmd_as_defer_succeed('getcertificatesforsigning')
+
+    # TODO: get rid of this function. lbryum should take care of it
     def _save_wallet(self, val=None):
         self.wallet.storage.write()
         return defer.succeed(val)

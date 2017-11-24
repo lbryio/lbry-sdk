@@ -87,10 +87,6 @@ class UnknownAPIMethodError(Exception):
     pass
 
 
-class DeprecatedAPIMethodError(Exception):
-    pass
-
-
 class NotAllowedDuringStartupError(Exception):
     pass
 
@@ -120,7 +116,6 @@ class JSONRPCServerType(type):
         klass.callable_methods = {}
         klass.deprecated_methods = {}
         klass.authorized_functions = []
-        klass.queued_methods = []
 
         for methodname in dir(klass):
             if methodname.startswith("jsonrpc_"):
@@ -129,8 +124,6 @@ class JSONRPCServerType(type):
                     klass.callable_methods.update({methodname.split("jsonrpc_")[1]: method})
                     if hasattr(method, '_auth_required'):
                         klass.authorized_functions.append(methodname.split("jsonrpc_")[1])
-                    if hasattr(method, '_queued'):
-                        klass.queued_methods.append(methodname.split("jsonrpc_")[1])
                 else:
                     klass.deprecated_methods.update({methodname.split("jsonrpc_")[1]: method})
         return klass
@@ -142,11 +135,6 @@ class AuthorizedBase(object):
     @staticmethod
     def auth_required(f):
         f._auth_required = True
-        return f
-
-    @staticmethod
-    def queued(f):
-        f._queued = True
         return f
 
     @staticmethod
@@ -195,7 +183,6 @@ class AuthJSONRPCServer(AuthorizedBase):
     allowed_during_startup = []
 
     def __init__(self, use_authentication=None):
-        self._call_lock = {}
         self._use_authentication = (
             use_authentication if use_authentication is not None else conf.settings['use_auth_http']
         )
@@ -293,7 +280,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         id_ = None
         try:
             function_name = parsed.get('method')
-            is_queued = function_name in self.queued_methods
             args = parsed.get('params', {})
             id_ = parsed.get('id', None)
             token = parsed.pop('hmac', None)
@@ -323,7 +309,7 @@ class AuthJSONRPCServer(AuthorizedBase):
                 reply_with_next_secret = True
 
         try:
-            function = self._get_jsonrpc_method(function_name)
+            fn = self._get_jsonrpc_method(function_name)
         except UnknownAPIMethodError as err:
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
@@ -339,13 +325,6 @@ class AuthJSONRPCServer(AuthorizedBase):
                 request, id_
             )
             return server.NOT_DONE_YET
-        except DeprecatedAPIMethodError:
-            log.warning('API function is deprecated %s', function_name)
-            self._render_error(
-                JSONRPCError(None, JSONRPCError.CODE_METHOD_NOT_FOUND),
-                request, id_
-            )
-            return server.NOT_DONE_YET
 
         if args == EMPTY_PARAMS or args == []:
             args_dict = {}
@@ -357,13 +336,11 @@ class AuthJSONRPCServer(AuthorizedBase):
             # TODO: also delete EMPTY_PARAMS then
             args_dict = args[0]
             _args, _kwargs = (), args
-        elif isinstance(args, list):
-            _args, _kwargs = args, {}
         else:
             # d = defer.maybeDeferred(function, *args)  # if we want to support positional args too
             raise ValueError('Args must be a dict')
 
-        params_error, erroneous_params = self._check_params(function, args_dict)
+        params_error, erroneous_params = self._check_params(fn, args_dict)
         if params_error is not None:
             params_error_message = '{} for {} command: {}'.format(
                 params_error, function_name, ', '.join(erroneous_params)
@@ -375,27 +352,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             )
             return server.NOT_DONE_YET
 
-        if is_queued:
-            d_lock = self._call_lock.get(function_name, False)
-            if not d_lock:
-                d = defer.maybeDeferred(function, self, **args_dict)
-                self._call_lock[function_name] = finished_deferred
-
-                def _del_lock(*args):
-                    if function_name in self._call_lock:
-                        del self._call_lock[function_name]
-                    if args:
-                        return args
-
-                finished_deferred.addCallback(_del_lock)
-
-            else:
-                log.info("queued %s", function_name)
-                d = d_lock
-                d.addBoth(lambda _: log.info("running %s from queue", function_name))
-                d.addCallback(lambda _: defer.maybeDeferred(function, self, **args_dict))
-        else:
-            d = defer.maybeDeferred(function, self, **args_dict)
+        d = defer.maybeDeferred(fn, self, **args_dict)
 
         # finished_deferred will callback when the request is finished
         # and errback if something went wrong. If the errback is
@@ -473,10 +430,6 @@ class AuthJSONRPCServer(AuthorizedBase):
         else:
             return server_port[0], 80
 
-    def _check_deprecated(self, function_path):
-        if function_path in self.deprecated_methods:
-            raise DeprecatedAPIMethodError(function_path)
-
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
             raise UnknownAPIMethodError(function_path)
@@ -485,7 +438,11 @@ class AuthJSONRPCServer(AuthorizedBase):
                 raise NotAllowedDuringStartupError(function_path)
 
     def _get_jsonrpc_method(self, function_path):
-        self._check_deprecated(function_path)
+        if function_path in self.deprecated_methods:
+            new_command = self.deprecated_methods[function_path]._new_command
+            log.warning('API function \"%s\" is deprecated, please update to use \"%s\"',
+                        function_path, new_command)
+            function_path = new_command
         self._verify_method_is_callable(function_path)
         return self.callable_methods.get(function_path)
 

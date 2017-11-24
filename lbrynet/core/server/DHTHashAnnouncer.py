@@ -28,7 +28,7 @@ class DHTHashAnnouncer(object):
         self.next_manage_call = utils.call_later(self.ANNOUNCE_CHECK_INTERVAL, self.run_manage_loop)
 
     def stop(self):
-        log.info("Stopping %s", self)
+        log.info("Stopping DHT hash announcer.")
         if self.next_manage_call is not None:
             self.next_manage_call.cancel()
             self.next_manage_call = None
@@ -76,7 +76,7 @@ class DHTHashAnnouncer(object):
             if len(self.hash_queue):
                 h, announce_deferred = self.hash_queue.popleft()
                 log.debug('Announcing blob %s to dht', h)
-                d = self.dht_node.announceHaveBlob(binascii.unhexlify(h), self.peer_port)
+                d = self.dht_node.announceHaveBlob(binascii.unhexlify(h))
                 d.chainDeferred(announce_deferred)
                 d.addBoth(lambda _: utils.call_later(0, announce))
             else:

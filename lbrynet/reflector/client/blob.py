@@ -94,7 +94,7 @@ class BlobReflectorClient(Protocol):
 
     def set_not_uploading(self):
         if self.next_blob_to_send is not None:
-            self.next_blob_to_send.close_read_handle(self.read_handle)
+            self.read_handle.close()
             self.read_handle = None
             self.next_blob_to_send = None
         self.file_sender = None
@@ -105,6 +105,7 @@ class BlobReflectorClient(Protocol):
         assert self.read_handle is not None, \
             "self.read_handle was None when trying to start the transfer"
         d = self.file_sender.beginFileTransfer(self.read_handle, self)
+        d.addCallback(lambda _: self.read_handle.close())
         return d
 
     def handle_handshake_response(self, response_dict):
@@ -132,7 +133,7 @@ class BlobReflectorClient(Protocol):
                 return self.set_not_uploading()
 
     def open_blob_for_reading(self, blob):
-        if blob.is_validated():
+        if blob.get_is_verified():
             read_handle = blob.open_for_reading()
             if read_handle is not None:
                 log.debug('Getting ready to send %s', blob.blob_hash)

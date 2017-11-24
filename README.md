@@ -31,7 +31,7 @@ The full API is documented [here](https://lbry.io/api).
 
 ## What is LBRY?
 
-LBRY is a protocol providing fully decentralized network for the discovery, distribution, and payment of data. 
+LBRY is a protocol that provides a fully decentralized network for the discovery, distribution, and payment of data. 
 
 It utilizes the [LBRY blockchain](https://github.com/lbryio/lbrycrd) as a global namespace and database of digital content. Blockchain entries contain searchable content metadata, identities, and rights and access rules.
 
@@ -39,7 +39,7 @@ LBRY also provides a data network consists of peers uploading and downloading da
 
 ## Contributions
 
-To contribute, [join us on Slack](https://slack.lbry.io/) or contact jeremy@lbry.io. Pull requests are also welcome.
+To contribute, [join us on Discord](https://chat.lbry.io/) or contact jeremy@lbry.io. Pull requests are also welcome.
 
 ## Support
 

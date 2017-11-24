@@ -188,7 +188,7 @@ Returns
 Support a name claim
 
 Args:
-    'name': (str) name
+    'name': (str) Name of claim
     'claim_id': (str) claim ID of claim to support
     'amount': (float) amount to support by
 Return:
@@ -211,7 +211,7 @@ Args:
     'nout'(optional): (int) if specified, look for claim with this nout
     'claim_id'(optional): (str) if specified, look for claim with this claim_id
 Returns:
-    (dict) Dictionary contaning claim info, (bool) false if claim is not
+    (dict) Dictionary containing claim info, (bool) false if claim is not
         resolvable
 
     {
@@ -347,7 +347,7 @@ Args:
     'timeout'(optional): (int) download timeout in number of seconds
     'download_directory'(optional): (str) path to directory where file will be saved
 Returns:
-    (dict) Dictionary contaning information about the stream
+    (dict) Dictionary containing information about the stream
     {
         'completed': (bool) true if download is completed,
         'file_name': (str) name of file,

@@ -8,6 +8,24 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+### Security
+  *
+  *
+
+### Fixed
+  * Fixed unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
+  * Merged two sepereate dht test folders into one
+  *
+
+### Deprecated
+  * `channel_list_mine`, replaced with `channel_list`
+  *
+
+### Changed
+  * Check claim schema in `publish` before trying to make the claim, return better error messages
+  * Renamed `channel_list_mine` to `channel_list`
+  * Changed `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet
+
 ### Added
   * Add link to instructions on how to change the default peer port
   * Add `peer_port` to settings configurable using `settings_set`
@@ -20,30 +38,228 @@ at anytime.
   * Linux folders moved from the home directory to `~/.local/share/lbry`
   * Windows folders moved from `%AppData%/Roaming` to `%AppData%/Local/lbry`
   * Block wallet startup on being unlocked
-
-### Fixed
-  * Fix for https://github.com/lbryio/lbry/issues/750
-  * Fixed inconsistencies in claim_show output
-  * Fixed daemon process hanging when started without an internet connection
-  * Fixed https://github.com/lbryio/lbry/issues/774
-  * Fix XDG compliance on Linux
-  * Fixed https://github.com/lbryio/lbry/issues/760
-  * Fixed default directories bug
-
-### Deprecated
-  *
-  *
+  * Added `channel_import` and `channel_export` commands
+  * Added `is_mine` field to `channel_list` results
 
 ### Removed
   *
   *
+
+
+## [0.18.0] - 2017-11-08
+### Fixed
+ * Fixed amount of close nodes to add to list in case of extension to neighbouring k-buckets
+ * Fixed external IP detection via jsonip.com (avoid detecting IPv6)
+ * Fixed failing ConnectionManager unit test for parallel connections
+ * Fixed race condition between `publish` and `channel_new`
+ * Fixed incorrect response on attempting to delete blob twice
+ * Fixed local node ID reporting in peer list
+
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.14 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0014---2017-11-08)
+ * Bumped `lbryum` requirement to 3.1.11 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#3111---2017-11-08)
+ * Moved BLOB_SIZE from conf.py to MAX_BLOB_SIZE in blob/blob_file.py
+
+### Added
+ * Added `utxo_list` command to list unspent transaction outputs
+ * Added redundant API server for currency conversion
+
+### Removed
+ * Removed some alternate methods of reading from blob files
+ * Removed `@AuthJSONRPCServer.queued` decorator
+
+
+## [0.17.1] - 2017-10-25
+### Fixed
+ * Fixed slow startup for nodes with many lbry files
+ * Fixed setting the external ip on startup
+ * Fixed session startup not blocking on joining the dht
+ * Fixed several parsing bugs that prevented replacing dead dht contacts
+ * Fixed lbryid length validation
+ * Fixed an old print statement that polluted logs
+ * Fixed rpc id length for dht requests
+
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.13 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0013---2017-10-25)
+ * Bumped `lbryum` requirement to 3.1.10 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#3110---2017-10-25)
+ * Use the first port available for the peer and dht ports, starting with the provided values (defaults of 3333 and 4444). This allows multiple lbrynet instances in a LAN with UPnP.
+ * Detect a UPnP redirect that didn't get cleaned up on a previous run and use it
+ * Bumped jsonschema requirement to 2.6.0
+ * Refactor some assert statements to accommodate the PYTHONOPTIMIZE flag set for Android.
+
+### Added
+ * Added `wallet_prefill_addresses` command, which distributes credits to multiple addresses
+
+
+## [0.17.0] - 2017-10-12
+### Fixed
+ * Fixed handling cancelled blob and availability requests
+ * Fixed redundant blob requests to a peer
+ * Fixed https://github.com/lbryio/lbry/issues/923
+ * Fixed concurrent reflects opening too many files
+ * Fixed cases when reflecting would fail on error conditions
+ * Fixed deadlocks from occuring during blob writes
+ * Fixed and updated`lbrynet.tests.dht`
+ * Fixed redundant dht id
+ * Fixed dht `ping` method
+ * Fixed raising remote exceptions in dht
+ * Fixed hanging delayedCall in dht node class
+ * Fixed logging error in dht when calling or receiving methods with no arguments
+ * Fixed IndexError in routingTable.findCloseNodes which would cause an empty list to be returned
+ * Fixed bug where last blob in a stream was not saved to blob manager
+
+### Deprecated
+ * Deprecated `blob_announce_all` JSONRPC command. Use `blob_announce` instead.
+
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.12 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0012---2017-10-12)
+ * Bumped `lbryum` requirement to 3.1.9 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#319---2017-10-12)
+ * Announcing by head blob is turned on by default
+ * Updated reflector server dns
+ * Moved tests into the lbrynet package.
+
+### Added
+ * Added WAL pragma to sqlite3
+ * Added unit tests for `BlobFile`
+ * Updated exchange rate tests for the lbry.io api
+ * Use `hashlib` for sha384 instead of `pycrypto`
+ * Use `cryptography` instead of `pycrypto` for blob encryption and decryption
+ * Use `cryptography` for PKCS7 instead of doing it manually
+ * Use `BytesIO` buffers instead of temp files when processing blobs
+ * Refactored and pruned blob related classes into `lbrynet.blobs`
+ * Changed several `assert`s to raise more useful errors
+ * Added ability for reflector to store stream information for head blob announce
+ * Added blob announcement information to API call status with session flag
+
+### Removed
+ * Removed `TempBlobFile`
+ * Removed unused `EncryptedFileOpener`
+
+
+## [0.16.3] - 2017-09-28
+### Fixed
+ * Fixed blob download history
+
+### Changed
+ * Improved download analytics
+ * Improved download errors by distinguishing a data timeout from a sd timeout
+
+
+## [0.16.2] - 2017-09-26
+### Fixed
+ * Fixed https://github.com/lbryio/lbry/issues/771 (handle when a certificate is missing for a signed claim in `claim_list_mine`)
+
+
+## [0.16.1] - 2017-09-20
+### Fixed
+ * Fixed `transaction_list` doc string
+ * Fixed ([in lbryum](https://github.com/lbryio/lbryum/pull/156)) batched queries responsible for making transaction and tip histories slow
+ * Fixed daemon refusing to start if DNS cannot resolve lbry.io domain.
+
+### Changed
+ * Bumped `lbryum` requirement to 3.1.8 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#318---2017-09-20)
+
+
+## [0.16.0] - 2017-09-18
+### Fixed
+ * Fixed uncaught error when shutting down after a failed daemon startup
+ * Fixed spelling error in documentation.
+
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.11 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0011---2017-09-18)
+ * Bumped `lbryum` requirement to 3.1.7 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#317---2017-09-18)
+ * Updated exchange rate tests for the lbry.io api
+
+### Added
+ * Added option to announce head blob only if seeding
+ * Added option to download by seeking head blob first
+ * By default, option to download seeking head blob first is turned on
+ * Added `include_tip_info` param to `transaction_list` API call
+
+
+## [0.15.2] - 2017-09-07
+### Changed
+ * Use lbry.io exchange rate API instead of google finance
+
+
+## [0.15.1] - 2017-08-22
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.10 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0010---2017-08-22)
+ * Bumped `lbryum` requirement to 3.1.6 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#316---2017-08-22)
+ * Persist DHT node id
+
+### Added
+ * Android platform detection in lbrynet/conf.py
+ * androidhelpers module for determining base file paths
+
+
+## [0.15.0] - 2017-08-15
+### Fixed
+ * Fixed reflector server blocking the `received_blob` reply on the server announcing the blob to the dht
+ * Fixed incorrect formatting of "amount" fields
+ * Fixed handling of SIGINT, SIGTERM.
+ * Fixed shutdown sequence
+ * Fix error when resolving an integer
+
+### Deprecated
+ * The API will no longer be served at the /lbryapi path. It will now be at the root.
+ * Deprecated `send_amount_to_address` in favor of `wallet_send`
+
+### Changed
+ * Renamed `reflect` command to `file_reflect`
+ * Allow IP addresses to be configured as reflector servers, not just host names.
+ * Return list of blobs that were reflected from `file_reflect`
+
+### Added
+ * Added `wallet_send`, a command to send credits and tips
+ * Added `reflector` keyword parameter to `file_reflect` command
+ * Added configuration options for auto re-reflect
+ * Added option to abandon by txid/nout
+
+
+## [0.14.3] - 2017-08-04
+### Fixed
+ * Fixed incorrect formatting of "amount" fields
+
+### Added
+ * Added validation of currencies.
+ * Added blob_announce API command
+
+### Removed
+ * Removed TempBlobManager
+  * Removed old /view and /upload API paths
+  *
+
+
+## [0.14.2] - 2017-07-24
+### Fixed
+ * Fix for https://github.com/lbryio/lbry/issues/750
+ * Fixed inconsistencies in claim_show output
+ * Fixed daemon process hanging when started without an internet connection
+ * Fixed https://github.com/lbryio/lbry/issues/774
+ * Fix XDG compliance on Linux
+ * Fixed https://github.com/lbryio/lbry/issues/760
+ * Fixed default directories bug
+
+### Changed
+ * claim_show API command no longer takes name as argument
+ * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
+ * Linux folders moved from the home directory to `~/.local/share/lbry`
+ * Windows folders moved from `%AppData%/Roaming` to `%AppData%/Local/lbry`
+ * Changed `claim_list_by_channel` to return the `claims_in_channel` count instead of the `claims_in_channel_pages` count
+
+### Added
+ * Add link to instructions on how to change the default peer port
+ * Add `peer_port` to settings configurable using `settings_set`
+ * Added an option to disable max key fee check.
+
 
 ## [0.14.1] - 2017-07-07
 
 ### Fixed
  * Fixed timeout behaviour when calling API command get
  * Fixed https://github.com/lbryio/lbry/issues/765
- 
+
 ### Removed
   * Removed stream_info_cache.json from daemon.py
 

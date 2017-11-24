@@ -41,7 +41,7 @@ set -eu
 
 if $LINUX; then
   INSTALL="$SUDO apt-get install --no-install-recommends -y"
-  $INSTALL build-essential libssl-dev libffi-dev libgmp3-dev python2.7-dev
+  $INSTALL build-essential libssl-dev libffi-dev libgmp3-dev python2.7-dev wget
 elif $OSX && ! cmd_exists brew ; then
   /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 fi

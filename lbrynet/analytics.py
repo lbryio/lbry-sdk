@@ -57,15 +57,14 @@ class Manager(object):
             self._event(DOWNLOAD_STARTED, self._download_properties(id_, name, claim_dict))
         )
 
-    def send_download_errored(self, id_, name, claim_dict=None):
-        self.analytics_api.track(
-            self._event(DOWNLOAD_ERRORED, self._download_properties(id_, name, claim_dict))
-        )
+    def send_download_errored(self, err, id_, name, claim_dict, report):
+        download_error_properties = self._download_error_properties(err, id_, name, claim_dict,
+                                                                    report)
+        self.analytics_api.track(self._event(DOWNLOAD_ERRORED, download_error_properties))
 
-    def send_download_finished(self, id_, name, claim_dict=None):
-        self.analytics_api.track(
-            self._event(DOWNLOAD_FINISHED, self._download_properties(id_, name, claim_dict))
-        )
+    def send_download_finished(self, id_, name, report, claim_dict=None):
+        download_properties = self._download_properties(id_, name, claim_dict, report)
+        self.analytics_api.track(self._event(DOWNLOAD_FINISHED, download_properties))
 
     def send_claim_action(self, action):
         self.analytics_api.track(self._event(CLAIM_ACTION, {'action': action}))
@@ -159,17 +158,30 @@ class Manager(object):
         return properties
 
     @staticmethod
-    def _download_properties(id_, name, claim_dict=None):
-        sd_hash = None
-        if claim_dict:
-            try:
-                sd_hash = claim_dict.source_hash
-            except (KeyError, TypeError, ValueError):
-                log.debug('Failed to get sd_hash from %s', claim_dict, exc_info=True)
-        return {
+    def _download_properties(id_, name, claim_dict=None, report=None):
+        sd_hash = None if not claim_dict else claim_dict.source_hash
+        p = {
             'download_id': id_,
             'name': name,
             'stream_info': sd_hash
+        }
+        if report:
+            p['report'] = report
+        return p
+
+    @staticmethod
+    def _download_error_properties(error, id_, name, claim_dict, report):
+        def error_name(err):
+            if not hasattr(type(err), "__name__"):
+                return str(type(err))
+            return type(err).__name__
+        return {
+            'download_id': id_,
+            'name': name,
+            'stream_info': claim_dict.source_hash,
+            'error': error_name(error),
+            'reason': error.message,
+            'report': report
         }
 
     @staticmethod
@@ -233,7 +245,7 @@ class Api(object):
     def track(self, event):
         """Send a single tracking event"""
         if not self._enabled:
-            return defer.succeed('analytics disabled')
+            return defer.succeed('Analytics disabled')
 
         def _log_error(failure, event):
             log.warning('Failed to send track event. %s (%s)', failure.getTraceback(), str(event))

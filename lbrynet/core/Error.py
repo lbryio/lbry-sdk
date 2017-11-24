@@ -9,10 +9,25 @@ class DuplicateStreamHashError(Exception):
 class DownloadCanceledError(Exception):
     pass
 
+
+class DownloadSDTimeout(Exception):
+    def __init__(self, download):
+        Exception.__init__(self, 'Failed to download sd blob {} within timeout'.format(download))
+        self.download = download
+
+
 class DownloadTimeoutError(Exception):
     def __init__(self, download):
         Exception.__init__(self, 'Failed to download {} within timeout'.format(download))
         self.download = download
+
+
+class DownloadDataTimeout(Exception):
+    def __init__(self, download):
+        Exception.__init__(self, 'Failed to download data blobs for sd hash '
+                                 '{} within timeout'.format(download))
+        self.download = download
+
 
 class RequestCanceledError(Exception):
     pass
@@ -139,3 +154,9 @@ class InvalidAuthenticationToken(Exception):
 
 class NegotiationError(Exception):
     pass
+
+class InvalidCurrencyError(Exception):
+    def __init__(self, currency):
+        self.currency = currency
+        Exception.__init__(
+            self, 'Invalid currency: {} is not a supported currency.'.format(currency))

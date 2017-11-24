@@ -21,8 +21,8 @@ requires = [
     'envparse',
     'jsonrpc',
     'jsonschema',
-    'lbryum==3.1.4rc3',
-    'lbryschema==0.0.9rc1',
+    'lbryum==3.2.0rc2',
+    'lbryschema==0.0.15rc2',
     'miniupnpc',
     'pycrypto',
     'pyyaml',
@@ -49,7 +49,7 @@ def package_files(directory):
 package_name = "lbrynet"
 base_dir = os.path.abspath(os.path.dirname(__file__))
 # Get the long description from the README file
-with open(os.path.join(base_dir, 'README.md')) as f:
+with open(os.path.join(base_dir, 'README.md'), 'rb') as f:
     long_description = f.read().decode('utf-8')
 
 setup(
@@ -62,7 +62,7 @@ setup(
     long_description=long_description,
     keywords="lbry protocol media",
     license='MIT',
-    packages=find_packages(base_dir, exclude=['tests']),
+    packages=find_packages(base_dir),
     install_requires=requires,
     entry_points={'console_scripts': console_scripts},
     package_data={

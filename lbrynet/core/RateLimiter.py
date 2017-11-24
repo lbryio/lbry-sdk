@@ -69,7 +69,7 @@ class RateLimiter(object):
         self.protocols = []
 
     def start(self):
-        log.info("Starting %s", self)
+        log.info("Starting rate limiter.")
         self.tick_call = task.LoopingCall(self.tick)
         self.tick_call.start(self.tick_interval)
 
@@ -80,7 +80,7 @@ class RateLimiter(object):
         self.unthrottle_ul()
 
     def stop(self):
-        log.info("Stopping %s", self)
+        log.info("Stopping rate limiter.")
         if self.tick_call is not None:
             self.tick_call.stop()
             self.tick_call = None

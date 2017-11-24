@@ -2,12 +2,13 @@
 import platform
 import os
 
-
 dir = 'build';
 cwd = os.getcwd()
 if os.path.basename(cwd) != dir:
     raise Exception('pyinstaller build needs to be run from the ' + dir + ' directory')
 repo_base = os.path.abspath(os.path.join(cwd, '..'))
+
+execfile(os.path.join(cwd, "entrypoint.py")) # ghetto import
 
 
 system = platform.system()
@@ -21,28 +22,10 @@ else:
     print 'Warning: System {} has no icons'.format(system)
     icns = None
 
-block_cipher = None
 
+a = Entrypoint('lbrynet', 'console_scripts', 'lbrynet-cli', pathex=[cwd])
 
-a = Analysis(
-    ['cli.py'],
-    pathex=[cwd],
-    binaries=None,
-    datas=[],
-    hiddenimports=[],
-    hookspath=[],
-    runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher
-)
-
-pyz = PYZ(
-    a.pure,
-    a.zipped_data,
-    cipher=block_cipher
-)
+pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz,

@@ -12,7 +12,7 @@ import operator
 import struct
 import time
 
-from twisted.internet import defer, error, reactor, threads
+from twisted.internet import defer, error, reactor, threads, task
 
 import constants
 import routingtable
@@ -49,9 +49,9 @@ class Node(object):
     application is performed via this class (or a subclass).
     """
 
-    def __init__(self, id=None, udpPort=4000, dataStore=None,
-                 routingTableClass=None, networkProtocol=None, lbryid=None,
-                 externalIP=None):
+    def __init__(self, node_id=None, udpPort=4000, dataStore=None,
+                 routingTableClass=None, networkProtocol=None,
+                 externalIP=None, peerPort=None):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -73,12 +73,10 @@ class Node(object):
                                 change the format of the physical RPC messages
                                 being transmitted.
         @type networkProtocol: entangled.kademlia.protocol.KademliaProtocol
+        @param externalIP: the IP at which this node can be contacted
+        @param peerPort: the port at which this node announces it has a blob for
         """
-        if id != None:
-            self.id = id
-        else:
-            self.id = self._generateID()
-        self.lbryid = lbryid
+        self.node_id = node_id or self._generateID()
         self.port = udpPort
         self._listeningPort = None  # object implementing Twisted
         # IListeningPort This will contain a deferred created when
@@ -88,12 +86,12 @@ class Node(object):
         # operations before the node has finished joining the network)
         self._joinDeferred = None
         self.next_refresh_call = None
-        self.next_change_token_call = None
+        self.change_token_lc = task.LoopingCall(self.change_token)
         # Create k-buckets (for storing contacts)
         if routingTableClass is None:
-            self._routingTable = routingtable.OptimizedTreeRoutingTable(self.id)
+            self._routingTable = routingtable.OptimizedTreeRoutingTable(self.node_id)
         else:
-            self._routingTable = routingTableClass(self.id)
+            self._routingTable = routingTableClass(self.node_id)
 
         # Initialize this node's network access mechanisms
         if networkProtocol is None:
@@ -103,7 +101,6 @@ class Node(object):
         # Initialize the data storage mechanism used by this node
         self.token_secret = self._generateID()
         self.old_token_secret = None
-        self.change_token()
         if dataStore is None:
             self._dataStore = datastore.DictDataStore()
         else:
@@ -111,12 +108,13 @@ class Node(object):
             # Try to restore the node's state...
             if 'nodeState' in self._dataStore:
                 state = self._dataStore['nodeState']
-                self.id = state['id']
+                self.node_id = state['id']
                 for contactTriple in state['closestNodes']:
                     contact = Contact(
                         contactTriple[0], contactTriple[1], contactTriple[2], self._protocol)
                     self._routingTable.addContact(contact)
         self.externalIP = externalIP
+        self.peerPort = peerPort
         self.hash_watcher = HashWatcher()
 
     def __del__(self):
@@ -128,9 +126,8 @@ class Node(object):
         if self.next_refresh_call is not None:
             self.next_refresh_call.cancel()
             self.next_refresh_call = None
-        if self.next_change_token_call is not None:
-            self.next_change_token_call.cancel()
-            self.next_change_token_call = None
+        if self.change_token_lc.running:
+            self.change_token_lc.stop()
         if self._listeningPort is not None:
             self._listeningPort.stopListening()
         self.hash_watcher.stop()
@@ -163,8 +160,12 @@ class Node(object):
                 bootstrapContacts.append(contact)
         else:
             bootstrapContacts = None
+
+        # Start the token looping call
+        self.change_token_lc.start(constants.tokenSecretChangeInterval)
+
         # Initiate the Kademlia joining sequence - perform a search for this node's own ID
-        self._joinDeferred = self._iterativeFind(self.id, bootstrapContacts)
+        self._joinDeferred = self._iterativeFind(self.node_id, bootstrapContacts)
         #        #TODO: Refresh all k-buckets further away than this node's closest neighbour
         # Start refreshing k-buckets periodically, if necessary
         self.next_refresh_call = reactor.callLater(constants.checkRefreshInterval,
@@ -173,18 +174,27 @@ class Node(object):
         self.hash_watcher.tick()
         yield self._joinDeferred
 
+    @property
+    def contacts(self):
+        def _inner():
+            for i in range(len(self._routingTable._buckets)):
+                for contact in self._routingTable._buckets[i]._contacts:
+                    yield contact
+        return list(_inner())
+
     def printContacts(self, *args):
         print '\n\nNODE CONTACTS\n==============='
         for i in range(len(self._routingTable._buckets)):
+            print "bucket %i" % i
             for contact in self._routingTable._buckets[i]._contacts:
-                print contact
+                print "    %s:%i" % (contact.address, contact.port)
         print '=================================='
 
     def getApproximateTotalDHTNodes(self):
         # get the deepest bucket and the number of contacts in that bucket and multiply it
         # by the number of equivalently deep buckets in the whole DHT to get a really bad
         # estimate!
-        bucket = self._routingTable._buckets[self._routingTable._kbucketIndex(self.id)]
+        bucket = self._routingTable._buckets[self._routingTable._kbucketIndex(self.node_id)]
         num_in_bucket = len(bucket._contacts)
         factor = (2 ** constants.key_bits) / (bucket.rangeMax - bucket.rangeMin)
         return num_in_bucket * factor
@@ -199,31 +209,21 @@ class Node(object):
             return 0
         return num_in_data_store * self.getApproximateTotalDHTNodes() / 8
 
-    def announceHaveBlob(self, key, port):
-        return self.iterativeAnnounceHaveBlob(key, {'port': port, 'lbryid': self.lbryid})
+    def announceHaveBlob(self, key):
+        return self.iterativeAnnounceHaveBlob(key, {'port': self.peerPort, 'lbryid': self.node_id})
 
+    @defer.inlineCallbacks
     def getPeersForBlob(self, blob_hash):
-        def expand_and_filter(result):
-            expanded_peers = []
-            if isinstance(result, dict):
-                if blob_hash in result:
-                    for peer in result[blob_hash]:
-                        if self.lbryid != peer[6:]:
-                            host = ".".join([str(ord(d)) for d in peer[:4]])
-                            if host == "127.0.0.1":
-                                if "from_peer" in result:
-                                    if result["from_peer"] != "self":
-                                        host = result["from_peer"]
-                            port, = struct.unpack('>H', peer[4:6])
-                            expanded_peers.append((host, port))
-            return expanded_peers
-
-        def find_failed(err):
-            return []
-
-        d = self.iterativeFindValue(blob_hash)
-        d.addCallbacks(expand_and_filter, find_failed)
-        return d
+        result = yield self.iterativeFindValue(blob_hash)
+        expanded_peers = []
+        if result:
+            if blob_hash in result:
+                for peer in result[blob_hash]:
+                    host = ".".join([str(ord(d)) for d in peer[:4]])
+                    port, = struct.unpack('>H', peer[4:6])
+                    if (host, port) not in expanded_peers:
+                        expanded_peers.append((host, port))
+        defer.returnValue(expanded_peers)
 
     def get_most_popular_hashes(self, num_to_return):
         return self.hash_watcher.most_popular_hashes(num_to_return)
@@ -263,7 +263,7 @@ class Node(object):
             result = responseMsg.response
             if 'token' in result:
                 value['token'] = result['token']
-                d = n.store(blob_hash, value, self.id, 0)
+                d = n.store(blob_hash, value, self.node_id, 0)
                 d.addCallback(log_success)
                 d.addErrback(log_error, n)
             else:
@@ -272,12 +272,12 @@ class Node(object):
 
         def requestPeers(contacts):
             if self.externalIP is not None and len(contacts) >= constants.k:
-                is_closer = Distance(blob_hash).is_closer(self.id, contacts[-1].id)
+                is_closer = Distance(blob_hash).is_closer(self.node_id, contacts[-1].id)
                 if is_closer:
                     contacts.pop()
-                    self.store(blob_hash, value, self_store=True, originalPublisherID=self.id)
+                    self.store(blob_hash, value, self_store=True, originalPublisherID=self.node_id)
             elif self.externalIP is not None:
-                self.store(blob_hash, value, self_store=True, originalPublisherID=self.id)
+                self.store(blob_hash, value, self_store=True, originalPublisherID=self.node_id)
             ds = []
             for contact in contacts:
                 known_nodes[contact.id] = contact
@@ -295,8 +295,6 @@ class Node(object):
     def change_token(self):
         self.old_token_secret = self.token_secret
         self.token_secret = self._generateID()
-        self.next_change_token_call = reactor.callLater(constants.tokenSecretChangeInterval,
-                                                        self.change_token)
 
     def make_token(self, compact_ip):
         h = hashlib.new('sha384')
@@ -367,7 +365,7 @@ class Node(object):
                     # Ok, we have the value locally, so use that
                     peers = self._dataStore.getPeersForBlob(key)
                     # Send this value to the closest node without it
-                    outerDf.callback({key: peers, "from_peer": 'self'})
+                    outerDf.callback({key: peers})
                 else:
                     # Ok, value does not exist in DHT at all
                     outerDf.callback(result)
@@ -463,14 +461,13 @@ class Node(object):
                 raise TypeError, 'No NodeID given. Therefore we can\'t store this node'
 
         if self_store is True and self.externalIP:
-            contact = Contact(self.id, self.externalIP, self.port, None, None)
+            contact = Contact(self.node_id, self.externalIP, self.port, None, None)
             compact_ip = contact.compact_ip()
         elif '_rpcNodeContact' in kwargs:
             contact = kwargs['_rpcNodeContact']
             compact_ip = contact.compact_ip()
         else:
-            return 'Not OK'
-            # raise TypeError, 'No contact info available'
+            raise TypeError, 'No contact info available'
 
         if ((self_store is False) and
                 ('token' not in value or not self.verify_token(value['token'], compact_ip))):
@@ -486,8 +483,9 @@ class Node(object):
             raise TypeError, 'No port available'
 
         if 'lbryid' in value:
-            if len(value['lbryid']) > constants.key_bits:
-                raise ValueError, 'Invalid lbryid'
+            if len(value['lbryid']) != constants.key_bits / 8:
+                raise ValueError('Invalid lbryid (%i bytes): %s' % (len(value['lbryid']),
+                                                                    value['lbryid'].encode('hex')))
             else:
                 compact_address = compact_ip + compact_port + value['lbryid']
         else:
@@ -513,6 +511,7 @@ class Node(object):
                  node is returning all of the contacts that it knows of.
         @rtype: list
         """
+
         # Get the sender's ID (if any)
         if '_rpcNodeID' in kwargs:
             rpc_sender_id = kwargs['_rpcNodeID']
@@ -589,11 +588,12 @@ class Node(object):
         findValue = rpc != 'findNode'
 
         if startupShortlist is None:
-            shortlist = self._routingTable.findCloseNodes(key, constants.alpha)
-            if key != self.id:
+            shortlist = self._routingTable.findCloseNodes(key, constants.k)
+            if key != self.node_id:
                 # Update the "last accessed" timestamp for the appropriate k-bucket
                 self._routingTable.touchKBucket(key)
             if len(shortlist) == 0:
+                log.warning("This node doesnt know any other nodes")
                 # This node doesn't know of any other nodes
                 fakeDf = defer.Deferred()
                 fakeDf.callback([])
@@ -686,7 +686,7 @@ class _IterativeFindHelper(object):
         responseMsg = responseTuple[0]
         originAddress = responseTuple[1]  # tuple: (ip adress, udp port)
         # Make sure the responding node is valid, and abort the operation if it isn't
-        if responseMsg.nodeID in self.active_contacts or responseMsg.nodeID == self.node.id:
+        if responseMsg.nodeID in self.active_contacts or responseMsg.nodeID == self.node.node_id:
             return responseMsg.nodeID
 
         # Mark this node as active
@@ -705,7 +705,6 @@ class _IterativeFindHelper(object):
         if self.find_value is True and self.key in result and not 'contacts' in result:
             # We have found the value
             self.find_value_result[self.key] = result[self.key]
-            self.find_value_result['from_peer'] = aContact.address
         else:
             if self.find_value is True:
                 self._setClosestNodeValue(responseMsg, aContact)
@@ -752,10 +751,11 @@ class _IterativeFindHelper(object):
             if testContact not in self.shortlist:
                 self.shortlist.append(testContact)
 
-    def removeFromShortlist(self, failure):
+    def removeFromShortlist(self, failure, deadContactID):
         """ @type failure: twisted.python.failure.Failure """
         failure.trap(protocol.TimeoutError)
-        deadContactID = failure.getErrorMessage()
+        if len(deadContactID) != constants.key_bits / 8:
+            raise ValueError("invalid lbry id")
         if deadContactID in self.shortlist:
             self.shortlist.remove(deadContactID)
         return deadContactID
@@ -825,7 +825,7 @@ class _IterativeFindHelper(object):
         rpcMethod = getattr(contact, self.rpc)
         df = rpcMethod(self.key, rawResponse=True)
         df.addCallback(self.extendShortlist)
-        df.addErrback(self.removeFromShortlist)
+        df.addErrback(self.removeFromShortlist, contact.id)
         df.addCallback(self.cancelActiveProbe)
         df.addErrback(lambda _: log.exception('Failed to contact %s', contact))
         self.already_contacted.append(contact.id)

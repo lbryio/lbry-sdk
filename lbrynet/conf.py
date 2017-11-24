@@ -8,10 +8,16 @@ import yaml
 import envparse
 from appdirs import user_data_dir, user_config_dir
 from lbrynet.core import utils
+from lbrynet.core.Error import InvalidCurrencyError
+from lbrynet.androidhelpers.paths import (
+    android_internal_storage_dir,
+    android_app_internal_storage_dir
+)
 
 try:
     from lbrynet.winhelpers.knownpaths import get_path, FOLDERID, UserHandle
-except (ImportError, ValueError):
+except (ImportError, ValueError, NameError):
+    # Android platform: NameError: name 'c_wchar' is not defined
     pass
 
 log = logging.getLogger(__name__)
@@ -30,6 +36,7 @@ APP_NAME = 'LBRY'
 LINUX = 1
 DARWIN = 2
 WINDOWS = 3
+ANDROID = 4
 KB = 2 ** 10
 MB = 2 ** 20
 
@@ -88,7 +95,11 @@ def _get_old_directories(platform):
 
 def _get_new_directories(platform):
     dirs = {}
-    if platform == WINDOWS:
+    if platform == ANDROID:
+        dirs['data'] = '%s/lbrynet' % android_app_internal_storage_dir()
+        dirs['lbryum'] = '%s/lbryum' % android_app_internal_storage_dir()
+        dirs['download'] = '%s/Download' % android_internal_storage_dir()
+    elif platform == WINDOWS:
         dirs['data'] = user_data_dir('lbrynet', 'lbry')
         dirs['lbryum'] = user_data_dir('lbryum', 'lbry')
         dirs['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
@@ -112,7 +123,11 @@ def _get_new_directories(platform):
     return dirs
 
 
-if 'darwin' in sys.platform:
+if 'ANDROID_ARGUMENT' in os.environ:
+    # https://github.com/kivy/kivy/blob/master/kivy/utils.py#L417-L421
+    platform = ANDROID
+    dirs = _get_new_directories(ANDROID)
+elif 'darwin' in sys.platform:
     platform = DARWIN
     dirs = _get_old_directories(DARWIN)
 elif 'win' in sys.platform:
@@ -191,7 +206,6 @@ FIXED_SETTINGS = {
     'API_ADDRESS': 'lbryapi',
     'APP_NAME': APP_NAME,
     'BLOBFILES_DIR': 'blobfiles',
-    'BLOB_SIZE': 2 * MB,
     'CRYPTSD_FILE_EXTENSION': '.cryptsd',
     'CURRENCIES': {
         'BTC': {'type': 'crypto'},
@@ -236,9 +250,11 @@ ADJUSTABLE_SETTINGS = {
     'download_directory': (str, default_download_dir),
     'download_timeout': (int, 180),
     'is_generous_host': (bool, True),
+    'announce_head_blobs_only': (bool, True),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_port),
     'lbryum_wallet_dir': (str, default_lbryum_dir),
     'max_connections_per_stream': (int, 5),
+    'seek_head_blob_first': (bool, True),
     # TODO: writing json on the cmd line is a pain, come up with a nicer
     # parser for this data structure. maybe 'USD:25'
     'max_key_fee': (json.loads, {'currency': 'USD', 'amount': 50.0}),
@@ -249,8 +265,13 @@ ADJUSTABLE_SETTINGS = {
     'peer_port': (int, 3333),
     'pointtrader_server': (str, 'http://127.0.0.1:2424'),
     'reflector_port': (int, 5566),
+    # if reflect_uploads is True, reflect files on publish
     'reflect_uploads': (bool, True),
-    'reflector_servers': (list, [('reflector.lbry.io', 5566)], server_port),
+    # if auto_re_reflect is True, attempt to re-reflect files on startup and
+    # at every auto_re_reflect_interval seconds, useful if initial reflect is unreliable
+    'auto_re_reflect': (bool, True),
+    'auto_re_reflect_interval': (int, 3600),
+    'reflector_servers': (list, [('reflector2.lbry.io', 5566)], server_port),
     'run_reflector_server': (bool, False),
     'sd_download_timeout': (int, 3),
     'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
@@ -267,6 +288,7 @@ class Config(object):
 
         self._installation_id = None
         self._session_id = base58.b58encode(utils.generate_id())
+        self._node_id = None
 
         self._fixed_defaults = fixed_defaults
         self._adjustable_defaults = adjustable_defaults
@@ -329,7 +351,8 @@ class Config(object):
         return env_settings
 
     def _assert_valid_data_type(self, data_type):
-        assert data_type in self._data, KeyError('{} in is not a valid data type'.format(data_type))
+        if not data_type in self._data:
+            raise KeyError('{} in is not a valid data type'.format(data_type))
 
     def get_valid_setting_names(self):
         return self._data[TYPE_DEFAULT].keys()
@@ -338,8 +361,8 @@ class Config(object):
         return name in self.get_valid_setting_names()
 
     def _assert_valid_setting(self, name):
-        assert self._is_valid_setting(name), \
-            KeyError('{} is not a valid setting'.format(name))
+        if not self._is_valid_setting(name):
+            raise KeyError('{} is not a valid setting'.format(name))
 
     def _validate_settings(self, data):
         invalid_settings = set(data.keys()) - set(self.get_valid_setting_names())
@@ -348,8 +371,12 @@ class Config(object):
 
     def _assert_editable_setting(self, name):
         self._assert_valid_setting(name)
-        assert name not in self._fixed_defaults, \
-            ValueError('{} is not an editable setting'.format(name))
+        if name in self._fixed_defaults:
+            raise ValueError('{} is not an editable setting'.format(name))
+
+    def _validate_currency(self, currency):
+        if currency not in self._fixed_defaults['CURRENCIES'].keys():
+            raise InvalidCurrencyError(currency)
 
     def get(self, name, data_type=None):
         """Get a config value
@@ -388,6 +415,10 @@ class Config(object):
         data types (e.g. PERSISTED values to save to a file, CLI values from parsed
         command-line options, etc), you can specify that with the data_types param
         """
+        if name == "max_key_fee":
+            currency = str(value["currency"]).upper()
+            self._validate_currency(currency)
+
         self._assert_editable_setting(name)
         for data_type in data_types:
             self._assert_valid_data_type(data_type)
@@ -500,13 +531,24 @@ class Config(object):
                 install_id_file.write(self._installation_id)
         return self._installation_id
 
+    def get_node_id(self):
+        node_id_filename = os.path.join(self.ensure_data_dir(), "node_id")
+        if not self._node_id:
+            if os.path.isfile(node_id_filename):
+                with open(node_id_filename, "r") as node_id_file:
+                    self._node_id = base58.b58decode(node_id_file.read())
+        if not self._node_id:
+            self._node_id = utils.generate_id()
+            with open(node_id_filename, "w") as node_id_file:
+                node_id_file.write(base58.b58encode(self._node_id))
+        return self._node_id
+
     def get_session_id(self):
         return self._session_id
 
 
 # type: Config
 settings = None
-
 
 def get_default_env():
     env_defaults = {}
@@ -524,5 +566,6 @@ def initialize_settings(load_conf_file=True):
         settings = Config(FIXED_SETTINGS, ADJUSTABLE_SETTINGS,
                           environment=get_default_env())
         settings.installation_id = settings.get_installation_id()
+        settings.node_id = settings.get_node_id()
         if load_conf_file:
             settings.load_conf_file_settings()

@@ -3,9 +3,9 @@ dist: trusty
 language: python
 python: 2.7
 
-addons:
-    srcclr:
-        debug: true
+branches:
+  except:
+    - gh-pages
 
 notifications:
   slack:
@@ -18,6 +18,8 @@ cache:
     - $TRAVIS_BUILD_DIR/cache/wheel
 
 addons:
+  #srcclr:
+  #  debug: true
   apt:
     packages:
     - libgmp3-dev
@@ -25,7 +27,7 @@ addons:
     - git
     - libssl-dev
     - libffi-dev
-  
+
 before_install:
   - virtualenv venv
   - source venv/bin/activate
@@ -39,7 +41,7 @@ script:
   - pip install cython
   - pip install mock pylint unqlite
   - pylint lbrynet
-  - PYTHONPATH=. trial tests
-  - python -m unittest discover tests/integration
+  - PYTHONPATH=. trial lbrynet.tests
+  - python -m unittest discover lbrynet/tests/integration
   - rvm install ruby-2.3.1
   - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger

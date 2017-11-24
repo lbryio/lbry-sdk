@@ -1,11 +1,17 @@
 import binascii
 import logging
-from Crypto.Cipher import AES
-from lbrynet import conf
+from io import BytesIO
+from twisted.internet import defer
+from twisted.web.client import FileBodyProducer
+from cryptography.hazmat.primitives.ciphers import Cipher, modes
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
+from cryptography.hazmat.primitives.padding import PKCS7
+from cryptography.hazmat.backends import default_backend
 from lbrynet.core.BlobInfo import BlobInfo
-
+from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
 log = logging.getLogger(__name__)
+backend = default_backend()
 
 
 class CryptBlobInfo(BlobInfo):
@@ -31,7 +37,9 @@ class StreamBlobDecryptor(object):
         self.length = length
         self.buff = b''
         self.len_read = 0
-        self.cipher = AES.new(self.key, AES.MODE_CBC, self.iv)
+        cipher = Cipher(AES(self.key), modes.CBC(self.iv), backend=backend)
+        self.unpadder = PKCS7(AES.block_size).unpadder()
+        self.cipher = cipher.decryptor()
 
     def decrypt(self, write_func):
         """
@@ -39,33 +47,45 @@ class StreamBlobDecryptor(object):
 
         write_func - function that takes decrypted string as
             arugment and writes it somewhere
+
+        Returns:
+
+        deferred that returns after decrypting blob and writing content
         """
 
         def remove_padding(data):
-            pad_len = ord(data[-1])
-            data, padding = data[:-1 * pad_len], data[-1 * pad_len:]
-            for c in padding:
-                assert ord(c) == pad_len
-            return data
+            return self.unpadder.update(data) + self.unpadder.finalize()
 
         def write_bytes():
             if self.len_read < self.length:
-                num_bytes_to_decrypt = greatest_multiple(len(self.buff), self.cipher.block_size)
+                num_bytes_to_decrypt = greatest_multiple(len(self.buff), (AES.block_size / 8))
                 data_to_decrypt, self.buff = split(self.buff, num_bytes_to_decrypt)
-                write_func(self.cipher.decrypt(data_to_decrypt))
+                write_func(self.cipher.update(data_to_decrypt))
 
         def finish_decrypt():
-            assert len(self.buff) % self.cipher.block_size == 0
+            bytes_left = len(self.buff) % (AES.block_size / 8)
+            if bytes_left != 0:
+                log.warning(self.buff[-1 * (AES.block_size / 8):].encode('hex'))
+                raise Exception("blob %s has incorrect padding: %i bytes left" %
+                                (self.blob.blob_hash, bytes_left))
             data_to_decrypt, self.buff = self.buff, b''
-            write_func(remove_padding(self.cipher.decrypt(data_to_decrypt)))
+            last_chunk = self.cipher.update(data_to_decrypt) + self.cipher.finalize()
+            write_func(remove_padding(last_chunk))
 
-        def decrypt_bytes(data):
-            self.buff += data
-            self.len_read += len(data)
+
+        read_handle = self.blob.open_for_reading()
+
+        @defer.inlineCallbacks
+        def decrypt_bytes():
+            producer = FileBodyProducer(read_handle)
+            buff = BytesIO()
+            yield producer.startProducing(buff)
+            self.buff = buff.getvalue()
+            self.len_read += len(self.buff)
             write_bytes()
+            finish_decrypt()
 
-        d = self.blob.read(decrypt_bytes)
-        d.addCallback(lambda _: finish_decrypt())
+        d = decrypt_bytes()
         return d
 
 
@@ -84,8 +104,9 @@ class CryptStreamBlobMaker(object):
         self.iv = iv
         self.blob_num = blob_num
         self.blob = blob
-        self.cipher = AES.new(self.key, AES.MODE_CBC, self.iv)
-        self.buff = b''
+        cipher = Cipher(AES(self.key), modes.CBC(self.iv), backend=backend)
+        self.padder = PKCS7(AES.block_size).padder()
+        self.cipher = cipher.encryptor()
         self.length = 0
 
     def write(self, data):
@@ -97,46 +118,33 @@ class CryptStreamBlobMaker(object):
         max bytes are written. num_bytes_to_write is the number
         of bytes that will be written from data in this call
         """
-        max_bytes_to_write = conf.settings['BLOB_SIZE'] - self.length - 1
+        max_bytes_to_write = MAX_BLOB_SIZE - self.length - 1
         done = False
         if max_bytes_to_write <= len(data):
             num_bytes_to_write = max_bytes_to_write
             done = True
         else:
             num_bytes_to_write = len(data)
-        self.length += num_bytes_to_write
         data_to_write = data[:num_bytes_to_write]
-        self.buff += data_to_write
-        self._write_buffer()
+        self.length += len(data_to_write)
+        padded_data = self.padder.update(data_to_write)
+        encrypted_data = self.cipher.update(padded_data)
+        self.blob.write(encrypted_data)
         return done, num_bytes_to_write
 
+    @defer.inlineCallbacks
     def close(self):
         log.debug("closing blob %s with plaintext len %s", str(self.blob_num), str(self.length))
         if self.length != 0:
-            self._close_buffer()
-        d = self.blob.close()
-        d.addCallback(self._return_info)
+            self.length += (AES.block_size / 8) - (self.length % (AES.block_size / 8))
+            padded_data = self.padder.finalize()
+            encrypted_data = self.cipher.update(padded_data) + self.cipher.finalize()
+            self.blob.write(encrypted_data)
+
+        blob_hash = yield self.blob.close()
         log.debug("called the finished_callback from CryptStreamBlobMaker.close")
-        return d
-
-    def _write_buffer(self):
-        num_bytes_to_encrypt = (len(self.buff) // AES.block_size) * AES.block_size
-        data_to_encrypt, self.buff = split(self.buff, num_bytes_to_encrypt)
-        encrypted_data = self.cipher.encrypt(data_to_encrypt)
-        self.blob.write(encrypted_data)
-
-    def _close_buffer(self):
-        data_to_encrypt, self.buff = self.buff, b''
-        assert len(data_to_encrypt) < AES.block_size
-        pad_len = AES.block_size - len(data_to_encrypt)
-        padded_data = data_to_encrypt + chr(pad_len) * pad_len
-        self.length += pad_len
-        assert len(padded_data) == AES.block_size
-        encrypted_data = self.cipher.encrypt(padded_data)
-        self.blob.write(encrypted_data)
-
-    def _return_info(self, blob_hash):
-        return CryptBlobInfo(blob_hash, self.blob_num, self.length, binascii.hexlify(self.iv))
+        blob = CryptBlobInfo(blob_hash, self.blob_num, self.length, binascii.hexlify(self.iv))
+        defer.returnValue(blob)
 
 
 def greatest_multiple(a, b):

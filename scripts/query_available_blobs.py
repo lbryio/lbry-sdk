@@ -51,7 +51,7 @@ def main(args=None):
         session = Session.Session(
             0,
             db_dir=db_dir,
-            lbryid=utils.generate_id(),
+            node_id=utils.generate_id(),
             blob_dir=blob_dir,
             dht_node_port=4444,
             known_dht_nodes=conf.settings['known_dht_nodes'],
@@ -59,7 +59,7 @@ def main(args=None):
             use_upnp=False,
             wallet=wallet
         )
-        api = analytics.Api.new_instance()
+        api = analytics.Api.new_instance(conf.settings['share_usage_data'])
         run(args, session, api)
         reactor.run()
     finally:

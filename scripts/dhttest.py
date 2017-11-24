@@ -150,7 +150,7 @@ if __name__ == '__main__':
     # If you wish to have a pure Kademlia network, use the
     # entangled.kademlia.node.Node class instead
     print 'Creating Node'
-    node = Node(udpPort=int(sys.argv[1]), lbryid=lbryid)
+    node = Node(udpPort=int(sys.argv[1]), node_id=lbryid)
 
     # Schedule the node to join the Kademlia/Entangled DHT
     node.joinNetwork(knownNodes)

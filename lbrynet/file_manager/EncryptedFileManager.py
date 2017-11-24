@@ -17,29 +17,25 @@ from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.cryptstream.client.CryptStreamDownloader import CurrentlyStoppingError
 from lbrynet.core.sqlite_helpers import rerun_if_locked
+from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet import conf
 
 
 log = logging.getLogger(__name__)
 
 
-def safe_start_looping_call(looping_call, seconds=3600):
-    if not looping_call.running:
-        looping_call.start(seconds)
-
-
-def safe_stop_looping_call(looping_call):
-    if looping_call.running:
-        looping_call.stop()
-
-
 class EncryptedFileManager(object):
-    """Keeps track of currently opened LBRY Files, their options, and
-    their LBRY File specific metadata.
-
     """
+    Keeps track of currently opened LBRY Files, their options, and
+    their LBRY File specific metadata.
+    """
+    # when reflecting files, reflect up to this many files at a time
+    CONCURRENT_REFLECTS = 5
 
     def __init__(self, session, stream_info_manager, sd_identifier, download_directory=None):
+
+        self.auto_re_reflect = conf.settings['auto_re_reflect']
+        self.auto_re_reflect_interval = conf.settings['auto_re_reflect_interval']
         self.session = session
         self.stream_info_manager = stream_info_manager
         # TODO: why is sd_identifier part of the file manager?
@@ -57,9 +53,9 @@ class EncryptedFileManager(object):
     def setup(self):
         yield self._open_db()
         yield self._add_to_sd_identifier()
-        yield self._start_lbry_files()
-        if conf.settings['reflect_uploads']:
-            safe_start_looping_call(self.lbry_file_reflector)
+        # don't block on starting the lbry files
+        self._start_lbry_files()
+        log.info("Started file manager")
 
     def get_lbry_file_status(self, lbry_file):
         return self._get_lbry_file_status(lbry_file.rowid)
@@ -123,6 +119,9 @@ class EncryptedFileManager(object):
             self._set_options_and_restore(rowid, stream_hash, options)
             for rowid, stream_hash, options in files_and_options
         ])
+
+        if self.auto_re_reflect is True:
+            safe_start_looping_call(self.lbry_file_reflector, self.auto_re_reflect_interval)
         log.info("Started %i lbry files", len(self.lbry_files))
 
     @defer.inlineCallbacks
@@ -241,13 +240,13 @@ class EncryptedFileManager(object):
                 return l.toggle_running()
         return defer.fail(Failure(ValueError("Could not find that LBRY file")))
 
-    def _reflect_lbry_files(self):
-        for lbry_file in self.lbry_files:
-            yield reflect_stream(lbry_file)
-
     @defer.inlineCallbacks
     def reflect_lbry_files(self):
-        yield defer.DeferredList(list(self._reflect_lbry_files()))
+        sem = defer.DeferredSemaphore(self.CONCURRENT_REFLECTS)
+        ds = []
+        for lbry_file in self.lbry_files:
+            ds.append(sem.run(reflect_stream, lbry_file))
+        yield defer.DeferredList(ds)
 
     @defer.inlineCallbacks
     def stop(self):
@@ -256,7 +255,7 @@ class EncryptedFileManager(object):
         if self.sql_db:
             yield self.sql_db.close()
         self.sql_db = None
-        log.info("Stopped %s", self)
+        log.info("Stopped encrypted file manager")
         defer.returnValue(True)
 
     def get_count_for_stream_hash(self, stream_hash):
@@ -309,8 +308,10 @@ class EncryptedFileManager(object):
 
     @rerun_if_locked
     def _change_file_status(self, rowid, new_status):
-        return self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
+        d = self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
                                     (new_status, rowid))
+        d.addCallback(lambda _: new_status)
+        return d
 
     @rerun_if_locked
     def _get_lbry_file_status(self, rowid):

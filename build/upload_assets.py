@@ -20,7 +20,7 @@ def get_asset_filename():
 
 
 def upload_to_s3(folder):
-    tag = subprocess.check_output(['git', 'describe', '--always', 'HEAD']).strip()
+    tag = subprocess.check_output(['git', 'describe', '--always', '--abbrev=8', 'HEAD']).strip()
     commit_date = subprocess.check_output([
         'git', 'show', '-s', '--format=%cd', '--date=format:%Y%m%d-%H%I%S', 'HEAD']).strip()
 

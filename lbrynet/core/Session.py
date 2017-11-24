@@ -1,6 +1,6 @@
 import logging
 import miniupnpc
-from lbrynet.core.BlobManager import DiskBlobManager, TempBlobManager
+from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.dht import node
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import RateLimiter
@@ -37,18 +37,18 @@ class Session(object):
     """
 
     def __init__(self, blob_data_payment_rate, db_dir=None,
-                 lbryid=None, peer_manager=None, dht_node_port=None,
+                 node_id=None, peer_manager=None, dht_node_port=None,
                  known_dht_nodes=None, peer_finder=None,
                  hash_announcer=None, blob_dir=None,
                  blob_manager=None, peer_port=None, use_upnp=True,
                  rate_limiter=None, wallet=None,
                  dht_node_class=node.Node, blob_tracker_class=None,
-                 payment_rate_manager_class=None, is_generous=True):
+                 payment_rate_manager_class=None, is_generous=True, external_ip=None):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
         @param db_dir: The directory in which levelDB files should be stored
 
-        @param lbryid: The unique ID of this node
+        @param node_id: The unique ID of this node
 
         @param peer_manager: An object which keeps track of all known
             peers. If None, a PeerManager will be created
@@ -101,7 +101,7 @@ class Session(object):
         """
         self.db_dir = db_dir
 
-        self.lbryid = lbryid
+        self.node_id = node_id
 
         self.peer_manager = peer_manager
 
@@ -124,7 +124,7 @@ class Session(object):
 
         self.rate_limiter = rate_limiter
 
-        self.external_ip = '127.0.0.1'
+        self.external_ip = external_ip
 
         self.upnp_redirects = []
 
@@ -140,10 +140,10 @@ class Session(object):
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
 
-        log.debug("Setting up the lbry session")
+        log.debug("Starting session.")
 
-        if self.lbryid is None:
-            self.lbryid = generate_id()
+        if self.node_id is None:
+            self.node_id = generate_id()
 
         if self.wallet is None:
             from lbrynet.core.PTCWallet import PTCWallet
@@ -169,7 +169,7 @@ class Session(object):
 
     def shut_down(self):
         """Stop all services"""
-        log.info('Shutting down %s', self)
+        log.info('Stopping session.')
         ds = []
         if self.blob_tracker is not None:
             ds.append(defer.maybeDeferred(self.blob_tracker.stop))
@@ -193,6 +193,31 @@ class Session(object):
 
         log.debug("In _try_upnp")
 
+        def get_free_port(upnp, port, protocol):
+            # returns an existing mapping if it exists
+            mapping = upnp.getspecificportmapping(port, protocol)
+            if not mapping:
+                return port
+            if upnp.lanaddr == mapping[0]:
+                return mapping
+            return get_free_port(upnp, port + 1, protocol)
+
+        def get_port_mapping(upnp, internal_port, protocol, description):
+            # try to map to the requested port, if there is already a mapping use the next external
+            # port available
+            if protocol not in ['UDP', 'TCP']:
+                raise Exception("invalid protocol")
+            external_port = get_free_port(upnp, internal_port, protocol)
+            if isinstance(external_port, tuple):
+                log.info("Found existing UPnP redirect %s:%i (%s) to %s:%i, using it",
+                         self.external_ip, external_port[1], protocol, upnp.lanaddr, internal_port)
+                return external_port[1], protocol
+            upnp.addportmapping(external_port, protocol, upnp.lanaddr, internal_port,
+                                description, '')
+            log.info("Set UPnP redirect %s:%i (%s) to %s:%i", self.external_ip, external_port,
+                     protocol, upnp.lanaddr, internal_port)
+            return external_port, protocol
+
         def threaded_try_upnp():
             if self.use_upnp is False:
                 log.debug("Not using upnp")
@@ -202,40 +227,15 @@ class Session(object):
             if num_devices_found > 0:
                 u.selectigd()
                 external_ip = u.externalipaddress()
-                if external_ip != '0.0.0.0':
+                if external_ip != '0.0.0.0' and not self.external_ip:
+                    # best not to rely on this external ip, the router can be behind layers of NATs
                     self.external_ip = external_ip
-                if self.peer_port is not None:
-                    if u.getspecificportmapping(self.peer_port, 'TCP') is None:
-                        u.addportmapping(
-                            self.peer_port, 'TCP', u.lanaddr, self.peer_port,
-                            'LBRY peer port', '')
-                        self.upnp_redirects.append((self.peer_port, 'TCP'))
-                        log.info("Set UPnP redirect for TCP port %d", self.peer_port)
-                    else:
-                        # see comment below
-                        log.warning("UPnP redirect already set for TCP port %d", self.peer_port)
-                        self.upnp_redirects.append((self.peer_port, 'TCP'))
-                if self.dht_node_port is not None:
-                    if u.getspecificportmapping(self.dht_node_port, 'UDP') is None:
-                        u.addportmapping(
-                            self.dht_node_port, 'UDP', u.lanaddr, self.dht_node_port,
-                            'LBRY DHT port', '')
-                        self.upnp_redirects.append((self.dht_node_port, 'UDP'))
-                        log.info("Set UPnP redirect for UDP port %d", self.dht_node_port)
-                    else:
-                        # TODO: check that the existing redirect was
-                        # put up by an old lbrynet session before
-                        # grabbing it if such a disconnected redirect
-                        # exists, then upnp won't work unless the
-                        # redirect is appended or is torn down and set
-                        # back up. a bad shutdown of lbrynet could
-                        # leave such a redirect up and cause problems
-                        # on the next start.  this could be
-                        # problematic if a previous lbrynet session
-                        # didn't make the redirect, and it was made by
-                        # another application
-                        log.warning("UPnP redirect already set for UDP port %d", self.dht_node_port)
-                        self.upnp_redirects.append((self.dht_node_port, 'UDP'))
+                if self.peer_port:
+                    self.upnp_redirects.append(get_port_mapping(u, self.peer_port, 'TCP',
+                                                                'LBRY peer port'))
+                if self.dht_node_port:
+                    self.upnp_redirects.append(get_port_mapping(u, self.dht_node_port, 'UDP',
+                                                                'LBRY DHT port'))
                 return True
             return False
 
@@ -260,8 +260,7 @@ class Session(object):
                     addresses.append(value)
             return addresses
 
-        def start_dht(addresses):
-            self.dht_node.joinNetwork(addresses)
+        def start_dht(join_network_result):
             self.peer_finder.run_manage_loop()
             self.hash_announcer.run_manage_loop()
             return True
@@ -274,8 +273,9 @@ class Session(object):
 
         self.dht_node = self.dht_node_class(
             udpPort=self.dht_node_port,
-            lbryid=self.lbryid,
-            externalIP=self.external_ip
+            node_id=self.node_id,
+            externalIP=self.external_ip,
+            peerPort=self.peer_port
         )
         self.peer_finder = DHTPeerFinder(self.dht_node, self.peer_manager)
         if self.hash_announcer is None:
@@ -283,6 +283,7 @@ class Session(object):
 
         dl = defer.DeferredList(ds)
         dl.addCallback(join_resolved_addresses)
+        dl.addCallback(self.dht_node.joinNetwork)
         dl.addCallback(start_dht)
         return dl
 
@@ -294,7 +295,8 @@ class Session(object):
 
         if self.blob_manager is None:
             if self.blob_dir is None:
-                self.blob_manager = TempBlobManager(self.hash_announcer)
+                raise Exception(
+                    "TempBlobManager is no longer supported, specify BlobManager or db_dir")
             else:
                 self.blob_manager = DiskBlobManager(self.hash_announcer,
                                                     self.blob_dir,
@@ -319,7 +321,7 @@ class Session(object):
         return dl
 
     def _unset_upnp(self):
-        log.info("Unsetting upnp for %s", self)
+        log.info("Unsetting upnp for session")
 
         def threaded_unset_upnp():
             u = miniupnpc.UPnP()
