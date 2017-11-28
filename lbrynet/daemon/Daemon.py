@@ -1995,6 +1995,40 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
+    def jsonrpc_claim_renew(self, outpoint=None, height=None):
+        """
+        Renew claim(s) or support(s)
+
+        Usage:
+            claim_renew (<outpoint> | --outpoint=<outpoint>) | (<height> | --height=<height>)
+
+        Return:
+            (dict) Dictionary containing result of the claim/support renewals
+            {
+                'tx' : (str) hex encoded transaction
+                'txid' : (str) txid of resulting claim
+                'nout' : (int) nout of the resulting claim
+                'fee' : (float) fee paid for the claim transaction
+                'claim_id' : (str) claim ID of the resulting claim
+            }
+        """
+
+        if outpoint is None and height is None:
+            raise Exception("must provide an outpoint or a height")
+        elif outpoint is not None:
+            if len(outpoint.split(":")) == 2:
+                txid, nout = outpoint.split(":")
+                nout = int(nout)
+            else:
+                raise Exception("invalid outpoint")
+            result = yield self.session.wallet.claim_renew(txid, nout)
+        else:
+            height = int(height)
+            result = yield self.session.wallet.claim_renew_all_before_expiration(height)
+        defer.returnValue(result)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
     def jsonrpc_claim_send_to_address(self, claim_id, address, amount=None):
         """
         Send a name claim to an address

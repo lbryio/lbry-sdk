@@ -30,6 +30,7 @@ at anytime.
 ### Added
   * Added `channel_import` and `channel_export` commands
   * Added `is_mine` field to `channel_list` results
+  * Added `claim_renew` command
 
 ### Removed
   * Removed claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect`
