@@ -264,5 +264,6 @@ class WalletTest(unittest.TestCase):
         wallet.wallet.create_master_keys(password)
         wallet.wallet.create_main_account()
 
+        wallet.config.use_keyring = False
         wallet._cmd_runner = Commands(wallet.config, wallet.wallet, wallet.network, None, password)
         wallet.encrypt_wallet("secret2", True)
