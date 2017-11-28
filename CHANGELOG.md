@@ -15,7 +15,6 @@ at anytime.
 ### Fixed
   * Fixed unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
   * Merged two sepereate dht test folders into one
-  *
 
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
@@ -25,15 +24,14 @@ at anytime.
   * Check claim schema in `publish` before trying to make the claim, return better error messages
   * Renamed `channel_list_mine` to `channel_list`
   * Changed `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet
-  * API commands file_list, file_delete, and file_reflect no longer deals with claim information
-  *
+  * Changed `file_list`, `file_delete`, `file_set_status`, and `file_reflect` to no longer return claim related information.
 
 ### Added
   * Added `channel_import` and `channel_export` commands
   * Added `is_mine` field to `channel_list` results
 
 ### Removed
-  *
+  * Removed claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect`
   *
 
 

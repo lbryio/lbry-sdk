@@ -1537,19 +1537,14 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             file_set_status <status> [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                      [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
-                      [--outpoint=<outpoint>] [--rowid=<rowid>]
-                      [--name=<name>]
+                      [--stream_hash=<stream_hash>] [--rowid=<rowid>]
 
         Options:
             --sd_hash=<sd_hash>          : set status of file with matching sd hash
             --file_name=<file_name>      : set status of file with matching file name in the
                                            downloads folder
             --stream_hash=<stream_hash>  : set status of file with matching stream hash
-            --claim_id=<claim_id>        : set status of file with matching claim id
-            --outpoint=<outpoint>        : set status of file with matching claim outpoint
             --rowid=<rowid>              : set status of file with matching row id
-            --name=<name>                : set status of file with matching associated name claim
 
         Returns:
             (str) Confirmation message
@@ -1583,9 +1578,7 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             file_delete [-f] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                        [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
-                        [--outpoint=<outpoint>] [--rowid=<rowid>]
-                        [--name=<name>]
+                        [--stream_hash=<stream_hash>] [--rowid=<rowid>]
 
         Options:
             -f, --delete_from_download_dir  : delete file from download directory,
@@ -2639,8 +2632,7 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             file_reflect [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                         [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
-                         [--outpoint=<outpoint>] [--rowid=<rowid>] [--name=<name>]
+                         [--stream_hash=<stream_hash>] [--rowid=<rowid>]
                          [--reflector=<reflector>]
 
         Options:
