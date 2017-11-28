@@ -7,7 +7,7 @@ from zope.interface import implements
 from twisted.internet import defer
 
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
-from lbrynet.core.Error import NoSuchSDHash, NoSuchStreamHash
+from lbrynet.core.Error import NoSuchStreamHash
 from lbrynet.core.utils import short_hash
 from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaver
@@ -15,12 +15,11 @@ from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileDownlo
 from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbry_file.StreamDescriptor import save_sd_info
-from lbrynet.core.Wallet import ClaimOutpoint
 
 log = logging.getLogger(__name__)
 
 
-def log_status(name, sd_hash, status):
+def log_status(file_name, sd_hash, status):
     if status == ManagedEncryptedFileDownloader.STATUS_RUNNING:
         status_string = "running"
     elif status == ManagedEncryptedFileDownloader.STATUS_STOPPED:
@@ -29,7 +28,7 @@ def log_status(name, sd_hash, status):
         status_string = "finished"
     else:
         status_string = "unknown"
-    log.info("lbry://%s (%s) is %s", name, short_hash(sd_hash), status_string)
+    log.info("%s (%s) is %s", file_name, short_hash(sd_hash), status_string)
 
 
 class ManagedEncryptedFileDownloader(EncryptedFileSaver):
@@ -48,11 +47,6 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
                                     download_directory,
                                     file_name)
         self.sd_hash = None
-        self.txid = None
-        self.nout = None
-        self.outpoint = None
-        self.name = None
-        self.claim_id = None
         self.rowid = rowid
         self.lbry_file_manager = lbry_file_manager
         self._saving_status = False
@@ -66,7 +60,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         yield self.load_file_attributes()
 
         status = yield self.lbry_file_manager.get_lbry_file_status(self)
-        log_status(self.name, self.sd_hash, status)
+        log_status(self.file_name, self.sd_hash, status)
 
         if status == ManagedEncryptedFileDownloader.STATUS_RUNNING:
             # start returns self.finished_deferred
@@ -118,16 +112,6 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         else:
             self.sd_hash = sd_hash
 
-        stream_metadata = yield self.wallet.get_claim_metadata_for_sd_hash(self.sd_hash)
-        if stream_metadata:
-            name, txid, nout = stream_metadata
-            self.name = name
-            self.txid = txid
-            self.nout = nout
-            self.outpoint = ClaimOutpoint(self.txid, self.nout)
-        else:
-            raise NoSuchSDHash(self.sd_hash)
-        self.claim_id = yield self.wallet.get_claimid(self.txid, self.nout)
         defer.returnValue(None)
 
     @defer.inlineCallbacks
@@ -135,7 +119,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         yield EncryptedFileSaver._start(self)
         yield self.load_file_attributes()
         status = yield self._save_status()
-        log_status(self.name, self.sd_hash, status)
+        log_status(self.file_name, self.sd_hash, status)
         defer.returnValue(status)
 
     def _get_finished_deferred_callback_value(self):

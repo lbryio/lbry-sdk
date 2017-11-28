@@ -16,8 +16,7 @@ class FakeLBRYFile(object):
         self.blob_manager = blob_manager
         self.stream_info_manager = stream_info_manager
         self.stream_hash = stream_hash
-        self.name = "fake_uri"
-
+        self.file_name = 'fake_lbry_file'
 
 class Node(object):
     def __init__(self, *args, **kwargs):
