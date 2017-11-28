@@ -242,6 +242,10 @@ ADJUSTABLE_SETTINGS = {
     # all of your credits.
     'api_host': (str, 'localhost'),
     'api_port': (int, 5279),
+    # claims set to expire within this many blocks will be
+    # automatically renewed after startup (if set to 0, renews
+    # will not be made automatically)
+    'auto_renew_claim_height_delta': (int, 0),
     'cache_time': (int, 150),
     'data_dir': (str, default_data_dir),
     'data_rate': (float, .0001),  # points/megabyte

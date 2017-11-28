@@ -188,6 +188,8 @@ class Daemon(AuthJSONRPCServer):
         self.reflector_port = conf.settings['reflector_port']
         self.dht_node_port = conf.settings['dht_node_port']
         self.use_upnp = conf.settings['use_upnp']
+        self.auto_renew_claim_height_delta = conf.settings['auto_renew_claim_height_delta']
+
 
         self.startup_status = STARTUP_STAGES[0]
         self.connected_to_internet = True
@@ -255,6 +257,7 @@ class Daemon(AuthJSONRPCServer):
         yield self._setup_server()
         log.info("Starting balance: " + str(self.session.wallet.get_balance()))
         yield _announce_startup()
+        self._auto_renew()
 
     def _get_platform(self):
         if self.platform is None:
@@ -289,6 +292,23 @@ class Daemon(AuthJSONRPCServer):
 
         if not self.connected_to_internet:
             self.connection_status_code = CONNECTION_STATUS_NETWORK
+
+    @defer.inlineCallbacks
+    def _auto_renew(self):
+        # automatically renew claims
+        # auto renew is turned off if 0 or some negative number
+        if self.auto_renew_claim_height_delta < 1:
+            return
+        log.debug("Renewing claim")
+        h = self.session.wallet.network.get_local_height() + self.auto_renew_claim_height_delta
+        results = yield self.session.wallet.claim_renew_all_before_expiration(h)
+        for outpoint, result in results.iteritems():
+            if result['success']:
+                log.info("Renewed claim at outpoint:%s claim ID:%s, paid fee:%s",
+                    outpoint, result['claim_id'], result['fee'])
+            else:
+                log.info("Failed to renew claim at outpoint:%s, reason:%s",
+                    outpoint, result['reason'])
 
     def _start_server(self):
         if self.peer_port is not None:
