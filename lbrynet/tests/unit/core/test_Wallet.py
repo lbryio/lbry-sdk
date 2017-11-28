@@ -214,7 +214,8 @@ class WalletTest(unittest.TestCase):
 
     def test_unlock_wallet(self):
         wallet = MocEncryptedWallet()
-        seed_text = "travel nowhere air position hill peace suffer parent beautiful rise blood power home crumble teach"
+        seed_text = "travel nowhere air position hill peace suffer parent beautiful rise " \
+                    "blood power home crumble teach"
         password = "secret"
 
         user_dir = tempfile.mkdtemp()
@@ -233,7 +234,8 @@ class WalletTest(unittest.TestCase):
 
     def test_encrypt_decrypt_wallet(self):
         wallet = MocEncryptedWallet()
-        seed_text = "travel nowhere air position hill peace suffer parent beautiful rise blood power home crumble teach"
+        seed_text = "travel nowhere air position hill peace suffer parent beautiful rise " \
+                    "blood power home crumble teach"
         password = "secret1"
 
         user_dir = tempfile.mkdtemp()
@@ -247,3 +249,20 @@ class WalletTest(unittest.TestCase):
         wallet._cmd_runner = Commands(wallet.config, wallet.wallet, wallet.network, None, password)
         wallet.encrypt_wallet("secret2", False)
         wallet.decrypt_wallet()
+
+    def test_update_password_keyring_off(self):
+        wallet = MocEncryptedWallet()
+        seed_text = "travel nowhere air position hill peace suffer parent beautiful rise " \
+                    "blood power home crumble teach"
+        password = "secret"
+
+        user_dir = tempfile.mkdtemp()
+        path = os.path.join(user_dir, "somewallet")
+        storage = lbryum.wallet.WalletStorage(path)
+        wallet.wallet = lbryum.wallet.NewWallet(storage)
+        wallet.wallet.add_seed(seed_text, password)
+        wallet.wallet.create_master_keys(password)
+        wallet.wallet.create_main_account()
+
+        wallet._cmd_runner = Commands(wallet.config, wallet.wallet, wallet.network, None, password)
+        wallet.encrypt_wallet("secret2", True)
