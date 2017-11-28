@@ -1132,10 +1132,10 @@ class Wallet(object):
     def _get_values_for_uris(self, page, page_size, *uris):
         return defer.fail(NotImplementedError())
 
-    def _claim_renew_all_before_expiration(self, height):
+    def claim_renew_all_before_expiration(self, height):
         return defer.fail(NotImplementedError())
 
-    def _claim_renew(self, txid, nout):
+    def claim_renew(self, txid, nout):
         return defer.fail(NotImplementedError())
 
     def send_claim_to_address(self, claim_id, destination, amount):
@@ -1518,10 +1518,10 @@ class LBRYumWallet(Wallet):
     def get_certificates_for_signing(self):
         return self._run_cmd_as_defer_succeed('getcertificatesforsigning')
 
-    def _claim_renew_all_before_expiration(self, height):
+    def claim_renew_all_before_expiration(self, height):
         return self._run_cmd_as_defer_succeed('renewclaimsbeforeexpiration', height)
 
-    def _claim_renew(self, txid, nout):
+    def claim_renew(self, txid, nout):
         return self._run_cmd_as_defer_succeed('listunspent')
 
     # TODO: get rid of this function. lbryum should take care of it
