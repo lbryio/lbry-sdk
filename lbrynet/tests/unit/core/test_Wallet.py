@@ -266,4 +266,7 @@ class WalletTest(unittest.TestCase):
 
         wallet.config.use_keyring = False
         wallet._cmd_runner = Commands(wallet.config, wallet.wallet, wallet.network, None, password)
-        wallet.encrypt_wallet("secret2", True)
+
+        # no keyring available, so ValueError is expected
+        with self.assertRaises(ValueError):
+            wallet.encrypt_wallet("secret2", True)
