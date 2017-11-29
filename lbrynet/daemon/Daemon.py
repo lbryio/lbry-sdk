@@ -1153,7 +1153,8 @@ class Daemon(AuthJSONRPCServer):
                          [<share_usage_data> | --share_usage_data=<share_usage_data>]
                          [<peer_search_timeout> | --peer_search_timeout=<peer_search_timeout>]
                          [<sd_download_timeout> | --sd_download_timeout=<sd_download_timeout>]
-                         [<auto_renew_claim_height_delta> | --auto_renew_claim_height_delta=<auto_renew_claim_height_delta]
+                         [<auto_renew_claim_height_delta>
+                            | --auto_renew_claim_height_delta=<auto_renew_claim_height_delta]
 
         Options:
             <download_directory>, --download_directory=<download_directory>  : (str)
@@ -1178,7 +1179,8 @@ class Daemon(AuthJSONRPCServer):
             <share_usage_data>, --share_usage_data=<share_usage_data>  : (bool), True
             <peer_search_timeout>, --peer_search_timeout=<peer_search_timeout>  : (int), 3
             <sd_download_timeout>, --sd_download_timeout=<sd_download_timeout>  : (int), 3
-            <auto_renew_claim_height_delta>, --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int), 0
+            <auto_renew_claim_height_delta>,
+                --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int), 0
                 claims set to expire within this many blocks will be
                 automatically renewed after startup (if set to 0, renews
                 will not be made automatically)
