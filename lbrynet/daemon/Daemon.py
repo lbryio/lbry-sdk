@@ -2032,13 +2032,17 @@ class Daemon(AuthJSONRPCServer):
             claim_renew (<outpoint> | --outpoint=<outpoint>) | (<height> | --height=<height>)
 
         Return:
-            (dict) Dictionary containing result of the claim/support renewals
+            (dict) Dictionary where key is the the original claim's outpoint and
+            value is the result of the renewal
             {
-                'tx' : (str) hex encoded transaction
-                'txid' : (str) txid of resulting claim
-                'nout' : (int) nout of the resulting claim
-                'fee' : (float) fee paid for the claim transaction
-                'claim_id' : (str) claim ID of the resulting claim
+                outpoint:{
+
+                    'tx' : (str) hex encoded transaction
+                    'txid' : (str) txid of resulting claim
+                    'nout' : (int) nout of the resulting claim
+                    'fee' : (float) fee paid for the claim transaction
+                    'claim_id' : (str) claim ID of the resulting claim
+                },
             }
         """
 
@@ -2051,6 +2055,7 @@ class Daemon(AuthJSONRPCServer):
             else:
                 raise Exception("invalid outpoint")
             result = yield self.session.wallet.claim_renew(txid, nout)
+            result = {outpoint:result}
         else:
             height = int(height)
             result = yield self.session.wallet.claim_renew_all_before_expiration(height)
