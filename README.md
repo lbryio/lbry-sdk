@@ -27,7 +27,7 @@ By default, `lbrynet-daemon` will provide a JSON-RPC server at `http://localhost
 
 Our [quickstart guide](http://lbry.io/quickstart) provides a simple walkthrough and examples for learning.
 
-The full API is documented [here](https://lbry.io/api).
+The full API is documented [here](https://lbryio.github.io/lbry/cli).
 
 ## What is LBRY?
 
