@@ -323,10 +323,10 @@ class Session(object):
             return True
 
         self.dht_node = self.dht_node_class(
-            udpPort=self.dht_node_port,
+            udpPort=self.external_dht_node_port,
             node_id=self.node_id,
             externalIP=self.external_ip,
-            peerPort=self.peer_port
+            peerPort=self.external_peer_port
         )
         self.peer_finder = DHTPeerFinder(self.dht_node, self.peer_manager)
         if self.hash_announcer is None:
