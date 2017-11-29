@@ -9,7 +9,6 @@ from lbrynet import conf
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.daemon.auth.auth import PasswordChecker, HttpPasswordRealm
 from lbrynet.daemon.auth.util import initialize_api_key_file
-from lbrynet.daemon.DaemonRequest import DaemonRequest
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +35,6 @@ class DaemonServer(object):
         self.root.putChild(conf.settings['API_ADDRESS'], self._daemon)
 
         lbrynet_server = get_site_base(use_auth, self.root)
-        lbrynet_server.requestFactory = DaemonRequest
 
         try:
             self.server_port = reactor.listenTCP(

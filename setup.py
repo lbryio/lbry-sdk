@@ -65,8 +65,5 @@ setup(
     packages=find_packages(base_dir),
     install_requires=requires,
     entry_points={'console_scripts': console_scripts},
-    package_data={
-        package_name: list(package_files('lbrynet/resources/ui'))
-    },
     zip_safe=False,
 )
