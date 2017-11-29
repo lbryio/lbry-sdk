@@ -311,6 +311,11 @@ class Config(object):
             TYPE_RUNTIME, TYPE_CLI, TYPE_ENV, TYPE_PERSISTED, TYPE_DEFAULT
         )
 
+        # types of data where user specified config values can be stored
+        self._user_specified = (
+            TYPE_RUNTIME, TYPE_CLI, TYPE_ENV, TYPE_PERSISTED
+        )
+
         self._data[TYPE_DEFAULT].update(self._fixed_defaults)
         self._data[TYPE_DEFAULT].update(
             {k: v[1] for (k, v) in self._adjustable_defaults.iteritems()})
@@ -382,6 +387,28 @@ class Config(object):
     def _validate_currency(self, currency):
         if currency not in self._fixed_defaults['CURRENCIES'].keys():
             raise InvalidCurrencyError(currency)
+
+    def is_default(self, name):
+        """Check if a config value is wasn't specified by the user
+
+        Args:
+            name: the name of the value to check
+
+        Returns: true if config value is the default one, false if it was specified by
+        the user
+
+        Sometimes it may be helpful to understand if a config value was specified
+        by the user or if it still holds its default value. This function will return
+        true when the config value is still the default. Note that when the user
+        specifies a value that is equal to the default one, it will still be considered
+        as 'user specified'
+        """
+
+        self._assert_valid_setting(name)
+        for possible_data_type in self._user_specified:
+            if name in self._data[possible_data_type]:
+                return False
+        return True
 
     def get(self, name, data_type=None):
         """Get a config value
