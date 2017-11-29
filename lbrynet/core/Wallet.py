@@ -1522,7 +1522,7 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_succeed('renewclaimsbeforeexpiration', height)
 
     def claim_renew(self, txid, nout):
-        return self._run_cmd_as_defer_succeed('listunspent')
+        return self._run_cmd_as_defer_succeed('renewclaim', txid, nout)
 
     # TODO: get rid of this function. lbryum should take care of it
     def _save_wallet(self, val=None):
