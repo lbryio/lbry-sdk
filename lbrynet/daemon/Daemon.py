@@ -1068,6 +1068,11 @@ class Daemon(AuthJSONRPCServer):
 
                 If given the session status option:
                     'session_status': {
+                        'external_ip': IP address used by external nodes to contact this node
+                        'external_dht_node_port': port used by external nodes to contact this node
+                            for sending DHT messages
+                        'external_peer_port': port use dby external nodes to contact this node for
+                            downloading blobs
                         'managed_blobs': count of blobs in the blob manager,
                         'managed_streams': count of streams in the file manager
                         'announce_queue_size': number of blobs currently queued to be announced
@@ -1126,6 +1131,9 @@ class Daemon(AuthJSONRPCServer):
             announce_queue_size = self.session.hash_announcer.hash_queue_size()
             should_announce_blobs = yield self.session.blob_manager.count_should_announce_blobs()
             response['session_status'] = {
+                'external_ip': self.session.external_ip,
+                'external_dht_node_port': self.session.external_dht_node_port,
+                'external_peer_port': self.session.external_peer_port,
                 'managed_blobs': len(blobs),
                 'managed_streams': len(self.lbry_file_manager.lbry_files),
                 'announce_queue_size': announce_queue_size,
