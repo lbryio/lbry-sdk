@@ -298,7 +298,7 @@ class Daemon(AuthJSONRPCServer):
         # automatically renew claims
         # auto renew is turned off if 0 or some negative number
         if self.auto_renew_claim_height_delta < 1:
-            return
+            defer.returnValue(None)
         log.debug("Renewing claim")
         h = self.session.wallet.network.get_local_height() + self.auto_renew_claim_height_delta
         results = yield self.session.wallet.claim_renew_all_before_expiration(h)
