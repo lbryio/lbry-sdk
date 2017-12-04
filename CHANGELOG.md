@@ -34,6 +34,7 @@ at anytime.
   * Removed claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect`
   * Removed unused files
   * Removed old and unused UI related code
+  * Removed claim information from lbry file internals
 
 
 ## [0.18.0] - 2017-11-08
