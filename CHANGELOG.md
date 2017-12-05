@@ -26,6 +26,7 @@ at anytime.
   * Renamed `channel_list_mine` to `channel_list`
   * Changed `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet
   * Changed `file_list`, `file_delete`, `file_set_status`, and `file_reflect` to no longer return claim related information.
+  * Increased assumption for time it takes to announce single hash from 1 second to 5 seconds
 
 ### Added
   * Added `channel_import` and `channel_export` commands
