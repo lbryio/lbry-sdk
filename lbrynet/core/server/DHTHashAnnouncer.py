@@ -96,7 +96,7 @@ class DHTHashSupplier(object):
     MIN_HASH_REANNOUNCE_TIME = 60*60
     # conservative assumption of the time it takes to announce
     # a single hash
-    SINGLE_HASH_ANNOUNCE_DURATION = 1
+    SINGLE_HASH_ANNOUNCE_DURATION = 5
 
     """Classes derived from this class give hashes to a hash announcer"""
     def __init__(self, announcer):
