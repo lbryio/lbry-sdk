@@ -314,6 +314,29 @@ Return:
     }
 ```
 
+## claim_renew
+
+```text
+Renew claim(s) or support(s)
+
+Usage:
+    claim_renew (<outpoint> | --outpoint=<outpoint>) | (<height> | --height=<height>)
+
+Return:
+    (dict) Dictionary where key is the the original claim's outpoint and
+    value is the result of the renewal
+    {
+        outpoint:{
+
+            'tx' : (str) hex encoded transaction
+            'txid' : (str) txid of resulting claim
+            'nout' : (int) nout of the resulting claim
+            'fee' : (float) fee paid for the claim transaction
+            'claim_id' : (str) claim ID of the resulting claim
+        },
+    }
+```
+
 ## claim_send_to_address
 
 ```text
@@ -822,6 +845,8 @@ Usage:
                  [<share_usage_data> | --share_usage_data=<share_usage_data>]
                  [<peer_search_timeout> | --peer_search_timeout=<peer_search_timeout>]
                  [<sd_download_timeout> | --sd_download_timeout=<sd_download_timeout>]
+                 [<auto_renew_claim_height_delta>
+                    | --auto_renew_claim_height_delta=<auto_renew_claim_height_delta]
 
 Options:
     <download_directory>, --download_directory=<download_directory>  : (str)
@@ -846,6 +871,12 @@ Options:
     <share_usage_data>, --share_usage_data=<share_usage_data>  : (bool), True
     <peer_search_timeout>, --peer_search_timeout=<peer_search_timeout>  : (int), 3
     <sd_download_timeout>, --sd_download_timeout=<sd_download_timeout>  : (int), 3
+    <auto_renew_claim_height_delta>,
+        --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int), 0
+        claims set to expire within this many blocks will be
+        automatically renewed after startup (if set to 0, renews
+        will not be made automatically)
+
 
 Returns:
     (dict) Updated dictionary of daemon settings
