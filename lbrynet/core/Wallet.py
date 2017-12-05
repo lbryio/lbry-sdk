@@ -338,7 +338,7 @@ class SqliteStorage(MetaDataStorage):
         claim_tx_info = yield self.db.runQuery("SELECT name, txid, n FROM claim_ids "
                                                "WHERE claimId=?", (claim_id, ))
         response = None
-        if r and claim_tx_info:
+        if r and claim_tx_info and r[0]:
             rid, _, seq, claim_address, height, amount, supports, raw, chan_name, valid, ts = r[0]
             supports, amount = yield self._fix_malformed_supports_amount(rid, supports, amount)
             last_modified = int(ts)
