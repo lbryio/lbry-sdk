@@ -16,6 +16,7 @@ at anytime.
   * Fixed unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
   * Merged two separate dht test folders into one
   * Fixed value error due to a race condition when saving to the claim cache (https://github.com/lbryio/lbry/issues/1013)
+  * Fixed being unable to re-download updated content (#951)
 
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
