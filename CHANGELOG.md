@@ -30,6 +30,8 @@ at anytime.
 ### Added
   * Added `channel_import` and `channel_export` commands
   * Added `is_mine` field to `channel_list` results
+  * Added `claim_renew` command
+  * Added user configurable `auto_renew_claim_height_delta` setting, defaults to 0 (off)
 
 ### Removed
   * Removed claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect`

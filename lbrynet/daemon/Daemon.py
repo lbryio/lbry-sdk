@@ -188,6 +188,8 @@ class Daemon(AuthJSONRPCServer):
         self.reflector_port = conf.settings['reflector_port']
         self.dht_node_port = conf.settings['dht_node_port']
         self.use_upnp = conf.settings['use_upnp']
+        self.auto_renew_claim_height_delta = conf.settings['auto_renew_claim_height_delta']
+
 
         self.startup_status = STARTUP_STAGES[0]
         self.connected_to_internet = True
@@ -255,6 +257,7 @@ class Daemon(AuthJSONRPCServer):
         yield self._setup_server()
         log.info("Starting balance: " + str(self.session.wallet.get_balance()))
         yield _announce_startup()
+        self._auto_renew()
 
     def _get_platform(self):
         if self.platform is None:
@@ -289,6 +292,26 @@ class Daemon(AuthJSONRPCServer):
 
         if not self.connected_to_internet:
             self.connection_status_code = CONNECTION_STATUS_NETWORK
+
+    @defer.inlineCallbacks
+    def _auto_renew(self):
+        # automatically renew claims
+        # auto renew is turned off if 0 or some negative number
+        if self.auto_renew_claim_height_delta < 1:
+            defer.returnValue(None)
+        if not self.session.wallet.network.get_remote_height():
+            log.warning("Failed to get remote height, aborting auto renew")
+            defer.returnValue(None)
+        log.debug("Renewing claim")
+        h = self.session.wallet.network.get_remote_height() + self.auto_renew_claim_height_delta
+        results = yield self.session.wallet.claim_renew_all_before_expiration(h)
+        for outpoint, result in results.iteritems():
+            if result['success']:
+                log.info("Renewed claim at outpoint:%s claim ID:%s, paid fee:%s",
+                    outpoint, result['claim_id'], result['fee'])
+            else:
+                log.info("Failed to renew claim at outpoint:%s, reason:%s",
+                    outpoint, result['reason'])
 
     def _start_server(self):
         if self.peer_port is not None:
@@ -436,6 +459,7 @@ class Daemon(AuthJSONRPCServer):
             'disable_max_key_fee': bool,
             'peer_search_timeout': int,
             'sd_download_timeout': int,
+            'auto_renew_claim_height_delta': int
         }
 
         for key, setting_type in setting_types.iteritems():
@@ -1132,6 +1156,8 @@ class Daemon(AuthJSONRPCServer):
                          [<share_usage_data> | --share_usage_data=<share_usage_data>]
                          [<peer_search_timeout> | --peer_search_timeout=<peer_search_timeout>]
                          [<sd_download_timeout> | --sd_download_timeout=<sd_download_timeout>]
+                         [<auto_renew_claim_height_delta>
+                            | --auto_renew_claim_height_delta=<auto_renew_claim_height_delta]
 
         Options:
             <download_directory>, --download_directory=<download_directory>  : (str)
@@ -1156,6 +1182,12 @@ class Daemon(AuthJSONRPCServer):
             <share_usage_data>, --share_usage_data=<share_usage_data>  : (bool), True
             <peer_search_timeout>, --peer_search_timeout=<peer_search_timeout>  : (int), 3
             <sd_download_timeout>, --sd_download_timeout=<sd_download_timeout>  : (int), 3
+            <auto_renew_claim_height_delta>,
+                --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int), 0
+                claims set to expire within this many blocks will be
+                automatically renewed after startup (if set to 0, renews
+                will not be made automatically)
+
 
         Returns:
             (dict) Updated dictionary of daemon settings
@@ -1991,6 +2023,45 @@ class Daemon(AuthJSONRPCServer):
 
         result = yield self.session.wallet.support_claim(name, claim_id, amount)
         self.analytics_manager.send_claim_action('new_support')
+        defer.returnValue(result)
+
+    @AuthJSONRPCServer.auth_required
+    @defer.inlineCallbacks
+    def jsonrpc_claim_renew(self, outpoint=None, height=None):
+        """
+        Renew claim(s) or support(s)
+
+        Usage:
+            claim_renew (<outpoint> | --outpoint=<outpoint>) | (<height> | --height=<height>)
+
+        Return:
+            (dict) Dictionary where key is the the original claim's outpoint and
+            value is the result of the renewal
+            {
+                outpoint:{
+
+                    'tx' : (str) hex encoded transaction
+                    'txid' : (str) txid of resulting claim
+                    'nout' : (int) nout of the resulting claim
+                    'fee' : (float) fee paid for the claim transaction
+                    'claim_id' : (str) claim ID of the resulting claim
+                },
+            }
+        """
+
+        if outpoint is None and height is None:
+            raise Exception("must provide an outpoint or a height")
+        elif outpoint is not None:
+            if len(outpoint.split(":")) == 2:
+                txid, nout = outpoint.split(":")
+                nout = int(nout)
+            else:
+                raise Exception("invalid outpoint")
+            result = yield self.session.wallet.claim_renew(txid, nout)
+            result = {outpoint:result}
+        else:
+            height = int(height)
+            result = yield self.session.wallet.claim_renew_all_before_expiration(height)
         defer.returnValue(result)
 
     @AuthJSONRPCServer.auth_required
