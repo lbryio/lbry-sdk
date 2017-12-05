@@ -212,6 +212,12 @@ class TestReflector(unittest.TestCase):
             self.assertEqual(self.sd_hash, files[0].sd_hash)
             self.assertEqual('test_file', files[0].file_name)
 
+            status = yield files[0].status()
+            self.assertEqual('stopped', status.running_status)
+            num_blobs = len(self.expected_blobs) -1 # subtract sd hash
+            self.assertEqual(num_blobs, status.num_completed)
+            self.assertEqual(num_blobs, status.num_known)
+
             # check should_announce blobs on blob_manager
             blob_hashes = yield self.server_blob_manager._get_all_should_announce_blob_hashes()
             self.assertEqual(2, len(blob_hashes))
