@@ -42,6 +42,7 @@ cp "$ROOT/requirements.txt" "$BUILD_DIR/requirements_base.txt"
   cd "$BUILD_DIR"
   pyinstaller -y daemon.onefile.spec
   pyinstaller -y cli.onefile.spec
+  pyinstaller -y console.onefile.spec
 )
 
 python "$BUILD_DIR/zip_daemon.py"

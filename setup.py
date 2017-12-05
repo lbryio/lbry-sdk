@@ -36,7 +36,8 @@ requires = [
 
 console_scripts = [
     'lbrynet-daemon = lbrynet.daemon.DaemonControl:start',
-    'lbrynet-cli = lbrynet.daemon.DaemonCLI:main'
+    'lbrynet-cli = lbrynet.daemon.DaemonCLI:main',
+    'lbrynet-console = lbrynet.daemon.DaemonConsole:main'
 ]
 
 
