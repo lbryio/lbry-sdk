@@ -124,6 +124,12 @@ class DBEncryptedFileMetadataManager(object):
                             "    stream_hash text,"
                             "    foreign key(stream_hash) references lbry_files(stream_hash)" +
                             ")")
+        transaction.execute("create table if not exists lbry_file_metadata (" +
+                            "    lbry_file integer primary key, " +
+                            "    txid text, " +
+                            "    n integer, " +
+                            "    foreign key(lbry_file) references lbry_files(rowid)"
+                            ")")
 
     def _open_db(self):
         # check_same_thread=False is solely to quiet a spurious error that appears to be due
@@ -133,18 +139,39 @@ class DBEncryptedFileMetadataManager(object):
         return self.db_conn.runInteraction(self._create_tables)
 
     @rerun_if_locked
+    @defer.inlineCallbacks
+    def get_file_outpoint(self, rowid):
+        result = yield self.db_conn.runQuery("select txid, n from lbry_file_metadata "
+                                             "where lbry_file=?", (rowid, ))
+        response = None
+        if result:
+            txid, nout = result[0]
+            if txid is not None and nout is not None:
+                response = "%s:%i" % (txid, nout)
+        defer.returnValue(response)
+
+    @rerun_if_locked
+    @defer.inlineCallbacks
+    def save_outpoint_to_file(self, rowid, txid, nout):
+        existing_outpoint = yield self.get_file_outpoint(rowid)
+        if not existing_outpoint:
+            yield self.db_conn.runOperation("insert into lbry_file_metadata values "
+                                            "(?, ?, ?)", (rowid, txid, nout))
+
+    @rerun_if_locked
     def _delete_stream(self, stream_hash):
         d = self.db_conn.runQuery(
-            "select stream_hash from lbry_files where stream_hash = ?", (stream_hash,))
+            "select rowid, stream_hash from lbry_files where stream_hash = ?", (stream_hash,))
         d.addCallback(
-            lambda result: result[0][0] if result else Failure(NoSuchStreamHash(stream_hash)))
+            lambda result: result[0] if result else Failure(NoSuchStreamHash(stream_hash)))
 
-        def do_delete(transaction, s_h):
+        def do_delete(transaction, row_id, s_h):
             transaction.execute("delete from lbry_files where stream_hash = ?", (s_h,))
             transaction.execute("delete from lbry_file_blobs where stream_hash = ?", (s_h,))
             transaction.execute("delete from lbry_file_descriptors where stream_hash = ?", (s_h,))
+            transaction.execute("delete from lbry_file_metadata where lbry_file = ?", (row_id,))
 
-        d.addCallback(lambda s_h: self.db_conn.runInteraction(do_delete, s_h))
+        d.addCallback(lambda (row_id, s_h): self.db_conn.runInteraction(do_delete, row_id, s_h))
         return d
 
     @rerun_if_locked
@@ -294,7 +321,8 @@ class DBEncryptedFileMetadataManager(object):
 
     @rerun_if_locked
     def _get_all_lbry_files(self):
-        d = self.db_conn.runQuery("select rowid, stream_hash, blob_data_rate from lbry_file_options")
+        d = self.db_conn.runQuery("select rowid, stream_hash, "
+                                  "blob_data_rate from lbry_file_options")
         return d
 
     @rerun_if_locked

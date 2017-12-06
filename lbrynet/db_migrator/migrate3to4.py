@@ -81,5 +81,6 @@ def migrate_blobs_db(db_dir):
         log.error("Some how not all blobs were marked as announceable")
 
     blobs_db_file.commit()
-
+    blobs_db_file.close()
+    lbryfile_info_file.close()
 

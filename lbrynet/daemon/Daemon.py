@@ -195,7 +195,7 @@ class Daemon(AuthJSONRPCServer):
         self.connected_to_internet = True
         self.connection_status_code = None
         self.platform = None
-        self.current_db_revision = 4
+        self.current_db_revision = 5
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self.uploaded_temp_files = []
@@ -662,7 +662,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(report)
 
     @defer.inlineCallbacks
-    def _download_name(self, name, claim_dict, sd_hash, timeout=None, file_name=None):
+    def _download_name(self, name, claim_dict, sd_hash, txid, nout, timeout=None, file_name=None):
         """
         Add a lbry file to the file manager, start the download, and return the new lbry file.
         If it already exists in the file manager, return the existing lbry file
@@ -672,6 +672,7 @@ class Daemon(AuthJSONRPCServer):
         def _download_finished(download_id, name, claim_dict):
             report = yield self._get_stream_analytics_report(claim_dict)
             self.analytics_manager.send_download_finished(download_id, name, report, claim_dict)
+
         @defer.inlineCallbacks
         def _download_failed(error, download_id, name, claim_dict):
             report = yield self._get_stream_analytics_report(claim_dict)
@@ -693,11 +694,11 @@ class Daemon(AuthJSONRPCServer):
                                                file_name)
             try:
                 lbry_file, finished_deferred = yield self.streams[sd_hash].start(claim_dict, name)
+                yield self.stream_info_manager.save_outpoint_to_file(lbry_file.rowid, txid, nout)
                 finished_deferred.addCallbacks(lambda _: _download_finished(download_id, name,
                                                                             claim_dict),
                                                lambda e: _download_failed(e, download_id, name,
                                                                           claim_dict))
-
                 result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
             except Exception as err:
                 yield _download_failed(err, download_id, name, claim_dict)
@@ -731,6 +732,9 @@ class Daemon(AuthJSONRPCServer):
                 d = reupload.reflect_stream(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
+        yield self.stream_info_manager.save_outpoint_to_file(publisher.lbry_file.rowid,
+                                                             claim_out['txid'],
+                                                             int(claim_out['nout']))
         self.analytics_manager.send_claim_action('publish')
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
@@ -897,10 +901,7 @@ class Daemon(AuthJSONRPCServer):
             file_status = yield lbry_file.status()
             message = STREAM_STAGES[2][1] % (file_status.name, file_status.num_completed,
                                              file_status.num_known, file_status.running_status)
-            info = yield self.session.wallet.get_claim_metadata_for_sd_hash(lbry_file.sd_hash)
-            if info:
-                name, txid, nout = info
-                outpoint = "%s:%i" % (txid, nout)
+            outpoint = yield self.stream_info_manager.get_file_outpoint(lbry_file.rowid)
 
         result = {
             'completed': lbry_file.completed,
@@ -1536,8 +1537,7 @@ class Daemon(AuthJSONRPCServer):
                     "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", "")))
             else:
                 resolved = resolved['claim']
-
-        name = resolved['name']
+        txid, nout, name = resolved['txid'], resolved['nout'], resolved['name']
         claim_dict = ClaimDict.load_dict(resolved['value'])
         sd_hash = claim_dict.source_hash
 
@@ -1556,8 +1556,8 @@ class Daemon(AuthJSONRPCServer):
                 log.info('Already have a file for %s', name)
             result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
         else:
-            result = yield self._download_name(name, claim_dict, sd_hash, timeout=timeout,
-                                               file_name=file_name)
+            result = yield self._download_name(name, claim_dict, sd_hash, txid, nout,
+                                               timeout=timeout, file_name=file_name)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
