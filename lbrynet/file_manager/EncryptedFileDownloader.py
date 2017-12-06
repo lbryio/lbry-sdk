@@ -19,7 +19,7 @@ from lbrynet.lbry_file.StreamDescriptor import save_sd_info
 log = logging.getLogger(__name__)
 
 
-def log_status(file_name, sd_hash, status):
+def log_status(sd_hash, status):
     if status == ManagedEncryptedFileDownloader.STATUS_RUNNING:
         status_string = "running"
     elif status == ManagedEncryptedFileDownloader.STATUS_STOPPED:
@@ -28,7 +28,7 @@ def log_status(file_name, sd_hash, status):
         status_string = "finished"
     else:
         status_string = "unknown"
-    log.info("%s (%s) is %s", file_name, short_hash(sd_hash), status_string)
+    log.info("stream %s is %s", short_hash(sd_hash), status_string)
 
 
 class ManagedEncryptedFileDownloader(EncryptedFileSaver):
@@ -60,7 +60,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         yield self.load_file_attributes()
 
         status = yield self.lbry_file_manager.get_lbry_file_status(self)
-        log_status(self.file_name, self.sd_hash, status)
+        log_status(self.sd_hash, status)
 
         if status == ManagedEncryptedFileDownloader.STATUS_RUNNING:
             # start returns self.finished_deferred
@@ -119,7 +119,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         yield EncryptedFileSaver._start(self)
         yield self.load_file_attributes()
         status = yield self._save_status()
-        log_status(self.file_name, self.sd_hash, status)
+        log_status(self.sd_hash, status)
         defer.returnValue(status)
 
     def _get_finished_deferred_callback_value(self):
