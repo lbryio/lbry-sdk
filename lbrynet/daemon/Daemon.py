@@ -890,15 +890,17 @@ class Daemon(AuthJSONRPCServer):
         else:
             written_bytes = 0
 
+        size = message = outpoint = None
+
         if full_status:
             size = yield lbry_file.get_total_bytes()
             file_status = yield lbry_file.status()
             message = STREAM_STAGES[2][1] % (file_status.name, file_status.num_completed,
                                              file_status.num_known, file_status.running_status)
-        else:
-            size = None
-            message = None
-
+            info = yield self.session.wallet.get_claim_metadata_for_sd_hash(lbry_file.sd_hash)
+            if info:
+                name, txid, nout = info
+                outpoint = "%s:%i" % (txid, nout)
 
         result = {
             'completed': lbry_file.completed,
@@ -916,6 +918,7 @@ class Daemon(AuthJSONRPCServer):
             'total_bytes': size,
             'written_bytes': written_bytes,
             'message': message,
+            'outpoint': outpoint
         }
         defer.returnValue(result)
 
@@ -1311,9 +1314,10 @@ class Daemon(AuthJSONRPCServer):
                     'download_path': (str) download path of file,
                     'mime_type': (str) mime type of file,
                     'key': (str) key attached to file,
-                    'total_bytes': (int) file size in bytes, None if full_status is false
-                    'written_bytes': (int) written size in bytes
-                    'message': (str), None if full_status is false
+                    'total_bytes': (int) file size in bytes, None if full_status is false,
+                    'written_bytes': (int) written size in bytes,
+                    'message': (str), status message, None if full_status is false
+                    'outpoint': (str), None if full_status is false or if claim is not found
                 },
             ]
         """
@@ -1499,25 +1503,22 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) Dictionary containing information about the stream
             {
-                'completed': (bool) true if download is completed,
-                'file_name': (str) name of file,
-                'download_directory': (str) download directory,
-                'points_paid': (float) credit paid to download file,
-                'stopped': (bool) true if download is stopped,
-                'stream_hash': (str) stream hash of file,
-                'stream_name': (str) stream name,
-                'suggested_file_name': (str) suggested file name,
-                'sd_hash': (str) sd hash of file,
-                'name': (str) name claim attached to file
-                'outpoint': (str) claim outpoint attached to file
-                'claim_id': (str) claim ID attached to file,
-                'download_path': (str) download path of file,
-                'mime_type': (str) mime type of file,
-                'key': (str) key attached to file,
-                'total_bytes': (int) file size in bytes, None if full_status is false
-                'written_bytes': (int) written size in bytes
-                'message': (str), None if full_status is false
-                'metadata': (dict) Metadata dictionary
+                    'completed': (bool) true if download is completed,
+                    'file_name': (str) name of file,
+                    'download_directory': (str) download directory,
+                    'points_paid': (float) credit paid to download file,
+                    'stopped': (bool) true if download is stopped,
+                    'stream_hash': (str) stream hash of file,
+                    'stream_name': (str) stream name ,
+                    'suggested_file_name': (str) suggested file name,
+                    'sd_hash': (str) sd hash of file,
+                    'download_path': (str) download path of file,
+                    'mime_type': (str) mime type of file,
+                    'key': (str) key attached to file,
+                    'total_bytes': (int) file size in bytes, None if full_status is false,
+                    'written_bytes': (int) written size in bytes,
+                    'message': (str) status message,
+                    'outpoint': (str) claim outpoint
             }
         """
 
@@ -1668,7 +1669,7 @@ class Daemon(AuthJSONRPCServer):
 
         Returns:
             (float) Estimated cost in lbry credits, returns None if uri is not
-                resolveable
+                resolvable
         """
         cost = yield self.get_est_cost(uri, size)
         defer.returnValue(cost)

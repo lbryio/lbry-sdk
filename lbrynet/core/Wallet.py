@@ -756,8 +756,6 @@ class Wallet(object):
 
         defer.returnValue(claim)
 
-
-
     @defer.inlineCallbacks
     def _handle_claim_result(self, results, update_caches=True):
         if not results:
