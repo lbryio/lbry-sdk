@@ -539,7 +539,6 @@ class Daemon(AuthJSONRPCServer):
         log.info('Starting to setup up file manager')
         self.startup_status = STARTUP_STAGES[3]
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
-        yield self.stream_info_manager.setup()
         self.lbry_file_manager = EncryptedFileManager(
             self.session,
             self.stream_info_manager,
