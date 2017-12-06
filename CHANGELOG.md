@@ -17,6 +17,7 @@ at anytime.
   * Merged two separate dht test folders into one
   * Fixed value error due to a race condition when saving to the claim cache (https://github.com/lbryio/lbry/issues/1013)
   * Fixed being unable to re-download updated content (#951)
+  * Fixed sending error messages for failed api requests
 
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
@@ -28,6 +29,8 @@ at anytime.
   * Changed `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet
   * Changed `file_list`, `file_delete`, `file_set_status`, and `file_reflect` to no longer return claim related information.
   * Increased assumption for time it takes to announce single hash from 1 second to 5 seconds
+  * Don't set HTTP error codes for failed api requests, conform to http://www.jsonrpc.org/specification#error_object
+  * Return less verbose tracebacks for api requests resulting in errors
 
 ### Added
   * Added `channel_import` and `channel_export` commands
