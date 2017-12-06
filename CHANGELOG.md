@@ -31,6 +31,7 @@ at anytime.
   * Increased assumption for time it takes to announce single hash from 1 second to 5 seconds
   * Don't set HTTP error codes for failed api requests, conform to http://www.jsonrpc.org/specification#error_object
   * Return less verbose tracebacks for api requests resulting in errors
+  * Don't include file names when logging information about streams, only include sd hashes
 
 ### Added
   * Added `channel_import` and `channel_export` commands
