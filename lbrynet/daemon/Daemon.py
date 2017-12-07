@@ -867,13 +867,14 @@ class Daemon(AuthJSONRPCServer):
         else:
             written_bytes = 0
 
-        size = message = outpoint = None
+        size = outpoint = num_completed = num_known = status = None
 
         if full_status:
             size = yield lbry_file.get_total_bytes()
             file_status = yield lbry_file.status()
-            message = STREAM_STAGES[2][1] % (file_status.name, file_status.num_completed,
-                                             file_status.num_known, file_status.running_status)
+            num_completed = file_status.num_completed
+            num_known = file_status.num_known
+            status = file_status.running_status
             outpoint = yield self.stream_info_manager.get_file_outpoint(lbry_file.rowid)
 
         result = {
@@ -891,7 +892,9 @@ class Daemon(AuthJSONRPCServer):
             'key': key,
             'total_bytes': size,
             'written_bytes': written_bytes,
-            'message': message,
+            'blobs_completed': num_completed,
+            'blobs_in_stream': num_known,
+            'status': status,
             'outpoint': outpoint
         }
         defer.returnValue(result)
@@ -1290,7 +1293,9 @@ class Daemon(AuthJSONRPCServer):
                     'key': (str) key attached to file,
                     'total_bytes': (int) file size in bytes, None if full_status is false,
                     'written_bytes': (int) written size in bytes,
-                    'message': (str), status message, None if full_status is false
+                    'blobs_completed': (int) num_completed, None if full_status is false,
+                    'blobs_in_stream': (int) None if full_status is false,
+                    'status': (str) downloader status, None if full_status is false,
                     'outpoint': (str), None if full_status is false or if claim is not found
                 },
             ]
@@ -1491,8 +1496,10 @@ class Daemon(AuthJSONRPCServer):
                     'key': (str) key attached to file,
                     'total_bytes': (int) file size in bytes, None if full_status is false,
                     'written_bytes': (int) written size in bytes,
-                    'message': (str) status message,
-                    'outpoint': (str) claim outpoint
+                    'blobs_completed': (int) num_completed, None if full_status is false,
+                    'blobs_in_stream': (int) None if full_status is false,
+                    'status': (str) downloader status, None if full_status is false,
+                    'outpoint': (str), None if full_status is false or if claim is not found
             }
         """
 

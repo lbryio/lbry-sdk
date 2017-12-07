@@ -27,13 +27,14 @@ at anytime.
   * Check claim schema in `publish` before trying to make the claim, return better error messages
   * Renamed `channel_list_mine` to `channel_list`
   * Changed `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet
-  * Changed file objects returned by `file_list` and `get` to no longer contain `name`, `claim_id`, or `metadata`
+  * Changed file objects returned by `file_list` and `get` to no longer contain `name`, `claim_id`, `message`, or `metadata`
   * Increased assumption for time it takes to announce single hash from 1 second to 5 seconds
   * Don't set HTTP error codes for failed api requests, conform to http://www.jsonrpc.org/specification#error_object
   * Return less verbose tracebacks for api requests resulting in errors
   * Don't include file names when logging information about streams, only include sd hashes
 
 ### Added
+  * Added `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
   * Added `channel_import` and `channel_export` commands
   * Added `is_mine` field to `channel_list` results
   * Added `claim_renew` command
