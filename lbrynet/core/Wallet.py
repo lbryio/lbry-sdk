@@ -1,18 +1,17 @@
+import os
+from future_builtins import zip
+from collections import defaultdict, deque
 import datetime
 import logging
-import os
 import json
 import time
-
+from decimal import Decimal
+from zope.interface import implements
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
 
-from collections import defaultdict, deque
-from zope.interface import implements
-from decimal import Decimal
-
-import lbryum.wallet
+from lbryum import wallet as lbryum_wallet
 from lbryum.network import Network
 from lbryum.simple_config import SimpleConfig
 from lbryum.constants import COIN
@@ -661,7 +660,7 @@ class Wallet(object):
             self.current_address_given_to_peer[peer] = address
             return address
 
-        d = self.get_unused_address()
+        d = self.get_least_used_address()
         d.addCallback(set_address_for_peer)
         return d
 
@@ -1024,7 +1023,6 @@ class Wallet(object):
         dl = defer.DeferredList(ds)
 
         def handle_checks(results):
-            from future_builtins import zip
             for balance, (success, result) in zip(balances_to_check, results):
                 peer = balance[0]
                 if success is True:
@@ -1056,6 +1054,12 @@ class Wallet(object):
         return dl
 
     # ======== Must be overridden ======== #
+
+    def _get_blockhash(self, height):
+        return defer.fail(NotImplementedError())
+
+    def _get_transaction(self, txid):
+        return defer.fail(NotImplementedError())
 
     def _update_balance(self):
         return defer.fail(NotImplementedError())
@@ -1148,6 +1152,12 @@ class Wallet(object):
     def get_certificates_for_signing(self):
         return defer.fail(NotImplementedError())
 
+    def get_unused_address(self):
+        return defer.fail(NotImplementedError())
+
+    def get_least_used_address(self, account=None, for_change=False, max_count=100):
+        return defer.fail(NotImplementedError())
+
     def _start(self):
         pass
 
@@ -1200,7 +1210,6 @@ class LBRYumWallet(Wallet):
 
         d = setup_network()
         d.addCallback(lambda _: self._load_wallet())
-        d.addCallback(self._save_wallet)
         d.addCallback(lambda _: self._start_check.start(.1))
         d.addCallback(lambda _: network_start_d)
         d.addCallback(lambda _: self._load_blockchain())
@@ -1242,8 +1251,8 @@ class LBRYumWallet(Wallet):
 
     def _load_wallet(self):
         path = self.config.get_wallet_path()
-        storage = lbryum.wallet.WalletStorage(path)
-        wallet = lbryum.wallet.Wallet(storage)
+        storage = lbryum_wallet.WalletStorage(path)
+        wallet = lbryum_wallet.Wallet(storage)
         if not storage.file_exists:
             self.is_first_run = True
             seed = wallet.make_seed()
@@ -1319,14 +1328,11 @@ class LBRYumWallet(Wallet):
         return d
 
     # Always create and return a brand new address
-    @defer.inlineCallbacks
-    def get_new_address(self):
-        addr = self.wallet.create_new_address(account=None)
-        yield self._save_wallet()
-        defer.returnValue(addr)
+    def get_new_address(self, for_change=False, account=None):
+        return defer.succeed(self.wallet.create_new_address(account=account,
+                                                            for_change=for_change))
 
     # Get the balance of a given address.
-
     def get_address_balance(self, address, include_balance=False):
         c, u, x = self.wallet.get_addr_balance(address)
         if include_balance is False:
@@ -1343,7 +1349,6 @@ class LBRYumWallet(Wallet):
             for i in range(len(addresses), num_addresses):
                 address = self.wallet.create_new_address(account=None)
                 addresses.append(address)
-            yield self._save_wallet()
 
         outputs = [[address, amount] for address in addresses]
         tx = yield self._run_cmd_as_defer_succeed('paytomany', outputs)
@@ -1357,9 +1362,11 @@ class LBRYumWallet(Wallet):
     def get_unused_address(self):
         addr = self.wallet.get_unused_address(account=None)
         if addr is None:
-            addr = self.wallet.create_new_address()
-        yield self._save_wallet()
+            addr = yield self.get_new_address()
         defer.returnValue(addr)
+
+    def get_least_used_address(self, account=None, for_change=False, max_count=100):
+        return defer.succeed(self.wallet.get_least_used_address(account, for_change, max_count))
 
     def get_block(self, blockhash):
         return self._run_cmd_as_defer_to_thread('getblock', blockhash)
@@ -1395,7 +1402,7 @@ class LBRYumWallet(Wallet):
     def _send_name_claim(self, name, value, amount,
                             certificate_id=None, claim_address=None, change_address=None):
         log.info("Send claim: %s for %s: %s ", name, amount, value)
-        claim_out = yield self._run_cmd_as_defer_succeed('claim', name, value, amount,
+        claim_out = yield self._run_cmd_as_defer_to_thread('claim', name, value, amount,
                                                          certificate_id=certificate_id,
                                                          claim_addr=claim_address,
                                                          change_addr=change_address)
@@ -1404,31 +1411,19 @@ class LBRYumWallet(Wallet):
     @defer.inlineCallbacks
     def _abandon_claim(self, claim_id, txid, nout):
         log.debug("Abandon %s" % claim_id)
-        tx_out = yield self._run_cmd_as_defer_succeed('abandon', claim_id, txid, nout)
+        tx_out = yield self._run_cmd_as_defer_to_thread('abandon', claim_id, txid, nout)
         defer.returnValue(tx_out)
 
     @defer.inlineCallbacks
     def _support_claim(self, name, claim_id, amount):
         log.debug("Support %s %s %f" % (name, claim_id, amount))
-        broadcast = False
-        tx = yield self._run_cmd_as_defer_succeed('support', name, claim_id, amount, broadcast)
-        claim_out = yield self._broadcast_claim_transaction(tx)
+        claim_out = yield self._run_cmd_as_defer_to_thread('support', name, claim_id, amount)
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
     def _tip_claim(self, claim_id, amount):
         log.debug("Tip %s %f", claim_id, amount)
-        broadcast = False
-        tx = yield self._run_cmd_as_defer_succeed('sendwithsupport', claim_id, amount, broadcast)
-        claim_out = yield self._broadcast_claim_transaction(tx)
-        defer.returnValue(claim_out)
-
-    @defer.inlineCallbacks
-    def _broadcast_claim_transaction(self, claim_out):
-        if 'success' not in claim_out:
-            raise Exception('Unexpected claim command output: {}'.format(claim_out))
-        if claim_out['success']:
-            yield self._broadcast_transaction(claim_out['tx'])
+        claim_out = yield self._run_cmd_as_defer_to_thread('sendwithsupport', claim_id, amount)
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
@@ -1465,7 +1460,7 @@ class LBRYumWallet(Wallet):
                                                 *uris)
 
     def _claim_certificate(self, name, amount):
-        return self._run_cmd_as_defer_succeed('claimcertificate', name, amount)
+        return self._run_cmd_as_defer_to_thread('claimcertificate', name, amount)
 
     def _get_certificate_claims(self):
         return self._run_cmd_as_defer_succeed('getcertificateclaims')
@@ -1505,7 +1500,7 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_succeed('listunspent')
 
     def send_claim_to_address(self, claim_id, destination, amount):
-        return self._run_cmd_as_defer_succeed('sendclaimtoaddress', claim_id, destination, amount)
+        return self._run_cmd_as_defer_to_thread('sendclaimtoaddress', claim_id, destination, amount)
 
     def import_certificate_info(self, serialized_certificate_info):
         return self._run_cmd_as_defer_succeed('importcertificateinfo', serialized_certificate_info)
@@ -1517,15 +1512,10 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_succeed('getcertificatesforsigning')
 
     def claim_renew_all_before_expiration(self, height):
-        return self._run_cmd_as_defer_succeed('renewclaimsbeforeexpiration', height)
+        return self._run_cmd_as_defer_to_thread('renewclaimsbeforeexpiration', height)
 
     def claim_renew(self, txid, nout):
-        return self._run_cmd_as_defer_succeed('renewclaim', txid, nout)
-
-    # TODO: get rid of this function. lbryum should take care of it
-    def _save_wallet(self, val=None):
-        self.wallet.storage.write()
-        return defer.succeed(val)
+        return self._run_cmd_as_defer_to_thread('renewclaim', txid, nout)
 
 
 class LBRYcrdAddressRequester(object):
