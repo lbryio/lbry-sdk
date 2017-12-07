@@ -27,7 +27,7 @@ at anytime.
   * Check claim schema in `publish` before trying to make the claim, return better error messages
   * Renamed `channel_list_mine` to `channel_list`
   * Changed `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet
-  * Changed `file_list`, `file_delete`, `file_set_status`, and `file_reflect` to no longer return claim related information.
+  * Changed file objects returned by `file_list` and `get` to no longer contain `name`, `claim_id`, or `metadata`
   * Increased assumption for time it takes to announce single hash from 1 second to 5 seconds
   * Don't set HTTP error codes for failed api requests, conform to http://www.jsonrpc.org/specification#error_object
   * Return less verbose tracebacks for api requests resulting in errors
@@ -39,6 +39,7 @@ at anytime.
   * Added `claim_renew` command
   * Added user configurable `auto_renew_claim_height_delta` setting, defaults to 0 (off)
   * Added `lbrynet-console`, a tool to run or connect to lbrynet-daemon and launch an interactive python console with the api functions built in.
+  * Added a table to the lbry file database to store the outpoint of the claim downloaded from
 
 ### Removed
   * Removed claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect`
