@@ -198,7 +198,6 @@ class Daemon(AuthJSONRPCServer):
         self.current_db_revision = 5
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
-        self.uploaded_temp_files = []
         self._session_id = conf.settings.get_session_id()
         # TODO: this should probably be passed into the daemon, or
         # possibly have the entire log upload functionality taken out
@@ -274,18 +273,6 @@ class Daemon(AuthJSONRPCServer):
 
     def _check_network_connection(self):
         self.connected_to_internet = utils.check_connection()
-
-    def _check_lbrynet_connection(self):
-        def _log_success():
-            log.info("lbrynet connectivity test passed")
-
-        def _log_failure():
-            log.info("lbrynet connectivity test failed")
-
-        wonderfullife_sh = ("6f3af0fa3924be98a54766aa2715d22c6c1509c3f7fa32566df4899"
-                            "a41f3530a9f97b2ecb817fa1dcbf1b30553aefaa7")
-        d = download_sd_blob(self.session, wonderfullife_sh, self.session.base_payment_rate_manager)
-        d.addCallbacks(lambda _: _log_success, lambda _: _log_failure)
 
     def _update_connection_status(self):
         self.connection_status_code = CONNECTION_STATUS_CONNECTED
@@ -400,14 +387,6 @@ class Daemon(AuthJSONRPCServer):
             self.query_handlers[query_id] = handler
         return defer.succeed(None)
 
-    def _clean_up_temp_files(self):
-        for path in self.uploaded_temp_files:
-            try:
-                log.debug('Removing tmp file: %s', path)
-                os.remove(path)
-            except OSError:
-                pass
-
     @staticmethod
     def _already_shutting_down(sig_num, frame):
         log.info("Already shutting down")
@@ -430,8 +409,6 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager.shutdown()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
-
-        self._clean_up_temp_files()
 
         d = self._stop_server()
         d.addErrback(log.fail(), 'Failure while shutting down')
@@ -739,10 +716,6 @@ class Daemon(AuthJSONRPCServer):
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
         defer.returnValue(claim_out)
-
-    def _get_long_count_timestamp(self):
-        dt = utils.utcnow() - utils.datetime_obj(year=2012, month=12, day=21)
-        return int(dt.total_seconds())
 
     @defer.inlineCallbacks
     def _resolve_name(self, name, force_refresh=False):
