@@ -3,7 +3,9 @@ from twisted.trial import unittest
 from lbrynet import conf
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.tests.util import random_lbry_hash
+
 
 class TestEncryptedFileManager(unittest.TestCase):
 
@@ -19,12 +21,12 @@ class TestEncryptedFileManager(unittest.TestCase):
 
         session = MocSession()
         session.db_dir = '.'
-        stream_info_manager = None
+        stream_info_manager = DBEncryptedFileMetadataManager('.')
         sd_identifier = None
         download_directory = '.'
         manager = EncryptedFileManager(
             session, stream_info_manager, sd_identifier, download_directory)
-        yield manager._open_db()
+        yield manager.stream_info_manager.setup()
         out = yield manager._get_all_lbry_files()
         self.assertEqual(len(out), 0)
 

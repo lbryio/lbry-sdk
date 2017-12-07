@@ -5,7 +5,6 @@ Keep track of which LBRY Files are downloading and store their LBRY File specifi
 import logging
 import os
 
-from twisted.enterprise import adbapi
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
 
@@ -16,7 +15,6 @@ from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDow
 from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.cryptstream.client.CryptStreamDownloader import CurrentlyStoppingError
-from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet import conf
 
@@ -41,7 +39,6 @@ class EncryptedFileManager(object):
         # TODO: why is sd_identifier part of the file manager?
         self.sd_identifier = sd_identifier
         self.lbry_files = []
-        self.sql_db = None
         if download_directory:
             self.download_directory = download_directory
         else:
@@ -51,7 +48,7 @@ class EncryptedFileManager(object):
 
     @defer.inlineCallbacks
     def setup(self):
-        yield self._open_db()
+        yield self.stream_info_manager.setup()
         yield self._add_to_sd_identifier()
         # don't block on starting the lbry files
         self._start_lbry_files()
@@ -252,84 +249,32 @@ class EncryptedFileManager(object):
     def stop(self):
         safe_stop_looping_call(self.lbry_file_reflector)
         yield defer.DeferredList(list(self._stop_lbry_files()))
-        if self.sql_db:
-            yield self.sql_db.close()
-        self.sql_db = None
         log.info("Stopped encrypted file manager")
         defer.returnValue(True)
 
     def get_count_for_stream_hash(self, stream_hash):
         return self._get_count_for_stream_hash(stream_hash)
 
-    ######### database calls #########
-
-    def _open_db(self):
-        # check_same_thread=False is solely to quiet a spurious error that appears to be due
-        # to a bug in twisted, where the connection is closed by a different thread than the
-        # one that opened it. The individual connections in the pool are not used in multiple
-        # threads.
-        self.sql_db = adbapi.ConnectionPool(
-            "sqlite3",
-            os.path.join(self.session.db_dir, "lbryfile_info.db"),
-            check_same_thread=False
-        )
-        return self.sql_db.runQuery(
-            "create table if not exists lbry_file_options (" +
-            "    blob_data_rate real, " +
-            "    status text," +
-            "    stream_hash text,"
-            "    foreign key(stream_hash) references lbry_files(stream_hash)" +
-            ")"
-        )
-
-    @rerun_if_locked
-    def _save_lbry_file(self, stream_hash, data_payment_rate):
-        def do_save(db_transaction):
-            row = (data_payment_rate, ManagedEncryptedFileDownloader.STATUS_STOPPED, stream_hash)
-            db_transaction.execute("insert into lbry_file_options values (?, ?, ?)", row)
-            return db_transaction.lastrowid
-        return self.sql_db.runInteraction(do_save)
-
-    @rerun_if_locked
-    def _delete_lbry_file_options(self, rowid):
-        return self.sql_db.runQuery("delete from lbry_file_options where rowid = ?",
-                                    (rowid,))
-
-    @rerun_if_locked
-    def _set_lbry_file_payment_rate(self, rowid, new_rate):
-        return self.sql_db.runQuery(
-            "update lbry_file_options set blob_data_rate = ? where rowid = ?",
-            (new_rate, rowid))
-
-    @rerun_if_locked
-    def _get_all_lbry_files(self):
-        d = self.sql_db.runQuery("select rowid, stream_hash, blob_data_rate from lbry_file_options")
-        return d
-
-    @rerun_if_locked
-    def _change_file_status(self, rowid, new_status):
-        d = self.sql_db.runQuery("update lbry_file_options set status = ? where rowid = ?",
-                                    (new_status, rowid))
-        d.addCallback(lambda _: new_status)
-        return d
-
-    @rerun_if_locked
-    def _get_lbry_file_status(self, rowid):
-        d = self.sql_db.runQuery("select status from lbry_file_options where rowid = ?",
-                                 (rowid,))
-        d.addCallback(lambda r: (r[0][0] if len(r) else None))
-        return d
-
-    @rerun_if_locked
     def _get_count_for_stream_hash(self, stream_hash):
-        d = self.sql_db.runQuery("select count(*) from lbry_file_options where stream_hash = ?",
-                                     (stream_hash,))
-        d.addCallback(lambda r: (r[0][0] if r else 0))
-        return d
+        return self.stream_info_manager._get_count_for_stream_hash(stream_hash)
 
-    @rerun_if_locked
+    def _delete_lbry_file_options(self, rowid):
+        return self.stream_info_manager._delete_lbry_file_options(rowid)
+
+    def _save_lbry_file(self, stream_hash, data_payment_rate):
+        return self.stream_info_manager._save_lbry_file(stream_hash, data_payment_rate)
+
+    def _get_all_lbry_files(self):
+        return self.stream_info_manager._get_all_lbry_files()
+
     def _get_rowid_for_stream_hash(self, stream_hash):
-        d = self.sql_db.runQuery("select rowid from lbry_file_options where stream_hash = ?",
-                                     (stream_hash,))
-        d.addCallback(lambda r: (r[0][0] if len(r) else None))
-        return d
+        return self.stream_info_manager._get_rowid_for_stream_hash(stream_hash)
+
+    def _change_file_status(self, rowid, status):
+        return self.stream_info_manager._change_file_status(rowid, status)
+
+    def _set_lbry_file_payment_rate(self, rowid, new_rate):
+        return self.stream_info_manager._set_lbry_file_payment_rate(rowid, new_rate)
+
+    def _get_lbry_file_status(self, rowid):
+        return self.stream_info_manager._get_lbry_file_status(rowid)

@@ -10,7 +10,6 @@ import unittest
 from Crypto import Random
 from Crypto.Hash import MD5
 from lbrynet import conf
-from lbrynet.lbry_file.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.Session import Session
@@ -120,7 +119,7 @@ class LbryUploader(object):
             peer_port=5553, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
             dht_node_class=Node, is_generous=self.is_generous, external_ip="127.0.0.1")
-        stream_info_manager = TempEncryptedFileMetadataManager()
+        stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
         self.lbry_file_manager = EncryptedFileManager(
             self.session, stream_info_manager, self.sd_identifier)
         if self.ul_rate_limit is not None:
@@ -227,7 +226,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
                       is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1],
                       external_ip="127.0.0.1")
 
-    stream_info_manager = TempEncryptedFileMetadataManager()
+    stream_info_manager = DBEncryptedFileMetadataManager(db_dir)
 
     lbry_file_manager = EncryptedFileManager(session, stream_info_manager, sd_identifier)
 
@@ -520,7 +519,7 @@ class TestTransfer(TestCase):
             blob_tracker_class=DummyBlobAvailabilityTracker,
             dht_node_class=Node, is_generous=self.is_generous, external_ip="127.0.0.1")
 
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = DBEncryptedFileMetadataManager(db_dir)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
@@ -820,7 +819,7 @@ class TestTransfer(TestCase):
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1],
                                external_ip="127.0.0.1")
 
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = DBEncryptedFileMetadataManager(db_dir)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
