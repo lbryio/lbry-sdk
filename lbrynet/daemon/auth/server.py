@@ -224,7 +224,8 @@ class AuthJSONRPCServer(AuthorizedBase):
         else:
             # last resort, just cast it as a string
             error = JSONRPCError(str(failure))
-        log.warning("error processing api request: %s", error.message)
+        log.warning("error processing api request: %s\ntraceback: %s", error.message,
+                    "\n".join(error.traceback))
         response_content = jsonrpc_dumps_pretty(error, id=id_)
         self._set_headers(request, response_content)
         request.setResponseCode(200)
