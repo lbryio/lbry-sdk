@@ -1402,7 +1402,7 @@ class LBRYumWallet(Wallet):
     def _send_name_claim(self, name, value, amount,
                             certificate_id=None, claim_address=None, change_address=None):
         log.info("Send claim: %s for %s: %s ", name, amount, value)
-        claim_out = yield self._run_cmd_as_defer_to_thread('claim', name, value, amount,
+        claim_out = yield self._run_cmd_as_defer_succeed('claim', name, value, amount,
                                                          certificate_id=certificate_id,
                                                          claim_addr=claim_address,
                                                          change_addr=change_address)
@@ -1411,19 +1411,19 @@ class LBRYumWallet(Wallet):
     @defer.inlineCallbacks
     def _abandon_claim(self, claim_id, txid, nout):
         log.debug("Abandon %s" % claim_id)
-        tx_out = yield self._run_cmd_as_defer_to_thread('abandon', claim_id, txid, nout)
+        tx_out = yield self._run_cmd_as_defer_succeed('abandon', claim_id, txid, nout)
         defer.returnValue(tx_out)
 
     @defer.inlineCallbacks
     def _support_claim(self, name, claim_id, amount):
         log.debug("Support %s %s %f" % (name, claim_id, amount))
-        claim_out = yield self._run_cmd_as_defer_to_thread('support', name, claim_id, amount)
+        claim_out = yield self._run_cmd_as_defer_succeed('support', name, claim_id, amount)
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
     def _tip_claim(self, claim_id, amount):
         log.debug("Tip %s %f", claim_id, amount)
-        claim_out = yield self._run_cmd_as_defer_to_thread('sendwithsupport', claim_id, amount)
+        claim_out = yield self._run_cmd_as_defer_succeed('sendwithsupport', claim_id, amount)
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
@@ -1460,7 +1460,7 @@ class LBRYumWallet(Wallet):
                                                 *uris)
 
     def _claim_certificate(self, name, amount):
-        return self._run_cmd_as_defer_to_thread('claimcertificate', name, amount)
+        return self._run_cmd_as_defer_succeed('claimcertificate', name, amount)
 
     def _get_certificate_claims(self):
         return self._run_cmd_as_defer_succeed('getcertificateclaims')
@@ -1500,7 +1500,7 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_succeed('listunspent')
 
     def send_claim_to_address(self, claim_id, destination, amount):
-        return self._run_cmd_as_defer_to_thread('sendclaimtoaddress', claim_id, destination, amount)
+        return self._run_cmd_as_defer_succeed('sendclaimtoaddress', claim_id, destination, amount)
 
     def import_certificate_info(self, serialized_certificate_info):
         return self._run_cmd_as_defer_succeed('importcertificateinfo', serialized_certificate_info)
@@ -1512,10 +1512,10 @@ class LBRYumWallet(Wallet):
         return self._run_cmd_as_defer_succeed('getcertificatesforsigning')
 
     def claim_renew_all_before_expiration(self, height):
-        return self._run_cmd_as_defer_to_thread('renewclaimsbeforeexpiration', height)
+        return self._run_cmd_as_defer_succeed('renewclaimsbeforeexpiration', height)
 
     def claim_renew(self, txid, nout):
-        return self._run_cmd_as_defer_to_thread('renewclaim', txid, nout)
+        return self._run_cmd_as_defer_succeed('renewclaim', txid, nout)
 
 
 class LBRYcrdAddressRequester(object):
