@@ -58,20 +58,24 @@ class JSONRPCError(object):
         assert (data is None or isinstance(data, dict)), "'data' must be None or a dict"
         self.code = code
         if message is None:
-            message = self.MESSAGES[code] if code in self.MESSAGES else "Error"
+            message = self.MESSAGES[code] if code in self.MESSAGES else "API Error"
         self.message = message
         self.data = {} if data is None else data
+        self.traceback = []
         if traceback is not None:
-            self.data['traceback'] = traceback.split("\n")
+            trace_lines = traceback.split("\n")
+            for i, t in enumerate(trace_lines):
+                if "--- <exception caught here> ---" in t:
+                    if len(trace_lines) > i + 1:
+                        self.traceback = [j for j in trace_lines[i+1:] if j]
+                        break
 
     def to_dict(self):
-        ret = {
+        return {
             'code': self.code,
             'message': self.message,
+            'data': self.traceback
         }
-        if len(self.data):
-            ret['data'] = self.data
-        return ret
 
     @classmethod
     def create_from_exception(cls, exception, code=CODE_APPLICATION_ERROR, traceback=None):
@@ -215,18 +219,16 @@ class AuthJSONRPCServer(AuthorizedBase):
             error = failure.check(JSONRPCError)
             if error is None:
                 # maybe its a twisted Failure with another type of error
-                error = JSONRPCError(failure.getErrorMessage(), traceback=failure.getTraceback())
+                error = JSONRPCError(failure.getErrorMessage() or failure.type.__name__,
+                                     traceback=failure.getTraceback())
         else:
             # last resort, just cast it as a string
             error = JSONRPCError(str(failure))
-
+        log.warning("error processing api request: %s\ntraceback: %s", error.message,
+                    "\n".join(error.traceback))
         response_content = jsonrpc_dumps_pretty(error, id=id_)
-
         self._set_headers(request, response_content)
-        try:
-            request.setResponseCode(JSONRPCError.HTTP_CODES[error.code])
-        except KeyError:
-            request.setResponseCode(JSONRPCError.HTTP_CODES[JSONRPCError.CODE_INTERNAL_ERROR])
+        request.setResponseCode(200)
         self._render_message(request, response_content)
 
     @staticmethod
@@ -365,8 +367,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         # handle deferredLists that won't peacefully cancel, namely
         # get_lbry_files
         d.addErrback(trap, ConnectionDone, ConnectionLost, defer.CancelledError, RuntimeError)
-        d.addErrback(log.fail(self._render_error, request, id_),
-                     'Failed to process %s', function_name)
+        d.addErrback(self._render_error, request, id_)
         d.addBoth(lambda _: log.debug("%s took %f",
                                       function_name,
                                       (utils.now() - time_in).total_seconds()))

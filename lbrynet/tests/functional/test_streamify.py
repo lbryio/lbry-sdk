@@ -7,7 +7,6 @@ from twisted.trial.unittest import TestCase
 from twisted.internet import defer, threads
 
 from lbrynet import conf
-from lbrynet.lbry_file.EncryptedFileMetadataManager import TempEncryptedFileMetadataManager
 from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.Session import Session
@@ -80,7 +79,7 @@ class TestStreamify(TestCase):
             is_generous=self.is_generous, external_ip="127.0.0.1"
         )
 
-        self.stream_info_manager = TempEncryptedFileMetadataManager()
+        self.stream_info_manager = DBEncryptedFileMetadataManager(db_dir)
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)

@@ -7,6 +7,7 @@ from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 from lbrynet.core.Error import NoSuchStreamHash
 from lbrynet.tests.util import random_lbry_hash
 
+
 class DBEncryptedFileMetadataManagerTest(unittest.TestCase):
     def setUp(self):
         self.db_dir = tempfile.mkdtemp()

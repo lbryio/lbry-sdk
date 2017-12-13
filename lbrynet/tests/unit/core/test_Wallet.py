@@ -41,6 +41,9 @@ class MocLbryumWallet(Wallet):
         self.queued_payments = defaultdict(Decimal)
         self._storage = InMemoryStorage()
 
+    def get_least_used_address(self, account=None, for_change=False, max_count=100):
+        return defer.succeed(None)
+
     def get_name_claims(self):
         return threads.deferToThread(lambda: [])
 

@@ -109,16 +109,42 @@ Returns:
     (dict) Requested block
 ```
 
-## channel_list_mine
+## channel_export
 
 ```text
-Get my channels
+Export serialized channel signing information for a given certificate claim id
 
 Usage:
-    channel_list_mine
+    channel_export (<claim_id> | --claim_id=<claim_id>)
 
 Returns:
-    (list) ClaimDict
+    (str) Serialized certificate information
+```
+
+## channel_import
+
+```text
+Import serialized channel signing information (to allow signing new claims to the channel)
+
+Usage:
+    channel_import (<serialized_certificate_info> |
+                    --serialized_certificate_info=<serialized_certificate_info>)
+
+Returns:
+    (dict) Result dictionary
+```
+
+## channel_list
+
+```text
+Get certificate claim infos for channels that can be published to
+
+Usage:
+    channel_list
+
+Returns:
+    (list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim
+    is in the wallet.
 ```
 
 ## channel_new
@@ -288,6 +314,29 @@ Return:
     }
 ```
 
+## claim_renew
+
+```text
+Renew claim(s) or support(s)
+
+Usage:
+    claim_renew (<outpoint> | --outpoint=<outpoint>) | (<height> | --height=<height>)
+
+Return:
+    (dict) Dictionary where key is the the original claim's outpoint and
+    value is the result of the renewal
+    {
+        outpoint:{
+
+            'tx' : (str) hex encoded transaction
+            'txid' : (str) txid of resulting claim
+            'nout' : (int) nout of the resulting claim
+            'fee' : (float) fee paid for the claim transaction
+            'claim_id' : (str) claim ID of the resulting claim
+        },
+    }
+```
+
 ## claim_send_to_address
 
 ```text
@@ -388,9 +437,7 @@ Delete a LBRY file
 
 Usage:
     file_delete [-f] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
-                [--outpoint=<outpoint>] [--rowid=<rowid>]
-                [--name=<name>]
+                [--stream_hash=<stream_hash>] [--rowid=<rowid>]
 
 Options:
     -f, --delete_from_download_dir  : delete file from download directory,
@@ -401,10 +448,7 @@ Options:
     --sd_hash=<sd_hash>             : delete by file sd hash
     --file_name<file_name>          : delete by file name in downloads folder
     --stream_hash=<stream_hash>     : delete by file stream hash
-    --claim_id=<claim_id>           : delete by file claim id
-    --outpoint=<outpoint>           : delete by file claim outpoint
     --rowid=<rowid>                 : delete by file row id
-    --name=<name>                   : delete by associated name claim of file
 
 Returns:
     (bool) true if deletion was successful
@@ -417,8 +461,7 @@ List files limited by optional filters
 
 Usage:
     file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
-              [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--rowid=<rowid>]
-              [--name=<name>]
+              [--rowid=<rowid>]
               [-f]
 
 Options:
@@ -426,10 +469,7 @@ Options:
     --file_name=<file_name>      : get file with matching file name in the
                                    downloads folder
     --stream_hash=<stream_hash>  : get file with matching stream hash
-    --claim_id=<claim_id>        : get file with matching claim id
-    --outpoint=<outpoint>        : get file with matching claim outpoint
     --rowid=<rowid>              : get file with matching row id
-    --name=<name>                : get file with matching associated name claim
     -f                           : full status, populate the 'message' and 'size' fields
 
 Returns:
@@ -446,16 +486,12 @@ Returns:
             'stream_name': (str) stream name ,
             'suggested_file_name': (str) suggested file name,
             'sd_hash': (str) sd hash of file,
-            'name': (str) name claim attached to file
-            'outpoint': (str) claim outpoint attached to file
-            'claim_id': (str) claim ID attached to file,
             'download_path': (str) download path of file,
             'mime_type': (str) mime type of file,
             'key': (str) key attached to file,
             'total_bytes': (int) file size in bytes, None if full_status is false
             'written_bytes': (int) written size in bytes
             'message': (str), None if full_status is false
-            'metadata': (dict) Metadata dictionary
         },
     ]
 ```
@@ -467,8 +503,7 @@ Reflect all the blobs in a file matching the filter criteria
 
 Usage:
     file_reflect [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                 [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
-                 [--outpoint=<outpoint>] [--rowid=<rowid>] [--name=<name>]
+                 [--stream_hash=<stream_hash>] [--rowid=<rowid>]
                  [--reflector=<reflector>]
 
 Options:
@@ -476,10 +511,7 @@ Options:
     --file_name=<file_name>      : get file with matching file name in the
                                    downloads folder
     --stream_hash=<stream_hash>  : get file with matching stream hash
-    --claim_id=<claim_id>        : get file with matching claim id
-    --outpoint=<outpoint>        : get file with matching claim outpoint
     --rowid=<rowid>              : get file with matching row id
-    --name=<name>                : get file with matching associated name claim
     --reflector=<reflector>      : reflector server, ip address or url
                                    by default choose a server from the config
 
@@ -494,19 +526,14 @@ Start or stop downloading a file
 
 Usage:
     file_set_status <status> [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-              [--stream_hash=<stream_hash>] [--claim_id=<claim_id>]
-              [--outpoint=<outpoint>] [--rowid=<rowid>]
-              [--name=<name>]
+              [--stream_hash=<stream_hash>] [--rowid=<rowid>]
 
 Options:
     --sd_hash=<sd_hash>          : set status of file with matching sd hash
     --file_name=<file_name>      : set status of file with matching file name in the
                                    downloads folder
     --stream_hash=<stream_hash>  : set status of file with matching stream hash
-    --claim_id=<claim_id>        : set status of file with matching claim id
-    --outpoint=<outpoint>        : set status of file with matching claim outpoint
     --rowid=<rowid>              : set status of file with matching row id
-    --name=<name>                : set status of file with matching associated name claim
 
 Returns:
     (str) Confirmation message
@@ -626,8 +653,9 @@ Options:
     --metadata=<metadata>          : ClaimDict to associate with the claim.
     --file_path=<file_path>        : path to file to be associated with name. If provided,
                                      a lbry stream of this file will be used in 'sources'.
-                                     If no path is given but a metadata dict is provided,
-                                     the source from the given metadata will be used.
+                                     If no path is given but a sources dict is provided,
+                                     it will be used. If neither are provided, an
+                                     error is raised.
     --fee=<fee>                    : Dictionary representing key fee to download content:
                                       {
                                         'currency': currency_symbol,
@@ -817,6 +845,8 @@ Usage:
                  [<share_usage_data> | --share_usage_data=<share_usage_data>]
                  [<peer_search_timeout> | --peer_search_timeout=<peer_search_timeout>]
                  [<sd_download_timeout> | --sd_download_timeout=<sd_download_timeout>]
+                 [<auto_renew_claim_height_delta>
+                    | --auto_renew_claim_height_delta=<auto_renew_claim_height_delta]
 
 Options:
     <download_directory>, --download_directory=<download_directory>  : (str)
@@ -841,6 +871,12 @@ Options:
     <share_usage_data>, --share_usage_data=<share_usage_data>  : (bool), True
     <peer_search_timeout>, --peer_search_timeout=<peer_search_timeout>  : (int), 3
     <sd_download_timeout>, --sd_download_timeout=<sd_download_timeout>  : (int), 3
+    <auto_renew_claim_height_delta>,
+        --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int), 0
+        claims set to expire within this many blocks will be
+        automatically renewed after startup (if set to 0, renews
+        will not be made automatically)
+
 
 Returns:
     (dict) Updated dictionary of daemon settings

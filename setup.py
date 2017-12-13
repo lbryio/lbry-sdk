@@ -21,7 +21,7 @@ requires = [
     'envparse',
     'jsonrpc',
     'jsonschema',
-    'lbryum==3.2.0rc2',
+    'lbryum==3.2.0rc4',
     'lbryschema==0.0.15rc2',
     'miniupnpc',
     'pycrypto',
@@ -36,7 +36,8 @@ requires = [
 
 console_scripts = [
     'lbrynet-daemon = lbrynet.daemon.DaemonControl:start',
-    'lbrynet-cli = lbrynet.daemon.DaemonCLI:main'
+    'lbrynet-cli = lbrynet.daemon.DaemonCLI:main',
+    'lbrynet-console = lbrynet.daemon.DaemonConsole:main'
 ]
 
 
@@ -65,8 +66,5 @@ setup(
     packages=find_packages(base_dir),
     install_requires=requires,
     entry_points={'console_scripts': console_scripts},
-    package_data={
-        package_name: list(package_files('lbrynet/resources/ui'))
-    },
     zip_safe=False,
 )

@@ -10,7 +10,7 @@ def main():
     tag = subprocess.check_output(['git', 'describe']).strip()
     zipfilename = 'lbrynet-daemon-{}-{}.zip'.format(tag, get_system_label())
     full_filename = os.path.join(this_dir, 'dist', zipfilename)
-    executables = ['lbrynet-daemon', 'lbrynet-cli']
+    executables = ['lbrynet-daemon', 'lbrynet-cli', 'lbrynet-console']
     ext = '.exe' if platform.system() == 'Windows' else ''
     with zipfile.ZipFile(full_filename, 'w') as myzip:
         for executable in executables:
