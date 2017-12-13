@@ -237,7 +237,7 @@ class EncryptedFileReflectorClient(Protocol):
                 self.file_sender = FileSender()
                 return defer.succeed(True)
             else:
-                log.warning("Reflector already has %s", self.next_blob_to_send)
+                log.info("Reflector already has %s", self.next_blob_to_send)
                 return self.set_not_uploading()
         else:  # Expecting Server Blob Response
             if 'received_blob' not in response_dict:
