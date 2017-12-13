@@ -1348,8 +1348,9 @@ class LBRYumWallet(Wallet):
     # lbryum commands should be run this way , unless if the command
     # only makes a lbrum server query, use _run_cmd_as_defer_to_thread()
     def _run_cmd_as_defer_succeed(self, command_name, *args, **kwargs):
+        cmd_runner = self._get_cmd_runner()
         cmd = Commands.known_commands[command_name]
-        func = getattr(self._cmd_runner, cmd.name)
+        func = getattr(cmd_runner, cmd.name)
         return defer.succeed(func(*args, **kwargs))
 
     # run commands as a deferToThread,  lbryum commands that only make
@@ -1357,8 +1358,9 @@ class LBRYumWallet(Wallet):
     # TODO: keep track of running threads and cancel them on `stop`
     #       otherwise the application will hang, waiting for threads to complete
     def _run_cmd_as_defer_to_thread(self, command_name, *args, **kwargs):
+        cmd_runner = self._get_cmd_runner()
         cmd = Commands.known_commands[command_name]
-        func = getattr(self._cmd_runner, cmd.name)
+        func = getattr(cmd_runner, cmd.name)
         return threads.deferToThread(func, *args, **kwargs)
 
     def _update_balance(self):
