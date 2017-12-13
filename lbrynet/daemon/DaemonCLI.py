@@ -133,7 +133,7 @@ def main():
             # print_help_for_command(method)
         else:
             print_error("Something went wrong\n", suggest_help=False)
-            print(str(err))
+            print str(err)
 
         return 1
 
