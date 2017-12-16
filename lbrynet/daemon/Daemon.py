@@ -314,7 +314,7 @@ class Daemon(AuthJSONRPCServer):
                 log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for"
                           " more details.", self.peer_port)
                 log.error("%s", traceback.format_exc())
-                raise ValueError("%s lbrynet may already be running on your computer.", str(e))
+                raise ValueError("%s lbrynet may already be running on your computer." % str(e))
         return defer.succeed(True)
 
     def _start_reflector(self):
