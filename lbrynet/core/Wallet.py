@@ -27,8 +27,10 @@ from lbrynet import conf
 from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
-from lbrynet.core.Error import RequestCanceledError, InsufficientFundsError, UnknownNameError
+from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
 from lbrynet.core.Error import UnknownClaimID, UnknownURI, NegativeFundsError, UnknownOutpoint
+from lbrynet.core.Error import DownloadCanceledError, RequestCanceledError
+from twisted.internet.error import ConnectionAborted
 
 log = logging.getLogger(__name__)
 
@@ -1610,7 +1612,7 @@ class LBRYcrdAddressRequester(object):
         self.wallet.update_peer_address(peer, address)
 
     def _request_failed(self, err, peer):
-        if not err.check(RequestCanceledError):
+        if not err.check(DownloadCanceledError, RequestCanceledError, ConnectionAborted):
             log.warning("A peer failed to send a valid public key response. Error: %s, peer: %s",
                         err.getErrorMessage(), str(peer))
             return err
