@@ -1,10 +1,17 @@
+import os
+import shutil
+import tempfile
+import lbryum.wallet
+
 from decimal import Decimal
 from collections import defaultdict
 from twisted.trial import unittest
 from twisted.internet import threads, defer
 
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.Wallet import Wallet, ReservedPoints, InMemoryStorage
+from lbrynet.core.Wallet import Wallet, LBRYumWallet, ReservedPoints, InMemoryStorage
+from lbryum.commands import Commands
+
 
 test_metadata = {
 'license': 'NASA',
@@ -44,7 +51,35 @@ class MocLbryumWallet(Wallet):
         return defer.succeed(True)
 
 
+class MocEncryptedWallet(LBRYumWallet):
+    def __init__(self):
+        LBRYumWallet.__init__(self, InMemoryStorage())
+        self.wallet_balance = Decimal(10.0)
+        self.total_reserved_points = Decimal(0.0)
+        self.queued_payments = defaultdict(Decimal)
+
 class WalletTest(unittest.TestCase):
+
+    def setUp(self):
+        wallet = MocEncryptedWallet()
+        seed_text = "travel nowhere air position hill peace suffer parent beautiful rise " \
+                    "blood power home crumble teach"
+        password = "secret"
+
+        user_dir = tempfile.mkdtemp()
+        path = os.path.join(user_dir, "somewallet")
+        storage = lbryum.wallet.WalletStorage(path)
+        wallet.wallet = lbryum.wallet.NewWallet(storage)
+        wallet.wallet.add_seed(seed_text, password)
+        wallet.wallet.create_master_keys(password)
+        wallet.wallet.create_main_account()
+
+        self.wallet_path = path
+        self.enc_wallet = wallet
+        self.enc_wallet_password = password
+
+    def tearDown(self):
+        shutil.rmtree(os.path.dirname(self.wallet_path))
 
     def test_failed_send_name_claim(self):
         def not_enough_funds_send_name_claim(self, name, val, amount):
@@ -198,3 +233,29 @@ class WalletTest(unittest.TestCase):
             'test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 4))
         self.assertFailure(d, InsufficientFundsError)
         return d
+
+    def test_unlock_wallet(self):
+        wallet = self.enc_wallet
+        wallet._cmd_runner = Commands(
+            wallet.config, wallet.wallet, wallet.network, None, self.enc_wallet_password)
+        cmd_runner = wallet.get_cmd_runner()
+        cmd_runner.unlock_wallet(self.enc_wallet_password)
+        self.assertIsNone(cmd_runner.new_password)
+        self.assertEqual(cmd_runner._password, self.enc_wallet_password)
+
+    def test_encrypt_decrypt_wallet(self):
+        wallet = self.enc_wallet
+        wallet._cmd_runner = Commands(
+            wallet.config, wallet.wallet, wallet.network, None, self.enc_wallet_password)
+        wallet.encrypt_wallet("secret2", False)
+        wallet.decrypt_wallet()
+
+    def test_update_password_keyring_off(self):
+        wallet = self.enc_wallet
+        wallet.config.use_keyring = False
+        wallet._cmd_runner = Commands(
+            wallet.config, wallet.wallet, wallet.network, None, self.enc_wallet_password)
+
+        # no keyring available, so ValueError is expected
+        with self.assertRaises(ValueError):
+            wallet.encrypt_wallet("secret2", True)

@@ -34,8 +34,20 @@ at anytime.
   * Don't include file names when logging information about streams, only include sd hashes
   * Re-use addresses used for lbrycrd info exchange, this was a significant source of address bloat in the wallet
   * Remove manual saving of the wallet in from lbrynet, let lbryum handle it
+  * Block wallet startup on being unlocked if it is encrypted
 
 ### Added
+  * Add link to instructions on how to change the default peer port
+  * Add `peer_port` to settings configurable using `settings_set`
+  * Added an option to disable max key fee check.
+  * Add `wallet_unlock`, a command available during startup to unlock an encrypted wallet
+
+### Changed
+  * claim_show API command no longer takes name as argument
+  * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
+  * Linux folders moved from the home directory to `~/.local/share/lbry`
+  * Windows folders moved from `%AppData%/Roaming` to `%AppData%/Local/lbry`
+  * Block wallet startup on being unlocked
   * Added `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
   * Added `channel_import` and `channel_export` commands
   * Added `is_mine` field to `channel_list` results
@@ -43,6 +55,8 @@ at anytime.
   * Added user configurable `auto_renew_claim_height_delta` setting, defaults to 0 (off)
   * Added `lbrynet-console`, a tool to run or connect to lbrynet-daemon and launch an interactive python console with the api functions built in.
   * Added a table to the lbry file database to store the outpoint of the claim downloaded from
+  * Added `wallet_unlock`, a command available during startup to unlock an encrypted wallet
+  * Added support for wallet encryption via new commands `wallet_decrypt` and `wallet_encrypt`
 
 ### Removed
   * Removed claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect`

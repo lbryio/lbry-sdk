@@ -21,6 +21,8 @@ from lbryschema.error import URIParseError, DecodeError
 from lbryschema.validator import validate_claim_id
 from lbryschema.address import decode_address
 
+from lbryum.errors import InvalidPassword
+
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet import conf, analytics
@@ -165,7 +167,7 @@ class Daemon(AuthJSONRPCServer):
     """
 
     allowed_during_startup = [
-        'daemon_stop', 'status', 'version',
+        'daemon_stop', 'status', 'version', 'wallet_unlock'
     ]
 
     def __init__(self, analytics_manager):
@@ -541,6 +543,8 @@ class Daemon(AuthJSONRPCServer):
             elif self.wallet_type == LBRYUM_WALLET:
                 log.info("Using lbryum wallet")
                 config = {'auto_connect': True}
+                if 'use_keyring' in conf.settings:
+                    config['use_keyring'] = conf.settings['use_keyring']
                 if conf.settings['lbryum_wallet_dir']:
                     config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
                 storage = SqliteStorage(self.db_dir)
@@ -971,16 +975,16 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) lbrynet-daemon status
             {
-                'lbry_id': lbry peer id, base58
-                'installation_id': installation id, base58
-                'is_running': bool
-                'is_first_run': bool
+                'lbry_id': lbry peer id, base58,
+                'installation_id': installation id, base58,
+                'is_running': bool,
+                'is_first_run': bool,
                 'startup_status': {
-                    'code': status code
+                    'code': status code,
                     'message': status message
                 },
                 'connection_status': {
-                    'code': connection status code
+                    'code': connection status code,
                     'message': connection status message
                 },
                 'blockchain_status': {
@@ -988,6 +992,7 @@ class Daemon(AuthJSONRPCServer):
                     'blocks_behind': remote_height - local_height,
                     'best_blockhash': block hash of most recent block,
                 },
+                'wallet_is_encrypted': bool,
 
                 If given the session status option:
                     'session_status': {
@@ -1001,13 +1006,13 @@ class Daemon(AuthJSONRPCServer):
                     'dht_status': {
                         'kbps_received': current kbps receiving,
                         'kbps_sent': current kdps being sent,
-                        'total_bytes_sent': total bytes sent
-                        'total_bytes_received': total bytes received
-                        'queries_received': number of queries received per second
-                        'queries_sent': number of queries sent per second
-                        'recent_contacts': count of recently contacted peers
+                        'total_bytes_sent': total bytes sent,
+                        'total_bytes_received': total bytes received,
+                        'queries_received': number of queries received per second,
+                        'queries_sent': number of queries sent per second,
+                        'recent_contacts': count of recently contacted peers,
                         'unique_contacts': count of unique peers
-                    }
+                    },
             }
         """
 
@@ -1016,6 +1021,8 @@ class Daemon(AuthJSONRPCServer):
         local_height = self.session.wallet.network.get_local_height() if has_wallet else 0
         remote_height = self.session.wallet.network.get_server_height() if has_wallet else 0
         best_hash = (yield self.session.wallet.get_best_blockhash()) if has_wallet else None
+        wallet_is_encrypted = has_wallet and self.session.wallet.wallet and \
+                              self.session.wallet.wallet.use_encryption
 
         response = {
             'lbry_id': base58.b58encode(self.node_id),
@@ -1034,6 +1041,7 @@ class Daemon(AuthJSONRPCServer):
                     else ''
                 ),
             },
+            'wallet_is_encrypted': wallet_is_encrypted,
             'blocks_behind': remote_height - local_height,  # deprecated. remove from UI, then here
             'blockchain_status': {
                 'blocks': local_height,
@@ -1237,6 +1245,68 @@ class Daemon(AuthJSONRPCServer):
         else:
             return self._render_response(float(
                 self.session.wallet.get_address_balance(address, include_unconfirmed)))
+
+    @defer.inlineCallbacks
+    def jsonrpc_wallet_unlock(self, password):
+        """
+        Unlock an encrypted wallet
+
+        Usage:
+            wallet_unlock (<password>)
+
+        Returns:
+            (bool) true if wallet is unlocked, otherwise false
+        """
+
+        cmd_runner = self.session.wallet.get_cmd_runner()
+        if cmd_runner is not None and cmd_runner.locked:
+            result = True
+        elif self.session.wallet.wallet_pw_d is not None:
+            d = self.session.wallet.wallet_pw_d
+            if not d.called:
+                d.addCallback(lambda _: not self.session.wallet._cmd_runner.locked)
+                self.session.wallet.wallet_pw_d.callback(password)
+            try:
+                result = yield d
+            except InvalidPassword:
+                result = False
+        else:
+            result = self.session.wallet._cmd_runner.locked
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
+    @defer.inlineCallbacks
+    def jsonrpc_wallet_decrypt(self):
+        """
+        Decrypt an encrypted wallet, this will remove the wallet password
+
+        Usage:
+            wallet_decrypt
+
+        Returns:
+            (bool) true if wallet is decrypted, otherwise false
+        """
+
+        result = self.session.wallet.decrypt_wallet()
+        response = yield self._render_response(result)
+        defer.returnValue(response)
+
+    @defer.inlineCallbacks
+    def jsonrpc_wallet_encrypt(self, new_password):
+        """
+        Encrypt a wallet with a password, if the wallet is already encrypted this will update
+        the password
+
+        Usage:
+            wallet_encrypt (<new_password>)
+
+        Returns:
+            (bool) true if wallet is decrypted, otherwise false
+        """
+
+        self.session.wallet.encrypt_wallet(new_password)
+        response = yield self._render_response(self.session.wallet.wallet.use_encryption)
+        defer.returnValue(response)
 
     @defer.inlineCallbacks
     def jsonrpc_daemon_stop(self):

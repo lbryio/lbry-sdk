@@ -282,6 +282,7 @@ ADJUSTABLE_SETTINGS = {
     'peer_search_timeout': (int, 3),
     'use_auth_http': (bool, False),
     'use_upnp': (bool, True),
+    'use_keyring': (bool, False),
     'wallet': (str, LBRYUM_WALLET),
 }
 

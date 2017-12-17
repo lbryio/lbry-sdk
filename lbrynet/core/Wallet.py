@@ -16,6 +16,7 @@ from lbryum.network import Network
 from lbryum.simple_config import SimpleConfig
 from lbryum.constants import COIN
 from lbryum.commands import Commands
+from lbryum.errors import InvalidPassword
 
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.claim import ClaimDict
@@ -1158,6 +1159,12 @@ class Wallet(object):
     def get_least_used_address(self, account=None, for_change=False, max_count=100):
         return defer.fail(NotImplementedError())
 
+    def decrypt_wallet(self):
+        return defer.fail(NotImplementedError())
+
+    def encrypt_wallet(self, new_password, update_keyring=False):
+        return defer.fail(NotImplementedError())
+
     def _start(self):
         pass
 
@@ -1172,6 +1179,9 @@ class LBRYumWallet(Wallet):
         self.config = make_config(self._config)
         self.network = None
         self.wallet = None
+        self._cmd_runner = None
+        self.wallet_pw_d = None
+        self.wallet_unlocked_d = defer.Deferred()
         self.is_first_run = False
         self.printed_retrieving_headers = False
         self._start_check = None
@@ -1184,6 +1194,12 @@ class LBRYumWallet(Wallet):
     def _is_first_run(self):
         return (not self.printed_retrieving_headers and
                 self.network.blockchain.retrieving_headers)
+
+    def get_cmd_runner(self):
+        if self._cmd_runner is None:
+            self._cmd_runner = Commands(self.config, self.wallet, self.network)
+
+        return self._cmd_runner
 
     def _start(self):
         network_start_d = defer.Deferred()
@@ -1206,6 +1222,34 @@ class LBRYumWallet(Wallet):
             else:
                 network_start_d.errback(ValueError("Failed to connect to network."))
 
+        def unlock(password):
+            if self._cmd_runner and self._cmd_runner.locked:
+                try:
+                    self._cmd_runner.unlock_wallet(password)
+                except InvalidPassword:
+                    log.warning("Incorrect password")
+                    check_locked()
+                    raise InvalidPassword
+            if self._cmd_runner and self._cmd_runner.locked:
+                raise Exception("Failed to unlock wallet")
+            elif not self._cmd_runner:
+                raise Exception("Command runner hasn't been initialized yet")
+            self.wallet_unlocked_d.callback(True)
+            log.info("Unlocked the wallet!")
+
+        def check_locked():
+            if self._cmd_runner and self._cmd_runner.locked:
+                log.info("Waiting for wallet password")
+                d = defer.Deferred()
+                d.addCallback(unlock)
+                self.wallet_pw_d = d
+                return self.wallet_unlocked_d
+            elif not self._cmd_runner:
+                raise Exception("Command runner hasn't been initialized yet")
+            if not self.wallet.use_encryption:
+                log.info("Wallet is not encrypted")
+            self.wallet_unlocked_d.callback(True)
+
         self._start_check = task.LoopingCall(check_started)
 
         d = setup_network()
@@ -1216,6 +1260,9 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda _: log.info("Subscribing to addresses"))
         d.addCallback(lambda _: self.wallet.wait_until_synchronized(lambda _: None))
         d.addCallback(lambda _: log.info("Synchronized wallet"))
+        d.addCallback(lambda _: self.get_cmd_runner())
+        d.addCallbacks(lambda _: log.info("Set up lbryum command runner"))
+        d.addCallbacks(lambda _: check_locked())
         return d
 
     def _stop(self):
@@ -1296,9 +1343,6 @@ class LBRYumWallet(Wallet):
         d = defer.succeed(self.wallet.start_threads(self.network))
         d.addCallback(lambda _: blockchain_caught_d)
         return d
-
-    def _get_cmd_runner(self):
-        return Commands(self.config, self.wallet, self.network)
 
     # run commands as a defer.succeed,
     # lbryum commands should be run this way , unless if the command
@@ -1516,6 +1560,24 @@ class LBRYumWallet(Wallet):
 
     def claim_renew(self, txid, nout):
         return self._run_cmd_as_defer_succeed('renewclaim', txid, nout)
+
+    def decrypt_wallet(self):
+        if not self.wallet.use_encryption:
+            return False
+        if not self._cmd_runner:
+            return False
+        if self._cmd_runner.locked:
+            return False
+        self._cmd_runner.decrypt_wallet()
+        return not self.wallet.use_encryption
+
+    def encrypt_wallet(self, new_password, update_keyring=False):
+        if not self._cmd_runner:
+            return False
+        if self._cmd_runner.locked:
+            return False
+        self._cmd_runner.update_password(new_password, update_keyring)
+        return not self.wallet.use_encryption
 
 
 class LBRYcrdAddressRequester(object):
