@@ -1,5 +1,6 @@
 from __future__ import print_function
-import ctypes, sys
+import sys
+import ctypes
 from ctypes import windll, wintypes
 from uuid import UUID
 

@@ -34,6 +34,8 @@ unsafe-load-any-extension=no
 # be loaded. Extensions are loading into the active Python interpreter and may
 # run arbitrary code
 extension-pkg-whitelist=
+    miniupnpc,
+    unqlite
 
 # Allow optimization of some AST trees. This will activate a peephole AST
 # optimizer, which will apply various small optimizations. For instance, it can
@@ -74,10 +76,8 @@ disable=
   broad-except,
   cell-var-from-loop,
   consider-iterating-dictionary,
-  cyclic-import,
   dangerous-default-value,
   duplicate-code,
-  exec-used,
   fixme,
   global-statement,
   inherit-non-class,
@@ -86,12 +86,10 @@ disable=
   locally-disabled,
   logging-not-lazy,
   missing-docstring,
-  multiple-imports,
   no-else-return,
   no-init,
   no-member,
   no-self-use,
-  not-context-manager,
   protected-access,
   redefined-builtin,
   redefined-outer-name,
@@ -117,7 +115,13 @@ disable=
   unused-variable,
   wildcard-import,
   wrong-import-order,
-  wrong-import-position
+  wrong-import-position,
+  deprecated-lambda,
+  simplifiable-if-statement,
+  unidiomatic-typecheck,
+  global-at-module-level,
+  inconsistent-return-statements,
+  keyword-arg-before-vararg
 
 
 [REPORTS]

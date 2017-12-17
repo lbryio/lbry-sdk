@@ -110,7 +110,6 @@ def main():
         else:
             print utils.json_dumps_pretty(result)
     except (RPCError, KeyError, JSONRPCException, HTTPError) as err:
-        error_data = None
         if isinstance(err, HTTPError):
             error_body = err.read()
             try:
@@ -123,14 +122,19 @@ def main():
                 return 1
 
             print_error(error_data['error']['message'] + "\n", suggest_help=False)
+
+            if 'data' in error_data['error'] and 'traceback' in error_data['error']['data']:
+                print "Here's the traceback for the error you encountered:"
+                print "\n".join(error_data['error']['data']['traceback'])
+
+            print_help_for_command(method)
+        elif isinstance(err, RPCError):
+            print_error(err.msg, suggest_help=False)
+            # print_help_for_command(method)
         else:
             print_error("Something went wrong\n", suggest_help=False)
+            print str(err)
 
-        print_help_for_command(method)
-
-        if 'data' in error_data['error'] and 'traceback' in error_data['error']['data']:
-            print "Here's the traceback for the error you encountered:"
-            print "\n".join(error_data['error']['data']['traceback'])
         return 1
 
 
