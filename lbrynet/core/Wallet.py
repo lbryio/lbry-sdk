@@ -1180,7 +1180,6 @@ class LBRYumWallet(Wallet):
         self.network = None
         self.wallet = None
         self._cmd_runner = None
-        self.wallet_pw_d = None
         self.wallet_unlocked_d = defer.Deferred()
         self.is_first_run = False
         self.printed_retrieving_headers = False
@@ -1204,6 +1203,9 @@ class LBRYumWallet(Wallet):
     def _start(self):
         network_start_d = defer.Deferred()
 
+        # fired when the wallet actually unlocks (wallet_unlocked_d can be called multiple times)
+        wallet_unlock_success = defer.Deferred()
+
         def setup_network():
             self.network = Network(self.config)
             log.info("Loading the wallet")
@@ -1226,29 +1228,25 @@ class LBRYumWallet(Wallet):
             if self._cmd_runner and self._cmd_runner.locked:
                 try:
                     self._cmd_runner.unlock_wallet(password)
+                    wallet_unlock_success.callback(True)
+                    log.info("Unlocked the wallet!")
                 except InvalidPassword:
-                    log.warning("Incorrect password")
-                    check_locked()
-                    raise InvalidPassword
-            if self._cmd_runner and self._cmd_runner.locked:
-                raise Exception("Failed to unlock wallet")
-            elif not self._cmd_runner:
-                raise Exception("Command runner hasn't been initialized yet")
-            self.wallet_unlocked_d.callback(True)
-            log.info("Unlocked the wallet!")
+                    log.warning("Incorrect password, try again")
+                    self.wallet_unlocked_d = defer.Deferred()
+                    self.wallet_unlocked_d.addCallback(unlock)
+                    return defer.succeed(False)
+            return defer.succeed(True)
 
         def check_locked():
-            if self._cmd_runner and self._cmd_runner.locked:
-                log.info("Waiting for wallet password")
-                d = defer.Deferred()
-                d.addCallback(unlock)
-                self.wallet_pw_d = d
-                return self.wallet_unlocked_d
-            elif not self._cmd_runner:
-                raise Exception("Command runner hasn't been initialized yet")
             if not self.wallet.use_encryption:
                 log.info("Wallet is not encrypted")
-            self.wallet_unlocked_d.callback(True)
+                wallet_unlock_success.callback(True)
+            elif not self._cmd_runner:
+                raise Exception("Command runner hasn't been initialized yet")
+            elif self._cmd_runner.locked:
+                log.info("Waiting for wallet password")
+                self.wallet_unlocked_d.addCallback(unlock)
+            return wallet_unlock_success
 
         self._start_check = task.LoopingCall(check_started)
 
