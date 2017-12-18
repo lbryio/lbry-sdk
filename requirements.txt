@@ -15,7 +15,7 @@ jsonrpc==1.2
 jsonrpclib==0.1.7
 jsonschema==2.6.0
 keyring==10.4.0
-git+https://github.com/lbryio/lbryum.git@v3.2.0rc7#egg=lbryum
+git+https://github.com/lbryio/lbryum.git@v3.2.0rc8#egg=lbryum
 git+https://github.com/lbryio/lbryschema.git@v0.0.15rc2#egg=lbryschema
 miniupnpc==1.9
 pbkdf2==1.3
