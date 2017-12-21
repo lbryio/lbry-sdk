@@ -484,7 +484,7 @@ class DownloadRequest(RequestHelper):
             blob_details.cancel_func,
             blob
         )
-        log.debug("Requesting blob %s from %s", blob.blob_hash, self.peer)
+        log.info("Requesting blob %s from %s", blob.blob_hash, self.peer)
         return request
 
     def _handle_download_request(self, client_blob_request):
@@ -508,10 +508,10 @@ class DownloadRequest(RequestHelper):
             self._download_failed,
             callbackArgs=(client_blob_request.blob,),
         )
-        client_blob_request.finished_deferred.addBoth(
-            self._pay_or_cancel_payment, reserved_points, client_blob_request.blob)
-        client_blob_request.finished_deferred.addErrback(
-            _handle_download_error, self.peer, client_blob_request.blob)
+        client_blob_request.finished_deferred.addBoth(self._pay_or_cancel_payment,
+                                                      reserved_points, client_blob_request.blob)
+        client_blob_request.finished_deferred.addErrback(_handle_download_error, self.peer,
+                                                         client_blob_request.blob)
 
     def _pay_or_cancel_payment(self, arg, reserved_points, blob):
         if self._can_pay_peer(blob, arg):

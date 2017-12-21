@@ -21,7 +21,7 @@ at anytime.
 
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
-  *
+  * `get_availability`, replaced with `stream_availability`
 
 ### Changed
   * Check claim schema in `publish` before trying to make the claim, return better error messages
@@ -57,6 +57,7 @@ at anytime.
   * Added a table to the lbry file database to store the outpoint of the claim downloaded from
   * Added `wallet_unlock`, a command available during startup to unlock an encrypted wallet
   * Added support for wallet encryption via new commands `wallet_decrypt` and `wallet_encrypt`
+  * Added `blob_availability` and `stream_availability` commands for debugging download issues
 
 ### Removed
   * Removed claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect`

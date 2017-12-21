@@ -39,7 +39,7 @@ class ConnectionManager(object):
         # a deferred that gets fired when a _manage call is set
         self._manage_deferred = None
         self.stopped = True
-        log.info("%s initialized", self._get_log_name())
+        log.debug("%s initialized", self._get_log_name())
 
     # this identifies what the connection manager is for,
     # used for logging purposes only
