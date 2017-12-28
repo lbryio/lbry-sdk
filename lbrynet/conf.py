@@ -73,54 +73,54 @@ def _win_path_to_bytes(path):
     return path
 
 
-def _get_old_directories(platform):
-    dirs = {}
-    if platform == WINDOWS:
+def _get_old_directories(platform_type):
+    directories = {}
+    if platform_type == WINDOWS:
         appdata = get_path(FOLDERID.RoamingAppData, UserHandle.current)
-        dirs['data'] = os.path.join(appdata, 'lbrynet')
-        dirs['lbryum'] = os.path.join(appdata, 'lbryum')
-        dirs['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
-    elif platform == DARWIN:
-        dirs['data'] = user_data_dir('LBRY')
-        dirs['lbryum'] = os.path.expanduser('~/.lbryum')
-        dirs['download'] = os.path.expanduser('~/Downloads')
-    elif platform == LINUX:
-        dirs['data'] = os.path.expanduser('~/.lbrynet')
-        dirs['lbryum'] = os.path.expanduser('~/.lbryum')
-        dirs['download'] = os.path.expanduser('~/Downloads')
+        directories['data'] = os.path.join(appdata, 'lbrynet')
+        directories['lbryum'] = os.path.join(appdata, 'lbryum')
+        directories['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
+    elif platform_type == DARWIN:
+        directories['data'] = user_data_dir('LBRY')
+        directories['lbryum'] = os.path.expanduser('~/.lbryum')
+        directories['download'] = os.path.expanduser('~/Downloads')
+    elif platform_type == LINUX:
+        directories['data'] = os.path.expanduser('~/.lbrynet')
+        directories['lbryum'] = os.path.expanduser('~/.lbryum')
+        directories['download'] = os.path.expanduser('~/Downloads')
     else:
         raise ValueError('unknown platform value')
-    return dirs
+    return directories
 
 
-def _get_new_directories(platform):
-    dirs = {}
-    if platform == ANDROID:
-        dirs['data'] = '%s/lbrynet' % android_app_internal_storage_dir()
-        dirs['lbryum'] = '%s/lbryum' % android_app_internal_storage_dir()
-        dirs['download'] = '%s/Download' % android_internal_storage_dir()
-    elif platform == WINDOWS:
-        dirs['data'] = user_data_dir('lbrynet', 'lbry')
-        dirs['lbryum'] = user_data_dir('lbryum', 'lbry')
-        dirs['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
-    elif platform == DARWIN:
-        _get_old_directories(platform)
-    elif platform == LINUX:
-        dirs['data'] = user_data_dir('lbry/lbrynet')
-        dirs['lbryum'] = user_data_dir('lbry/lbryum')
+def _get_new_directories(platform_type):
+    directories = {}
+    if platform_type == ANDROID:
+        directories['data'] = '%s/lbrynet' % android_app_internal_storage_dir()
+        directories['lbryum'] = '%s/lbryum' % android_app_internal_storage_dir()
+        directories['download'] = '%s/Download' % android_internal_storage_dir()
+    elif platform_type == WINDOWS:
+        directories['data'] = user_data_dir('lbrynet', 'lbry')
+        directories['lbryum'] = user_data_dir('lbryum', 'lbry')
+        directories['download'] = get_path(FOLDERID.Downloads, UserHandle.current)
+    elif platform_type == DARWIN:
+        directories = _get_old_directories(platform_type)
+    elif platform_type == LINUX:
+        directories['data'] = user_data_dir('lbry/lbrynet')
+        directories['lbryum'] = user_data_dir('lbry/lbryum')
         try:
             with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
                 down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
                 down_dir = re.sub('\$HOME', os.getenv('HOME'), down_dir)
-                dirs['download'] = re.sub('\"', '', down_dir)
+                directories['download'] = re.sub('\"', '', down_dir)
         except EnvironmentError:
-            dirs['download'] = os.getenv('XDG_DOWNLOAD_DIR')
+            directories['download'] = os.getenv('XDG_DOWNLOAD_DIR')
 
-        if not dirs['download']:
-            dirs['download'] = os.path.expanduser('~/Downloads')
+        if not directories['download']:
+            directories['download'] = os.path.expanduser('~/Downloads')
     else:
         raise ValueError('unknown platform value')
-    return dirs
+    return directories
 
 
 if 'ANDROID_ARGUMENT' in os.environ:
@@ -356,7 +356,7 @@ class Config(object):
         return env_settings
 
     def _assert_valid_data_type(self, data_type):
-        if not data_type in self._data:
+        if data_type not in self._data:
             raise KeyError('{} in is not a valid data type'.format(data_type))
 
     def get_valid_setting_names(self):
@@ -554,6 +554,7 @@ class Config(object):
 
 # type: Config
 settings = None
+
 
 def get_default_env():
     env_defaults = {}
