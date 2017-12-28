@@ -264,6 +264,7 @@ ADJUSTABLE_SETTINGS = {
     'dht_node_port': (int, DEFAULT_DHT_NODE_PORT),
     'download_directory': (str, default_download_dir),
     'download_timeout': (int, 180),
+    'external_ip': (str, None),
     'is_generous_host': (bool, True),
     'announce_head_blobs_only': (bool, True),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_list),
