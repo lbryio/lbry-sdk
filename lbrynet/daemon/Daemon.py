@@ -236,7 +236,6 @@ class Daemon(AuthJSONRPCServer):
                 log.info("Started lbrynet-daemon")
                 log.info("%i blobs in manager", len(self.session.blob_manager.blobs))
 
-            yield self.session.blob_manager.get_all_verified_blobs()
             yield _announce()
 
         log.info("Starting lbrynet-daemon")
