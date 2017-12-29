@@ -21,13 +21,13 @@ class TestEncryptedFileSaver(unittest.TestCase):
         payment_rate_manager = None
         wallet = None
         download_directory = '.'
-        upload_allowed = False
-        saver = EncryptedFileSaver(
-            stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
-            payment_rate_manager, wallet, download_directory, file_name)
+        key = ''
+
+        saver = EncryptedFileSaver(stream_hash, peer_finder, rate_limiter, blob_manager,
+                                   stream_info_manager, payment_rate_manager, wallet,
+                                   download_directory, key, file_name, file_name,
+                                   file_name)
 
         yield saver._setup_output()
         self.assertTrue(os.path.isfile(file_name))
         saver._close_output()
-
-

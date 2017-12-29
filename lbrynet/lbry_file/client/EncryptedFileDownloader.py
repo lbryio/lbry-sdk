@@ -22,12 +22,13 @@ class EncryptedFileDownloader(CryptStreamDownloader):
     """Classes which inherit from this class download LBRY files"""
 
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager,
-                 stream_info_manager, payment_rate_manager, wallet):
+                 stream_info_manager, payment_rate_manager, wallet, key, stream_name,
+                 suggested_file_name=None):
         CryptStreamDownloader.__init__(self, peer_finder, rate_limiter, blob_manager,
-                                       payment_rate_manager, wallet)
+                                       payment_rate_manager, wallet, key, stream_name)
         self.stream_hash = stream_hash
         self.stream_info_manager = stream_info_manager
-        self.suggested_file_name = None
+        self.suggested_file_name = suggested_file_name
         self._calculated_total_bytes = None
         self.sd_hash = None
 
@@ -171,11 +172,11 @@ class EncryptedFileDownloaderFactory(object):
 
 class EncryptedFileSaver(EncryptedFileDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
-                 payment_rate_manager, wallet, download_directory, file_name=None):
-        EncryptedFileDownloader.__init__(self, stream_hash,
-                                         peer_finder, rate_limiter,
-                                         blob_manager, stream_info_manager,
-                                         payment_rate_manager, wallet)
+                 payment_rate_manager, wallet, download_directory, key, stream_name,
+                 suggested_file_name, file_name):
+        EncryptedFileDownloader.__init__(self, stream_hash, peer_finder, rate_limiter,
+                                         blob_manager, stream_info_manager, payment_rate_manager,
+                                         wallet, key, stream_name, suggested_file_name)
         self.download_directory = download_directory
         self.file_name = file_name
         self.file_written_to = None
@@ -273,11 +274,15 @@ class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
         self.download_directory = download_directory
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info):
-        return EncryptedFileSaver(stream_hash, self.peer_finder,
-                                  self.rate_limiter, self.blob_manager,
-                                  self.stream_info_manager,
-                                  payment_rate_manager, self.wallet,
-                                  self.download_directory)
+        stream_name = binascii.unhexlify(stream_info.raw_info['stream_name'])
+        key = stream_info.raw_info['key']
+        suggested_file_name = binascii.unhexlify(stream_info.raw_info['suggested_file_name'])
+        file_name = os.path.join(self.download_directory, os.path.basename(suggested_file_name))
+
+        return EncryptedFileSaver(stream_hash, self.peer_finder, self.rate_limiter,
+                                  self.blob_manager, self.stream_info_manager,
+                                  payment_rate_manager, self.wallet, self.download_directory, key,
+                                  stream_name, suggested_file_name, file_name)
 
     @staticmethod
     def get_description():

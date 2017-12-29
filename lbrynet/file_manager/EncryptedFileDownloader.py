@@ -34,21 +34,18 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     STATUS_RUNNING = "running"
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
-    """
-    These are started by EncryptedFileManager, aka, file_manager
-    """
-    def __init__(self, rowid, stream_hash, peer_finder, rate_limiter,
-                 blob_manager, stream_info_manager, lbry_file_manager,
-                 payment_rate_manager, wallet, download_directory,
-                 file_name=None):
 
+    def __init__(self, rowid, stream_hash, peer_finder, rate_limiter, blob_manager,
+                 stream_info_manager, lbry_file_manager, payment_rate_manager, wallet,
+                 download_directory, file_name=None, sd_hash=None, key=None, stream_name=None,
+                 suggested_file_name=None):
         EncryptedFileSaver.__init__(self, stream_hash, peer_finder,
                                     rate_limiter, blob_manager,
                                     stream_info_manager,
                                     payment_rate_manager, wallet,
                                     download_directory,
-                                    file_name)
-
+                                    file_name, key, stream_name, suggested_file_name)
+        self.sd_hash = sd_hash
         self.rowid = rowid
         self.lbry_file_manager = lbry_file_manager
         self._saving_status = False
