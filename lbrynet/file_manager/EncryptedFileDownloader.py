@@ -54,22 +54,16 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     def saving_status(self):
         return self._saving_status
 
-    @defer.inlineCallbacks
-    def restore(self):
-
-        status = yield self.lbry_file_manager.get_lbry_file_status(self)
-        log_status(self.sd_hash, status)
-
+    def restore(self, status):
         if status == ManagedEncryptedFileDownloader.STATUS_RUNNING:
             # start returns self.finished_deferred
             # which fires when we've finished downloading the file
             # and we don't want to wait for the entire download
             self.start()
         elif status == ManagedEncryptedFileDownloader.STATUS_STOPPED:
-            defer.returnValue(False)
+            pass
         elif status == ManagedEncryptedFileDownloader.STATUS_FINISHED:
             self.completed = True
-            defer.returnValue(True)
         else:
             raise Exception("Unknown status for stream %s: %s" % (self.stream_hash, status))
 

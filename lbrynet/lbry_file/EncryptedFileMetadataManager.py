@@ -1,6 +1,7 @@
+import os
 import logging
 import sqlite3
-import os
+import binascii
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
@@ -208,6 +209,30 @@ class DBEncryptedFileMetadataManager(object):
         return d
 
     @rerun_if_locked
+    @defer.inlineCallbacks
+    def _get_all_stream_infos(self):
+        file_results = yield self.db_conn.runQuery("select rowid, * from lbry_files")
+        descriptor_results = yield self.db_conn.runQuery("select stream_hash, sd_blob_hash "
+                                                         "from lbry_file_descriptors")
+        response = {}
+        for (stream_hash, sd_hash) in descriptor_results:
+            if stream_hash in response:
+                log.warning("Duplicate stream %s (sd: %s)", stream_hash, sd_hash[:16])
+                continue
+            response[stream_hash] = {
+                'sd_hash': sd_hash
+            }
+        for (rowid, stream_hash, key, stream_name, suggested_file_name) in file_results:
+            if stream_hash not in response:
+                log.warning("Missing sd hash for %s", stream_hash)
+                continue
+            response[stream_hash]['rowid'] = rowid
+            response[stream_hash]['key'] = binascii.unhexlify(key)
+            response[stream_hash]['stream_name'] = binascii.unhexlify(stream_name)
+            response[stream_hash]['suggested_file_name'] = binascii.unhexlify(suggested_file_name)
+        defer.returnValue(response)
+
+    @rerun_if_locked
     def _check_if_stream_exists(self, stream_hash):
         d = self.db_conn.runQuery(
             "select stream_hash from lbry_files where stream_hash = ?", (stream_hash,))
@@ -321,8 +346,8 @@ class DBEncryptedFileMetadataManager(object):
 
     @rerun_if_locked
     def _get_all_lbry_files(self):
-        d = self.db_conn.runQuery("select rowid, stream_hash, "
-                                  "blob_data_rate from lbry_file_options")
+        d = self.db_conn.runQuery("select rowid, stream_hash, blob_data_rate, status "
+                                  "from lbry_file_options")
         return d
 
     @rerun_if_locked
