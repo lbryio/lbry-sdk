@@ -27,7 +27,7 @@ def log_status(sd_hash, status):
         status_string = "finished"
     else:
         status_string = "unknown"
-    log.info("stream %s is %s", short_hash(sd_hash), status_string)
+    log.debug("stream %s is %s", short_hash(sd_hash), status_string)
 
 
 class ManagedEncryptedFileDownloader(EncryptedFileSaver):
