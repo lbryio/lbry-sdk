@@ -20,9 +20,18 @@ def test_internet_connection():
 
 def start():
     """The primary entry point for launching the daemon."""
-    conf.initialize_settings()
+
+    # postpone loading the config file to after the CLI arguments
+    # have been parsed, as they may contain an alternate config file location
+    conf.initialize_settings(load_conf_file=False)
 
     parser = argparse.ArgumentParser(description="Launch lbrynet-daemon")
+    parser.add_argument(
+        "--conf",
+        help="specify an alternative configuration file",
+        type=str,
+        default=None
+    )
     parser.add_argument(
         "--wallet",
         help="lbryum or ptc for testing, default lbryum",
@@ -48,6 +57,8 @@ def start():
 
     args = parser.parse_args()
     update_settings_from_args(args)
+
+    conf.settings.load_conf_file_settings()
 
     if args.version:
         version = system_info.get_platform(get_ip=False)
@@ -82,6 +93,8 @@ def update_settings_from_args(args):
         'use_auth_http': args.useauth,
         'wallet': args.wallet,
     }, data_types=(conf.TYPE_CLI,))
+
+    conf.conf_file = args.conf
 
 
 @defer.inlineCallbacks

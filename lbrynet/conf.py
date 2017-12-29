@@ -56,6 +56,8 @@ settings_encoders = {
     '.yml': yaml.safe_dump
 }
 
+# set by CLI when the user specifies an alternate config file path
+conf_file = None
 
 def _win_path_to_bytes(path):
     """
@@ -476,7 +478,11 @@ class Config(object):
             }
 
     def save_conf_file_settings(self):
-        path = self.get_conf_filename()
+        if conf_file:
+            path = conf_file
+        else:
+            path = self.get_conf_filename()
+
         ext = os.path.splitext(path)[1]
         encoder = settings_encoders.get(ext, False)
         assert encoder is not False, 'Unknown settings format %s' % ext
@@ -484,7 +490,11 @@ class Config(object):
             settings_file.write(encoder(self._data[TYPE_PERSISTED]))
 
     def load_conf_file_settings(self):
-        path = self.get_conf_filename()
+        if conf_file:
+            path = conf_file
+        else:
+            path = self.get_conf_filename()
+
         ext = os.path.splitext(path)[1]
         decoder = settings_decoders.get(ext, False)
         assert decoder is not False, 'Unknown settings format %s' % ext
