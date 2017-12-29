@@ -917,7 +917,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(lbry_file)
 
     @defer.inlineCallbacks
-    def _get_lbry_files(self, return_json=False, full_status=False, **kwargs):
+    def _get_lbry_files(self, return_json=False, full_status=True, **kwargs):
         lbry_files = list(self.lbry_file_manager.lbry_files)
         if kwargs:
             for search_type, value in iter_lbry_file_search_values(kwargs):
