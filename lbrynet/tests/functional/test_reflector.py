@@ -6,7 +6,6 @@ from lbrynet import lbry_file
 from lbrynet import reflector
 from lbrynet.core import BlobManager
 from lbrynet.core import PeerManager
-from lbrynet.core import RateLimiter
 from lbrynet.core import Session
 from lbrynet.core import StreamDescriptor
 from lbrynet.lbry_file import EncryptedFileMetadataManager
@@ -32,7 +31,6 @@ class TestReflector(unittest.TestCase):
         peer_manager = PeerManager.PeerManager()
         peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
         hash_announcer = mocks.Announcer()
-        rate_limiter = RateLimiter.DummyRateLimiter()
         sd_identifier = StreamDescriptor.StreamDescriptorIdentifier()
 
         self.expected_blobs = [
@@ -52,7 +50,7 @@ class TestReflector(unittest.TestCase):
                 1015056
             ),
         ]
-
+        ## Setup reflector client classes ##
         self.db_dir, self.blob_dir = mk_db_and_blob_dir()
         self.session = Session.Session(
             conf.settings['data_rate'],
@@ -63,7 +61,6 @@ class TestReflector(unittest.TestCase):
             blob_dir=self.blob_dir,
             peer_port=5553,
             use_upnp=False,
-            rate_limiter=rate_limiter,
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
             external_ip="127.0.0.1"
@@ -75,19 +72,39 @@ class TestReflector(unittest.TestCase):
         self.lbry_file_manager = EncryptedFileManager.EncryptedFileManager(
             self.session, self.stream_info_manager, sd_identifier)
 
+        ## Setup reflector server classes ##
         self.server_db_dir, self.server_blob_dir = mk_db_and_blob_dir()
+        self.server_session = Session.Session(
+            conf.settings['data_rate'],
+            db_dir=self.server_db_dir,
+            node_id="abcd",
+            peer_finder=peer_finder,
+            hash_announcer=hash_announcer,
+            blob_dir=self.server_blob_dir,
+            peer_port=5553,
+            use_upnp=False,
+            wallet=wallet,
+            blob_tracker_class=mocks.BlobAvailabilityTracker,
+            external_ip="127.0.0.1"
+        )
+
         self.server_blob_manager = BlobManager.DiskBlobManager(
                                     hash_announcer, self.server_blob_dir, self.server_db_dir)
         self.server_stream_info_manager = \
             EncryptedFileMetadataManager.DBEncryptedFileMetadataManager(self.server_db_dir)
 
+        self.server_lbry_file_manager = EncryptedFileManager.EncryptedFileManager(
+                                    self.server_session, self.server_stream_info_manager,
+                                    sd_identifier)
 
         d = self.session.setup()
         d.addCallback(lambda _: self.stream_info_manager.setup())
         d.addCallback(lambda _: EncryptedFileOptions.add_lbry_file_to_sd_identifier(sd_identifier))
         d.addCallback(lambda _: self.lbry_file_manager.setup())
+        d.addCallback(lambda _: self.server_session.setup())
         d.addCallback(lambda _: self.server_blob_manager.setup())
         d.addCallback(lambda _: self.server_stream_info_manager.setup())
+        d.addCallback(lambda _: self.server_lbry_file_manager.setup())
 
         def verify_equal(sd_info):
             self.assertEqual(mocks.create_stream_sd_file, sd_info)
@@ -123,7 +140,8 @@ class TestReflector(unittest.TestCase):
 
         def start_server():
             server_factory = reflector.ServerFactory(
-                peer_manager, self.server_blob_manager, self.server_stream_info_manager)
+                peer_manager, self.server_blob_manager, self.server_stream_info_manager,
+                self.server_lbry_file_manager)
             from twisted.internet import reactor
             port = 8943
             while self.reflector_port is None:
@@ -140,16 +158,18 @@ class TestReflector(unittest.TestCase):
 
     def take_down_env(self):
         d = defer.succeed(True)
-        if self.lbry_file_manager is not None:
-            d.addCallback(lambda _: self.lbry_file_manager.stop())
-        if self.session is not None:
-            d.addCallback(lambda _: self.session.shut_down())
-        if self.stream_info_manager is not None:
-            d.addCallback(lambda _: self.stream_info_manager.stop())
-        if self.server_blob_manager is not None:
-            d.addCallback(lambda _: self.server_blob_manager.stop())
-        if self.reflector_port is not None:
-            d.addCallback(lambda _: self.reflector_port.stopListening())
+        ## Close client classes ##
+        d.addCallback(lambda _: self.lbry_file_manager.stop())
+        d.addCallback(lambda _: self.session.shut_down())
+        d.addCallback(lambda _: self.stream_info_manager.stop())
+
+        ## Close server classes ##
+        d.addCallback(lambda _: self.server_blob_manager.stop())
+        d.addCallback(lambda _: self.server_lbry_file_manager.stop())
+        d.addCallback(lambda _: self.server_session.shut_down())
+        d.addCallback(lambda _: self.server_stream_info_manager.stop())
+
+        d.addCallback(lambda _: self.reflector_port.stopListening())
 
         def delete_test_env():
             try:
@@ -185,6 +205,18 @@ class TestReflector(unittest.TestCase):
             self.assertEqual(1, len(sd_hashes))
             expected_sd_hash = self.expected_blobs[-1][0]
             self.assertEqual(self.sd_hash, sd_hashes[0])
+
+            # check lbry file manager has the file
+            files = yield self.server_lbry_file_manager.lbry_files
+            self.assertEqual(1, len(files))
+            self.assertEqual(self.sd_hash, files[0].sd_hash)
+            self.assertEqual('test_file', files[0].file_name)
+
+            status = yield files[0].status()
+            self.assertEqual('stopped', status.running_status)
+            num_blobs = len(self.expected_blobs) -1 # subtract sd hash
+            self.assertEqual(num_blobs, status.num_completed)
+            self.assertEqual(num_blobs, status.num_known)
 
             # check should_announce blobs on blob_manager
             blob_hashes = yield self.server_blob_manager._get_all_should_announce_blob_hashes()

@@ -324,7 +324,8 @@ class Daemon(AuthJSONRPCServer):
                 reflector_factory = reflector_server_factory(
                     self.session.peer_manager,
                     self.session.blob_manager,
-                    self.stream_info_manager
+                    self.stream_info_manager,
+                    self.lbry_file_manager
                 )
                 try:
                     self.reflector_server_port = reactor.listenTCP(self.reflector_port,
