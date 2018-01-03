@@ -1192,6 +1192,9 @@ class LBRYumWallet(Wallet):
         self.blocks_behind = 0
         self.catchup_progress = 0
 
+        # fired when the wallet actually unlocks (wallet_unlocked_d can be called multiple times)
+        self.wallet_unlock_success = defer.Deferred()
+
     def _is_first_run(self):
         return (not self.printed_retrieving_headers and
                 self.network.blockchain.retrieving_headers)
@@ -1202,11 +1205,32 @@ class LBRYumWallet(Wallet):
 
         return self._cmd_runner
 
+    def check_locked(self):
+        if not self.wallet.use_encryption:
+            log.info("Wallet is not encrypted")
+            self.wallet_unlock_success.callback(True)
+        elif not self._cmd_runner:
+            raise Exception("Command runner hasn't been initialized yet")
+        elif self._cmd_runner.locked:
+            log.info("Waiting for wallet password")
+            self.wallet_unlocked_d.addCallback(self.unlock)
+        return self.wallet_unlock_success
+
+    def unlock(self, password):
+        if self._cmd_runner and self._cmd_runner.locked:
+            try:
+                self._cmd_runner.unlock_wallet(password)
+                self.wallet_unlock_success.callback(True)
+                log.info("Unlocked the wallet!")
+            except InvalidPassword:
+                log.warning("Incorrect password, try again")
+                self.wallet_unlocked_d = defer.Deferred()
+                self.wallet_unlocked_d.addCallback(self.unlock)
+                return defer.succeed(False)
+        return defer.succeed(True)
+
     def _start(self):
         network_start_d = defer.Deferred()
-
-        # fired when the wallet actually unlocks (wallet_unlocked_d can be called multiple times)
-        wallet_unlock_success = defer.Deferred()
 
         def setup_network():
             self.network = Network(self.config)
@@ -1226,30 +1250,6 @@ class LBRYumWallet(Wallet):
             else:
                 network_start_d.errback(ValueError("Failed to connect to network."))
 
-        def unlock(password):
-            if self._cmd_runner and self._cmd_runner.locked:
-                try:
-                    self._cmd_runner.unlock_wallet(password)
-                    wallet_unlock_success.callback(True)
-                    log.info("Unlocked the wallet!")
-                except InvalidPassword:
-                    log.warning("Incorrect password, try again")
-                    self.wallet_unlocked_d = defer.Deferred()
-                    self.wallet_unlocked_d.addCallback(unlock)
-                    return defer.succeed(False)
-            return defer.succeed(True)
-
-        def check_locked():
-            if not self.wallet.use_encryption:
-                log.info("Wallet is not encrypted")
-                wallet_unlock_success.callback(True)
-            elif not self._cmd_runner:
-                raise Exception("Command runner hasn't been initialized yet")
-            elif self._cmd_runner.locked:
-                log.info("Waiting for wallet password")
-                self.wallet_unlocked_d.addCallback(unlock)
-            return wallet_unlock_success
-
         self._start_check = task.LoopingCall(check_started)
 
         d = setup_network()
@@ -1262,7 +1262,6 @@ class LBRYumWallet(Wallet):
         d.addCallback(lambda _: log.info("Synchronized wallet"))
         d.addCallback(lambda _: self.get_cmd_runner())
         d.addCallbacks(lambda _: log.info("Set up lbryum command runner"))
-        d.addCallbacks(lambda _: check_locked())
         return d
 
     def _stop(self):
