@@ -41,6 +41,7 @@ at anytime.
   * Add `peer_port` to settings configurable using `settings_set`
   * Added an option to disable max key fee check.
   * Add `wallet_unlock`, a command available during startup to unlock an encrypted wallet
+  * Add `--conf` CLI flag to specify an alternate config file
 
 ### Changed
   * claim_show API command no longer takes name as argument
