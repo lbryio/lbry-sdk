@@ -3160,8 +3160,8 @@ def get_loggly_query_string(installation_id):
     return base_loggly_search_url + data
 
 
-def report_bug_to_slack(message, installation_id, platform_name, app_version):
-    webhook = utils.deobfuscate(conf.settings['SLACK_WEBHOOK'])
+def report_bug_to_discord(message, installation_id, platform_name, app_version):
+    webhook = utils.deobfuscate(conf.settings['DISCORD_WEBHOOK'])
     payload_template = "os: %s\n version: %s\n<%s|loggly>\n%s"
     payload_params = (
         platform_name,
