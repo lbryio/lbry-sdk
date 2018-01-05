@@ -1146,7 +1146,7 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_report_bug(self, message=None):
         """
-        Report a bug to slack
+        Report a bug to discord
 
         Usage:
             report_bug (<message> | --message=<message>)
@@ -1156,7 +1156,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         platform_name = self._get_platform()['platform']
-        report_bug_to_slack(
+        report_bug_to_discord(
             message,
             conf.settings.installation_id,
             platform_name,
