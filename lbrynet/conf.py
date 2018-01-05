@@ -286,6 +286,8 @@ ADJUSTABLE_SETTINGS = {
     'use_upnp': (bool, True),
     'use_keyring': (bool, False),
     'wallet': (str, LBRYUM_WALLET),
+    'blockchain_name': (str, 'lbrycrd_main'),
+    'lbryum_servers': (list, ['lbryum8.lbry.io:50001', 'lbryum9.lbry.io:50001'])
 }
 
 

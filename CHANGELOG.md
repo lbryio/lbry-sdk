@@ -45,6 +45,7 @@ at anytime.
   * Added an option to disable max key fee check.
   * Add `wallet_unlock`, a command available during startup to unlock an encrypted wallet
   * Add `--conf` CLI flag to specify an alternate config file
+  * Added `blockchain_name` and `lbryum_servers` to the adjustable settings
 
 ### Changed
   * claim_show API command no longer takes name as argument

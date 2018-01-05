@@ -540,8 +540,18 @@ class Daemon(AuthJSONRPCServer):
             if self.wallet_type == LBRYCRD_WALLET:
                 raise ValueError('LBRYcrd Wallet is no longer supported')
             elif self.wallet_type == LBRYUM_WALLET:
+
                 log.info("Using lbryum wallet")
-                config = {'auto_connect': True}
+
+                lbryum_servers = {address.split(":")[0]: {'t': str(address.split(":")[1])}
+                                  for address in conf.settings['lbryum_servers']}
+
+                config = {
+                    'auto_connect': True,
+                    'chain': conf.settings['blockchain_name'],
+                    'default_servers': lbryum_servers
+                }
+
                 if 'use_keyring' in conf.settings:
                     config['use_keyring'] = conf.settings['use_keyring']
                 if conf.settings['lbryum_wallet_dir']:
