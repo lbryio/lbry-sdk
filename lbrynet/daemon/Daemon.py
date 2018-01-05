@@ -1594,7 +1594,6 @@ class Daemon(AuthJSONRPCServer):
         Options:
             <file_name>           : specified name for the downloaded file
             <timeout>             : download timeout in number of seconds
-            <download_directory>  : path to directory where file will be saved
 
         Returns:
             (dict) Dictionary containing information about the stream
