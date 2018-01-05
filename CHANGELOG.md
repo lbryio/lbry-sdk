@@ -25,6 +25,8 @@ at anytime.
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
   * `get_availability`, replaced with `stream_availability`
+  * `slack`, replaced with `discord`
+  * `report_bug_to_slack`, replaced with `report_bug_to_discord`
 
 ### Changed
   * Check claim schema in `publish` before trying to make the claim, return better error messages
@@ -38,6 +40,7 @@ at anytime.
   * Re-use addresses used for lbrycrd info exchange, this was a significant source of address bloat in the wallet
   * Remove manual saving of the wallet in from lbrynet, let lbryum handle it
   * Block wallet startup on being unlocked if it is encrypted
+  * Changed `SLACK_WEBHOOK`to `DISCORD_WEBHOOK`
 
 ### Added
   * Add link to instructions on how to change the default peer port
