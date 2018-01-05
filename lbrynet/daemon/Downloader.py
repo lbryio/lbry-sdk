@@ -31,15 +31,13 @@ log = logging.getLogger(__name__)
 
 class GetStream(object):
     def __init__(self, sd_identifier, session, exchange_rate_manager,
-                 max_key_fee, disable_max_key_fee, data_rate=None, timeout=None,
-                 file_name=None):
+                 max_key_fee, disable_max_key_fee, data_rate=None, timeout=None):
 
         self.timeout = timeout or conf.settings['download_timeout']
         self.data_rate = data_rate or conf.settings['data_rate']
         self.max_key_fee = max_key_fee or conf.settings['max_key_fee'][1]
         self.disable_max_key_fee = disable_max_key_fee or conf.settings['disable_max_key_fee']
         self.download_directory = conf.settings['download_directory']
-        self.file_name = file_name
         self.timeout_counter = 0
         self.code = None
         self.sd_hash = None
@@ -126,7 +124,6 @@ class GetStream(object):
             [self.data_rate],
             self.payment_rate_manager,
             download_directory=self.download_directory,
-            file_name=self.file_name
         )
         defer.returnValue(downloader)
 

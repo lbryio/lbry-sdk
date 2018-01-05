@@ -566,7 +566,7 @@ class Config(object):
         if not self._installation_id:
             if os.path.isfile(install_id_filename):
                 with open(install_id_filename, "r") as install_id_file:
-                    self._installation_id = install_id_file.read()
+                    self._installation_id = str(install_id_file.read()).strip()
         if not self._installation_id:
             self._installation_id = base58.b58encode(utils.generate_id())
             with open(install_id_filename, "w") as install_id_file:
@@ -578,7 +578,7 @@ class Config(object):
         if not self._node_id:
             if os.path.isfile(node_id_filename):
                 with open(node_id_filename, "r") as node_id_file:
-                    self._node_id = base58.b58decode(node_id_file.read())
+                    self._node_id = base58.b58decode(str(node_id_file.read()).strip())
         if not self._node_id:
             self._node_id = utils.generate_id()
             with open(node_id_filename, "w") as node_id_file:
