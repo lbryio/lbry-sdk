@@ -1,3 +1,4 @@
+import binascii
 import logging
 from zope.interface import implements
 from lbrynet.interfaces import IStreamDownloader
@@ -61,8 +62,8 @@ class CryptStreamDownloader(object):
         self.blob_manager = blob_manager
         self.payment_rate_manager = payment_rate_manager
         self.wallet = wallet
-        self.key = key
-        self.stream_name = stream_name
+        self.key = binascii.unhexlify(key)
+        self.stream_name = binascii.unhexlify(stream_name)
         self.completed = False
         self.stopped = True
         self.stopping = False

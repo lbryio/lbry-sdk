@@ -144,9 +144,10 @@ class TestStreamify(TestCase):
             d = lbry_file.start()
             return d
 
-        def combine_stream(stream_hash):
+        def combine_stream(info):
+            stream_hash, sd_hash = info
             prm = self.session.payment_rate_manager
-            d = self.lbry_file_manager.add_lbry_file(stream_hash, prm)
+            d = self.lbry_file_manager.add_lbry_file(stream_hash, sd_hash, prm)
             d.addCallback(start_lbry_file)
 
             def check_md5_sum():
@@ -163,8 +164,9 @@ class TestStreamify(TestCase):
             test_file = GenFile(53209343, b''.join([chr(i + 5) for i in xrange(0, 64, 6)]))
             stream_hash = yield create_lbry_file(self.session, self.lbry_file_manager, "test_file",
                                              test_file, suggested_file_name="test_file")
-            yield publish_sd_blob(self.stream_info_manager, self.session.blob_manager, stream_hash)
-            defer.returnValue(stream_hash)
+            sd_hash = yield publish_sd_blob(self.stream_info_manager, self.session.blob_manager,
+                                            stream_hash)
+            defer.returnValue((stream_hash, sd_hash))
 
         d = self.session.setup()
         d.addCallback(lambda _: self.stream_info_manager.setup())

@@ -1,7 +1,6 @@
 import os
 import logging
 import sqlite3
-import binascii
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.enterprise import adbapi
@@ -227,9 +226,9 @@ class DBEncryptedFileMetadataManager(object):
                 log.warning("Missing sd hash for %s", stream_hash)
                 continue
             response[stream_hash]['rowid'] = rowid
-            response[stream_hash]['key'] = binascii.unhexlify(key)
-            response[stream_hash]['stream_name'] = binascii.unhexlify(stream_name)
-            response[stream_hash]['suggested_file_name'] = binascii.unhexlify(suggested_file_name)
+            response[stream_hash]['key'] = key
+            response[stream_hash]['stream_name'] = stream_name
+            response[stream_hash]['suggested_file_name'] = suggested_file_name
         defer.returnValue(response)
 
     @rerun_if_locked

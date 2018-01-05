@@ -6,6 +6,7 @@ from twisted.internet import defer
 
 from lbrynet.core import file_utils
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
+from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.lbry_file.StreamDescriptor import publish_sd_blob
 
 
@@ -36,13 +37,15 @@ class Publisher(object):
                                                  read_handle)
         sd_hash = yield publish_sd_blob(self.lbry_file_manager.stream_info_manager,
                             self.session.blob_manager, stream_hash)
-        self.lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash)
+        status = ManagedEncryptedFileDownloader.STATUS_FINISHED
+        self.lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash, sd_hash,
+                                                                    status=status)
         if 'source' not in claim_dict['stream']:
             claim_dict['stream']['source'] = {}
         claim_dict['stream']['source']['source'] = sd_hash
         claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
-        claim_dict['stream']['source']['version'] = "_0_0_1" # need current version here
+        claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
 
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
         self.lbry_file.completed = True

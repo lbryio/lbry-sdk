@@ -670,8 +670,7 @@ class Daemon(AuthJSONRPCServer):
             self.streams[sd_hash] = GetStream(self.sd_identifier, self.session,
                                               self.exchange_rate_manager, self.max_key_fee,
                                               self.disable_max_key_fee,
-                                              conf.settings['data_rate'], timeout,
-                                              file_name)
+                                              conf.settings['data_rate'], timeout)
             try:
                 lbry_file, finished_deferred = yield self.streams[sd_hash].start(claim_dict, name)
                 yield self.stream_info_manager.save_outpoint_to_file(lbry_file.rowid, txid, nout)

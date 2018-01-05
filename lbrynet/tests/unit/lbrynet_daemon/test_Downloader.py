@@ -103,7 +103,7 @@ class GetStreamTests(unittest.TestCase):
         DownloadTimeoutError is raised
         """
         def download_sd_blob(self):
-            raise DownloadSDTimeout(self.file_name)
+            raise DownloadSDTimeout(self)
 
         getstream = self.init_getstream_with_mocs()
         getstream._initialize = types.MethodType(moc_initialize, getstream)

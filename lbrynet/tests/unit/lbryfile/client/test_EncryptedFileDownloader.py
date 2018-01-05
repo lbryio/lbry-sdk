@@ -10,6 +10,7 @@ class TestEncryptedFileSaver(unittest.TestCase):
     @defer.inlineCallbacks
     def test_setup_output(self):
         file_name = 'encrypted_file_saver_test.tmp'
+        file_name_hex = file_name.encode('hex')
         self.assertFalse(os.path.isfile(file_name))
 
         # create file in the temporary trial folder
@@ -25,8 +26,8 @@ class TestEncryptedFileSaver(unittest.TestCase):
 
         saver = EncryptedFileSaver(stream_hash, peer_finder, rate_limiter, blob_manager,
                                    stream_info_manager, payment_rate_manager, wallet,
-                                   download_directory, key, file_name, file_name,
-                                   file_name)
+                                   download_directory, key,
+                                   file_name_hex, file_name_hex)
 
         yield saver._setup_output()
         self.assertTrue(os.path.isfile(file_name))

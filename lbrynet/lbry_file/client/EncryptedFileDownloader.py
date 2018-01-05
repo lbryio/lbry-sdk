@@ -6,7 +6,6 @@ from lbrynet.lbry_file.StreamDescriptor import save_sd_info
 from lbrynet.cryptstream.client.CryptStreamDownloader import CryptStreamDownloader
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.core.StreamDescriptor import StreamMetadata
-from lbrynet.core.Error import NoSuchStreamHash
 from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.lbry_file.client.EncryptedFileMetadataHandler import EncryptedFileMetadataHandler
 import os
@@ -28,24 +27,8 @@ class EncryptedFileDownloader(CryptStreamDownloader):
                                        payment_rate_manager, wallet, key, stream_name)
         self.stream_hash = stream_hash
         self.stream_info_manager = stream_info_manager
-        self.suggested_file_name = suggested_file_name
+        self.suggested_file_name = binascii.unhexlify(suggested_file_name)
         self._calculated_total_bytes = None
-        self.sd_hash = None
-
-    @defer.inlineCallbacks
-    def set_stream_info(self):
-        if self.key is None:
-            out = yield self.stream_info_manager.get_stream_info(self.stream_hash)
-            key, stream_name, suggested_file_name = out
-            self.key = binascii.unhexlify(key)
-            self.stream_name = binascii.unhexlify(stream_name)
-            self.suggested_file_name = binascii.unhexlify(suggested_file_name)
-
-            out = yield self.stream_info_manager.get_sd_blob_hashes_for_stream(self.stream_hash)
-            if out:
-                self.sd_hash = out[0]
-            else:
-                raise NoSuchStreamHash(self.stream_hash)
 
     def delete_data(self):
         d1 = self.stream_info_manager.get_blobs_for_stream(self.stream_hash)
@@ -173,12 +156,12 @@ class EncryptedFileDownloaderFactory(object):
 class EncryptedFileSaver(EncryptedFileDownloader):
     def __init__(self, stream_hash, peer_finder, rate_limiter, blob_manager, stream_info_manager,
                  payment_rate_manager, wallet, download_directory, key, stream_name,
-                 suggested_file_name, file_name):
+                 suggested_file_name):
         EncryptedFileDownloader.__init__(self, stream_hash, peer_finder, rate_limiter,
                                          blob_manager, stream_info_manager, payment_rate_manager,
                                          wallet, key, stream_name, suggested_file_name)
         self.download_directory = download_directory
-        self.file_name = file_name
+        self.file_name = os.path.basename(self.suggested_file_name)
         self.file_written_to = None
         self.file_handle = None
 
@@ -187,19 +170,6 @@ class EncryptedFileSaver(EncryptedFileDownloader):
             return str(self.file_written_to)
         else:
             return str(self.file_name)
-
-    def set_stream_info(self):
-        d = EncryptedFileDownloader.set_stream_info(self)
-
-        def set_file_name():
-            if self.file_name is None:
-                if self.suggested_file_name:
-                    self.file_name = os.path.basename(self.suggested_file_name)
-                else:
-                    self.file_name = os.path.basename(self.stream_name)
-
-        d.addCallback(lambda _: set_file_name())
-        return d
 
     def stop(self, err=None):
         d = EncryptedFileDownloader.stop(self, err=err)
@@ -274,15 +244,14 @@ class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
         self.download_directory = download_directory
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info):
-        stream_name = binascii.unhexlify(stream_info.raw_info['stream_name'])
+        stream_name = stream_info.raw_info['stream_name']
         key = stream_info.raw_info['key']
-        suggested_file_name = binascii.unhexlify(stream_info.raw_info['suggested_file_name'])
-        file_name = os.path.join(self.download_directory, os.path.basename(suggested_file_name))
-
+        suggested_file_name = stream_info.raw_info['suggested_file_name']
         return EncryptedFileSaver(stream_hash, self.peer_finder, self.rate_limiter,
                                   self.blob_manager, self.stream_info_manager,
-                                  payment_rate_manager, self.wallet, self.download_directory, key,
-                                  stream_name, suggested_file_name, file_name)
+                                  payment_rate_manager, self.wallet, self.download_directory,
+                                  key=key, stream_name=stream_name,
+                                  suggested_file_name=suggested_file_name)
 
     @staticmethod
     def get_description():
