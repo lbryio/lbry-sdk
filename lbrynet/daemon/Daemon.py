@@ -1146,7 +1146,7 @@ class Daemon(AuthJSONRPCServer):
 
     def jsonrpc_report_bug(self, message=None):
         """
-        Report a bug to slack
+        Report a bug to discord
 
         Usage:
             report_bug (<message> | --message=<message>)
@@ -1156,7 +1156,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         platform_name = self._get_platform()['platform']
-        report_bug_to_slack(
+        report_bug_to_discord(
             message,
             conf.settings.installation_id,
             platform_name,
@@ -3160,8 +3160,8 @@ def get_loggly_query_string(installation_id):
     return base_loggly_search_url + data
 
 
-def report_bug_to_slack(message, installation_id, platform_name, app_version):
-    webhook = utils.deobfuscate(conf.settings['SLACK_WEBHOOK'])
+def report_bug_to_discord(message, installation_id, platform_name, app_version):
+    webhook = utils.deobfuscate(conf.settings['DISCORD_WEBHOOK'])
     payload_template = "os: %s\n version: %s\n<%s|loggly>\n%s"
     payload_params = (
         platform_name,

@@ -477,7 +477,7 @@ Returns:
 ## report_bug
 
 ```text
-Report a bug to slack
+Report a bug to Discord
 
 Args:
     'message': (str) message to send
