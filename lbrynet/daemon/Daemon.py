@@ -60,6 +60,7 @@ LOADING_FILE_MANAGER_CODE = 'loading_file_manager'
 LOADING_SERVER_CODE = 'loading_server'
 STARTED_CODE = 'started'
 WAITING_FOR_FIRST_RUN_CREDITS = 'waiting_for_credits'
+WAITING_FOR_UNLOCK = 'waiting_for_wallet_unlock'
 STARTUP_STAGES = [
     (INITIALIZING_CODE, 'Initializing'),
     (LOADING_DB_CODE, 'Loading databases'),
@@ -68,6 +69,7 @@ STARTUP_STAGES = [
     (LOADING_SERVER_CODE, 'Starting lbrynet'),
     (STARTED_CODE, 'Started lbrynet'),
     (WAITING_FOR_FIRST_RUN_CREDITS, 'Waiting for first run credits'),
+    (WAITING_FOR_UNLOCK, 'Waiting for user to unlock the wallet using the wallet_unlock command')
 ]
 
 # TODO: make this consistent with the stages in Downloader.py
@@ -248,6 +250,7 @@ class Daemon(AuthJSONRPCServer):
         yield threads.deferToThread(self._setup_data_directory)
         yield self._check_db_migration()
         yield self._get_session()
+        yield self._check_wallet_locked()
         yield self._get_analytics()
         yield add_lbry_file_to_sd_identifier(self.sd_identifier)
         yield self._setup_stream_identifier()
@@ -587,6 +590,14 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(create_session)
         d.addCallback(lambda _: self.session.setup())
         return d
+
+    @defer.inlineCallbacks
+    def _check_wallet_locked(self):
+        wallet = self.session.wallet
+        if wallet.wallet.use_encryption:
+            self.startup_status = STARTUP_STAGES[7]
+
+        yield wallet.check_locked()
 
     def _setup_stream_identifier(self):
         file_saver_factory = EncryptedFileSaverFactory(

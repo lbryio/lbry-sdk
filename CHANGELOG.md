@@ -44,6 +44,7 @@ at anytime.
   * Add `peer_port` to settings configurable using `settings_set`
   * Added an option to disable max key fee check.
   * Add `wallet_unlock`, a command available during startup to unlock an encrypted wallet
+  * Added a new startup stage to indicate if the daemon is waiting for the `wallet_unlock` command.
   * Add `--conf` CLI flag to specify an alternate config file
   * Added `blockchain_name` and `lbryum_servers` to the adjustable settings
 
