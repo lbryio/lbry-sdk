@@ -56,6 +56,8 @@ settings_encoders = {
     '.yml': yaml.safe_dump
 }
 
+# set by CLI when the user specifies an alternate config file path
+conf_file = None
 
 def _win_path_to_bytes(path):
     """
@@ -284,6 +286,8 @@ ADJUSTABLE_SETTINGS = {
     'use_upnp': (bool, True),
     'use_keyring': (bool, False),
     'wallet': (str, LBRYUM_WALLET),
+    'blockchain_name': (str, 'lbrycrd_main'),
+    'lbryum_servers': (list, ['lbryum8.lbry.io:50001', 'lbryum9.lbry.io:50001'])
 }
 
 
@@ -309,6 +313,11 @@ class Config(object):
         # the order in which a piece of data is searched for. earlier types override later types
         self._search_order = (
             TYPE_RUNTIME, TYPE_CLI, TYPE_ENV, TYPE_PERSISTED, TYPE_DEFAULT
+        )
+
+        # types of data where user specified config values can be stored
+        self._user_specified = (
+            TYPE_RUNTIME, TYPE_CLI, TYPE_ENV, TYPE_PERSISTED
         )
 
         self._data[TYPE_DEFAULT].update(self._fixed_defaults)
@@ -383,6 +392,28 @@ class Config(object):
         if currency not in self._fixed_defaults['CURRENCIES'].keys():
             raise InvalidCurrencyError(currency)
 
+    def is_default(self, name):
+        """Check if a config value is wasn't specified by the user
+
+        Args:
+            name: the name of the value to check
+
+        Returns: true if config value is the default one, false if it was specified by
+        the user
+
+        Sometimes it may be helpful to understand if a config value was specified
+        by the user or if it still holds its default value. This function will return
+        true when the config value is still the default. Note that when the user
+        specifies a value that is equal to the default one, it will still be considered
+        as 'user specified'
+        """
+
+        self._assert_valid_setting(name)
+        for possible_data_type in self._user_specified:
+            if name in self._data[possible_data_type]:
+                return False
+        return True
+
     def get(self, name, data_type=None):
         """Get a config value
 
@@ -449,7 +480,11 @@ class Config(object):
             }
 
     def save_conf_file_settings(self):
-        path = self.get_conf_filename()
+        if conf_file:
+            path = conf_file
+        else:
+            path = self.get_conf_filename()
+
         ext = os.path.splitext(path)[1]
         encoder = settings_encoders.get(ext, False)
         assert encoder is not False, 'Unknown settings format %s' % ext
@@ -457,7 +492,11 @@ class Config(object):
             settings_file.write(encoder(self._data[TYPE_PERSISTED]))
 
     def load_conf_file_settings(self):
-        path = self.get_conf_filename()
+        if conf_file:
+            path = conf_file
+        else:
+            path = self.get_conf_filename()
+
         ext = os.path.splitext(path)[1]
         decoder = settings_decoders.get(ext, False)
         assert decoder is not False, 'Unknown settings format %s' % ext
@@ -529,7 +568,7 @@ class Config(object):
         if not self._installation_id:
             if os.path.isfile(install_id_filename):
                 with open(install_id_filename, "r") as install_id_file:
-                    self._installation_id = install_id_file.read()
+                    self._installation_id = str(install_id_file.read()).strip()
         if not self._installation_id:
             self._installation_id = base58.b58encode(utils.generate_id())
             with open(install_id_filename, "w") as install_id_file:
@@ -541,7 +580,7 @@ class Config(object):
         if not self._node_id:
             if os.path.isfile(node_id_filename):
                 with open(node_id_filename, "r") as node_id_file:
-                    self._node_id = base58.b58decode(node_id_file.read())
+                    self._node_id = base58.b58decode(str(node_id_file.read()).strip())
         if not self._node_id:
             self._node_id = utils.generate_id()
             with open(node_id_filename, "w") as node_id_file:

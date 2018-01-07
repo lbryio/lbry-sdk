@@ -12,7 +12,7 @@ from lbrynet.reflector.reupload import reflect_stream
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
+from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType, get_sd_info
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.cryptstream.client.CryptStreamDownloader import CurrentlyStoppingError
 from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
@@ -50,8 +50,7 @@ class EncryptedFileManager(object):
     def setup(self):
         yield self.stream_info_manager.setup()
         yield self._add_to_sd_identifier()
-        # don't block on starting the lbry files
-        self._start_lbry_files()
+        yield self._start_lbry_files()
         log.info("Started file manager")
 
     def get_lbry_file_status(self, lbry_file):
@@ -86,62 +85,11 @@ class EncryptedFileManager(object):
         self.sd_identifier.add_stream_downloader_factory(
             EncryptedFileStreamType, downloader_factory)
 
-    @defer.inlineCallbacks
-    def _check_stream_is_managed(self, stream_hash):
-        # check that all the streams in the stream_info_manager are also
-        # tracked by lbry_file_manager and fix any streams that aren't.
-        rowid = yield self._get_rowid_for_stream_hash(stream_hash)
-        if rowid is not None:
-            defer.returnValue(True)
-        rate = self.session.base_payment_rate_manager.min_blob_data_payment_rate
-        key, stream_name, file_name = yield self.stream_info_manager.get_stream_info(stream_hash)
-        log.warning("Trying to fix missing lbry file for %s", stream_name.decode('hex'))
-        yield self._save_lbry_file(stream_hash, rate)
-
-    @defer.inlineCallbacks
-    def _check_stream_info_manager(self):
-        def _iter_streams(stream_hashes):
-            for stream_hash in stream_hashes:
-                yield self._check_stream_is_managed(stream_hash)
-
-        stream_hashes = yield self.stream_info_manager.get_all_streams()
-        log.debug("Checking %s streams", len(stream_hashes))
-        yield defer.DeferredList(list(_iter_streams(stream_hashes)))
-
-    @defer.inlineCallbacks
-    def _start_lbry_files(self):
-        yield self._check_stream_info_manager()
-        files_and_options = yield self._get_all_lbry_files()
-        yield defer.DeferredList([
-            self._set_options_and_restore(rowid, stream_hash, options)
-            for rowid, stream_hash, options in files_and_options
-        ])
-
-        if self.auto_re_reflect is True:
-            safe_start_looping_call(self.lbry_file_reflector, self.auto_re_reflect_interval)
-        log.info("Started %i lbry files", len(self.lbry_files))
-
-    @defer.inlineCallbacks
-    def _set_options_and_restore(self, rowid, stream_hash, options):
-        try:
-            b_prm = self.session.base_payment_rate_manager
-            payment_rate_manager = NegotiatedPaymentRateManager(
-                b_prm, self.session.blob_tracker)
-            downloader = yield self.start_lbry_file(
-                rowid, stream_hash, payment_rate_manager, blob_data_rate=options)
-            yield downloader.restore()
-        except Exception:
-            log.error('An error occurred while starting a lbry file (%s, %s, %s)',
-                          rowid, stream_hash, options)
-
-    @defer.inlineCallbacks
-    def start_lbry_file(self, rowid, stream_hash,
-                        payment_rate_manager, blob_data_rate=None,
-                        download_directory=None, file_name=None):
-        if not download_directory:
-            download_directory = self.download_directory
-        payment_rate_manager.min_blob_data_payment_rate = blob_data_rate
-        lbry_file_downloader = ManagedEncryptedFileDownloader(
+    def _get_lbry_file(self, rowid, stream_hash, payment_rate_manager, sd_hash, key,
+                       stream_name, suggested_file_name, download_directory=None):
+        download_directory = download_directory or self.download_directory
+        payment_rate_manager = payment_rate_manager or self.session.payment_rate_manager
+        return ManagedEncryptedFileDownloader(
             rowid,
             stream_hash,
             self.session.peer_finder,
@@ -152,17 +100,46 @@ class EncryptedFileManager(object):
             payment_rate_manager,
             self.session.wallet,
             download_directory,
-            file_name=file_name
+            sd_hash=sd_hash,
+            key=key,
+            stream_name=stream_name,
+            suggested_file_name=suggested_file_name
         )
-        yield lbry_file_downloader.set_stream_info()
-        self.lbry_files.append(lbry_file_downloader)
-        defer.returnValue(lbry_file_downloader)
+
+    @defer.inlineCallbacks
+    def _start_lbry_files(self):
+        files_and_options = yield self._get_all_lbry_files()
+        stream_infos = yield self.stream_info_manager._get_all_stream_infos()
+        b_prm = self.session.base_payment_rate_manager
+        payment_rate_manager = NegotiatedPaymentRateManager(b_prm, self.session.blob_tracker)
+        log.info("Trying to start %i files", len(stream_infos))
+        for i, (rowid, stream_hash, blob_data_rate, status) in enumerate(files_and_options):
+            if len(files_and_options) > 500 and i % 500 == 0:
+                log.info("Started %i/%i files", i, len(stream_infos))
+            if stream_hash in stream_infos:
+                lbry_file = self._get_lbry_file(rowid, stream_hash, payment_rate_manager,
+                                                stream_infos[stream_hash]['sd_hash'],
+                                                stream_infos[stream_hash]['key'],
+                                                stream_infos[stream_hash]['stream_name'],
+                                                stream_infos[stream_hash]['suggested_file_name'])
+                log.info("initialized file %s", lbry_file.stream_name)
+                try:
+                    # restore will raise an Exception if status is unknown
+                    lbry_file.restore(status)
+                    self.lbry_files.append(lbry_file)
+                except Exception:
+                    log.warning("Failed to start %i", rowid)
+                    continue
+        log.info("Started %i lbry files", len(self.lbry_files))
+        if self.auto_re_reflect is True:
+            safe_start_looping_call(self.lbry_file_reflector, self.auto_re_reflect_interval)
 
     @defer.inlineCallbacks
     def _stop_lbry_file(self, lbry_file):
         def wait_for_finished(lbry_file, count=2):
             if count or lbry_file.saving_status is not False:
-                return task.deferLater(reactor, 1, self._stop_lbry_file, lbry_file, count=count - 1)
+                return task.deferLater(reactor, 1, self._stop_lbry_file, lbry_file,
+                                       count=count - 1)
         try:
             yield lbry_file.stop(change_status=False)
             self.lbry_files.remove(lbry_file)
@@ -180,14 +157,18 @@ class EncryptedFileManager(object):
             yield self._stop_lbry_file(lbry_file)
 
     @defer.inlineCallbacks
-    def add_lbry_file(self, stream_hash, payment_rate_manager=None, blob_data_rate=None,
-                      download_directory=None, file_name=None):
-        if not payment_rate_manager:
-            payment_rate_manager = self.session.payment_rate_manager
+    def add_lbry_file(self, stream_hash, sd_hash, payment_rate_manager=None, blob_data_rate=None,
+                      download_directory=None, status=None):
         rowid = yield self._save_lbry_file(stream_hash, blob_data_rate)
-        lbry_file = yield self.start_lbry_file(rowid, stream_hash, payment_rate_manager,
-                                               blob_data_rate, download_directory,
-                                               file_name)
+        stream_metadata = yield get_sd_info(self.stream_info_manager,
+                                            stream_hash, False)
+        key = stream_metadata['key']
+        stream_name = stream_metadata['stream_name']
+        suggested_file_name = stream_metadata['suggested_file_name']
+        lbry_file = self._get_lbry_file(rowid, stream_hash, payment_rate_manager, sd_hash, key,
+                                        stream_name, suggested_file_name, download_directory)
+        lbry_file.restore(status or ManagedEncryptedFileDownloader.STATUS_STOPPED)
+        self.lbry_files.append(lbry_file)
         defer.returnValue(lbry_file)
 
     @defer.inlineCallbacks

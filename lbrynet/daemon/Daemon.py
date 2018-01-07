@@ -517,7 +517,7 @@ class Daemon(AuthJSONRPCServer):
 
     @defer.inlineCallbacks
     def _setup_lbry_file_manager(self):
-        log.info('Starting to setup up file manager')
+        log.info('Starting the file manager')
         self.startup_status = STARTUP_STAGES[3]
         self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
         self.lbry_file_manager = EncryptedFileManager(
@@ -543,8 +543,18 @@ class Daemon(AuthJSONRPCServer):
             if self.wallet_type == LBRYCRD_WALLET:
                 raise ValueError('LBRYcrd Wallet is no longer supported')
             elif self.wallet_type == LBRYUM_WALLET:
+
                 log.info("Using lbryum wallet")
-                config = {'auto_connect': True}
+
+                lbryum_servers = {address.split(":")[0]: {'t': str(address.split(":")[1])}
+                                  for address in conf.settings['lbryum_servers']}
+
+                config = {
+                    'auto_connect': True,
+                    'chain': conf.settings['blockchain_name'],
+                    'default_servers': lbryum_servers
+                }
+
                 if 'use_keyring' in conf.settings:
                     config['use_keyring'] = conf.settings['use_keyring']
                 if conf.settings['lbryum_wallet_dir']:
@@ -681,8 +691,7 @@ class Daemon(AuthJSONRPCServer):
             self.streams[sd_hash] = GetStream(self.sd_identifier, self.session,
                                               self.exchange_rate_manager, self.max_key_fee,
                                               self.disable_max_key_fee,
-                                              conf.settings['data_rate'], timeout,
-                                              file_name)
+                                              conf.settings['data_rate'], timeout)
             try:
                 lbry_file, finished_deferred = yield self.streams[sd_hash].start(claim_dict, name)
                 yield self.stream_info_manager.save_outpoint_to_file(lbry_file.rowid, txid, nout)
@@ -928,7 +937,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(lbry_file)
 
     @defer.inlineCallbacks
-    def _get_lbry_files(self, return_json=False, full_status=False, **kwargs):
+    def _get_lbry_files(self, return_json=False, full_status=True, **kwargs):
         lbry_files = list(self.lbry_file_manager.lbry_files)
         if kwargs:
             for search_type, value in iter_lbry_file_search_values(kwargs):
@@ -1596,7 +1605,6 @@ class Daemon(AuthJSONRPCServer):
         Options:
             <file_name>           : specified name for the downloaded file
             <timeout>             : download timeout in number of seconds
-            <download_directory>  : path to directory where file will be saved
 
         Returns:
             (dict) Dictionary containing information about the stream
@@ -2052,6 +2060,8 @@ class Daemon(AuthJSONRPCServer):
             'claim_address': claim_address,
             'change_address': change_address,
             'claim_dict': claim_dict,
+            'channel_id': channel_id,
+            'channel_name': channel_name
         })
 
         if channel_id:

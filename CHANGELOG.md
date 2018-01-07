@@ -18,6 +18,9 @@ at anytime.
   * Fixed value error due to a race condition when saving to the claim cache (https://github.com/lbryio/lbry/issues/1013)
   * Fixed being unable to re-download updated content (#951)
   * Fixed sending error messages for failed api requests
+  * Fixed the file manager startup being slow when handling thousands of files
+  * Fixed handling decryption error for blobs encrypted with an invalid key
+  * Fixed handling stream with no data blob (https://github.com/lbryio/lbry/issues/905)
 
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
@@ -42,6 +45,8 @@ at anytime.
   * Added an option to disable max key fee check.
   * Add `wallet_unlock`, a command available during startup to unlock an encrypted wallet
   * Added a new startup stage to indicate if the daemon is waiting for the `wallet_unlock` command.
+  * Add `--conf` CLI flag to specify an alternate config file
+  * Added `blockchain_name` and `lbryum_servers` to the adjustable settings
 
 ### Changed
   * claim_show API command no longer takes name as argument
