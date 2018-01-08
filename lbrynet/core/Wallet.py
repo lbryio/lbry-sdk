@@ -1400,9 +1400,7 @@ class LBRYumWallet(Wallet):
                 addresses.append(address)
 
         outputs = [[address, amount] for address in addresses]
-        tx = yield self._run_cmd_as_defer_succeed('paytomany', outputs)
-        if broadcast and tx['complete']:
-            tx['txid'] = yield self._broadcast_transaction(tx)
+        tx = yield self._run_cmd_as_defer_succeed('payto', outputs, broadcast=broadcast)
         defer.returnValue(tx)
 
     # Return an address with no balance in it, if
@@ -1475,23 +1473,15 @@ class LBRYumWallet(Wallet):
         claim_out = yield self._run_cmd_as_defer_succeed('sendwithsupport', claim_id, amount)
         defer.returnValue(claim_out)
 
-    @defer.inlineCallbacks
-    def _broadcast_transaction(self, raw_tx):
-        txid = yield self._run_cmd_as_defer_succeed('broadcast', raw_tx)
-        log.info("Broadcast tx: %s", txid)
-        if len(txid) != 64:
-            raise Exception("Transaction rejected. Raw tx: {}".format(raw_tx))
-        defer.returnValue(txid)
-
     def _do_send_many(self, payments_to_send):
-        def broadcast_send_many(paytomany_out):
-            if 'hex' not in paytomany_out:
-                raise Exception('Unexpected paytomany output:{}'.format(paytomany_out))
-            return self._broadcast_transaction(paytomany_out['hex'])
+        def handle_payto_out(payto_out):
+            if not payto_out['success']:
+                raise Exception("Failed payto, reason:{}".format(payto_out['reason']))
+            return payto_out['txid']
 
         log.debug("Doing send many. payments to send: %s", str(payments_to_send))
-        d = self._run_cmd_as_defer_succeed('paytomany', payments_to_send.iteritems())
-        d.addCallback(lambda out: broadcast_send_many(out))
+        d = self._run_cmd_as_defer_succeed('payto', payments_to_send.iteritems())
+        d.addCallback(lambda out: handle_payto_out(out))
         return d
 
     def _get_value_for_name(self, name):
