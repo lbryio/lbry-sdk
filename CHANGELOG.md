@@ -64,6 +64,7 @@ at anytime.
   * Added `wallet_unlock`, a command available during startup to unlock an encrypted wallet
   * Added support for wallet encryption via new commands `wallet_decrypt` and `wallet_encrypt`
   * Added `blob_availability` and `stream_availability` commands for debugging download issues
+  * Changed config file format of `known_dht_nodes`, `lbryum_servers`, and `reflector_servers` to lists of `hostname:port` strings
 
 ### Removed
   * Removed claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect`

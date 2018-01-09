@@ -59,6 +59,7 @@ settings_encoders = {
 # set by CLI when the user specifies an alternate config file path
 conf_file = None
 
+
 def _win_path_to_bytes(path):
     """
     Encode Windows paths to string. appdirs.user_data_dir()
@@ -162,6 +163,10 @@ def server_port(server_and_port):
     return server, int(port)
 
 
+def server_list(servers):
+    return [server_port(server) for server in servers]
+
+
 class Env(envparse.Env):
     """An Env parser that automatically namespaces the variables with LBRY"""
 
@@ -188,6 +193,7 @@ class Env(envparse.Env):
         If you do this, the tuple/list must be of the
         form (cast, default) or (cast, default, subcast)
         """
+
         if isinstance(value, (tuple, list)):
             new_value = {'cast': value[0], 'default': value[1]}
             if len(value) == 3:
@@ -257,7 +263,7 @@ ADJUSTABLE_SETTINGS = {
     'download_timeout': (int, 180),
     'is_generous_host': (bool, True),
     'announce_head_blobs_only': (bool, True),
-    'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_port),
+    'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_list),
     'lbryum_wallet_dir': (str, default_lbryum_dir),
     'max_connections_per_stream': (int, 5),
     'seek_head_blob_first': (bool, True),
@@ -277,7 +283,7 @@ ADJUSTABLE_SETTINGS = {
     # at every auto_re_reflect_interval seconds, useful if initial reflect is unreliable
     'auto_re_reflect': (bool, True),
     'auto_re_reflect_interval': (int, 3600),
-    'reflector_servers': (list, [('reflector2.lbry.io', 5566)], server_port),
+    'reflector_servers': (list, [('reflector2.lbry.io', 5566)], server_list),
     'run_reflector_server': (bool, False),
     'sd_download_timeout': (int, 3),
     'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
@@ -287,7 +293,7 @@ ADJUSTABLE_SETTINGS = {
     'use_keyring': (bool, False),
     'wallet': (str, LBRYUM_WALLET),
     'blockchain_name': (str, 'lbrycrd_main'),
-    'lbryum_servers': (list, ['lbryum8.lbry.io:50001', 'lbryum9.lbry.io:50001'])
+    'lbryum_servers': (list, [('lbryum8.lbry.io', 50001), ('lbryum9.lbry.io', 50001)], server_list)
 }
 
 
@@ -491,6 +497,16 @@ class Config(object):
         with open(path, 'w') as settings_file:
             settings_file.write(encoder(self._data[TYPE_PERSISTED]))
 
+    @staticmethod
+    def _convert_conf_file_lists(decoded):
+        converted = {}
+        for k, v in decoded.iteritems():
+            if k in ADJUSTABLE_SETTINGS and len(ADJUSTABLE_SETTINGS[k]) == 3:
+                converted[k] = ADJUSTABLE_SETTINGS[k][2](v)
+            else:
+                converted[k] = v
+        return converted
+
     def load_conf_file_settings(self):
         if conf_file:
             path = conf_file
@@ -506,7 +522,7 @@ class Config(object):
             decoded = self._fix_old_conf_file_settings(decoder(data))
             log.info('Loaded settings file: %s', path)
             self._validate_settings(decoded)
-            self._data[TYPE_PERSISTED].update(decoded)
+            self._data[TYPE_PERSISTED].update(self._convert_conf_file_lists(decoded))
         except (IOError, OSError) as err:
             log.info('%s: Failed to update settings from %s', err, path)
 
