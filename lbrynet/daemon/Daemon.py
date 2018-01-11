@@ -2349,47 +2349,62 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @AuthJSONRPCServer.auth_required
-    @AuthJSONRPCServer.flags(include_tip_info='-t')
-    def jsonrpc_transaction_list(self, include_tip_info=False):
+    def jsonrpc_transaction_list(self):
         """
         List transactions belonging to wallet
 
         Usage:
-            transaction_list [-t]
-
-        Options:
-            -t  : Include claim tip information
+            transaction_list
 
         Returns:
-            (list) List of transactions, where is_tip is null by default,
-             and set to a boolean if include_tip_info is true
+            (list) List of transactions(balance_delta field returns the amount debited/credited from
+            your wallet)
 
             {
-                "claim_info": (list) claim info if in txn [{"amount": (float) claim amount,
-                                                            "claim_id": (str) claim id,
-                                                            "claim_name": (str) claim name,
-                                                            "nout": (int) nout}],
+                "claim_info": (list) claim info if in txn [{
+                                                        "address": (str) address of claim,
+                                                        "balance_delta": (float) bid amount,
+                                                        "amount": (float) claim amount,
+                                                        "claim_id": (str) claim id,
+                                                        "claim_name": (str) claim name,
+                                                        "nout": (int) nout
+                                                        }],
+                "abandon_info": (list) abandon info if in txn [{
+                                                        "address": (str) address of abandoned claim,
+                                                        "balance_delta": (float) returned amount,
+                                                        "amount": (float) claim amount,
+                                                        "claim_id": (str) claim id,
+                                                        "claim_name": (str) claim name,
+                                                        "nout": (int) nout
+                                                        }],
                 "confirmations": (int) number of confirmations for the txn,
                 "date": (str) date and time of txn,
                 "fee": (float) txn fee,
-                "support_info": (list) support info if in txn [{"amount": (float) support amount,
-                                                                "claim_id": (str) claim id,
-                                                                "claim_name": (str) claim name,
-                                                                "is_tip": (null) default,
-                                                                (bool) if include_tip_info is true,
-                                                                "nout": (int) nout}],
+                "support_info": (list) support info if in txn [{
+                                                        "address": (str) address of support,
+                                                        "balance_delta": (float) support amount,
+                                                        "amount": (float) support amount,
+                                                        "claim_id": (str) claim id,
+                                                        "claim_name": (str) claim name,
+                                                        "is_tip": (bool),
+                                                        "nout": (int) nout
+                                                        }],
                 "timestamp": (int) timestamp,
                 "txid": (str) txn id,
-                "update_info": (list) update info if in txn [{"amount": (float) updated amount,
-                                                              "claim_id": (str) claim id,
-                                                              "claim_name": (str) claim name,
-                                                              "nout": (int) nout}],
+                "update_info": (list) update info if in txn [{
+                                                        "address": (str) address of claim,
+                                                        "balance_delta": (float) difference amount,
+                                                        "amount": (float) absolute amount,
+                                                        "claim_id": (str) claim id,
+                                                        "claim_name": (str) claim name,
+                                                        "nout": (int) nout
+                                                        }],
                 "value": (float) value of txn
             }
 
         """
 
-        d = self.session.wallet.get_history(include_tip_info)
+        d = self.session.wallet.get_history()
         d.addCallback(lambda r: self._render_response(r))
         return d
 

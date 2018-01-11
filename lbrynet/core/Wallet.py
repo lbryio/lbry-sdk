@@ -992,8 +992,8 @@ class Wallet(object):
         d = self._get_blockhash(height)
         return d
 
-    def get_history(self, include_tip_info):
-        d = self._get_history(include_tip_info)
+    def get_history(self):
+        d = self._get_history()
         return d
 
     def address_is_mine(self, address):
@@ -1117,7 +1117,7 @@ class Wallet(object):
     def _get_balance_for_address(self, address):
         return defer.fail(NotImplementedError())
 
-    def _get_history(self, include_tip_info):
+    def _get_history(self):
         return defer.fail(NotImplementedError())
 
     def _address_is_mine(self, address):
@@ -1519,9 +1519,7 @@ class LBRYumWallet(Wallet):
     def get_nametrie(self):
         return self._run_cmd_as_defer_to_thread('getclaimtrie')
 
-    def _get_history(self, include_tip_info):
-        if include_tip_info:
-            return self._run_cmd_as_defer_succeed('tiphistory')
+    def _get_history(self):
         return self._run_cmd_as_defer_succeed('claimhistory')
 
     def _address_is_mine(self, address):
