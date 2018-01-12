@@ -71,6 +71,7 @@ at anytime.
   * Removed unused files
   * Removed old and unused UI related code
   * Removed claim information from lbry file internals
+  * Removed `auto_re_reflect` setting from the conf file, use the `reflect_uploads` setting instead
 
 
 ## [0.18.0] - 2017-11-08
