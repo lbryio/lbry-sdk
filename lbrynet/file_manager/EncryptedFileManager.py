@@ -32,7 +32,7 @@ class EncryptedFileManager(object):
 
     def __init__(self, session, stream_info_manager, sd_identifier, download_directory=None):
 
-        self.auto_re_reflect = conf.settings['auto_re_reflect']
+        self.auto_re_reflect = conf.settings['reflect_uploads']
         self.auto_re_reflect_interval = conf.settings['auto_re_reflect_interval']
         self.session = session
         self.stream_info_manager = stream_info_manager

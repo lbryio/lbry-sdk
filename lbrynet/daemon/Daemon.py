@@ -546,8 +546,8 @@ class Daemon(AuthJSONRPCServer):
 
                 log.info("Using lbryum wallet")
 
-                lbryum_servers = {address.split(":")[0]: {'t': str(address.split(":")[1])}
-                                  for address in conf.settings['lbryum_servers']}
+                lbryum_servers = {address: {'t': str(port)}
+                                  for address, port in conf.settings['lbryum_servers']}
 
                 config = {
                     'auto_connect': True,
