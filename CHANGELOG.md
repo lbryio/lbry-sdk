@@ -38,6 +38,7 @@ at anytime.
   * Re-use addresses used for lbrycrd info exchange, this was a significant source of address bloat in the wallet
   * Remove manual saving of the wallet in from lbrynet, let lbryum handle it
   * Block wallet startup on being unlocked if it is encrypted
+  * Use reworked lbryum payto command
 
 ### Added
   * Add link to instructions on how to change the default peer port
