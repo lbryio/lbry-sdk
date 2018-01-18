@@ -48,7 +48,7 @@ at anytime.
   * Added a new startup stage to indicate if the daemon is waiting for the `wallet_unlock` command.
   * Add `--conf` CLI flag to specify an alternate config file
   * Added `blockchain_name` and `lbryum_servers` to the adjustable settings
-  * Added abandon information(claim name, id, address, amount, balance_delta and nout) about claims/supports/updates to `transaction_list` command, under `abandon_info` key
+  * Added abandon information (claim name, id, address, amount, balance_delta and nout) about claims, supports, and updates to `transaction_list` results under `abandon_info` key
 
 ### Changed
   * claim_show API command no longer takes name as argument
@@ -74,7 +74,7 @@ at anytime.
   * Removed old and unused UI related code
   * Removed claim information from lbry file internals
   * Removed `auto_re_reflect` setting from the conf file, use the `reflect_uploads` setting instead
-  * Removed include_tip_info argument from transaction_list, which will now always include tip information.
+  * Removed `include_tip_info` argument from `transaction_list`, which will now always include tip information.
 
 
 ## [0.18.0] - 2017-11-08

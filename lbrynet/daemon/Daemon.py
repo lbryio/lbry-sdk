@@ -2357,8 +2357,7 @@ class Daemon(AuthJSONRPCServer):
             transaction_list
 
         Returns:
-            (list) List of transactions(balance_delta field returns the amount debited/credited from
-            your wallet)
+            (list) List of transactions
 
             {
                 "claim_info": (list) claim info if in txn [{
@@ -2393,7 +2392,7 @@ class Daemon(AuthJSONRPCServer):
                 "txid": (str) txn id,
                 "update_info": (list) update info if in txn [{
                                                         "address": (str) address of claim,
-                                                        "balance_delta": (float) difference amount,
+                                                        "balance_delta": (float) credited/debited
                                                         "amount": (float) absolute amount,
                                                         "claim_id": (str) claim id,
                                                         "claim_name": (str) claim name,
