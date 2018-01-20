@@ -740,6 +740,9 @@ class Wallet(object):
             name = claim['name']
             claim['value'] = claim_dict
             claim['hex'] = decoded.serialized.encode('hex')
+
+            # lbry/issue#958
+            claim['permanent_url'] = claim["name"] + "#" + claim["claim_id"]
             if update_caches:
                 if decoded.is_stream:
                     yield self._save_name_metadata(name, outpoint, decoded.source_hash)
@@ -875,6 +878,8 @@ class Wallet(object):
                 decoded = smart_decode(claim['value'])
                 claim['value'] = decoded.claim_dict
                 claim['hex'] = decoded.serialized.encode('hex')
+                # lbry/issue#958
+                claim['permanent_url'] = claim["name"] + "#" + claim["claim_id"]
                 claims_for_return.append(claim)
             except DecodeError:
                 claim['hex'] = claim['value']
@@ -946,6 +951,9 @@ class Wallet(object):
             raise Exception(msg)
 
         claim = self._process_claim_out(claim)
+
+        # lbry/issue#958
+        claim['permanent_url'] = str(name) + "#" + claim["claim_id"]
         claim_outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
         log.info("Saving metadata for claim %s %d", claim['txid'], claim['nout'])
         yield self._update_claimid(claim['claim_id'], name, claim_outpoint)
