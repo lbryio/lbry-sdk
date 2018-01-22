@@ -251,7 +251,7 @@ class Daemon(AuthJSONRPCServer):
         yield self._check_db_migration()
         yield self._get_session()
         yield self._check_wallet_locked()
-        yield self._get_analytics()
+        yield self._start_analytics()
         yield add_lbry_file_to_sd_identifier(self.sd_identifier)
         yield self._setup_stream_identifier()
         yield self._setup_lbry_file_manager()
@@ -529,14 +529,9 @@ class Daemon(AuthJSONRPCServer):
         yield self.lbry_file_manager.setup()
         log.info('Done setting up file manager')
 
-    def _get_analytics(self):
+    def _start_analytics(self):
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
-            self.analytics_manager.register_repeating_metric(
-                analytics.BLOB_BYTES_AVAILABLE,
-                AlwaysSend(calculate_available_blob_size, self.session.blob_manager),
-                frequency=300
-            )
 
     def _get_session(self):
         def get_wallet():

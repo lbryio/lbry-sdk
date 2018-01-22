@@ -20,7 +20,6 @@ NEW_CHANNEL = 'New Channel'
 CREDITS_SENT = 'Credits Sent'
 
 BLOB_BYTES_UPLOADED = 'Blob Bytes Uploaded'
-BLOB_BYTES_AVAILABLE = 'Blob Bytes Available'
 
 log = logging.getLogger(__name__)
 
