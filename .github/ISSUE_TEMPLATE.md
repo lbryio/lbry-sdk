@@ -4,14 +4,19 @@ Thanks for reporting an issue to LBRY and helping us improve!
 To make it possible for us to help you, please fill out below information carefully.
 
 Before reporting any issues, please make sure that you're using the latest version.
-- App releases: https://github.com/lbryio/lbry-app/releases
-- Standalone daemon: https://github.com/lbryio/lbry/releases
+- App: https://github.com/lbryio/lbry-app/releases
+- Daemon: https://github.com/lbryio/lbry/releases
 
 We are also available on Discord at https://chat.lbry.io
 --> 
 
 
 ## The Issue
+
+In order to <achieve some value>, 
+as a <type of user>, 
+I want <some functionality>.
+
 
 ### Steps to reproduce
 1.
@@ -31,7 +36,7 @@ Tell us what happens instead
      You can include a screenshot instead of typing it out --> 
 
 <!-- For the daemon, run:
-     curl 'http://localhost:5279/lbryapi' --data '{"method":"version"}'
+     curl 'http://localhost:5279' --data '{"method":"version"}'
      and include the full output -->
 
 - LBRY Daemon version:
