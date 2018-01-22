@@ -23,7 +23,7 @@ from lbryschema.decode import smart_decode
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.core.system_info import get_lbrynet_version
-from lbrynet import conf, analytics
+from lbrynet import conf
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
