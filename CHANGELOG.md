@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed fetching the external ip
+  *
   *
 
 ### Deprecated
@@ -31,6 +31,11 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.18.1] - 2018-01-22
+### Fixed
+ * Fixed fetching the external ip
 
 
 ## [0.18.0] - 2017-11-08
