@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed fetching the external ip
   *
 
 ### Deprecated
