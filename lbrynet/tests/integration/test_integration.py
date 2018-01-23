@@ -28,7 +28,7 @@ def lbrynet_cli(commands):
     return out,err
 
 lbrynet_rpc_port = '5279'
-lbrynet = JSONRPCProxy.from_url("http://localhost:{}/lbryapi".format(lbrynet_rpc_port))
+lbrynet = JSONRPCProxy.from_url("http://localhost:{}".format(lbrynet_rpc_port))
 
 
 class TestIntegration(unittest.TestCase):
