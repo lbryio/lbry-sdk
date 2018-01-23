@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed import error in Wallet.py
   *
 
 ### Deprecated
