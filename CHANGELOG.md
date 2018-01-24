@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed import error in Wallet.py
+  *
   *
 
 ### Deprecated
@@ -31,6 +31,11 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.18.2] - 2018-01-24
+### Fixed
+ * Fixed import error in Wallet.py
 
 
 ## [0.18.1] - 2018-01-22
