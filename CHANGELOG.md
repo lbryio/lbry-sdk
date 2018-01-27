@@ -11,6 +11,8 @@ at anytime.
 ### Security
   *
   *
+### Fixed
+  * fixed `get` on channel now it returns error that informs of `get` not supporting channels
 
 ### Fixed
   * Fixed unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
