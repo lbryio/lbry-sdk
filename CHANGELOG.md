@@ -11,8 +11,9 @@ at anytime.
 ### Security
   *
   *
-
 ### Fixed
+  * fixed `get` on channel now it returns error that informs of `get` not supporting channels
+  * the message that is displayed can be more descriptive, and it is open for discussion
   * Fixed unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
   * Merged two separate dht test folders into one
   * Fixed value error due to a race condition when saving to the claim cache (https://github.com/lbryio/lbry/issues/1013)
