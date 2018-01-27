@@ -1636,7 +1636,7 @@ class Daemon(AuthJSONRPCServer):
         if not resolved or 'value' not in resolved:
             if 'claim' not in resolved:
                 if 'certificate' in resolved:
-                    raise  Exception( "Cannot use get on channels")
+                    raise  Exception("Cannot use get on channels")
                 else:
                     raise Exception(
                         "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", "")))
