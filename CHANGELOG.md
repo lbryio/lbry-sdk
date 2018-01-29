@@ -50,6 +50,8 @@ at anytime.
   * Add `--conf` CLI flag to specify an alternate config file
   * Added `blockchain_name` and `lbryum_servers` to the adjustable settings
   * Added abandon information (claim name, id, address, amount, balance_delta and nout) about claims, supports, and updates to `transaction_list` results under `abandon_info` key
+  * Added `permanent_url` attribute to `channel_list_mine`, `claim_list`, `claim_show`, `resolve` and `resolve_name` API calls through lbryio/lbryum#203
+  *
 
 ### Changed
   * claim_show API command no longer takes name as argument

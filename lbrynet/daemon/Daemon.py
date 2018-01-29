@@ -1530,6 +1530,7 @@ class Daemon(AuthJSONRPCServer):
                         'depth': (int) claim depth,
                         'has_signature': (bool) included if decoded_claim
                         'name': (str) claim name,
+                        'permanent_url': (str) permanent url of the certificate claim,
                         'supports: (list) list of supports [{'txid': (str) txid,
                                                              'nout': (int) nout,
                                                              'amount': (float) amount}],
@@ -1554,6 +1555,7 @@ class Daemon(AuthJSONRPCServer):
                         'depth': (int) claim depth,
                         'has_signature': (bool) included if decoded_claim
                         'name': (str) claim name,
+                        'permanent_url': (str) permanent url of the claim,
                         'channel_name': (str) channel name if claim is in a channel
                         'supports: (list) list of supports [{'txid': (str) txid,
                                                              'nout': (int) nout,
@@ -2211,6 +2213,7 @@ class Daemon(AuthJSONRPCServer):
                     'height': (int) height of the block containing the claim
                     'is_spent': (bool) true if claim is abandoned, false otherwise
                     'name': (str) name of the claim
+                    'permanent_url': (str) permanent url of the claim,
                     'txid': (str) txid of the cliam
                     'nout': (int) nout of the claim
                     'value': (str) value of the claim
@@ -2243,6 +2246,7 @@ class Daemon(AuthJSONRPCServer):
                     'height': (int) height of block containing the claim
                     'txid': (str) txid of the claim
                     'nout': (int) nout of the claim
+                    'permanent_url': (str) permanent url of the claim,
                     'supports': (list) a list of supports attached to the claim
                     'value': (str) the value of the claim
                     },
