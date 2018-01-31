@@ -1371,9 +1371,24 @@ class LBRYumWallet(Wallet):
     def _update_balance(self):
         accounts = None
         exclude_claimtrietx = True
-        d = self._run_cmd_as_defer_succeed('getbalance', accounts, exclude_claimtrietx)
-        d.addCallback(
-            lambda result: Decimal(result['confirmed']) + Decimal(result.get('unconfirmed', 0.0)))
+        
+        # Call doesn't always succeed as there is a race condition on startup
+        # Supply it with dummy data in the event of failure for nicer exception
+        # handling.
+        # See issue: https://github.com/lbryio/lbry/issues/626
+        try:
+            d = self._run_cmd_as_defer_succeed(
+                'getbalance', accounts, exclude_claimtrietx)
+            d.addCallback(
+                lambda result: Decimal(result['confirmed']) + Decimal(result.get('unconfirmed', 0.0)))
+
+        except AttributeError:
+            log.warning(
+                'Unable to communicate with lbryum via getbalance, supplying it with dummy data')
+            d = defer.Deferred()
+            d.addCallback(lambda _: Decimal(0))
+            d.callback(0)
+
         return d
 
     # Always create and return a brand new address

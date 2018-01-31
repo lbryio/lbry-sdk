@@ -23,3 +23,5 @@
 
 # temporary files from the twisted.trial test runner
 _trial_temp/
+
+.vscode/
