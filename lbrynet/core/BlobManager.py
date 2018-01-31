@@ -34,7 +34,7 @@ class DiskBlobManager(DHTHashSupplier):
         # TODO: consider using an LRU for blobs as there could potentially
         #       be thousands of blobs loaded up, many stale
         self.blobs = {}
-        self.blob_hashes_to_delete = {} # {blob_hash: being_deleted (True/False)}
+        self.blob_hashes_to_delete = {}  # {blob_hash: being_deleted (True/False)}
 
     @defer.inlineCallbacks
     def setup(self):

@@ -47,7 +47,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
         self._ask_for_request()
 
     def dataReceived(self, data):
-        log.debug("Data receieved from %s", self.peer)
+        log.debug("Received %d bytes from %s", len(data), self.peer)
         self.setTimeout(None)
         self._rate_limiter.report_dl_bytes(len(data))
 
