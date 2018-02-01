@@ -78,6 +78,7 @@ at anytime.
   * Removed claim information from lbry file internals
   * Removed `auto_re_reflect` setting from the conf file, use the `reflect_uploads` setting instead
   * Removed `include_tip_info` argument from `transaction_list`, which will now always include tip information.
+  * Removed `seccure` and `gmpy` dependencies
 
 
 ## [0.18.0] - 2017-11-08

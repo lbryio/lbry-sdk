@@ -13,10 +13,8 @@ python setupmingw32.py install
 cd ..\
 Remove-Item -Recurse -Force miniupnpc-1.9
 
-# copy requirements from lbry, but remove gmpy and miniupnpc (installed manually)
-Get-Content ..\requirements.txt | Select-String -Pattern 'gmpy|miniupnpc' -NotMatch | Out-File requirements_base.txt
-# add in gmpy wheel
-Add-Content requirements.txt "./gmpy-1.17-cp27-none-win32.whl"
+# copy requirements from lbry, but remove miniupnpc (installed manually)
+Get-Content ..\requirements.txt | Select-String -Pattern 'miniupnpc' -NotMatch | Out-File requirements_base.txt
 
 python set_build.py
 

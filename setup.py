@@ -28,7 +28,6 @@ requires = [
     'pyyaml',
     'requests',
     'txrequests',
-    'seccure',
     'txJSON-RPC',
     'zope.interface',
     'docopt'
