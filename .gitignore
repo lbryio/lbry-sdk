@@ -18,10 +18,9 @@
 /lbry-venv
 
 .idea/
+.vscode/
 .coverage
 .DS_Store
 
 # temporary files from the twisted.trial test runner
 _trial_temp/
-
-.vscode/

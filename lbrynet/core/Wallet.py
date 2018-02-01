@@ -1398,12 +1398,15 @@ class LBRYumWallet(Wallet):
 
         # See issue: https://github.com/lbryio/lbry/issues/626
         if self.network and self.network.is_connected():
-            balance_info = yield self._run_cmd_as_defer_succeed('getbalance', accounts, exclude_claimtrietx)
-            balance = Decimal(balance_info['confirmed']) + Decimal(balance_info.get('unconfirmed', 0.0))
+            balance_info = yield self._run_cmd_as_defer_succeed(
+                'getbalance', accounts, exclude_claimtrietx
+            )
+            balance = Decimal(balance_info['confirmed']) + \
+                      Decimal(balance_info.get('unconfirmed', 0.0))
         else:
             log.warning('lbryum is not connected')
 
-        defer.returnValue(balance)                
+        defer.returnValue(balance)
 
     # Always create and return a brand new address
     def get_new_address(self, for_change=False, account=None):
