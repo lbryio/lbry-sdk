@@ -1390,30 +1390,20 @@ class LBRYumWallet(Wallet):
         func = getattr(cmd_runner, cmd.name)
         return threads.deferToThread(func, *args, **kwargs)
 
+    @defer.inlineCallbacks
     def _update_balance(self):
         accounts = None
         exclude_claimtrietx = True
+        balance = Decimal(0)
 
-        # Call doesn't always succeed as there is a race condition on startup
-        # Supply it with dummy data in the event of failure for nicer exception
-        # handling.
         # See issue: https://github.com/lbryio/lbry/issues/626
-        try:
-            d = self._run_cmd_as_defer_succeed(
-                'getbalance', accounts, exclude_claimtrietx)
-            d.addCallback(
-                lambda result: Decimal(result['confirmed']) +
-                Decimal(result.get('unconfirmed', 0.0))
-            )
+        if self.network and self.network.is_connected():
+            balance_info = yield self._run_cmd_as_defer_succeed('getbalance', accounts, exclude_claimtrietx)
+            balance = Decimal(balance_info['confirmed']) + Decimal(balance_info.get('unconfirmed', 0.0))
+        else:
+            log.warning('lbryum is not connected')
 
-        except AttributeError:
-            log.warning(
-                'Unable to communicate with lbryum via getbalance, supplying it with dummy data')
-            d = defer.Deferred()
-            d.addCallback(lambda _: Decimal(0))
-            d.callback(0)
-
-        return d
+        defer.returnValue(balance)                
 
     # Always create and return a brand new address
     def get_new_address(self, for_change=False, account=None):
