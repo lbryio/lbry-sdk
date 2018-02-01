@@ -201,6 +201,12 @@ class Node(object):
                 print "    %s:%i" % (contact.address, contact.port)
         print '=================================='
 
+    def hasContacts(self):
+        for bucket in self._routingTable._buckets:
+            if bucket._contacts:
+                return True
+        return False
+
     def getApproximateTotalDHTNodes(self):
         # get the deepest bucket and the number of contacts in that bucket and multiply it
         # by the number of equivalently deep buckets in the whole DHT to get a really bad
