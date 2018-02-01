@@ -40,6 +40,7 @@ at anytime.
   * Remove manual saving of the wallet in from lbrynet, let lbryum handle it
   * Block wallet startup on being unlocked if it is encrypted
   * Use reworked lbryum payto command
+  * Re-attempt joining the DHT every 60 secs if the Node has no peers
 
 ### Added
   * Add link to instructions on how to change the default peer port
