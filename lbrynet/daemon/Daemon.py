@@ -2001,6 +2001,9 @@ class Daemon(AuthJSONRPCServer):
         except (TypeError, URIParseError):
             raise Exception("Invalid name given to publish")
 
+        if not isinstance(bid, float):
+            raise Exception("Bid must be a float")
+
         if bid <= 0.0:
             raise Exception("Invalid bid")
 
