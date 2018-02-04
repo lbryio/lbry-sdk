@@ -134,8 +134,31 @@ def get_sd_hash(stream_info):
         return None
     if isinstance(stream_info, ClaimDict):
         return stream_info.source_hash
-    return stream_info['stream']['source']['source']
+    path = ['claim', 'value', 'stream', 'source', 'source']
+    result = safe_dict_descend(stream_info, *path)
+    if not result:
+        log.warn("Unable to get sd_hash via path %s" % path)
+    return result
 
 
 def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
+
+
+def safe_dict_descend(source, *path):
+    """
+    For when you want to do something like
+    stream_info['claim']['value']['stream']['source']['source']"
+    but don't trust that every last one of those keys exists
+    """
+    cur_source = source
+    for path_entry in path:
+        try:
+            if path_entry not in cur_source:
+                return None
+        except TypeError:
+            # This happens if we try to keep going along a path that isn't
+            # a dictionary (see e.g. test_safe_dict_descend_typeerror)
+            return None
+        cur_source = cur_source[path_entry]
+    return cur_source

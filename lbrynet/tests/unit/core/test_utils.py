@@ -31,3 +31,47 @@ class ObfuscationTest(unittest.TestCase):
         plain = '☃'
         obf = utils.obfuscate(plain)
         self.assertEqual(plain, utils.deobfuscate(obf))
+
+
+class SafeDictDescendTest(unittest.TestCase):
+
+    def test_safe_dict_descend_happy(self):
+        nested = {
+            'foo': {
+                'bar': {
+                    'baz': 3
+                }
+            }
+        }
+        self.assertEqual(
+            utils.safe_dict_descend(nested, 'foo', 'bar', 'baz'),
+            3
+        )
+
+    def test_safe_dict_descend_typeerror(self):
+        nested = {
+            'foo': {
+                'bar': 7
+            }
+        }
+        self.assertIsNone(utils.safe_dict_descend(nested, 'foo', 'bar', 'baz'))
+
+    def test_safe_dict_descend_missing(self):
+        nested = {
+            'foo': {
+                'barn': 7
+            }
+        }
+        self.assertIsNone(utils.safe_dict_descend(nested, 'foo', 'bar', 'baz'))
+
+    def test_empty_dict_doesnt_explode(self):
+        nested = {}
+        self.assertIsNone(utils.safe_dict_descend(nested, 'foo', 'bar', 'baz'))
+
+    def test_identity(self):
+        nested = {
+            'foo': {
+                'bar': 7
+            }
+        }
+        self.assertIs(nested, utils.safe_dict_descend(nested))
