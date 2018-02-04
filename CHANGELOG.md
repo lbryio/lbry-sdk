@@ -8,6 +8,8 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
+### Added
+  * Added new exception for non-float values being passed in the `bid` parameter for the `publish` method
 ### Security
   *
   *
