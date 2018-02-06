@@ -18,6 +18,7 @@
 /lbry-venv
 
 .idea/
+.vscode/
 .coverage
 .DS_Store
 
