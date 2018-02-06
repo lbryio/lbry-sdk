@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from lbrynet.core import utils
-from lbryschema.claim import ClaimDict
 
 from twisted.trial import unittest
 
