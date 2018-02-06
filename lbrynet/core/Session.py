@@ -247,11 +247,10 @@ class Session(object):
         d.addErrback(upnp_failed)
         return d
 
-    def _setup_dht(self):
-
+    # the callback, if any, will be invoked once the joining procedure
+    # has terminated
+    def join_dht(self, cb=None):
         from twisted.internet import reactor
-
-        log.info("Starting DHT")
 
         def join_resolved_addresses(result):
             addresses = []
@@ -260,16 +259,33 @@ class Session(object):
                     addresses.append(value)
             return addresses
 
-        def start_dht(join_network_result):
-            self.peer_finder.run_manage_loop()
-            self.hash_announcer.run_manage_loop()
-            return True
+        @defer.inlineCallbacks
+        def join_network(knownNodes):
+            log.debug("join DHT using known nodes: " + str(knownNodes))
+            result = yield self.dht_node.joinNetwork(knownNodes)
+            defer.returnValue(result)
 
         ds = []
         for host, port in self.known_dht_nodes:
             d = reactor.resolve(host)
             d.addCallback(lambda h: (h, port))  # match host to port
             ds.append(d)
+
+        dl = defer.DeferredList(ds)
+        dl.addCallback(join_resolved_addresses)
+        dl.addCallback(join_network)
+        if cb:
+            dl.addCallback(cb)
+
+        return dl
+
+    def _setup_dht(self):
+        log.info("Starting DHT")
+
+        def start_dht(join_network_result):
+            self.peer_finder.run_manage_loop()
+            self.hash_announcer.run_manage_loop()
+            return True
 
         self.dht_node = self.dht_node_class(
             udpPort=self.dht_node_port,
@@ -281,11 +297,10 @@ class Session(object):
         if self.hash_announcer is None:
             self.hash_announcer = DHTHashAnnouncer(self.dht_node, self.peer_port)
 
-        dl = defer.DeferredList(ds)
-        dl.addCallback(join_resolved_addresses)
-        dl.addCallback(self.dht_node.joinNetwork)
-        dl.addCallback(start_dht)
-        return dl
+        self.dht_node.startNetwork()
+
+        # pass start_dht() as callback to start the remaining components after joining the DHT
+        return self.join_dht(start_dht)
 
     def _setup_other_components(self):
         log.debug("Setting up the rest of the components")
