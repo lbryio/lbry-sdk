@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from lbrynet.core import utils
+from lbryschema.claim import ClaimDict
 
 from twisted.trial import unittest
 
@@ -33,45 +34,31 @@ class ObfuscationTest(unittest.TestCase):
         self.assertEqual(plain, utils.deobfuscate(obf))
 
 
-class SafeDictDescendTest(unittest.TestCase):
+class SdHashTests(unittest.TestCase):
 
-    def test_safe_dict_descend_happy(self):
-        nested = {
-            'foo': {
-                'bar': {
-                    'baz': 3
+    def test_none_in_none_out(self):
+        self.assertIsNone(utils.get_sd_hash(None))
+
+    def test_ordinary_dict(self):
+        claim = {
+            "claim": {
+                "value": {
+                    "stream": {
+                        "source": {
+                            "source": "0123456789ABCDEF"
+                        }
+                    }
                 }
             }
         }
-        self.assertEqual(
-            utils.safe_dict_descend(nested, 'foo', 'bar', 'baz'),
-            3
-        )
+        self.assertEqual("0123456789ABCDEF", utils.get_sd_hash(claim))
 
-    def test_safe_dict_descend_typeerror(self):
-        nested = {
-            'foo': {
-                'bar': 7
+    def test_old_shape_fails(self):
+        claim = {
+            "stream": {
+                "source": {
+                    "source": "0123456789ABCDEF"
+                }
             }
         }
-        self.assertIsNone(utils.safe_dict_descend(nested, 'foo', 'bar', 'baz'))
-
-    def test_safe_dict_descend_missing(self):
-        nested = {
-            'foo': {
-                'barn': 7
-            }
-        }
-        self.assertIsNone(utils.safe_dict_descend(nested, 'foo', 'bar', 'baz'))
-
-    def test_empty_dict_doesnt_explode(self):
-        nested = {}
-        self.assertIsNone(utils.safe_dict_descend(nested, 'foo', 'bar', 'baz'))
-
-    def test_identity(self):
-        nested = {
-            'foo': {
-                'bar': 7
-            }
-        }
-        self.assertIs(nested, utils.safe_dict_descend(nested))
+        self.assertIsNone(utils.get_sd_hash(claim))
