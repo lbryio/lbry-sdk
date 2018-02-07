@@ -1,5 +1,6 @@
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
+
 class ClientRequest(object):
     def __init__(self, request_dict, response_identifier=None):
         self.request_dict = request_dict

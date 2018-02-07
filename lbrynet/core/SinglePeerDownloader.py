@@ -17,12 +17,6 @@ from lbrynet.core.client.ConnectionManager import ConnectionManager
 log = logging.getLogger(__name__)
 
 
-class TempBlobManager(DiskBlobManager):
-    def stop(self):
-        self.db_conn.close()
-        return defer.succeed(True)
-
-
 class SinglePeerFinder(DummyPeerFinder):
     def __init__(self, peer):
         DummyPeerFinder.__init__(self)
@@ -93,6 +87,7 @@ class SinglePeerDownloader(object):
         connection_manager = ConnectionManager(downloader, self._rate_limiter, [requester],
                                                [info_exchanger])
         connection_manager.start()
+
         result = yield blob.callback
         if not result:
             log.debug("Failed to downloaded %s from %s", blob_hash[:16], peer.host)
@@ -102,7 +97,7 @@ class SinglePeerDownloader(object):
     @defer.inlineCallbacks
     def download_temp_blob_from_peer(self, peer, timeout, blob_hash):
         tmp_dir = yield threads.deferToThread(tempfile.mkdtemp)
-        tmp_blob_manager = TempBlobManager(self._announcer, tmp_dir, tmp_dir)
+        tmp_blob_manager = DiskBlobManager(self._announcer, tmp_dir, tmp_dir)
         try:
             result = yield self.download_blob_from_peer(peer, timeout, blob_hash, tmp_blob_manager)
         finally:
