@@ -134,7 +134,14 @@ def get_sd_hash(stream_info):
         return None
     if isinstance(stream_info, ClaimDict):
         return stream_info.source_hash
-    return stream_info['stream']['source']['source']
+    result = stream_info.get('claim', {}).\
+        get('value', {}).\
+        get('stream', {}).\
+        get('source', {}).\
+        get('source')
+    if not result:
+        log.warn("Unable to get sd_hash")
+    return result
 
 
 def json_dumps_pretty(obj, **kwargs):
