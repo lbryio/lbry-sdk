@@ -2881,7 +2881,10 @@ class Daemon(AuthJSONRPCServer):
         if uri:
             metadata = yield self._resolve_name(uri)
             sd_hash = utils.get_sd_hash(metadata)
-            blobs = yield self.get_blobs_for_sd_hash(sd_hash)
+            try:
+                blobs = yield self.get_blobs_for_sd_hash(sd_hash)
+            except NoSuchSDHash:
+                blobs = []
         elif stream_hash:
             try:
                 blobs = yield self.get_blobs_for_stream_hash(stream_hash)
