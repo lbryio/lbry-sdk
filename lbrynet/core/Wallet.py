@@ -537,9 +537,6 @@ class Wallet(object):
         decoded = ClaimDict.load_dict(metadata)
         serialized = decoded.serialized
 
-        if self.get_balance() < Decimal(bid):
-            raise InsufficientFundsError()
-
         claim = yield self._send_name_claim(name, serialized.encode('hex'),
                                             bid, certificate_id, claim_address, change_address)
 
