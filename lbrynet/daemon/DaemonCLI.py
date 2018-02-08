@@ -171,7 +171,6 @@ def print_error(message, suggest_help=True):
 
 
 def print_help():
-    commands = Daemon.callable_methods.keys()
     print "\n".join([
         "NAME",
         "   lbrynet-cli - LBRY command line client.",
@@ -184,9 +183,6 @@ def print_help():
         "   lbrynet-cli status              # get daemon status",
         "   lbrynet-cli resolve_name what   # resolve a name",
         "   lbrynet-cli help resolve_name   # get help for a command",
-        "",
-        "COMMANDS",
-        wrap_list_to_term_width(commands, prefix='   ')
     ])
 
 
