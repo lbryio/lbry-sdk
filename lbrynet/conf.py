@@ -8,7 +8,7 @@ import yaml
 import envparse
 from appdirs import user_data_dir, user_config_dir
 from lbrynet.core import utils
-from lbrynet.core.Error import InvalidCurrencyError
+from lbrynet.core.Error import InvalidCurrencyError, NoSuchDirectoryError
 from lbrynet.androidhelpers.paths import (
     android_internal_storage_dir,
     android_app_internal_storage_dir
@@ -392,9 +392,15 @@ class Config(object):
         if name in self._fixed_defaults:
             raise ValueError('{} is not an editable setting'.format(name))
 
-    def _validate_currency(self, currency):
-        if currency not in self._fixed_defaults['CURRENCIES'].keys():
-            raise InvalidCurrencyError(currency)
+    def _assert_valid_setting_value(self, name, value):
+        if name == "max_key_fee":
+            currency = str(value["currency"]).upper()
+            if currency not in self._fixed_defaults['CURRENCIES'].keys():
+                raise InvalidCurrencyError(currency)
+        elif name == "download_directory":
+            directory = str(value)
+            if not os.path.exists(directory):
+                raise NoSuchDirectoryError(directory)
 
     def is_default(self, name):
         """Check if a config value is wasn't specified by the user
@@ -455,11 +461,9 @@ class Config(object):
         data types (e.g. PERSISTED values to save to a file, CLI values from parsed
         command-line options, etc), you can specify that with the data_types param
         """
-        if name == "max_key_fee":
-            currency = str(value["currency"]).upper()
-            self._validate_currency(currency)
-
         self._assert_editable_setting(name)
+        self._assert_valid_setting_value(name, value)
+
         for data_type in data_types:
             self._assert_valid_data_type(data_type)
             self._data[data_type][name] = value
