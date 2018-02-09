@@ -13,6 +13,7 @@ at anytime.
   *
 
 ### Fixed
+  * Fixed improper parsing of arguments to CLI settings_set (https://github.com/lbryio/lbry/issues/930)
   * Fixed unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
   * Merged two separate dht test folders into one
   * Fixed value error due to a race condition when saving to the claim cache (https://github.com/lbryio/lbry/issues/1013)
@@ -29,6 +30,7 @@ at anytime.
   * `get_availability`, replaced with `stream_availability`
 
 ### Changed
+  * Removed support for positional arguments in cli `settings_set`. Now only accepts settings changes in the form `--setting_key=value`
   * Check claim schema in `publish` before trying to make the claim, return better error messages
   * Renamed `channel_list_mine` to `channel_list`
   * Changed `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet

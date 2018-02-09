@@ -453,14 +453,9 @@ class Daemon(AuthJSONRPCServer):
                     conf.settings.update({key: decoded},
                                          data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
                 else:
-                    try:
-                        converted = setting_type(settings[key])
-                        conf.settings.update({key: converted},
-                                             data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-                    except Exception as err:
-                        log.warning(err.message)
-                        log.warning("error converting setting '%s' to type %s from type %s", key,
-                                    setting_type, str(type(settings[key])))
+                    converted = setting_type(settings[key])
+                    conf.settings.update({key: converted},
+                                            data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
         conf.settings.save_conf_file_settings()
 
         self.data_rate = conf.settings['data_rate']
@@ -1190,28 +1185,27 @@ class Daemon(AuthJSONRPCServer):
         Set daemon settings
 
         Usage:
-            settings_set [<download_directory> | --download_directory=<download_directory>]
-                         [<data_rate> | --data_rate=<data_rate>]
-                         [<download_timeout> | --download_timeout=<download_timeout>]
-                         [<peer_port> | --peer_port=<peer_port>]
-                         [<max_key_fee> | --max_key_fee=<max_key_fee>]
-                         [<disable_max_key_fee> | --disable_max_key_fee=<disable_max_key_fee>]
-                         [<use_upnp> | --use_upnp=<use_upnp>]
-                         [<run_reflector_server> | --run_reflector_server=<run_reflector_server>]
-                         [<cache_time> | --cache_time=<cache_time>]
-                         [<reflect_uploads> | --reflect_uploads=<reflect_uploads>]
-                         [<share_usage_data> | --share_usage_data=<share_usage_data>]
-                         [<peer_search_timeout> | --peer_search_timeout=<peer_search_timeout>]
-                         [<sd_download_timeout> | --sd_download_timeout=<sd_download_timeout>]
-                         [<auto_renew_claim_height_delta>
-                            | --auto_renew_claim_height_delta=<auto_renew_claim_height_delta]
+            settings_set [--download_directory=<download_directory>]
+                         [--data_rate=<data_rate>]
+                         [--download_timeout=<download_timeout>]
+                         [--peer_port=<peer_port>]
+                         [--max_key_fee=<max_key_fee>]
+                         [--disable_max_key_fee=<disable_max_key_fee>]
+                         [--use_upnp=<use_upnp>]
+                         [--run_reflector_server=<run_reflector_server>]
+                         [--cache_time=<cache_time>]
+                         [--reflect_uploads=<reflect_uploads>]
+                         [--share_usage_data=<share_usage_data>]
+                         [--peer_search_timeout=<peer_search_timeout>]
+                         [--sd_download_timeout=<sd_download_timeout>]
+                         [--auto_renew_claim_height_delta=<auto_renew_claim_height_delta>]
 
         Options:
-            <download_directory>, --download_directory=<download_directory>  : (str)
-            <data_rate>, --data_rate=<data_rate>                             : (float), 0.0001
-            <download_timeout>, --download_timeout=<download_timeout>        : (int), 180
-            <peer_port>, --peer_port=<peer_port>                             : (int), 3333
-            <max_key_fee>, --max_key_fee=<max_key_fee>   : (dict) maximum key fee for downloads,
+            --download_directory=<download_directory>  : (str)
+            --data_rate=<data_rate>                             : (float), 0.0001
+            --download_timeout=<download_timeout>        : (int), 180
+            --peer_port=<peer_port>                             : (int), 3333
+            --max_key_fee=<max_key_fee>   : (dict) maximum key fee for downloads,
                                                             in the format: {
                                                                 "currency": <currency_symbol>,
                                                                 "amount": <amount>
@@ -1221,16 +1215,15 @@ class Daemon(AuthJSONRPCServer):
                                                                 LBC
                                                                 BTC
                                                                 USD
-            <disable_max_key_fee>, --disable_max_key_fee=<disable_max_key_fee> : (bool), False
-            <use_upnp>, --use_upnp=<use_upnp>            : (bool), True
-            <run_reflector_server>, --run_reflector_server=<run_reflector_server>  : (bool), False
-            <cache_time>, --cache_time=<cache_time>  : (int), 150
-            <reflect_uploads>, --reflect_uploads=<reflect_uploads>  : (bool), True
-            <share_usage_data>, --share_usage_data=<share_usage_data>  : (bool), True
-            <peer_search_timeout>, --peer_search_timeout=<peer_search_timeout>  : (int), 3
-            <sd_download_timeout>, --sd_download_timeout=<sd_download_timeout>  : (int), 3
-            <auto_renew_claim_height_delta>,
-                --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int), 0
+            --disable_max_key_fee=<disable_max_key_fee> : (bool), False
+            --use_upnp=<use_upnp>            : (bool), True
+            --run_reflector_server=<run_reflector_server>  : (bool), False
+            --cache_time=<cache_time>  : (int), 150
+            --reflect_uploads=<reflect_uploads>  : (bool), True
+            --share_usage_data=<share_usage_data>  : (bool), True
+            --peer_search_timeout=<peer_search_timeout>  : (int), 3
+            --sd_download_timeout=<sd_download_timeout>  : (int), 3
+            --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int), 0
                 claims set to expire within this many blocks will be
                 automatically renewed after startup (if set to 0, renews
                 will not be made automatically)
