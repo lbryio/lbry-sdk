@@ -14,10 +14,9 @@ at anytime.
 ### Fixed
   * fixed `get` on channel now it returns error that informs of `get` not supporting channels
   * the message that is displayed can be more descriptive, and it is open for discussion
-
-### Fixed
   * fixed `get` on channel now it returns error that informs of `get` not supporting channels
   * the message that is displayed can be more descriptive, and it is open for discussion
+  * Fixed improper parsing of arguments to CLI settings_set (https://github.com/lbryio/lbry/issues/930)
   * Fixed unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
   * Merged two separate dht test folders into one
   * Fixed value error due to a race condition when saving to the claim cache (https://github.com/lbryio/lbry/issues/1013)
@@ -27,12 +26,14 @@ at anytime.
   * Fixed handling decryption error for blobs encrypted with an invalid key
   * Fixed handling stream with no data blob (https://github.com/lbryio/lbry/issues/905)
   * Fixed fetching the external ip
+  * Fixed API call to blob_list with --uri parameter (https://github.com/lbryio/lbry/issues/895)
 
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
   * `get_availability`, replaced with `stream_availability`
 
 ### Changed
+  * Removed support for positional arguments in cli `settings_set`. Now only accepts settings changes in the form `--setting_key=value`
   * Check claim schema in `publish` before trying to make the claim, return better error messages
   * Renamed `channel_list_mine` to `channel_list`
   * Changed `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet
@@ -45,6 +46,7 @@ at anytime.
   * Remove manual saving of the wallet in from lbrynet, let lbryum handle it
   * Block wallet startup on being unlocked if it is encrypted
   * Use reworked lbryum payto command
+  * Re-attempt joining the DHT every 60 secs if the Node has no peers
 
 ### Added
   * Add link to instructions on how to change the default peer port
@@ -55,6 +57,8 @@ at anytime.
   * Add `--conf` CLI flag to specify an alternate config file
   * Added `blockchain_name` and `lbryum_servers` to the adjustable settings
   * Added abandon information (claim name, id, address, amount, balance_delta and nout) about claims, supports, and updates to `transaction_list` results under `abandon_info` key
+  * Added `permanent_url` attribute to `channel_list_mine`, `claim_list`, `claim_show`, `resolve` and `resolve_name` API calls through lbryio/lbryum#203
+  *
 
 ### Changed
   * claim_show API command no longer takes name as argument
@@ -81,6 +85,8 @@ at anytime.
   * Removed claim information from lbry file internals
   * Removed `auto_re_reflect` setting from the conf file, use the `reflect_uploads` setting instead
   * Removed `include_tip_info` argument from `transaction_list`, which will now always include tip information.
+  * Removed `seccure` and `gmpy` dependencies
+  * Removed TempBlobManager
 
 
 ## [0.18.0] - 2017-11-08

@@ -31,3 +31,33 @@ class ObfuscationTest(unittest.TestCase):
         plain = '☃'
         obf = utils.obfuscate(plain)
         self.assertEqual(plain, utils.deobfuscate(obf))
+
+
+class SdHashTests(unittest.TestCase):
+
+    def test_none_in_none_out(self):
+        self.assertIsNone(utils.get_sd_hash(None))
+
+    def test_ordinary_dict(self):
+        claim = {
+            "claim": {
+                "value": {
+                    "stream": {
+                        "source": {
+                            "source": "0123456789ABCDEF"
+                        }
+                    }
+                }
+            }
+        }
+        self.assertEqual("0123456789ABCDEF", utils.get_sd_hash(claim))
+
+    def test_old_shape_fails(self):
+        claim = {
+            "stream": {
+                "source": {
+                    "source": "0123456789ABCDEF"
+                }
+            }
+        }
+        self.assertIsNone(utils.get_sd_hash(claim))

@@ -25,7 +25,7 @@ sudo pip install virtualenv
 On Ubuntu (we recommend 16.04), install the following:
 
 ```
-sudo apt-get install libgmp3-dev build-essential python2.7 python2.7-dev python-pip git python-virtualenv libssl-dev libffi-dev python-protobuf
+sudo apt-get install build-essential python2.7 python2.7-dev python-pip git python-virtualenv libssl-dev libffi-dev python-protobuf
 ```
 
 On Raspbian, you will also need to install `python-pyparsing`.
@@ -53,10 +53,7 @@ Currently, available binaries include:
 - Twisted
 - Zope.interface
 - pywin32
-- Yapsy
-- cx_Freeze
 - requests
-- gmpy
 
 Install the above binaries with `pip install *.whl`
 

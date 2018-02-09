@@ -160,3 +160,8 @@ class InvalidCurrencyError(Exception):
         self.currency = currency
         Exception.__init__(
             self, 'Invalid currency: {} is not a supported currency.'.format(currency))
+
+class NoSuchDirectoryError(Exception):
+    def __init__(self, directory):
+        self.directory = directory
+        Exception.__init__(self, 'No such directory {}'.format(directory))

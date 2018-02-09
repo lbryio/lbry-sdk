@@ -132,17 +132,12 @@ class Node(object):
             self._listeningPort.stopListening()
         self.hash_watcher.stop()
 
-    @defer.inlineCallbacks
-    def joinNetwork(self, knownNodeAddresses=None):
-        """ Causes the Node to join the Kademlia network; normally, this
-        should be called before any other DHT operations.
-
-        @param knownNodeAddresses: A sequence of tuples containing IP address
-                                   information for existing nodes on the
-                                   Kademlia network, in the format:
-                                   C{(<ip address>, (udp port>)}
-        @type knownNodeAddresses: tuple
+    def startNetwork(self):
+        """ Causes the Node to start all the underlying components needed for the DHT
+        to work. This should be called before any other DHT operations.
         """
+        log.info("Starting DHT underlying components")
+
         # Prepare the underlying Kademlia protocol
         if self.port is not None:
             try:
@@ -151,6 +146,29 @@ class Node(object):
                 import traceback
                 log.error("Couldn't bind to port %d. %s", self.port, traceback.format_exc())
                 raise ValueError("%s lbrynet may already be running." % str(e))
+
+        # Start the token looping call
+        self.change_token_lc.start(constants.tokenSecretChangeInterval)
+        #        #TODO: Refresh all k-buckets further away than this node's closest neighbour
+        # Start refreshing k-buckets periodically, if necessary
+        self.next_refresh_call = reactor.callLater(constants.checkRefreshInterval,
+                                                   self._refreshNode)
+        self.hash_watcher.tick()
+
+    @defer.inlineCallbacks
+    def joinNetwork(self, knownNodeAddresses=None):
+        """ Causes the Node to attempt to join the DHT network by contacting the
+        known DHT nodes. This can be called multiple times if the previous attempt
+        has failed or if the Node has lost all the contacts.
+
+        @param knownNodeAddresses: A sequence of tuples containing IP address
+                                   information for existing nodes on the
+                                   Kademlia network, in the format:
+                                   C{(<ip address>, (udp port>)}
+        @type knownNodeAddresses: tuple
+        """
+        log.info("Attempting to join the DHT network")
+
         # IGNORE:E1101
         # Create temporary contact information for the list of addresses of known nodes
         if knownNodeAddresses != None:
@@ -161,18 +179,11 @@ class Node(object):
         else:
             bootstrapContacts = None
 
-        # Start the token looping call
-        self.change_token_lc.start(constants.tokenSecretChangeInterval)
-
         # Initiate the Kademlia joining sequence - perform a search for this node's own ID
         self._joinDeferred = self._iterativeFind(self.node_id, bootstrapContacts)
-        #        #TODO: Refresh all k-buckets further away than this node's closest neighbour
-        # Start refreshing k-buckets periodically, if necessary
-        self.next_refresh_call = reactor.callLater(constants.checkRefreshInterval,
-                                                   self._refreshNode)
 
-        self.hash_watcher.tick()
-        yield self._joinDeferred
+        result = yield self._joinDeferred
+        defer.returnValue(result)
 
     @property
     def contacts(self):
@@ -189,6 +200,12 @@ class Node(object):
             for contact in self._routingTable._buckets[i]._contacts:
                 print "    %s:%i" % (contact.address, contact.port)
         print '=================================='
+
+    def hasContacts(self):
+        for bucket in self._routingTable._buckets:
+            if bucket._contacts:
+                return True
+        return False
 
     def getApproximateTotalDHTNodes(self):
         # get the deepest bucket and the number of contacts in that bucket and multiply it
