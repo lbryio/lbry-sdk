@@ -676,12 +676,13 @@ class Daemon(AuthJSONRPCServer):
                                               self.disable_max_key_fee,
                                               conf.settings['data_rate'], timeout)
             try:
-                lbry_file, finished_deferred = yield self.streams[sd_hash].start(claim_dict, name)
-                yield self.stream_info_manager.save_outpoint_to_file(lbry_file.rowid, txid, nout)
-                finished_deferred.addCallbacks(lambda _: _download_finished(download_id, name,
-                                                                            claim_dict),
-                                               lambda e: _download_failed(e, download_id, name,
-                                                                          claim_dict))
+                lbry_file, finished_deferred = yield self.streams[sd_hash].start(
+                    claim_dict, name, txid, nout, file_name
+                )
+                finished_deferred.addCallbacks(
+                    lambda _: _download_finished(download_id, name, claim_dict),
+                    lambda e: _download_failed(e, download_id, name, claim_dict)
+                )
                 result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
             except Exception as err:
                 yield _download_failed(err, download_id, name, claim_dict)
@@ -706,7 +707,8 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise Exception("Invalid bid")
         if not file_path:
-            claim_out = yield publisher.publish_stream(name, bid, claim_dict, claim_address,
+            stream_hash = yield self.storage.get_stream_hash_for_sd_hash(claim_dict['stream']['source']['source'])
+            claim_out = yield publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address,
                                                        change_address)
         else:
             claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path,
@@ -715,9 +717,6 @@ class Daemon(AuthJSONRPCServer):
                 d = reupload.reflect_stream(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
-        yield self.stream_info_manager.save_outpoint_to_file(publisher.lbry_file.rowid,
-                                                             claim_out['txid'],
-                                                             int(claim_out['nout']))
         self.analytics_manager.send_claim_action('publish')
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
@@ -1592,24 +1591,31 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) Dictionary containing information about the stream
             {
-                    'completed': (bool) true if download is completed,
-                    'file_name': (str) name of file,
-                    'download_directory': (str) download directory,
-                    'points_paid': (float) credit paid to download file,
-                    'stopped': (bool) true if download is stopped,
-                    'stream_hash': (str) stream hash of file,
-                    'stream_name': (str) stream name ,
-                    'suggested_file_name': (str) suggested file name,
-                    'sd_hash': (str) sd hash of file,
-                    'download_path': (str) download path of file,
-                    'mime_type': (str) mime type of file,
-                    'key': (str) key attached to file,
-                    'total_bytes': (int) file size in bytes, None if full_status is false,
-                    'written_bytes': (int) written size in bytes,
-                    'blobs_completed': (int) num_completed, None if full_status is false,
-                    'blobs_in_stream': (int) None if full_status is false,
-                    'status': (str) downloader status, None if full_status is false,
-                    'outpoint': (str), None if full_status is false or if claim is not found
+                'completed': (bool) true if download is completed,
+                'file_name': (str) name of file,
+                'download_directory': (str) download directory,
+                'points_paid': (float) credit paid to download file,
+                'stopped': (bool) true if download is stopped,
+                'stream_hash': (str) stream hash of file,
+                'stream_name': (str) stream name ,
+                'suggested_file_name': (str) suggested file name,
+                'sd_hash': (str) sd hash of file,
+                'download_path': (str) download path of file,
+                'mime_type': (str) mime type of file,
+                'key': (str) key attached to file,
+                'total_bytes': (int) file size in bytes, None if full_status is false,
+                'written_bytes': (int) written size in bytes,
+                'blobs_completed': (int) num_completed, None if full_status is false,
+                'blobs_in_stream': (int) None if full_status is false,
+                'status': (str) downloader status, None if full_status is false,
+                'claim_id': (str) claim id,
+                'outpoint': (str) claim outpoint string,
+                'txid': (str) claim txid,
+                'nout': (int) claim nout,
+                'metadata': (dict) claim metadata,
+                'channel_claim_id': (str) None if claim is not signed
+                'channel_name': (str) None if claim is not signed
+                'claim_name': (str) claim name
             }
         """
 
