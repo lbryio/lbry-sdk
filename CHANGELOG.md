@@ -14,8 +14,6 @@ at anytime.
 ### Fixed
   * fixed `get` on channel now it returns error that informs of `get` not supporting channels
   * the message that is displayed can be more descriptive, and it is open for discussion
-  * fixed `get` on channel now it returns error that informs of `get` not supporting channels
-  * the message that is displayed can be more descriptive, and it is open for discussion
   * Fixed improper parsing of arguments to CLI settings_set (https://github.com/lbryio/lbry/issues/930)
   * Fixed unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
   * Merged two separate dht test folders into one
