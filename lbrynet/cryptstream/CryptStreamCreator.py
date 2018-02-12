@@ -128,7 +128,6 @@ class CryptStreamCreator(object):
         d.addCallback(self._blob_finished)
         self.finished_deferreds.append(d)
 
-
     def _write(self, data):
         while len(data) > 0:
             if self.current_blob is None:

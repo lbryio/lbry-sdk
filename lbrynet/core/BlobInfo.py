@@ -16,3 +16,4 @@ class BlobInfo(object):
         self.blob_hash = blob_hash
         self.blob_num = blob_num
         self.length = length
+
