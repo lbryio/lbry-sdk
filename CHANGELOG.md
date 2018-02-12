@@ -11,6 +11,9 @@ at anytime.
 ### Security
   *
   *
+### Fixed
+  * fixed `get` on channel now it returns error that informs of `get` not supporting channels
+  * the message that is displayed can be more descriptive, and it is open for discussion
 
 ### Fixed
   * Fixed improper parsing of arguments to CLI settings_set (https://github.com/lbryio/lbry/issues/930)
