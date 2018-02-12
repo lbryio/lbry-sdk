@@ -206,7 +206,7 @@ class Daemon(AuthJSONRPCServer):
         self.connected_to_internet = True
         self.connection_status_code = None
         self.platform = None
-        self.current_db_revision = 5
+        self.current_db_revision = 6
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self._session_id = conf.settings.get_session_id()
@@ -237,16 +237,6 @@ class Daemon(AuthJSONRPCServer):
 
         configure_loggly_handler()
 
-        @defer.inlineCallbacks
-        def _announce_startup():
-            def _announce():
-                self.announced_startup = True
-                self.startup_status = STARTUP_STAGES[5]
-                log.info("Started lbrynet-daemon")
-                log.info("%i blobs in manager", len(self.session.blob_manager.blobs))
-
-            yield _announce()
-
         log.info("Starting lbrynet-daemon")
 
         self.looping_call_manager.start(Checker.INTERNET_CONNECTION, 3600)
@@ -255,7 +245,8 @@ class Daemon(AuthJSONRPCServer):
 
         yield self._initial_setup()
         yield threads.deferToThread(self._setup_data_directory)
-        yield self._check_db_migration()
+        migrated = yield self._check_db_migration()
+        yield self.storage.setup()
         yield self._get_session()
         yield self._check_wallet_locked()
         yield self._start_analytics()
@@ -265,7 +256,20 @@ class Daemon(AuthJSONRPCServer):
         yield self._setup_query_handlers()
         yield self._setup_server()
         log.info("Starting balance: " + str(self.session.wallet.get_balance()))
-        yield _announce_startup()
+        self.announced_startup = True
+        self.startup_status = STARTUP_STAGES[5]
+        log.info("Started lbrynet-daemon")
+
+        ###
+        # this should be removed with the next db revision
+        if migrated:
+            missing_channel_claim_ids = yield self.storage.get_unknown_certificate_ids()
+            while missing_channel_claim_ids:  # in case there are a crazy amount lets batch to be safe
+                batch = missing_channel_claim_ids[:100]
+                _ = yield self.session.wallet.get_claims_by_ids(*batch)
+                missing_channel_claim_ids = missing_channel_claim_ids[100:]
+        ###
+
         self._auto_renew()
 
     def _get_platform(self):
@@ -493,28 +497,28 @@ class Daemon(AuthJSONRPCServer):
             log.warning("db_revision file not found. Creating it")
             self._write_db_revision_file(old_revision)
 
+    @defer.inlineCallbacks
     def _check_db_migration(self):
         old_revision = 1
+        migrated = False
         if os.path.exists(self.db_revision_file):
-            old_revision = int(open(self.db_revision_file).read().strip())
+            with open(self.db_revision_file, "r") as revision_read_handle:
+                old_revision = int(revision_read_handle.read().strip())
 
         if old_revision > self.current_db_revision:
             raise Exception('This version of lbrynet is not compatible with the database\n'
                             'Your database is revision %i, expected %i' %
                             (old_revision, self.current_db_revision))
-
-        def update_version_file_and_print_success():
+        if old_revision < self.current_db_revision:
+            from lbrynet.database.migrator import dbmigrator
+            log.info("Upgrading your databases (revision %i to %i)", old_revision, self.current_db_revision)
+            yield threads.deferToThread(
+                dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision
+            )
             self._write_db_revision_file(self.current_db_revision)
             log.info("Finished upgrading the databases.")
-
-        if old_revision < self.current_db_revision:
-            from lbrynet.db_migrator import dbmigrator
-            log.info("Upgrading your databases")
-            d = threads.deferToThread(
-                dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision)
-            d.addCallback(lambda _: update_version_file_and_print_success())
-            return d
-        return defer.succeed(True)
+            migrated = True
+        defer.returnValue(migrated)
 
     @defer.inlineCallbacks
     def _setup_lbry_file_manager(self):
