@@ -120,6 +120,13 @@ class _FileID(IterableContainer):
     FILE_NAME = 'file_name'
     STREAM_HASH = 'stream_hash'
     ROWID = "rowid"
+    CLAIM_ID = "claim_id"
+    OUTPOINT = "outpoint"
+    TXID = "txid"
+    NOUT = "nout"
+    CHANNEL_CLAIM_ID = "channel_claim_id"
+    CLAIM_NAME = "claim_name"
+    CHANNEL_NAME = "channel_name"
 
 
 FileID = _FileID()
@@ -872,7 +879,7 @@ class Daemon(AuthJSONRPCServer):
         else:
             written_bytes = 0
 
-        size = outpoint = num_completed = num_known = status = None
+        size = num_completed = num_known = status = None
 
         if full_status:
             size = yield lbry_file.get_total_bytes()
@@ -880,7 +887,6 @@ class Daemon(AuthJSONRPCServer):
             num_completed = file_status.num_completed
             num_known = file_status.num_known
             status = file_status.running_status
-            outpoint = yield self.stream_info_manager.get_file_outpoint(lbry_file.rowid)
 
         result = {
             'completed': lbry_file.completed,
@@ -900,7 +906,14 @@ class Daemon(AuthJSONRPCServer):
             'blobs_completed': num_completed,
             'blobs_in_stream': num_known,
             'status': status,
-            'outpoint': outpoint
+            'claim_id': lbry_file.claim_id,
+            'txid': lbry_file.txid,
+            'nout': lbry_file.nout,
+            'outpoint': lbry_file.outpoint,
+            'metadata': lbry_file.metadata,
+            'channel_claim_id': lbry_file.channel_claim_id,
+            'channel_name': lbry_file.channel_name,
+            'claim_name': lbry_file.claim_name
         }
         defer.returnValue(result)
 
@@ -1371,16 +1384,24 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
-                      [--rowid=<rowid>]
-                      [-f]
+                      [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
+                      [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
+                      [--claim_name=<claim_name>] [-f]
 
         Options:
-            --sd_hash=<sd_hash>          : get file with matching sd hash
-            --file_name=<file_name>      : get file with matching file name in the
-                                           downloads folder
-            --stream_hash=<stream_hash>  : get file with matching stream hash
-            --rowid=<rowid>              : get file with matching row id
-            -f                           : full status, populate the 'message' and 'size' fields
+            --sd_hash=<sd_hash>                    : get file with matching sd hash
+            --file_name=<file_name>                : get file with matching file name in the
+                                                     downloads folder
+            --stream_hash=<stream_hash>            : get file with matching stream hash
+            --rowid=<rowid>                        : get file with matching row id
+            --claim_id=<claim_id>                  : get file with matching claim id
+            --outpoint=<outpoint>                  : get file with matching claim outpoint
+            --txid=<txid>                          : get file with matching claim txid
+            --nout=<nout>                          : get file with matching claim nout
+            --channel_claim_id=<channel_claim_id>  : get file with matching channel claim id
+            --channel_name=<channel_name>  : get file with matching channel name
+            --claim_name=<claim_name>              : get file with matching claim name
+            -f                                     : full status, populate the 'message' and 'size' fields
 
         Returns:
             (list) List of files
@@ -1404,7 +1425,14 @@ class Daemon(AuthJSONRPCServer):
                     'blobs_completed': (int) num_completed, None if full_status is false,
                     'blobs_in_stream': (int) None if full_status is false,
                     'status': (str) downloader status, None if full_status is false,
-                    'outpoint': (str), None if full_status is false or if claim is not found
+                    'claim_id': (str) None if full_status is false or if claim is not found,
+                    'outpoint': (str) None if full_status is false or if claim is not found,
+                    'txid': (str) None if full_status is false or if claim is not found,
+                    'nout': (int) None if full_status is false or if claim is not found,
+                    'metadata': (dict) None if full_status is false or if claim is not found,
+                    'channel_claim_id': (str) None if full_status is false or if claim is not found or signed,
+                    'channel_name': (str) None if full_status is false or if claim is not found or signed,
+                    'claim_name': (str) None if full_status is false or if claim is not found
                 },
             ]
         """
@@ -1709,18 +1737,26 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             file_delete [-f] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                        [--stream_hash=<stream_hash>] [--rowid=<rowid>]
+                        [--stream_hash=<stream_hash>] [--rowid=<rowid>] [--claim_id=<claim_id>] [--txid=<txid>]
+                        [--nout=<nout>] [--claim_name=<claim_name>] [--channel_claim_id=<channel_claim_id>]
+                        [--channel_name=<channel_name>]
 
         Options:
-            -f, --delete_from_download_dir  : delete file from download directory,
-                                                instead of just deleting blobs
-            --delete_all                    : if there are multiple matching files,
-                                                allow the deletion of multiple files.
-                                                Otherwise do not delete anything.
-            --sd_hash=<sd_hash>             : delete by file sd hash
-            --file_name<file_name>          : delete by file name in downloads folder
-            --stream_hash=<stream_hash>     : delete by file stream hash
-            --rowid=<rowid>                 : delete by file row id
+            -f, --delete_from_download_dir         : delete file from download directory,
+                                                    instead of just deleting blobs
+            --delete_all                           : if there are multiple matching files,
+                                                     allow the deletion of multiple files.
+                                                     Otherwise do not delete anything.
+            --sd_hash=<sd_hash>                    : delete by file sd hash
+            --file_name<file_name>                 : delete by file name in downloads folder
+            --stream_hash=<stream_hash>            : delete by file stream hash
+            --rowid=<rowid>                        : delete by file row id
+            --claim_id=<claim_id>                  : delete by file claim id
+            --txid=<txid>                          : delete by file claim txid
+            --nout=<nout>                          : delete by file claim nout
+            --claim_name=<claim_name>              : delete by file claim name
+            --channel_claim_id=<channel_claim_id>  : delete by file channel claim id
+            --channel_name=<channel_name>                 : delete by file channel claim name
 
         Returns:
             (bool) true if deletion was successful
