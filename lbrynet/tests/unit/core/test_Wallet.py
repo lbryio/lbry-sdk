@@ -7,11 +7,13 @@ from decimal import Decimal
 from collections import defaultdict
 from twisted.trial import unittest
 from twisted.internet import threads, defer
-
+from lbrynet.database.storage import SQLiteStorage
+from lbrynet.tests.mocks import FakeNetwork
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.Wallet import Wallet, LBRYumWallet, ReservedPoints, InMemoryStorage
+from lbrynet.core.Wallet import LBRYumWallet, ReservedPoints
 from lbryum.commands import Commands
-
+from lbryum.simple_config import SimpleConfig
+from lbryschema.claim import ClaimDict
 
 test_metadata = {
 'license': 'NASA',
@@ -34,12 +36,22 @@ test_claim_dict = {
 }}
 
 
-class MocLbryumWallet(Wallet):
+class MocLbryumWallet(LBRYumWallet):
     def __init__(self):
+        # LBRYumWallet.__init__(self)
+        self.config = SimpleConfig()
         self.wallet_balance = Decimal(10.0)
         self.total_reserved_points = Decimal(0.0)
         self.queued_payments = defaultdict(Decimal)
-        self._storage = InMemoryStorage()
+        self.network = FakeNetwork()
+        self.db_dir = tempfile.mkdtemp()
+        self.storage = SQLiteStorage(self.db_dir)
+
+    def __del__(self):
+        shutil.rmtree(self.db_dir)
+
+    def setup(self):
+        return self.storage.setup()
 
     def get_least_used_address(self, account=None, for_change=False, max_count=100):
         return defer.succeed(None)
@@ -51,21 +63,15 @@ class MocLbryumWallet(Wallet):
         return defer.succeed(True)
 
 
-class MocEncryptedWallet(LBRYumWallet):
-    def __init__(self):
-        LBRYumWallet.__init__(self, InMemoryStorage())
-        self.wallet_balance = Decimal(10.0)
-        self.total_reserved_points = Decimal(0.0)
-        self.queued_payments = defaultdict(Decimal)
-
 class WalletTest(unittest.TestCase):
 
+    @defer.inlineCallbacks
     def setUp(self):
-        wallet = MocEncryptedWallet()
+        wallet = MocLbryumWallet()
+        yield wallet.setup()
         seed_text = "travel nowhere air position hill peace suffer parent beautiful rise " \
                     "blood power home crumble teach"
         password = "secret"
-
         user_dir = tempfile.mkdtemp()
         path = os.path.join(user_dir, "somewallet")
         storage = lbryum.wallet.WalletStorage(path)
@@ -88,7 +94,8 @@ class WalletTest(unittest.TestCase):
 
         MocLbryumWallet._send_name_claim = not_enough_funds_send_name_claim
         wallet = MocLbryumWallet()
-        d = wallet.claim_name('test', 1, test_claim_dict)
+        d = wallet.setup()
+        d.addCallback(lambda _: wallet.claim_name('test', 1, test_claim_dict))
         self.assertFailure(d, Exception)
         return d
 
@@ -98,8 +105,12 @@ class WalletTest(unittest.TestCase):
             "fee": "0.00012",
             "nout": 0,
             "success": True,
-            "txid": "6f8180002ef4d21f5b09ca7d9648a54d213c666daf8639dc283e2fd47450269e"
-         }
+            "txid": "6f8180002ef4d21f5b09ca7d9648a54d213c666daf8639dc283e2fd47450269e",
+            "value": ClaimDict.load_dict(test_claim_dict).serialized.encode('hex'),
+            "claim_address": "",
+            "channel_claim_id": "",
+            "channel_name": ""
+        }
 
         def check_out(claim_out):
             self.assertTrue('success' not in claim_out)
@@ -107,6 +118,7 @@ class WalletTest(unittest.TestCase):
             self.assertEqual(expected_claim_out['fee'], claim_out['fee'])
             self.assertEqual(expected_claim_out['nout'], claim_out['nout'])
             self.assertEqual(expected_claim_out['txid'], claim_out['txid'])
+            self.assertEqual(expected_claim_out['value'], claim_out['value'])
 
         def success_send_name_claim(self, name, val, amount, certificate_id=None,
                                     claim_address=None, change_address=None):
@@ -114,7 +126,8 @@ class WalletTest(unittest.TestCase):
 
         MocLbryumWallet._send_name_claim = success_send_name_claim
         wallet = MocLbryumWallet()
-        d = wallet.claim_name('test', 1, test_claim_dict)
+        d = wallet.setup()
+        d.addCallback(lambda _: wallet.claim_name('test', 1, test_claim_dict))
         d.addCallback(lambda claim_out: check_out(claim_out))
         return d
 
@@ -124,7 +137,8 @@ class WalletTest(unittest.TestCase):
             return threads.deferToThread(lambda: claim_out)
         MocLbryumWallet._support_claim = failed_support_claim
         wallet = MocLbryumWallet()
-        d = wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 1)
+        d = wallet.setup()
+        d.addCallback(lambda _: wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 1))
         self.assertFailure(d, Exception)
         return d
 
@@ -146,7 +160,8 @@ class WalletTest(unittest.TestCase):
             return threads.deferToThread(lambda: expected_support_out)
         MocLbryumWallet._support_claim = success_support_claim
         wallet = MocLbryumWallet()
-        d = wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 1)
+        d = wallet.setup()
+        d.addCallback(lambda _: wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 1))
         d.addCallback(lambda claim_out: check_out(claim_out))
         return d
 
@@ -156,7 +171,8 @@ class WalletTest(unittest.TestCase):
             return threads.deferToThread(lambda: claim_out)
         MocLbryumWallet._abandon_claim = failed_abandon_claim
         wallet = MocLbryumWallet()
-        d = wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa", None, None)
+        d = wallet.setup()
+        d.addCallback(lambda _: wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa", None, None))
         self.assertFailure(d, Exception)
         return d
 
@@ -177,7 +193,8 @@ class WalletTest(unittest.TestCase):
 
         MocLbryumWallet._abandon_claim = success_abandon_claim
         wallet = MocLbryumWallet()
-        d = wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa", None, None)
+        d = wallet.storage.setup()
+        d.addCallback(lambda _: wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa", None, None))
         d.addCallback(lambda claim_out: check_out(claim_out))
         return d
 
@@ -188,7 +205,8 @@ class WalletTest(unittest.TestCase):
             return defer.succeed(5)
         wallet = MocLbryumWallet()
         wallet._update_balance = update_balance
-        d = wallet.update_balance()
+        d = wallet.setup()
+        d.addCallback(lambda _: wallet.update_balance())
         # test point reservation
         d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
         d.addCallback(lambda _: wallet.reserve_points('testid', 2))
@@ -213,7 +231,8 @@ class WalletTest(unittest.TestCase):
             return defer.succeed(5)
         wallet = MocLbryumWallet()
         wallet._update_balance = update_balance
-        d = wallet.update_balance()
+        d = wallet.setup()
+        d.addCallback(lambda _: wallet.update_balance())
         d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
         d.addCallback(lambda _: wallet.reserve_points('testid', 2))
         d.addCallback(lambda _: wallet.claim_name('test', 4, test_claim_dict))
@@ -226,7 +245,8 @@ class WalletTest(unittest.TestCase):
             return defer.succeed(5)
         wallet = MocLbryumWallet()
         wallet._update_balance = update_balance
-        d = wallet.update_balance()
+        d = wallet.setup()
+        d.addCallback(lambda _: wallet.update_balance())
         d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
         d.addCallback(lambda _: wallet.reserve_points('testid', 2))
         d.addCallback(lambda _: wallet.support_claim(

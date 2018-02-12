@@ -39,21 +39,26 @@ class MocDownloader(object):
         self.stop_called = True
         self.finish_deferred.callback(True)
 
+
 def moc_initialize(self, stream_info):
     self.sd_hash = "d5169241150022f996fa7cd6a9a1c421937276a3275eb912" \
                    "790bd07ba7aec1fac5fd45431d226b8fb402691e79aeb24b"
     return None
 
+
 def moc_download_sd_blob(self):
     return None
 
-def moc_download(self, sd_blob, name, key_fee):
+
+def moc_download(self, sd_blob, name, txid, nout, key_fee, file_name):
     self.pay_key_fee(key_fee, name)
     self.downloader = MocDownloader()
     self.downloader.start()
 
+
 def moc_pay_key_fee(self, key_fee, name):
     self.pay_key_fee_called = True
+
 
 class GetStreamTests(unittest.TestCase):
 
@@ -93,7 +98,7 @@ class GetStreamTests(unittest.TestCase):
         stream_info = None
 
         with self.assertRaises(AttributeError):
-            yield getstream.start(stream_info, name)
+            yield getstream.start(stream_info, name, "deadbeef" * 12, 0)
 
 
     @defer.inlineCallbacks
@@ -113,7 +118,7 @@ class GetStreamTests(unittest.TestCase):
         name = 'test'
         stream_info = None
         with self.assertRaises(DownloadSDTimeout):
-            yield getstream.start(stream_info, name)
+            yield getstream.start(stream_info, name, "deadbeef" * 12, 0)
         self.assertFalse(getstream.pay_key_fee_called)
 
     @defer.inlineCallbacks
@@ -129,7 +134,7 @@ class GetStreamTests(unittest.TestCase):
         getstream.pay_key_fee = types.MethodType(moc_pay_key_fee, getstream)
         name = 'test'
         stream_info = None
-        start = getstream.start(stream_info, name)
+        start = getstream.start(stream_info, name, "deadbeef" * 12, 0)
         self.clock.advance(1)
         self.clock.advance(1)
         self.clock.advance(1)
@@ -151,8 +156,7 @@ class GetStreamTests(unittest.TestCase):
         getstream.pay_key_fee = types.MethodType(moc_pay_key_fee, getstream)
         name = 'test'
         stream_info = None
-        start = getstream.start(stream_info, name)
-
+        start = getstream.start(stream_info, name, "deadbeef" * 12, 0)
         getstream.downloader.num_completed = 1
         self.clock.advance(1)
 

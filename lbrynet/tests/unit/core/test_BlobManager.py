@@ -7,6 +7,7 @@ import string
 from lbrynet.tests.util import random_lbry_hash
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
+from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.Peer import Peer
 from lbrynet import conf
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
@@ -14,13 +15,14 @@ from twisted.trial import unittest
 
 from twisted.internet import defer
 
+
 class BlobManagerTest(unittest.TestCase):
     def setUp(self):
         conf.initialize_settings()
         self.blob_dir = tempfile.mkdtemp()
         self.db_dir = tempfile.mkdtemp()
         hash_announcer = DummyHashAnnouncer()
-        self.bm = DiskBlobManager(hash_announcer, self.blob_dir, self.db_dir)
+        self.bm = DiskBlobManager(hash_announcer, self.blob_dir, SQLiteStorage(self.db_dir))
         self.peer = Peer('somehost', 22)
 
     def tearDown(self):
@@ -43,13 +45,13 @@ class BlobManagerTest(unittest.TestCase):
         blob_hash = out
 
         # create new blob
+        yield self.bm.storage.setup()
         yield self.bm.setup()
         blob = yield self.bm.get_blob(blob_hash, len(data))
 
         writer, finished_d = yield blob.open_for_writing(self.peer)
         yield writer.write(data)
         yield self.bm.blob_completed(blob, should_announce)
-        yield self.bm.add_blob_to_upload_history(blob_hash, 'test', len(data))
 
         # check to see if blob is there
         self.assertTrue(os.path.isfile(os.path.join(self.blob_dir, blob_hash)))
@@ -81,7 +83,7 @@ class BlobManagerTest(unittest.TestCase):
         self.assertFalse(os.path.isfile(os.path.join(self.blob_dir, blob_hash)))
         blobs = yield self.bm.get_all_verified_blobs()
         self.assertEqual(len(blobs), 0)
-        blobs = yield self.bm._get_all_blob_hashes()
+        blobs = yield self.bm.storage.get_all_blob_hashes()
         self.assertEqual(len(blobs), 0)
         self.assertFalse(blob_hash in self.bm.blobs)
 

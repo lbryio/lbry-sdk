@@ -6,8 +6,10 @@ from twisted.internet import defer
 from twisted import trial
 
 from lbryschema.decode import smart_decode
+from lbryum.wallet import NewWallet
 from lbrynet import conf
 from lbrynet.core import Session, PaymentRateManager, Wallet
+from lbrynet.database.storage import SQLiteStorage
 from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
 
 from lbrynet.tests import util
@@ -33,6 +35,10 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     daemon = LBRYDaemon(None)
     daemon.session = mock.Mock(spec=Session.Session)
     daemon.session.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
+    daemon.session.wallet.wallet = mock.Mock(spec=NewWallet)
+    daemon.session.wallet.wallet.use_encryption = False
+    daemon.session.wallet.network = FakeNetwork()
+    daemon.session.storage = mock.Mock(spec=SQLiteStorage)
     market_feeds = [BTCLBCFeed(), USDBTCFeed()]
     daemon.exchange_rate_manager = DummyExchangeRateManager(market_feeds, rates)
     base_prm = PaymentRateManager.BasePaymentRateManager(rate=data_rate)
@@ -107,8 +113,7 @@ class TestJsonRpc(trial.unittest.TestCase):
         mock_conf_settings(self)
         util.resetTime(self)
         self.test_daemon = get_test_daemon()
-        self.test_daemon.session.wallet = Wallet.LBRYumWallet(storage=Wallet.InMemoryStorage())
-        self.test_daemon.session.wallet.network = FakeNetwork()
+        self.test_daemon.session.wallet.is_first_run = False
         self.test_daemon.session.wallet.get_best_blockhash = noop
 
     def test_status(self):
