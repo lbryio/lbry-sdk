@@ -118,21 +118,18 @@ class SQLiteStorage(object):
             
             create table if not exists stream (
                 stream_hash char(96) not null primary key,
-                sd_hash char(96) not null,
+                sd_hash char(96) not null references blob,
                 stream_key text not null,
                 stream_name text not null,
-                suggested_filename text not null,
-                foreign key(sd_hash) references blob(blob_hash)
+                suggested_filename text not null
             );
             
             create table if not exists stream_blob (
-                stream_hash char(96) not null,
-                blob_hash char(96),
+                stream_hash char(96) not null references stream,
+                blob_hash char(96) references blob,
                 position integer not null,
                 iv char(32) not null,
-                primary key (stream_hash, blob_hash),
-                foreign key(stream_hash) references stream(stream_hash),
-                foreign key (blob_hash) references blob(blob_hash)
+                primary key (stream_hash, blob_hash)
             );
             
             create table if not exists claim (
@@ -148,20 +145,17 @@ class SQLiteStorage(object):
             );
 
             create table if not exists file (
-                stream_hash text primary key not null,
+                stream_hash text primary key not null references stream,
                 file_name text not null,
                 download_directory text not null,
                 blob_data_rate real not null,
-                status text not null,
-                foreign key(stream_hash) references stream(stream_hash)
+                status text not null
             );
             
             create table if not exists content_claim (
-                stream_hash text unique not null,
-                claim_outpoint text not null,
-                primary key (stream_hash, claim_outpoint),
-                foreign key (claim_outpoint) references claim(claim_outpoint),
-                foreign key(stream_hash) references file(stream_hash)
+                stream_hash text unique not null references file,
+                claim_outpoint text not null references claim,
+                primary key (stream_hash, claim_outpoint)
             );
             
             create table if not exists support (
