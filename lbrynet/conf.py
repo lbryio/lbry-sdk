@@ -509,6 +509,10 @@ class Config(object):
                 converted[k] = v
         return converted
 
+    def initialize_post_conf_load(self):
+        settings.installation_id = settings.get_installation_id()
+        settings.node_id = settings.get_node_id()
+
     def load_conf_file_settings(self):
         if conf_file:
             path = conf_file
@@ -527,6 +531,9 @@ class Config(object):
             self._data[TYPE_PERSISTED].update(self._convert_conf_file_lists(decoded))
         except (IOError, OSError) as err:
             log.info('%s: Failed to update settings from %s', err, path)
+
+        #initialize members depending on config file
+        self.initialize_post_conf_load()
 
     def _fix_old_conf_file_settings(self, settings_dict):
         if 'API_INTERFACE' in settings_dict:
@@ -628,7 +635,5 @@ def initialize_settings(load_conf_file=True):
     if settings is None:
         settings = Config(FIXED_SETTINGS, ADJUSTABLE_SETTINGS,
                           environment=get_default_env())
-        settings.installation_id = settings.get_installation_id()
-        settings.node_id = settings.get_node_id()
         if load_conf_file:
             settings.load_conf_file_settings()
