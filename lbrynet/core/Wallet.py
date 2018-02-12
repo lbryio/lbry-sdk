@@ -1,15 +1,10 @@
-import os
-from future_builtins import zip
 from collections import defaultdict, deque
 import datetime
 import logging
-import json
-import time
 from decimal import Decimal
 from zope.interface import implements
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
-from twisted.enterprise import adbapi
 
 from lbryum import wallet as lbryum_wallet
 from lbryum.network import Network
@@ -23,8 +18,6 @@ from lbryschema.claim import ClaimDict
 from lbryschema.error import DecodeError
 from lbryschema.decode import smart_decode
 
-from lbrynet import conf
-from lbrynet.core.sqlite_helpers import rerun_if_locked
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
@@ -67,370 +60,12 @@ class ClaimOutpoint(dict):
         return not self.__eq__(compare)
 
 
-class CachedClaim(object):
-    def __init__(self, claim_id, claim, claim_sequence, address, height, amount, supports,
-                 channal_name, signature_is_valid, cache_timestamp, name, txid, nout):
-        self.claim_id = claim_id
-        self.claim = claim
-        self.claim_sequence = claim_sequence
-        self.address = address
-        self.height = height
-        self.amount = amount
-        self.supports = [] if not supports else json.loads(supports)
-        self.effective_amount = self.amount + sum([x['amount'] for x in self.supports])
-        self.channel_name = channal_name
-        self.signature_is_valid = signature_is_valid
-        self.cache_timestamp = cache_timestamp
-        self.name = name
-        self.txid = txid
-        self.nout = nout
-
-    def response_dict(self, check_expires=True):
-        if check_expires:
-            if (time.time() - int(self.cache_timestamp)) > conf.settings['cache_time']:
-                return
-        claim = {
-            "height": self.height,
-            "address": self.address,
-            "claim_id": self.claim_id,
-            "claim_sequence": self.claim_sequence,
-            "effective_amount": self.effective_amount,
-            "has_signature": self.claim.has_signature,
-            "name": self.name,
-            "hex": self.claim.serialized.encode('hex'),
-            "value": self.claim.claim_dict,
-            "txid": self.txid,
-            "amount": self.amount,
-            "decoded_claim": True,
-            "supports": self.supports,
-            "nout": self.nout
-        }
-        if self.channel_name is not None:
-            claim['channel_name'] = self.channel_name
-        if self.signature_is_valid is not None:
-            claim['signature_is_valid'] = bool(self.signature_is_valid)
-        return claim
-
-
-class MetaDataStorage(object):
-    def load(self):
-        return defer.succeed(True)
-
-    def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        return defer.succeed(True)
-
-    def get_claim_metadata_for_sd_hash(self, sd_hash):
-        return defer.succeed(True)
-
-    def update_claimid(self, claim_id, name, claim_outpoint):
-        return defer.succeed(True)
-
-    def get_claimid_for_tx(self, claim_outpoint):
-        return defer.succeed(True)
-
-    @defer.inlineCallbacks
-    def get_cached_claim(self, claim_id, check_expire=True):
-        cache_info = yield self._get_cached_claim(claim_id)
-        response = None
-        if cache_info:
-            cached_claim = CachedClaim(claim_id, *cache_info)
-            response = cached_claim.response_dict(check_expires=check_expire)
-        defer.returnValue(response)
-
-    def _get_cached_claim(self, claim_id):
-        return defer.succeed(None)
-
-    def save_claim_to_cache(self, claim_id, claim_sequence, claim, claim_address, height, amount,
-                            supports, channel_name, signature_is_valid):
-        return defer.succeed(True)
-
-    def save_claim_to_uri_cache(self, uri, claim_id, certificate_id=None):
-        return defer.succeed(None)
-
-    def get_cached_claim_for_uri(self, uri, check_expire=True):
-        return defer.succeed(None)
-
-
-class InMemoryStorage(MetaDataStorage):
-    def __init__(self):
-        self.metadata = {}
-        self.claimids = {}
-        self.claim_dicts = {}
-        self.uri_cache = {}
-        MetaDataStorage.__init__(self)
-
-    def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        self.metadata[sd_hash] = (name, claim_outpoint)
-        return defer.succeed(True)
-
-    def get_claim_metadata_for_sd_hash(self, sd_hash):
-        try:
-            name, claim_outpoint = self.metadata[sd_hash]
-            return defer.succeed((name, claim_outpoint['txid'], claim_outpoint['nout']))
-        except KeyError:
-            return defer.succeed(None)
-
-    def update_claimid(self, claim_id, name, claim_outpoint):
-        self.claimids[(name, claim_outpoint['txid'], claim_outpoint['nout'])] = claim_id
-        return defer.succeed(True)
-
-    def get_claimid_for_tx(self, claim_outpoint):
-        result = None
-        for k, claim_id in self.claimids.iteritems():
-            if k[1] == claim_outpoint['txid'] and k[2] == claim_outpoint['nout']:
-                result = claim_id
-                break
-
-        return defer.succeed(result)
-
-    def _get_cached_claim(self, claim_id):
-        claim_cache = self.claim_dicts.get(claim_id, None)
-        claim_tx_cache = None
-        for k, v in self.claimids.iteritems():
-            if v == claim_id:
-                claim_tx_cache = k
-                break
-
-        if claim_cache and claim_tx_cache:
-            cached_claim_args = tuple(claim_cache) + tuple(claim_tx_cache)
-            return defer.succeed(cached_claim_args)
-        return defer.succeed(None)
-
-    def save_claim_to_cache(self, claim_id, claim_sequence, claim, claim_address, height, amount,
-                            supports, channel_name, signature_is_valid):
-        self.claim_dicts[claim_id] = (claim, claim_sequence, claim_address, height, amount,
-                                      supports, channel_name, signature_is_valid, int(time.time()))
-        return defer.succeed(True)
-
-    def save_claim_to_uri_cache(self, uri, claim_id, certificate_id=None):
-        self.uri_cache[uri] = (claim_id, certificate_id)
-        return defer.succeed(None)
-
-    @defer.inlineCallbacks
-    def get_cached_claim_for_uri(self, uri, check_expire=True):
-        result = self.uri_cache.get(uri, None)
-        response = None
-        if result:
-            claim_id, certificate_id = result
-            response = yield self.get_cached_claim(claim_id, check_expire)
-            if response and certificate_id:
-                certificate = yield self.get_cached_claim(certificate_id, check_expire)
-                response['certificate'] = certificate['claim']
-        defer.returnValue(response)
-
-
-class SqliteStorage(MetaDataStorage):
-    def __init__(self, db_dir):
-        self.db_dir = db_dir
-        self.db = adbapi.ConnectionPool('sqlite3', os.path.join(self.db_dir, "blockchainname.db"),
-                                        check_same_thread=False)
-        MetaDataStorage.__init__(self)
-
-    def load(self):
-        def create_tables(transaction):
-            transaction.execute("CREATE TABLE IF NOT EXISTS name_metadata (" +
-                                "    name TEXT UNIQUE NOT NULL, " +
-                                "    txid TEXT NOT NULL, " +
-                                "    n INTEGER NOT NULL, " +
-                                "    sd_hash TEXT NOT NULL)")
-            transaction.execute("create table if not exists claim_ids (" +
-                                "    claimId text, " +
-                                "    name text, " +
-                                "    txid text, " +
-                                "    n integer)")
-            transaction.execute("CREATE TABLE IF NOT EXISTS claim_cache (" +
-                                "    row_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                                "    claim_id TEXT UNIQUE NOT NULL, " +
-                                "    claim_sequence INTEGER, " +
-                                "    claim_address TEXT NOT NULL, " +
-                                "    height INTEGER NOT NULL, " +
-                                "    amount INTEGER NOT NULL, " +
-                                "    supports TEXT, " +
-                                "    claim_pb TEXT, " +
-                                "    channel_name TEXT, " +
-                                "    signature_is_valid BOOL, " +
-                                "    last_modified TEXT)")
-            transaction.execute("CREATE TABLE IF NOT EXISTS uri_cache (" +
-                                "    row_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                                "    uri TEXT UNIQUE NOT NULL, " +
-                                "    cache_row INTEGER, " +
-                                "    certificate_row INTEGER, " +
-                                "    last_modified TEXT)")
-
-        return self.db.runInteraction(create_tables)
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
-    def save_name_metadata(self, name, claim_outpoint, sd_hash):
-        # TODO: refactor the 'claim_ids' table to not be terrible
-        txid, nout = claim_outpoint['txid'], claim_outpoint['nout']
-        yield self.db.runOperation("INSERT OR REPLACE INTO name_metadata VALUES (?, ?, ?, ?)",
-                                       (name, txid, nout, sd_hash))
-        defer.returnValue(None)
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
-    def get_claim_metadata_for_sd_hash(self, sd_hash):
-        result = yield self.db.runQuery("SELECT name, txid, n FROM name_metadata WHERE sd_hash=?",
-                                        (sd_hash, ))
-        response = None
-        if result:
-            response = result[0]
-        defer.returnValue(response)
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
-    def update_claimid(self, claim_id, name, claim_outpoint):
-        txid, nout = claim_outpoint['txid'], claim_outpoint['nout']
-        yield self.db.runOperation("INSERT OR IGNORE INTO claim_ids VALUES (?, ?, ?, ?)",
-                                   (claim_id, name, txid, nout))
-        defer.returnValue(claim_id)
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
-    def get_claimid_for_tx(self, claim_outpoint):
-        result = yield self.db.runQuery("SELECT claimId FROM claim_ids "
-                                        "WHERE txid=? AND n=?",
-                                        (claim_outpoint['txid'], claim_outpoint['nout']))
-        response = None
-        if result:
-            response = result[0][0]
-        defer.returnValue(response)
-
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
-    def _fix_malformed_supports_amount(self, row_id, supports, amount):
-        """
-        this fixes malformed supports and amounts that were entering the cache
-        support list of [txid, nout, amount in deweys] instead of list of
-        {'txid':,'nout':,'amount':}, with amount specified in dewey
-
-        and also supports could be "[]" (brackets enclosed by double quotes)
-        This code can eventually be removed, as new versions should not have this problem
-        """
-        fixed_supports = None
-        fixed_amount = None
-        supports = [] if not supports else json.loads(supports)
-        if isinstance(supports, (str, unicode)) and supports == '[]':
-            fixed_supports = []
-        elif len(supports) > 0 and not isinstance(supports[0], dict):
-            fixed_supports = []
-            fixed_amount = amount / 100000000.0
-            for support in supports:
-                fixed_supports.append(
-                    {'txid':support[0], 'nout':support[1], 'amount':support[2]/100000000.0})
-        if fixed_supports is not None:
-            log.warn("Malformed support found, fixing it")
-            r = yield self.db.runOperation('UPDATE claim_cache SET supports=? WHERE row_id=?',
-                                        (json.dumps(fixed_supports), row_id))
-            supports = fixed_supports
-        if fixed_amount is not None:
-            log.warn("Malformed amount found, fixing it")
-            r = yield self.db.runOperation('UPDATE claim_cache SET amount=? WHERE row_id=?',
-                                        (fixed_amount, row_id))
-            amount = fixed_amount
-
-        defer.returnValue((json.dumps(supports), amount))
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
-    def _get_cached_claim(self, claim_id, check_expire=True):
-        r = yield self.db.runQuery("SELECT * FROM claim_cache WHERE claim_id=?", (claim_id, ))
-        claim_tx_info = yield self.db.runQuery("SELECT name, txid, n FROM claim_ids "
-                                               "WHERE claimId=?", (claim_id, ))
-        response = None
-        if r and claim_tx_info and r[0]:
-            rid, _, seq, claim_address, height, amount, supports, raw, chan_name, valid, ts = r[0]
-            supports, amount = yield self._fix_malformed_supports_amount(rid, supports, amount)
-            last_modified = int(ts)
-            name, txid, nout = claim_tx_info[0]
-            claim = ClaimDict.deserialize(raw.decode('hex'))
-            response = (claim, seq, claim_address, height, amount, supports,
-                        chan_name, valid, last_modified, name, txid, nout)
-        defer.returnValue(response)
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
-    def save_claim_to_cache(self, claim_id, claim_sequence, claim, claim_address, height, amount,
-                            supports, channel_name, signature_is_valid):
-        serialized = claim.serialized.encode("hex")
-        supports = json.dumps([] or supports)
-        now = str(int(time.time()))
-
-        yield self.db.runOperation("INSERT OR REPLACE INTO claim_cache(claim_sequence, "
-                                   "                        claim_id, claim_address, height, "
-                                   "                        amount, supports, claim_pb, "
-                                   "                        channel_name, signature_is_valid, "
-                                   "                        last_modified)"
-                                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                   (claim_sequence, claim_id, claim_address, height, amount,
-                                    supports, serialized, channel_name, signature_is_valid, now))
-        defer.returnValue(None)
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
-    def save_claim_to_uri_cache(self, uri, claim_id, certificate_id=None):
-        result = yield self.db.runQuery("SELECT row_id, last_modified FROM claim_cache "
-                                        "WHERE claim_id=?", (claim_id, ))
-        certificate_result = None
-        certificate_row = None
-
-        if certificate_id:
-            certificate_result = yield self.db.runQuery("SELECT row_id FROM claim_cache "
-                                                        "WHERE claim_id=?", (certificate_id, ))
-        if certificate_id is not None and certificate_result is None:
-            log.warning("Certificate is not in cache")
-        elif certificate_result:
-            certificate_row = certificate_result[0][0]
-
-        if result:
-            cache_row, ts = result[0]
-            yield self.db.runOperation("INSERT OR REPLACE INTO uri_cache(uri, cache_row, "
-                                       "                      certificate_row, last_modified) "
-                                       "VALUES (?, ?, ?, ?)",
-                                       (uri, cache_row, certificate_row,
-                                       str(int(time.time()))))
-        else:
-            log.warning("Claim is not in cache")
-        defer.returnValue(None)
-
-    @rerun_if_locked
-    @defer.inlineCallbacks
-    def get_cached_claim_for_uri(self, uri, check_expire=True):
-        result = yield self.db.runQuery("SELECT "
-                                        "claim.claim_id, cert.claim_id, uri_cache.last_modified "
-                                        "FROM uri_cache "
-                                        "INNER JOIN claim_cache as claim "
-                                        "ON uri_cache.cache_row=claim.row_id "
-                                        "LEFT OUTER JOIN claim_cache as cert "
-                                        "ON uri_cache.certificate_row=cert.row_id "
-                                        "WHERE uri_cache.uri=?", (uri, ))
-        response = None
-        if result:
-            claim_id, certificate_id, last_modified = result[0]
-            last_modified = int(last_modified)
-            if check_expire and time.time() - last_modified > conf.settings['cache_time']:
-                defer.returnValue(None)
-            claim = yield self.get_cached_claim(claim_id)
-            if claim:
-                response = {
-                    "claim": claim
-                }
-            if response and certificate_id is not None:
-                certificate = yield self.get_cached_claim(certificate_id)
-                response['certificate'] = certificate
-        defer.returnValue(response)
-
-
 class Wallet(object):
     """This class implements the Wallet interface for the LBRYcrd payment system"""
     implements(IWallet)
 
     def __init__(self, storage):
-        if not isinstance(storage, MetaDataStorage):
-            raise ValueError('storage must be an instance of MetaDataStorage')
-        self._storage = storage
+        self.storage = storage
         self.next_manage_call = None
         self.wallet_balance = Decimal(0.0)
         self.total_reserved_points = Decimal(0.0)
@@ -456,19 +91,9 @@ class Wallet(object):
             self.manage()
             return True
 
-        d = self._storage.load()
-        d.addCallback(lambda _: self._start())
+        d = self._start()
         d.addCallback(lambda _: start_manage())
         return d
-
-    def _save_name_metadata(self, name, claim_outpoint, sd_hash):
-        return self._storage.save_name_metadata(name, claim_outpoint, sd_hash)
-
-    def _get_claim_metadata_for_sd_hash(self, sd_hash):
-        return self._storage.get_claim_metadata_for_sd_hash(sd_hash)
-
-    def _update_claimid(self, claim_id, name, claim_outpoint):
-        return self._storage.update_claimid(claim_id, name, claim_outpoint)
 
     @staticmethod
     def log_stop_error(err):
@@ -691,30 +316,13 @@ class Wallet(object):
     ######
 
     @defer.inlineCallbacks
-    def get_cached_claim(self, claim_id, check_expire=True):
-        results = yield self._storage.get_cached_claim(claim_id, check_expire)
-        defer.returnValue(results)
-
-    @defer.inlineCallbacks
     def get_claim_by_claim_id(self, claim_id, check_expire=True):
-        cached_claim = yield self.get_cached_claim(claim_id, check_expire)
-        if cached_claim:
-            result = cached_claim
-        else:
-            log.debug("Refreshing cached claim: %s", claim_id)
-            claim = yield self._get_claim_by_claimid(claim_id)
-            try:
-                result = yield self._handle_claim_result(claim)
-            except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
-                result = {'error': err.message}
-
+        claim = yield self._get_claim_by_claimid(claim_id)
+        try:
+            result = self._handle_claim_result(claim)
+        except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
+            result = {'error': err.message}
         defer.returnValue(result)
-
-    @defer.inlineCallbacks
-    def get_claimid(self, txid, nout):
-        claim_outpoint = ClaimOutpoint(txid, nout)
-        claim_id = yield self._storage.get_claimid_for_tx(claim_outpoint)
-        defer.returnValue(claim_id)
 
     @defer.inlineCallbacks
     def get_my_claim(self, name):
@@ -727,8 +335,7 @@ class Wallet(object):
                 break
         defer.returnValue(my_claim)
 
-    @defer.inlineCallbacks
-    def _decode_and_cache_claim_result(self, claim, update_caches):
+    def _decode_claim_result(self, claim):
         if 'has_signature' in claim and claim['has_signature']:
             if not claim['signature_is_valid']:
                 log.warning("lbry://%s#%s has an invalid signature",
@@ -736,30 +343,15 @@ class Wallet(object):
         try:
             decoded = smart_decode(claim['value'])
             claim_dict = decoded.claim_dict
-            outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
-            name = claim['name']
             claim['value'] = claim_dict
             claim['hex'] = decoded.serialized.encode('hex')
-            if update_caches:
-                if decoded.is_stream:
-                    yield self._save_name_metadata(name, outpoint, decoded.source_hash)
-                yield self._update_claimid(claim['claim_id'], name, outpoint)
-                yield self._storage.save_claim_to_cache(claim['claim_id'],
-                                                        claim['claim_sequence'],
-                                                        decoded, claim['address'],
-                                                        claim['height'],
-                                                        claim['amount'], claim['supports'],
-                                                        claim.get('channel_name', None),
-                                                        claim.get('signature_is_valid', None))
         except DecodeError:
             claim['hex'] = claim['value']
             claim['value'] = None
             claim['error'] = "Failed to decode value"
+        return claim
 
-        defer.returnValue(claim)
-
-    @defer.inlineCallbacks
-    def _handle_claim_result(self, results, update_caches=True):
+    def _handle_claim_result(self, results):
         if not results:
             #TODO: cannot determine what name we searched for here
             # we should fix lbryum commands that return None
@@ -779,49 +371,41 @@ class Wallet(object):
 
         # case where return value is {'certificate':{'txid', 'value',...},...}
         if 'certificate' in results:
-            results['certificate'] = yield self._decode_and_cache_claim_result(
-                                                                        results['certificate'],
-                                                                        update_caches)
+            results['certificate'] = self._decode_claim_result(results['certificate'])
 
         # case where return value is {'claim':{'txid','value',...},...}
         if 'claim' in results:
-            results['claim'] = yield self._decode_and_cache_claim_result(
-                                                                     results['claim'],
-                                                                     update_caches)
+            results['claim'] = self._decode_claim_result(results['claim'])
 
         # case where return value is {'txid','value',...}
         # returned by queries that are not name resolve related
         # (getclaimbyoutpoint, getclaimbyid, getclaimsfromtx)
-        # we do not update caches here because it should be missing
-        # some values such as claim_sequence, and supports
         elif 'value' in results:
-            results = yield self._decode_and_cache_claim_result(results, update_caches=False)
+            results = self._decode_claim_result(results)
 
         # case where there is no 'certificate', 'value', or 'claim' key
         elif 'certificate' not in results:
             msg = 'result in unexpected format:{}'.format(results)
             assert False, msg
 
-        defer.returnValue(results)
+        return results
+
+    @defer.inlineCallbacks
+    def save_claim(self, claim_info):
+        if 'value' in claim_info:
+            yield self.storage.save_claim(claim_info)
+        else:
+            if 'certificate' in claim_info:
+                yield self.storage.save_claim(claim_info['certificate'])
+            if 'claim' in claim_info:
+                yield self.storage.save_claim(claim_info['claim'])
 
     @defer.inlineCallbacks
     def resolve(self, *uris, **kwargs):
-        check_cache = kwargs.get('check_cache', True)
         page = kwargs.get('page', 0)
         page_size = kwargs.get('page_size', 10)
 
         result = {}
-        needed = []
-        for uri in uris:
-            cached_claim = None
-            if check_cache:
-                cached_claim = yield self._storage.get_cached_claim_for_uri(uri, check_cache)
-            if cached_claim:
-                log.debug("Using cached results for %s", uri)
-                result[uri] = yield self._handle_claim_result(cached_claim, update_caches=False)
-            else:
-                log.info("Resolving %s", uri)
-                needed.append(uri)
 
         batch_results = yield self._get_values_for_uris(page, page_size, *uris)
 
@@ -833,36 +417,37 @@ class Wallet(object):
             if resolve_results and 'certificate' in resolve_results:
                 certificate_id = resolve_results['certificate']['claim_id']
             try:
-                result[uri] = yield self._handle_claim_result(resolve_results, update_caches=True)
-                if claim_id:
-                    yield self._storage.save_claim_to_uri_cache(uri, claim_id, certificate_id)
+                result[uri] = self._handle_claim_result(resolve_results)
+                yield self.save_claim(result[uri])
             except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
                 result[uri] = {'error': err.message}
 
         defer.returnValue(result)
 
     @defer.inlineCallbacks
+    def get_claims_by_ids(self, *claim_ids):
+        claims = yield self._get_claims_by_claimids(*claim_ids)
+        for claim in claims.itervalues():
+            yield self.save_claim(claim)
+        defer.returnValue(claims)
+
+    @defer.inlineCallbacks
     def get_claim_by_outpoint(self, claim_outpoint, check_expire=True):
-        claim_id = yield self._storage.get_claimid_for_tx(claim_outpoint)
-        txid, nout = claim_outpoint['txid'], claim_outpoint['nout']
-        if claim_id:
-            cached_claim = yield self._storage.get_cached_claim(claim_id, check_expire)
-        else:
-            cached_claim = None
-        if not cached_claim:
-            claim = yield self._get_claim_by_outpoint(txid, nout)
-            try:
-                result = yield self._handle_claim_result(claim)
-            except (UnknownOutpoint) as err:
-                result = {'error': err.message}
-        else:
-            result = cached_claim
+        txid, nout = claim_outpoint.split(":")
+        nout = int(nout)
+        claim = yield self._get_claim_by_outpoint(txid, nout)
+        try:
+            result = self._handle_claim_result(claim)
+            yield self.save_claim(result)
+        except (UnknownOutpoint) as err:
+            result = {'error': err.message}
         defer.returnValue(result)
 
     @defer.inlineCallbacks
     def get_claim_by_name(self, name):
         get_name_result = yield self._get_value_for_name(name)
-        result = yield self._handle_claim_result(get_name_result)
+        result = self._handle_claim_result(get_name_result)
+        yield self.save_claim(result)
         defer.returnValue(result)
 
     @defer.inlineCallbacks
@@ -875,6 +460,7 @@ class Wallet(object):
                 decoded = smart_decode(claim['value'])
                 claim['value'] = decoded.claim_dict
                 claim['hex'] = decoded.serialized.encode('hex')
+                yield self.save_claim(claim)
                 claims_for_return.append(claim)
             except DecodeError:
                 claim['hex'] = claim['value']
@@ -892,6 +478,7 @@ class Wallet(object):
         claim_out['fee'] = float(claim_out['fee'])
         return claim_out
 
+    @defer.inlineCallbacks
     def claim_new_channel(self, channel_name, amount):
         parsed_channel_name = parse_lbry_uri(channel_name)
         if not parsed_channel_name.is_channel:
@@ -900,16 +487,32 @@ class Wallet(object):
               parsed_channel_name.bid_position or parsed_channel_name.claim_sequence):
             raise Exception("New channel claim should have no fields other than name")
         log.info("Preparing to make certificate claim for %s", channel_name)
-        return self._claim_certificate(parsed_channel_name.name, amount)
+        channel_claim = yield self._claim_certificate(parsed_channel_name.name, amount)
+        yield self.save_claim(self._get_temp_claim_info(channel_claim, channel_name, amount))
+        defer.returnValue(channel_claim)
 
     @defer.inlineCallbacks
     def channel_list(self):
         certificates = yield self.get_certificates_for_signing()
         results = []
         for claim in certificates:
-            formatted = yield self._handle_claim_result(claim)
+            formatted = self._handle_claim_result(claim)
             results.append(formatted)
         defer.returnValue(results)
+
+    def _get_temp_claim_info(self, claim_result, name, bid):
+        # save the claim information with a height and sequence of 0, this will be reset upon next resolve
+        return {
+            "claim_id": claim_result['claim_id'],
+            "name": name,
+            "amount": bid,
+            "address": claim_result['claim_address'],
+            "txid": claim_result['txid'],
+            "nout": claim_result['nout'],
+            "value": claim_result['value'],
+            "height": -1,
+            "claim_sequence": -1,
+        }
 
     @defer.inlineCallbacks
     def claim_name(self, name, bid, metadata, certificate_id=None, claim_address=None,
@@ -944,12 +547,8 @@ class Wallet(object):
             log.error(claim)
             msg = 'Claim to name {} failed: {}'.format(name, claim['reason'])
             raise Exception(msg)
-
         claim = self._process_claim_out(claim)
-        claim_outpoint = ClaimOutpoint(claim['txid'], claim['nout'])
-        log.info("Saving metadata for claim %s %d", claim['txid'], claim['nout'])
-        yield self._update_claimid(claim['claim_id'], name, claim_outpoint)
-        yield self._save_name_metadata(name, claim_outpoint, decoded.source_hash)
+        yield self.storage.save_claim(self._get_temp_claim_info(claim, name, bid), smart_decode(claim['value']))
         defer.returnValue(claim)
 
     @defer.inlineCallbacks
@@ -1003,9 +602,6 @@ class Wallet(object):
     def get_transaction(self, txid):
         d = self._get_transaction(txid)
         return d
-
-    def get_claim_metadata_for_sd_hash(self, sd_hash):
-        return self._get_claim_metadata_for_sd_hash(sd_hash)
 
     def get_balance(self):
         return self.wallet_balance - self.total_reserved_points - sum(self.queued_payments.values())
@@ -1135,6 +731,9 @@ class Wallet(object):
     def _get_claim_by_claimid(self, claim_id):
         return defer.fail(NotImplementedError())
 
+    def _get_claims_by_claimids(self, *claim_ids):
+        return defer.fail(NotImplementedError())
+
     def _get_values_for_uris(self, page, page_size, *uris):
         return defer.fail(NotImplementedError())
 
@@ -1169,7 +768,7 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def _start(self):
-        pass
+        return defer.fail(NotImplementedError())
 
     def _stop(self):
         pass
@@ -1512,6 +1111,9 @@ class LBRYumWallet(Wallet):
 
     def _get_claim_by_claimid(self, claim_id):
         return self._run_cmd_as_defer_to_thread('getclaimbyid', claim_id)
+
+    def _get_claims_by_claimids(self, *claim_ids):
+        return self._run_cmd_as_defer_to_thread('getclaimsbyids', claim_ids)
 
     def _get_balance_for_address(self, address):
         return defer.succeed(Decimal(self.wallet.get_addr_received(address)) / COIN)
