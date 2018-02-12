@@ -152,7 +152,7 @@ def do_migration(db_dir):
 
         # first migrate the blobs
         blobs = blobs_db_cursor.execute("select * from blobs").fetchall()
-        _populate_blobs(blobs)
+        _populate_blobs(blobs)  # pylint: disable=no-value-for-parameter
         log.info("migrated %i blobs", new_db.execute("select count(*) from blob").fetchone()[0])
 
         # used to store the query arguments if we need to try re-importing the lbry file later
@@ -220,7 +220,8 @@ def do_migration(db_dir):
             for damaged_sd in damaged_sds_on_disk:
                 try:
                     decoded, sd_length = verify_sd_blob(damaged_sd, blob_dir)
-                    _add_recovered_blobs(decoded['blobs'], damaged_sd, sd_length)
+                    blobs = decoded['blobs']
+                    _add_recovered_blobs(blobs, damaged_sd, sd_length)  # pylint: disable=no-value-for-parameter
                     _import_file(*file_args[damaged_sd])
                     damaged_stream_sds.remove(damaged_sd)
                 except (OSError, ValueError, TypeError, IOError, AssertionError, sqlite3.IntegrityError):
@@ -245,7 +246,7 @@ def do_migration(db_dir):
 
         log.info("migrated %i content claims", new_db.execute("select count(*) from content_claim").fetchone()[0])
 
-    _make_db()
+    _make_db()  # pylint: disable=no-value-for-parameter
     connection.close()
     blobs_db.close()
     lbryfile_db.close()

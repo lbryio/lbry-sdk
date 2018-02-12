@@ -11,7 +11,7 @@ from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
 from lbrynet.core.utils import generate_id
 from lbrynet.core.PaymentRateManager import BasePaymentRateManager, NegotiatedPaymentRateManager
 from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
-from twisted.internet import threads, defer, reactor
+from twisted.internet import threads, defer
 
 log = logging.getLogger(__name__)
 
