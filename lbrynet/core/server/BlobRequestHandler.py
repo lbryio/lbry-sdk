@@ -152,17 +152,11 @@ class BlobRequestHandler(object):
                 response_fields['blob_hash'] = blob.blob_hash
                 response_fields['length'] = blob.length
                 response['incoming_blob'] = response_fields
-                d.addCallback(lambda _: self.record_transaction(blob))
                 d.addCallback(lambda _: response)
                 return d
         log.debug("We can not send %s", str(blob))
         response['incoming_blob'] = {'error': 'BLOB_UNAVAILABLE'}
         d.addCallback(lambda _: response)
-        return d
-
-    def record_transaction(self, blob):
-        d = self.blob_manager.add_blob_to_upload_history(
-            blob.blob_hash, self.peer.host, self.blob_data_payment_rate)
         return d
 
     def _reply_to_send_request(self, response, incoming):
