@@ -1,4 +1,4 @@
-"""
+__doc__ = """
 Reflector is a protocol to re-host lbry blobs and streams
 Client queries and server responses follow, all dicts are encoded as json
 
