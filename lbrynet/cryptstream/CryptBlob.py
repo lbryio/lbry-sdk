@@ -19,6 +19,16 @@ class CryptBlobInfo(BlobInfo):
         BlobInfo.__init__(self, blob_hash, blob_num, length)
         self.iv = iv
 
+    def get_dict(self):
+        info = {
+            "blob_num": self.blob_num,
+            "length": self.length,
+            "iv": self.iv
+        }
+        if self.blob_hash:
+            info['blob_hash'] = self.blob_hash
+        return info
+
 
 class StreamBlobDecryptor(object):
     def __init__(self, blob, key, iv, length):
