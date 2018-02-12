@@ -2,6 +2,7 @@ import logging
 import miniupnpc
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.dht import node
+from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.client.DHTPeerFinder import DHTPeerFinder
@@ -10,7 +11,7 @@ from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
 from lbrynet.core.utils import generate_id
 from lbrynet.core.PaymentRateManager import BasePaymentRateManager, NegotiatedPaymentRateManager
 from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
-from twisted.internet import threads, defer
+from twisted.internet import threads, defer, reactor
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class Session(object):
                  blob_manager=None, peer_port=None, use_upnp=True,
                  rate_limiter=None, wallet=None,
                  dht_node_class=node.Node, blob_tracker_class=None,
-                 payment_rate_manager_class=None, is_generous=True, external_ip=None):
+                 payment_rate_manager_class=None, is_generous=True, external_ip=None, storage=None):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
         @param db_dir: The directory in which levelDB files should be stored
@@ -136,6 +137,7 @@ class Session(object):
         self.payment_rate_manager = None
         self.payment_rate_manager_class = payment_rate_manager_class or NegotiatedPaymentRateManager
         self.is_generous = is_generous
+        self.storage = storage or SQLiteStorage(self.db_dir)
 
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
@@ -313,9 +315,9 @@ class Session(object):
                 raise Exception(
                     "TempBlobManager is no longer supported, specify BlobManager or db_dir")
             else:
-                self.blob_manager = DiskBlobManager(self.hash_announcer,
-                                                    self.blob_dir,
-                                                    self.db_dir)
+                self.blob_manager = DiskBlobManager(
+                    self.hash_announcer, self.blob_dir, self.storage
+                )
 
         if self.blob_tracker is None:
             self.blob_tracker = self.blob_tracker_class(self.blob_manager,
@@ -328,12 +330,10 @@ class Session(object):
                 self.is_generous)
 
         self.rate_limiter.start()
-        d1 = self.blob_manager.setup()
-        d2 = self.wallet.start()
-
-        dl = defer.DeferredList([d1, d2], fireOnOneErrback=True, consumeErrors=True)
-        dl.addCallback(lambda _: self.blob_tracker.start())
-        return dl
+        d = self.storage.setup()
+        d.addCallback(lambda _: self.wallet.start())
+        d.addCallback(lambda _: self.blob_tracker.start())
+        return d
 
     def _unset_upnp(self):
         log.info("Unsetting upnp for session")
