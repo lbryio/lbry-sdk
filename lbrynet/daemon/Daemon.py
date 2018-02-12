@@ -23,6 +23,7 @@ from lbryschema.decode import smart_decode
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.core.system_info import get_lbrynet_version
+from lbrynet.database.storage import SQLiteStorage
 from lbrynet import conf
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
@@ -30,8 +31,6 @@ from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.core.log_support import configure_loggly_handler
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
-from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.daemon.Downloader import GetStream
 from lbrynet.daemon.Publisher import Publisher
@@ -40,8 +39,9 @@ from lbrynet.daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
+from lbrynet.core.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.core.Session import Session
-from lbrynet.core.Wallet import LBRYumWallet, SqliteStorage, ClaimOutpoint
+from lbrynet.core.Wallet import LBRYumWallet, ClaimOutpoint
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
@@ -175,6 +175,7 @@ class Daemon(AuthJSONRPCServer):
     def __init__(self, analytics_manager):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         self.db_dir = conf.settings['data_dir']
+        self.storage = SQLiteStorage(self.db_dir)
         self.download_directory = conf.settings['download_directory']
         if conf.settings['BLOBFILES_DIR'] == "blobfiles":
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
@@ -221,7 +222,6 @@ class Daemon(AuthJSONRPCServer):
         }
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.stream_info_manager = None
         self.lbry_file_manager = None
 
     @defer.inlineCallbacks
@@ -327,7 +327,6 @@ class Daemon(AuthJSONRPCServer):
                 reflector_factory = reflector_server_factory(
                     self.session.peer_manager,
                     self.session.blob_manager,
-                    self.stream_info_manager,
                     self.lbry_file_manager
                 )
                 try:
@@ -514,13 +513,7 @@ class Daemon(AuthJSONRPCServer):
     def _setup_lbry_file_manager(self):
         log.info('Starting the file manager')
         self.startup_status = STARTUP_STAGES[3]
-        self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
-        self.lbry_file_manager = EncryptedFileManager(
-            self.session,
-            self.stream_info_manager,
-            self.sd_identifier,
-            download_directory=self.download_directory
-        )
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.sd_identifier)
         yield self.lbry_file_manager.setup()
         log.info('Done setting up file manager')
 
@@ -549,8 +542,7 @@ class Daemon(AuthJSONRPCServer):
                     config['use_keyring'] = conf.settings['use_keyring']
                 if conf.settings['lbryum_wallet_dir']:
                     config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
-                storage = SqliteStorage(self.db_dir)
-                wallet = LBRYumWallet(storage, config)
+                wallet = LBRYumWallet(self.storage, config)
                 return defer.succeed(wallet)
             elif self.wallet_type == PTC_WALLET:
                 log.info("Using PTC wallet")
@@ -573,7 +565,8 @@ class Daemon(AuthJSONRPCServer):
                 use_upnp=self.use_upnp,
                 wallet=wallet,
                 is_generous=conf.settings['is_generous_host'],
-                external_ip=self.platform['ip']
+                external_ip=self.platform['ip'],
+                storage=self.storage
             )
             self.startup_status = STARTUP_STAGES[2]
 
@@ -594,7 +587,7 @@ class Daemon(AuthJSONRPCServer):
             self.session.peer_finder,
             self.session.rate_limiter,
             self.session.blob_manager,
-            self.stream_info_manager,
+            self.session.storage,
             self.session.wallet,
             self.download_directory
         )
@@ -623,7 +616,7 @@ class Daemon(AuthJSONRPCServer):
     def _get_stream_analytics_report(self, claim_dict):
         sd_hash = claim_dict.source_hash
         try:
-            stream_hash = yield self.stream_info_manager.get_stream_hash_for_sd_hash(sd_hash)
+            stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(sd_hash)
         except Exception:
             stream_hash = None
         report = {
@@ -637,7 +630,7 @@ class Daemon(AuthJSONRPCServer):
             sd_host = None
         report["sd_blob"] = sd_host
         if stream_hash:
-            blob_infos = yield self.stream_info_manager.get_blobs_for_stream(stream_hash)
+            blob_infos = yield self.session.storage.get_blobs_for_stream(stream_hash)
             report["known_blobs"] = len(blob_infos)
         else:
             blob_infos = []
@@ -953,12 +946,12 @@ class Daemon(AuthJSONRPCServer):
             dl.addCallback(lambda blobs: [blob[1] for blob in blobs if blob[0]])
             return dl
 
-        d = self.stream_info_manager.get_blobs_for_stream(stream_hash)
+        d = self.session.storage.get_blobs_for_stream(stream_hash)
         d.addCallback(_get_blobs)
         return d
 
     def get_blobs_for_sd_hash(self, sd_hash):
-        d = self.stream_info_manager.get_stream_hash_for_sd_hash(sd_hash)
+        d = self.session.storage.get_stream_hash_for_sd_hash(sd_hash)
         d.addCallback(self.get_blobs_for_stream_hash)
         return d
 
@@ -2730,8 +2723,8 @@ class Daemon(AuthJSONRPCServer):
             response = yield self._render_response("Don't have that blob")
             defer.returnValue(response)
         try:
-            stream_hash = yield self.stream_info_manager.get_stream_hash_for_sd_hash(blob_hash)
-            yield self.stream_info_manager.delete_stream(stream_hash)
+            stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(blob_hash)
+            yield self.session.storage.delete_stream(stream_hash)
         except Exception as err:
             pass
         yield self.session.blob_manager.delete_blobs([blob_hash])
