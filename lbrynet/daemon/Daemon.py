@@ -495,7 +495,7 @@ class Daemon(AuthJSONRPCServer):
             log.debug("Created the blobfile directory: %s", str(self.blobfile_dir))
         if not os.path.exists(self.db_revision_file):
             log.warning("db_revision file not found. Creating it")
-            self._write_db_revision_file(old_revision)
+            self._write_db_revision_file(self.current_db_revision)
 
     @defer.inlineCallbacks
     def _check_db_migration(self):
