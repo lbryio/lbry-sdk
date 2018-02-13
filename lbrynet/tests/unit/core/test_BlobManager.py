@@ -3,6 +3,8 @@ import shutil
 import os
 import random
 import string
+from twisted.trial import unittest
+from twisted.internet import defer, threads
 
 from lbrynet.tests.util import random_lbry_hash
 from lbrynet.core.BlobManager import DiskBlobManager
@@ -11,12 +13,10 @@ from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.Peer import Peer
 from lbrynet import conf
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
-from twisted.trial import unittest
-
-from twisted.internet import defer
 
 
 class BlobManagerTest(unittest.TestCase):
+    @defer.inlineCallbacks
     def setUp(self):
         conf.initialize_settings()
         self.blob_dir = tempfile.mkdtemp()
@@ -24,14 +24,17 @@ class BlobManagerTest(unittest.TestCase):
         hash_announcer = DummyHashAnnouncer()
         self.bm = DiskBlobManager(hash_announcer, self.blob_dir, SQLiteStorage(self.db_dir))
         self.peer = Peer('somehost', 22)
+        yield self.bm.storage.setup()
 
+    @defer.inlineCallbacks
     def tearDown(self):
-        self.bm.stop()
+        yield self.bm.stop()
+        yield self.bm.storage.stop()
         # BlobFile will try to delete itself  in _close_writer
         # thus when calling rmtree we may get a FileNotFoundError
         # for the blob file
-        shutil.rmtree(self.blob_dir, ignore_errors=True)
-        shutil.rmtree(self.db_dir)
+        yield threads.deferToThread(shutil.rmtree, self.blob_dir)
+        yield threads.deferToThread(shutil.rmtree, self.db_dir)
 
     @defer.inlineCallbacks
     def _create_and_add_blob(self, should_announce=False):
