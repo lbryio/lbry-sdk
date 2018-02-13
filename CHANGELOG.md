@@ -24,6 +24,7 @@ at anytime.
   * fetching the external ip
   * `blob_list` failing with --uri parameter (https://github.com/lbryio/lbry/issues/895)
   * `get` failing with a non-useful error message when given a uri for a channel claim
+  * exception checking in several wallet unit tests
 
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
@@ -42,8 +43,9 @@ at anytime.
   * `abandon_info` dictionary (containing `claim_name`, `claim_id`, `address`, `amount`, `balance_delta` and `nout`) for claims, supports, and updates returned by `transaction_list`
   * `permanent_url` string to `channel_list_mine`, `claim_list`, `claim_show`, `resolve` and `resolve_name` (see lbryio/lbryum#203)
   * `is_mine` boolean to `channel_list` results
-  * `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
-  * sqlite table to store the outpoint of the claim a stream is downloaded from
+  * `txid`, `nout`, `channel_claim_id`, `channel_claim_name`, `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
+  * `txid`, `nout`, `channel_claim_id`, and `channel_claim_name` filters for `file` commands (`file_list`, `file_set_status`, `file_reflect`,  and `file_delete`)
+  * unit tests for `SQLiteStorage` and updated old tests for relevant changes (https://github.com/lbryio/lbry/issues/1088)
 
 ### Changed
   * default download folder on linux from `~/Downloads` to `XDG_DOWNLOAD_DIR`
@@ -55,7 +57,9 @@ at anytime.
   * `publish` to verify the claim schema before trying to make the claim and to return better error messages
   * `channel_list_mine` to be instead named `channel_list`
   * `channel_list` to include channels where the certificate info has been imported but the claim is not in the wallet
-  * file objects returned by `file_list` and `get` to no longer contain `name`, `claim_id`, `message`, or `metadata`
+  * file objects returned by `file_list` and `get` to contain `claim_name` field instead of `name`
+  * `name` filter parameter for `file_list`, `file_set_status`, `file_reflect`,  and `file_delete` to be named `claim_name`
+  * `metadata` field in file objects returned by `file_list` and `get` to be a [Metadata object](https://github.com/lbryio/lbryschema/blob/master/lbryschema/proto/metadata.proto#L5)  
   * assumption for time it takes to announce single hash from 1 second to 5 seconds
   * HTTP error codes for failed api requests, conform to http://www.jsonrpc.org/specification#error_object (previously http errors were set for jsonrpc errors)
   * api requests resulting in errors to return less verbose tracebacks
@@ -64,16 +68,20 @@ at anytime.
   * lbrynet to not manually save the wallet file and to let lbryum handle it
   * internals to use reworked lbryum `payto` command
   * dht `Node` class to re-attempt joining the network every 60 secs if no peers are known
+  * lbrynet database and file manager to separate the creation of lbry files (from downloading or publishing) from the handling of a stream. All files have a stream, but not all streams may have a file. (https://github.com/lbryio/lbry/issues/1020) 
+  * manager classes to use new `SQLiteStorage` for database interaction. This class uses a single `lbrynet.sqlite` database file.
 
 ### Removed
   * `seccure` and `gmpy` dependencies
   * support for positional arguments in cli `settings_set`. Now only accepts settings changes in the form `--setting_key=value`
   * `auto_re_reflect` setting from the conf file, use the `reflect_uploads` setting instead
   * `name` argument for `claim_show` command
-  * claim related filter arguments `name`, `claim_id`, and `outpoint` from `file_list`, `file_delete`, `file_set_status`, and `file_reflect` commands
+  * `message` response field in file objects returned by `file_list` and `get`
   * `include_tip_info` argument from `transaction_list`, which will now always include tip information.
   * old and unused UI related code
   * unnecessary `TempBlobManager` class
+  * old storage classes used by the file manager, wallet, and blob manager
+  * old `.db` database files from the data directory
 
 ## [0.18.0] - 2017-11-08
 ### Fixed
