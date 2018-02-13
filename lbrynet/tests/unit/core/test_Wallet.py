@@ -16,42 +16,53 @@ from lbryum.simple_config import SimpleConfig
 from lbryschema.claim import ClaimDict
 
 test_metadata = {
-'license': 'NASA',
-'version': '_0_1_0',
-'description': 'test',
-'language': 'en',
-'author': 'test',
-'title': 'test',
-'nsfw': False,
-'thumbnail': 'test'
+    'license': 'NASA',
+    'version': '_0_1_0',
+    'description': 'test',
+    'language': 'en',
+    'author': 'test',
+    'title': 'test',
+    'nsfw': False,
+    'thumbnail': 'test'
 }
 
 test_claim_dict = {
-    'version':'_0_0_1',
-    'claimType':'streamType',
-    'stream':{'metadata':test_metadata, 'version':'_0_0_1', 'source':
+    'version': '_0_0_1',
+    'claimType': 'streamType',
+    'stream': {'metadata': test_metadata, 'version': '_0_0_1', 'source':
         {'source': '8655f713819344980a9a0d67b198344e2c462c90f813e86f'
                    '0c63789ab0868031f25c54d0bb31af6658e997e2041806eb',
          'sourceType': 'lbry_sd_hash', 'contentType': 'video/mp4', 'version': '_0_0_1'},
-}}
+               }}
 
 
 class MocLbryumWallet(LBRYumWallet):
-    def __init__(self):
-        # LBRYumWallet.__init__(self)
-        self.config = SimpleConfig()
+    def __init__(self, db_dir):
+        LBRYumWallet.__init__(self, SQLiteStorage(db_dir), SimpleConfig(
+            {"lbryum_path": db_dir, "wallet_path": os.path.join(db_dir, "testwallet")}
+        ))
+        self.db_dir = db_dir
         self.wallet_balance = Decimal(10.0)
         self.total_reserved_points = Decimal(0.0)
         self.queued_payments = defaultdict(Decimal)
         self.network = FakeNetwork()
-        self.db_dir = tempfile.mkdtemp()
-        self.storage = SQLiteStorage(self.db_dir)
+        assert self.config.get_wallet_path() == os.path.join(self.db_dir, "testwallet")
 
-    def __del__(self):
-        shutil.rmtree(self.db_dir)
+    @defer.inlineCallbacks
+    def setup(self, password=None, seed=None):
+        yield self.storage.setup()
+        seed = seed or "travel nowhere air position hill peace suffer parent beautiful rise " \
+                       "blood power home crumble teach"
+        storage = lbryum.wallet.WalletStorage(self.config.get_wallet_path())
+        self.wallet = lbryum.wallet.NewWallet(storage)
+        self.wallet.add_seed(seed, password)
+        self.wallet.create_master_keys(password)
+        self.wallet.create_main_account()
 
-    def setup(self):
-        return self.storage.setup()
+    @defer.inlineCallbacks
+    def stop(self):
+        yield self.storage.stop()
+        yield threads.deferToThread(shutil.rmtree, self.db_dir)
 
     def get_least_used_address(self, account=None, for_change=False, max_count=100):
         return defer.succeed(None)
@@ -64,41 +75,27 @@ class MocLbryumWallet(LBRYumWallet):
 
 
 class WalletTest(unittest.TestCase):
-
     @defer.inlineCallbacks
     def setUp(self):
-        wallet = MocLbryumWallet()
-        yield wallet.setup()
-        seed_text = "travel nowhere air position hill peace suffer parent beautiful rise " \
-                    "blood power home crumble teach"
-        password = "secret"
         user_dir = tempfile.mkdtemp()
-        path = os.path.join(user_dir, "somewallet")
-        storage = lbryum.wallet.WalletStorage(path)
-        wallet.wallet = lbryum.wallet.NewWallet(storage)
-        wallet.wallet.add_seed(seed_text, password)
-        wallet.wallet.create_master_keys(password)
-        wallet.wallet.create_main_account()
-
-        self.wallet_path = path
-        self.enc_wallet = wallet
-        self.enc_wallet_password = password
+        self.wallet = MocLbryumWallet(user_dir)
+        yield self.wallet.setup()
+        self.assertEqual(self.wallet.get_balance(), Decimal(10))
 
     def tearDown(self):
-        shutil.rmtree(os.path.dirname(self.wallet_path))
+        return self.wallet.stop()
 
     def test_failed_send_name_claim(self):
         def not_enough_funds_send_name_claim(self, name, val, amount):
-            claim_out = {'success':False, 'reason':'Not enough funds'}
+            claim_out = {'success': False, 'reason': 'Not enough funds'}
             return claim_out
 
-        MocLbryumWallet._send_name_claim = not_enough_funds_send_name_claim
-        wallet = MocLbryumWallet()
-        d = wallet.setup()
-        d.addCallback(lambda _: wallet.claim_name('test', 1, test_claim_dict))
+        self.wallet._send_name_claim = not_enough_funds_send_name_claim
+        d = self.wallet.claim_name('test', 1, test_claim_dict)
         self.assertFailure(d, Exception)
         return d
 
+    @defer.inlineCallbacks
     def test_successful_send_name_claim(self):
         expected_claim_out = {
             "claim_id": "f43dc06256a69988bdbea09a58c80493ba15dcfa",
@@ -112,35 +109,26 @@ class WalletTest(unittest.TestCase):
             "channel_name": ""
         }
 
-        def check_out(claim_out):
-            self.assertTrue('success' not in claim_out)
-            self.assertEqual(expected_claim_out['claim_id'], claim_out['claim_id'])
-            self.assertEqual(expected_claim_out['fee'], claim_out['fee'])
-            self.assertEqual(expected_claim_out['nout'], claim_out['nout'])
-            self.assertEqual(expected_claim_out['txid'], claim_out['txid'])
-            self.assertEqual(expected_claim_out['value'], claim_out['value'])
-
         def success_send_name_claim(self, name, val, amount, certificate_id=None,
                                     claim_address=None, change_address=None):
-            return expected_claim_out
+            return defer.succeed(expected_claim_out)
 
-        MocLbryumWallet._send_name_claim = success_send_name_claim
-        wallet = MocLbryumWallet()
-        d = wallet.setup()
-        d.addCallback(lambda _: wallet.claim_name('test', 1, test_claim_dict))
-        d.addCallback(lambda claim_out: check_out(claim_out))
-        return d
+        self.wallet._send_name_claim = success_send_name_claim
+        claim_out = yield self.wallet.claim_name('test', 1, test_claim_dict)
+        self.assertTrue('success' not in claim_out)
+        self.assertEqual(expected_claim_out['claim_id'], claim_out['claim_id'])
+        self.assertEqual(expected_claim_out['fee'], claim_out['fee'])
+        self.assertEqual(expected_claim_out['nout'], claim_out['nout'])
+        self.assertEqual(expected_claim_out['txid'], claim_out['txid'])
+        self.assertEqual(expected_claim_out['value'], claim_out['value'])
 
+    @defer.inlineCallbacks
     def test_failed_support(self):
-        def failed_support_claim(self, name, claim_id, amount):
-            claim_out = {'success':False, 'reason':'Not enough funds'}
-            return threads.deferToThread(lambda: claim_out)
-        MocLbryumWallet._support_claim = failed_support_claim
-        wallet = MocLbryumWallet()
-        d = wallet.setup()
-        d.addCallback(lambda _: wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 1))
-        self.assertFailure(d, Exception)
-        return d
+        # wallet.support_claim will check the balance before calling _support_claim
+        try:
+            yield self.wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 1000)
+        except InsufficientFundsError:
+            pass
 
     def test_succesful_support(self):
         expected_support_out = {
@@ -150,32 +138,32 @@ class WalletTest(unittest.TestCase):
             "txid": "11030a76521e5f552ca87ad70765d0cc52e6ea4c0dc0063335e6cf2a9a85085f"
         }
 
-        def check_out(claim_out):
-            self.assertTrue('success' not in claim_out)
-            self.assertEqual(expected_support_out['fee'], claim_out['fee'])
-            self.assertEqual(expected_support_out['nout'], claim_out['nout'])
-            self.assertEqual(expected_support_out['txid'], claim_out['txid'])
+        expected_result = {
+            "fee": 0.000129,
+            "nout": 0,
+            "txid": "11030a76521e5f552ca87ad70765d0cc52e6ea4c0dc0063335e6cf2a9a85085f"
+        }
 
-        def success_support_claim(self, name, val, amount):
-            return threads.deferToThread(lambda: expected_support_out)
-        MocLbryumWallet._support_claim = success_support_claim
-        wallet = MocLbryumWallet()
-        d = wallet.setup()
-        d.addCallback(lambda _: wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 1))
+        def check_out(claim_out):
+            self.assertDictEqual(expected_result, claim_out)
+
+        def success_support_claim(name, val, amount):
+            return defer.succeed(expected_support_out)
+
+        self.wallet._support_claim = success_support_claim
+        d = self.wallet.support_claim('test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 1)
         d.addCallback(lambda claim_out: check_out(claim_out))
         return d
 
+    @defer.inlineCallbacks
     def test_failed_abandon(self):
-        def failed_abandon_claim(self, claim_outpoint):
-            claim_out = {'success':False, 'reason':'Not enough funds'}
-            return threads.deferToThread(lambda: claim_out)
-        MocLbryumWallet._abandon_claim = failed_abandon_claim
-        wallet = MocLbryumWallet()
-        d = wallet.setup()
-        d.addCallback(lambda _: wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa", None, None))
-        self.assertFailure(d, Exception)
-        return d
+        try:
+            yield self.wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa", None, None)
+            raise Exception("test failed")
+        except Exception as err:
+            self.assertSubstring("claim not found", err.message)
 
+    @defer.inlineCallbacks
     def test_successful_abandon(self):
         expected_abandon_out = {
             "fee": "0.000096",
@@ -183,59 +171,57 @@ class WalletTest(unittest.TestCase):
             "txid": "0578c161ad8d36a7580c557d7444f967ea7f988e194c20d0e3c42c3cabf110dd"
         }
 
-        def check_out(claim_out):
-            self.assertTrue('success' not in claim_out)
-            self.assertEqual(expected_abandon_out['fee'], claim_out['fee'])
-            self.assertEqual(expected_abandon_out['txid'], claim_out['txid'])
+        expected_abandon_result = {
+            "fee": 0.000096,
+            "txid": "0578c161ad8d36a7580c557d7444f967ea7f988e194c20d0e3c42c3cabf110dd"
+        }
 
-        def success_abandon_claim(self, claim_outpoint, txid, nout):
-            return threads.deferToThread(lambda: expected_abandon_out)
+        def success_abandon_claim(claim_outpoint, txid, nout):
+            return defer.succeed(expected_abandon_out)
 
-        MocLbryumWallet._abandon_claim = success_abandon_claim
-        wallet = MocLbryumWallet()
-        d = wallet.storage.setup()
-        d.addCallback(lambda _: wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa", None, None))
-        d.addCallback(lambda claim_out: check_out(claim_out))
-        return d
+        self.wallet._abandon_claim = success_abandon_claim
+        claim_out = yield self.wallet.abandon_claim("f43dc06256a69988bdbea09a58c80493ba15dcfa", None, None)
+        self.assertDictEqual(expected_abandon_result, claim_out)
 
+    @defer.inlineCallbacks
     def test_point_reservation_and_balance(self):
         # check that point reservations and cancellation changes the balance
         # properly
         def update_balance():
             return defer.succeed(5)
-        wallet = MocLbryumWallet()
-        wallet._update_balance = update_balance
-        d = wallet.setup()
-        d.addCallback(lambda _: wallet.update_balance())
+
+        self.wallet._update_balance = update_balance
+        yield self.wallet.update_balance()
+        self.assertEqual(5, self.wallet.get_balance())
+
         # test point reservation
-        d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
-        d.addCallback(lambda _: wallet.reserve_points('testid', 2))
-        d.addCallback(lambda _: self.assertEqual(3, wallet.get_balance()))
-        d.addCallback(lambda _: self.assertEqual(2, wallet.total_reserved_points))
+        yield self.wallet.reserve_points('testid', 2)
+        self.assertEqual(3, self.wallet.get_balance())
+        self.assertEqual(2, self.wallet.total_reserved_points)
+
         # test reserved points cancellation
-        d.addCallback(lambda _: wallet.cancel_point_reservation(ReservedPoints('testid', 2)))
-        d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
-        d.addCallback(lambda _: self.assertEqual(0, wallet.total_reserved_points))
+        yield self.wallet.cancel_point_reservation(ReservedPoints('testid', 2))
+        self.assertEqual(5, self.wallet.get_balance())
+        self.assertEqual(0, self.wallet.total_reserved_points)
+
         # test point sending
-        d.addCallback(lambda _: wallet.reserve_points('testid', 2))
-        d.addCallback(lambda reserve_points: wallet.send_points_to_address(reserve_points, 1))
-        d.addCallback(lambda _: self.assertEqual(3, wallet.get_balance()))
+        reserve_points = yield self.wallet.reserve_points('testid', 2)
+        yield self.wallet.send_points_to_address(reserve_points, 1)
+        self.assertEqual(3, self.wallet.get_balance())
         # test failed point reservation
-        d.addCallback(lambda _: wallet.reserve_points('testid', 4))
-        d.addCallback(lambda out: self.assertEqual(None, out))
-        return d
+        out = yield self.wallet.reserve_points('testid', 4)
+        self.assertEqual(None, out)
 
     def test_point_reservation_and_claim(self):
         # check that claims take into consideration point reservations
         def update_balance():
             return defer.succeed(5)
-        wallet = MocLbryumWallet()
-        wallet._update_balance = update_balance
-        d = wallet.setup()
-        d.addCallback(lambda _: wallet.update_balance())
-        d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
-        d.addCallback(lambda _: wallet.reserve_points('testid', 2))
-        d.addCallback(lambda _: wallet.claim_name('test', 4, test_claim_dict))
+
+        self.wallet._update_balance = update_balance
+        d = self.wallet.update_balance()
+        d.addCallback(lambda _: self.assertEqual(5, self.wallet.get_balance()))
+        d.addCallback(lambda _: self.wallet.reserve_points('testid', 2))
+        d.addCallback(lambda _: self.wallet.claim_name('test', 4, test_claim_dict))
         self.assertFailure(d, InsufficientFundsError)
         return d
 
@@ -243,39 +229,45 @@ class WalletTest(unittest.TestCase):
         # check that supports take into consideration point reservations
         def update_balance():
             return defer.succeed(5)
-        wallet = MocLbryumWallet()
-        wallet._update_balance = update_balance
-        d = wallet.setup()
-        d.addCallback(lambda _: wallet.update_balance())
-        d.addCallback(lambda _: self.assertEqual(5, wallet.get_balance()))
-        d.addCallback(lambda _: wallet.reserve_points('testid', 2))
-        d.addCallback(lambda _: wallet.support_claim(
+
+        self.wallet._update_balance = update_balance
+        d = self.wallet.update_balance()
+        d.addCallback(lambda _: self.assertEqual(5, self.wallet.get_balance()))
+        d.addCallback(lambda _: self.wallet.reserve_points('testid', 2))
+        d.addCallback(lambda _: self.wallet.support_claim(
             'test', "f43dc06256a69988bdbea09a58c80493ba15dcfa", 4))
         self.assertFailure(d, InsufficientFundsError)
         return d
 
+
+class WalletEncryptionTests(unittest.TestCase):
+    def setUp(self):
+        user_dir = tempfile.mkdtemp()
+        self.wallet = MocLbryumWallet(user_dir)
+        return self.wallet.setup(password="password")
+
+    def tearDown(self):
+        return self.wallet.stop()
+
     def test_unlock_wallet(self):
-        wallet = self.enc_wallet
-        wallet._cmd_runner = Commands(
-            wallet.config, wallet.wallet, wallet.network, None, self.enc_wallet_password)
-        cmd_runner = wallet.get_cmd_runner()
-        cmd_runner.unlock_wallet(self.enc_wallet_password)
+        self.wallet._cmd_runner = Commands(
+            self.wallet.config, self.wallet.wallet, self.wallet.network, None, "password")
+        cmd_runner = self.wallet.get_cmd_runner()
+        cmd_runner.unlock_wallet("password")
         self.assertIsNone(cmd_runner.new_password)
-        self.assertEqual(cmd_runner._password, self.enc_wallet_password)
+        self.assertEqual(cmd_runner._password, "password")
 
     def test_encrypt_decrypt_wallet(self):
-        wallet = self.enc_wallet
-        wallet._cmd_runner = Commands(
-            wallet.config, wallet.wallet, wallet.network, None, self.enc_wallet_password)
-        wallet.encrypt_wallet("secret2", False)
-        wallet.decrypt_wallet()
+        self.wallet._cmd_runner = Commands(
+            self.wallet.config, self.wallet.wallet, self.wallet.network, None, "password")
+        self.wallet.encrypt_wallet("secret2", False)
+        self.wallet.decrypt_wallet()
 
     def test_update_password_keyring_off(self):
-        wallet = self.enc_wallet
-        wallet.config.use_keyring = False
-        wallet._cmd_runner = Commands(
-            wallet.config, wallet.wallet, wallet.network, None, self.enc_wallet_password)
+        self.wallet.config.use_keyring = False
+        self.wallet._cmd_runner = Commands(
+            self.wallet.config, self.wallet.wallet, self.wallet.network, None, "password")
 
         # no keyring available, so ValueError is expected
         with self.assertRaises(ValueError):
-            wallet.encrypt_wallet("secret2", True)
+            self.wallet.encrypt_wallet("secret2", True)
