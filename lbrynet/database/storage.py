@@ -17,9 +17,7 @@ log = logging.getLogger(__name__)
 
 
 def _get_next_available_file_name(download_directory, file_name):
-    base_name, ext = os.path.splitext(file_name or "_")
-    if ext:
-        ext = ".%s" % ext
+    base_name, ext = os.path.splitext(file_name)
     i = 0
     while os.path.isfile(os.path.join(download_directory, file_name)):
         i += 1
