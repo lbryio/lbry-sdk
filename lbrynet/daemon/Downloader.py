@@ -116,14 +116,15 @@ class GetStream(object):
         raise Exception('No suitable factory was found in {}'.format(factories))
 
     @defer.inlineCallbacks
-    def get_downloader(self, factory, stream_metadata):
+    def get_downloader(self, factory, stream_metadata, file_name=None):
         # TODO: we should use stream_metadata.options.get_downloader_options
         #       instead of hard-coding the options to be [self.data_rate]
         downloader = yield factory.make_downloader(
             stream_metadata,
-            [self.data_rate],
+            self.data_rate,
             self.payment_rate_manager,
-            download_directory=self.download_directory,
+            self.download_directory,
+            file_name=file_name
         )
         defer.returnValue(downloader)
 
@@ -165,10 +166,10 @@ class GetStream(object):
         defer.returnValue(key_fee)
 
     @defer.inlineCallbacks
-    def _create_downloader(self, sd_blob):
+    def _create_downloader(self, sd_blob, file_name=None):
         stream_metadata = yield self.sd_identifier.get_metadata_for_sd_blob(sd_blob)
         factory = self.get_downloader_factory(stream_metadata.factories)
-        downloader = yield self.get_downloader(factory, stream_metadata)
+        downloader = yield self.get_downloader(factory, stream_metadata, file_name)
         defer.returnValue(downloader)
 
     @defer.inlineCallbacks
@@ -178,15 +179,17 @@ class GetStream(object):
         defer.returnValue(sd_blob)
 
     @defer.inlineCallbacks
-    def _download(self, sd_blob, name, key_fee):
-        self.downloader = yield self._create_downloader(sd_blob)
+    def _download(self, sd_blob, name, key_fee, txid, nout, file_name=None):
+        self.downloader = yield self._create_downloader(sd_blob, file_name=file_name)
         yield self.pay_key_fee(key_fee, name)
+        yield self.session.storage.save_content_claim(self.downloader.stream_hash, "%s:%i" % (txid, nout))
+        yield self.downloader.get_claim_info()
         log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
         self.finished_deferred = self.downloader.start()
         self.finished_deferred.addCallbacks(lambda result: self.finish(result, name), self.fail)
 
     @defer.inlineCallbacks
-    def start(self, stream_info, name):
+    def start(self, stream_info, name, txid, nout, file_name=None):
         """
         Start download
 
@@ -203,7 +206,7 @@ class GetStream(object):
         self.set_status(DOWNLOAD_METADATA_CODE, name)
         sd_blob = yield self._download_sd_blob()
 
-        yield self._download(sd_blob, name, key_fee)
+        yield self._download(sd_blob, name, key_fee, txid, nout, file_name)
         self.set_status(DOWNLOAD_RUNNING_CODE, name)
 
         try:

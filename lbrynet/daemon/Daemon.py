@@ -23,6 +23,7 @@ from lbryschema.decode import smart_decode
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.core.system_info import get_lbrynet_version
+from lbrynet.database.storage import SQLiteStorage
 from lbrynet import conf
 from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
 from lbrynet.reflector import reupload
@@ -30,8 +31,6 @@ from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.core.log_support import configure_loggly_handler
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
-from lbrynet.lbry_file.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.daemon.Downloader import GetStream
 from lbrynet.daemon.Publisher import Publisher
@@ -40,8 +39,9 @@ from lbrynet.daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
+from lbrynet.core.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.core.Session import Session
-from lbrynet.core.Wallet import LBRYumWallet, SqliteStorage, ClaimOutpoint
+from lbrynet.core.Wallet import LBRYumWallet, ClaimOutpoint
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
@@ -120,6 +120,13 @@ class _FileID(IterableContainer):
     FILE_NAME = 'file_name'
     STREAM_HASH = 'stream_hash'
     ROWID = "rowid"
+    CLAIM_ID = "claim_id"
+    OUTPOINT = "outpoint"
+    TXID = "txid"
+    NOUT = "nout"
+    CHANNEL_CLAIM_ID = "channel_claim_id"
+    CLAIM_NAME = "claim_name"
+    CHANNEL_NAME = "channel_name"
 
 
 FileID = _FileID()
@@ -175,6 +182,7 @@ class Daemon(AuthJSONRPCServer):
     def __init__(self, analytics_manager):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         self.db_dir = conf.settings['data_dir']
+        self.storage = SQLiteStorage(self.db_dir)
         self.download_directory = conf.settings['download_directory']
         if conf.settings['BLOBFILES_DIR'] == "blobfiles":
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
@@ -198,7 +206,7 @@ class Daemon(AuthJSONRPCServer):
         self.connected_to_internet = True
         self.connection_status_code = None
         self.platform = None
-        self.current_db_revision = 5
+        self.current_db_revision = 6
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self._session_id = conf.settings.get_session_id()
@@ -221,7 +229,6 @@ class Daemon(AuthJSONRPCServer):
         }
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
-        self.stream_info_manager = None
         self.lbry_file_manager = None
 
     @defer.inlineCallbacks
@@ -229,16 +236,6 @@ class Daemon(AuthJSONRPCServer):
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
 
         configure_loggly_handler()
-
-        @defer.inlineCallbacks
-        def _announce_startup():
-            def _announce():
-                self.announced_startup = True
-                self.startup_status = STARTUP_STAGES[5]
-                log.info("Started lbrynet-daemon")
-                log.info("%i blobs in manager", len(self.session.blob_manager.blobs))
-
-            yield _announce()
 
         log.info("Starting lbrynet-daemon")
 
@@ -248,7 +245,8 @@ class Daemon(AuthJSONRPCServer):
 
         yield self._initial_setup()
         yield threads.deferToThread(self._setup_data_directory)
-        yield self._check_db_migration()
+        migrated = yield self._check_db_migration()
+        yield self.storage.setup()
         yield self._get_session()
         yield self._check_wallet_locked()
         yield self._start_analytics()
@@ -258,7 +256,20 @@ class Daemon(AuthJSONRPCServer):
         yield self._setup_query_handlers()
         yield self._setup_server()
         log.info("Starting balance: " + str(self.session.wallet.get_balance()))
-        yield _announce_startup()
+        self.announced_startup = True
+        self.startup_status = STARTUP_STAGES[5]
+        log.info("Started lbrynet-daemon")
+
+        ###
+        # this should be removed with the next db revision
+        if migrated:
+            missing_channel_claim_ids = yield self.storage.get_unknown_certificate_ids()
+            while missing_channel_claim_ids:  # in case there are a crazy amount lets batch to be safe
+                batch = missing_channel_claim_ids[:100]
+                _ = yield self.session.wallet.get_claims_by_ids(*batch)
+                missing_channel_claim_ids = missing_channel_claim_ids[100:]
+        ###
+
         self._auto_renew()
 
     def _get_platform(self):
@@ -327,7 +338,6 @@ class Daemon(AuthJSONRPCServer):
                 reflector_factory = reflector_server_factory(
                     self.session.peer_manager,
                     self.session.blob_manager,
-                    self.stream_info_manager,
                     self.lbry_file_manager
                 )
                 try:
@@ -485,42 +495,36 @@ class Daemon(AuthJSONRPCServer):
             log.debug("Created the blobfile directory: %s", str(self.blobfile_dir))
         if not os.path.exists(self.db_revision_file):
             log.warning("db_revision file not found. Creating it")
-            self._write_db_revision_file(old_revision)
+            self._write_db_revision_file(self.current_db_revision)
 
+    @defer.inlineCallbacks
     def _check_db_migration(self):
         old_revision = 1
+        migrated = False
         if os.path.exists(self.db_revision_file):
-            old_revision = int(open(self.db_revision_file).read().strip())
+            with open(self.db_revision_file, "r") as revision_read_handle:
+                old_revision = int(revision_read_handle.read().strip())
 
         if old_revision > self.current_db_revision:
             raise Exception('This version of lbrynet is not compatible with the database\n'
                             'Your database is revision %i, expected %i' %
                             (old_revision, self.current_db_revision))
-
-        def update_version_file_and_print_success():
+        if old_revision < self.current_db_revision:
+            from lbrynet.database.migrator import dbmigrator
+            log.info("Upgrading your databases (revision %i to %i)", old_revision, self.current_db_revision)
+            yield threads.deferToThread(
+                dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision
+            )
             self._write_db_revision_file(self.current_db_revision)
             log.info("Finished upgrading the databases.")
-
-        if old_revision < self.current_db_revision:
-            from lbrynet.db_migrator import dbmigrator
-            log.info("Upgrading your databases")
-            d = threads.deferToThread(
-                dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision)
-            d.addCallback(lambda _: update_version_file_and_print_success())
-            return d
-        return defer.succeed(True)
+            migrated = True
+        defer.returnValue(migrated)
 
     @defer.inlineCallbacks
     def _setup_lbry_file_manager(self):
         log.info('Starting the file manager')
         self.startup_status = STARTUP_STAGES[3]
-        self.stream_info_manager = DBEncryptedFileMetadataManager(self.db_dir)
-        self.lbry_file_manager = EncryptedFileManager(
-            self.session,
-            self.stream_info_manager,
-            self.sd_identifier,
-            download_directory=self.download_directory
-        )
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.sd_identifier)
         yield self.lbry_file_manager.setup()
         log.info('Done setting up file manager')
 
@@ -549,8 +553,7 @@ class Daemon(AuthJSONRPCServer):
                     config['use_keyring'] = conf.settings['use_keyring']
                 if conf.settings['lbryum_wallet_dir']:
                     config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
-                storage = SqliteStorage(self.db_dir)
-                wallet = LBRYumWallet(storage, config)
+                wallet = LBRYumWallet(self.storage, config)
                 return defer.succeed(wallet)
             elif self.wallet_type == PTC_WALLET:
                 log.info("Using PTC wallet")
@@ -573,7 +576,8 @@ class Daemon(AuthJSONRPCServer):
                 use_upnp=self.use_upnp,
                 wallet=wallet,
                 is_generous=conf.settings['is_generous_host'],
-                external_ip=self.platform['ip']
+                external_ip=self.platform['ip'],
+                storage=self.storage
             )
             self.startup_status = STARTUP_STAGES[2]
 
@@ -594,7 +598,7 @@ class Daemon(AuthJSONRPCServer):
             self.session.peer_finder,
             self.session.rate_limiter,
             self.session.blob_manager,
-            self.stream_info_manager,
+            self.session.storage,
             self.session.wallet,
             self.download_directory
         )
@@ -623,7 +627,7 @@ class Daemon(AuthJSONRPCServer):
     def _get_stream_analytics_report(self, claim_dict):
         sd_hash = claim_dict.source_hash
         try:
-            stream_hash = yield self.stream_info_manager.get_stream_hash_for_sd_hash(sd_hash)
+            stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(sd_hash)
         except Exception:
             stream_hash = None
         report = {
@@ -637,7 +641,7 @@ class Daemon(AuthJSONRPCServer):
             sd_host = None
         report["sd_blob"] = sd_host
         if stream_hash:
-            blob_infos = yield self.stream_info_manager.get_blobs_for_stream(stream_hash)
+            blob_infos = yield self.session.storage.get_blobs_for_stream(stream_hash)
             report["known_blobs"] = len(blob_infos)
         else:
             blob_infos = []
@@ -683,12 +687,13 @@ class Daemon(AuthJSONRPCServer):
                                               self.disable_max_key_fee,
                                               conf.settings['data_rate'], timeout)
             try:
-                lbry_file, finished_deferred = yield self.streams[sd_hash].start(claim_dict, name)
-                yield self.stream_info_manager.save_outpoint_to_file(lbry_file.rowid, txid, nout)
-                finished_deferred.addCallbacks(lambda _: _download_finished(download_id, name,
-                                                                            claim_dict),
-                                               lambda e: _download_failed(e, download_id, name,
-                                                                          claim_dict))
+                lbry_file, finished_deferred = yield self.streams[sd_hash].start(
+                    claim_dict, name, txid, nout, file_name
+                )
+                finished_deferred.addCallbacks(
+                    lambda _: _download_finished(download_id, name, claim_dict),
+                    lambda e: _download_failed(e, download_id, name, claim_dict)
+                )
                 result = yield self._get_lbry_file_dict(lbry_file, full_status=True)
             except Exception as err:
                 yield _download_failed(err, download_id, name, claim_dict)
@@ -713,7 +718,8 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise Exception("Invalid bid")
         if not file_path:
-            claim_out = yield publisher.publish_stream(name, bid, claim_dict, claim_address,
+            stream_hash = yield self.storage.get_stream_hash_for_sd_hash(claim_dict['stream']['source']['source'])
+            claim_out = yield publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address,
                                                        change_address)
         else:
             claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path,
@@ -722,9 +728,6 @@ class Daemon(AuthJSONRPCServer):
                 d = reupload.reflect_stream(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
-        yield self.stream_info_manager.save_outpoint_to_file(publisher.lbry_file.rowid,
-                                                             claim_out['txid'],
-                                                             int(claim_out['nout']))
         self.analytics_manager.send_claim_action('publish')
         log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
                  claim_out['nout'])
@@ -880,7 +883,7 @@ class Daemon(AuthJSONRPCServer):
         else:
             written_bytes = 0
 
-        size = outpoint = num_completed = num_known = status = None
+        size = num_completed = num_known = status = None
 
         if full_status:
             size = yield lbry_file.get_total_bytes()
@@ -888,7 +891,6 @@ class Daemon(AuthJSONRPCServer):
             num_completed = file_status.num_completed
             num_known = file_status.num_known
             status = file_status.running_status
-            outpoint = yield self.stream_info_manager.get_file_outpoint(lbry_file.rowid)
 
         result = {
             'completed': lbry_file.completed,
@@ -908,7 +910,14 @@ class Daemon(AuthJSONRPCServer):
             'blobs_completed': num_completed,
             'blobs_in_stream': num_known,
             'status': status,
-            'outpoint': outpoint
+            'claim_id': lbry_file.claim_id,
+            'txid': lbry_file.txid,
+            'nout': lbry_file.nout,
+            'outpoint': lbry_file.outpoint,
+            'metadata': lbry_file.metadata,
+            'channel_claim_id': lbry_file.channel_claim_id,
+            'channel_name': lbry_file.channel_name,
+            'claim_name': lbry_file.claim_name
         }
         defer.returnValue(result)
 
@@ -953,12 +962,12 @@ class Daemon(AuthJSONRPCServer):
             dl.addCallback(lambda blobs: [blob[1] for blob in blobs if blob[0]])
             return dl
 
-        d = self.stream_info_manager.get_blobs_for_stream(stream_hash)
+        d = self.session.storage.get_blobs_for_stream(stream_hash)
         d.addCallback(_get_blobs)
         return d
 
     def get_blobs_for_sd_hash(self, sd_hash):
-        d = self.stream_info_manager.get_stream_hash_for_sd_hash(sd_hash)
+        d = self.session.storage.get_stream_hash_for_sd_hash(sd_hash)
         d.addCallback(self.get_blobs_for_stream_hash)
         return d
 
@@ -1379,16 +1388,24 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
-                      [--rowid=<rowid>]
-                      [-f]
+                      [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
+                      [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
+                      [--claim_name=<claim_name>] [-f]
 
         Options:
-            --sd_hash=<sd_hash>          : get file with matching sd hash
-            --file_name=<file_name>      : get file with matching file name in the
-                                           downloads folder
-            --stream_hash=<stream_hash>  : get file with matching stream hash
-            --rowid=<rowid>              : get file with matching row id
-            -f                           : full status, populate the 'message' and 'size' fields
+            --sd_hash=<sd_hash>                    : get file with matching sd hash
+            --file_name=<file_name>                : get file with matching file name in the
+                                                     downloads folder
+            --stream_hash=<stream_hash>            : get file with matching stream hash
+            --rowid=<rowid>                        : get file with matching row id
+            --claim_id=<claim_id>                  : get file with matching claim id
+            --outpoint=<outpoint>                  : get file with matching claim outpoint
+            --txid=<txid>                          : get file with matching claim txid
+            --nout=<nout>                          : get file with matching claim nout
+            --channel_claim_id=<channel_claim_id>  : get file with matching channel claim id
+            --channel_name=<channel_name>  : get file with matching channel name
+            --claim_name=<claim_name>              : get file with matching claim name
+            -f                                     : full status, populate the 'message' and 'size' fields
 
         Returns:
             (list) List of files
@@ -1412,7 +1429,14 @@ class Daemon(AuthJSONRPCServer):
                     'blobs_completed': (int) num_completed, None if full_status is false,
                     'blobs_in_stream': (int) None if full_status is false,
                     'status': (str) downloader status, None if full_status is false,
-                    'outpoint': (str), None if full_status is false or if claim is not found
+                    'claim_id': (str) None if full_status is false or if claim is not found,
+                    'outpoint': (str) None if full_status is false or if claim is not found,
+                    'txid': (str) None if full_status is false or if claim is not found,
+                    'nout': (int) None if full_status is false or if claim is not found,
+                    'metadata': (dict) None if full_status is false or if claim is not found,
+                    'channel_claim_id': (str) None if full_status is false or if claim is not found or signed,
+                    'channel_name': (str) None if full_status is false or if claim is not found or signed,
+                    'claim_name': (str) None if full_status is false or if claim is not found
                 },
             ]
         """
@@ -1599,24 +1623,31 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) Dictionary containing information about the stream
             {
-                    'completed': (bool) true if download is completed,
-                    'file_name': (str) name of file,
-                    'download_directory': (str) download directory,
-                    'points_paid': (float) credit paid to download file,
-                    'stopped': (bool) true if download is stopped,
-                    'stream_hash': (str) stream hash of file,
-                    'stream_name': (str) stream name ,
-                    'suggested_file_name': (str) suggested file name,
-                    'sd_hash': (str) sd hash of file,
-                    'download_path': (str) download path of file,
-                    'mime_type': (str) mime type of file,
-                    'key': (str) key attached to file,
-                    'total_bytes': (int) file size in bytes, None if full_status is false,
-                    'written_bytes': (int) written size in bytes,
-                    'blobs_completed': (int) num_completed, None if full_status is false,
-                    'blobs_in_stream': (int) None if full_status is false,
-                    'status': (str) downloader status, None if full_status is false,
-                    'outpoint': (str), None if full_status is false or if claim is not found
+                'completed': (bool) true if download is completed,
+                'file_name': (str) name of file,
+                'download_directory': (str) download directory,
+                'points_paid': (float) credit paid to download file,
+                'stopped': (bool) true if download is stopped,
+                'stream_hash': (str) stream hash of file,
+                'stream_name': (str) stream name ,
+                'suggested_file_name': (str) suggested file name,
+                'sd_hash': (str) sd hash of file,
+                'download_path': (str) download path of file,
+                'mime_type': (str) mime type of file,
+                'key': (str) key attached to file,
+                'total_bytes': (int) file size in bytes, None if full_status is false,
+                'written_bytes': (int) written size in bytes,
+                'blobs_completed': (int) num_completed, None if full_status is false,
+                'blobs_in_stream': (int) None if full_status is false,
+                'status': (str) downloader status, None if full_status is false,
+                'claim_id': (str) claim id,
+                'outpoint': (str) claim outpoint string,
+                'txid': (str) claim txid,
+                'nout': (int) claim nout,
+                'metadata': (dict) claim metadata,
+                'channel_claim_id': (str) None if claim is not signed
+                'channel_name': (str) None if claim is not signed
+                'claim_name': (str) claim name
             }
         """
 
@@ -1710,18 +1741,26 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             file_delete [-f] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                        [--stream_hash=<stream_hash>] [--rowid=<rowid>]
+                        [--stream_hash=<stream_hash>] [--rowid=<rowid>] [--claim_id=<claim_id>] [--txid=<txid>]
+                        [--nout=<nout>] [--claim_name=<claim_name>] [--channel_claim_id=<channel_claim_id>]
+                        [--channel_name=<channel_name>]
 
         Options:
-            -f, --delete_from_download_dir  : delete file from download directory,
-                                                instead of just deleting blobs
-            --delete_all                    : if there are multiple matching files,
-                                                allow the deletion of multiple files.
-                                                Otherwise do not delete anything.
-            --sd_hash=<sd_hash>             : delete by file sd hash
-            --file_name<file_name>          : delete by file name in downloads folder
-            --stream_hash=<stream_hash>     : delete by file stream hash
-            --rowid=<rowid>                 : delete by file row id
+            -f, --delete_from_download_dir         : delete file from download directory,
+                                                    instead of just deleting blobs
+            --delete_all                           : if there are multiple matching files,
+                                                     allow the deletion of multiple files.
+                                                     Otherwise do not delete anything.
+            --sd_hash=<sd_hash>                    : delete by file sd hash
+            --file_name<file_name>                 : delete by file name in downloads folder
+            --stream_hash=<stream_hash>            : delete by file stream hash
+            --rowid=<rowid>                        : delete by file row id
+            --claim_id=<claim_id>                  : delete by file claim id
+            --txid=<txid>                          : delete by file claim txid
+            --nout=<nout>                          : delete by file claim nout
+            --claim_name=<claim_name>              : delete by file claim name
+            --channel_claim_id=<channel_claim_id>  : delete by file channel claim id
+            --channel_name=<channel_name>                 : delete by file channel claim name
 
         Returns:
             (bool) true if deletion was successful
@@ -2730,8 +2769,8 @@ class Daemon(AuthJSONRPCServer):
             response = yield self._render_response("Don't have that blob")
             defer.returnValue(response)
         try:
-            stream_hash = yield self.stream_info_manager.get_stream_hash_for_sd_hash(blob_hash)
-            yield self.stream_info_manager.delete_stream(stream_hash)
+            stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(blob_hash)
+            yield self.session.storage.delete_stream(stream_hash)
         except Exception as err:
             pass
         yield self.session.blob_manager.delete_blobs([blob_hash])

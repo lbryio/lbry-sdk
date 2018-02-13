@@ -5,13 +5,13 @@ Utilities for turning plain files into LBRY Files.
 import binascii
 import logging
 import os
-from lbrynet.core.StreamDescriptor import PlainStreamDescriptorWriter
-from lbrynet.cryptstream.CryptStreamCreator import CryptStreamCreator
-from lbrynet import conf
-from lbrynet.lbry_file.StreamDescriptor import get_sd_info
-from lbrynet.core.cryptoutils import get_lbry_hash_obj
+
+from twisted.internet import defer
 from twisted.protocols.basic import FileSender
 
+from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter, EncryptedFileStreamType
+from lbrynet.core.StreamDescriptor import format_sd_info, get_stream_hash
+from lbrynet.cryptstream.CryptStreamCreator import CryptStreamCreator
 
 log = logging.getLogger(__name__)
 
@@ -20,58 +20,32 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
     """
     A CryptStreamCreator which adds itself and its additional metadata to an EncryptedFileManager
     """
-    def __init__(self, blob_manager, lbry_file_manager, name=None,
-                 key=None, iv_generator=None, suggested_file_name=None):
-        CryptStreamCreator.__init__(self, blob_manager, name, key, iv_generator)
+
+    def __init__(self, blob_manager, lbry_file_manager, stream_name=None,
+                 key=None, iv_generator=None):
+        CryptStreamCreator.__init__(self, blob_manager, stream_name, key, iv_generator)
         self.lbry_file_manager = lbry_file_manager
-        self.suggested_file_name = suggested_file_name or name
         self.stream_hash = None
         self.blob_infos = []
+        self.sd_info = None
 
     def _blob_finished(self, blob_info):
         log.debug("length: %s", blob_info.length)
-        self.blob_infos.append(blob_info)
+        self.blob_infos.append(blob_info.get_dict())
         return blob_info
 
-    def _save_stream_info(self):
-        stream_info_manager = self.lbry_file_manager.stream_info_manager
-        d = stream_info_manager.save_stream(self.stream_hash, hexlify(self.name),
-                                            hexlify(self.key),
-                                            hexlify(self.suggested_file_name),
-                                            self.blob_infos)
-        return d
-
-    def _get_blobs_hashsum(self):
-        blobs_hashsum = get_lbry_hash_obj()
-        for blob_info in sorted(self.blob_infos, key=lambda b_i: b_i.blob_num):
-            length = blob_info.length
-            if length != 0:
-                blob_hash = blob_info.blob_hash
-            else:
-                blob_hash = None
-            blob_num = blob_info.blob_num
-            iv = blob_info.iv
-            blob_hashsum = get_lbry_hash_obj()
-            if length != 0:
-                blob_hashsum.update(blob_hash)
-            blob_hashsum.update(str(blob_num))
-            blob_hashsum.update(iv)
-            blob_hashsum.update(str(length))
-            blobs_hashsum.update(blob_hashsum.digest())
-        return blobs_hashsum.digest()
-
-    def _make_stream_hash(self):
-        hashsum = get_lbry_hash_obj()
-        hashsum.update(hexlify(self.name))
-        hashsum.update(hexlify(self.key))
-        hashsum.update(hexlify(self.suggested_file_name))
-        hashsum.update(self._get_blobs_hashsum())
-        self.stream_hash = hashsum.hexdigest()
-
     def _finished(self):
-        self._make_stream_hash()
-        d = self._save_stream_info()
-        return d
+        # calculate the stream hash
+        self.stream_hash = get_stream_hash(
+            hexlify(self.name), hexlify(self.key), hexlify(self.name),
+            self.blob_infos
+        )
+        # generate the sd info
+        self.sd_info = format_sd_info(
+            EncryptedFileStreamType, hexlify(self.name), hexlify(self.key),
+            hexlify(self.name), self.stream_hash, self.blob_infos
+        )
+        return defer.succeed(self.stream_hash)
 
 
 # TODO: this should be run its own thread. Encrypting a large file can
@@ -80,8 +54,8 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
 #       great when sending over the network, but this is all local so
 #       we can simply read the file from the disk without needing to
 #       involve reactor.
-def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=None,
-                     iv_generator=None, suggested_file_name=None):
+@defer.inlineCallbacks
+def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=None, iv_generator=None):
     """Turn a plain file into an LBRY File.
 
     An LBRY File is a collection of encrypted blobs of data and the metadata that binds them
@@ -104,10 +78,6 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
     @param file_handle: The file-like object to read
     @type file_handle: any file-like object which can be read by twisted.protocols.basic.FileSender
 
-    @param secret_pass_phrase: A string that will be used to generate the public key. If None, a
-        random string will be used.
-    @type secret_pass_phrase: string
-
     @param key: the raw AES key which will be used to encrypt the blobs. If None, a random key will
         be generated.
     @type key: string
@@ -116,53 +86,44 @@ def create_lbry_file(session, lbry_file_manager, file_name, file_handle, key=Non
         vectors for the blobs. Will be called once for each blob.
     @type iv_generator: a generator function which yields strings
 
-    @param suggested_file_name: what the file should be called when the LBRY File is saved to disk.
-    @type suggested_file_name: string
-
     @return: a Deferred which fires with the stream_hash of the LBRY File
     @rtype: Deferred which fires with hex-encoded string
     """
 
-    def stop_file(creator):
-        log.debug("the file sender has triggered its deferred. stopping the stream writer")
-        return creator.stop()
-
-    def make_stream_desc_file(stream_hash):
-        log.debug("creating the stream descriptor file")
-        descriptor_file_path = os.path.join(
-            session.db_dir, file_name + conf.settings['CRYPTSD_FILE_EXTENSION'])
-        descriptor_writer = PlainStreamDescriptorWriter(descriptor_file_path)
-
-        d = get_sd_info(lbry_file_manager.stream_info_manager, stream_hash, True)
-
-        d.addCallback(descriptor_writer.create_descriptor)
-
-        return d
-
     base_file_name = os.path.basename(file_name)
+    file_directory = os.path.dirname(file_handle.name)
 
     lbry_file_creator = EncryptedFileStreamCreator(
-        session.blob_manager,
-        lbry_file_manager,
-        base_file_name, key,
-        iv_generator,
-        suggested_file_name)
+        session.blob_manager, lbry_file_manager, base_file_name, key, iv_generator
+    )
 
-    def start_stream():
-        # TODO: Using FileSender isn't necessary, we can just read
-        #       straight from the disk. The stream creation process
-        #       should be in its own thread anyway so we don't need to
-        #       worry about interacting with the twisted reactor
-        file_sender = FileSender()
-        d = file_sender.beginFileTransfer(file_handle, lbry_file_creator)
-        d.addCallback(lambda _: stop_file(lbry_file_creator))
-        d.addCallback(lambda _: make_stream_desc_file(lbry_file_creator.stream_hash))
-        d.addCallback(lambda _: lbry_file_creator.stream_hash)
-        return d
+    yield lbry_file_creator.setup()
+    # TODO: Using FileSender isn't necessary, we can just read
+    #       straight from the disk. The stream creation process
+    #       should be in its own thread anyway so we don't need to
+    #       worry about interacting with the twisted reactor
+    file_sender = FileSender()
+    yield file_sender.beginFileTransfer(file_handle, lbry_file_creator)
 
-    d = lbry_file_creator.setup()
-    d.addCallback(lambda _: start_stream())
-    return d
+    log.debug("the file sender has triggered its deferred. stopping the stream writer")
+    yield lbry_file_creator.stop()
+
+    log.debug("making the sd blob")
+    sd_info = lbry_file_creator.sd_info
+    descriptor_writer = BlobStreamDescriptorWriter(session.blob_manager)
+    sd_hash = yield descriptor_writer.create_descriptor(sd_info)
+
+    log.debug("saving the stream")
+    yield session.storage.store_stream(
+        sd_info['stream_hash'], sd_hash, sd_info['stream_name'], sd_info['key'],
+        sd_info['suggested_file_name'], sd_info['blobs']
+    )
+    log.debug("adding to the file manager")
+    lbry_file = yield lbry_file_manager.add_published_file(
+        sd_info['stream_hash'], sd_hash, binascii.hexlify(file_directory), session.payment_rate_manager,
+        session.payment_rate_manager.min_blob_data_payment_rate
+    )
+    defer.returnValue(lbry_file)
 
 
 def hexlify(str_or_unicode):

@@ -2,18 +2,18 @@
 Download LBRY Files from LBRYnet and save them to disk.
 """
 import logging
+import binascii
 
 from zope.interface import implements
 from twisted.internet import defer
 
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
 from lbrynet.core.utils import short_hash
-from lbrynet.core.StreamDescriptor import StreamMetadata
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaver
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
 from lbrynet.interfaces import IStreamDownloaderFactory
-from lbrynet.lbry_file.StreamDescriptor import save_sd_info
+from lbrynet.core.StreamDescriptor import save_sd_info
 
 log = logging.getLogger(__name__)
 
@@ -35,19 +35,41 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     STATUS_STOPPED = "stopped"
     STATUS_FINISHED = "finished"
 
-    def __init__(self, rowid, stream_hash, peer_finder, rate_limiter, blob_manager,
-                 stream_info_manager, lbry_file_manager, payment_rate_manager, wallet,
-                 download_directory, sd_hash=None, key=None, stream_name=None,
-                 suggested_file_name=None):
-        EncryptedFileSaver.__init__(self, stream_hash, peer_finder,
-                                    rate_limiter, blob_manager,
-                                    stream_info_manager,
-                                    payment_rate_manager, wallet,
-                                    download_directory, key, stream_name, suggested_file_name)
+    def __init__(self, rowid, stream_hash, peer_finder, rate_limiter, blob_manager, storage, lbry_file_manager,
+                 payment_rate_manager, wallet, download_directory, file_name, stream_name, sd_hash, key,
+                 suggested_file_name):
+        EncryptedFileSaver.__init__(
+            self, stream_hash, peer_finder, rate_limiter, blob_manager, storage, payment_rate_manager, wallet,
+            download_directory, key, stream_name, file_name
+        )
         self.sd_hash = sd_hash
         self.rowid = rowid
+        self.suggested_file_name = binascii.unhexlify(suggested_file_name)
         self.lbry_file_manager = lbry_file_manager
         self._saving_status = False
+        self.claim_id = None
+        self.outpoint = None
+        self.claim_name = None
+        self.txid = None
+        self.nout = None
+        self.channel_claim_id = None
+        self.channel_name = None
+        self.metadata = None
+
+    @defer.inlineCallbacks
+    def get_claim_info(self, include_supports=True):
+        claim_info = yield self.storage.get_content_claim(self.stream_hash, include_supports)
+        if claim_info:
+            self.claim_id = claim_info['claim_id']
+            self.txid = claim_info['txid']
+            self.nout = claim_info['nout']
+            self.channel_claim_id = claim_info['channel_claim_id']
+            self.outpoint = "%s:%i" % (self.txid, self.nout)
+            self.claim_name = claim_info['name']
+            self.channel_name = claim_info['channel_name']
+            self.metadata = claim_info['value']['stream']['metadata']
+
+        defer.returnValue(claim_info)
 
     @property
     def saving_status(self):
@@ -77,8 +99,8 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
     @defer.inlineCallbacks
     def status(self):
-        blobs = yield self.stream_info_manager.get_blobs_for_stream(self.stream_hash)
-        blob_hashes = [b[0] for b in blobs if b[0] is not None]
+        blobs = yield self.storage.get_blobs_for_stream(self.stream_hash)
+        blob_hashes = [b.blob_hash for b in blobs if b.blob_hash is not None]
         completed_blobs = yield self.blob_manager.completed_blobs(blob_hashes)
         num_blobs_completed = len(completed_blobs)
         num_blobs_known = len(blob_hashes)
@@ -89,8 +111,9 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
             status = "stopped"
         else:
             status = "running"
-        defer.returnValue(EncryptedFileStatusReport(self.file_name, num_blobs_completed,
-                                                    num_blobs_known, status))
+        defer.returnValue(EncryptedFileStatusReport(
+            self.file_name, num_blobs_completed, num_blobs_known, status
+        ))
 
     @defer.inlineCallbacks
     def _start(self):
@@ -137,19 +160,16 @@ class ManagedEncryptedFileDownloaderFactory(object):
         return True
 
     @defer.inlineCallbacks
-    def make_downloader(self, metadata, options, payment_rate_manager, download_directory=None):
-        assert len(options) == 1
-        data_rate = options[0]
-        stream_hash = yield save_sd_info(self.lbry_file_manager.stream_info_manager,
+    def make_downloader(self, metadata, data_rate, payment_rate_manager, download_directory, file_name=None):
+        stream_hash = yield save_sd_info(self.lbry_file_manager.session.blob_manager,
+                                         metadata.source_blob_hash,
                                          metadata.validator.raw_info)
-        if metadata.metadata_source == StreamMetadata.FROM_BLOB:
-            yield self.lbry_file_manager.save_sd_blob_hash_to_stream(stream_hash,
-                                                                     metadata.source_blob_hash)
-        lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash,
-                                                               metadata.source_blob_hash,
-                                                               payment_rate_manager,
-                                                               data_rate,
-                                                               download_directory)
+        if file_name:
+            file_name = binascii.hexlify(file_name)
+        lbry_file = yield self.lbry_file_manager.add_downloaded_file(
+            stream_hash, metadata.source_blob_hash, binascii.hexlify(download_directory), payment_rate_manager,
+            data_rate, file_name=file_name
+        )
         defer.returnValue(lbry_file)
 
     @staticmethod

@@ -11,7 +11,7 @@ from lbrynet.tests.mocks import BTCLBCFeed, USDBTCFeed
 class FeeFormatTest(unittest.TestCase):
     def test_fee_created_with_correct_inputs(self):
         fee_dict = {
-            'currency':'USD',
+            'currency': 'USD',
             'amount': 10.0,
             'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
         }
@@ -21,7 +21,7 @@ class FeeFormatTest(unittest.TestCase):
 
     def test_fee_zero(self):
         fee_dict = {
-            'currency':'LBC',
+            'currency': 'LBC',
             'amount': 0.0,
             'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
         }
@@ -47,7 +47,7 @@ class FeeTest(unittest.TestCase):
 
     def test_fee_converts_to_lbc(self):
         fee = Fee({
-            'currency':'USD',
+            'currency': 'USD',
             'amount': 10.0,
             'address': "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
             })

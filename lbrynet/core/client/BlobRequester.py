@@ -566,8 +566,6 @@ class DownloadRequest(RequestHelper):
         self.peer.update_score(5.0)
         should_announce = blob.blob_hash == self.head_blob_hash
         d = self.requestor.blob_manager.blob_completed(blob, should_announce=should_announce)
-        d.addCallback(lambda _: self.requestor.blob_manager.add_blob_to_download_history(
-            blob.blob_hash, self.peer.host, self.protocol_prices[self.protocol]))
         d.addCallback(lambda _: arg)
         return d
 

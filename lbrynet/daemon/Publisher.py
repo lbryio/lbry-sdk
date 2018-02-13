@@ -6,9 +6,6 @@ from twisted.internet import defer
 
 from lbrynet.core import file_utils
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
-from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
-from lbrynet.lbry_file.StreamDescriptor import publish_sd_blob
-
 
 log = logging.getLogger(__name__)
 
@@ -33,29 +30,27 @@ class Publisher(object):
 
         file_name = os.path.basename(file_path)
         with file_utils.get_read_handle(file_path) as read_handle:
-            stream_hash = yield create_lbry_file(self.session, self.lbry_file_manager, file_name,
-                                                 read_handle)
-        sd_hash = yield publish_sd_blob(self.lbry_file_manager.stream_info_manager,
-                            self.session.blob_manager, stream_hash)
-        status = ManagedEncryptedFileDownloader.STATUS_FINISHED
-        self.lbry_file = yield self.lbry_file_manager.add_lbry_file(stream_hash, sd_hash,
-                                                                    status=status)
+            self.lbry_file = yield create_lbry_file(self.session, self.lbry_file_manager, file_name,
+                                                    read_handle)
+
         if 'source' not in claim_dict['stream']:
             claim_dict['stream']['source'] = {}
-        claim_dict['stream']['source']['source'] = sd_hash
+        claim_dict['stream']['source']['source'] = self.lbry_file.sd_hash
         claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
         claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
-
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
-        self.lbry_file.completed = True
-        yield self.lbry_file.save_status()
+        yield self.session.storage.save_content_claim(
+            self.lbry_file.stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout'])
+        )
+        yield self.lbry_file.get_claim_info()
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
-    def publish_stream(self, name, bid, claim_dict, claim_address=None, change_address=None):
+    def publish_stream(self, name, bid, claim_dict, stream_hash, claim_address=None, change_address=None):
         """Make a claim without creating a lbry file"""
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
+        yield self.session.storage.save_content_claim(stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout']))
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks

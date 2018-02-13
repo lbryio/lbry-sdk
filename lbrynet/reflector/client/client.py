@@ -51,10 +51,6 @@ class EncryptedFileReflectorClient(Protocol):
         return self.factory.protocol_version
 
     @property
-    def stream_info_manager(self):
-        return self.factory.stream_info_manager
-
-    @property
     def stream_hash(self):
         return self.factory.stream_hash
 
@@ -113,9 +109,9 @@ class EncryptedFileReflectorClient(Protocol):
 
     def get_validated_blobs(self, blobs_in_stream):
         def get_blobs(blobs):
-            for (blob, _, _, blob_len) in blobs:
-                if blob and blob_len:
-                    yield self.blob_manager.get_blob(blob, blob_len)
+            for crypt_blob in blobs:
+                if crypt_blob.blob_hash and crypt_blob.length:
+                    yield self.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
 
         dl = defer.DeferredList(list(get_blobs(blobs_in_stream)), consumeErrors=True)
         dl.addCallback(lambda blobs: [blob for r, blob in blobs if r and blob.get_is_verified()])
@@ -135,7 +131,7 @@ class EncryptedFileReflectorClient(Protocol):
                          len(filtered))
             return filtered
 
-        d = self.factory.stream_info_manager.get_blobs_for_stream(self.factory.stream_hash)
+        d = self.factory.blob_manager.storage.get_blobs_for_stream(self.factory.stream_hash)
         d.addCallback(self.get_validated_blobs)
         if not self.descriptor_needed:
             d.addCallback(lambda filtered:
@@ -155,8 +151,8 @@ class EncryptedFileReflectorClient(Protocol):
         def _save_descriptor_blob(sd_blob):
             self.stream_descriptor = sd_blob
 
-        d = self.factory.stream_info_manager.get_sd_blob_hashes_for_stream(self.factory.stream_hash)
-        d.addCallback(lambda sd: self.factory.blob_manager.get_blob(sd[0]))
+        d = self.factory.blob_manager.storage.get_sd_blob_hash_for_stream(self.factory.stream_hash)
+        d.addCallback(self.factory.blob_manager.get_blob)
         d.addCallback(_save_descriptor_blob)
         return d
 
@@ -325,10 +321,6 @@ class EncryptedFileReflectorClientFactory(ClientFactory):
     @property
     def blob_manager(self):
         return self._lbry_file.blob_manager
-
-    @property
-    def stream_info_manager(self):
-        return self._lbry_file.stream_info_manager
 
     @property
     def stream_hash(self):

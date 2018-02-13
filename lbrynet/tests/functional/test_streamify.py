@@ -1,20 +1,18 @@
-import logging
 import os
 import shutil
+import tempfile
 
 from Crypto.Hash import MD5
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer, threads
 
 from lbrynet import conf
-from lbrynet.lbry_file.EncryptedFileMetadataManager import DBEncryptedFileMetadataManager
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.Session import Session
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
-from lbrynet.lbry_file import publish_sd_blob
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.lbry_file.StreamDescriptor import get_sd_info
+from lbrynet.core.StreamDescriptor import get_sd_info
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter
 
@@ -31,30 +29,29 @@ DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 
 class TestStreamify(TestCase):
+    maxDiff = 5000
     def setUp(self):
         mocks.mock_conf_settings(self)
         self.session = None
-        self.stream_info_manager = None
         self.lbry_file_manager = None
-        self.addCleanup(self.take_down_env)
         self.is_generous = True
+        self.db_dir = tempfile.mkdtemp()
+        self.blob_dir = os.path.join(self.db_dir, "blobfiles")
+        os.mkdir(self.blob_dir)
 
-    def take_down_env(self):
-        d = defer.succeed(True)
+    @defer.inlineCallbacks
+    def tearDown(self):
+        lbry_files = self.lbry_file_manager.lbry_files
+        for lbry_file in lbry_files:
+            yield self.lbry_file_manager.delete_lbry_file(lbry_file)
         if self.lbry_file_manager is not None:
-            d.addCallback(lambda _: self.lbry_file_manager.stop())
+            yield self.lbry_file_manager.stop()
         if self.session is not None:
-            d.addCallback(lambda _: self.session.shut_down())
-        if self.stream_info_manager is not None:
-            d.addCallback(lambda _: self.stream_info_manager.stop())
-
-        def delete_test_env():
-            shutil.rmtree('client')
-            if os.path.exists("test_file"):
-                os.remove("test_file")
-
-        d.addCallback(lambda _: threads.deferToThread(delete_test_env))
-        return d
+            yield self.session.shut_down()
+        yield self.session.storage.stop()
+        yield threads.deferToThread(shutil.rmtree, self.db_dir)
+        if os.path.exists("test_file"):
+            os.remove("test_file")
 
     def test_create_stream(self):
         wallet = FakeWallet()
@@ -64,28 +61,18 @@ class TestStreamify(TestCase):
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
 
-
-        db_dir = "client"
-        blob_dir = os.path.join(db_dir, "blobfiles")
-        os.mkdir(db_dir)
-        os.mkdir(blob_dir)
-
         self.session = Session(
-            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, node_id="abcd",
+            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=self.db_dir, node_id="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
-            blob_dir=blob_dir, peer_port=5553,
+            blob_dir=self.blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
             is_generous=self.is_generous, external_ip="127.0.0.1"
         )
 
-        self.stream_info_manager = DBEncryptedFileMetadataManager(db_dir)
-
-        self.lbry_file_manager = EncryptedFileManager(
-            self.session, self.stream_info_manager, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, sd_identifier)
 
         d = self.session.setup()
-        d.addCallback(lambda _: self.stream_info_manager.setup())
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
         d.addCallback(lambda _: self.lbry_file_manager.setup())
 
@@ -93,7 +80,7 @@ class TestStreamify(TestCase):
             self.assertEqual(sd_info, test_create_stream_sd_file)
 
         def verify_stream_descriptor_file(stream_hash):
-            d = get_sd_info(self.lbry_file_manager.stream_info_manager, stream_hash, True)
+            d = get_sd_info(self.session.storage, stream_hash, True)
             d.addCallback(verify_equal)
             return d
 
@@ -107,6 +94,7 @@ class TestStreamify(TestCase):
             test_file = GenFile(5209343, b''.join([chr(i + 3) for i in xrange(0, 64, 6)]))
             d = create_lbry_file(self.session, self.lbry_file_manager, "test_file", test_file,
                                  key="0123456701234567", iv_generator=iv_generator())
+            d.addCallback(lambda lbry_file: lbry_file.stream_hash)
             return d
 
         d.addCallback(lambda _: create_stream())
@@ -121,57 +109,30 @@ class TestStreamify(TestCase):
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
 
-        db_dir = "client"
-        blob_dir = os.path.join(db_dir, "blobfiles")
-        os.mkdir(db_dir)
-        os.mkdir(blob_dir)
-
         self.session = Session(
-            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, node_id="abcd",
+            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=self.db_dir, node_id="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
-            blob_dir=blob_dir, peer_port=5553,
+            blob_dir=self.blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker, external_ip="127.0.0.1"
         )
 
-        self.stream_info_manager = DBEncryptedFileMetadataManager(self.session.db_dir)
-
-        self.lbry_file_manager = EncryptedFileManager(
-            self.session, self.stream_info_manager, sd_identifier)
-
-        def start_lbry_file(lbry_file):
-            logging.debug("Calling lbry_file.start()")
-            d = lbry_file.start()
-            return d
-
-        def combine_stream(info):
-            stream_hash, sd_hash = info
-            prm = self.session.payment_rate_manager
-            d = self.lbry_file_manager.add_lbry_file(stream_hash, sd_hash, prm)
-            d.addCallback(start_lbry_file)
-
-            def check_md5_sum():
-                f = open('test_file')
-                hashsum = MD5.new()
-                hashsum.update(f.read())
-                self.assertEqual(hashsum.hexdigest(), "68959747edc73df45e45db6379dd7b3b")
-
-            d.addCallback(lambda _: check_md5_sum())
-            return d
+        self.lbry_file_manager = EncryptedFileManager(self.session, sd_identifier)
 
         @defer.inlineCallbacks
         def create_stream():
             test_file = GenFile(53209343, b''.join([chr(i + 5) for i in xrange(0, 64, 6)]))
-            stream_hash = yield create_lbry_file(self.session, self.lbry_file_manager, "test_file",
-                                             test_file, suggested_file_name="test_file")
-            sd_hash = yield publish_sd_blob(self.stream_info_manager, self.session.blob_manager,
-                                            stream_hash)
-            defer.returnValue((stream_hash, sd_hash))
+            lbry_file = yield create_lbry_file(self.session, self.lbry_file_manager, "test_file", test_file)
+            sd_hash = yield self.session.storage.get_sd_blob_hash_for_stream(lbry_file.stream_hash)
+            self.assertTrue(lbry_file.sd_hash, sd_hash)
+            yield lbry_file.start()
+            f = open('test_file')
+            hashsum = MD5.new()
+            hashsum.update(f.read())
+            self.assertEqual(hashsum.hexdigest(), "68959747edc73df45e45db6379dd7b3b")
 
         d = self.session.setup()
-        d.addCallback(lambda _: self.stream_info_manager.setup())
         d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
         d.addCallback(lambda _: self.lbry_file_manager.setup())
         d.addCallback(lambda _: create_stream())
-        d.addCallback(combine_stream)
         return d

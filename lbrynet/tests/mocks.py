@@ -173,6 +173,7 @@ class GenFile(io.RawIOBase):
         self.read_so_far = 0
         self.buff = b''
         self.last_offset = 0
+        self.name = "."
 
     def readable(self):
         return True
