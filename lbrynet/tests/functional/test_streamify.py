@@ -4,7 +4,7 @@ import tempfile
 
 from Crypto.Hash import MD5
 from twisted.trial.unittest import TestCase
-from twisted.internet import defer
+from twisted.internet import defer, threads
 
 from lbrynet import conf
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
@@ -48,7 +48,8 @@ class TestStreamify(TestCase):
             yield self.lbry_file_manager.stop()
         if self.session is not None:
             yield self.session.shut_down()
-        shutil.rmtree(self.db_dir)
+        yield self.session.storage.stop()
+        yield threads.deferToThread(shutil.rmtree, self.db_dir)
         if os.path.exists("test_file"):
             os.remove("test_file")
 
