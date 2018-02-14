@@ -30,3 +30,5 @@ slowaes==0.1a1
 txJSON-RPC==0.5
 wsgiref==0.1.2
 zope.interface==4.3.3
+Cython==0.27.3
+unqlite==0.6.2
