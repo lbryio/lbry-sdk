@@ -15,10 +15,37 @@ at anytime.
 ### Fixed
   *
   *
+  * incorrectly raised download cancelled error for already verified blob files
+  * infinite loop where reflector client keeps trying to send failing blobs, which may be failing because they are invalid and thus will never be successfully received
+  * docstring bugs for `stream_availability`, `channel_import`, and `blob_announce`
+  * regression in `stream_availability` due to error in it's docstring
+  * fixed the inconsistencies in API and CLI docstrings
+  * `blob_announce` error when announcing a single blob
+  * `blob_list` error when looking up blobs by stream or sd hash
+  * issue#1107 whereing claiming a channel with the exact amount present in wallet would give out proper error
+  *
+  *
+  *
+  * improper parsing of arguments to CLI settings_set (https://github.com/lbryio/lbry/issues/930)
+  * unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
+  * value error due to a race condition when saving to the claim cache (https://github.com/lbryio/lbry/issues/1013)
+  * being unable to re-download updated content (https://github.com/lbryio/lbry/issues/951)
+  * sending error messages for failed api requests
+  * file manager startup being slow when handling thousands of files
+  * handling decryption error for blobs encrypted with an invalid key
+  * handling stream with no data blob (https://github.com/lbryio/lbry/issues/905)
+  * fetching the external ip
+  * `blob_list` returning an error with --uri parameter and incorrectly returning `[]` for streams where blobs are known (https://github.com/lbryio/lbry/issues/895)
+  * `get` failing with a non-useful error message when given a uri for a channel claim
+  * exception checking in several wallet unit tests
+  * daemon not erring properly for non-numeric values being passed to the `bid` parameter for the `publish` method
+  * incorrect `blob_num` for the stream terminator blob, which would result in creating invalid streams. Such invalid streams are detected on startup and are automatically removed (https://github.com/lbryio/lbry/issues/1124)
+  * handling error from dht clients with old `ping` method
 
 ### Deprecated
   *
   *
+  * `single_hash_announce_duration` field to `status` response when provided the `dht_status` argument
 
 ### Changed
   *
@@ -27,6 +54,17 @@ at anytime.
 ### Added
   *
   *
+  * `blob_reflect` command to send specific blobs to a reflector server
+  * unit test for docopt
+  *
+  * scripts to autogenerate documentation
+  * now updating new channel also takes into consideration the original bid amount, so now channel could be updated for wallet balance + the original bid amount
+  * forward-compaitibility for upcoming DHT bencoding changes
+  *
+  * several internal dht functions to use inlineCallbacks
+  * blob announcement to be retried up to three times if `store` is unsuccessful
+  * `DHTHashAnnouncer` and `Node` manage functions to use `LoopingCall`s instead of scheduling with `callLater`.
+  * `store` kademlia rpc method to block on the call finishing and to return storing peer information
 
 ### Removed
   *
