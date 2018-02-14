@@ -30,7 +30,8 @@ requires = [
     'txrequests',
     'txJSON-RPC',
     'zope.interface',
-    'docopt'
+    'docopt',
+    'unqlite'
 ]
 
 console_scripts = [

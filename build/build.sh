@@ -35,6 +35,7 @@ fi
 cp "$ROOT/requirements.txt" "$BUILD_DIR/requirements_base.txt"
 (
   cd "$BUILD_DIR"
+  pip install Cython==0.27.3
   pip install -r requirements.txt
 )
 
