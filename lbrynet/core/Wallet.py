@@ -537,6 +537,10 @@ class Wallet(object):
         decoded = ClaimDict.load_dict(metadata)
         serialized = decoded.serialized
 
+        amt = yield self.get_max_usable_balance_for_claim(name)
+        if bid > amt:
+            raise InsufficientFundsError()
+
         claim = yield self._send_name_claim(name, serialized.encode('hex'),
                                             bid, certificate_id, claim_address, change_address)
 
@@ -971,6 +975,11 @@ class LBRYumWallet(Wallet):
         d.addCallback(
             lambda result: Decimal(result['confirmed']) + Decimal(result.get('unconfirmed', 0.0)))
         return d
+
+    @defer.inlineCallbacks
+    def get_max_usable_balance_for_claim(self, claim_name):
+        amt = yield self._run_cmd_as_defer_to_thread('get_max_spendable_amt_for_claim', claim_name)
+        defer.returnValue(amt)
 
     # Always create and return a brand new address
     def get_new_address(self, for_change=False, account=None):

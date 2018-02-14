@@ -73,6 +73,8 @@ class MocLbryumWallet(LBRYumWallet):
     def _save_name_metadata(self, name, claim_outpoint, sd_hash):
         return defer.succeed(True)
 
+    def get_max_usable_balance_for_claim(self, name):
+        return defer.succeed(3)
 
 class WalletTest(unittest.TestCase):
     @defer.inlineCallbacks
