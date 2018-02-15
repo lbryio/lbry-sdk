@@ -2,11 +2,9 @@ import logging
 import miniupnpc
 from twisted.internet import threads, defer
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.dht import node, peerfinder, peermanager
+from lbrynet.dht import node, peerfinder, peermanager, hashannouncer
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
-from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
-from lbrynet.dht.hashannouncer import DHTHashAnnouncer
 from lbrynet.core.utils import generate_id
 from lbrynet.core.PaymentRateManager import BasePaymentRateManager, NegotiatedPaymentRateManager
 from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
@@ -162,7 +160,7 @@ class Session(object):
         else:
             if self.hash_announcer is None and self.peer_port is not None:
                 log.warning("The server has no way to advertise its available blobs.")
-                self.hash_announcer = DummyHashAnnouncer()
+                self.hash_announcer = hashannouncer.DummyHashAnnouncer()
 
         d.addCallback(lambda _: self._setup_other_components())
         return d
@@ -296,7 +294,7 @@ class Session(object):
         )
         self.peer_finder = peerfinder.DHTPeerFinder(self.dht_node, self.peer_manager)
         if self.hash_announcer is None:
-            self.hash_announcer = DHTHashAnnouncer(self.dht_node, self.peer_port)
+            self.hash_announcer = hashannouncer.DHTHashAnnouncer(self.dht_node, self.peer_port)
 
         self.dht_node.startNetwork()
 

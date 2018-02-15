@@ -14,7 +14,7 @@ from lbrynet.core import log_support, Wallet, Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
+from lbrynet.dht.hashannouncer import DummyHashAnnouncer
 
 log = logging.getLogger()
 

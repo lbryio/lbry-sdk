@@ -6,13 +6,14 @@ from twisted.internet import defer, threads, reactor
 
 from lbrynet.blob import BlobFile
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
 from lbrynet.core.RateLimiter import DummyRateLimiter
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
-from lbrynet.core.PeerFinder import DummyPeerFinder
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.client.ConnectionManager import ConnectionManager
+from lbrynet.dht.hashannouncer import DummyHashAnnouncer
+from lbrynet.dht.peerfinder import DummyPeerFinder
+
 
 log = logging.getLogger(__name__)
 

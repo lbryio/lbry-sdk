@@ -10,7 +10,27 @@ from lbrynet.core import utils
 log = logging.getLogger(__name__)
 
 
-class DHTHashAnnouncer(object):
+class DummyHashAnnouncer(object):
+    def __init__(self):
+        pass
+
+    def run_manage_loop(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def add_supplier(self, supplier):
+        pass
+
+    def hash_queue_size(self):
+        return 0
+
+    def immediate_announce(self, blob_hashes):
+        pass
+
+
+class DHTHashAnnouncer(DummyHashAnnouncer):
     ANNOUNCE_CHECK_INTERVAL = 60
     CONCURRENT_ANNOUNCERS = 5
 

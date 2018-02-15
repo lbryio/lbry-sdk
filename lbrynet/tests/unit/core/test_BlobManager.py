@@ -8,7 +8,7 @@ from twisted.internet import defer, threads
 
 from lbrynet.tests.util import random_lbry_hash
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
+from lbrynet.dht.hashannouncer import DummyHashAnnouncer
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.Peer import Peer
 from lbrynet import conf
