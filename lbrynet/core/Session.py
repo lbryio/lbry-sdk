@@ -247,44 +247,9 @@ class Session(object):
         d.addErrback(upnp_failed)
         return d
 
-    # the callback, if any, will be invoked once the joining procedure
-    # has terminated
-    def join_dht(self, cb=None):
-        from twisted.internet import reactor
-
-        def join_resolved_addresses(result):
-            addresses = []
-            for success, value in result:
-                if success is True:
-                    addresses.append(value)
-            return addresses
-
-        @defer.inlineCallbacks
-        def join_network(knownNodes):
-            log.debug("join DHT using known nodes: " + str(knownNodes))
-            result = yield self.dht_node.joinNetwork(knownNodes)
-            defer.returnValue(result)
-
-        ds = []
-        for host, port in self.known_dht_nodes:
-            d = reactor.resolve(host)
-            d.addCallback(lambda h: (h, port))  # match host to port
-            ds.append(d)
-
-        dl = defer.DeferredList(ds)
-        dl.addCallback(join_resolved_addresses)
-        dl.addCallback(join_network)
-        if cb:
-            dl.addCallback(cb)
-
-        return dl
-
+    @defer.inlineCallbacks
     def _setup_dht(self):
         log.info("Starting DHT")
-
-        def start_dht(join_network_result):
-            self.hash_announcer.run_manage_loop()
-            return True
 
         self.dht_node = self.dht_node_class(
             udpPort=self.dht_node_port,
@@ -292,14 +257,10 @@ class Session(object):
             externalIP=self.external_ip,
             peerPort=self.peer_port
         )
-        self.peer_finder = peerfinder.DHTPeerFinder(self.dht_node, self.peer_manager)
-        if self.hash_announcer is None:
-            self.hash_announcer = hashannouncer.DHTHashAnnouncer(self.dht_node, self.peer_port)
 
-        self.dht_node.startNetwork()
-
-        # pass start_dht() as callback to start the remaining components after joining the DHT
-        return self.join_dht(start_dht)
+        yield self.dht_node.joinNetwork(self.known_dht_nodes)
+        self.peer_finder = self.dht_node.peer_finder
+        self.hash_announcer = self.dht_node.hash_announcer
 
     def _setup_other_components(self):
         log.debug("Setting up the rest of the components")
