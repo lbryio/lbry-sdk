@@ -8,7 +8,7 @@ from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.StreamDescriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.core import BlobManager
 from lbrynet.core import Session
-from lbrynet.core.server import DHTHashAnnouncer
+from lbrynet.dht import hashannouncer
 from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager import EncryptedFileManager
 from lbrynet.tests import mocks
@@ -33,7 +33,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
         self.session = mock.Mock(spec=Session.Session)(None, None)
         self.session.payment_rate_manager.min_blob_data_payment_rate = 0
 
-        hash_announcer = DHTHashAnnouncer.DHTHashAnnouncer(None, None)
+        hash_announcer = hashannouncer.DHTHashAnnouncer(None, None)
         self.blob_manager = BlobManager.DiskBlobManager(
             hash_announcer, self.tmp_blob_dir, SQLiteStorage(self.tmp_db_dir))
         self.session.blob_manager = self.blob_manager

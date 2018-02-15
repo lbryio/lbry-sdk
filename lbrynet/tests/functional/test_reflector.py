@@ -5,7 +5,7 @@ from lbrynet import conf
 from lbrynet.core.StreamDescriptor import get_sd_info
 from lbrynet import reflector
 from lbrynet.core import BlobManager
-from lbrynet.core import PeerManager
+from lbrynet.dht import peermanager
 from lbrynet.core import Session
 from lbrynet.core import StreamDescriptor
 from lbrynet.lbry_file.client import EncryptedFileOptions
@@ -26,7 +26,7 @@ class TestReflector(unittest.TestCase):
         self.port = None
         self.addCleanup(self.take_down_env)
         wallet = mocks.Wallet()
-        peer_manager = PeerManager.PeerManager()
+        peer_manager = peermanager.PeerManager()
         peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
         hash_announcer = mocks.Announcer()
         sd_identifier = StreamDescriptor.StreamDescriptorIdentifier()

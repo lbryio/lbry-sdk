@@ -1,17 +1,15 @@
 import logging
 import miniupnpc
+from twisted.internet import threads, defer
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.dht import node
+from lbrynet.dht import node, peerfinder, peermanager
 from lbrynet.database.storage import SQLiteStorage
-from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import RateLimiter
-from lbrynet.core.client.DHTPeerFinder import DHTPeerFinder
 from lbrynet.core.HashAnnouncer import DummyHashAnnouncer
-from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
+from lbrynet.dht.hashannouncer import DHTHashAnnouncer
 from lbrynet.core.utils import generate_id
 from lbrynet.core.PaymentRateManager import BasePaymentRateManager, NegotiatedPaymentRateManager
 from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
-from twisted.internet import threads, defer
 
 log = logging.getLogger(__name__)
 
@@ -152,7 +150,7 @@ class Session(object):
             self.wallet = PTCWallet(self.db_dir)
 
         if self.peer_manager is None:
-            self.peer_manager = PeerManager()
+            self.peer_manager = peermanager.PeerManager()
 
         if self.use_upnp is True:
             d = self._try_upnp()
@@ -296,7 +294,7 @@ class Session(object):
             externalIP=self.external_ip,
             peerPort=self.peer_port
         )
-        self.peer_finder = DHTPeerFinder(self.dht_node, self.peer_manager)
+        self.peer_finder = peerfinder.DHTPeerFinder(self.dht_node, self.peer_manager)
         if self.hash_announcer is None:
             self.hash_announcer = DHTHashAnnouncer(self.dht_node, self.peer_port)
 

@@ -278,10 +278,10 @@ class Node(object):
                 value['token'] = result['token']
                 try:
                     res = yield n.store(blob_hash, value, self.node_id)
-                    log.debug("Response to store request: %s", str(res))
+                    log.info("Response to store request: %s", str(res))
                     announced = True
                 except protocol.TimeoutError:
-                    log.debug("Timeout while storing blob_hash %s at %s",
+                    log.info("Timeout while storing blob_hash %s at %s",
                                 blob_hash.encode('hex')[:16], n.id.encode('hex'))
                 except Exception as err:
                     log.error("Unexpected error while storing blob_hash %s at %s: %s",

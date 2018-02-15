@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 class TreeRoutingTable(object):
     """ This class implements a routing table used by a Node class.
 
-    The Kademlia routing table is a binary tree whose leaves are k-buckets,
+    The Kademlia routing table is a binary tree whFose leaves are k-buckets,
     where each k-bucket contains nodes with some common prefix of their IDs.
     This prefix is the k-bucket's position in the binary tree; it therefore
     covers some range of ID values, and together all of the k-buckets cover

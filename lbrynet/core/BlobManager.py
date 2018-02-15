@@ -5,7 +5,7 @@ from twisted.internet import threads, defer, reactor, task
 from lbrynet import conf
 from lbrynet.blob.blob_file import BlobFile
 from lbrynet.blob.creator import BlobFileCreator
-from lbrynet.core.server.DHTHashAnnouncer import DHTHashSupplier
+from lbrynet.dht.hashannouncer import DHTHashSupplier
 
 log = logging.getLogger(__name__)
 

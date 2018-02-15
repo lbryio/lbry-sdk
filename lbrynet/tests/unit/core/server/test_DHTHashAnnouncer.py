@@ -2,7 +2,7 @@ from twisted.trial import unittest
 from twisted.internet import defer, reactor
 
 from lbrynet.tests.util import random_lbry_hash
-from lbrynet.core.server.DHTHashAnnouncer import DHTHashAnnouncer
+from lbrynet.dht.hashannouncer import DHTHashAnnouncer
 
 class MocDHTNode(object):
     def __init__(self, announce_will_fail=False):

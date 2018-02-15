@@ -3,7 +3,7 @@ from lbrynet.core.server.ServerProtocol import ServerProtocol
 from lbrynet.core.client.ClientProtocol import ClientProtocol
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.Peer import Peer
-from lbrynet.core.PeerManager import PeerManager
+from lbrynet.dht.peermanager import PeerManager
 from lbrynet.core.Error import NoResponseError
 
 from twisted.trial import unittest
