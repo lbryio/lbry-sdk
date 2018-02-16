@@ -2,13 +2,16 @@ import platform
 import json
 import subprocess
 import os
+import logging
 
 from urllib2 import urlopen, URLError
 from lbryschema import __version__ as lbryschema_version
 from lbryum import __version__ as LBRYUM_VERSION
 from lbrynet import build_type, __version__ as lbrynet_version
+from lbrynet import conf
 from lbrynet.conf import ROOT_DIR
 
+log = logging.getLogger(__name__)
 
 def get_lbrynet_version():
     if build_type.BUILD == "dev":
@@ -39,12 +42,16 @@ def get_platform(get_ip=True):
 
     # TODO: remove this from get_platform and add a get_external_ip function using txrequests
     if get_ip:
-        try:
-            response = json.loads(urlopen("https://api.lbry.io/ip").read())
-            if not response['success']:
-                raise URLError("failed to get external ip")
-            p['ip'] = response['data']['ip']
-        except (URLError, AssertionError):
-            p['ip'] = "Could not determine IP"
+        if conf.settings.is_default('external_ip'):
+            try:
+                response = json.loads(urlopen("https://api.lbry.io/ip").read())
+                if not response['success']:
+                    raise URLError("failed to get external ip")
+                p['ip'] = response['data']['ip']
+            except (URLError, AssertionError):
+                p['ip'] = "Could not determine IP"
+        else:
+            p['ip'] = conf.settings['external_ip']
+            log.info('Using configured external IP: %s' % p['ip'])
 
     return p

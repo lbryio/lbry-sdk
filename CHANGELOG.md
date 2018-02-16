@@ -25,6 +25,8 @@ at anytime.
   * `blob_list` failing with --uri parameter (https://github.com/lbryio/lbry/issues/895)
   * `get` failing with a non-useful error message when given a uri for a channel claim
   * exception checking in several wallet unit tests
+  * Fixed UPnP setup to avoid race conditions
+  * Fixed port sanity check
 
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
@@ -46,6 +48,9 @@ at anytime.
   * `txid`, `nout`, `channel_claim_id`, `channel_claim_name`, `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
   * `txid`, `nout`, `channel_claim_id`, and `channel_claim_name` filters for `file` commands (`file_list`, `file_set_status`, `file_reflect`,  and `file_delete`)
   * unit tests for `SQLiteStorage` and updated old tests for relevant changes (https://github.com/lbryio/lbry/issues/1088)
+  * Add `external_ip` config setting to manually set IP address
+  * Added `external_peer_port` field to Session
+  * Added `external_dht_node_port` field to Session
 
 ### Changed
   * default download folder on linux from `~/Downloads` to `XDG_DOWNLOAD_DIR`
@@ -70,6 +75,7 @@ at anytime.
   * dht `Node` class to re-attempt joining the network every 60 secs if no peers are known
   * lbrynet database and file manager to separate the creation of lbry files (from downloading or publishing) from the handling of a stream. All files have a stream, but not all streams may have a file. (https://github.com/lbryio/lbry/issues/1020) 
   * manager classes to use new `SQLiteStorage` for database interaction. This class uses a single `lbrynet.sqlite` database file.
+  * Changed UPnP logic to check for available external port. Use addanyportmapping() now, unless user has specified port in config
 
 ### Removed
   * `seccure` and `gmpy` dependencies

@@ -1,5 +1,6 @@
 import logging
 import miniupnpc
+from lbrynet import conf
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.dht import node
 from lbrynet.database.storage import SQLiteStorage
@@ -107,6 +108,7 @@ class Session(object):
         self.peer_manager = peer_manager
 
         self.dht_node_port = dht_node_port
+        self.external_dht_node_port = dht_node_port
         self.known_dht_nodes = known_dht_nodes
         if self.known_dht_nodes is None:
             self.known_dht_nodes = []
@@ -120,6 +122,7 @@ class Session(object):
         self.blob_tracker_class = blob_tracker_class or BlobAvailabilityTracker
 
         self.peer_port = peer_port
+        self.external_peer_port = peer_port
 
         self.use_upnp = use_upnp
 
@@ -195,30 +198,54 @@ class Session(object):
 
         log.debug("In _try_upnp")
 
-        def get_free_port(upnp, port, protocol):
-            # returns an existing mapping if it exists
+        def get_mapped_port(upnp, port, protocol):
+            # returns an existing mapped port if it exists
             mapping = upnp.getspecificportmapping(port, protocol)
-            if not mapping:
-                return port
-            if upnp.lanaddr == mapping[0]:
-                return mapping
-            return get_free_port(upnp, port + 1, protocol)
+            if mapping is not None and upnp.lanaddr == mapping[0]:
+                return mapping[1]
+            return None
 
-        def get_port_mapping(upnp, internal_port, protocol, description):
-            # try to map to the requested port, if there is already a mapping use the next external
-            # port available
+        def add_port_mapping(upnp, port, auto_port, protocol, description):
+            log.debug('UPNP automatic port selection enabled: ' + str(auto_port))
+            try:
+                if auto_port is True:
+                    # addanyportmapping() returns None on failure
+                    return upnp.addanyportmapping(port, protocol, upnp.lanaddr, port,
+                                                  description, '')
+                else:
+                    # addportmapping() raises an exception on failure
+                    upnp.addportmapping(port, protocol, upnp.lanaddr, port, description, '')
+                    return port
+            except Exception as e:
+                log.warning('UPnP failed with error: %s', e.message)
+            return None
+
+        def get_port_mapping(upnp, internal_port, auto_port, protocol, description):
+            # try to map to the requested port. If auto_port is true and there is already
+            # a mapping use the next external port available.
+            #
+            # Raise an exception on failure
             if protocol not in ['UDP', 'TCP']:
                 raise Exception("invalid protocol")
-            external_port = get_free_port(upnp, internal_port, protocol)
-            if isinstance(external_port, tuple):
-                log.info("Found existing UPnP redirect %s:%i (%s) to %s:%i, using it",
-                         self.external_ip, external_port[1], protocol, upnp.lanaddr, internal_port)
-                return external_port[1], protocol
-            upnp.addportmapping(external_port, protocol, upnp.lanaddr, internal_port,
-                                description, '')
+
+            external_port = get_mapped_port(upnp, internal_port, protocol)
+            if external_port is not None:
+                # if a previous mapping exist, use it only if it is compatible with the user
+                # settings
+                if external_port == internal_port or auto_port is True:
+                    log.info("Found existing UPnP redirect %s:%i (%s) to %s:%i, using it",
+                             self.external_ip, external_port, protocol, upnp.lanaddr, internal_port)
+                    return external_port
+
+            external_port = add_port_mapping(upnp, internal_port, auto_port, protocol, description)
+            if external_port is None:
+                raise Exception("Can't setup UPnP redirect for port " + str(internal_port) +
+                                " (auto selection: " + str(auto_port) + ")")
+
             log.info("Set UPnP redirect %s:%i (%s) to %s:%i", self.external_ip, external_port,
                      protocol, upnp.lanaddr, internal_port)
-            return external_port, protocol
+
+            return external_port
 
         def threaded_try_upnp():
             if self.use_upnp is False:
@@ -232,20 +259,24 @@ class Session(object):
                 if external_ip != '0.0.0.0' and not self.external_ip:
                     # best not to rely on this external ip, the router can be behind layers of NATs
                     self.external_ip = external_ip
-                if self.peer_port:
-                    self.upnp_redirects.append(
-                        get_port_mapping(u, self.peer_port, 'TCP', 'LBRY peer port')
-                    )
-                if self.dht_node_port:
-                    self.upnp_redirects.append(
-                        get_port_mapping(u, self.dht_node_port, 'UDP', 'LBRY DHT port')
-                    )
+
+                # use specified peer_port, if any
+                auto_port = conf.settings.is_default('peer_port')
+                self.external_peer_port = get_port_mapping(u, self.peer_port, auto_port, 'TCP',
+                                                           'LBRY peer port')
+                self.upnp_redirects.append((self.external_peer_port, 'TCP'))
+
+                # use specified dht_node_port, if any
+                auto_port = conf.settings.is_default('dht_node_port')
+                self.external_dht_node_port = get_port_mapping(u, self.dht_node_port, auto_port,
+                                                               'UDP', 'LBRY DHT port')
+                self.upnp_redirects.append((self.external_dht_node_port, 'UDP'))
                 return True
             return False
 
         def upnp_failed(err):
-            log.warning("UPnP failed. Reason: %s", err.getErrorMessage())
-            return False
+            log.info("UPnP setup failed. Reason: %s", err.getErrorMessage())
+            err.raiseException()
 
         d = threads.deferToThread(threaded_try_upnp)
         d.addErrback(upnp_failed)
@@ -292,10 +323,10 @@ class Session(object):
             return True
 
         self.dht_node = self.dht_node_class(
-            udpPort=self.dht_node_port,
+            udpPort=self.external_dht_node_port,
             node_id=self.node_id,
             externalIP=self.external_ip,
-            peerPort=self.peer_port
+            peerPort=self.external_peer_port
         )
         self.peer_finder = DHTPeerFinder(self.dht_node, self.peer_manager)
         if self.hash_announcer is None:

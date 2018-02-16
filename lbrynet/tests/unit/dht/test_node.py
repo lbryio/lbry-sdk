@@ -199,7 +199,7 @@ class NodeLookupTest(unittest.TestCase):
         h.update('node1')
         node_id = str(h.digest())
         self.node = lbrynet.dht.node.Node(node_id, 4000, None, None, self._protocol)
-        self.updPort = 81173
+        self.updPort = 21173
         self.contactsAmount = 80
         # Reinitialise the routing table
         self.node._routingTable = lbrynet.dht.routingtable.OptimizedTreeRoutingTable(
