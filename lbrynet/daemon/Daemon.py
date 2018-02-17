@@ -2001,11 +2001,11 @@ class Daemon(AuthJSONRPCServer):
         except (TypeError, URIParseError):
             raise Exception("Invalid name given to publish")
 
-        if not isinstance(bid, float):
-            raise Exception("Bid must be a float")
+        if not isinstance(bid, (float, int)):
+            raise TypeError("Bid must be a float or an integer.")
 
         if bid <= 0.0:
-            raise Exception("Invalid bid")
+            raise ValueError("Bid value must be greater than 0.0")
 
         if bid >= self.session.wallet.get_balance():
             raise InsufficientFundsError('Insufficient funds. ' \

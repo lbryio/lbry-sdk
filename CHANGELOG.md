@@ -25,10 +25,13 @@ at anytime.
   * `blob_list` failing with --uri parameter (https://github.com/lbryio/lbry/issues/895)
   * `get` failing with a non-useful error message when given a uri for a channel claim
   * exception checking in several wallet unit tests
+  * daemon not erring properly for non-numeric values being passed to the `bid` parameter for the `publish` method
+  *
 
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
   * `get_availability`, replaced with `stream_availability`
+  *
 
 ### Added
   * link to instructions on how to change the default peer port
@@ -46,6 +49,7 @@ at anytime.
   * `txid`, `nout`, `channel_claim_id`, `channel_claim_name`, `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
   * `txid`, `nout`, `channel_claim_id`, and `channel_claim_name` filters for `file` commands (`file_list`, `file_set_status`, `file_reflect`,  and `file_delete`)
   * unit tests for `SQLiteStorage` and updated old tests for relevant changes (https://github.com/lbryio/lbry/issues/1088)
+  *
 
 ### Changed
   * default download folder on linux from `~/Downloads` to `XDG_DOWNLOAD_DIR`
@@ -70,35 +74,7 @@ at anytime.
   * dht `Node` class to re-attempt joining the network every 60 secs if no peers are known
   * lbrynet database and file manager to separate the creation of lbry files (from downloading or publishing) from the handling of a stream. All files have a stream, but not all streams may have a file. (https://github.com/lbryio/lbry/issues/1020) 
   * manager classes to use new `SQLiteStorage` for database interaction. This class uses a single `lbrynet.sqlite` database file.
-  * Add link to instructions on how to change the default peer port
-  * Add `peer_port` to settings configurable using `settings_set`
-  * Added an option to disable max key fee check.
-  * Add `wallet_unlock`, a command available during startup to unlock an encrypted wallet
-  * Added a new startup stage to indicate if the daemon is waiting for the `wallet_unlock` command.
-  * Add `--conf` CLI flag to specify an alternate config file
-  * Added `blockchain_name` and `lbryum_servers` to the adjustable settings
-  * Added abandon information (claim name, id, address, amount, balance_delta and nout) about claims, supports, and updates to `transaction_list` results under `abandon_info` key
-  * Added `permanent_url` attribute to `channel_list_mine`, `claim_list`, `claim_show`, `resolve` and `resolve_name` API calls through lbryio/lbryum#203
-  * Added new exception for non-float values being passed in the `bid` parameter for the `publish` method
   *
-
-### Changed
-  * claim_show API command no longer takes name as argument
-  * Linux default downloads folder changed from `~/Downloads` to `XDG_DOWNLOAD_DIR`
-  * Linux folders moved from the home directory to `~/.local/share/lbry`
-  * Windows folders moved from `%AppData%/Roaming` to `%AppData%/Local/lbry`
-  * Block wallet startup on being unlocked
-  * Added `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
-  * Added `channel_import` and `channel_export` commands
-  * Added `is_mine` field to `channel_list` results
-  * Added `claim_renew` command
-  * Added user configurable `auto_renew_claim_height_delta` setting, defaults to 0 (off)
-  * Added `lbrynet-console`, a tool to run or connect to lbrynet-daemon and launch an interactive python console with the api functions built in.
-  * Added a table to the lbry file database to store the outpoint of the claim downloaded from
-  * Added `wallet_unlock`, a command available during startup to unlock an encrypted wallet
-  * Added support for wallet encryption via new commands `wallet_decrypt` and `wallet_encrypt`
-  * Added `blob_availability` and `stream_availability` commands for debugging download issues
-  * Changed config file format of `known_dht_nodes`, `lbryum_servers`, and `reflector_servers` to lists of `hostname:port` strings
 
 ### Removed
   * `seccure` and `gmpy` dependencies
@@ -111,6 +87,7 @@ at anytime.
   * unnecessary `TempBlobManager` class
   * old storage classes used by the file manager, wallet, and blob manager
   * old `.db` database files from the data directory
+  *
 
 ## [0.18.0] - 2017-11-08
 ### Fixed
