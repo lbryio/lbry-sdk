@@ -2,7 +2,7 @@ import binascii
 import logging
 
 from zope.interface import implements
-from twisted.internet import defer, reactor
+from twisted.internet import defer
 from lbrynet.interfaces import IPeerFinder
 from lbrynet.core.utils import short_hash
 
@@ -63,7 +63,7 @@ class DHTPeerFinder(DummyPeerFinder):
         finished_deferred = self.dht_node.getPeersForBlob(bin_hash)
 
         if timeout is not None:
-            reactor.callLater(timeout, _trigger_timeout)
+            self.dht_node.reactor_callLater(timeout, _trigger_timeout)
 
         try:
             peer_list = yield finished_deferred

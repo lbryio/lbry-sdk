@@ -45,8 +45,9 @@ class DHTHashAnnouncer(DummyHashAnnouncer):
         self.hash_queue = collections.deque()
         self._concurrent_announcers = 0
         self._manage_call_lc = task.LoopingCall(self.manage_lc)
+        self._manage_call_lc.clock = dht_node.clock
         self._lock = utils.DeferredLockContextManager(defer.DeferredLock())
-        self._last_checked = time.time(), self.CONCURRENT_ANNOUNCERS
+        self._last_checked = dht_node.clock.seconds(), self.CONCURRENT_ANNOUNCERS
         self._total = None
 
     def run_manage_loop(self):
@@ -58,7 +59,7 @@ class DHTHashAnnouncer(DummyHashAnnouncer):
         last_time, last_hashes = self._last_checked
         hashes = len(self.hash_queue)
         if hashes:
-            t, h = time.time() - last_time, last_hashes - hashes
+            t, h = self.dht_node.clock.seconds() - last_time, last_hashes - hashes
             blobs_per_second = float(h) / float(t)
             if blobs_per_second > 0:
                 estimated_time_remaining = int(float(hashes) / blobs_per_second)
@@ -108,7 +109,7 @@ class DHTHashAnnouncer(DummyHashAnnouncer):
             defer.returnValue(None)
         log.info('Announcing %s hashes', len(hashes))
         # TODO: add a timeit decorator
-        start = time.time()
+        start = self.dht_node.clock.seconds()
 
         ds = []
         with self._lock:
@@ -174,9 +175,9 @@ class DHTHashAnnouncer(DummyHashAnnouncer):
         for _, announced_to in announcer_results:
             stored_to.update(announced_to)
 
-        log.info('Took %s seconds to announce %s hashes', time.time() - start, len(hashes))
-        seconds_per_blob = (time.time() - start) / len(hashes)
-        self.supplier.set_single_hash_announce_duration(seconds_per_blob)
+        log.info('Took %s seconds to announce %s hashes', self.dht_node.clock.seconds() - start, len(hashes))
+        seconds_per_blob = (self.dht_node.clock.seconds() - start) / len(hashes)
+        self.set_single_hash_announce_duration(seconds_per_blob)
         defer.returnValue(stored_to)
 
 

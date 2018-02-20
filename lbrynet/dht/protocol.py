@@ -3,7 +3,7 @@ import time
 import socket
 import errno
 
-from twisted.internet import protocol, defer, error, reactor, task
+from twisted.internet import protocol, defer, error, task
 
 import constants
 import encoding
@@ -47,6 +47,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._total_bytes_tx = 0
         self._total_bytes_rx = 0
         self._bandwidth_stats_update_lc = task.LoopingCall(self._update_bandwidth_stats)
+        self._bandwidth_stats_update_lc.clock = self._node.clock
 
     def _update_bandwidth_stats(self):
         recent_rx_history = {}
@@ -168,7 +169,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             df._rpcRawResponse = True
 
         # Set the RPC timeout timer
-        timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, msg.id)
+        timeoutCall = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, msg.id)
         # Transmit the data
         self._send(encodedMsg, msg.id, (contact.address, contact.port))
         self._sentMessages[msg.id] = (contact.id, df, timeoutCall, method, args)
@@ -331,7 +332,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         """Schedule the sending of the next UDP packet """
         delay = self._delay()
         key = object()
-        delayed_call = reactor.callLater(delay, self._write_and_remove, key, txData, address)
+        delayed_call = self._node.reactor_callLater(delay, self._write_and_remove, key, txData, address)
         self._call_later_list[key] = delayed_call
 
     def _write_and_remove(self, key, txData, address):
@@ -428,7 +429,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         # See if any progress has been made; if not, kill the message
         if self._hasProgressBeenMade(messageID):
             # Reset the RPC timeout timer
-            timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, messageID)
+            timeoutCall = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, messageID)
             self._sentMessages[messageID] = (remoteContactID, df, timeoutCall, method, args)
         else:
             # No progress has been made

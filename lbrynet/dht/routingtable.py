@@ -5,7 +5,6 @@
 # The docstrings in this module contain epytext markup; API documentation
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
-import time
 import random
 from zope.interface import implements
 import constants
@@ -34,7 +33,7 @@ class TreeRoutingTable(object):
     """
     implements(IRoutingTable)
 
-    def __init__(self, parentNodeID):
+    def __init__(self, parentNodeID, getTime=None):
         """
         @param parentNodeID: The n-bit node ID of the node to which this
                              routing table belongs
@@ -43,6 +42,9 @@ class TreeRoutingTable(object):
         # Create the initial (single) k-bucket covering the range of the entire n-bit ID space
         self._buckets = [kbucket.KBucket(rangeMin=0, rangeMax=2 ** constants.key_bits)]
         self._parentNodeID = parentNodeID
+        if not getTime:
+            from time import time as getTime
+        self._getTime = getTime
 
     def addContact(self, contact):
         """ Add the given contact to the correct k-bucket; if it already
@@ -194,7 +196,7 @@ class TreeRoutingTable(object):
         bucketIndex = startIndex
         refreshIDs = []
         for bucket in self._buckets[startIndex:]:
-            if force or (int(time.time()) - bucket.lastAccessed >= constants.refreshTimeout):
+            if force or (int(self._getTime()) - bucket.lastAccessed >= constants.refreshTimeout):
                 searchID = self._randomIDInBucketRange(bucketIndex)
                 refreshIDs.append(searchID)
             bucketIndex += 1
@@ -221,7 +223,7 @@ class TreeRoutingTable(object):
         @type key: str
         """
         bucketIndex = self._kbucketIndex(key)
-        self._buckets[bucketIndex].lastAccessed = int(time.time())
+        self._buckets[bucketIndex].lastAccessed = int(self._getTime())
 
     def _kbucketIndex(self, key):
         """ Calculate the index of the k-bucket which is responsible for the
@@ -289,8 +291,8 @@ class OptimizedTreeRoutingTable(TreeRoutingTable):
     of the 13-page version of the Kademlia paper.
     """
 
-    def __init__(self, parentNodeID):
-        TreeRoutingTable.__init__(self, parentNodeID)
+    def __init__(self, parentNodeID, getTime=None):
+        TreeRoutingTable.__init__(self, parentNodeID, getTime)
         # Cache containing nodes eligible to replace stale k-bucket entries
         self._replacementCache = {}
 
@@ -301,6 +303,7 @@ class OptimizedTreeRoutingTable(TreeRoutingTable):
         @param contact: The contact to add to this node's k-buckets
         @type contact: kademlia.contact.Contact
         """
+
         if contact.id == self._parentNodeID:
             return
 

@@ -11,7 +11,7 @@ import hashlib
 import operator
 import struct
 import time
-from twisted.internet import defer, error, reactor, task
+from twisted.internet import defer, error, task
 
 import constants
 import routingtable
@@ -52,9 +52,11 @@ class Node(object):
     application is performed via this class (or a subclass).
     """
 
-    def __init__(self, node_id=None, udpPort=4000, dataStore=None,
+    def __init__(self, hash_announcer=None, node_id=None, udpPort=4000, dataStore=None,
                  routingTableClass=None, networkProtocol=None,
-                 externalIP=None, peerPort=None):
+                 externalIP=None, peerPort=None, listenUDP=None,
+                 callLater=None, resolve=None, clock=None, peer_finder=None,
+                 peer_manager=None):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -79,6 +81,17 @@ class Node(object):
         @param externalIP: the IP at which this node can be contacted
         @param peerPort: the port at which this node announces it has a blob for
         """
+
+        if not listenUDP or not resolve or not callLater or not clock:
+            from twisted.internet import reactor
+            listenUDP = listenUDP or reactor.listenUDP
+            resolve = resolve or reactor.resolve
+            callLater = callLater or reactor.callLater
+            clock = clock or reactor
+        self.reactor_resolve = resolve
+        self.reactor_listenUDP = listenUDP
+        self.reactor_callLater = callLater
+        self.clock = clock
         self.node_id = node_id or self._generateID()
         self.port = udpPort
         self._listeningPort = None  # object implementing Twisted
@@ -89,12 +102,14 @@ class Node(object):
         # operations before the node has finished joining the network)
         self._joinDeferred = None
         self.change_token_lc = task.LoopingCall(self.change_token)
+        self.change_token_lc.clock = self.clock
         self.refresh_node_lc = task.LoopingCall(self._refreshNode)
+        self.refresh_node_lc.clock = self.clock
         # Create k-buckets (for storing contacts)
         if routingTableClass is None:
-            self._routingTable = routingtable.OptimizedTreeRoutingTable(self.node_id)
+            self._routingTable = routingtable.OptimizedTreeRoutingTable(self.node_id, self.clock.seconds)
         else:
-            self._routingTable = routingTableClass(self.node_id)
+            self._routingTable = routingTableClass(self.node_id, self.clock.seconds)
 
         # Initialize this node's network access mechanisms
         if networkProtocol is None:
@@ -118,7 +133,7 @@ class Node(object):
                     self._routingTable.addContact(contact)
         self.externalIP = externalIP
         self.peerPort = peerPort
-        self.hash_watcher = HashWatcher()
+        self.hash_watcher = HashWatcher(self.clock)
 
         # will be used later
         self._can_store = True
@@ -136,15 +151,18 @@ class Node(object):
     def can_store(self):
         return self._can_store is True
 
+    @defer.inlineCallbacks
     def stop(self):
+        yield self.hash_announcer.stop()
         # stop LoopingCalls:
         if self.refresh_node_lc.running:
-            self.refresh_node_lc.stop()
+            yield self.refresh_node_lc.stop()
         if self.change_token_lc.running:
-            self.change_token_lc.stop()
+            yield self.change_token_lc.stop()
         if self._listeningPort is not None:
-            self._listeningPort.stopListening()
-        self.hash_watcher.stop()
+            yield self._listeningPort.stopListening()
+        if self.hash_watcher.lc.running:
+            yield self.hash_watcher.stop()
 
     @defer.inlineCallbacks
     def joinNetwork(self, known_node_addresses=None):
@@ -183,10 +201,10 @@ class Node(object):
         # Start refreshing k-buckets periodically, if necessary
         self.hash_watcher.tick()
         yield self._joinDeferred
+        self.hash_watcher.start()
 
         self.change_token_lc.start(constants.tokenSecretChangeInterval)
         self.refresh_node_lc.start(constants.checkRefreshInterval)
-        self.peer_finder.run_manage_loop()
         self.hash_announcer.run_manage_loop()
 
         #TODO: re-attempt joining the network if it fails
@@ -828,7 +846,7 @@ class _IterativeFindHelper(object):
         if self._should_lookup_active_calls():
             # Schedule the next iteration if there are any active
             # calls (Kademlia uses loose parallelism)
-            call = reactor.callLater(constants.iterativeLookupDelay, self.searchIteration)
+            call = self.node.reactor_callLater(constants.iterativeLookupDelay, self.searchIteration)
             self.pending_iteration_calls.append(call)
         # Check for a quick contact response that made an update to the shortList
         elif prevShortlistLength < len(self.shortlist):
