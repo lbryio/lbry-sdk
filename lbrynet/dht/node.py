@@ -17,6 +17,7 @@ import constants
 import routingtable
 import datastore
 import protocol
+from error import TimeoutError
 
 from peermanager import PeerManager
 from hashannouncer import DHTHashAnnouncer
@@ -799,7 +800,7 @@ class _IterativeFindHelper(object):
 
     def removeFromShortlist(self, failure, deadContactID):
         """ @type failure: twisted.python.failure.Failure """
-        failure.trap(protocol.TimeoutError)
+        failure.trap(TimeoutError, defer.CancelledError, TypeError)
         if len(deadContactID) != constants.key_bits / 8:
             raise ValueError("invalid lbry id")
         if deadContactID in self.shortlist:
