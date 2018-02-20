@@ -304,22 +304,22 @@ class Node(object):
             if not responseMsg.nodeID in known_nodes:
                 log.warning("Responding node was not expected")
                 defer.returnValue(responseMsg.nodeID)
-            n = known_nodes[responseMsg.nodeID]
+            remote_node = known_nodes[responseMsg.nodeID]
 
             result = responseMsg.response
             announced = False
             if 'token' in result:
                 value['token'] = result['token']
                 try:
-                    res = yield n.store(blob_hash, value, self.node_id)
-                    log.info("Response to store request: %s", str(res))
+                    res = yield remote_node.store(blob_hash, value)
+                    assert res == "OK", "unexpected response: {}".format(res)
                     announced = True
                 except protocol.TimeoutError:
                     log.info("Timeout while storing blob_hash %s at %s",
-                                blob_hash.encode('hex')[:16], n.id.encode('hex'))
+                                blob_hash.encode('hex')[:16], remote_node.id.encode('hex'))
                 except Exception as err:
                     log.error("Unexpected error while storing blob_hash %s at %s: %s",
-                              blob_hash.encode('hex')[:16], n.id.encode('hex'), err)
+                              blob_hash.encode('hex')[:16], remote_node.id.encode('hex'), err)
             else:
                 log.warning("missing token")
             defer.returnValue(announced)
