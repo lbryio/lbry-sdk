@@ -1,12 +1,15 @@
+import struct
 import io
 
 from Crypto.PublicKey import RSA
-from twisted.internet import defer
+from twisted.internet import defer, threads, error
 
 from lbrynet.core import PTCWallet
 from lbrynet.core import BlobAvailability
+from lbrynet.core.utils import generate_id
 from lbrynet.daemon import ExchangeRateManager as ERM
 from lbrynet import conf
+from util import debug_kademlia_packet
 
 KB = 2**10
 
@@ -18,15 +21,18 @@ class FakeLBRYFile(object):
         self.stream_hash = stream_hash
         self.file_name = 'fake_lbry_file'
 
+
 class Node(object):
-    def __init__(self, *args, **kwargs):
-        pass
+    def __init__(self, hash_announcer, peer_finder=None, peer_manager=None, **kwargs):
+        self.hash_announcer = hash_announcer
+        self.peer_finder = peer_finder
+        self.peer_manager = peer_manager
 
     def joinNetwork(self, *args):
-        pass
+        return defer.succeed(True)
 
     def stop(self):
-        pass
+        return defer.succeed(None)
 
 
 class FakeNetwork(object):
@@ -163,6 +169,9 @@ class Announcer(object):
 
     def stop(self):
         pass
+
+    def get_next_announce_time(self):
+        return 0
 
 
 class GenFile(io.RawIOBase):
@@ -313,4 +322,87 @@ def mock_conf_settings(obj, settings={}):
     obj.addCleanup(_reset_settings)
 
 
+MOCK_DHT_NODES = [
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+    "DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF",
+]
 
+MOCK_DHT_SEED_DNS = { # these map to mock nodes 0, 1, and 2
+    "lbrynet1.lbry.io": "10.42.42.1",
+    "lbrynet2.lbry.io": "10.42.42.2",
+    "lbrynet3.lbry.io": "10.42.42.3",
+}
+
+
+def resolve(name, timeout=(1, 3, 11, 45)):
+    if name not in MOCK_DHT_SEED_DNS:
+        return defer.fail(error.DNSLookupError(name))
+    return defer.succeed(MOCK_DHT_SEED_DNS[name])
+
+
+class MockUDPTransport(object):
+    def __init__(self, address, port, max_packet_size, protocol):
+        self.address = address
+        self.port = port
+        self.max_packet_size = max_packet_size
+        self._node = protocol._node
+
+    def write(self, data, address):
+        dest = MockNetwork.protocols[address][0]
+        debug_kademlia_packet(data, (self.address, self.port), address, self._node)
+        dest.datagramReceived(data, (self.address, self.port))
+
+
+class MockUDPPort(object):
+    def __init__(self, protocol):
+        self.protocol = protocol
+
+    def startListening(self, reason=None):
+        return self.protocol.startProtocol()
+
+    def stopListening(self, reason=None):
+        return self.protocol.stopProtocol()
+
+
+class MockNetwork(object):
+    protocols = {}  # (interface, port): (protocol, max_packet_size)
+
+    @classmethod
+    def add_peer(cls, port, protocol, interface, maxPacketSize):
+        interface = protocol._node.externalIP
+        protocol.transport = MockUDPTransport(interface, port, maxPacketSize, protocol)
+        cls.protocols[(interface, port)] = (protocol, maxPacketSize)
+
+
+def listenUDP(port, protocol, interface='', maxPacketSize=8192):
+    MockNetwork.add_peer(port, protocol, interface, maxPacketSize)
+    return MockUDPPort(protocol)
+
+
+def address_generator(address=(10, 42, 42, 1)):
+    def increment(addr):
+        value = struct.unpack("I", "".join([chr(x) for x in list(addr)[::-1]]))[0] + 1
+        new_addr = []
+        for i in range(4):
+            new_addr.append(value % 256)
+            value >>= 8
+        return tuple(new_addr[::-1])
+
+    while True:
+        yield "{}.{}.{}.{}".format(*address)
+        address = increment(address)
+
+
+def mock_node_generator(count=None, mock_node_ids=MOCK_DHT_NODES):
+    if mock_node_ids is None:
+        mock_node_ids = MOCK_DHT_NODES
+
+    for num, node_ip in enumerate(address_generator()):
+        if count and num >= count:
+            break
+        if num >= len(mock_node_ids):
+            node_id = generate_id().encode('hex')
+        else:
+            node_id = mock_node_ids[num]
+        yield (node_id, node_ip)
