@@ -173,6 +173,13 @@ class KademliaProtocol(protocol.DatagramProtocol):
         # Transmit the data
         self._send(encodedMsg, msg.id, (contact.address, contact.port))
         self._sentMessages[msg.id] = (contact.id, df, timeoutCall, method, args)
+
+        def cancel(err):
+            if timeoutCall.cancelled or timeoutCall.called:
+                return err
+            timeoutCall.cancel()
+
+        df.addErrback(cancel)
         return df
 
     def startProtocol(self):
@@ -336,7 +343,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._call_later_list[key] = delayed_call
 
     def _write_and_remove(self, key, txData, address):
-        del self._call_later_list[key]
+        if key in self._call_later_list:
+            del self._call_later_list[key]
         if self.transport:
             try:
                 self.transport.write(txData, address)
