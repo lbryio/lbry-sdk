@@ -93,6 +93,7 @@ CONNECTION_MESSAGES = {
 }
 
 SHORT_ID_LEN = 20
+MAX_UPDATE_FEE_ESTIMATE = 0.3
 
 
 class IterableContainer(object):
@@ -2008,8 +2009,8 @@ class Daemon(AuthJSONRPCServer):
         amt = yield self.session.wallet.get_max_usable_balance_for_claim(name)
         if bid > amt:
             raise InsufficientFundsError(
-                "Please lower the bid value, the max amount you can specify for this claim is {}"
-                .format(amt))
+                "Please lower the bid value, the maximum amount you can specify for this claim is {}"
+                .format(amt - MAX_UPDATE_FEE_ESTIMATE))
 
         metadata = metadata or {}
         if fee is not None:
