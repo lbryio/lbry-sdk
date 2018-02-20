@@ -2,16 +2,18 @@
 from Crypto.Cipher import AES
 import mock
 from twisted.trial import unittest
-from twisted.internet import defer
+from twisted.internet import defer, reactor
 
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.StreamDescriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.core import BlobManager
 from lbrynet.core import Session
 from lbrynet.dht import hashannouncer
+from lbrynet.dht.node import Node
 from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager import EncryptedFileManager
 from lbrynet.tests import mocks
+from time import time
 from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 MB = 2**20
@@ -32,10 +34,8 @@ class CreateEncryptedFileTest(unittest.TestCase):
 
         self.session = mock.Mock(spec=Session.Session)(None, None)
         self.session.payment_rate_manager.min_blob_data_payment_rate = 0
-
-        hash_announcer = hashannouncer.DHTHashAnnouncer(None, None)
         self.blob_manager = BlobManager.DiskBlobManager(
-            hash_announcer, self.tmp_blob_dir, SQLiteStorage(self.tmp_db_dir))
+            hashannouncer.DummyHashAnnouncer(), self.tmp_blob_dir, SQLiteStorage(self.tmp_db_dir))
         self.session.blob_manager = self.blob_manager
         self.session.storage = self.session.blob_manager.storage
         self.file_manager = EncryptedFileManager.EncryptedFileManager(self.session, object())

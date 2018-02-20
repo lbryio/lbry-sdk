@@ -15,6 +15,8 @@ from lbrynet.file_manager import EncryptedFileManager
 from lbrynet.tests import mocks
 from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
+from lbrynet.tests.mocks import Node
+
 
 class TestReflector(unittest.TestCase):
     def setUp(self):
@@ -61,7 +63,8 @@ class TestReflector(unittest.TestCase):
             use_upnp=False,
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
-            external_ip="127.0.0.1"
+            external_ip="127.0.0.1",
+            dht_node_class=Node
         )
 
         self.lbry_file_manager = EncryptedFileManager.EncryptedFileManager(self.session,
@@ -80,7 +83,8 @@ class TestReflector(unittest.TestCase):
             use_upnp=False,
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
-            external_ip="127.0.0.1"
+            external_ip="127.0.0.1",
+            dht_node_class=Node
         )
 
         self.server_blob_manager = BlobManager.DiskBlobManager(hash_announcer,
@@ -363,6 +367,7 @@ class TestReflector(unittest.TestCase):
         d.addCallback(lambda _: verify_blob_on_reflector())
         d.addCallback(lambda _: verify_stream_on_reflector())
         return d
+
 
 def iv_generator():
     iv = 0

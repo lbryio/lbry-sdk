@@ -26,31 +26,18 @@ class MocDHTNode(object):
         defer.returnValue(result)
 
 
-class MocSupplier(object):
-    def __init__(self, blobs_to_announce):
-        self.blobs_to_announce = blobs_to_announce
-        self.announced = False
-
-    def hashes_to_announce(self):
-        if not self.announced:
-            self.announced = True
-            return defer.succeed(self.blobs_to_announce)
-        else:
-            return defer.succeed([])
-
-    def set_single_hash_announce_duration(self, seconds):
-        pass
-
 class DHTHashAnnouncerTest(unittest.TestCase):
+    @defer.inlineCallbacks
     def setUp(self):
         self.num_blobs = 10
         self.blobs_to_announce = []
         for i in range(0, self.num_blobs):
             self.blobs_to_announce.append(random_lbry_hash())
         self.dht_node = MocDHTNode()
-        self.announcer = DHTHashAnnouncer(self.dht_node, peer_port=3333)
-        self.supplier = MocSupplier(self.blobs_to_announce)
-        self.announcer.add_supplier(self.supplier)
+        self.dht_node.peerPort = 3333
+        self.dht_node.clock = reactor
+        self.announcer = DHTHashAnnouncer(self.dht_node)
+        yield self.announcer.add_hashes_to_announce(self.blobs_to_announce)
 
     @defer.inlineCallbacks
     def test_announce_fail(self):
