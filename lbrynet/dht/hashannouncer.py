@@ -20,27 +20,32 @@ class DummyHashAnnouncer(object):
     def stop(self):
         pass
 
-    def add_supplier(self, supplier):
-        pass
-
     def hash_queue_size(self):
         return 0
 
     def immediate_announce(self, blob_hashes):
         pass
 
+    def get_next_announce_time(self):
+        return 0
+
 
 class DHTHashAnnouncer(DummyHashAnnouncer):
     ANNOUNCE_CHECK_INTERVAL = 60
     CONCURRENT_ANNOUNCERS = 5
 
+    # 1 hour is the min time hash will be reannounced
+    MIN_HASH_REANNOUNCE_TIME = 60 * 60
+    # conservative assumption of the time it takes to announce
+    # a single hash
+    DEFAULT_SINGLE_HASH_ANNOUNCE_DURATION = 1
+
     """This class announces to the DHT that this peer has certain blobs"""
     STORE_RETRIES = 3
 
-    def __init__(self, dht_node, peer_port):
+    def __init__(self, dht_node):
         self.dht_node = dht_node
-        self.peer_port = peer_port
-        self.supplier = None
+        self.peer_port = dht_node.peerPort
         self.next_manage_call = None
         self.hash_queue = collections.deque()
         self._concurrent_announcers = 0
@@ -49,6 +54,8 @@ class DHTHashAnnouncer(DummyHashAnnouncer):
         self._lock = utils.DeferredLockContextManager(defer.DeferredLock())
         self._last_checked = dht_node.clock.seconds(), self.CONCURRENT_ANNOUNCERS
         self._total = None
+        self.single_hash_announce_duration = self.DEFAULT_SINGLE_HASH_ANNOUNCE_DURATION
+        self._hashes_to_announce = []
 
     def run_manage_loop(self):
         log.info("Starting hash announcer")
@@ -79,10 +86,7 @@ class DHTHashAnnouncer(DummyHashAnnouncer):
     def stop(self):
         log.info("Stopping DHT hash announcer.")
         if self._manage_call_lc.running:
-            self._manage_call_lc.stop()
-
-    def add_supplier(self, supplier):
-        self.supplier = supplier
+            return self._manage_call_lc.stop()
 
     def immediate_announce(self, blob_hashes):
         if self.peer_port is not None:
@@ -96,9 +100,8 @@ class DHTHashAnnouncer(DummyHashAnnouncer):
     @defer.inlineCallbacks
     def _announce_available_hashes(self):
         log.debug('Announcing available hashes')
-        if self.supplier:
-            hashes = yield self.supplier.hashes_to_announce()
-            yield self._announce_hashes(hashes)
+        hashes = yield self.hashes_to_announce()
+        yield self._announce_hashes(hashes)
 
     @defer.inlineCallbacks
     def _announce_hashes(self, hashes, immediate=False):
@@ -180,24 +183,20 @@ class DHTHashAnnouncer(DummyHashAnnouncer):
         self.set_single_hash_announce_duration(seconds_per_blob)
         defer.returnValue(stored_to)
 
+    @defer.inlineCallbacks
+    def add_hashes_to_announce(self, blob_hashes):
+        yield self._lock._lock.acquire()
+        self._hashes_to_announce.extend(blob_hashes)
+        yield self._lock._lock.release()
 
-class DHTHashSupplier(object):
-    # 1 hour is the min time hash will be reannounced
-    MIN_HASH_REANNOUNCE_TIME = 60 * 60
-    # conservative assumption of the time it takes to announce
-    # a single hash
-    DEFAULT_SINGLE_HASH_ANNOUNCE_DURATION = 1
-
-    """Classes derived from this class give hashes to a hash announcer"""
-
-    def __init__(self, announcer):
-        if announcer is not None:
-            announcer.add_supplier(self)
-        self.hash_announcer = announcer
-        self.single_hash_announce_duration = self.DEFAULT_SINGLE_HASH_ANNOUNCE_DURATION
-
+    @defer.inlineCallbacks
     def hashes_to_announce(self):
-        pass
+        hashes_to_announce = []
+        yield self._lock._lock.acquire()
+        while self._hashes_to_announce:
+            hashes_to_announce.append(self._hashes_to_announce.pop())
+        yield self._lock._lock.release()
+        defer.returnValue(hashes_to_announce)
 
     def set_single_hash_announce_duration(self, seconds):
         """
@@ -221,7 +220,7 @@ class DHTHashSupplier(object):
         Returns:
             timestamp for next announce time
         """
-        queue_size = self.hash_announcer.hash_queue_size() + num_hashes_to_announce
+        queue_size = self.hash_queue_size() + num_hashes_to_announce
         reannounce = max(self.MIN_HASH_REANNOUNCE_TIME,
                          queue_size * self.single_hash_announce_duration)
-        return time.time() + reannounce
+        return self.dht_node.clock.seconds() + reannounce

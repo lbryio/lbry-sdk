@@ -1,16 +1,15 @@
 import logging
 import os
 from sqlite3 import IntegrityError
-from twisted.internet import threads, defer, reactor, task
+from twisted.internet import threads, defer, task
 from lbrynet import conf
 from lbrynet.blob.blob_file import BlobFile
 from lbrynet.blob.creator import BlobFileCreator
-from lbrynet.dht.hashannouncer import DHTHashSupplier
 
 log = logging.getLogger(__name__)
 
 
-class DiskBlobManager(DHTHashSupplier):
+class DiskBlobManager(object):
     def __init__(self, hash_announcer, blob_dir, storage):
 
         """
@@ -18,8 +17,7 @@ class DiskBlobManager(DHTHashSupplier):
         blob_dir - directory where blobs are stored
         db_dir - directory where sqlite database of blob information is stored
         """
-
-        DHTHashSupplier.__init__(self, hash_announcer)
+        self.hash_announcer = hash_announcer
         self.storage = storage
         self.announce_head_blobs_only = conf.settings['announce_head_blobs_only']
         self.blob_dir = blob_dir
@@ -70,14 +68,14 @@ class DiskBlobManager(DHTHashSupplier):
     @defer.inlineCallbacks
     def blob_completed(self, blob, next_announce_time=None, should_announce=True):
         if next_announce_time is None:
-            next_announce_time = self.get_next_announce_time()
+            next_announce_time = self.hash_announcer.get_next_announce_time()
         yield self.storage.add_completed_blob(
             blob.blob_hash, blob.length, next_announce_time, should_announce
         )
         # we announce all blobs immediately, if announce_head_blob_only is False
         # otherwise, announce only if marked as should_announce
         if not self.announce_head_blobs_only or should_announce:
-            reactor.callLater(0, self.immediate_announce, [blob.blob_hash])
+            self.immediate_announce([blob.blob_hash])
 
     def completed_blobs(self, blobhashes_to_check):
         return self._completed_blobs(blobhashes_to_check)
@@ -93,7 +91,7 @@ class DiskBlobManager(DHTHashSupplier):
             blob = self.blobs[blob_hash]
             if blob.get_is_verified():
                 return self.storage.set_should_announce(
-                    blob_hash, self.get_next_announce_time(), should_announce
+                    blob_hash, self.hash_announcer.get_next_announce_time(), should_announce
                 )
         return defer.succeed(False)
 
@@ -110,7 +108,7 @@ class DiskBlobManager(DHTHashSupplier):
             raise Exception("Blob has a length of 0")
         new_blob = BlobFile(self.blob_dir, blob_creator.blob_hash, blob_creator.length)
         self.blobs[blob_creator.blob_hash] = new_blob
-        next_announce_time = self.get_next_announce_time()
+        next_announce_time = self.hash_announcer.get_next_announce_time()
         return self.blob_completed(new_blob, next_announce_time, should_announce)
 
     def immediate_announce_all_blobs(self):

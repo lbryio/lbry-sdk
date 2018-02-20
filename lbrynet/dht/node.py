@@ -138,9 +138,9 @@ class Node(object):
         # will be used later
         self._can_store = True
 
-        self.peer_manager = PeerManager()
-        self.peer_finder = DHTPeerFinder(self, self.peer_manager)
-        self.hash_announcer = DHTHashAnnouncer(self, self.port)
+        self.peer_manager = peer_manager or PeerManager()
+        self.peer_finder = peer_finder or DHTPeerFinder(self, self.peer_manager)
+        self.hash_announcer = hash_announcer or DHTHashAnnouncer(self)
 
     def __del__(self):
         log.warning("unclean shutdown of the dht node")
