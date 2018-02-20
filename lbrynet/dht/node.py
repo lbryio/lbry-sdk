@@ -418,33 +418,26 @@ class Node(object):
                      to the specified key
         @rtype: twisted.internet.defer.Deferred
         """
-        # Prepare a callback for this operation
-        outerDf = defer.Deferred()
-
-        def checkResult(result):
-            if isinstance(result, dict):
-                # We have found the value; now see who was the closest contact without it...
-                # ...and store the key/value pair
-                outerDf.callback(result)
-            else:
-                # The value wasn't found, but a list of contacts was returned
-                # Now, see if we have the value (it might seem wasteful to search on the network
-                # first, but it ensures that all values are properly propagated through the
-                # network
-                if self._dataStore.hasPeersForBlob(key):
-                    # Ok, we have the value locally, so use that
-                    peers = self._dataStore.getPeersForBlob(key)
-                    # Send this value to the closest node without it
-                    outerDf.callback({key: peers})
-                else:
-                    # Ok, value does not exist in DHT at all
-                    outerDf.callback(result)
 
         # Execute the search
         iterative_find_result = yield self._iterativeFind(key, rpc='findValue')
-        checkResult(iterative_find_result)
-        result = yield outerDf
-        defer.returnValue(result)
+        if isinstance(iterative_find_result, dict):
+            # We have found the value; now see who was the closest contact without it...
+            # ...and store the key/value pair
+            defer.returnValue(iterative_find_result)
+        else:
+            # The value wasn't found, but a list of contacts was returned
+            # Now, see if we have the value (it might seem wasteful to search on the network
+            # first, but it ensures that all values are properly propagated through the
+            # network
+            if self._dataStore.hasPeersForBlob(key):
+                # Ok, we have the value locally, so use that
+                # Send this value to the closest node without it
+                peers = self._dataStore.getPeersForBlob(key)
+                defer.returnValue({key: peers})
+            else:
+                # Ok, value does not exist in DHT at all
+                defer.returnValue(iterative_find_result)
 
     def addContact(self, contact):
         """ Add/update the given contact; simple wrapper for the same method
