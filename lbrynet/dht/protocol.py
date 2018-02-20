@@ -214,8 +214,9 @@ class KademliaProtocol(protocol.DatagramProtocol):
         try:
             msgPrimitive = self._encoder.decode(datagram)
             message = self._translator.fromPrimitive(msgPrimitive)
-        except (encoding.DecodeError, ValueError):
+        except (encoding.DecodeError, ValueError) as err:
             # We received some rubbish here
+            log.exception("Decode error: %s", err)
             return
         except (IndexError, KeyError):
             log.warning("Couldn't decode dht datagram from %s", address)
@@ -359,6 +360,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 else:
                     log.error("DHT socket error: %s (%i)", err.message, err.errno)
                     raise err
+        else:
+            log.warning("transport not connected!")
 
     def _sendResponse(self, contact, rpcID, response):
         """ Send a RPC response to the specified contact
