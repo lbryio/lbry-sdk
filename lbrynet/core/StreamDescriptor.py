@@ -358,13 +358,14 @@ def get_stream_hash(hex_stream_name, key, hex_suggested_file_name, blob_infos):
     h.update(key)
     h.update(hex_suggested_file_name)
     blobs_hashsum = get_lbry_hash_obj()
-    sorted_blob_infos = sorted(blob_infos, key=lambda x: x['blob_num'])
-    for blob in sorted_blob_infos:
-        blobs_hashsum.update(get_blob_hashsum(blob))
-    if sorted_blob_infos[-1]['length'] != 0:
+    if any(blob['length'] for blob in blob_infos if blob['length'] <= 0):
+        raise InvalidStreamDescriptorError("Contains invalid length data blobs")
+    if blob_infos[-1]['length'] != 0:
         raise InvalidStreamDescriptorError("Does not end with a zero-length blob.")
-    if 'blob_hash' in sorted_blob_infos[-1]:
+    if 'blob_hash' in blob_infos[-1]:
         raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")
+    for blob in blob_infos:
+        blobs_hashsum.update(get_blob_hashsum(blob))
     h.update(blobs_hashsum.digest())
     return h.hexdigest()
 
