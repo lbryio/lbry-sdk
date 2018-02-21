@@ -335,25 +335,6 @@ def get_sd_info(storage, stream_hash, include_blobs):
     )
 
 
-@defer.inlineCallbacks
-def create_plain_sd(storage, stream_hash, file_name, overwrite_existing=False):
-    def _get_file_name():
-        actual_file_name = file_name
-        if os.path.exists(actual_file_name):
-            ext_num = 1
-            while os.path.exists(actual_file_name + "_" + str(ext_num)):
-                ext_num += 1
-            actual_file_name = actual_file_name + "_" + str(ext_num)
-        return actual_file_name
-
-    if overwrite_existing is False:
-        file_name = yield threads.deferToThread(_get_file_name())
-    descriptor_writer = PlainStreamDescriptorWriter(file_name)
-    sd_info = yield get_sd_info(storage, stream_hash, True)
-    sd_hash = yield descriptor_writer.create_descriptor(sd_info)
-    defer.returnValue(sd_hash)
-
-
 def get_blob_hashsum(b):
     length = b['length']
     if length != 0:
