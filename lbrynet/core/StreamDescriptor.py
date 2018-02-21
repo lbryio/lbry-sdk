@@ -1,4 +1,3 @@
-import os
 import binascii
 from collections import defaultdict
 import json
