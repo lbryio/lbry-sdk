@@ -2,7 +2,7 @@ import logging
 import miniupnpc
 from twisted.internet import threads, defer
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.dht import node, peermanager, hashannouncer
+from lbrynet.dht import node
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.utils import generate_id
@@ -122,6 +122,7 @@ class Session(object):
         self.payment_rate_manager_class = payment_rate_manager_class or NegotiatedPaymentRateManager
         self.is_generous = is_generous
         self.storage = storage or SQLiteStorage(self.db_dir)
+        self._join_dht_deferred = None
 
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
@@ -221,9 +222,7 @@ class Session(object):
         d.addErrback(upnp_failed)
         return d
 
-    @defer.inlineCallbacks
-    def _setup_dht(self):
-        log.info("Starting DHT")
+    def _setup_dht(self):  # does not block startup, the dht will re-attempt if necessary
         self.dht_node = self.dht_node_class(
             self.hash_announcer,
             udpPort=self.dht_node_port,
@@ -233,7 +232,11 @@ class Session(object):
             peer_manager=self.peer_manager,
             peer_finder=self.peer_finder,
         )
-        yield self.dht_node.joinNetwork(self.known_dht_nodes)
+        self.peer_manager = self.dht_node.peer_manager
+        self.peer_finder = self.dht_node.peer_finder
+        self.hash_announcer = self.dht_node.hash_announcer
+        self._join_dht_deferred = self.dht_node.joinNetwork(self.known_dht_nodes)
+        self._join_dht_deferred.addCallback(lambda _: log.info("Joined the dht"))
 
     def _setup_other_components(self):
         log.debug("Setting up the rest of the components")

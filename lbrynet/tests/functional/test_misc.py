@@ -23,7 +23,7 @@ from twisted.trial.unittest import TestCase
 from twisted.python.failure import Failure
 
 from lbrynet.dht.node import Node
-from lbrynet.dht.peermanager import PeerManager
+from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter, RateLimiter
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory

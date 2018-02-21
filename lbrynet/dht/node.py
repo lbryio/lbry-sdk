@@ -11,23 +11,23 @@ import hashlib
 import operator
 import struct
 import time
+import logging
 from twisted.internet import defer, error, task
+
+from lbrynet.core.utils import generate_id
+from lbrynet.core.PeerManager import PeerManager
 
 import constants
 import routingtable
 import datastore
 import protocol
 from error import TimeoutError
-
-from peermanager import PeerManager
 from hashannouncer import DHTHashAnnouncer
 from peerfinder import DHTPeerFinder
 from contact import Contact
 from hashwatcher import HashWatcher
 from distance import Distance
 
-import logging
-from lbrynet.core.utils import generate_id
 
 log = logging.getLogger(__name__)
 
@@ -168,7 +168,6 @@ class Node(object):
     def start_listening(self):
         try:
             self._listeningPort = self.reactor_listenUDP(self.port, self._protocol)
-            log.info("DHT node listening on %i", self.port)
         except error.CannotListenError as e:
             import traceback
             log.error("Couldn't bind to port %d. %s", self.port, traceback.format_exc())
@@ -191,12 +190,12 @@ class Node(object):
                     bootstrap_contacts = self.contacts
             defer.returnValue(bootstrap_contacts)
 
-        def _rerun(bootstrap_contacts):
-            if not bootstrap_contacts:
-                log.info("Failed to join the dht, re-attempting in 60 seconds")
-                self.reactor_callLater(60, self.bootstrap_join, known_node_addresses, finished_d)
+        def _rerun(closest_nodes):
+            if not closest_nodes:
+                log.info("Failed to join the dht, re-attempting in 30 seconds")
+                self.reactor_callLater(30, self.bootstrap_join, known_node_addresses, finished_d)
             elif not finished_d.called:
-                finished_d.callback(bootstrap_contacts)
+                finished_d.callback(closest_nodes)
 
         log.info("Attempting to join the DHT network")
         d = _resolve_seeds()

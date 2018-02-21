@@ -39,6 +39,7 @@ class DaemonServer(object):
         try:
             self.server_port = reactor.listenTCP(
                 conf.settings['api_port'], lbrynet_server, interface=conf.settings['api_host'])
+            log.info("lbrynet API listening on TCP %s:%i", conf.settings['api_host'], conf.settings['api_port'])
         except error.CannotListenError:
             log.info('Daemon already running, exiting app')
             raise

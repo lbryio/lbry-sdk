@@ -313,7 +313,7 @@ class Daemon(AuthJSONRPCServer):
                                                    self.session.peer_manager)
 
             try:
-                log.info("Daemon bound to port: %d", self.peer_port)
+                log.info("Peer protocol listening on TCP %d", self.peer_port)
                 self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
             except error.CannotListenError as e:
                 import traceback
