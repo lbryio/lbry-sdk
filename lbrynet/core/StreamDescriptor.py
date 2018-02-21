@@ -1,4 +1,3 @@
-import os
 import binascii
 from collections import defaultdict
 import json
@@ -335,25 +334,6 @@ def get_sd_info(storage, stream_hash, include_blobs):
     )
 
 
-@defer.inlineCallbacks
-def create_plain_sd(storage, stream_hash, file_name, overwrite_existing=False):
-    def _get_file_name():
-        actual_file_name = file_name
-        if os.path.exists(actual_file_name):
-            ext_num = 1
-            while os.path.exists(actual_file_name + "_" + str(ext_num)):
-                ext_num += 1
-            actual_file_name = actual_file_name + "_" + str(ext_num)
-        return actual_file_name
-
-    if overwrite_existing is False:
-        file_name = yield threads.deferToThread(_get_file_name())
-    descriptor_writer = PlainStreamDescriptorWriter(file_name)
-    sd_info = yield get_sd_info(storage, stream_hash, True)
-    sd_hash = yield descriptor_writer.create_descriptor(sd_info)
-    defer.returnValue(sd_hash)
-
-
 def get_blob_hashsum(b):
     length = b['length']
     if length != 0:
@@ -377,13 +357,14 @@ def get_stream_hash(hex_stream_name, key, hex_suggested_file_name, blob_infos):
     h.update(key)
     h.update(hex_suggested_file_name)
     blobs_hashsum = get_lbry_hash_obj()
-    sorted_blob_infos = sorted(blob_infos, key=lambda x: x['blob_num'])
-    for blob in sorted_blob_infos:
-        blobs_hashsum.update(get_blob_hashsum(blob))
-    if sorted_blob_infos[-1]['length'] != 0:
+    if any(blob['length'] for blob in blob_infos if blob['length'] <= 0):
+        raise InvalidStreamDescriptorError("Contains invalid length data blobs")
+    if blob_infos[-1]['length'] != 0:
         raise InvalidStreamDescriptorError("Does not end with a zero-length blob.")
-    if 'blob_hash' in sorted_blob_infos[-1]:
+    if 'blob_hash' in blob_infos[-1]:
         raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")
+    for blob in blob_infos:
+        blobs_hashsum.update(get_blob_hashsum(blob))
     h.update(blobs_hashsum.digest())
     return h.hexdigest()
 

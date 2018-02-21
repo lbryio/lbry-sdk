@@ -26,7 +26,7 @@ at anytime.
   * `get` failing with a non-useful error message when given a uri for a channel claim
   * exception checking in several wallet unit tests
   * daemon not erring properly for non-numeric values being passed to the `bid` parameter for the `publish` method
-  *
+  * incorrect `blob_num` for the stream terminator blob, which would result in creating invalid streams (https://github.com/lbryio/lbry/issues/1124)
 
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
