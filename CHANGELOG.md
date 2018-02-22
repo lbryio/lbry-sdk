@@ -22,7 +22,7 @@ at anytime.
   * handling decryption error for blobs encrypted with an invalid key
   * handling stream with no data blob (https://github.com/lbryio/lbry/issues/905)
   * fetching the external ip
-  * `blob_list` failing with --uri parameter (https://github.com/lbryio/lbry/issues/895)
+  * `blob_list` returning an error with --uri parameter and incorrectly returning `[]` for streams where blobs are known (https://github.com/lbryio/lbry/issues/895)
   * `get` failing with a non-useful error message when given a uri for a channel claim
   * exception checking in several wallet unit tests
   * daemon not erring properly for non-numeric values being passed to the `bid` parameter for the `publish` method
