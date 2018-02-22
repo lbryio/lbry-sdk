@@ -1,4 +1,3 @@
-import os
 import binascii
 from collections import defaultdict
 import json
@@ -335,25 +334,6 @@ def get_sd_info(storage, stream_hash, include_blobs):
     )
 
 
-@defer.inlineCallbacks
-def create_plain_sd(storage, stream_hash, file_name, overwrite_existing=False):
-    def _get_file_name():
-        actual_file_name = file_name
-        if os.path.exists(actual_file_name):
-            ext_num = 1
-            while os.path.exists(actual_file_name + "_" + str(ext_num)):
-                ext_num += 1
-            actual_file_name = actual_file_name + "_" + str(ext_num)
-        return actual_file_name
-
-    if overwrite_existing is False:
-        file_name = yield threads.deferToThread(_get_file_name())
-    descriptor_writer = PlainStreamDescriptorWriter(file_name)
-    sd_info = yield get_sd_info(storage, stream_hash, True)
-    sd_hash = yield descriptor_writer.create_descriptor(sd_info)
-    defer.returnValue(sd_hash)
-
-
 def get_blob_hashsum(b):
     length = b['length']
     if length != 0:
@@ -377,13 +357,8 @@ def get_stream_hash(hex_stream_name, key, hex_suggested_file_name, blob_infos):
     h.update(key)
     h.update(hex_suggested_file_name)
     blobs_hashsum = get_lbry_hash_obj()
-    sorted_blob_infos = sorted(blob_infos, key=lambda x: x['blob_num'])
-    for blob in sorted_blob_infos:
+    for blob in blob_infos:
         blobs_hashsum.update(get_blob_hashsum(blob))
-    if sorted_blob_infos[-1]['length'] != 0:
-        raise InvalidStreamDescriptorError("Does not end with a zero-length blob.")
-    if 'blob_hash' in sorted_blob_infos[-1]:
-        raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")
     h.update(blobs_hashsum.digest())
     return h.hexdigest()
 
@@ -403,6 +378,12 @@ def validate_descriptor(stream_info):
         blobs = stream_info['blobs']
     except KeyError as e:
         raise InvalidStreamDescriptorError("Missing '%s'" % (e.args[0]))
+    if stream_info['blobs'][-1]['length'] != 0:
+        raise InvalidStreamDescriptorError("Does not end with a zero-length blob.")
+    if any([False if blob_info['length'] > 0 else True for blob_info in stream_info['blobs'][:-1]]):
+        raise InvalidStreamDescriptorError("Contains zero-length data blob")
+    if 'blob_hash' in stream_info['blobs'][-1]:
+        raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")
 
     verify_hex(key, "key")
     verify_hex(hex_suggested_file_name, "suggested file name")
@@ -467,6 +448,11 @@ def download_sd_blob(session, blob_hash, payment_rate_manager, timeout=None):
     sd_blob = yield downloader.download()
     sd_reader = BlobStreamDescriptorReader(sd_blob)
     sd_info = yield sd_reader.get_info()
+    try:
+        validate_descriptor(sd_info)
+    except InvalidStreamDescriptorError as err:
+        yield session.blob_manager.delete_blobs([blob_hash])
+        raise err
     raw_sd = yield sd_reader._get_raw_data()
     yield session.blob_manager.storage.add_known_blob(blob_hash, len(raw_sd))
     yield save_sd_info(session.blob_manager, sd_blob.blob_hash, sd_info)

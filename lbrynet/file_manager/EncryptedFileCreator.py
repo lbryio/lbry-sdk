@@ -10,7 +10,7 @@ from twisted.internet import defer
 from twisted.protocols.basic import FileSender
 
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorWriter, EncryptedFileStreamType
-from lbrynet.core.StreamDescriptor import format_sd_info, get_stream_hash
+from lbrynet.core.StreamDescriptor import format_sd_info, get_stream_hash, validate_descriptor
 from lbrynet.cryptstream.CryptStreamCreator import CryptStreamCreator
 
 log = logging.getLogger(__name__)
@@ -40,11 +40,15 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
             hexlify(self.name), hexlify(self.key), hexlify(self.name),
             self.blob_infos
         )
+
         # generate the sd info
         self.sd_info = format_sd_info(
             EncryptedFileStreamType, hexlify(self.name), hexlify(self.key),
             hexlify(self.name), self.stream_hash, self.blob_infos
         )
+
+        # sanity check
+        validate_descriptor(self.sd_info)
         return defer.succeed(self.stream_hash)
 
 

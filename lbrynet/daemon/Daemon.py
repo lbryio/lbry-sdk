@@ -45,11 +45,12 @@ from lbrynet.core.Wallet import LBRYumWallet, ClaimOutpoint
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
-from lbrynet.core.Error import InsufficientFundsError, UnknownNameError, NoSuchSDHash
-from lbrynet.core.Error import NoSuchStreamHash, DownloadDataTimeout, DownloadSDTimeout
+from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
+from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.core.Error import NullFundsError, NegativeFundsError
 from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
+from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 
 log = logging.getLogger(__name__)
 
@@ -159,16 +160,6 @@ class AlwaysSend(object):
         d = defer.maybeDeferred(self.value_generator, *self.args, **self.kwargs)
         d.addCallback(lambda v: (True, v))
         return d
-
-
-# If an instance has a lot of blobs, this call might get very expensive.
-# For reflector, with 50k blobs, it definitely has an impact on the first run
-# But doesn't seem to impact performance after that.
-@defer.inlineCallbacks
-def calculate_available_blob_size(blob_manager):
-    blob_hashes = yield blob_manager.get_all_verified_blobs()
-    blobs = yield defer.DeferredList([blob_manager.get_blob(b) for b in blob_hashes])
-    defer.returnValue(sum(b.length for success, b in blobs if success and b.length))
 
 
 class Daemon(AuthJSONRPCServer):
@@ -622,7 +613,11 @@ class Daemon(AuthJSONRPCServer):
 
         rate_manager = rate_manager or self.session.payment_rate_manager
         timeout = timeout or 30
-        return download_sd_blob(self.session, blob_hash, rate_manager, timeout)
+        downloader = StandaloneBlobDownloader(
+            blob_hash, self.session.blob_manager, self.session.peer_finder, self.session.rate_limiter,
+            rate_manager, self.session.wallet, timeout
+        )
+        return downloader.download()
 
     @defer.inlineCallbacks
     def _get_stream_analytics_report(self, claim_dict):
@@ -948,27 +943,6 @@ class Daemon(AuthJSONRPCServer):
             lbry_files = file_dicts
         log.debug("Collected %i lbry files", len(lbry_files))
         defer.returnValue(lbry_files)
-
-    # TODO: do this and get_blobs_for_sd_hash in the stream info manager
-    def get_blobs_for_stream_hash(self, stream_hash):
-        def _iter_blobs(blob_hashes):
-            for blob_hash, blob_num, blob_iv, blob_length in blob_hashes:
-                if blob_hash:
-                    yield self.session.blob_manager.get_blob(blob_hash, length=blob_length)
-
-        def _get_blobs(blob_hashes):
-            dl = defer.DeferredList(list(_iter_blobs(blob_hashes)), consumeErrors=True)
-            dl.addCallback(lambda blobs: [blob[1] for blob in blobs if blob[0]])
-            return dl
-
-        d = self.session.storage.get_blobs_for_stream(stream_hash)
-        d.addCallback(_get_blobs)
-        return d
-
-    def get_blobs_for_sd_hash(self, sd_hash):
-        d = self.session.storage.get_stream_hash_for_sd_hash(sd_hash)
-        d.addCallback(self.get_blobs_for_stream_hash)
-        return d
 
     def _get_single_peer_downloader(self):
         downloader = SinglePeerDownloader()
@@ -2828,17 +2802,19 @@ class Daemon(AuthJSONRPCServer):
         if announce_all:
             yield self.session.blob_manager.immediate_announce_all_blobs()
         else:
+            blob_hashes = []
             if blob_hash:
-                blob_hashes = [blob_hash]
+                blob_hashes = blob_hashes.append(blob_hashes)
             elif stream_hash:
-                blobs = yield self.get_blobs_for_stream_hash(stream_hash)
-                blob_hashes = [blob.blob_hash for blob in blobs if blob.get_is_verified()]
+                pass
             elif sd_hash:
-                blobs = yield self.get_blobs_for_sd_hash(sd_hash)
-                blob_hashes = [sd_hash] + [blob.blob_hash for blob in blobs if
-                                           blob.get_is_verified()]
+                stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
             else:
                 raise Exception('single argument must be specified')
+            if not blob_hash:
+                blobs = yield self.storage.get_blobs_for_stream(stream_hash)
+                blob_hashes.extend([blob.blob_hash for blob in blobs if blob.get_is_verified()])
+
             yield self.session.blob_manager._immediate_announce(blob_hashes)
 
         response = yield self._render_response(True)
@@ -2916,24 +2892,23 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (list) List of blob hashes
         """
-
-        if uri:
-            metadata = yield self._resolve_name(uri)
-            sd_hash = utils.get_sd_hash(metadata)
-            try:
-                blobs = yield self.get_blobs_for_sd_hash(sd_hash)
-            except NoSuchSDHash:
+        if uri or stream_hash or sd_hash:
+            if uri:
+                metadata = yield self._resolve_name(uri)
+                sd_hash = utils.get_sd_hash(metadata)
+                stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(sd_hash)
+            elif stream_hash:
+                sd_hash = yield self.session.storage.get_sd_blob_hash_for_stream(stream_hash)
+            elif sd_hash:
+                stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(sd_hash)
+                sd_hash = yield self.session.storage.get_sd_blob_hash_for_stream(stream_hash)
+            if stream_hash:
+                blobs = yield self.session.storage.get_blobs_for_stream(stream_hash)
+            else:
                 blobs = []
-        elif stream_hash:
-            try:
-                blobs = yield self.get_blobs_for_stream_hash(stream_hash)
-            except NoSuchStreamHash:
-                blobs = []
-        elif sd_hash:
-            try:
-                blobs = yield self.get_blobs_for_sd_hash(sd_hash)
-            except NoSuchSDHash:
-                blobs = []
+            # get_blobs_for_stream does not include the sd blob, so we'll add it manually
+            if sd_hash in self.session.blob_manager.blobs:
+                blobs = [self.session.blob_manager.blobs[sd_hash]] + blobs
         else:
             blobs = self.session.blob_manager.blobs.itervalues()
 
@@ -2942,7 +2917,7 @@ class Daemon(AuthJSONRPCServer):
         if finished:
             blobs = [blob for blob in blobs if blob.get_is_verified()]
 
-        blob_hashes = [blob.blob_hash for blob in blobs]
+        blob_hashes = [blob.blob_hash for blob in blobs if blob.blob_hash]
         page_size = page_size or len(blob_hashes)
         page = page or 0
         start_index = page * page_size

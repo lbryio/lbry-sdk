@@ -5,7 +5,7 @@ from twisted.internet.task import LoopingCall
 
 from lbryschema.fee import Fee
 
-from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed
+from lbrynet.core.Error import InsufficientFundsError, KeyFeeAboveMaxAllowed, InvalidStreamDescriptorError
 from lbrynet.core.Error import DownloadDataTimeout, DownloadCanceledError, DownloadSDTimeout
 from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
 from lbrynet.core.StreamDescriptor import download_sd_blob
@@ -204,14 +204,12 @@ class GetStream(object):
 
         safe_start_looping_call(self.checker, 1)
         self.set_status(DOWNLOAD_METADATA_CODE, name)
-        sd_blob = yield self._download_sd_blob()
-
-        yield self._download(sd_blob, name, key_fee, txid, nout, file_name)
-        self.set_status(DOWNLOAD_RUNNING_CODE, name)
-
         try:
+            sd_blob = yield self._download_sd_blob()
+            yield self._download(sd_blob, name, key_fee, txid, nout, file_name)
+            self.set_status(DOWNLOAD_RUNNING_CODE, name)
             yield self.data_downloading_deferred
-        except DownloadDataTimeout as err:
+        except (DownloadDataTimeout, InvalidStreamDescriptorError) as err:
             safe_stop_looping_call(self.checker)
             raise err
 
