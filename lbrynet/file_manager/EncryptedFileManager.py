@@ -6,12 +6,12 @@ import logging
 
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
-
+from lbrynet.core.Error import InvalidStreamDescriptorError
 from lbrynet.reflector.reupload import reflect_stream
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet.core.StreamDescriptor import EncryptedFileStreamType, get_sd_info
+from lbrynet.core.StreamDescriptor import EncryptedFileStreamType, get_sd_info, validate_descriptor
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.cryptstream.client.CryptStreamDownloader import CurrentlyStoppingError
 from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
@@ -114,12 +114,22 @@ class EncryptedFileManager(object):
             )
             yield lbry_file.get_claim_info()
             try:
-                # restore will raise an Exception if status is unknown
-                lbry_file.restore(file_info['status'])
-                self.lbry_files.append(lbry_file)
-            except Exception:
-                log.warning("Failed to start %i", file_info['rowid'])
-                continue
+                # verify the stream is valid (we might have downloaded an invalid stream
+                # in the past when the validation check didn't work)
+                stream_info = yield get_sd_info(self.storage, file_info['stream_hash'], include_blobs=True)
+                validate_descriptor(stream_info)
+            except InvalidStreamDescriptorError as err:
+                log.warning("Stream for descriptor %s is invalid (%s), cleaning it up",
+                            lbry_file.sd_hash, err.message)
+                yield lbry_file.delete_data()
+                yield self.session.storage.delete_stream(lbry_file.stream_hash)
+            else:
+                try:
+                    # restore will raise an Exception if status is unknown
+                    lbry_file.restore(file_info['status'])
+                    self.lbry_files.append(lbry_file)
+                except Exception:
+                    log.warning("Failed to start %i", file_info.get('rowid'))
         log.info("Started %i lbry files", len(self.lbry_files))
         if self.auto_re_reflect is True:
             safe_start_looping_call(self.lbry_file_reflector, self.auto_re_reflect_interval)

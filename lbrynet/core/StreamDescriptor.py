@@ -357,12 +357,6 @@ def get_stream_hash(hex_stream_name, key, hex_suggested_file_name, blob_infos):
     h.update(key)
     h.update(hex_suggested_file_name)
     blobs_hashsum = get_lbry_hash_obj()
-    if any(blob['length'] for blob in blob_infos if blob['length'] <= 0):
-        raise InvalidStreamDescriptorError("Contains invalid length data blobs")
-    if blob_infos[-1]['length'] != 0:
-        raise InvalidStreamDescriptorError("Does not end with a zero-length blob.")
-    if 'blob_hash' in blob_infos[-1]:
-        raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")
     for blob in blob_infos:
         blobs_hashsum.update(get_blob_hashsum(blob))
     h.update(blobs_hashsum.digest())
@@ -384,6 +378,12 @@ def validate_descriptor(stream_info):
         blobs = stream_info['blobs']
     except KeyError as e:
         raise InvalidStreamDescriptorError("Missing '%s'" % (e.args[0]))
+    if stream_info['blobs'][-1]['length'] != 0:
+        raise InvalidStreamDescriptorError("Does not end with a zero-length blob.")
+    if any([False if blob_info['length'] > 0 else True for blob_info in stream_info['blobs'][:-1]]):
+        raise InvalidStreamDescriptorError("Contains zero-length data blob")
+    if 'blob_hash' in stream_info['blobs'][-1]:
+        raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")
 
     verify_hex(key, "key")
     verify_hex(hex_suggested_file_name, "suggested file name")
@@ -448,6 +448,11 @@ def download_sd_blob(session, blob_hash, payment_rate_manager, timeout=None):
     sd_blob = yield downloader.download()
     sd_reader = BlobStreamDescriptorReader(sd_blob)
     sd_info = yield sd_reader.get_info()
+    try:
+        validate_descriptor(sd_info)
+    except InvalidStreamDescriptorError as err:
+        yield session.blob_manager.delete_blobs([blob_hash])
+        raise err
     raw_sd = yield sd_reader._get_raw_data()
     yield session.blob_manager.storage.add_known_blob(blob_hash, len(raw_sd))
     yield save_sd_info(session.blob_manager, sd_blob.blob_hash, sd_info)

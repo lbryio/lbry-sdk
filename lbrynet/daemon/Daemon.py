@@ -50,6 +50,7 @@ from lbrynet.core.Error import NoSuchStreamHash, DownloadDataTimeout, DownloadSD
 from lbrynet.core.Error import NullFundsError, NegativeFundsError
 from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
+from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 
 log = logging.getLogger(__name__)
 
@@ -621,7 +622,11 @@ class Daemon(AuthJSONRPCServer):
 
         rate_manager = rate_manager or self.session.payment_rate_manager
         timeout = timeout or 30
-        return download_sd_blob(self.session, blob_hash, rate_manager, timeout)
+        downloader = StandaloneBlobDownloader(
+            blob_hash, self.session.blob_manager, self.session.peer_finder, self.session.rate_limiter,
+            rate_manager, self.session.wallet, timeout
+        )
+        return downloader.download()
 
     @defer.inlineCallbacks
     def _get_stream_analytics_report(self, claim_dict):
