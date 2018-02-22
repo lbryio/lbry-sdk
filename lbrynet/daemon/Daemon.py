@@ -94,6 +94,7 @@ CONNECTION_MESSAGES = {
 }
 
 SHORT_ID_LEN = 20
+MAX_UPDATE_FEE_ESTIMATE = 0.3
 
 
 class IterableContainer(object):
@@ -710,8 +711,6 @@ class Daemon(AuthJSONRPCServer):
         publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet,
                               certificate_id)
         parse_lbry_uri(name)
-        if bid <= 0.0:
-            raise Exception("Invalid bid")
         if not file_path:
             stream_hash = yield self.storage.get_stream_hash_for_sd_hash(claim_dict['stream']['source']['source'])
             claim_out = yield publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address,
@@ -1981,9 +1980,11 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise ValueError("Bid value must be greater than 0.0")
 
-        if bid >= self.session.wallet.get_balance():
-            raise InsufficientFundsError('Insufficient funds. ' \
-                                         'Make sure you have enough LBC to deposit')
+        amt = yield self.session.wallet.get_max_usable_balance_for_claim(name)
+        if bid > amt:
+            raise InsufficientFundsError(
+                "Please lower the bid value, the maximum amount you can specify for this claim is {}"
+                .format(amt - MAX_UPDATE_FEE_ESTIMATE))
 
         metadata = metadata or {}
         if fee is not None:

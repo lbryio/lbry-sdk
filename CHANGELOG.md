@@ -26,6 +26,7 @@ at anytime.
   * `get` failing with a non-useful error message when given a uri for a channel claim
   * exception checking in several wallet unit tests
   * daemon not erring properly for non-numeric values being passed to the `bid` parameter for the `publish` method
+  * `publish` command to allow updating claims with a `bid` amount higher than the wallet balance, so long as the amount is less than the wallet balance plus the bid amount of the claim being updated (https://github.com/lbryio/lbry/issues/748)
   * incorrect `blob_num` for the stream terminator blob, which would result in creating invalid streams. Such invalid streams are detected on startup and are automatically removed (https://github.com/lbryio/lbry/issues/1124)
 
 ### Deprecated
