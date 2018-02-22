@@ -74,6 +74,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
         # this comes from the database, the blobs returned are sorted
         sd_info = yield get_sd_info(self.session.storage, lbry_file.stream_hash, include_blobs=True)
         self.assertDictEqual(sd_info, sd_file_info)
+        self.assertListEqual(sd_info['blobs'], sd_file_info['blobs'])
         self.assertEqual(sd_info['stream_hash'], expected_stream_hash)
         self.assertEqual(len(sd_info['blobs']), 3)
         self.assertNotEqual(sd_info['blobs'][0]['length'], 0)
