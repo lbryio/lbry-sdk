@@ -1,7 +1,7 @@
 import time
 import unittest
 from twisted.internet.task import Clock
-from twisted.internet import defer
+from twisted.internet import defer, threads
 import lbrynet.dht.protocol
 import lbrynet.dht.contact
 import lbrynet.dht.constants
@@ -9,6 +9,7 @@ import lbrynet.dht.msgtypes
 from lbrynet.dht.error import TimeoutError
 from lbrynet.dht.node import Node, rpcmethod
 from lbrynet.tests.mocks import listenUDP, resolve
+from lbrynet.core.call_later_manager import CallLaterManager
 
 import logging
 
@@ -22,10 +23,12 @@ class KademliaProtocolTest(unittest.TestCase):
 
     def setUp(self):
         self._reactor = Clock()
+        CallLaterManager.setup(self._reactor.callLater)
         self.node = Node(node_id='1' * 48, udpPort=self.udpPort, externalIP="127.0.0.1", listenUDP=listenUDP,
                          resolve=resolve, clock=self._reactor, callLater=self._reactor.callLater)
 
     def tearDown(self):
+        CallLaterManager.stop()
         del self._reactor
 
     @defer.inlineCallbacks
@@ -40,7 +43,6 @@ class KademliaProtocolTest(unittest.TestCase):
 
     def testRPCTimeout(self):
         """ Tests if a RPC message sent to a dead remote node times out correctly """
-
         dead_node = Node(node_id='2' * 48, udpPort=self.udpPort, externalIP="127.0.0.2", listenUDP=listenUDP,
                          resolve=resolve, clock=self._reactor, callLater=self._reactor.callLater)
         dead_node.start_listening()

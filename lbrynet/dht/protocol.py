@@ -3,7 +3,8 @@ import time
 import socket
 import errno
 
-from twisted.internet import protocol, defer, error, task
+from twisted.internet import protocol, defer, task
+from lbrynet.core.call_later_manager import CallLaterManager
 
 import constants
 import encoding
@@ -169,17 +170,11 @@ class KademliaProtocol(protocol.DatagramProtocol):
             df._rpcRawResponse = True
 
         # Set the RPC timeout timer
-        timeoutCall = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, msg.id)
+        timeoutCall, cancelTimeout = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, msg.id)
         # Transmit the data
         self._send(encodedMsg, msg.id, (contact.address, contact.port))
         self._sentMessages[msg.id] = (contact.id, df, timeoutCall, method, args)
-
-        def cancel(err):
-            if timeoutCall.cancelled or timeoutCall.called:
-                return err
-            timeoutCall.cancel()
-
-        df.addErrback(cancel)
+        df.addErrback(cancelTimeout)
         return df
 
     def startProtocol(self):
@@ -340,12 +335,9 @@ class KademliaProtocol(protocol.DatagramProtocol):
         """Schedule the sending of the next UDP packet """
         delay = self._delay()
         key = object()
-        delayed_call = self._node.reactor_callLater(delay, self._write_and_remove, key, txData, address)
-        self._call_later_list[key] = delayed_call
+        delayed_call, _ = self._node.reactor_callLater(delay, self._write_and_remove, key, txData, address)
 
     def _write_and_remove(self, key, txData, address):
-        if key in self._call_later_list:
-            del self._call_later_list[key]
         if self.transport:
             try:
                 self.transport.write(txData, address)
@@ -440,7 +432,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         # See if any progress has been made; if not, kill the message
         if self._hasProgressBeenMade(messageID):
             # Reset the RPC timeout timer
-            timeoutCall = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, messageID)
+            timeoutCall, _ = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, messageID)
             self._sentMessages[messageID] = (remoteContactID, df, timeoutCall, method, args)
         else:
             # No progress has been made
@@ -469,15 +461,6 @@ class KademliaProtocol(protocol.DatagramProtocol):
         if self._bandwidth_stats_update_lc.running:
             self._bandwidth_stats_update_lc.stop()
 
-        for delayed_call in self._call_later_list.values():
-            try:
-                delayed_call.cancel()
-            except (error.AlreadyCalled, error.AlreadyCancelled):
-                log.debug('Attempted to cancel a DelayedCall that was not active')
-            except Exception:
-                log.exception('Failed to cancel a DelayedCall')
-                # not sure why this is needed, but taking this out sometimes causes
-                # exceptions.AttributeError: 'Port' object has no attribute 'socket'
-                # to happen on shutdown
-                # reactor.iterate()
+        CallLaterManager.stop()
+
         log.info('DHT stopped')

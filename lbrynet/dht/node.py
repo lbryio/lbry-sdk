@@ -15,6 +15,7 @@ import logging
 from twisted.internet import defer, error, task
 
 from lbrynet.core.utils import generate_id
+from lbrynet.core.call_later_manager import CallLaterManager
 from lbrynet.core.PeerManager import PeerManager
 
 import constants
@@ -89,10 +90,11 @@ class Node(object):
             resolve = resolve or reactor.resolve
             callLater = callLater or reactor.callLater
             clock = clock or reactor
+        self.clock = clock
+        CallLaterManager.setup(callLater)
         self.reactor_resolve = resolve
         self.reactor_listenUDP = listenUDP
-        self.reactor_callLater = callLater
-        self.clock = clock
+        self.reactor_callLater = CallLaterManager.call_later
         self.node_id = node_id or self._generateID()
         self.port = udpPort
         self._listeningPort = None  # object implementing Twisted
@@ -856,7 +858,7 @@ class _IterativeFindHelper(object):
         if self._should_lookup_active_calls():
             # Schedule the next iteration if there are any active
             # calls (Kademlia uses loose parallelism)
-            call = self.node.reactor_callLater(constants.iterativeLookupDelay, self.searchIteration)
+            call, _ = self.node.reactor_callLater(constants.iterativeLookupDelay, self.searchIteration)
             self.pending_iteration_calls.append(call)
         # Check for a quick contact response that made an update to the shortList
         elif prevShortlistLength < len(self.shortlist):

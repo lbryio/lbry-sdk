@@ -1,7 +1,6 @@
 import binascii
 import collections
 import logging
-import time
 import datetime
 
 from twisted.internet import defer, task
