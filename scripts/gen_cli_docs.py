@@ -5,35 +5,20 @@
 # Push docs: mkdocs gh-deploy
 
 import inspect
-import sys
-import re
 import os.path as op
+import sys
 from tabulate import tabulate
 from lbrynet.daemon.Daemon import Daemon
 
 INDENT = "    "
-REQD_CMD_REGEX = r"\(.*?=<(?P<reqd>.*?)>\)"
-OPT_CMD_REGEX = r"\[.*?=<(?P<opt>.*?)>\]"
-CMD_REGEX = r"--.*?(?P<cmd>.*?)[=,\s,<]"
 
 
-def _tabulate_options(_options_docstr, method, reqd_matches, opt_matches):
+def _tabulate_options(_options_docstr, method):
     _option_list = []
     for line in _options_docstr.splitlines():
         if (line.strip().startswith("--")):
             # separates command name and description
             parts = line.split(":", 1)
-
-            # checks whether the command is optional or required
-            # and remove the cli type formatting and convert to
-            # api style formatitng
-            match = re.findall(CMD_REGEX, parts[0])
-
-            if match[0] not in reqd_matches:
-                parts[0] = "'" + match[0] + "' (optional)"
-            else:
-                parts[0] = "'" + match[0] + "'"
-
             # separates command type(in brackets) and description
             new_parts = parts[1].lstrip().split(" ", 1)
         else:
@@ -53,7 +38,7 @@ def _tabulate_options(_options_docstr, method, reqd_matches, opt_matches):
     # tabulate to make the options look pretty
     _options_docstr_no_indent = tabulate(_option_list, missingval="", tablefmt="plain")
 
-    # tabulate to make the options look pretty
+    # Indent the options properly
     _options_docstr = ""
     for line in _options_docstr_no_indent.splitlines():
         _options_docstr += INDENT + line + '\n'
@@ -65,20 +50,16 @@ def _doc(obj):
     docstr = (inspect.getdoc(obj) or '').strip()
 
     try:
-        _desc, _docstr_after_desc = docstr.split("Usage:", 1)
-        _usage_docstr, _docstr_after_options = _docstr_after_desc.split("Options:", 1)
+        _usage_docstr, _docstr_after_options = docstr.split("Options:", 1)
         _options_docstr, _returns_docstr = _docstr_after_options.split("Returns:", 1)
     except(ValueError):
         print "Error: Ill formatted doc string for {}".format(obj)
         return "Error!"
 
-    opt_matches = re.findall(OPT_CMD_REGEX, _usage_docstr)
-    reqd_matches = re.findall(REQD_CMD_REGEX, _usage_docstr)
+    _options_docstr = _tabulate_options(_options_docstr.strip(), obj)
 
-    _options_docstr = _tabulate_options(_options_docstr.strip(), obj, reqd_matches, opt_matches)
-
-    docstr = _desc + \
-        "Args:\n" + \
+    docstr = _usage_docstr + \
+        "\nOptions:\n" + \
         _options_docstr + \
         "\nReturns:" + \
         _returns_docstr
@@ -88,15 +69,15 @@ def _doc(obj):
 
 def main():
     curdir = op.dirname(op.realpath(__file__))
-    api_doc_path = op.realpath(op.join(curdir, '..', 'docs', 'index.md'))
+    cli_doc_path = op.realpath(op.join(curdir, '..', 'docs', 'cli.md'))
 
     docs = ''
     for method_name in sorted(Daemon.callable_methods.keys()):
         method = Daemon.callable_methods[method_name]
         docs += '## ' + method_name + "\n\n```text\n" + _doc(method) + "\n```\n\n"
 
-    docs = "# LBRY JSON-RPC API Documentation\n\n" + docs
-    with open(api_doc_path, 'w+') as f:
+    docs = "# LBRY Command Line Documentation\n\n" + docs
+    with open(cli_doc_path, 'w+') as f:
         f.write(docs)
 
 

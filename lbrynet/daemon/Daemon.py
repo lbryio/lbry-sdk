@@ -997,17 +997,16 @@ class Daemon(AuthJSONRPCServer):
     ############################################################################
 
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(session_status="-s", dht_status="-d")
     def jsonrpc_status(self, session_status=False, dht_status=False):
         """
         Get daemon status
 
         Usage:
-            status [-s] [-d]
+            status [--session_status] [--dht_status]
 
         Options:
-            -s  : include session status in results
-            -d  : include dht network and peer status
+            --session_status  : (bool) include session status in results
+            --dht_status  : (bool) include dht network and peer status
 
         Returns:
             (dict) lbrynet-daemon status
@@ -1107,6 +1106,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             version
 
+        Options:
+            None
+
         Returns:
             (dict) Dictionary of lbry version information
             {
@@ -1135,6 +1137,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             report_bug (<message> | --message=<message>)
 
+        Options:
+            --message=<message> : (str) Description of the bug
+
         Returns:
             (bool) true if successful
         """
@@ -1154,6 +1159,9 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             settings_get
+
+        Options:
+            None
 
         Returns:
             (dict) Dictionary of daemon settings
@@ -1184,29 +1192,27 @@ class Daemon(AuthJSONRPCServer):
                          [--auto_renew_claim_height_delta=<auto_renew_claim_height_delta>]
 
         Options:
-            --download_directory=<download_directory>  : (str)
-            --data_rate=<data_rate>                             : (float), 0.0001
-            --download_timeout=<download_timeout>        : (int), 180
-            --peer_port=<peer_port>                             : (int), 3333
-            --max_key_fee=<max_key_fee>   : (dict) maximum key fee for downloads,
-                                                            in the format: {
-                                                                "currency": <currency_symbol>,
-                                                                "amount": <amount>
-                                                            }. In the CLI, it must be an escaped
-                                                            JSON string
-                                                            Supported currency symbols:
-                                                                LBC
-                                                                BTC
-                                                                USD
-            --disable_max_key_fee=<disable_max_key_fee> : (bool), False
-            --use_upnp=<use_upnp>            : (bool), True
-            --run_reflector_server=<run_reflector_server>  : (bool), False
-            --cache_time=<cache_time>  : (int), 150
-            --reflect_uploads=<reflect_uploads>  : (bool), True
-            --share_usage_data=<share_usage_data>  : (bool), True
-            --peer_search_timeout=<peer_search_timeout>  : (int), 3
-            --sd_download_timeout=<sd_download_timeout>  : (int), 3
-            --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int), 0
+            --download_directory=<download_directory>  : (str) path of download directory
+            --data_rate=<data_rate>                    : (float) 0.0001
+            --download_timeout=<download_timeout>      : (int) 180
+            --peer_port=<peer_port>                    : (int) 3333
+            --max_key_fee=<max_key_fee>                : (dict) maximum key fee for downloads,
+                                                          in the format:
+                                                          {
+                                                            'currency': <currency_symbol>,
+                                                            'amount': <amount>
+                                                          }.
+                                                          In the CLI, it must be an escaped JSON string
+                                                          Supported currency symbols: LBC, USD, BTC
+            --disable_max_key_fee=<disable_max_key_fee> : (bool) False
+            --use_upnp=<use_upnp>            : (bool) True
+            --run_reflector_server=<run_reflector_server>  : (bool) False
+            --cache_time=<cache_time>  : (int) 150
+            --reflect_uploads=<reflect_uploads>  : (bool) True
+            --share_usage_data=<share_usage_data>  : (bool) True
+            --peer_search_timeout=<peer_search_timeout>  : (int) 3
+            --sd_download_timeout=<sd_download_timeout>  : (int) 3
+            --auto_renew_claim_height_delta=<auto_renew_claim_height_delta> : (int) 0
                 claims set to expire within this many blocks will be
                 automatically renewed after startup (if set to 0, renews
                 will not be made automatically)
@@ -1227,7 +1233,10 @@ class Daemon(AuthJSONRPCServer):
             help [<command> | --command=<command>]
 
         Options:
-            <command>, --command=<command>  : command to retrieve documentation for
+            --command=<command>  : (str) command to retrieve documentation for
+
+        Returns:
+            (str) Help message
         """
 
         if command is None:
@@ -1256,22 +1265,25 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             commands
 
+        Options:
+            None
+
         Returns:
             (list) list of available commands
         """
         return self._render_response(sorted([command for command in self.callable_methods.keys()]))
 
-    @AuthJSONRPCServer.flags(include_unconfirmed='-u')
     def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
         """
         Return the balance of the wallet
 
         Usage:
-            wallet_balance [<address> | --address=<address>] [-u]
+            wallet_balance [<address> | --address=<address>] [--include_unconfirmed]
 
         Options:
-            <address>  :  If provided only the balance for this address will be given
-            -u         :  Include unconfirmed
+            --address=<address>     : (str) If provided only the balance for this
+                                      address will be given
+            --include_unconfirmed   : (bool) Include unconfirmed
 
         Returns:
             (float) amount of lbry credits in wallet
@@ -1288,7 +1300,10 @@ class Daemon(AuthJSONRPCServer):
         Unlock an encrypted wallet
 
         Usage:
-            wallet_unlock (<password>)
+            wallet_unlock (<password> | --password=<password>)
+
+        Options:
+            --password=<password> : (str) password for unlocking wallet
 
         Returns:
             (bool) true if wallet is unlocked, otherwise false
@@ -1312,6 +1327,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             wallet_decrypt
 
+        Options:
+            None
+
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
@@ -1327,7 +1345,10 @@ class Daemon(AuthJSONRPCServer):
         the password
 
         Usage:
-            wallet_encrypt (<new_password>)
+            wallet_encrypt (<new_password> | --new_password=<new_password>)
+
+        Options:
+            --new_password=<new_password> : (str) password string to be used for encrypting wallet
 
         Returns:
             (bool) true if wallet is decrypted, otherwise false
@@ -1345,6 +1366,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             daemon_stop
 
+        Options:
+            None
+
         Returns:
             (string) Shutdown message
         """
@@ -1355,7 +1379,6 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(full_status='-f')
     def jsonrpc_file_list(self, **kwargs):
         """
         List files limited by optional filters
@@ -1364,22 +1387,23 @@ class Daemon(AuthJSONRPCServer):
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
                       [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
-                      [--claim_name=<claim_name>] [-f]
+                      [--claim_name=<claim_name>] [--full_status]
 
         Options:
-            --sd_hash=<sd_hash>                    : get file with matching sd hash
-            --file_name=<file_name>                : get file with matching file name in the
+            --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
+            --file_name=<file_name>                : (str) get file with matching file name in the
                                                      downloads folder
-            --stream_hash=<stream_hash>            : get file with matching stream hash
-            --rowid=<rowid>                        : get file with matching row id
-            --claim_id=<claim_id>                  : get file with matching claim id
-            --outpoint=<outpoint>                  : get file with matching claim outpoint
-            --txid=<txid>                          : get file with matching claim txid
-            --nout=<nout>                          : get file with matching claim nout
-            --channel_claim_id=<channel_claim_id>  : get file with matching channel claim id
-            --channel_name=<channel_name>  : get file with matching channel name
-            --claim_name=<claim_name>              : get file with matching claim name
-            -f                                     : full status, populate the 'message' and 'size' fields
+            --stream_hash=<stream_hash>            : (str) get file with matching stream hash
+            --rowid=<rowid>                        : (int) get file with matching row id
+            --claim_id=<claim_id>                  : (str) get file with matching claim id
+            --outpoint=<outpoint>                  : (str) get file with matching claim outpoint
+            --txid=<txid>                          : (str) get file with matching claim txid
+            --nout=<nout>                          : (int) get file with matching claim nout
+            --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id
+            --channel_name=<channel_name>  : (str) get file with matching channel name
+            --claim_name=<claim_name>              : (str) get file with matching claim name
+            --full_status                          : (bool) full status, populate the
+                                                     'message' and 'size' fields
 
         Returns:
             (list) List of files
@@ -1420,16 +1444,16 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(force='-f')
     def jsonrpc_resolve_name(self, name, force=False):
         """
         Resolve stream info from a LBRY name
 
         Usage:
-            resolve_name <name> [-f]
+            resolve_name (<name> | --name=<name>) [--force]
 
         Options:
-            -f  : force refresh and do not check cache
+            --name=<name> : (str) the name to resolve
+            --force       : (bool) force refresh and do not check cache
 
         Returns:
             (dict) Metadata dictionary from name claim, None if the name is not
@@ -1454,11 +1478,11 @@ class Daemon(AuthJSONRPCServer):
                        [<claim_id> | --claim_id=<claim_id>]
 
         Options:
-            <txid>, --txid=<txid>              : look for claim with this txid, nout must
-                                                    also be specified
-            <nout>, --nout=<nout>              : look for claim with this nout, txid must
-                                                    also be specified
-            <claim_id>, --claim_id=<claim_id>  : look for claim with this claim id
+            --txid=<txid>              : (str) look for claim with this txid, nout must
+                                         also be specified
+            --nout=<nout>              : (int) look for claim with this nout, txid must
+                                         also be specified
+            --claim_id=<claim_id>  : (str) look for claim with this claim id
 
         Returns:
             (dict) Dictionary containing claim info as below,
@@ -1492,16 +1516,17 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(force='-f')
     def jsonrpc_resolve(self, force=False, uri=None, uris=[]):
         """
         Resolve given LBRY URIs
 
         Usage:
-            resolve [-f] (<uri> | --uri=<uri>) [<uris>...]
+            resolve [--force] (<uri> | --uri=<uri>) [<uris>...]
 
         Options:
-            -f  : force refresh and ignore cache
+            --force  : (bool) force refresh and ignore cache
+            --uri=<uri>    : (str) uri to resolve
+            --uris=<uris>   : (list) uris to resolve
 
         Returns:
             Dictionary of results, keyed by uri
@@ -1591,8 +1616,9 @@ class Daemon(AuthJSONRPCServer):
 
 
         Options:
-            <file_name>           : specified name for the downloaded file
-            <timeout>             : download timeout in number of seconds
+            --uri=<uri>              : (str) uri of the content to download
+            --file_name=<file_name>  : (str) specified name for the downloaded file
+            --timeout=<timeout>      : (int) download timeout in number of seconds
 
         Returns:
             (dict) Dictionary containing information about the stream
@@ -1675,15 +1701,16 @@ class Daemon(AuthJSONRPCServer):
         Start or stop downloading a file
 
         Usage:
-            file_set_status <status> [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                      [--stream_hash=<stream_hash>] [--rowid=<rowid>]
+            file_set_status (<status> | --status=<status>) [--sd_hash=<sd_hash>]
+                      [--file_name=<file_name>] [--stream_hash=<stream_hash>] [--rowid=<rowid>]
 
         Options:
-            --sd_hash=<sd_hash>          : set status of file with matching sd hash
-            --file_name=<file_name>      : set status of file with matching file name in the
+            --status=<status>            : (str) one of "start" or "stop"
+            --sd_hash=<sd_hash>          : (str) set status of file with matching sd hash
+            --file_name=<file_name>      : (str) set status of file with matching file name in the
                                            downloads folder
-            --stream_hash=<stream_hash>  : set status of file with matching stream hash
-            --rowid=<rowid>              : set status of file with matching row id
+            --stream_hash=<stream_hash>  : (str) set status of file with matching stream hash
+            --rowid=<rowid>              : (int) set status of file with matching row id
 
         Returns:
             (str) Confirmation message
@@ -1710,33 +1737,32 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(delete_from_download_dir='-f', delete_all='--delete_all')
     def jsonrpc_file_delete(self, delete_from_download_dir=False, delete_all=False, **kwargs):
         """
         Delete a LBRY file
 
         Usage:
-            file_delete [-f] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
+            file_delete [--delete_from_download_dir] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
                         [--stream_hash=<stream_hash>] [--rowid=<rowid>] [--claim_id=<claim_id>] [--txid=<txid>]
                         [--nout=<nout>] [--claim_name=<claim_name>] [--channel_claim_id=<channel_claim_id>]
                         [--channel_name=<channel_name>]
 
         Options:
-            -f, --delete_from_download_dir         : delete file from download directory,
+            --delete_from_download_dir             : (bool) delete file from download directory,
                                                     instead of just deleting blobs
-            --delete_all                           : if there are multiple matching files,
+            --delete_all                           : (bool) if there are multiple matching files,
                                                      allow the deletion of multiple files.
                                                      Otherwise do not delete anything.
-            --sd_hash=<sd_hash>                    : delete by file sd hash
-            --file_name<file_name>                 : delete by file name in downloads folder
-            --stream_hash=<stream_hash>            : delete by file stream hash
-            --rowid=<rowid>                        : delete by file row id
-            --claim_id=<claim_id>                  : delete by file claim id
-            --txid=<txid>                          : delete by file claim txid
-            --nout=<nout>                          : delete by file claim nout
-            --claim_name=<claim_name>              : delete by file claim name
-            --channel_claim_id=<channel_claim_id>  : delete by file channel claim id
-            --channel_name=<channel_name>                 : delete by file channel claim name
+            --sd_hash=<sd_hash>                    : (str) delete by file sd hash
+            --file_name<file_name>                 : (str) delete by file name in downloads folder
+            --stream_hash=<stream_hash>            : (str) delete by file stream hash
+            --rowid=<rowid>                        : (int) delete by file row id
+            --claim_id=<claim_id>                  : (str) delete by file claim id
+            --txid=<txid>                          : (str) delete by file claim txid
+            --nout=<nout>                          : (int) delete by file claim nout
+            --claim_name=<claim_name>              : (str) delete by file claim name
+            --channel_claim_id=<channel_claim_id>  : (str) delete by file channel claim id
+            --channel_name=<channel_name>                 : (str) delete by file channel claim name
 
         Returns:
             (bool) true if deletion was successful
@@ -1776,10 +1802,11 @@ class Daemon(AuthJSONRPCServer):
         Get estimated cost for a lbry stream
 
         Usage:
-            stream_cost_estimate <uri> [<size> | --size=<size>]
+            stream_cost_estimate (<uri> | --uri=<uri>) [<size> | --size=<size>]
 
         Options:
-            <size>, --size=<size>  : stream size in bytes. if provided an sd blob won't be
+            --uri=<uri>      : (str) uri to use
+            --size=<size>  : (float) stream size in bytes. if provided an sd blob won't be
                                      downloaded.
 
         Returns:
@@ -1798,6 +1825,10 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             channel_new (<channel_name> | --channel_name=<channel_name>)
                         (<amount> | --amount=<amount>)
+
+        Options:
+            --channel_name=<channel_name>    : (str) name of the channel prefixed with '@'
+            --amount=<amount>                : (float) bid amount on the channel
 
         Returns:
             (dict) Dictionary containing result of the claim
@@ -1838,6 +1869,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             channel_list
 
+        Options:
+            None
+
         Returns:
             (list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim
             is in the wallet.
@@ -1856,6 +1890,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             channel_list_mine
 
+        Options:
+            None
+
         Returns:
             (list) ClaimDict
         """
@@ -1870,6 +1907,9 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             channel_export (<claim_id> | --claim_id=<claim_id>)
+
+        Options:
+            --claim_id=<claim_id> : (str) Claim ID to export information about
 
         Returns:
             (str) Serialized certificate information
@@ -1887,6 +1927,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             channel_import (<serialized_certificate_info> |
                             --serialized_certificate_info=<serialized_certificate_info>)
+
+        Options:
+            --serialized_certificate_info=<serialized_certificate_info> : (str) certificate info
 
         Returns:
             (dict) Result dictionary
@@ -1928,13 +1971,15 @@ class Daemon(AuthJSONRPCServer):
                     [--claim_address=<claim_address>] [--change_address=<change_address>]
 
         Options:
-            --metadata=<metadata>          : ClaimDict to associate with the claim.
-            --file_path=<file_path>        : path to file to be associated with name. If provided,
+            --name=<name>                  : (str) name of the content
+            --bid=<bid>                    : (float) amount to back the claim
+            --metadata=<metadata>          : (dict) ClaimDict to associate with the claim.
+            --file_path=<file_path>        : (str) path to file to be associated with name. If provided,
                                              a lbry stream of this file will be used in 'sources'.
                                              If no path is given but a sources dict is provided,
                                              it will be used. If neither are provided, an
                                              error is raised.
-            --fee=<fee>                    : Dictionary representing key fee to download content:
+            --fee=<fee>                    : (dict) Dictionary representing key fee to download content:
                                               {
                                                 'currency': currency_symbol,
                                                 'amount': float,
@@ -1943,22 +1988,22 @@ class Daemon(AuthJSONRPCServer):
                                               supported currencies: LBC, USD, BTC
                                               If an address is not provided a new one will be
                                               automatically generated. Default fee is zero.
-            --title=<title>                : title of the publication
-            --description=<description>    : description of the publication
-            --author=<author>              : author of the publication
-            --language=<language>          : language of the publication
-            --license=<license>            : publication license
-            --license_url=<license_url>    : publication license url
-            --thumbnail=<thumbnail>        : thumbnail url
-            --preview=<preview>            : preview url
-            --nsfw=<nsfw>                  : title of the publication
-            --sources=<sources>            : {'lbry_sd_hash':sd_hash} specifies sd hash of file
-            --channel_name=<channel_name>  : name of the publisher channel name in the wallet
-            --channel_id=<channel_id>      : claim id of the publisher channel, does not check
+            --title=<title>                : (str) title of the publication
+            --description=<description>    : (str) description of the publication
+            --author=<author>              : (str) author of the publication
+            --language=<language>          : (str) language of the publication
+            --license=<license>            : (str) publication license
+            --license_url=<license_url>    : (str) publication license url
+            --thumbnail=<thumbnail>        : (str) thumbnail url
+            --preview=<preview>            : (str) preview url
+            --nsfw=<nsfw>                  : (bool) title of the publication
+            --sources=<sources>            : (str) {'lbry_sd_hash': sd_hash} specifies sd hash of file
+            --channel_name=<channel_name>  : (str) name of the publisher channel name in the wallet
+            --channel_id=<channel_id>      : (str) claim id of the publisher channel, does not check
                                              for channel claim being in the wallet. This allows
                                              publishing to a channel where only the certificate
                                              private key is in the wallet.
-           --claim_address=<claim_address> : address where the claim is sent to, if not specified
+           --claim_address=<claim_address> : (str) address where the claim is sent to, if not specified
                                              new address wil automatically be created
 
         Returns:
@@ -2106,7 +2151,12 @@ class Daemon(AuthJSONRPCServer):
             claim_abandon [<claim_id> | --claim_id=<claim_id>]
                           [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
 
-        Return:
+        Options:
+            --claim_id=<claim_id> : (str) claim_id of the claim to abandon
+            --txid=<txid> : (str) txid of the claim to abandon
+            --nout=<nout> : (int) nout of the claim to abandon
+
+        Returns:
             (dict) Dictionary containing result of the claim
             {
                 txid : (str) txid of resulting transaction
@@ -2134,7 +2184,12 @@ class Daemon(AuthJSONRPCServer):
             claim_new_support (<name> | --name=<name>) (<claim_id> | --claim_id=<claim_id>)
                               (<amount> | --amount=<amount>)
 
-        Return:
+        Options:
+            --name=<name> : (str) name of the claim to support
+            --claim_id=<claim_id> : (str) claim_id of the claim to support
+            --amount=<amount> : (float) amount of support
+
+        Returns:
             (dict) Dictionary containing result of the claim
             {
                 txid : (str) txid of resulting support claim
@@ -2156,7 +2211,11 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             claim_renew (<outpoint> | --outpoint=<outpoint>) | (<height> | --height=<height>)
 
-        Return:
+        Options:
+            --outpoint=<outpoint> : (str) outpoint of the claim to renew
+            --height=<height> : (str) update claims expiring before or at this block height
+
+        Returns:
             (dict) Dictionary where key is the the original claim's outpoint and
             value is the result of the renewal
             {
@@ -2198,8 +2257,21 @@ class Daemon(AuthJSONRPCServer):
                                   [<amount> | --amount=<amount>]
 
         Options:
-            <amount>  : Amount of credits to claim name for, defaults to the current amount
-                        on the claim
+            --claim_id=<claim_id>   : (str) claim_id to send
+            --address=<address>     : (str) address to send the claim to
+            --amount<amount>        : (int) Amount of credits to claim name for, defaults to the current amount
+                                            on the claim
+
+        Returns:
+            (dict) Dictionary containing result of the claim
+            {
+                'tx' : (str) hex encoded transaction
+                'txid' : (str) txid of resulting claim
+                'nout' : (int) nout of the resulting claim
+                'fee' : (float) fee paid for the claim transaction
+                'claim_id' : (str) claim ID of the resulting claim
+            }
+
         """
         result = yield self.session.wallet.send_claim_to_address(claim_id, address, amount)
         response = yield self._render_response(result)
@@ -2214,7 +2286,10 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             claim_list_mine
 
-        Returns
+        Options:
+            None
+
+        Returns:
             (list) List of name claims owned by user
             [
                 {
@@ -2249,7 +2324,10 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             claim_list (<name> | --name=<name>)
 
-        Returns
+        Options:
+            --name=<name> : (str) name of the claim to list info about
+
+        Returns:
             (dict) State of claims assigned for the name
             {
                 'claims': (list) list of claims for the name
@@ -2286,9 +2364,11 @@ class Daemon(AuthJSONRPCServer):
                                    [--page_size=<page_size>]
 
         Options:
-            --page=<page>            : which page of results to return where page 1 is the first
-                                       page, defaults to no pages
-            --page_size=<page_size>  : number of results in a page, default of 10
+            --uri=<uri>              : (str) uri of the channel
+            --uris=<uris>            : (list) uris of the channel
+            --page=<page>            : (int) which page of results to return where page 1 is the first
+                                             page, defaults to no pages
+            --page_size=<page_size>  : (int) number of results in a page, default of 10
 
         Returns:
             {
@@ -2371,6 +2451,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             transaction_list
 
+        Options:
+            None
+
         Returns:
             (list) List of transactions
 
@@ -2429,6 +2512,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             transaction_show (<txid> | --txid=<txid>)
 
+        Options:
+            --txid=<txid>  : (str) txid of the transaction
+
         Returns:
             (dict) JSON formatted transaction
         """
@@ -2445,6 +2531,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             wallet_is_address_mine (<address> | --address=<address>)
 
+        Options:
+            --address=<address>  : (str) address to check
+
         Returns:
             (bool) true, if address is associated with current wallet
         """
@@ -2460,6 +2549,9 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             wallet_public_key (<address> | --address=<address>)
+
+        Options:
+            --address=<address>  : (str) address for which to get the public key
 
         Returns:
             (list) list of public keys associated with address.
@@ -2479,6 +2571,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             wallet_list
 
+        Options:
+            None
+
         Returns:
             List of wallet addresses
         """
@@ -2494,6 +2589,9 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             wallet_new_address
+
+        Options:
+            None
 
         Returns:
             (str) New wallet address in base58
@@ -2517,6 +2615,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             wallet_unused_address
 
+        Options:
+            None
+
         Returns:
             (str) Unused wallet address in base58
         """
@@ -2539,6 +2640,10 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             send_amount_to_address (<amount> | --amount=<amount>) (<address> | --address=<address>)
+
+        Options:
+            --amount=<amount>     : (float) amount to send
+            --address=<address>   : (str) address to send credits to
 
         Returns:
             (bool) true if payment successfully scheduled
@@ -2568,7 +2673,12 @@ class Daemon(AuthJSONRPCServer):
             wallet_send (<amount> | --amount=<amount>)
                         ((<address> | --address=<address>) | (<claim_id> | --claim_id=<claim_id>))
 
-        Return:
+        Options:
+            --amount=<amount>      : (float) amount of credit to send
+            --address=<address>    : (str) address to send credits to
+            --claim_id=<claim_id>  : (float) claim_id of the claim to send to tip to
+
+        Returns:
             If sending to an address:
             (bool) true if payment successfully scheduled
 
@@ -2612,6 +2722,11 @@ class Daemon(AuthJSONRPCServer):
                                      (<num_addresses> | --num_addresses=<num_addresses>)
                                      (<amount> | --amount=<amount>)
 
+        Options:
+            --no_broadcast                    : (bool) whether to broadcast or not
+            --num_addresses=<num_addresses>   : (int) num of addresses to create
+            --amount=<amount>                 : (float) initial amount in each address
+
         Returns:
             (dict) the resulting transaction
         """
@@ -2634,6 +2749,9 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             utxo_list
+
+        Options:
+            None
 
         Returns:
             (list) List of unspent transaction outputs (UTXOs)
@@ -2671,8 +2789,8 @@ class Daemon(AuthJSONRPCServer):
             block_show (<blockhash> | --blockhash=<blockhash>) | (<height> | --height=<height>)
 
         Options:
-            <blockhash>, --blockhash=<blockhash>  : hash of the block to look up
-            <height>, --height=<height>           : height of the block to look up
+            --blockhash=<blockhash>  : (str) hash of the block to look up
+            --height=<height>        : (int) height of the block to look up
 
         Returns:
             (dict) Requested block
@@ -2701,17 +2819,18 @@ class Daemon(AuthJSONRPCServer):
                      [--encoding=<encoding>] [--payment_rate_manager=<payment_rate_manager>]
 
         Options:
-        --timeout=<timeout>                            : timeout in number of seconds
-        --encoding=<encoding>                          : by default no attempt at decoding is made,
-                                                         can be set to one of the
+        --blob_hash=<blob_hash>                        : (str) blob hash of the blob to get
+        --timeout=<timeout>                            : (int) timeout in number of seconds
+        --encoding=<encoding>                          : (str) by default no attempt at decoding
+                                                         is made, can be set to one of the
                                                          following decoders:
                                                             'json'
-        --payment_rate_manager=<payment_rate_manager>  : if not given the default payment rate
+        --payment_rate_manager=<payment_rate_manager>  : (str) if not given the default payment rate
                                                          manager will be used.
                                                          supported alternative rate managers:
                                                             'only-free'
 
-        Returns
+        Returns:
             (str) Success/Fail message or (dict) decoded data
         """
 
@@ -2742,6 +2861,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             blob_delete (<blob_hash> | --blob_hash=<blob_hash)
 
+        Options:
+            --blob_hash=<blob_hash>  : (str) blob hash of the blob to delete
+
         Returns:
             (str) Success/fail message
         """
@@ -2766,7 +2888,8 @@ class Daemon(AuthJSONRPCServer):
             peer_list (<blob_hash> | --blob_hash=<blob_hash>) [<timeout> | --timeout=<timeout>]
 
         Options:
-            <timeout>, --timeout=<timeout>  : peer search timeout in seconds
+            --blob_hash=<blob_hash>  : (str) find available peers for this blob hash
+            --timeout=<timeout>      : (int) peer search timeout in seconds
 
         Returns:
             (list) List of contacts
@@ -2780,24 +2903,23 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(announce_all="-a")
     def jsonrpc_blob_announce(self, announce_all=None, blob_hash=None,
                               stream_hash=None, sd_hash=None):
         """
         Announce blobs to the DHT
 
         Usage:
-            blob_announce [-a] [<blob_hash> | --blob_hash=<blob_hash>]
+            blob_announce [--announce_all] [<blob_hash> | --blob_hash=<blob_hash>]
                           [<stream_hash> | --stream_hash=<stream_hash>]
                           [<sd_hash> | --sd_hash=<sd_hash>]
 
         Options:
-            -a                                          : announce all the blobs possessed by user
-            <blob_hash>, --blob_hash=<blob_hash>        : announce a blob, specified by blob_hash
-            <stream_hash>, --stream_hash=<stream_hash>  : announce all blobs associated with
-                                                            stream_hash
-            <sd_hash>, --sd_hash=<sd_hash>              : announce all blobs associated with
-                                                            sd_hash and the sd_hash itself
+            --announce_all=<announce_all>  : (bool) announce all the blobs possessed by user
+            --blob_hash=<blob_hash>        : (str) announce a blob, specified by blob_hash
+            --stream_hash=<stream_hash>    : (str) announce all blobs associated with
+                                             stream_hash
+            --sd_hash=<sd_hash>            : (str) announce all blobs associated with
+                                             sd_hash and the sd_hash itself
 
         Returns:
             (bool) true if successful
@@ -2830,6 +2952,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             blob_announce_all
 
+        Options:
+            None
+
         Returns:
             (str) Success/fail message
         """
@@ -2846,12 +2971,12 @@ class Daemon(AuthJSONRPCServer):
                          [--reflector=<reflector>]
 
         Options:
-            --sd_hash=<sd_hash>          : get file with matching sd hash
-            --file_name=<file_name>      : get file with matching file name in the
+            --sd_hash=<sd_hash>          : (str) get file with matching sd hash
+            --file_name=<file_name>      : (str) get file with matching file name in the
                                            downloads folder
-            --stream_hash=<stream_hash>  : get file with matching stream hash
-            --rowid=<rowid>              : get file with matching row id
-            --reflector=<reflector>      : reflector server, ip address or url
+            --stream_hash=<stream_hash>  : (str) get file with matching stream hash
+            --rowid=<rowid>              : (int) get file with matching row id
+            --reflector=<reflector>      : (str) reflector server, ip address or url
                                            by default choose a server from the config
 
         Returns:
@@ -2871,25 +2996,26 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(results)
 
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(needed="-n", finished="-f")
     def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
                           finished=None, page_size=None, page=None):
         """
         Returns blob hashes. If not given filters, returns all blobs known by the blob manager
 
         Usage:
-            blob_list [-n] [-f] [<uri> | --uri=<uri>] [<stream_hash> | --stream_hash=<stream_hash>]
-                      [<sd_hash> | --sd_hash=<sd_hash>] [<page_size> | --page_size=<page_size>]
+            blob_list [--needed] [--finished] [<uri> | --uri=<uri>]
+                      [<stream_hash> | --stream_hash=<stream_hash>]
+                      [<sd_hash> | --sd_hash=<sd_hash>]
+                      [<page_size> | --page_size=<page_size>]
                       [<page> | --page=<page>]
 
         Options:
-            -n                                          : only return needed blobs
-            -f                                          : only return finished blobs
-            <uri>, --uri=<uri>                          : filter blobs by stream in a uri
-            <stream_hash>, --stream_hash=<stream_hash>  : filter blobs by stream hash
-            <sd_hash>, --sd_hash=<sd_hash>              : filter blobs by sd hash
-            <page_size>, --page_size=<page_size>        : results page size
-            <page>, --page=<page>                       : page of results to return
+            --needed                     : (bool) only return needed blobs
+            --finished                   : (bool) only return finished blobs
+            --uri=<uri>                  : (str) filter blobs by stream in a uri
+            --stream_hash=<stream_hash>  : (str) filter blobs by stream hash
+            --sd_hash=<sd_hash>          : (str) filter blobs by sd hash
+            --page_size=<page_size>      : (int) results page size
+            --page=<page>                : (int) page of results to return
 
         Returns:
             (list) List of blob hashes
@@ -2935,6 +3061,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             blob_reflect_all
 
+        Options:
+            None
+
         Returns:
             (bool) true if successful
         """
@@ -2950,6 +3079,9 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             routing_table_get
+
+        Options:
+            None
 
         Returns:
             (dict) dictionary containing routing and contact information
@@ -3028,8 +3160,10 @@ class Daemon(AuthJSONRPCServer):
                               [<blob_timeout> | --blob_timeout=<blob_timeout>]
 
         Options:
-            <search_timeout> : how long to search for peers for the blob in the dht
-            <blob_timeout>   : how long to try downloading from a peer
+            --blob_hash=<blob_hash>           : (str) check availability for this blob hash
+            --search_timeout=<search_timeout> : (int) how long to search for peers for the blob
+                                                in the dht
+            --blob_timeout=<blob_timeout>     : (int) how long to try downloading from a peer
 
         Returns:
             (dict) {
@@ -3051,8 +3185,9 @@ class Daemon(AuthJSONRPCServer):
                              [<peer_timeout> | --peer_timeout=<peer_timeout>]
 
         Options:
-            <sd_timeout>, --sd_timeout=<sd_timeout>        : sd blob download timeout
-            <peer_timeout>, --peer_timeout=<peer_timeout>  : how long to look for peers
+            --uri=<uri>                    : (str) check availability for this uri
+            --sd_timeout=<sd_timeout>      : (int) sd blob download timeout
+            --peer_timeout=<peer_timeout>  : (int) how long to look for peers
 
         Returns:
             (float) Peers per blob / total blobs
@@ -3066,12 +3201,15 @@ class Daemon(AuthJSONRPCServer):
         Get stream availability for lbry uri
 
         Usage:
-            stream_availability (<uri>) [<search_timeout> | --search_timeout=<search_timeout>]
+            stream_availability (<uri> | --uri=<uri>)
+                                [<search_timeout> | --search_timeout=<search_timeout>]
                                 [<blob_timeout> | --blob_timeout=<blob_timeout>]
 
         Options:
-            <search_timeout> : how long to search for peers for the blob in the dht
-            <blob_timeout>   : how long to try downloading from a peer
+            --uri=<uri>                       : (str) check availability for this uri
+            --search_timeout=<search_timeout> : (int) how long to search for peers for the blob
+                                                in the dht
+            --search_timeout=<blob_timeout>   : (int) how long to try downloading from a peer
 
         Returns:
             (dict) {
@@ -3160,21 +3298,22 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(a_arg='-a', b_arg='-b')
     def jsonrpc_cli_test_command(self, pos_arg, pos_args=[], pos_arg2=None, pos_arg3=None,
                                  a_arg=False, b_arg=False):
         """
         This command is only for testing the CLI argument parsing
         Usage:
-            cli_test_command [-a] [-b] (<pos_arg> | --pos_arg=<pos_arg>)
+            cli_test_command [--a_arg] [--b_arg] (<pos_arg> | --pos_arg=<pos_arg>)
                              [<pos_args>...] [--pos_arg2=<pos_arg2>]
                              [--pos_arg3=<pos_arg3>]
 
         Options:
-            -a, --a_arg                        : a arg
-            -b, --b_arg                        : b arg
-            <pos_arg2>, --pos_arg2=<pos_arg2>  : pos arg 2
-            <pos_arg3>, --pos_arg3=<pos_arg3>  : pos arg 3
+            --a_arg                            : a arg
+            --b_arg                            : b arg
+            --pos_arg=<pos_arg>                : pos arg
+            --pos_args=<pos_args>              : pos args
+            --pos_arg2=<pos_arg2>              : pos arg 2
+            --pos_arg3=<pos_arg3>              : pos arg 3
         Returns:
             pos args
         """
