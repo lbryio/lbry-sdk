@@ -52,6 +52,7 @@ class TestIntegration(unittest.TestCase):
     def tearDownClass(cls):
         shell_command(['lbrynet-cli', 'daemon_stop'])
 
+
     def test_cli(self):
         help_out,err = lbrynet_cli(['help'])
         self.assertTrue(help_out)
@@ -65,6 +66,7 @@ class TestIntegration(unittest.TestCase):
         out,err = lbrynet_cli(['status'])
         out = json.loads(out)
         self.assertTrue(out['is_running'])
+
 
     def test_cli_docopts(self):
         out,err = lbrynet_cli(['cli_test_command'])
@@ -92,17 +94,22 @@ class TestIntegration(unittest.TestCase):
         # TODO: variable length arguments don't have guess_type() on them
         self.assertEqual([1,['2','3'],None,None,False,False], out)
 
-        out,err = lbrynet_cli(['cli_test_command','1','-a'])
-        out = json.loads(out)
-        self.assertEqual([1,[],None,None,True,False], out)
-
         out,err = lbrynet_cli(['cli_test_command','1','--a_arg'])
         out = json.loads(out)
         self.assertEqual([1,[],None,None,True,False], out)
 
-        out,err = lbrynet_cli(['cli_test_command','1','-a','-b'])
+        out,err = lbrynet_cli(['cli_test_command','1','--a_arg', '--b_arg'])
         out = json.loads(out)
         self.assertEqual([1,[],None,None,True,True], out)
+
+
+    def test_cli_docopts_with_short_args(self):
+        out,err = lbrynet_cli(['cli_test_command','1','-a'])
+        self.assertRaises(ValueError, json.loads, out)
+
+        out,err = lbrynet_cli(['cli_test_command','1','-a','-b'])
+        self.assertRaises(ValueError, json.loads, out)
+
 
     def test_status(self):
         out = lbrynet.status()
