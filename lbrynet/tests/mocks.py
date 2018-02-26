@@ -349,7 +349,7 @@ class MockUDPTransport(object):
         self._node = protocol._node
 
     def write(self, data, address):
-        dest = MockNetwork.protocols[address][0]
+        dest = MockNetwork.peers[address][0]
         debug_kademlia_packet(data, (self.address, self.port), address, self._node)
         dest.datagramReceived(data, (self.address, self.port))
 
@@ -366,13 +366,13 @@ class MockUDPPort(object):
 
 
 class MockNetwork(object):
-    protocols = {}  # (interface, port): (protocol, max_packet_size)
+    peers = {}  # (interface, port): (protocol, max_packet_size)
 
     @classmethod
     def add_peer(cls, port, protocol, interface, maxPacketSize):
         interface = protocol._node.externalIP
         protocol.transport = MockUDPTransport(interface, port, maxPacketSize, protocol)
-        cls.protocols[(interface, port)] = (protocol, maxPacketSize)
+        cls.peers[(interface, port)] = (protocol, maxPacketSize)
 
 
 def listenUDP(port, protocol, interface='', maxPacketSize=8192):
