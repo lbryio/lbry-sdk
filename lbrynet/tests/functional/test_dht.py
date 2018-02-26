@@ -107,6 +107,37 @@ class TestKademliaBase(unittest.TestCase):
             routable.update(contact_addresses)
         self.assertSetEqual(routable, node_addresses)
 
+    @defer.inlineCallbacks
+    def verify_all_nodes_are_pingable(self):
+        ping_replies = {}
+        ping_dl = []
+        contacted = set()
+
+        def _ping_cb(result, node, replies):
+            replies[node] = result
+
+        for node in self._seeds:
+            contact_addresses = set()
+            for contact in node.contacts:
+                contact_addresses.add(contact.address)
+                d = contact.ping()
+                d.addCallback(_ping_cb, contact.address, ping_replies)
+                contacted.add(contact.address)
+                ping_dl.append(d)
+        for node in self.nodes:
+            contact_addresses = set()
+            for contact in node.contacts:
+                contact_addresses.add(contact.address)
+                d = contact.ping()
+                d.addCallback(_ping_cb, contact.address, ping_replies)
+                contacted.add(contact.address)
+                ping_dl.append(d)
+        self.run_reactor(2, *ping_dl)
+        yield threads.deferToThread(time.sleep, 0.1)
+        node_addresses = {node.externalIP for node in self.nodes}.union({seed.externalIP for seed in self._seeds})
+        self.assertSetEqual(node_addresses, contacted)
+        self.assertDictEqual(ping_replies, {node: "pong" for node in contacted})
+
 
 class TestKademliaBootstrap(TestKademliaBase):
     """
@@ -134,17 +165,7 @@ class TestKademliaBootstrap(TestKademliaBase):
         )
 
     def test_all_nodes_are_pingable(self):
-        def _ping_cb(result):
-            self.assertEqual(result, "pong")
-
-        dl = []
-        for seed in self._seeds:
-            self.assertEqual(len(seed.contacts), 2)
-            for contact in seed.contacts:
-                d = contact.ping()
-                d.addCallback(_ping_cb)
-                dl.append(d)
-        self.run_reactor(1, *dl)
+        return self.verify_all_nodes_are_pingable()
 
 
 class TestKademliaBootstrapSixteenSeeds(TestKademliaBase):
@@ -207,6 +228,9 @@ class TestKademliaBootstrapSixteenSeeds(TestKademliaBase):
 
     def test_bootstrap_network(self):
         pass
+
+    def test_all_nodes_are_pingable(self):
+        return self.verify_all_nodes_are_pingable()
 
 
 class Test250NodeNetwork(TestKademliaBase):
