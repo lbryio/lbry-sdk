@@ -171,7 +171,7 @@ class CryptonatorBTCFeed(MarketFeed):
         try:
             json_response = json.loads(response)
         except ValueError:
-            raise InvalidExchangeRateResponse(self.name, "invalid rate response : %s" % response)
+            raise InvalidExchangeRateResponse(self.name, "invalid rate response")
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
                         'success' not in json_response or json_response['success'] is not True:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
@@ -194,7 +194,7 @@ class CryptonatorFeed(MarketFeed):
         try:
             json_response = json.loads(response)
         except ValueError:
-            raise InvalidExchangeRateResponse(self.name, "invalid rate response : %s" % response)
+            raise InvalidExchangeRateResponse(self.name, "invalid rate response")
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
                         'success' not in json_response or json_response['success'] is not True:
             raise InvalidExchangeRateResponse(self.name, 'result not found')
