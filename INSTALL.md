@@ -77,6 +77,8 @@ To install:
  virtualenv lbry-venv
  source lbry-venv/bin/activate
  
+ python --version # Python 3 is not supported. Make sure you're on Python 2.7
+ 
  pip install -U -r requirements.txt
  pip install --editable .
  ```
