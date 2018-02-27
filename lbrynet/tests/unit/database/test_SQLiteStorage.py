@@ -296,6 +296,9 @@ class ContentClaimStorageTests(StorageTest):
         stored_content_claim = yield self.storage.get_content_claim(stream_hash)
         self.assertDictEqual(stored_content_claim, fake_claim_info)
 
+        stream_hashes = yield self.storage.get_stream_hashes_for_claim_id(fake_claim_info['claim_id'])
+        self.assertListEqual(stream_hashes, [stream_hash])
+
         # test that we can't associate a claim update with a new stream to the file
         second_stream_hash, second_sd_hash = random_lbry_hash(), random_lbry_hash()
         yield self.make_and_store_fake_stream(blob_count=2, stream_hash=second_stream_hash, sd_hash=second_sd_hash)

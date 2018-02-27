@@ -40,6 +40,18 @@ class Publisher(object):
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
         claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
+
+        # check if we have a file already for this claim (if this is a publish update with a new stream)
+        old_stream_hashes = yield self.session.storage.get_stream_hashes_for_claim_id(claim_out['claim_id'])
+        if old_stream_hashes:
+            lbry_files = list(self.lbry_file_manager.lbry_files)
+            for lbry_file in lbry_files:
+                s_h = lbry_file.stream_hash
+                if s_h in old_stream_hashes:
+                    yield self.lbry_file_manager.delete_lbry_file(lbry_file, delete_file=False)
+                    old_stream_hashes.remove(s_h)
+                    log.info("Removed old stream for claim update: %s", s_h)
+
         yield self.session.storage.save_content_claim(
             self.lbry_file.stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout'])
         )

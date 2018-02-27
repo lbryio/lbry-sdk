@@ -543,6 +543,14 @@ class SQLiteStorage(object):
                                       # support info
             yield self.save_supports(claim_id, claim_info['supports'])
 
+    def get_stream_hashes_for_claim_id(self, claim_id):
+        return self.run_and_return_list(
+            "select f.stream_hash from file f "
+            "inner join content_claim cc on f.stream_hash=cc.stream_hash "
+            "inner join claim c on c.claim_outpoint=cc.claim_outpoint and c.claim_id=?",
+            claim_id
+        )
+
     def save_content_claim(self, stream_hash, claim_outpoint):
         def _save_content_claim(transaction):
             # get the claim id and serialized metadata
