@@ -55,7 +55,6 @@ class Publisher(object):
         yield self.session.storage.save_content_claim(
             self.lbry_file.stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout'])
         )
-        yield self.lbry_file.get_claim_info()
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
@@ -63,6 +62,7 @@ class Publisher(object):
         """Make a claim without creating a lbry file"""
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
         yield self.session.storage.save_content_claim(stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout']))
+        self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
