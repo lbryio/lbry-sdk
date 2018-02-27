@@ -8,6 +8,11 @@ These instructions are for installing from source code, which is recommended if 
 
 Before starting, you'll need to install some additional libraries depending on your operating system.
 
+### Python
+
+LBRY requires Python 2.7. Python 3 is not supported.
+
+
 ### OS X Prerequisites
 
 Install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/).
