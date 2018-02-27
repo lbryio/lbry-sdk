@@ -78,7 +78,8 @@ def rerun_if_locked(f):
             log.warning("database was locked. rerunning %s with args %s, kwargs %s",
                         str(f), str(args), str(kwargs))
             if rerun_count < max_attempts:
-                return task.deferLater(reactor, 0, inner_wrapper, rerun_count + 1, *args, **kwargs)
+                delay = 2**rerun_count
+                return task.deferLater(reactor, delay, inner_wrapper, rerun_count + 1, *args, **kwargs)
         raise err
 
     def inner_wrapper(rerun_count, *args, **kwargs):
