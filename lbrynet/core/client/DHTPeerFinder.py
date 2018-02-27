@@ -22,27 +22,9 @@ class DHTPeerFinder(object):
         self.dht_node = dht_node
         self.peer_manager = peer_manager
         self.peers = []
-        self.next_manage_call = None
-
-    def run_manage_loop(self):
-        self._manage_peers()
-        self.next_manage_call = reactor.callLater(60, self.run_manage_loop)
 
     def stop(self):
-        log.info("Stopping DHT peer finder.")
-        if self.next_manage_call is not None and self.next_manage_call.active():
-            self.next_manage_call.cancel()
-            self.next_manage_call = None
-
-    @defer.inlineCallbacks
-    def _manage_peers(self):
-        """
-        If we don't know any active peer, let's try to reconnect to the preconfigured
-        known DHT nodes
-        """
-        if not self.dht_node.hasContacts():
-            log.info("No active peer. Re-attempt joining DHT")
-            yield self.dht_node.join_dht()
+        pass
 
     @defer.inlineCallbacks
     def find_peers_for_blob(self, blob_hash, timeout=None, filter_self=False):
