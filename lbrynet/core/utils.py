@@ -7,7 +7,7 @@ import string
 import json
 
 import pkg_resources
-
+from twisted.internet import defer
 from lbryschema.claim import ClaimDict
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
@@ -146,3 +146,18 @@ def get_sd_hash(stream_info):
 
 def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
+
+
+@defer.inlineCallbacks
+def DeferredDict(d, consumeErrors=False):
+    keys = []
+    dl = []
+    response = {}
+    for k, v in d.iteritems():
+        keys.append(k)
+        dl.append(v)
+    results = yield defer.DeferredList(dl, consumeErrors=consumeErrors)
+    for k, (success, result) in zip(keys, results):
+        if success:
+            response[k] = result
+    defer.returnValue(response)

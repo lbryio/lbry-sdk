@@ -579,12 +579,12 @@ class SQLiteStorage(object):
                     log.warning("claim %s contains the same stream as the one already downloaded from claim %s",
                                 claim_id, known_claim_id)
 
-    def get_stream_hashes_for_claim_id(self, claim_id):
+    def get_old_stream_hashes_for_claim_id(self, claim_id, new_stream_hash):
         return self.run_and_return_list(
             "select f.stream_hash from file f "
             "inner join content_claim cc on f.stream_hash=cc.stream_hash "
-            "inner join claim c on c.claim_outpoint=cc.claim_outpoint and c.claim_id=?",
-            claim_id
+            "inner join claim c on c.claim_outpoint=cc.claim_outpoint and c.claim_id=? "
+            "where f.stream_hash!=?", claim_id, new_stream_hash
         )
 
     @defer.inlineCallbacks
@@ -670,7 +670,7 @@ class SQLiteStorage(object):
 
         def _get_claim(transaction):
             claim_info = transaction.execute(
-                "select * from claim where claim_id=? order by height, rowid desc", (claim_id, )
+                "select * from claim where claim_id=? order by rowid desc", (claim_id, )
             ).fetchone()
             result = _claim_response(*claim_info)
             if result['channel_claim_id']:
@@ -701,3 +701,25 @@ class SQLiteStorage(object):
                 ).fetchall()
             ]
         return self.db.runInteraction(_get_unknown_certificate_claim_ids)
+
+    @defer.inlineCallbacks
+    def get_pending_claim_outpoints(self):
+        claim_outpoints = yield self.run_and_return_list("select claim_outpoint from claim where height=-1")
+        results = {}  # {txid: [nout, ...]}
+        for outpoint_str in claim_outpoints:
+            txid, nout = outpoint_str.split(":")
+            outputs = results.get(txid, [])
+            outputs.append(int(nout))
+            results[txid] = outputs
+        if results:
+            log.debug("missing transaction heights for %i claims", len(results))
+        defer.returnValue(results)
+
+    def save_claim_tx_heights(self, claim_tx_heights):
+        def _save_claim_heights(transaction):
+            for outpoint, height in claim_tx_heights.iteritems():
+                transaction.execute(
+                    "update claim set height=? where claim_outpoint=? and height=-1",
+                    (height, outpoint)
+                )
+        return self.db.runInteraction(_save_claim_heights)

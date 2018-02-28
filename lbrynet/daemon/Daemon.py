@@ -1638,9 +1638,9 @@ class Daemon(AuthJSONRPCServer):
 
         if not resolved or 'value' not in resolved:
             if 'claim' not in resolved:
-                    raise Exception(
-                        "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", ""))
-                    )
+                raise Exception(
+                    "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", ""))
+                )
             else:
                 resolved = resolved['claim']
         txid, nout, name = resolved['txid'], resolved['nout'], resolved['name']
