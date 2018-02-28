@@ -410,12 +410,6 @@ class Wallet(object):
         batch_results = yield self._get_values_for_uris(page, page_size, *uris)
 
         for uri, resolve_results in batch_results.iteritems():
-            claim_id = None
-            if resolve_results and 'claim' in resolve_results:
-                claim_id = resolve_results['claim']['claim_id']
-            certificate_id = None
-            if resolve_results and 'certificate' in resolve_results:
-                certificate_id = resolve_results['certificate']['claim_id']
             try:
                 result[uri] = self._handle_claim_result(resolve_results)
                 yield self.save_claim(result[uri])
