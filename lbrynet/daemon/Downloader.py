@@ -183,7 +183,6 @@ class GetStream(object):
         self.downloader = yield self._create_downloader(sd_blob, file_name=file_name)
         yield self.pay_key_fee(key_fee, name)
         yield self.session.storage.save_content_claim(self.downloader.stream_hash, "%s:%i" % (txid, nout))
-        yield self.downloader.get_claim_info()
         log.info("Downloading lbry://%s (%s) --> %s", name, self.sd_hash[:6], self.download_path)
         self.finished_deferred = self.downloader.start()
         self.finished_deferred.addCallbacks(lambda result: self.finish(result, name), self.fail)

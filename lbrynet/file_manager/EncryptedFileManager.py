@@ -127,6 +127,7 @@ class EncryptedFileManager(object):
                 try:
                     # restore will raise an Exception if status is unknown
                     lbry_file.restore(file_info['status'])
+                    self.storage.content_claim_callbacks[lbry_file.stream_hash] = lbry_file.get_claim_info
                     self.lbry_files.append(lbry_file)
                 except Exception:
                     log.warning("Failed to start %i", file_info.get('rowid'))
@@ -171,6 +172,8 @@ class EncryptedFileManager(object):
             stream_metadata['suggested_file_name']
         )
         lbry_file.restore(status)
+        yield lbry_file.get_claim_info()
+        self.storage.content_claim_callbacks[stream_hash] = lbry_file.get_claim_info
         self.lbry_files.append(lbry_file)
         defer.returnValue(lbry_file)
 
@@ -195,8 +198,9 @@ class EncryptedFileManager(object):
             rowid, stream_hash, payment_rate_manager, sd_hash, key, stream_name, file_name, download_directory,
             stream_metadata['suggested_file_name']
         )
-        lbry_file.get_claim_info(include_supports=False)
         lbry_file.restore(status)
+        yield lbry_file.get_claim_info(include_supports=False)
+        self.storage.content_claim_callbacks[stream_hash] = lbry_file.get_claim_info
         self.lbry_files.append(lbry_file)
         defer.returnValue(lbry_file)
 
@@ -219,6 +223,9 @@ class EncryptedFileManager(object):
             yield wait_for_finished()
 
         self.lbry_files.remove(lbry_file)
+
+        if lbry_file.stream_hash in self.storage.content_claim_callbacks:
+            del self.storage.content_claim_callbacks[lbry_file.stream_hash]
 
         yield lbry_file.delete_data()
         yield self.session.storage.delete_stream(lbry_file.stream_hash)

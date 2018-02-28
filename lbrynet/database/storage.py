@@ -186,6 +186,11 @@ class SQLiteStorage(object):
         self.db = SqliteConnection(self._db_path)
         self.db.set_reactor(reactor)
 
+        # used to refresh the claim attributes on a ManagedEncryptedFileDownloader when a
+        # change to the associated content claim occurs. these are added by the file manager
+        # when it loads each file
+        self.content_claim_callbacks = {}  # {<stream_hash>: <callable returning a deferred>}
+
     def setup(self):
         def _create_tables(transaction):
             transaction.executescript(self.CREATE_TABLES_QUERY)
@@ -537,11 +542,36 @@ class SQLiteStorage(object):
                 "insert or replace into claim values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (outpoint, claim_id, name, amount, height, serialized, claim_dict.certificate_id, address, sequence)
             )
+
         yield self.db.runInteraction(_save_claim)
 
         if 'supports' in claim_info:  # if this response doesn't have support info don't overwrite the existing
                                       # support info
             yield self.save_supports(claim_id, claim_info['supports'])
+
+        # check for content claim updates
+        if claim_dict.source_hash:
+            existing_file_stream_hash = yield self.run_and_return_one_or_none(
+                "select file.stream_hash from stream "
+                "inner join file on file.stream_hash=stream.stream_hash "
+                "where sd_hash=?", claim_dict.source_hash
+            )
+            if existing_file_stream_hash:
+                known_outpoint = yield self.run_and_return_one_or_none(
+                    "select claim_outpoint from content_claim where stream_hash=?", existing_file_stream_hash
+                )
+                known_claim_id = yield self.run_and_return_one_or_none(
+                    "select claim_id from claim "
+                    "inner join content_claim c3 ON claim.claim_outpoint=c3.claim_outpoint "
+                    "where c3.stream_hash=?", existing_file_stream_hash
+                )
+                if not known_claim_id:
+                    log.info("discovered content claim %s for stream %s", claim_id, existing_file_stream_hash)
+                    yield self.save_content_claim(existing_file_stream_hash, outpoint)
+                elif known_claim_id and known_claim_id == claim_id:
+                    if known_outpoint != outpoint:
+                        log.info("updating content claim %s for stream %s", claim_id, existing_file_stream_hash)
+                        yield self.save_content_claim(existing_file_stream_hash, outpoint)
 
     def get_stream_hashes_for_claim_id(self, claim_id):
         return self.run_and_return_list(
@@ -551,6 +581,7 @@ class SQLiteStorage(object):
             claim_id
         )
 
+    @defer.inlineCallbacks
     def save_content_claim(self, stream_hash, claim_outpoint):
         def _save_content_claim(transaction):
             # get the claim id and serialized metadata
@@ -588,7 +619,12 @@ class SQLiteStorage(object):
 
             # update the claim associated to the file
             transaction.execute("insert or replace into content_claim values (?, ?)", (stream_hash, claim_outpoint))
-        return self.db.runInteraction(_save_content_claim)
+        yield self.db.runInteraction(_save_content_claim)
+
+        # update corresponding ManagedEncryptedFileDownloader object
+        if stream_hash in self.content_claim_callbacks:
+            file_callback = self.content_claim_callbacks[stream_hash]
+            yield file_callback()
 
     @defer.inlineCallbacks
     def get_content_claim(self, stream_hash, include_supports=True):
