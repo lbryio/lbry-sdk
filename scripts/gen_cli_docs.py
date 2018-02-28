@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-# Generate docs: python gen_api_docs.py
+# Generate docs: python gen_cli_docs.py
 # See docs: pip install mkdocs; mkdocs serve
-# Push docs: mkdocs gh-deploy
+# Push docs: mkdocs build
 
 import inspect
 import os.path as op
@@ -11,6 +11,7 @@ from tabulate import tabulate
 from lbrynet.daemon.Daemon import Daemon
 
 INDENT = "    "
+DOCS_DIR = "docs_build"
 
 
 def _tabulate_options(_options_docstr, method):
@@ -69,7 +70,7 @@ def _doc(obj):
 
 def main():
     curdir = op.dirname(op.realpath(__file__))
-    cli_doc_path = op.realpath(op.join(curdir, '..', 'docs', 'cli.md'))
+    cli_doc_path = op.realpath(op.join(curdir, '..', DOCS_DIR, 'cli.md'))
 
     docs = ''
     for method_name in sorted(Daemon.callable_methods.keys()):

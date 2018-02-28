@@ -2,7 +2,7 @@
 
 # Generate docs: python gen_api_docs.py
 # See docs: pip install mkdocs; mkdocs serve
-# Push docs: mkdocs gh-deploy
+# Push docs: mkdocs build
 
 import inspect
 import sys
@@ -15,6 +15,7 @@ INDENT = "    "
 REQD_CMD_REGEX = r"\(.*?=<(?P<reqd>.*?)>\)"
 OPT_CMD_REGEX = r"\[.*?=<(?P<opt>.*?)>\]"
 CMD_REGEX = r"--.*?(?P<cmd>.*?)[=,\s,<]"
+DOCS_DIR = "docs_build"
 
 
 def _tabulate_options(_options_docstr, method, reqd_matches, opt_matches):
@@ -88,7 +89,7 @@ def _doc(obj):
 
 def main():
     curdir = op.dirname(op.realpath(__file__))
-    api_doc_path = op.realpath(op.join(curdir, '..', 'docs', 'index.md'))
+    api_doc_path = op.realpath(op.join(curdir, '..', DOCS_DIR, 'index.md'))
 
     docs = ''
     for method_name in sorted(Daemon.callable_methods.keys()):
