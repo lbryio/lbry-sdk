@@ -1626,6 +1626,10 @@ class Daemon(AuthJSONRPCServer):
 
         timeout = timeout if timeout is not None else self.download_timeout
 
+        parsed_uri = parse_lbry_uri(uri)
+        if parsed_uri.is_channel and not parsed_uri.path:
+            raise Exception("cannot download a channel claim, specify a /path")
+
         resolved_result = yield self.session.wallet.resolve(uri)
         if resolved_result and uri in resolved_result:
             resolved = resolved_result[uri]
@@ -1634,11 +1638,9 @@ class Daemon(AuthJSONRPCServer):
 
         if not resolved or 'value' not in resolved:
             if 'claim' not in resolved:
-                if 'certificate' in resolved:
-                    raise  Exception("Cannot use get on channels")
-                else:
                     raise Exception(
-                        "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", "")))
+                        "Failed to resolve stream at lbry://{}".format(uri.replace("lbry://", ""))
+                    )
             else:
                 resolved = resolved['claim']
         txid, nout, name = resolved['txid'], resolved['nout'], resolved['name']
