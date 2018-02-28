@@ -565,13 +565,19 @@ class SQLiteStorage(object):
                     "inner join content_claim c3 ON claim.claim_outpoint=c3.claim_outpoint "
                     "where c3.stream_hash=?", existing_file_stream_hash
                 )
-                if not known_claim_id:
+                if not known_claim_id:  # this is a claim matching one of our files that has
+                                        # no associated claim yet
                     log.info("discovered content claim %s for stream %s", claim_id, existing_file_stream_hash)
                     yield self.save_content_claim(existing_file_stream_hash, outpoint)
                 elif known_claim_id and known_claim_id == claim_id:
-                    if known_outpoint != outpoint:
+                    if known_outpoint != outpoint:  # this is an update for one of our files
                         log.info("updating content claim %s for stream %s", claim_id, existing_file_stream_hash)
                         yield self.save_content_claim(existing_file_stream_hash, outpoint)
+                    else:  # we're up to date already
+                        pass
+                else:  # this is a claim containing a clone of a file that we have
+                    log.warning("claim %s contains the same stream as the one already downloaded from claim %s",
+                                claim_id, known_claim_id)
 
     def get_stream_hashes_for_claim_id(self, claim_id):
         return self.run_and_return_list(
