@@ -623,6 +623,9 @@ class Wallet(object):
         d = self._get_transaction(txid)
         return d
 
+    def wait_for_tx_in_wallet(self, txid):
+        return self._wait_for_tx_in_wallet(txid)
+
     def get_balance(self):
         return self.wallet_balance - self.total_reserved_points - sum(self.queued_payments.values())
 
@@ -679,6 +682,9 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def _get_transaction(self, txid):
+        return defer.fail(NotImplementedError())
+
+    def _wait_for_tx_in_wallet(self, txid):
         return defer.fail(NotImplementedError())
 
     def _update_balance(self):
@@ -1066,6 +1072,9 @@ class LBRYumWallet(Wallet):
 
     def _get_transaction(self, txid):
         return self._run_cmd_as_defer_to_thread("gettransaction", txid)
+
+    def _wait_for_tx_in_wallet(self, txid):
+        return self._run_cmd_as_defer_to_thread("waitfortxinwallet", txid)
 
     def get_name_claims(self):
         return self._run_cmd_as_defer_succeed('getnameclaims')
