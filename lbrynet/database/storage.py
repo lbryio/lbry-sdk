@@ -389,11 +389,14 @@ class SQLiteStorage(object):
             stream_hash, blob_num
         )
 
-    def get_blobs_for_stream(self, stream_hash):
+    def get_blobs_for_stream(self, stream_hash, only_completed=False):
         def _get_blobs_for_stream(transaction):
             crypt_blob_infos = []
-            stream_blobs = transaction.execute("select blob_hash, position, iv from stream_blob "
-                                               "where stream_hash=?", (stream_hash, )).fetchall()
+            if only_completed:
+                query = "select blob_hash, position, iv from stream_blob where stream_hash=? and status='finished'"
+            else:
+                query = "select blob_hash, position, iv from stream_blob where stream_hash=?"
+            stream_blobs = transaction.execute(query, (stream_hash, )).fetchall()
             if stream_blobs:
                 for blob_hash, position, iv in stream_blobs:
                     if blob_hash is not None:

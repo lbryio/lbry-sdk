@@ -2801,6 +2801,7 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (bool) true if successful
         """
+
         if announce_all:
             yield self.session.blob_manager.immediate_announce_all_blobs()
         else:
@@ -2814,11 +2815,9 @@ class Daemon(AuthJSONRPCServer):
             else:
                 raise Exception('single argument must be specified')
             if not blob_hash:
-                blobs = yield self.storage.get_blobs_for_stream(stream_hash)
-                blob_hashes.extend([blob.blob_hash for blob in blobs if blob.get_is_verified()])
-
+                blobs = yield self.storage.get_blobs_for_stream(stream_hash, only_completed=True)
+                blob_hashes.extend([blob.blob_hash for blob in blobs])
             yield self.session.blob_manager._immediate_announce(blob_hashes)
-
         response = yield self._render_response(True)
         defer.returnValue(response)
 
