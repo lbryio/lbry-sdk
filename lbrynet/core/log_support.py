@@ -142,7 +142,7 @@ def get_loggly_url(token=None, version=None):
 def configure_loggly_handler():
     if build_type.BUILD == 'dev':
         return
-    level = logging.WARNING
+    level = logging.ERROR
     handler = get_loggly_handler(level=level, installation_id=conf.settings.installation_id,
                                  session_id=conf.settings.get_session_id())
     log = logging.getLogger("lbrynet")
