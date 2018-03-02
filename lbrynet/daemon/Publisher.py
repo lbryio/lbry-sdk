@@ -40,10 +40,19 @@ class Publisher(object):
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
         claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
+
+        # check if we have a file already for this claim (if this is a publish update with a new stream)
+        old_stream_hashes = yield self.session.storage.get_old_stream_hashes_for_claim_id(claim_out['claim_id'],
+                                                                                          self.lbry_file.stream_hash)
+        if old_stream_hashes:
+            for lbry_file in filter(lambda l: l.stream_hash in old_stream_hashes,
+                                    list(self.lbry_file_manager.lbry_files)):
+                yield self.lbry_file_manager.delete_lbry_file(lbry_file, delete_file=False)
+                log.info("Removed old stream for claim update: %s", lbry_file.stream_hash)
+
         yield self.session.storage.save_content_claim(
             self.lbry_file.stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout'])
         )
-        yield self.lbry_file.get_claim_info()
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
@@ -51,6 +60,7 @@ class Publisher(object):
         """Make a claim without creating a lbry file"""
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
         yield self.session.storage.save_content_claim(stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout']))
+        self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks

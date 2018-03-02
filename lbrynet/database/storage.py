@@ -186,6 +186,11 @@ class SQLiteStorage(object):
         self.db = SqliteConnection(self._db_path)
         self.db.set_reactor(reactor)
 
+        # used to refresh the claim attributes on a ManagedEncryptedFileDownloader when a
+        # change to the associated content claim occurs. these are added by the file manager
+        # when it loads each file
+        self.content_claim_callbacks = {}  # {<stream_hash>: <callable returning a deferred>}
+
     def setup(self):
         def _create_tables(transaction):
             transaction.executescript(self.CREATE_TABLES_QUERY)
@@ -384,11 +389,14 @@ class SQLiteStorage(object):
             stream_hash, blob_num
         )
 
-    def get_blobs_for_stream(self, stream_hash):
+    def get_blobs_for_stream(self, stream_hash, only_completed=False):
         def _get_blobs_for_stream(transaction):
             crypt_blob_infos = []
-            stream_blobs = transaction.execute("select blob_hash, position, iv from stream_blob "
-                                               "where stream_hash=?", (stream_hash, )).fetchall()
+            if only_completed:
+                query = "select blob_hash, position, iv from stream_blob where stream_hash=? and status='finished'"
+            else:
+                query = "select blob_hash, position, iv from stream_blob where stream_hash=?"
+            stream_blobs = transaction.execute(query, (stream_hash, )).fetchall()
             if stream_blobs:
                 for blob_hash, position, iv in stream_blobs:
                     if blob_hash is not None:
@@ -537,12 +545,52 @@ class SQLiteStorage(object):
                 "insert or replace into claim values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (outpoint, claim_id, name, amount, height, serialized, claim_dict.certificate_id, address, sequence)
             )
+
         yield self.db.runInteraction(_save_claim)
 
         if 'supports' in claim_info:  # if this response doesn't have support info don't overwrite the existing
                                       # support info
             yield self.save_supports(claim_id, claim_info['supports'])
 
+        # check for content claim updates
+        if claim_dict.source_hash:
+            existing_file_stream_hash = yield self.run_and_return_one_or_none(
+                "select file.stream_hash from stream "
+                "inner join file on file.stream_hash=stream.stream_hash "
+                "where sd_hash=?", claim_dict.source_hash
+            )
+            if existing_file_stream_hash:
+                known_outpoint = yield self.run_and_return_one_or_none(
+                    "select claim_outpoint from content_claim where stream_hash=?", existing_file_stream_hash
+                )
+                known_claim_id = yield self.run_and_return_one_or_none(
+                    "select claim_id from claim "
+                    "inner join content_claim c3 ON claim.claim_outpoint=c3.claim_outpoint "
+                    "where c3.stream_hash=?", existing_file_stream_hash
+                )
+                if not known_claim_id:  # this is a claim matching one of our files that has
+                                        # no associated claim yet
+                    log.info("discovered content claim %s for stream %s", claim_id, existing_file_stream_hash)
+                    yield self.save_content_claim(existing_file_stream_hash, outpoint)
+                elif known_claim_id and known_claim_id == claim_id:
+                    if known_outpoint != outpoint:  # this is an update for one of our files
+                        log.info("updating content claim %s for stream %s", claim_id, existing_file_stream_hash)
+                        yield self.save_content_claim(existing_file_stream_hash, outpoint)
+                    else:  # we're up to date already
+                        pass
+                else:  # this is a claim containing a clone of a file that we have
+                    log.warning("claim %s contains the same stream as the one already downloaded from claim %s",
+                                claim_id, known_claim_id)
+
+    def get_old_stream_hashes_for_claim_id(self, claim_id, new_stream_hash):
+        return self.run_and_return_list(
+            "select f.stream_hash from file f "
+            "inner join content_claim cc on f.stream_hash=cc.stream_hash "
+            "inner join claim c on c.claim_outpoint=cc.claim_outpoint and c.claim_id=? "
+            "where f.stream_hash!=?", claim_id, new_stream_hash
+        )
+
+    @defer.inlineCallbacks
     def save_content_claim(self, stream_hash, claim_outpoint):
         def _save_content_claim(transaction):
             # get the claim id and serialized metadata
@@ -580,7 +628,12 @@ class SQLiteStorage(object):
 
             # update the claim associated to the file
             transaction.execute("insert or replace into content_claim values (?, ?)", (stream_hash, claim_outpoint))
-        return self.db.runInteraction(_save_content_claim)
+        yield self.db.runInteraction(_save_content_claim)
+
+        # update corresponding ManagedEncryptedFileDownloader object
+        if stream_hash in self.content_claim_callbacks:
+            file_callback = self.content_claim_callbacks[stream_hash]
+            yield file_callback()
 
     @defer.inlineCallbacks
     def get_content_claim(self, stream_hash, include_supports=True):
@@ -620,7 +673,7 @@ class SQLiteStorage(object):
 
         def _get_claim(transaction):
             claim_info = transaction.execute(
-                "select * from claim where claim_id=? order by height, rowid desc", (claim_id, )
+                "select * from claim where claim_id=? order by rowid desc", (claim_id, )
             ).fetchone()
             result = _claim_response(*claim_info)
             if result['channel_claim_id']:
@@ -651,3 +704,25 @@ class SQLiteStorage(object):
                 ).fetchall()
             ]
         return self.db.runInteraction(_get_unknown_certificate_claim_ids)
+
+    @defer.inlineCallbacks
+    def get_pending_claim_outpoints(self):
+        claim_outpoints = yield self.run_and_return_list("select claim_outpoint from claim where height=-1")
+        results = {}  # {txid: [nout, ...]}
+        for outpoint_str in claim_outpoints:
+            txid, nout = outpoint_str.split(":")
+            outputs = results.get(txid, [])
+            outputs.append(int(nout))
+            results[txid] = outputs
+        if results:
+            log.debug("missing transaction heights for %i claims", len(results))
+        defer.returnValue(results)
+
+    def save_claim_tx_heights(self, claim_tx_heights):
+        def _save_claim_heights(transaction):
+            for outpoint, height in claim_tx_heights.iteritems():
+                transaction.execute(
+                    "update claim set height=? where claim_outpoint=? and height=-1",
+                    (height, outpoint)
+                )
+        return self.db.runInteraction(_save_claim_heights)

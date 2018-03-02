@@ -5,6 +5,7 @@ from decimal import Decimal
 from zope.interface import implements
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
+from twisted.internet.error import ConnectionAborted
 
 from lbryum import wallet as lbryum_wallet
 from lbryum.network import Network
@@ -19,11 +20,11 @@ from lbryschema.error import DecodeError
 from lbryschema.decode import smart_decode
 
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
+from lbrynet.core.utils import DeferredDict
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
 from lbrynet.core.Error import UnknownClaimID, UnknownURI, NegativeFundsError, UnknownOutpoint
 from lbrynet.core.Error import DownloadCanceledError, RequestCanceledError
-from twisted.internet.error import ConnectionAborted
 
 log = logging.getLogger(__name__)
 
@@ -83,12 +84,15 @@ class Wallet(object):
         self._manage_count = 0
         self._balance_refresh_time = 3
         self._batch_count = 20
+        self._pending_claim_checker = task.LoopingCall(self.fetch_and_save_heights_for_pending_claims)
 
     def start(self):
         log.info("Starting wallet.")
+
         def start_manage():
             self.stopped = False
             self.manage()
+            self._pending_claim_checker.start(30)
             return True
 
         d = self._start()
@@ -102,6 +106,9 @@ class Wallet(object):
     def stop(self):
         log.info("Stopping wallet.")
         self.stopped = True
+
+        if self._pending_claim_checker.running:
+            self._pending_claim_checker.stop()
         # If self.next_manage_call is None, then manage is currently running or else
         # start has not been called, so set stopped and do nothing else.
         if self.next_manage_call is not None:
@@ -316,6 +323,19 @@ class Wallet(object):
     ######
 
     @defer.inlineCallbacks
+    def fetch_and_save_heights_for_pending_claims(self):
+        pending_outpoints = yield self.storage.get_pending_claim_outpoints()
+        if pending_outpoints:
+            tx_heights = yield DeferredDict({txid: self.get_height_for_txid(txid) for txid in pending_outpoints},
+                                            consumeErrors=True)
+            outpoint_heights = {}
+            for txid, outputs in pending_outpoints.iteritems():
+                if txid in tx_heights:
+                    for nout in outputs:
+                        outpoint_heights["%s:%i" % (txid, nout)] = tx_heights[txid]
+            yield self.storage.save_claim_tx_heights(outpoint_heights)
+
+    @defer.inlineCallbacks
     def get_claim_by_claim_id(self, claim_id, check_expire=True):
         claim = yield self._get_claim_by_claimid(claim_id)
         try:
@@ -410,12 +430,6 @@ class Wallet(object):
         batch_results = yield self._get_values_for_uris(page, page_size, *uris)
 
         for uri, resolve_results in batch_results.iteritems():
-            claim_id = None
-            if resolve_results and 'claim' in resolve_results:
-                claim_id = resolve_results['claim']['claim_id']
-            certificate_id = None
-            if resolve_results and 'certificate' in resolve_results:
-                certificate_id = resolve_results['certificate']['claim_id']
             try:
                 result[uri] = self._handle_claim_result(resolve_results)
                 yield self.save_claim(result[uri])
@@ -769,6 +783,9 @@ class Wallet(object):
         return defer.fail(NotImplementedError())
 
     def get_max_usable_balance_for_claim(self, claim_name):
+        return defer.fail(NotImplementedError())
+
+    def get_height_for_txid(self, txid):
         return defer.fail(NotImplementedError())
 
     def _start(self):
@@ -1162,6 +1179,9 @@ class LBRYumWallet(Wallet):
 
     def claim_renew(self, txid, nout):
         return self._run_cmd_as_defer_succeed('renewclaim', txid, nout)
+
+    def get_height_for_txid(self, txid):
+        return self._run_cmd_as_defer_to_thread('gettransactionheight', txid)
 
     def decrypt_wallet(self):
         if not self.wallet.use_encryption:
