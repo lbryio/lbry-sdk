@@ -287,7 +287,6 @@ class Session(object):
         log.info("Starting DHT")
 
         def start_dht(join_network_result):
-            self.peer_finder.run_manage_loop()
             self.hash_announcer.run_manage_loop()
             return True
 
