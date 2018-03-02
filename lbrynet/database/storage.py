@@ -639,7 +639,7 @@ class SQLiteStorage(object):
     def get_content_claim(self, stream_hash, include_supports=True):
         def _get_content_claim(transaction):
             claim_id = transaction.execute(
-                "select claim.claim_id from content_claim "
+                "select claim.claim_outpoint from content_claim "
                 "inner join claim on claim.claim_outpoint=content_claim.claim_outpoint and content_claim.stream_hash=? "
                 "order by claim.rowid desc", (stream_hash, )
             ).fetchone()
@@ -647,14 +647,14 @@ class SQLiteStorage(object):
                 return None
             return claim_id[0]
 
-        content_claim_id = yield self.db.runInteraction(_get_content_claim)
+        content_claim_outpoint = yield self.db.runInteraction(_get_content_claim)
         result = None
-        if content_claim_id:
-            result = yield self.get_claim(content_claim_id, include_supports)
+        if content_claim_outpoint:
+            result = yield self.get_claim(content_claim_outpoint, include_supports)
         defer.returnValue(result)
 
     @defer.inlineCallbacks
-    def get_claim(self, claim_id, include_supports=True):
+    def get_claim(self, claim_outpoint, include_supports=True):
         def _claim_response(outpoint, claim_id, name, amount, height, serialized, channel_id, address, claim_sequence):
             r = {
                 "name": name,
@@ -673,7 +673,7 @@ class SQLiteStorage(object):
 
         def _get_claim(transaction):
             claim_info = transaction.execute(
-                "select * from claim where claim_id=? order by rowid desc", (claim_id, )
+                "select * from claim where claim_outpoint=?", (claim_outpoint, )
             ).fetchone()
             result = _claim_response(*claim_info)
             if result['channel_claim_id']:
