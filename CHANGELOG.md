@@ -32,7 +32,6 @@ at anytime.
 ### Deprecated
   * `channel_list_mine`, replaced with `channel_list`
   * `get_availability`, replaced with `stream_availability`
-  *
 
 ### Added
   * link to instructions on how to change the default peer port
@@ -50,12 +49,8 @@ at anytime.
   * `txid`, `nout`, `channel_claim_id`, `channel_claim_name`, `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
   * `txid`, `nout`, `channel_claim_id`, and `channel_claim_name` filters for `file` commands (`file_list`, `file_set_status`, `file_reflect`,  and `file_delete`)
   * unit tests for `SQLiteStorage` and updated old tests for relevant changes (https://github.com/lbryio/lbry/issues/1088)
-  *
 
 ### Changed
-  * default download folder on linux from `~/Downloads` to `XDG_DOWNLOAD_DIR`
-  * data directory on linux from `~/.lbrynet` to `~/.local/share/lbry`
-  * data directory on windows from `%AppData%/Roaming` to `%AppData%/Local/lbry`
   * dht tests to only be in one folder
   * config file format of `known_dht_nodes`, `lbryum_servers`, and `reflector_servers` to lists of `hostname:port` strings
   * startup of `lbrynet-daemon` to block on the wallet being unlocked if it is encrypted
@@ -75,7 +70,6 @@ at anytime.
   * dht `Node` class to re-attempt joining the network every 60 secs if no peers are known
   * lbrynet database and file manager to separate the creation of lbry files (from downloading or publishing) from the handling of a stream. All files have a stream, but not all streams may have a file. (https://github.com/lbryio/lbry/issues/1020) 
   * manager classes to use new `SQLiteStorage` for database interaction. This class uses a single `lbrynet.sqlite` database file.
-  *
 
 ### Removed
   * `seccure` and `gmpy` dependencies
@@ -88,7 +82,6 @@ at anytime.
   * unnecessary `TempBlobManager` class
   * old storage classes used by the file manager, wallet, and blob manager
   * old `.db` database files from the data directory
-  *
 
 ## [0.18.0] - 2017-11-08
 ### Fixed
