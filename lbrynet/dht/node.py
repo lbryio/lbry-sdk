@@ -168,12 +168,15 @@ class Node(object):
             yield self.hash_watcher.stop()
 
     def start_listening(self):
-        try:
-            self._listeningPort = self.reactor_listenUDP(self.port, self._protocol)
-        except error.CannotListenError as e:
-            import traceback
-            log.error("Couldn't bind to port %d. %s", self.port, traceback.format_exc())
-            raise ValueError("%s lbrynet may already be running." % str(e))
+        if not self._listeningPort:
+            try:
+                self._listeningPort = self.reactor_listenUDP(self.port, self._protocol)
+            except error.CannotListenError as e:
+                import traceback
+                log.error("Couldn't bind to port %d. %s", self.port, traceback.format_exc())
+                raise ValueError("%s lbrynet may already be running." % str(e))
+        else:
+            log.warning("Already bound to port %d", self._listeningPort.port)
 
     def bootstrap_join(self, known_node_addresses, finished_d):
         """
