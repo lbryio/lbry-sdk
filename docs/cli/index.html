@@ -1,0 +1,2530 @@
+
+
+
+
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <meta http-equiv="x-ua-compatible" content="ie=edge">
+      
+      
+      
+      
+        <meta name="lang:clipboard.copy" content="Copy to clipboard">
+      
+        <meta name="lang:clipboard.copied" content="Copied to clipboard">
+      
+        <meta name="lang:search.language" content="en">
+      
+        <meta name="lang:search.pipeline.stopwords" content="True">
+      
+        <meta name="lang:search.pipeline.trimmer" content="True">
+      
+        <meta name="lang:search.result.none" content="No matching documents">
+      
+        <meta name="lang:search.result.one" content="1 matching document">
+      
+        <meta name="lang:search.result.other" content="# matching documents">
+      
+        <meta name="lang:search.tokenizer" content="[\s\-]+">
+      
+      <link rel="shortcut icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-0.17.2, mkdocs-material-2.6.6">
+    
+    
+      
+        <title>CLI - LBRY</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/application.78aab2dc.css">
+      
+    
+    
+      <script src="../assets/javascripts/modernizr.1aa3b519.js"></script>
+    
+    
+      <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin>
+      
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700|Roboto+Mono">
+        <style>body,input{font-family:"Roboto","Helvetica Neue",Helvetica,Arial,sans-serif}code,kbd,pre{font-family:"Roboto Mono","Courier New",Courier,monospace}</style>
+      
+      <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    
+    
+    
+  </head>
+  
+    <body dir="ltr">
+  
+    <svg class="md-svg">
+      <defs>
+        
+        
+          <svg xmlns="http://www.w3.org/2000/svg" width="416" height="448"
+    viewBox="0 0 416 448" id="github">
+  <path fill="currentColor" d="M160 304q0 10-3.125 20.5t-10.75 19-18.125
+        8.5-18.125-8.5-10.75-19-3.125-20.5 3.125-20.5 10.75-19 18.125-8.5
+        18.125 8.5 10.75 19 3.125 20.5zM320 304q0 10-3.125 20.5t-10.75
+        19-18.125 8.5-18.125-8.5-10.75-19-3.125-20.5 3.125-20.5 10.75-19
+        18.125-8.5 18.125 8.5 10.75 19 3.125 20.5zM360
+        304q0-30-17.25-51t-46.75-21q-10.25 0-48.75 5.25-17.75 2.75-39.25
+        2.75t-39.25-2.75q-38-5.25-48.75-5.25-29.5 0-46.75 21t-17.25 51q0 22 8
+        38.375t20.25 25.75 30.5 15 35 7.375 37.25 1.75h42q20.5 0
+        37.25-1.75t35-7.375 30.5-15 20.25-25.75 8-38.375zM416 260q0 51.75-15.25
+        82.75-9.5 19.25-26.375 33.25t-35.25 21.5-42.5 11.875-42.875 5.5-41.75
+        1.125q-19.5 0-35.5-0.75t-36.875-3.125-38.125-7.5-34.25-12.875-30.25-20.25-21.5-28.75q-15.5-30.75-15.5-82.75
+        0-59.25 34-99-6.75-20.5-6.75-42.5 0-29 12.75-54.5 27 0 47.5 9.875t47.25
+        30.875q36.75-8.75 77.25-8.75 37 0 70 8 26.25-20.5
+        46.75-30.25t47.25-9.75q12.75 25.5 12.75 54.5 0 21.75-6.75 42 34 40 34
+        99.5z" />
+</svg>
+        
+      </defs>
+    </svg>
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="drawer">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="search">
+    <label class="md-overlay" data-md-component="overlay" for="drawer"></label>
+    
+      <a href="#lbry-command-line-documentation" tabindex="1" class="md-skip">
+        Skip to content
+      </a>
+    
+    
+      <header class="md-header" data-md-component="header">
+  <nav class="md-header-nav md-grid">
+    <div class="md-flex">
+      <div class="md-flex__cell md-flex__cell--shrink">
+        <a href=".." title="LBRY" class="md-header-nav__button md-logo">
+          
+            <i class="md-icon"></i>
+          
+        </a>
+      </div>
+      <div class="md-flex__cell md-flex__cell--shrink">
+        <label class="md-icon md-icon--menu md-header-nav__button" for="drawer"></label>
+      </div>
+      <div class="md-flex__cell md-flex__cell--stretch">
+        <div class="md-flex__ellipsis md-header-nav__title" data-md-component="title">
+          
+            
+              <span class="md-header-nav__topic">
+                LBRY
+              </span>
+              <span class="md-header-nav__topic">
+                CLI
+              </span>
+            
+          
+        </div>
+      </div>
+      <div class="md-flex__cell md-flex__cell--shrink">
+        
+          
+            <label class="md-icon md-icon--search md-header-nav__button" for="search"></label>
+            
+<div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="query" data-md-state="active">
+      <label class="md-icon md-search__icon" for="search"></label>
+      <button type="reset" class="md-icon md-search__icon" data-md-component="reset" tabindex="-1">
+        &#xE5CD;
+      </button>
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="result">
+          <div class="md-search-result__meta">
+            Type to start searching
+          </div>
+          <ol class="md-search-result__list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+          
+        
+      </div>
+      
+        <div class="md-flex__cell md-flex__cell--shrink">
+          <div class="md-header-nav__source">
+            
+
+
+  
+
+
+  <a href="https://github.com/lbryio/lbry/" title="Go to repository" class="md-source" data-md-source="github">
+    
+      <div class="md-source__icon">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <use xlink:href="#github" width="24" height="24"></use>
+        </svg>
+      </div>
+    
+    <div class="md-source__repository">
+      GitHub
+    </div>
+  </a>
+
+          </div>
+        </div>
+      
+    </div>
+  </nav>
+</header>
+    
+    <div class="md-container">
+      
+        
+      
+      
+      <main class="md-main">
+        <div class="md-main__inner md-grid" data-md-component="container">
+          
+            
+              <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    <nav class="md-nav md-nav--primary" data-md-level="0">
+  <label class="md-nav__title md-nav__title--site" for="drawer">
+    <span class="md-nav__button md-logo">
+      
+        <i class="md-icon"></i>
+      
+    </span>
+    LBRY
+  </label>
+  
+    <div class="md-nav__source">
+      
+
+
+  
+
+
+  <a href="https://github.com/lbryio/lbry/" title="Go to repository" class="md-source" data-md-source="github">
+    
+      <div class="md-source__icon">
+        <svg viewBox="0 0 24 24" width="24" height="24">
+          <use xlink:href="#github" width="24" height="24"></use>
+        </svg>
+      </div>
+    
+    <div class="md-source__repository">
+      GitHub
+    </div>
+  </a>
+
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href=".." title="API" class="md-nav__link">
+      API
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+  
+
+
+  <li class="md-nav__item md-nav__item--active">
+    
+    <input class="md-toggle md-nav__toggle" data-md-toggle="toc" type="checkbox" id="toc">
+    
+      
+    
+    
+      <label class="md-nav__link md-nav__link--active" for="toc">
+        CLI
+      </label>
+    
+    <a href="./" title="CLI" class="md-nav__link md-nav__link--active">
+      CLI
+    </a>
+    
+      
+<nav class="md-nav md-nav--secondary">
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="toc">Table of contents</label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#blob_announce" title="blob_announce" class="md-nav__link">
+    blob_announce
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_availability" title="blob_availability" class="md-nav__link">
+    blob_availability
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_delete" title="blob_delete" class="md-nav__link">
+    blob_delete
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_get" title="blob_get" class="md-nav__link">
+    blob_get
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_list" title="blob_list" class="md-nav__link">
+    blob_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_reflect_all" title="blob_reflect_all" class="md-nav__link">
+    blob_reflect_all
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#block_show" title="block_show" class="md-nav__link">
+    block_show
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel_export" title="channel_export" class="md-nav__link">
+    channel_export
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel_import" title="channel_import" class="md-nav__link">
+    channel_import
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel_list" title="channel_list" class="md-nav__link">
+    channel_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel_new" title="channel_new" class="md-nav__link">
+    channel_new
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_abandon" title="claim_abandon" class="md-nav__link">
+    claim_abandon
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_list" title="claim_list" class="md-nav__link">
+    claim_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_list_by_channel" title="claim_list_by_channel" class="md-nav__link">
+    claim_list_by_channel
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_list_mine" title="claim_list_mine" class="md-nav__link">
+    claim_list_mine
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_new_support" title="claim_new_support" class="md-nav__link">
+    claim_new_support
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_renew" title="claim_renew" class="md-nav__link">
+    claim_renew
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_send_to_address" title="claim_send_to_address" class="md-nav__link">
+    claim_send_to_address
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_show" title="claim_show" class="md-nav__link">
+    claim_show
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli_test_command" title="cli_test_command" class="md-nav__link">
+    cli_test_command
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commands" title="commands" class="md-nav__link">
+    commands
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#daemon_stop" title="daemon_stop" class="md-nav__link">
+    daemon_stop
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file_delete" title="file_delete" class="md-nav__link">
+    file_delete
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file_list" title="file_list" class="md-nav__link">
+    file_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file_reflect" title="file_reflect" class="md-nav__link">
+    file_reflect
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file_set_status" title="file_set_status" class="md-nav__link">
+    file_set_status
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#get" title="get" class="md-nav__link">
+    get
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#help" title="help" class="md-nav__link">
+    help
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#peer_list" title="peer_list" class="md-nav__link">
+    peer_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#publish" title="publish" class="md-nav__link">
+    publish
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#report_bug" title="report_bug" class="md-nav__link">
+    report_bug
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolve" title="resolve" class="md-nav__link">
+    resolve
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolve_name" title="resolve_name" class="md-nav__link">
+    resolve_name
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#routing_table_get" title="routing_table_get" class="md-nav__link">
+    routing_table_get
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings_get" title="settings_get" class="md-nav__link">
+    settings_get
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings_set" title="settings_set" class="md-nav__link">
+    settings_set
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status" title="status" class="md-nav__link">
+    status
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stream_availability" title="stream_availability" class="md-nav__link">
+    stream_availability
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stream_cost_estimate" title="stream_cost_estimate" class="md-nav__link">
+    stream_cost_estimate
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transaction_list" title="transaction_list" class="md-nav__link">
+    transaction_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transaction_show" title="transaction_show" class="md-nav__link">
+    transaction_show
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#utxo_list" title="utxo_list" class="md-nav__link">
+    utxo_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version" title="version" class="md-nav__link">
+    version
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_balance" title="wallet_balance" class="md-nav__link">
+    wallet_balance
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_decrypt" title="wallet_decrypt" class="md-nav__link">
+    wallet_decrypt
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_encrypt" title="wallet_encrypt" class="md-nav__link">
+    wallet_encrypt
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_is_address_mine" title="wallet_is_address_mine" class="md-nav__link">
+    wallet_is_address_mine
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_list" title="wallet_list" class="md-nav__link">
+    wallet_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_new_address" title="wallet_new_address" class="md-nav__link">
+    wallet_new_address
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_prefill_addresses" title="wallet_prefill_addresses" class="md-nav__link">
+    wallet_prefill_addresses
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_public_key" title="wallet_public_key" class="md-nav__link">
+    wallet_public_key
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_send" title="wallet_send" class="md-nav__link">
+    wallet_send
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_unlock" title="wallet_unlock" class="md-nav__link">
+    wallet_unlock
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_unused_address" title="wallet_unused_address" class="md-nav__link">
+    wallet_unused_address
+  </a>
+  
+</li>
+      
+      
+      
+      
+      
+    </ul>
+  
+</nav>
+    
+  </li>
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+<nav class="md-nav md-nav--secondary">
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="toc">Table of contents</label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#blob_announce" title="blob_announce" class="md-nav__link">
+    blob_announce
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_availability" title="blob_availability" class="md-nav__link">
+    blob_availability
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_delete" title="blob_delete" class="md-nav__link">
+    blob_delete
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_get" title="blob_get" class="md-nav__link">
+    blob_get
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_list" title="blob_list" class="md-nav__link">
+    blob_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_reflect_all" title="blob_reflect_all" class="md-nav__link">
+    blob_reflect_all
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#block_show" title="block_show" class="md-nav__link">
+    block_show
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel_export" title="channel_export" class="md-nav__link">
+    channel_export
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel_import" title="channel_import" class="md-nav__link">
+    channel_import
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel_list" title="channel_list" class="md-nav__link">
+    channel_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channel_new" title="channel_new" class="md-nav__link">
+    channel_new
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_abandon" title="claim_abandon" class="md-nav__link">
+    claim_abandon
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_list" title="claim_list" class="md-nav__link">
+    claim_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_list_by_channel" title="claim_list_by_channel" class="md-nav__link">
+    claim_list_by_channel
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_list_mine" title="claim_list_mine" class="md-nav__link">
+    claim_list_mine
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_new_support" title="claim_new_support" class="md-nav__link">
+    claim_new_support
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_renew" title="claim_renew" class="md-nav__link">
+    claim_renew
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_send_to_address" title="claim_send_to_address" class="md-nav__link">
+    claim_send_to_address
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claim_show" title="claim_show" class="md-nav__link">
+    claim_show
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli_test_command" title="cli_test_command" class="md-nav__link">
+    cli_test_command
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commands" title="commands" class="md-nav__link">
+    commands
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#daemon_stop" title="daemon_stop" class="md-nav__link">
+    daemon_stop
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file_delete" title="file_delete" class="md-nav__link">
+    file_delete
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file_list" title="file_list" class="md-nav__link">
+    file_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file_reflect" title="file_reflect" class="md-nav__link">
+    file_reflect
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file_set_status" title="file_set_status" class="md-nav__link">
+    file_set_status
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#get" title="get" class="md-nav__link">
+    get
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#help" title="help" class="md-nav__link">
+    help
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#peer_list" title="peer_list" class="md-nav__link">
+    peer_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#publish" title="publish" class="md-nav__link">
+    publish
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#report_bug" title="report_bug" class="md-nav__link">
+    report_bug
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolve" title="resolve" class="md-nav__link">
+    resolve
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolve_name" title="resolve_name" class="md-nav__link">
+    resolve_name
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#routing_table_get" title="routing_table_get" class="md-nav__link">
+    routing_table_get
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings_get" title="settings_get" class="md-nav__link">
+    settings_get
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings_set" title="settings_set" class="md-nav__link">
+    settings_set
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status" title="status" class="md-nav__link">
+    status
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stream_availability" title="stream_availability" class="md-nav__link">
+    stream_availability
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stream_cost_estimate" title="stream_cost_estimate" class="md-nav__link">
+    stream_cost_estimate
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transaction_list" title="transaction_list" class="md-nav__link">
+    transaction_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transaction_show" title="transaction_show" class="md-nav__link">
+    transaction_show
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#utxo_list" title="utxo_list" class="md-nav__link">
+    utxo_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version" title="version" class="md-nav__link">
+    version
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_balance" title="wallet_balance" class="md-nav__link">
+    wallet_balance
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_decrypt" title="wallet_decrypt" class="md-nav__link">
+    wallet_decrypt
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_encrypt" title="wallet_encrypt" class="md-nav__link">
+    wallet_encrypt
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_is_address_mine" title="wallet_is_address_mine" class="md-nav__link">
+    wallet_is_address_mine
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_list" title="wallet_list" class="md-nav__link">
+    wallet_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_new_address" title="wallet_new_address" class="md-nav__link">
+    wallet_new_address
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_prefill_addresses" title="wallet_prefill_addresses" class="md-nav__link">
+    wallet_prefill_addresses
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_public_key" title="wallet_public_key" class="md-nav__link">
+    wallet_public_key
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_send" title="wallet_send" class="md-nav__link">
+    wallet_send
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_unlock" title="wallet_unlock" class="md-nav__link">
+    wallet_unlock
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet_unused_address" title="wallet_unused_address" class="md-nav__link">
+    wallet_unused_address
+  </a>
+  
+</li>
+      
+      
+      
+      
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          <div class="md-content">
+            <article class="md-content__inner md-typeset">
+              
+                
+                  <a href="https://github.com/lbryio/lbry/edit/master/docs/cli.md" title="Edit this page" class="md-icon md-content__icon">&#xE3C9;</a>
+                
+                
+                <h1 id="lbry-command-line-documentation">LBRY Command Line Documentation</h1>
+<h2 id="blob_announce">blob_announce</h2>
+<pre><code class="text">Announce blobs to the DHT
+
+Usage:
+    blob_announce [--announce_all] [&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash&gt;]
+                  [&lt;stream_hash&gt; | --stream_hash=&lt;stream_hash&gt;]
+                  [&lt;sd_hash&gt; | --sd_hash=&lt;sd_hash&gt;]
+
+
+Options:
+    --announce_all=&lt;announce_all&gt;  :  (bool)  announce all the blobs possessed by user
+    --blob_hash=&lt;blob_hash&gt;        :  (str)   announce a blob, specified by blob_hash
+    --stream_hash=&lt;stream_hash&gt;    :  (str)   announce all blobs associated with
+                                              stream_hash
+    --sd_hash=&lt;sd_hash&gt;            :  (str)   announce all blobs associated with
+                                              sd_hash and the sd_hash itself
+
+Returns:
+    (bool) true if successful
+</code></pre>
+
+<h2 id="blob_availability">blob_availability</h2>
+<pre><code class="text">Get blob availability
+
+Usage:
+    blob_availability (&lt;blob_hash&gt;) [&lt;search_timeout&gt; | --search_timeout=&lt;search_timeout&gt;]
+                      [&lt;blob_timeout&gt; | --blob_timeout=&lt;blob_timeout&gt;]
+
+
+Options:
+    --blob_hash=&lt;blob_hash&gt;            :  (str)  check availability for this blob hash
+    --search_timeout=&lt;search_timeout&gt;  :  (int)  how long to search for peers for the blob
+                                                 in the dht
+    --blob_timeout=&lt;blob_timeout&gt;      :  (int)  how long to try downloading from a peer
+
+Returns:
+    (dict) {
+        &quot;is_available&quot;: &lt;bool, true if blob is available from a peer from peer list&gt;
+        &quot;reachable_peers&quot;: [&quot;&lt;ip&gt;:&lt;port&gt;&quot;],
+        &quot;unreachable_peers&quot;: [&quot;&lt;ip&gt;:&lt;port&gt;&quot;]
+    }
+</code></pre>
+
+<h2 id="blob_delete">blob_delete</h2>
+<pre><code class="text">Delete a blob
+
+Usage:
+    blob_delete (&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash)
+
+
+Options:
+    --blob_hash=&lt;blob_hash&gt;  :  (str)  blob hash of the blob to delete
+
+Returns:
+    (str) Success/fail message
+</code></pre>
+
+<h2 id="blob_get">blob_get</h2>
+<pre><code class="text">Download and return a blob
+
+Usage:
+    blob_get (&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash&gt;) [--timeout=&lt;timeout&gt;]
+             [--encoding=&lt;encoding&gt;] [--payment_rate_manager=&lt;payment_rate_manager&gt;]
+
+
+Options:
+    --blob_hash=&lt;blob_hash&gt;                        :  (str)  blob hash of the blob to get
+    --timeout=&lt;timeout&gt;                            :  (int)  timeout in number of seconds
+    --encoding=&lt;encoding&gt;                          :  (str)  by default no attempt at decoding
+                                                             is made, can be set to one of the
+                                                             following decoders:
+                                                             'json'
+    --payment_rate_manager=&lt;payment_rate_manager&gt;  :  (str)  if not given the default payment rate
+                                                             manager will be used.
+                                                             supported alternative rate managers:
+                                                             'only-free'
+
+Returns:
+    (str) Success/Fail message or (dict) decoded data
+</code></pre>
+
+<h2 id="blob_list">blob_list</h2>
+<pre><code class="text">Returns blob hashes. If not given filters, returns all blobs known by the blob manager
+
+Usage:
+    blob_list [--needed] [--finished] [&lt;uri&gt; | --uri=&lt;uri&gt;]
+              [&lt;stream_hash&gt; | --stream_hash=&lt;stream_hash&gt;]
+              [&lt;sd_hash&gt; | --sd_hash=&lt;sd_hash&gt;]
+              [&lt;page_size&gt; | --page_size=&lt;page_size&gt;]
+              [&lt;page&gt; | --page=&lt;page&gt;]
+
+
+Options:
+    --needed                     :  (bool)  only return needed blobs
+    --finished                   :  (bool)  only return finished blobs
+    --uri=&lt;uri&gt;                  :  (str)   filter blobs by stream in a uri
+    --stream_hash=&lt;stream_hash&gt;  :  (str)   filter blobs by stream hash
+    --sd_hash=&lt;sd_hash&gt;          :  (str)   filter blobs by sd hash
+    --page_size=&lt;page_size&gt;      :  (int)   results page size
+    --page=&lt;page&gt;                :  (int)   page of results to return
+
+Returns:
+    (list) List of blob hashes
+</code></pre>
+
+<h2 id="blob_reflect_all">blob_reflect_all</h2>
+<pre><code class="text">Reflects all saved blobs
+
+Usage:
+    blob_reflect_all
+
+
+Options:
+          None
+
+Returns:
+    (bool) true if successful
+</code></pre>
+
+<h2 id="block_show">block_show</h2>
+<pre><code class="text">Get contents of a block
+
+Usage:
+    block_show (&lt;blockhash&gt; | --blockhash=&lt;blockhash&gt;) | (&lt;height&gt; | --height=&lt;height&gt;)
+
+
+Options:
+    --blockhash=&lt;blockhash&gt;  :  (str)  hash of the block to look up
+    --height=&lt;height&gt;        :  (int)  height of the block to look up
+
+Returns:
+    (dict) Requested block
+</code></pre>
+
+<h2 id="channel_export">channel_export</h2>
+<pre><code class="text">Export serialized channel signing information for a given certificate claim id
+
+Usage:
+    channel_export (&lt;claim_id&gt; | --claim_id=&lt;claim_id&gt;)
+
+
+Options:
+    --claim_id=&lt;claim_id&gt;  :  (str)  Claim ID to export information about
+
+Returns:
+    (str) Serialized certificate information
+</code></pre>
+
+<h2 id="channel_import">channel_import</h2>
+<pre><code class="text">Import serialized channel signing information (to allow signing new claims to the channel)
+
+Usage:
+    channel_import (&lt;serialized_certificate_info&gt; |
+                    --serialized_certificate_info=&lt;serialized_certificate_info&gt;)
+
+
+Options:
+    --serialized_certificate_info=&lt;serialized_certificate_info&gt;  :  (str)  certificate info
+
+Returns:
+    (dict) Result dictionary
+</code></pre>
+
+<h2 id="channel_list">channel_list</h2>
+<pre><code class="text">Get certificate claim infos for channels that can be published to
+
+Usage:
+    channel_list
+
+
+Options:
+          None
+
+Returns:
+    (list) ClaimDict, includes 'is_mine' field to indicate if the certificate claim
+    is in the wallet.
+</code></pre>
+
+<h2 id="channel_new">channel_new</h2>
+<pre><code class="text">Generate a publisher key and create a new '@' prefixed certificate claim
+
+Usage:
+    channel_new (&lt;channel_name&gt; | --channel_name=&lt;channel_name&gt;)
+                (&lt;amount&gt; | --amount=&lt;amount&gt;)
+
+
+Options:
+    --channel_name=&lt;channel_name&gt;  :  (str)    name of the channel prefixed with '@'
+    --amount=&lt;amount&gt;              :  (float)  bid amount on the channel
+
+Returns:
+    (dict) Dictionary containing result of the claim
+    {
+        'tx' : (str) hex encoded transaction
+        'txid' : (str) txid of resulting claim
+        'nout' : (int) nout of the resulting claim
+        'fee' : (float) fee paid for the claim transaction
+        'claim_id' : (str) claim ID of the resulting claim
+    }
+</code></pre>
+
+<h2 id="claim_abandon">claim_abandon</h2>
+<pre><code class="text">Abandon a name and reclaim credits from the claim
+
+Usage:
+    claim_abandon [&lt;claim_id&gt; | --claim_id=&lt;claim_id&gt;]
+                  [&lt;txid&gt; | --txid=&lt;txid&gt;] [&lt;nout&gt; | --nout=&lt;nout&gt;]
+
+
+Options:
+    --claim_id=&lt;claim_id&gt;  :  (str)  claim_id of the claim to abandon
+    --txid=&lt;txid&gt;          :  (str)  txid of the claim to abandon
+    --nout=&lt;nout&gt;          :  (int)  nout of the claim to abandon
+
+Returns:
+    (dict) Dictionary containing result of the claim
+    {
+        txid : (str) txid of resulting transaction
+        fee : (float) fee paid for the transaction
+    }
+</code></pre>
+
+<h2 id="claim_list">claim_list</h2>
+<pre><code class="text">List current claims and information about them for a given name
+
+Usage:
+    claim_list (&lt;name&gt; | --name=&lt;name&gt;)
+
+
+Options:
+    --name=&lt;name&gt;  :  (str)  name of the claim to list info about
+
+Returns:
+    (dict) State of claims assigned for the name
+    {
+        'claims': (list) list of claims for the name
+        [
+            {
+            'amount': (float) amount assigned to the claim
+            'effective_amount': (float) total amount assigned to the claim,
+                                including supports
+            'claim_id': (str) claim ID of the claim
+            'height': (int) height of block containing the claim
+            'txid': (str) txid of the claim
+            'nout': (int) nout of the claim
+            'permanent_url': (str) permanent url of the claim,
+            'supports': (list) a list of supports attached to the claim
+            'value': (str) the value of the claim
+            },
+        ]
+        'supports_without_claims': (list) supports without any claims attached to them
+        'last_takeover_height': (int) the height of last takeover for the name
+    }
+</code></pre>
+
+<h2 id="claim_list_by_channel">claim_list_by_channel</h2>
+<pre><code class="text">Get paginated claims in a channel specified by a channel uri
+
+Usage:
+    claim_list_by_channel (&lt;uri&gt; | --uri=&lt;uri&gt;) [&lt;uris&gt;...] [--page=&lt;page&gt;]
+                           [--page_size=&lt;page_size&gt;]
+
+
+Options:
+    --uri=&lt;uri&gt;              :  (str)   uri of the channel
+    --uris=&lt;uris&gt;            :  (list)  uris of the channel
+    --page=&lt;page&gt;            :  (int)   which page of results to return where page 1 is the first
+                                        page, defaults to no pages
+    --page_size=&lt;page_size&gt;  :  (int)   number of results in a page, default of 10
+
+Returns:
+    {
+         resolved channel uri: {
+            If there was an error:
+            'error': (str) error message
+
+            'claims_in_channel': the total number of results for the channel,
+
+            If a page of results was requested:
+            'returned_page': page number returned,
+            'claims_in_channel': [
+                {
+                    'absolute_channel_position': (int) claim index number in sorted list of
+                                                 claims which assert to be part of the
+                                                 channel
+                    'address': (str) claim address,
+                    'amount': (float) claim amount,
+                    'effective_amount': (float) claim amount including supports,
+                    'claim_id': (str) claim id,
+                    'claim_sequence': (int) claim sequence number,
+                    'decoded_claim': (bool) whether or not the claim value was decoded,
+                    'height': (int) claim height,
+                    'depth': (int) claim depth,
+                    'has_signature': (bool) included if decoded_claim
+                    'name': (str) claim name,
+                    'supports: (list) list of supports [{'txid': (str) txid,
+                                                         'nout': (int) nout,
+                                                         'amount': (float) amount}],
+                    'txid': (str) claim txid,
+                    'nout': (str) claim nout,
+                    'signature_is_valid': (bool), included if has_signature,
+                    'value': ClaimDict if decoded, otherwise hex string
+                }
+            ],
+        }
+    }
+</code></pre>
+
+<h2 id="claim_list_mine">claim_list_mine</h2>
+<pre><code class="text">List my name claims
+
+Usage:
+    claim_list_mine
+
+
+Options:
+          None
+
+Returns:
+    (list) List of name claims owned by user
+    [
+        {
+            'address': (str) address that owns the claim
+            'amount': (float) amount assigned to the claim
+            'blocks_to_expiration': (int) number of blocks until it expires
+            'category': (str) &quot;claim&quot;, &quot;update&quot; , or &quot;support&quot;
+            'claim_id': (str) claim ID of the claim
+            'confirmations': (int) number of blocks of confirmations for the claim
+            'expiration_height': (int) the block height which the claim will expire
+            'expired': (bool) true if expired, false otherwise
+            'height': (int) height of the block containing the claim
+            'is_spent': (bool) true if claim is abandoned, false otherwise
+            'name': (str) name of the claim
+            'permanent_url': (str) permanent url of the claim,
+            'txid': (str) txid of the cliam
+            'nout': (int) nout of the claim
+            'value': (str) value of the claim
+        },
+   ]
+</code></pre>
+
+<h2 id="claim_new_support">claim_new_support</h2>
+<pre><code class="text">Support a name claim
+
+Usage:
+    claim_new_support (&lt;name&gt; | --name=&lt;name&gt;) (&lt;claim_id&gt; | --claim_id=&lt;claim_id&gt;)
+                      (&lt;amount&gt; | --amount=&lt;amount&gt;)
+
+
+Options:
+    --name=&lt;name&gt;          :  (str)    name of the claim to support
+    --claim_id=&lt;claim_id&gt;  :  (str)    claim_id of the claim to support
+    --amount=&lt;amount&gt;      :  (float)  amount of support
+
+Returns:
+    (dict) Dictionary containing result of the claim
+    {
+        txid : (str) txid of resulting support claim
+        nout : (int) nout of the resulting support claim
+        fee : (float) fee paid for the transaction
+    }
+</code></pre>
+
+<h2 id="claim_renew">claim_renew</h2>
+<pre><code class="text">Renew claim(s) or support(s)
+
+Usage:
+    claim_renew (&lt;outpoint&gt; | --outpoint=&lt;outpoint&gt;) | (&lt;height&gt; | --height=&lt;height&gt;)
+
+
+Options:
+    --outpoint=&lt;outpoint&gt;  :  (str)  outpoint of the claim to renew
+    --height=&lt;height&gt;      :  (str)  update claims expiring before or at this block height
+
+Returns:
+    (dict) Dictionary where key is the the original claim's outpoint and
+    value is the result of the renewal
+    {
+        outpoint:{
+
+            'tx' : (str) hex encoded transaction
+            'txid' : (str) txid of resulting claim
+            'nout' : (int) nout of the resulting claim
+            'fee' : (float) fee paid for the claim transaction
+            'claim_id' : (str) claim ID of the resulting claim
+        },
+    }
+</code></pre>
+
+<h2 id="claim_send_to_address">claim_send_to_address</h2>
+<pre><code class="text">Send a name claim to an address
+
+Usage:
+    claim_send_to_address (&lt;claim_id&gt; | --claim_id=&lt;claim_id&gt;)
+                          (&lt;address&gt; | --address=&lt;address&gt;)
+                          [&lt;amount&gt; | --amount=&lt;amount&gt;]
+
+
+Options:
+    --claim_id=&lt;claim_id&gt;  :  (str)  claim_id to send
+    --address=&lt;address&gt;    :  (str)  address to send the claim to
+    --amount&lt;amount&gt;       :  (int)  Amount of credits to claim name for, defaults to the current amount
+                                     on the claim
+
+Returns:
+    (dict) Dictionary containing result of the claim
+    {
+        'tx' : (str) hex encoded transaction
+        'txid' : (str) txid of resulting claim
+        'nout' : (int) nout of the resulting claim
+        'fee' : (float) fee paid for the claim transaction
+        'claim_id' : (str) claim ID of the resulting claim
+    }
+</code></pre>
+
+<h2 id="claim_show">claim_show</h2>
+<pre><code class="text">Resolve claim info from txid/nout or with claim ID
+
+Usage:
+    claim_show [&lt;txid&gt; | --txid=&lt;txid&gt;] [&lt;nout&gt; | --nout=&lt;nout&gt;]
+               [&lt;claim_id&gt; | --claim_id=&lt;claim_id&gt;]
+
+
+Options:
+    --txid=&lt;txid&gt;          :  (str)  look for claim with this txid, nout must
+                                     also be specified
+    --nout=&lt;nout&gt;          :  (int)  look for claim with this nout, txid must
+                                     also be specified
+    --claim_id=&lt;claim_id&gt;  :  (str)  look for claim with this claim id
+
+Returns:
+    (dict) Dictionary containing claim info as below,
+
+    {
+        'txid': (str) txid of claim
+        'nout': (int) nout of claim
+        'amount': (float) amount of claim
+        'value': (str) value of claim
+        'height' : (int) height of claim takeover
+        'claim_id': (str) claim ID of claim
+        'supports': (list) list of supports associated with claim
+    }
+
+    if claim cannot be resolved, dictionary as below will be returned
+
+    {
+        'error': (str) reason for error
+    }
+</code></pre>
+
+<h2 id="cli_test_command">cli_test_command</h2>
+<pre><code class="text">This command is only for testing the CLI argument parsing
+Usage:
+    cli_test_command [--a_arg] [--b_arg] (&lt;pos_arg&gt; | --pos_arg=&lt;pos_arg&gt;)
+                     [&lt;pos_args&gt;...] [--pos_arg2=&lt;pos_arg2&gt;]
+                     [--pos_arg3=&lt;pos_arg3&gt;]
+
+
+Options:
+    --a_arg                :  a    arg
+    --b_arg                :  b    arg
+    --pos_arg=&lt;pos_arg&gt;    :  pos  arg
+    --pos_args=&lt;pos_args&gt;  :  pos  args
+    --pos_arg2=&lt;pos_arg2&gt;  :  pos  arg 2
+    --pos_arg3=&lt;pos_arg3&gt;  :  pos  arg 3
+
+Returns:
+    pos args
+</code></pre>
+
+<h2 id="commands">commands</h2>
+<pre><code class="text">Return a list of available commands
+
+Usage:
+    commands
+
+
+Options:
+          None
+
+Returns:
+    (list) list of available commands
+</code></pre>
+
+<h2 id="daemon_stop">daemon_stop</h2>
+<pre><code class="text">Stop lbrynet-daemon
+
+Usage:
+    daemon_stop
+
+
+Options:
+          None
+
+Returns:
+    (string) Shutdown message
+</code></pre>
+
+<h2 id="file_delete">file_delete</h2>
+<pre><code class="text">Delete a LBRY file
+
+Usage:
+    file_delete [--delete_from_download_dir] [--delete_all] [--sd_hash=&lt;sd_hash&gt;] [--file_name=&lt;file_name&gt;]
+                [--stream_hash=&lt;stream_hash&gt;] [--rowid=&lt;rowid&gt;] [--claim_id=&lt;claim_id&gt;] [--txid=&lt;txid&gt;]
+                [--nout=&lt;nout&gt;] [--claim_name=&lt;claim_name&gt;] [--channel_claim_id=&lt;channel_claim_id&gt;]
+                [--channel_name=&lt;channel_name&gt;]
+
+
+Options:
+    --delete_from_download_dir             :  (bool)  delete file from download directory,
+                                                      instead of just deleting blobs
+    --delete_all                           :  (bool)  if there are multiple matching files,
+                                                      allow the deletion of multiple files.
+                                                      Otherwise do not delete anything.
+    --sd_hash=&lt;sd_hash&gt;                    :  (str)   delete by file sd hash
+    --file_name&lt;file_name&gt;                 :  (str)   delete by file name in downloads folder
+    --stream_hash=&lt;stream_hash&gt;            :  (str)   delete by file stream hash
+    --rowid=&lt;rowid&gt;                        :  (int)   delete by file row id
+    --claim_id=&lt;claim_id&gt;                  :  (str)   delete by file claim id
+    --txid=&lt;txid&gt;                          :  (str)   delete by file claim txid
+    --nout=&lt;nout&gt;                          :  (int)   delete by file claim nout
+    --claim_name=&lt;claim_name&gt;              :  (str)   delete by file claim name
+    --channel_claim_id=&lt;channel_claim_id&gt;  :  (str)   delete by file channel claim id
+    --channel_name=&lt;channel_name&gt;          :  (str)   delete by file channel claim name
+
+Returns:
+    (bool) true if deletion was successful
+</code></pre>
+
+<h2 id="file_list">file_list</h2>
+<pre><code class="text">List files limited by optional filters
+
+Usage:
+    file_list [--sd_hash=&lt;sd_hash&gt;] [--file_name=&lt;file_name&gt;] [--stream_hash=&lt;stream_hash&gt;]
+              [--rowid=&lt;rowid&gt;] [--claim_id=&lt;claim_id&gt;] [--outpoint=&lt;outpoint&gt;] [--txid=&lt;txid&gt;] [--nout=&lt;nout&gt;]
+              [--channel_claim_id=&lt;channel_claim_id&gt;] [--channel_name=&lt;channel_name&gt;]
+              [--claim_name=&lt;claim_name&gt;] [--full_status]
+
+
+Options:
+    --sd_hash=&lt;sd_hash&gt;                    :  (str)   get file with matching sd hash
+    --file_name=&lt;file_name&gt;                :  (str)   get file with matching file name in the
+                                                      downloads folder
+    --stream_hash=&lt;stream_hash&gt;            :  (str)   get file with matching stream hash
+    --rowid=&lt;rowid&gt;                        :  (int)   get file with matching row id
+    --claim_id=&lt;claim_id&gt;                  :  (str)   get file with matching claim id
+    --outpoint=&lt;outpoint&gt;                  :  (str)   get file with matching claim outpoint
+    --txid=&lt;txid&gt;                          :  (str)   get file with matching claim txid
+    --nout=&lt;nout&gt;                          :  (int)   get file with matching claim nout
+    --channel_claim_id=&lt;channel_claim_id&gt;  :  (str)   get file with matching channel claim id
+    --channel_name=&lt;channel_name&gt;          :  (str)   get file with matching channel name
+    --claim_name=&lt;claim_name&gt;              :  (str)   get file with matching claim name
+    --full_status                          :  (bool)  full status, populate the
+                                                      'message' and 'size' fields
+
+Returns:
+    (list) List of files
+
+    [
+        {
+            'completed': (bool) true if download is completed,
+            'file_name': (str) name of file,
+            'download_directory': (str) download directory,
+            'points_paid': (float) credit paid to download file,
+            'stopped': (bool) true if download is stopped,
+            'stream_hash': (str) stream hash of file,
+            'stream_name': (str) stream name ,
+            'suggested_file_name': (str) suggested file name,
+            'sd_hash': (str) sd hash of file,
+            'download_path': (str) download path of file,
+            'mime_type': (str) mime type of file,
+            'key': (str) key attached to file,
+            'total_bytes': (int) file size in bytes, None if full_status is false,
+            'written_bytes': (int) written size in bytes,
+            'blobs_completed': (int) num_completed, None if full_status is false,
+            'blobs_in_stream': (int) None if full_status is false,
+            'status': (str) downloader status, None if full_status is false,
+            'claim_id': (str) None if full_status is false or if claim is not found,
+            'outpoint': (str) None if full_status is false or if claim is not found,
+            'txid': (str) None if full_status is false or if claim is not found,
+            'nout': (int) None if full_status is false or if claim is not found,
+            'metadata': (dict) None if full_status is false or if claim is not found,
+            'channel_claim_id': (str) None if full_status is false or if claim is not found or signed,
+            'channel_name': (str) None if full_status is false or if claim is not found or signed,
+            'claim_name': (str) None if full_status is false or if claim is not found
+        },
+    ]
+</code></pre>
+
+<h2 id="file_reflect">file_reflect</h2>
+<pre><code class="text">Reflect all the blobs in a file matching the filter criteria
+
+Usage:
+    file_reflect [--sd_hash=&lt;sd_hash&gt;] [--file_name=&lt;file_name&gt;]
+                 [--stream_hash=&lt;stream_hash&gt;] [--rowid=&lt;rowid&gt;]
+                 [--reflector=&lt;reflector&gt;]
+
+
+Options:
+    --sd_hash=&lt;sd_hash&gt;          :  (str)  get file with matching sd hash
+    --file_name=&lt;file_name&gt;      :  (str)  get file with matching file name in the
+                                           downloads folder
+    --stream_hash=&lt;stream_hash&gt;  :  (str)  get file with matching stream hash
+    --rowid=&lt;rowid&gt;              :  (int)  get file with matching row id
+    --reflector=&lt;reflector&gt;      :  (str)  reflector server, ip address or url
+                                           by default choose a server from the config
+
+Returns:
+    (list) list of blobs reflected
+</code></pre>
+
+<h2 id="file_set_status">file_set_status</h2>
+<pre><code class="text">Start or stop downloading a file
+
+Usage:
+    file_set_status (&lt;status&gt; | --status=&lt;status&gt;) [--sd_hash=&lt;sd_hash&gt;]
+              [--file_name=&lt;file_name&gt;] [--stream_hash=&lt;stream_hash&gt;] [--rowid=&lt;rowid&gt;]
+
+
+Options:
+    --status=&lt;status&gt;            :  (str)  one of &quot;start&quot; or &quot;stop&quot;
+    --sd_hash=&lt;sd_hash&gt;          :  (str)  set status of file with matching sd hash
+    --file_name=&lt;file_name&gt;      :  (str)  set status of file with matching file name in the
+                                           downloads folder
+    --stream_hash=&lt;stream_hash&gt;  :  (str)  set status of file with matching stream hash
+    --rowid=&lt;rowid&gt;              :  (int)  set status of file with matching row id
+
+Returns:
+    (str) Confirmation message
+</code></pre>
+
+<h2 id="get">get</h2>
+<pre><code class="text">Download stream from a LBRY name.
+
+Usage:
+    get &lt;uri&gt; [&lt;file_name&gt; | --file_name=&lt;file_name&gt;] [&lt;timeout&gt; | --timeout=&lt;timeout&gt;]
+
+
+
+Options:
+    --uri=&lt;uri&gt;              :  (str)  uri of the content to download
+    --file_name=&lt;file_name&gt;  :  (str)  specified name for the downloaded file
+    --timeout=&lt;timeout&gt;      :  (int)  download timeout in number of seconds
+
+Returns:
+    (dict) Dictionary containing information about the stream
+    {
+        'completed': (bool) true if download is completed,
+        'file_name': (str) name of file,
+        'download_directory': (str) download directory,
+        'points_paid': (float) credit paid to download file,
+        'stopped': (bool) true if download is stopped,
+        'stream_hash': (str) stream hash of file,
+        'stream_name': (str) stream name ,
+        'suggested_file_name': (str) suggested file name,
+        'sd_hash': (str) sd hash of file,
+        'download_path': (str) download path of file,
+        'mime_type': (str) mime type of file,
+        'key': (str) key attached to file,
+        'total_bytes': (int) file size in bytes, None if full_status is false,
+        'written_bytes': (int) written size in bytes,
+        'blobs_completed': (int) num_completed, None if full_status is false,
+        'blobs_in_stream': (int) None if full_status is false,
+        'status': (str) downloader status, None if full_status is false,
+        'claim_id': (str) claim id,
+        'outpoint': (str) claim outpoint string,
+        'txid': (str) claim txid,
+        'nout': (int) claim nout,
+        'metadata': (dict) claim metadata,
+        'channel_claim_id': (str) None if claim is not signed
+        'channel_name': (str) None if claim is not signed
+        'claim_name': (str) claim name
+    }
+</code></pre>
+
+<h2 id="help">help</h2>
+<pre><code class="text">Return a useful message for an API command
+
+Usage:
+    help [&lt;command&gt; | --command=&lt;command&gt;]
+
+
+Options:
+    --command=&lt;command&gt;  :  (str)  command to retrieve documentation for
+
+Returns:
+    (str) Help message
+</code></pre>
+
+<h2 id="peer_list">peer_list</h2>
+<pre><code class="text">Get peers for blob hash
+
+Usage:
+    peer_list (&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash&gt;) [&lt;timeout&gt; | --timeout=&lt;timeout&gt;]
+
+
+Options:
+    --blob_hash=&lt;blob_hash&gt;  :  (str)  find available peers for this blob hash
+    --timeout=&lt;timeout&gt;      :  (int)  peer search timeout in seconds
+
+Returns:
+    (list) List of contacts
+</code></pre>
+
+<h2 id="publish">publish</h2>
+<pre><code class="text">Make a new name claim and publish associated data to lbrynet,
+update over existing claim if user already has a claim for name.
+
+Fields required in the final Metadata are:
+    'title'
+    'description'
+    'author'
+    'language'
+    'license'
+    'nsfw'
+
+Metadata can be set by either using the metadata argument or by setting individual arguments
+fee, title, description, author, language, license, license_url, thumbnail, preview, nsfw,
+or sources. Individual arguments will overwrite the fields specified in metadata argument.
+
+Usage:
+    publish (&lt;name&gt; | --name=&lt;name&gt;) (&lt;bid&gt; | --bid=&lt;bid&gt;) [--metadata=&lt;metadata&gt;]
+            [--file_path=&lt;file_path&gt;] [--fee=&lt;fee&gt;] [--title=&lt;title&gt;]
+            [--description=&lt;description&gt;] [--author=&lt;author&gt;] [--language=&lt;language&gt;]
+            [--license=&lt;license&gt;] [--license_url=&lt;license_url&gt;] [--thumbnail=&lt;thumbnail&gt;]
+            [--preview=&lt;preview&gt;] [--nsfw=&lt;nsfw&gt;] [--sources=&lt;sources&gt;]
+            [--channel_name=&lt;channel_name&gt;] [--channel_id=&lt;channel_id&gt;]
+            [--claim_address=&lt;claim_address&gt;] [--change_address=&lt;change_address&gt;]
+
+
+Options:
+    --name=&lt;name&gt;                    :  (str)    name of the content
+    --bid=&lt;bid&gt;                      :  (float)  amount to back the claim
+    --metadata=&lt;metadata&gt;            :  (dict)   ClaimDict to associate with the claim.
+    --file_path=&lt;file_path&gt;          :  (str)    path to file to be associated with name. If provided,
+                                                 a lbry stream of this file will be used in 'sources'.
+                                                 If no path is given but a sources dict is provided,
+                                                 it will be used. If neither are provided, an
+                                                 error is raised.
+    --fee=&lt;fee&gt;                      :  (dict)   Dictionary representing key fee to download content:
+                                                 {
+                                                 'currency': currency_symbol,
+                                                 'amount': float,
+                                                 'address': str, optional
+                                                 }
+                                                 supported currencies: LBC, USD, BTC
+                                                 If an address is not provided a new one will be
+                                                 automatically generated. Default fee is zero.
+    --title=&lt;title&gt;                  :  (str)    title of the publication
+    --description=&lt;description&gt;      :  (str)    description of the publication
+    --author=&lt;author&gt;                :  (str)    author of the publication
+    --language=&lt;language&gt;            :  (str)    language of the publication
+    --license=&lt;license&gt;              :  (str)    publication license
+    --license_url=&lt;license_url&gt;      :  (str)    publication license url
+    --thumbnail=&lt;thumbnail&gt;          :  (str)    thumbnail url
+    --preview=&lt;preview&gt;              :  (str)    preview url
+    --nsfw=&lt;nsfw&gt;                    :  (bool)   title of the publication
+    --sources=&lt;sources&gt;              :  (str)    {'lbry_sd_hash': sd_hash} specifies sd hash of file
+    --channel_name=&lt;channel_name&gt;    :  (str)    name of the publisher channel name in the wallet
+    --channel_id=&lt;channel_id&gt;        :  (str)    claim id of the publisher channel, does not check
+                                                 for channel claim being in the wallet. This allows
+                                                 publishing to a channel where only the certificate
+                                                 private key is in the wallet.
+    --claim_address=&lt;claim_address&gt;  :  (str)    address where the claim is sent to, if not specified
+                                                 new address wil automatically be created
+
+Returns:
+    (dict) Dictionary containing result of the claim
+    {
+        'tx' : (str) hex encoded transaction
+        'txid' : (str) txid of resulting claim
+        'nout' : (int) nout of the resulting claim
+        'fee' : (float) fee paid for the claim transaction
+        'claim_id' : (str) claim ID of the resulting claim
+    }
+</code></pre>
+
+<h2 id="report_bug">report_bug</h2>
+<pre><code class="text">Report a bug to slack
+
+Usage:
+    report_bug (&lt;message&gt; | --message=&lt;message&gt;)
+
+
+Options:
+    --message=&lt;message&gt;  :  (str)  Description of the bug
+
+Returns:
+    (bool) true if successful
+</code></pre>
+
+<h2 id="resolve">resolve</h2>
+<pre><code class="text">Resolve given LBRY URIs
+
+Usage:
+    resolve [--force] (&lt;uri&gt; | --uri=&lt;uri&gt;) [&lt;uris&gt;...]
+
+
+Options:
+    --force        :  (bool)  force refresh and ignore cache
+    --uri=&lt;uri&gt;    :  (str)   uri to resolve
+    --uris=&lt;uris&gt;  :  (list)  uris to resolve
+
+Returns:
+    Dictionary of results, keyed by uri
+    '&lt;uri&gt;': {
+            If a resolution error occurs:
+            'error': Error message
+
+            If the uri resolves to a channel or a claim in a channel:
+            'certificate': {
+                'address': (str) claim address,
+                'amount': (float) claim amount,
+                'effective_amount': (float) claim amount including supports,
+                'claim_id': (str) claim id,
+                'claim_sequence': (int) claim sequence number,
+                'decoded_claim': (bool) whether or not the claim value was decoded,
+                'height': (int) claim height,
+                'depth': (int) claim depth,
+                'has_signature': (bool) included if decoded_claim
+                'name': (str) claim name,
+                'permanent_url': (str) permanent url of the certificate claim,
+                'supports: (list) list of supports [{'txid': (str) txid,
+                                                     'nout': (int) nout,
+                                                     'amount': (float) amount}],
+                'txid': (str) claim txid,
+                'nout': (str) claim nout,
+                'signature_is_valid': (bool), included if has_signature,
+                'value': ClaimDict if decoded, otherwise hex string
+            }
+
+            If the uri resolves to a channel:
+            'claims_in_channel': (int) number of claims in the channel,
+
+            If the uri resolves to a claim:
+            'claim': {
+                'address': (str) claim address,
+                'amount': (float) claim amount,
+                'effective_amount': (float) claim amount including supports,
+                'claim_id': (str) claim id,
+                'claim_sequence': (int) claim sequence number,
+                'decoded_claim': (bool) whether or not the claim value was decoded,
+                'height': (int) claim height,
+                'depth': (int) claim depth,
+                'has_signature': (bool) included if decoded_claim
+                'name': (str) claim name,
+                'permanent_url': (str) permanent url of the claim,
+                'channel_name': (str) channel name if claim is in a channel
+                'supports: (list) list of supports [{'txid': (str) txid,
+                                                     'nout': (int) nout,
+                                                     'amount': (float) amount}]
+                'txid': (str) claim txid,
+                'nout': (str) claim nout,
+                'signature_is_valid': (bool), included if has_signature,
+                'value': ClaimDict if decoded, otherwise hex string
+            }
+    }
+</code></pre>
+
+<h2 id="resolve_name">resolve_name</h2>
+<pre><code class="text">Resolve stream info from a LBRY name
+
+Usage:
+    resolve_name (&lt;name&gt; | --name=&lt;name&gt;) [--force]
+
+
+Options:
+    --name=&lt;name&gt;  :  (str)   the name to resolve
+    --force        :  (bool)  force refresh and do not check cache
+
+Returns:
+    (dict) Metadata dictionary from name claim, None if the name is not
+            resolvable
+</code></pre>
+
+<h2 id="routing_table_get">routing_table_get</h2>
+<pre><code class="text">Get DHT routing information
+
+Usage:
+    routing_table_get
+
+
+Options:
+          None
+
+Returns:
+    (dict) dictionary containing routing and contact information
+    {
+        &quot;buckets&quot;: {
+            &lt;bucket index&gt;: [
+                {
+                    &quot;address&quot;: (str) peer address,
+                    &quot;node_id&quot;: (str) peer node id,
+                    &quot;blobs&quot;: (list) blob hashes announced by peer
+                }
+            ]
+        },
+        &quot;contacts&quot;: (list) contact node ids,
+        &quot;blob_hashes&quot;: (list) all of the blob hashes stored by peers in the list of buckets,
+        &quot;node_id&quot;: (str) the local dht node id
+    }
+</code></pre>
+
+<h2 id="settings_get">settings_get</h2>
+<pre><code class="text">Get daemon settings
+
+Usage:
+    settings_get
+
+
+Options:
+          None
+
+Returns:
+    (dict) Dictionary of daemon settings
+    See ADJUSTABLE_SETTINGS in lbrynet/conf.py for full list of settings
+</code></pre>
+
+<h2 id="settings_set">settings_set</h2>
+<pre><code class="text">Set daemon settings
+
+Usage:
+    settings_set [--download_directory=&lt;download_directory&gt;]
+                 [--data_rate=&lt;data_rate&gt;]
+                 [--download_timeout=&lt;download_timeout&gt;]
+                 [--peer_port=&lt;peer_port&gt;]
+                 [--max_key_fee=&lt;max_key_fee&gt;]
+                 [--disable_max_key_fee=&lt;disable_max_key_fee&gt;]
+                 [--use_upnp=&lt;use_upnp&gt;]
+                 [--run_reflector_server=&lt;run_reflector_server&gt;]
+                 [--cache_time=&lt;cache_time&gt;]
+                 [--reflect_uploads=&lt;reflect_uploads&gt;]
+                 [--share_usage_data=&lt;share_usage_data&gt;]
+                 [--peer_search_timeout=&lt;peer_search_timeout&gt;]
+                 [--sd_download_timeout=&lt;sd_download_timeout&gt;]
+                 [--auto_renew_claim_height_delta=&lt;auto_renew_claim_height_delta&gt;]
+
+
+Options:
+    --download_directory=&lt;download_directory&gt;                        :  (str)    path of download directory
+    --data_rate=&lt;data_rate&gt;                                          :  (float)  0.0001
+    --download_timeout=&lt;download_timeout&gt;                            :  (int)    180
+    --peer_port=&lt;peer_port&gt;                                          :  (int)    3333
+    --max_key_fee=&lt;max_key_fee&gt;                                      :  (dict)   maximum key fee for downloads,
+                                                                                 in the format:
+                                                                                 {
+                                                                                 'currency': &lt;currency_symbol&gt;,
+                                                                                 'amount': &lt;amount&gt;
+                                                                                 }.
+                                                                                 In the CLI, it must be an escaped JSON string
+                                                                                 Supported currency symbols: LBC, USD, BTC
+    --disable_max_key_fee=&lt;disable_max_key_fee&gt;                      :  (bool)   False
+    --use_upnp=&lt;use_upnp&gt;                                            :  (bool)   True
+    --run_reflector_server=&lt;run_reflector_server&gt;                    :  (bool)   False
+    --cache_time=&lt;cache_time&gt;                                        :  (int)    150
+    --reflect_uploads=&lt;reflect_uploads&gt;                              :  (bool)   True
+    --share_usage_data=&lt;share_usage_data&gt;                            :  (bool)   True
+    --peer_search_timeout=&lt;peer_search_timeout&gt;                      :  (int)    3
+    --sd_download_timeout=&lt;sd_download_timeout&gt;                      :  (int)    3
+    --auto_renew_claim_height_delta=&lt;auto_renew_claim_height_delta&gt;  :  (int)    0
+                                                                                 claims set to expire within this many blocks will be
+                                                                                 automatically renewed after startup (if set to 0, renews
+                                                                                 will not be made automatically)
+
+Returns:
+    (dict) Updated dictionary of daemon settings
+</code></pre>
+
+<h2 id="status">status</h2>
+<pre><code class="text">Get daemon status
+
+Usage:
+    status [--session_status] [--dht_status]
+
+
+Options:
+    --session_status  :  (bool)  include session status in results
+    --dht_status      :  (bool)  include dht network and peer status
+
+Returns:
+    (dict) lbrynet-daemon status
+    {
+        'lbry_id': lbry peer id, base58,
+        'installation_id': installation id, base58,
+        'is_running': bool,
+        'is_first_run': bool,
+        'startup_status': {
+            'code': status code,
+            'message': status message
+        },
+        'connection_status': {
+            'code': connection status code,
+            'message': connection status message
+        },
+        'blockchain_status': {
+            'blocks': local blockchain height,
+            'blocks_behind': remote_height - local_height,
+            'best_blockhash': block hash of most recent block,
+        },
+        'wallet_is_encrypted': bool,
+
+        If given the session status option:
+            'session_status': {
+                'managed_blobs': count of blobs in the blob manager,
+                'managed_streams': count of streams in the file manager
+                'announce_queue_size': number of blobs currently queued to be announced
+                'should_announce_blobs': number of blobs that should be announced
+            }
+
+        If given the dht status option:
+            'dht_status': {
+                'kbps_received': current kbps receiving,
+                'kbps_sent': current kdps being sent,
+                'total_bytes_sent': total bytes sent,
+                'total_bytes_received': total bytes received,
+                'queries_received': number of queries received per second,
+                'queries_sent': number of queries sent per second,
+                'recent_contacts': count of recently contacted peers,
+                'unique_contacts': count of unique peers
+            },
+    }
+</code></pre>
+
+<h2 id="stream_availability">stream_availability</h2>
+<pre><code class="text">Get stream availability for lbry uri
+
+Usage:
+    stream_availability (&lt;uri&gt; | --uri=&lt;uri&gt;)
+                        [&lt;search_timeout&gt; | --search_timeout=&lt;search_timeout&gt;]
+                        [&lt;blob_timeout&gt; | --blob_timeout=&lt;blob_timeout&gt;]
+
+
+Options:
+    --uri=&lt;uri&gt;                        :  (str)  check availability for this uri
+    --search_timeout=&lt;search_timeout&gt;  :  (int)  how long to search for peers for the blob
+                                                 in the dht
+    --search_timeout=&lt;blob_timeout&gt;    :  (int)  how long to try downloading from a peer
+
+Returns:
+    (dict) {
+        'is_available': &lt;bool&gt;,
+        'did_decode': &lt;bool&gt;,
+        'did_resolve': &lt;bool&gt;,
+        'is_stream': &lt;bool&gt;,
+        'num_blobs_in_stream': &lt;int&gt;,
+        'sd_hash': &lt;str&gt;,
+        'sd_blob_availability': &lt;dict&gt; see `blob_availability`,
+        'head_blob_hash': &lt;str&gt;,
+        'head_blob_availability': &lt;dict&gt; see `blob_availability`,
+        'use_upnp': &lt;bool&gt;,
+        'upnp_redirect_is_set': &lt;bool&gt;,
+        'error': &lt;None&gt; | &lt;str&gt; error message
+    }
+</code></pre>
+
+<h2 id="stream_cost_estimate">stream_cost_estimate</h2>
+<pre><code class="text">Get estimated cost for a lbry stream
+
+Usage:
+    stream_cost_estimate (&lt;uri&gt; | --uri=&lt;uri&gt;) [&lt;size&gt; | --size=&lt;size&gt;]
+
+
+Options:
+    --uri=&lt;uri&gt;    :  (str)    uri to use
+    --size=&lt;size&gt;  :  (float)  stream size in bytes. if provided an sd blob won't be
+                               downloaded.
+
+Returns:
+    (float) Estimated cost in lbry credits, returns None if uri is not
+        resolvable
+</code></pre>
+
+<h2 id="transaction_list">transaction_list</h2>
+<pre><code class="text">List transactions belonging to wallet
+
+Usage:
+    transaction_list
+
+
+Options:
+          None
+
+Returns:
+    (list) List of transactions
+
+    {
+        &quot;claim_info&quot;: (list) claim info if in txn [{
+                                                &quot;address&quot;: (str) address of claim,
+                                                &quot;balance_delta&quot;: (float) bid amount,
+                                                &quot;amount&quot;: (float) claim amount,
+                                                &quot;claim_id&quot;: (str) claim id,
+                                                &quot;claim_name&quot;: (str) claim name,
+                                                &quot;nout&quot;: (int) nout
+                                                }],
+        &quot;abandon_info&quot;: (list) abandon info if in txn [{
+                                                &quot;address&quot;: (str) address of abandoned claim,
+                                                &quot;balance_delta&quot;: (float) returned amount,
+                                                &quot;amount&quot;: (float) claim amount,
+                                                &quot;claim_id&quot;: (str) claim id,
+                                                &quot;claim_name&quot;: (str) claim name,
+                                                &quot;nout&quot;: (int) nout
+                                                }],
+        &quot;confirmations&quot;: (int) number of confirmations for the txn,
+        &quot;date&quot;: (str) date and time of txn,
+        &quot;fee&quot;: (float) txn fee,
+        &quot;support_info&quot;: (list) support info if in txn [{
+                                                &quot;address&quot;: (str) address of support,
+                                                &quot;balance_delta&quot;: (float) support amount,
+                                                &quot;amount&quot;: (float) support amount,
+                                                &quot;claim_id&quot;: (str) claim id,
+                                                &quot;claim_name&quot;: (str) claim name,
+                                                &quot;is_tip&quot;: (bool),
+                                                &quot;nout&quot;: (int) nout
+                                                }],
+        &quot;timestamp&quot;: (int) timestamp,
+        &quot;txid&quot;: (str) txn id,
+        &quot;update_info&quot;: (list) update info if in txn [{
+                                                &quot;address&quot;: (str) address of claim,
+                                                &quot;balance_delta&quot;: (float) credited/debited
+                                                &quot;amount&quot;: (float) absolute amount,
+                                                &quot;claim_id&quot;: (str) claim id,
+                                                &quot;claim_name&quot;: (str) claim name,
+                                                &quot;nout&quot;: (int) nout
+                                                }],
+        &quot;value&quot;: (float) value of txn
+    }
+</code></pre>
+
+<h2 id="transaction_show">transaction_show</h2>
+<pre><code class="text">Get a decoded transaction from a txid
+
+Usage:
+    transaction_show (&lt;txid&gt; | --txid=&lt;txid&gt;)
+
+
+Options:
+    --txid=&lt;txid&gt;  :  (str)  txid of the transaction
+
+Returns:
+    (dict) JSON formatted transaction
+</code></pre>
+
+<h2 id="utxo_list">utxo_list</h2>
+<pre><code class="text">List unspent transaction outputs
+
+Usage:
+    utxo_list
+
+
+Options:
+          None
+
+Returns:
+    (list) List of unspent transaction outputs (UTXOs)
+    [
+        {
+            &quot;address&quot;: (str) the output address
+            &quot;amount&quot;: (float) unspent amount
+            &quot;height&quot;: (int) block height
+            &quot;is_claim&quot;: (bool) is the tx a claim
+            &quot;is_coinbase&quot;: (bool) is the tx a coinbase tx
+            &quot;is_support&quot;: (bool) is the tx a support
+            &quot;is_update&quot;: (bool) is the tx an update
+            &quot;nout&quot;: (int) nout of the output
+            &quot;txid&quot;: (str) txid of the output
+        },
+        ...
+    ]
+</code></pre>
+
+<h2 id="version">version</h2>
+<pre><code class="text">Get lbry version information
+
+Usage:
+    version
+
+
+Options:
+          None
+
+Returns:
+    (dict) Dictionary of lbry version information
+    {
+        'build': (str) build type (e.g. &quot;dev&quot;, &quot;rc&quot;, &quot;release&quot;),
+        'ip': (str) remote ip, if available,
+        'lbrynet_version': (str) lbrynet_version,
+        'lbryum_version': (str) lbryum_version,
+        'lbryschema_version': (str) lbryschema_version,
+        'os_release': (str) os release string
+        'os_system': (str) os name
+        'platform': (str) platform string
+        'processor': (str) processor type,
+        'python_version': (str) python version,
+    }
+</code></pre>
+
+<h2 id="wallet_balance">wallet_balance</h2>
+<pre><code class="text">Return the balance of the wallet
+
+Usage:
+    wallet_balance [&lt;address&gt; | --address=&lt;address&gt;] [--include_unconfirmed]
+
+
+Options:
+    --address=&lt;address&gt;    :  (str)   If provided only the balance for this
+                                      address will be given
+    --include_unconfirmed  :  (bool)  Include unconfirmed
+
+Returns:
+    (float) amount of lbry credits in wallet
+</code></pre>
+
+<h2 id="wallet_decrypt">wallet_decrypt</h2>
+<pre><code class="text">Decrypt an encrypted wallet, this will remove the wallet password
+
+Usage:
+    wallet_decrypt
+
+
+Options:
+          None
+
+Returns:
+    (bool) true if wallet is decrypted, otherwise false
+</code></pre>
+
+<h2 id="wallet_encrypt">wallet_encrypt</h2>
+<pre><code class="text">Encrypt a wallet with a password, if the wallet is already encrypted this will update
+the password
+
+Usage:
+    wallet_encrypt (&lt;new_password&gt; | --new_password=&lt;new_password&gt;)
+
+
+Options:
+    --new_password=&lt;new_password&gt;  :  (str)  password string to be used for encrypting wallet
+
+Returns:
+    (bool) true if wallet is decrypted, otherwise false
+</code></pre>
+
+<h2 id="wallet_is_address_mine">wallet_is_address_mine</h2>
+<pre><code class="text">Checks if an address is associated with the current wallet.
+
+Usage:
+    wallet_is_address_mine (&lt;address&gt; | --address=&lt;address&gt;)
+
+
+Options:
+    --address=&lt;address&gt;  :  (str)  address to check
+
+Returns:
+    (bool) true, if address is associated with current wallet
+</code></pre>
+
+<h2 id="wallet_list">wallet_list</h2>
+<pre><code class="text">List wallet addresses
+
+Usage:
+    wallet_list
+
+
+Options:
+          None
+
+Returns:
+    List of wallet addresses
+</code></pre>
+
+<h2 id="wallet_new_address">wallet_new_address</h2>
+<pre><code class="text">Generate a new wallet address
+
+Usage:
+    wallet_new_address
+
+
+Options:
+          None
+
+Returns:
+    (str) New wallet address in base58
+</code></pre>
+
+<h2 id="wallet_prefill_addresses">wallet_prefill_addresses</h2>
+<pre><code class="text">Create new addresses, each containing `amount` credits
+
+Usage:
+    wallet_prefill_addresses [--no_broadcast]
+                             (&lt;num_addresses&gt; | --num_addresses=&lt;num_addresses&gt;)
+                             (&lt;amount&gt; | --amount=&lt;amount&gt;)
+
+
+Options:
+    --no_broadcast                   :  (bool)   whether to broadcast or not
+    --num_addresses=&lt;num_addresses&gt;  :  (int)    num of addresses to create
+    --amount=&lt;amount&gt;                :  (float)  initial amount in each address
+
+Returns:
+    (dict) the resulting transaction
+</code></pre>
+
+<h2 id="wallet_public_key">wallet_public_key</h2>
+<pre><code class="text">Get public key from wallet address
+
+Usage:
+    wallet_public_key (&lt;address&gt; | --address=&lt;address&gt;)
+
+
+Options:
+    --address=&lt;address&gt;  :  (str)  address for which to get the public key
+
+Returns:
+    (list) list of public keys associated with address.
+        Could contain more than one public key if multisig.
+</code></pre>
+
+<h2 id="wallet_send">wallet_send</h2>
+<pre><code class="text">Send credits. If given an address, send credits to it. If given a claim id, send a tip
+to the owner of a claim specified by uri. A tip is a claim support where the recipient
+of the support is the claim address for the claim being supported.
+
+Usage:
+    wallet_send (&lt;amount&gt; | --amount=&lt;amount&gt;)
+                ((&lt;address&gt; | --address=&lt;address&gt;) | (&lt;claim_id&gt; | --claim_id=&lt;claim_id&gt;))
+
+
+Options:
+    --amount=&lt;amount&gt;      :  (float)  amount of credit to send
+    --address=&lt;address&gt;    :  (str)    address to send credits to
+    --claim_id=&lt;claim_id&gt;  :  (float)  claim_id of the claim to send to tip to
+
+Returns:
+    If sending to an address:
+    (bool) true if payment successfully scheduled
+
+    If sending a claim tip:
+    (dict) Dictionary containing the result of the support
+    {
+        txid : (str) txid of resulting support claim
+        nout : (int) nout of the resulting support claim
+        fee : (float) fee paid for the transaction
+    }
+</code></pre>
+
+<h2 id="wallet_unlock">wallet_unlock</h2>
+<pre><code class="text">Unlock an encrypted wallet
+
+Usage:
+    wallet_unlock (&lt;password&gt; | --password=&lt;password&gt;)
+
+
+Options:
+    --password=&lt;password&gt;  :  (str)  password for unlocking wallet
+
+Returns:
+    (bool) true if wallet is unlocked, otherwise false
+</code></pre>
+
+<h2 id="wallet_unused_address">wallet_unused_address</h2>
+<pre><code class="text">Return an address containing no balance, will create
+a new address if there is none.
+
+Usage:
+    wallet_unused_address
+
+
+Options:
+          None
+
+Returns:
+    (str) Unused wallet address in base58
+</code></pre>
+                
+                  
+                
+              
+              
+                
+              
+            </article>
+          </div>
+        </div>
+      </main>
+      
+        
+<footer class="md-footer">
+  
+    <div class="md-footer-nav">
+      <nav class="md-footer-nav__inner md-grid">
+        
+          <a href=".." title="API" class="md-flex md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+            <div class="md-flex__cell md-flex__cell--shrink">
+              <i class="md-icon md-icon--arrow-back md-footer-nav__button"></i>
+            </div>
+            <div class="md-flex__cell md-flex__cell--stretch md-footer-nav__title">
+              <span class="md-flex__ellipsis">
+                <span class="md-footer-nav__direction">
+                  Previous
+                </span>
+                API
+              </span>
+            </div>
+          </a>
+        
+        
+      </nav>
+    </div>
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-footer-copyright">
+        
+        powered by
+        <a href="http://www.mkdocs.org">MkDocs</a>
+        and
+        <a href="https://squidfunk.github.io/mkdocs-material/">
+          Material for MkDocs</a>
+      </div>
+      
+        
+  <div class="md-footer-social">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    
+      <a href="https://github.com/lbryio" class="md-footer-social__link fa fa-github"></a>
+    
+      <a href="https://twitter.com/lbryio" class="md-footer-social__link fa fa-twitter"></a>
+    
+      <a href="https://facebook.com/lbryio" class="md-footer-social__link fa fa-facebook"></a>
+    
+  </div>
+
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    
+      <script src="../assets/javascripts/application.02434462.js"></script>
+      
+      <script>app.initialize({version:"0.17.2",url:{base:".."}})</script>
+      
+    
+    
+      
+        <script>!function(e,a,t,n,o,c,i){e.GoogleAnalyticsObject=o,e.ga=e.ga||function(){(e.ga.q=e.ga.q||[]).push(arguments)},e.ga.l=1*new Date,c=a.createElement(t),i=a.getElementsByTagName(t)[0],c.async=1,c.src="https://www.google-analytics.com/analytics.js",i.parentNode.insertBefore(c,i)}(window,document,"script",0,"ga"),ga("create","UA-60403362-1","auto"),ga("set","anonymizeIp",!0),ga("send","pageview");var links=document.getElementsByTagName("a");if(Array.prototype.map.call(links,function(e){e.host!=document.location.host&&e.addEventListener("click",function(){var a=e.getAttribute("data-md-action")||"follow";ga("send","event","outbound",a,e.href)})}),document.forms.search){var query=document.forms.search.query;query.addEventListener("blur",function(){if(this.value){var e=document.location.pathname;ga("send","pageview",e+"?q="+this.value)}})}</script>
+      
+    
+  </body>
+</html>

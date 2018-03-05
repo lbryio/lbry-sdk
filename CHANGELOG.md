@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * fixed the inconsistencies in API and CLI docstrings
   *
 
 ### Deprecated
@@ -23,13 +23,12 @@ at anytime.
 ### Changed
   *
   *
-
 ### Added
-  *
+  * scripts to autogenerate documentation
   *
 
 ### Removed
-  *
+  * short(single dashed) arguments for `lbrynet-cli`
   *
 
 
@@ -104,7 +103,6 @@ at anytime.
  * unnecessary `TempBlobManager` class
  * old storage classes used by the file manager, wallet, and blob manager
  * old `.db` database files from the data directory
-
 
 ## [0.18.0] - 2017-11-08
 ### Fixed

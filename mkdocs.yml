@@ -3,8 +3,9 @@ repo_url: https://github.com/lbryio/lbry
 pages:
   - "API": index.md
   - "CLI": cli.md
-theme: material 
-site_dir: docs_build
+theme: material
+site_dir: docs
+docs_dir: docs_build
 google_analytics:
   - 'UA-60403362-1'
   - 'auto'
