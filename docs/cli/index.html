@@ -42,6 +42,8 @@
     
       <link rel="stylesheet" href="../assets/stylesheets/application.78aab2dc.css">
       
+        <link rel="stylesheet" href="../assets/stylesheets/application-palette.6079476c.css">
+      
     
     
       <script src="../assets/javascripts/modernizr.1aa3b519.js"></script>
@@ -58,7 +60,9 @@
     
   </head>
   
-    <body dir="ltr">
+    
+    
+    <body dir="ltr" data-md-color-primary="teal" data-md-color-accent="green">
   
     <svg class="md-svg">
       <defs>
@@ -89,7 +93,7 @@
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="search">
     <label class="md-overlay" data-md-component="overlay" for="drawer"></label>
     
-      <a href="#lbry-command-line-documentation" tabindex="1" class="md-skip">
+      <a href="#lbry-json-rpc-api-documentation" tabindex="1" class="md-skip">
         Skip to content
       </a>
     
@@ -100,7 +104,7 @@
       <div class="md-flex__cell md-flex__cell--shrink">
         <a href=".." title="LBRY" class="md-header-nav__button md-logo">
           
-            <i class="md-icon"></i>
+            <img src="../images/lbry-white.svg" width="24" height="24">
           
         </a>
       </div>
@@ -196,7 +200,7 @@
   <label class="md-nav__title md-nav__title--site" for="drawer">
     <span class="md-nav__button md-logo">
       
-        <i class="md-icon"></i>
+        <img src="../images/lbry-white.svg" width="24" height="24">
       
     </span>
     LBRY
@@ -476,13 +480,6 @@
         <li class="md-nav__item">
   <a href="#publish" title="publish" class="md-nav__link">
     publish
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#report_bug" title="report_bug" class="md-nav__link">
-    report_bug
   </a>
   
 </li>
@@ -890,13 +887,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#report_bug" title="report_bug" class="md-nav__link">
-    report_bug
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#resolve" title="resolve" class="md-nav__link">
     resolve
   </a>
@@ -1076,7 +1066,7 @@
                   <a href="https://github.com/lbryio/lbry/edit/master/docs/cli.md" title="Edit this page" class="md-icon md-content__icon">&#xE3C9;</a>
                 
                 
-                <h1 id="lbry-command-line-documentation">LBRY Command Line Documentation</h1>
+                <h1 id="lbry-json-rpc-api-documentation">LBRY JSON-RPC API Documentation</h1>
 <h2 id="blob_announce">blob_announce</h2>
 <pre><code class="text">Announce blobs to the DHT
 
@@ -1854,20 +1844,6 @@ Returns:
     }
 </code></pre>
 
-<h2 id="report_bug">report_bug</h2>
-<pre><code class="text">Report a bug to slack
-
-Usage:
-    report_bug (&lt;message&gt; | --message=&lt;message&gt;)
-
-
-Options:
-    --message=&lt;message&gt;  :  (str)  Description of the bug
-
-Returns:
-    (bool) true if successful
-</code></pre>
-
 <h2 id="resolve">resolve</h2>
 <pre><code class="text">Resolve given LBRY URIs
 
@@ -2497,18 +2473,6 @@ Returns:
       </div>
       
         
-  <div class="md-footer-social">
-    
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    
-      <a href="https://github.com/lbryio" class="md-footer-social__link fa fa-github"></a>
-    
-      <a href="https://twitter.com/lbryio" class="md-footer-social__link fa fa-twitter"></a>
-    
-      <a href="https://facebook.com/lbryio" class="md-footer-social__link fa fa-facebook"></a>
-    
-  </div>
-
       
     </div>
   </div>

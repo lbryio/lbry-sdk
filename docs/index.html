@@ -42,6 +42,8 @@
     
       <link rel="stylesheet" href="./assets/stylesheets/application.78aab2dc.css">
       
+        <link rel="stylesheet" href="./assets/stylesheets/application-palette.6079476c.css">
+      
     
     
       <script src="./assets/javascripts/modernizr.1aa3b519.js"></script>
@@ -58,7 +60,9 @@
     
   </head>
   
-    <body dir="ltr">
+    
+    
+    <body dir="ltr" data-md-color-primary="teal" data-md-color-accent="green">
   
     <svg class="md-svg">
       <defs>
@@ -100,7 +104,7 @@
       <div class="md-flex__cell md-flex__cell--shrink">
         <a href="." title="LBRY" class="md-header-nav__button md-logo">
           
-            <i class="md-icon"></i>
+            <img src="./images/lbry-white.svg" width="24" height="24">
           
         </a>
       </div>
@@ -196,7 +200,7 @@
   <label class="md-nav__title md-nav__title--site" for="drawer">
     <span class="md-nav__button md-logo">
       
-        <i class="md-icon"></i>
+        <img src="./images/lbry-white.svg" width="24" height="24">
       
     </span>
     LBRY
@@ -464,13 +468,6 @@
         <li class="md-nav__item">
   <a href="#publish" title="publish" class="md-nav__link">
     publish
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#report_bug" title="report_bug" class="md-nav__link">
-    report_bug
   </a>
   
 </li>
@@ -890,13 +887,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#report_bug" title="report_bug" class="md-nav__link">
-    report_bug
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#resolve" title="resolve" class="md-nav__link">
     resolve
   </a>
@@ -1081,12 +1071,12 @@
 <pre><code class="text">Announce blobs to the DHT
 
 Args:
-    'announce_all' (optional)  :  (bool)  announce all the blobs possessed by user
-    'blob_hash' (optional)     :  (str)   announce a blob, specified by blob_hash
-    'stream_hash' (optional)   :  (str)   announce all blobs associated with
-                                          stream_hash
-    'sd_hash' (optional)       :  (str)   announce all blobs associated with
-                                          sd_hash and the sd_hash itself
+    'announce_all'  :  (bool)  announce all the blobs possessed by user
+    'blob_hash'     :  (str)   announce a blob, specified by blob_hash
+    'stream_hash'   :  (str)   announce all blobs associated with
+                               stream_hash
+    'sd_hash'       :  (str)   announce all blobs associated with
+                               sd_hash and the sd_hash itself
 
 Returns:
     (bool) true if successful
@@ -1096,10 +1086,10 @@ Returns:
 <pre><code class="text">Get blob availability
 
 Args:
-    'blob_hash' (optional)       :  (str)  check availability for this blob hash
-    'search_timeout' (optional)  :  (int)  how long to search for peers for the blob
-                                           in the dht
-    'blob_timeout' (optional)    :  (int)  how long to try downloading from a peer
+    'blob_hash'       :  (str)  check availability for this blob hash
+    'search_timeout'  :  (int)  how long to search for peers for the blob
+                                in the dht
+    'blob_timeout'    :  (int)  how long to try downloading from a peer
 
 Returns:
     (dict) {
@@ -1113,7 +1103,7 @@ Returns:
 <pre><code class="text">Delete a blob
 
 Args:
-    'blob_hash' (optional)  :  (str)  blob hash of the blob to delete
+    'blob_hash'  :  (str)  blob hash of the blob to delete
 
 Returns:
     (str) Success/fail message
@@ -1123,16 +1113,16 @@ Returns:
 <pre><code class="text">Download and return a blob
 
 Args:
-    'blob_hash'                        :  (str)  blob hash of the blob to get
-    'timeout' (optional)               :  (int)  timeout in number of seconds
-    'encoding' (optional)              :  (str)  by default no attempt at decoding
-                                                 is made, can be set to one of the
-                                                 following decoders:
-                                                 'json'
-    'payment_rate_manager' (optional)  :  (str)  if not given the default payment rate
-                                                 manager will be used.
-                                                 supported alternative rate managers:
-                                                 'only-free'
+    'blob_hash' (required)  :  (str)  blob hash of the blob to get
+    'timeout'               :  (int)  timeout in number of seconds
+    'encoding'              :  (str)  by default no attempt at decoding
+                                      is made, can be set to one of the
+                                      following decoders:
+                                      'json'
+    'payment_rate_manager'  :  (str)  if not given the default payment rate
+                                      manager will be used.
+                                      supported alternative rate managers:
+                                      'only-free'
 
 Returns:
     (str) Success/Fail message or (dict) decoded data
@@ -1142,13 +1132,13 @@ Returns:
 <pre><code class="text">Returns blob hashes. If not given filters, returns all blobs known by the blob manager
 
 Args:
-    'needed' (optional)       :  (bool)  only return needed blobs
-    'finished' (optional)     :  (bool)  only return finished blobs
-    'uri' (optional)          :  (str)   filter blobs by stream in a uri
-    'stream_hash' (optional)  :  (str)   filter blobs by stream hash
-    'sd_hash' (optional)      :  (str)   filter blobs by sd hash
-    'page_size' (optional)    :  (int)   results page size
-    'page' (optional)         :  (int)   page of results to return
+    'needed'       :  (bool)  only return needed blobs
+    'finished'     :  (bool)  only return finished blobs
+    'uri'          :  (str)   filter blobs by stream in a uri
+    'stream_hash'  :  (str)   filter blobs by stream hash
+    'sd_hash'      :  (str)   filter blobs by sd hash
+    'page_size'    :  (int)   results page size
+    'page'         :  (int)   page of results to return
 
 Returns:
     (list) List of blob hashes
@@ -1168,8 +1158,8 @@ Returns:
 <pre><code class="text">Get contents of a block
 
 Args:
-    'blockhash'  :  (str)  hash of the block to look up
-    'height'     :  (int)  height of the block to look up
+    'blockhash' (required)  :  (str)  hash of the block to look up
+    'height' (required)     :  (int)  height of the block to look up
 
 Returns:
     (dict) Requested block
@@ -1179,7 +1169,7 @@ Returns:
 <pre><code class="text">Export serialized channel signing information for a given certificate claim id
 
 Args:
-    'claim_id'  :  (str)  Claim ID to export information about
+    'claim_id' (required)  :  (str)  Claim ID to export information about
 
 Returns:
     (str) Serialized certificate information
@@ -1189,7 +1179,7 @@ Returns:
 <pre><code class="text">Import serialized channel signing information (to allow signing new claims to the channel)
 
 Args:
-    'serialized_certificate_info' (optional)  :  (str)  certificate info
+    'serialized_certificate_info'  :  (str)  certificate info
 
 Returns:
     (dict) Result dictionary
@@ -1210,8 +1200,8 @@ Returns:
 <pre><code class="text">Generate a publisher key and create a new '@' prefixed certificate claim
 
 Args:
-    'channel_name'  :  (str)    name of the channel prefixed with '@'
-    'amount'        :  (float)  bid amount on the channel
+    'channel_name' (required)  :  (str)    name of the channel prefixed with '@'
+    'amount' (required)        :  (float)  bid amount on the channel
 
 Returns:
     (dict) Dictionary containing result of the claim
@@ -1228,9 +1218,9 @@ Returns:
 <pre><code class="text">Abandon a name and reclaim credits from the claim
 
 Args:
-    'claim_id' (optional)  :  (str)  claim_id of the claim to abandon
-    'txid' (optional)      :  (str)  txid of the claim to abandon
-    'nout' (optional)      :  (int)  nout of the claim to abandon
+    'claim_id'  :  (str)  claim_id of the claim to abandon
+    'txid'      :  (str)  txid of the claim to abandon
+    'nout'      :  (int)  nout of the claim to abandon
 
 Returns:
     (dict) Dictionary containing result of the claim
@@ -1244,7 +1234,7 @@ Returns:
 <pre><code class="text">List current claims and information about them for a given name
 
 Args:
-    'name'  :  (str)  name of the claim to list info about
+    'name' (required)  :  (str)  name of the claim to list info about
 
 Returns:
     (dict) State of claims assigned for the name
@@ -1273,11 +1263,11 @@ Returns:
 <pre><code class="text">Get paginated claims in a channel specified by a channel uri
 
 Args:
-    'uri'                   :  (str)   uri of the channel
-    'uris' (optional)       :  (list)  uris of the channel
-    'page' (optional)       :  (int)   which page of results to return where page 1 is the first
-                                       page, defaults to no pages
-    'page_size' (optional)  :  (int)   number of results in a page, default of 10
+    'uri' (required)  :  (str)   uri of the channel
+    'uris'            :  (list)  uris of the channel
+    'page'            :  (int)   which page of results to return where page 1 is the first
+                                 page, defaults to no pages
+    'page_size'       :  (int)   number of results in a page, default of 10
 
 Returns:
     {
@@ -1350,9 +1340,9 @@ Returns:
 <pre><code class="text">Support a name claim
 
 Args:
-    'name'      :  (str)    name of the claim to support
-    'claim_id'  :  (str)    claim_id of the claim to support
-    'amount'    :  (float)  amount of support
+    'name' (required)      :  (str)    name of the claim to support
+    'claim_id' (required)  :  (str)    claim_id of the claim to support
+    'amount' (required)    :  (float)  amount of support
 
 Returns:
     (dict) Dictionary containing result of the claim
@@ -1367,8 +1357,8 @@ Returns:
 <pre><code class="text">Renew claim(s) or support(s)
 
 Args:
-    'outpoint'  :  (str)  outpoint of the claim to renew
-    'height'    :  (str)  update claims expiring before or at this block height
+    'outpoint' (required)  :  (str)  outpoint of the claim to renew
+    'height' (required)    :  (str)  update claims expiring before or at this block height
 
 Returns:
     (dict) Dictionary where key is the the original claim's outpoint and
@@ -1389,10 +1379,10 @@ Returns:
 <pre><code class="text">Send a name claim to an address
 
 Args:
-    'claim_id'           :  (str)  claim_id to send
-    'address'            :  (str)  address to send the claim to
-    'amount' (optional)  :  (int)  Amount of credits to claim name for, defaults to the current amount
-                                   on the claim
+    'claim_id' (required)  :  (str)  claim_id to send
+    'address' (required)   :  (str)  address to send the claim to
+    'amount'               :  (int)  Amount of credits to claim name for, defaults to the current amount
+                                     on the claim
 
 Returns:
     (dict) Dictionary containing result of the claim
@@ -1409,11 +1399,11 @@ Returns:
 <pre><code class="text">Resolve claim info from txid/nout or with claim ID
 
 Args:
-    'txid' (optional)      :  (str)  look for claim with this txid, nout must
-                                     also be specified
-    'nout' (optional)      :  (int)  look for claim with this nout, txid must
-                                     also be specified
-    'claim_id' (optional)  :  (str)  look for claim with this claim id
+    'txid'      :  (str)  look for claim with this txid, nout must
+                          also be specified
+    'nout'      :  (int)  look for claim with this nout, txid must
+                          also be specified
+    'claim_id'  :  (str)  look for claim with this claim id
 
 Returns:
     (dict) Dictionary containing claim info as below,
@@ -1438,12 +1428,12 @@ Returns:
 <h2 id="cli_test_command">cli_test_command</h2>
 <pre><code class="text">This command is only for testing the CLI argument parsing
 Args:
-    'a_arg' (optional)     :  a    arg
-    'b_arg' (optional)     :  b    arg
-    'pos_arg'              :  pos  arg
-    'pos_args' (optional)  :  pos  args
-    'pos_arg2' (optional)  :  pos  arg 2
-    'pos_arg3' (optional)  :  pos  arg 3
+    'a_arg'               :  a    arg
+    'b_arg'               :  b    arg
+    'pos_arg' (required)  :  pos  arg
+    'pos_args'            :  pos  args
+    'pos_arg2'            :  pos  arg 2
+    'pos_arg3'            :  pos  arg 3
 
 Returns:
     pos args
@@ -1473,21 +1463,21 @@ Returns:
 <pre><code class="text">Delete a LBRY file
 
 Args:
-    'delete_from_download_dir' (optional)  :  (bool)  delete file from download directory,
-                                                      instead of just deleting blobs
-    'delete_all' (optional)                :  (bool)  if there are multiple matching files,
-                                                      allow the deletion of multiple files.
-                                                      Otherwise do not delete anything.
-    'sd_hash' (optional)                   :  (str)   delete by file sd hash
-    'file_name' (optional)                 :  (str)   delete by file name in downloads folder
-    'stream_hash' (optional)               :  (str)   delete by file stream hash
-    'rowid' (optional)                     :  (int)   delete by file row id
-    'claim_id' (optional)                  :  (str)   delete by file claim id
-    'txid' (optional)                      :  (str)   delete by file claim txid
-    'nout' (optional)                      :  (int)   delete by file claim nout
-    'claim_name' (optional)                :  (str)   delete by file claim name
-    'channel_claim_id' (optional)          :  (str)   delete by file channel claim id
-    'channel_name' (optional)              :  (str)   delete by file channel claim name
+    'delete_from_download_dir'  :  (bool)  delete file from download directory,
+                                           instead of just deleting blobs
+    'delete_all'                :  (bool)  if there are multiple matching files,
+                                           allow the deletion of multiple files.
+                                           Otherwise do not delete anything.
+    'sd_hash'                   :  (str)   delete by file sd hash
+    'file_name'                 :  (str)   delete by file name in downloads folder
+    'stream_hash'               :  (str)   delete by file stream hash
+    'rowid'                     :  (int)   delete by file row id
+    'claim_id'                  :  (str)   delete by file claim id
+    'txid'                      :  (str)   delete by file claim txid
+    'nout'                      :  (int)   delete by file claim nout
+    'claim_name'                :  (str)   delete by file claim name
+    'channel_claim_id'          :  (str)   delete by file channel claim id
+    'channel_name'              :  (str)   delete by file channel claim name
 
 Returns:
     (bool) true if deletion was successful
@@ -1497,20 +1487,20 @@ Returns:
 <pre><code class="text">List files limited by optional filters
 
 Args:
-    'sd_hash' (optional)           :  (str)   get file with matching sd hash
-    'file_name' (optional)         :  (str)   get file with matching file name in the
-                                              downloads folder
-    'stream_hash' (optional)       :  (str)   get file with matching stream hash
-    'rowid' (optional)             :  (int)   get file with matching row id
-    'claim_id' (optional)          :  (str)   get file with matching claim id
-    'outpoint' (optional)          :  (str)   get file with matching claim outpoint
-    'txid' (optional)              :  (str)   get file with matching claim txid
-    'nout' (optional)              :  (int)   get file with matching claim nout
-    'channel_claim_id' (optional)  :  (str)   get file with matching channel claim id
-    'channel_name' (optional)      :  (str)   get file with matching channel name
-    'claim_name' (optional)        :  (str)   get file with matching claim name
-    'full_status' (optional)       :  (bool)  full status, populate the
-                                              'message' and 'size' fields
+    'sd_hash'           :  (str)   get file with matching sd hash
+    'file_name'         :  (str)   get file with matching file name in the
+                                   downloads folder
+    'stream_hash'       :  (str)   get file with matching stream hash
+    'rowid'             :  (int)   get file with matching row id
+    'claim_id'          :  (str)   get file with matching claim id
+    'outpoint'          :  (str)   get file with matching claim outpoint
+    'txid'              :  (str)   get file with matching claim txid
+    'nout'              :  (int)   get file with matching claim nout
+    'channel_claim_id'  :  (str)   get file with matching channel claim id
+    'channel_name'      :  (str)   get file with matching channel name
+    'claim_name'        :  (str)   get file with matching claim name
+    'full_status'       :  (bool)  full status, populate the
+                                   'message' and 'size' fields
 
 Returns:
     (list) List of files
@@ -1550,13 +1540,13 @@ Returns:
 <pre><code class="text">Reflect all the blobs in a file matching the filter criteria
 
 Args:
-    'sd_hash' (optional)      :  (str)  get file with matching sd hash
-    'file_name' (optional)    :  (str)  get file with matching file name in the
-                                        downloads folder
-    'stream_hash' (optional)  :  (str)  get file with matching stream hash
-    'rowid' (optional)        :  (int)  get file with matching row id
-    'reflector' (optional)    :  (str)  reflector server, ip address or url
-                                        by default choose a server from the config
+    'sd_hash'      :  (str)  get file with matching sd hash
+    'file_name'    :  (str)  get file with matching file name in the
+                             downloads folder
+    'stream_hash'  :  (str)  get file with matching stream hash
+    'rowid'        :  (int)  get file with matching row id
+    'reflector'    :  (str)  reflector server, ip address or url
+                             by default choose a server from the config
 
 Returns:
     (list) list of blobs reflected
@@ -1566,12 +1556,12 @@ Returns:
 <pre><code class="text">Start or stop downloading a file
 
 Args:
-    'status'                  :  (str)  one of &quot;start&quot; or &quot;stop&quot;
-    'sd_hash' (optional)      :  (str)  set status of file with matching sd hash
-    'file_name' (optional)    :  (str)  set status of file with matching file name in the
-                                        downloads folder
-    'stream_hash' (optional)  :  (str)  set status of file with matching stream hash
-    'rowid' (optional)        :  (int)  set status of file with matching row id
+    'status' (required)  :  (str)  one of &quot;start&quot; or &quot;stop&quot;
+    'sd_hash'            :  (str)  set status of file with matching sd hash
+    'file_name'          :  (str)  set status of file with matching file name in the
+                                   downloads folder
+    'stream_hash'        :  (str)  set status of file with matching stream hash
+    'rowid'              :  (int)  set status of file with matching row id
 
 Returns:
     (str) Confirmation message
@@ -1581,9 +1571,9 @@ Returns:
 <pre><code class="text">Download stream from a LBRY name.
 
 Args:
-    'uri' (optional)        :  (str)  uri of the content to download
-    'file_name' (optional)  :  (str)  specified name for the downloaded file
-    'timeout' (optional)    :  (int)  download timeout in number of seconds
+    'uri'        :  (str)  uri of the content to download
+    'file_name'  :  (str)  specified name for the downloaded file
+    'timeout'    :  (int)  download timeout in number of seconds
 
 Returns:
     (dict) Dictionary containing information about the stream
@@ -1620,7 +1610,7 @@ Returns:
 <pre><code class="text">Return a useful message for an API command
 
 Args:
-    'command' (optional)  :  (str)  command to retrieve documentation for
+    'command'  :  (str)  command to retrieve documentation for
 
 Returns:
     (str) Help message
@@ -1630,8 +1620,8 @@ Returns:
 <pre><code class="text">Get peers for blob hash
 
 Args:
-    'blob_hash'           :  (str)  find available peers for this blob hash
-    'timeout' (optional)  :  (int)  peer search timeout in seconds
+    'blob_hash' (required)  :  (str)  find available peers for this blob hash
+    'timeout'               :  (int)  peer search timeout in seconds
 
 Returns:
     (list) List of contacts
@@ -1654,40 +1644,40 @@ fee, title, description, author, language, license, license_url, thumbnail, prev
 or sources. Individual arguments will overwrite the fields specified in metadata argument.
 
 Args:
-    'name'                      :  (str)    name of the content
-    'bid'                       :  (float)  amount to back the claim
-    'metadata' (optional)       :  (dict)   ClaimDict to associate with the claim.
-    'file_path' (optional)      :  (str)    path to file to be associated with name. If provided,
-                                            a lbry stream of this file will be used in 'sources'.
-                                            If no path is given but a sources dict is provided,
-                                            it will be used. If neither are provided, an
-                                            error is raised.
-    'fee' (optional)            :  (dict)   Dictionary representing key fee to download content:
-                                            {
-                                            'currency': currency_symbol,
-                                            'amount': float,
-                                            'address': str, optional
-                                            }
-                                            supported currencies: LBC, USD, BTC
-                                            If an address is not provided a new one will be
-                                            automatically generated. Default fee is zero.
-    'title' (optional)          :  (str)    title of the publication
-    'description' (optional)    :  (str)    description of the publication
-    'author' (optional)         :  (str)    author of the publication
-    'language' (optional)       :  (str)    language of the publication
-    'license' (optional)        :  (str)    publication license
-    'license_url' (optional)    :  (str)    publication license url
-    'thumbnail' (optional)      :  (str)    thumbnail url
-    'preview' (optional)        :  (str)    preview url
-    'nsfw' (optional)           :  (bool)   title of the publication
-    'sources' (optional)        :  (str)    {'lbry_sd_hash': sd_hash} specifies sd hash of file
-    'channel_name' (optional)   :  (str)    name of the publisher channel name in the wallet
-    'channel_id' (optional)     :  (str)    claim id of the publisher channel, does not check
-                                            for channel claim being in the wallet. This allows
-                                            publishing to a channel where only the certificate
-                                            private key is in the wallet.
-    'claim_address' (optional)  :  (str)    address where the claim is sent to, if not specified
-                                            new address wil automatically be created
+    'name' (required)  :  (str)    name of the content
+    'bid' (required)   :  (float)  amount to back the claim
+    'metadata'         :  (dict)   ClaimDict to associate with the claim.
+    'file_path'        :  (str)    path to file to be associated with name. If provided,
+                                   a lbry stream of this file will be used in 'sources'.
+                                   If no path is given but a sources dict is provided,
+                                   it will be used. If neither are provided, an
+                                   error is raised.
+    'fee'              :  (dict)   Dictionary representing key fee to download content:
+                                   {
+                                   'currency': currency_symbol,
+                                   'amount': float,
+                                   'address': str, optional
+                                   }
+                                   supported currencies: LBC, USD, BTC
+                                   If an address is not provided a new one will be
+                                   automatically generated. Default fee is zero.
+    'title'            :  (str)    title of the publication
+    'description'      :  (str)    description of the publication
+    'author'           :  (str)    author of the publication
+    'language'         :  (str)    language of the publication
+    'license'          :  (str)    publication license
+    'license_url'      :  (str)    publication license url
+    'thumbnail'        :  (str)    thumbnail url
+    'preview'          :  (str)    preview url
+    'nsfw'             :  (bool)   title of the publication
+    'sources'          :  (str)    {'lbry_sd_hash': sd_hash} specifies sd hash of file
+    'channel_name'     :  (str)    name of the publisher channel name in the wallet
+    'channel_id'       :  (str)    claim id of the publisher channel, does not check
+                                   for channel claim being in the wallet. This allows
+                                   publishing to a channel where only the certificate
+                                   private key is in the wallet.
+    'claim_address'    :  (str)    address where the claim is sent to, if not specified
+                                   new address wil automatically be created
 
 Returns:
     (dict) Dictionary containing result of the claim
@@ -1700,23 +1690,13 @@ Returns:
     }
 </code></pre>
 
-<h2 id="report_bug">report_bug</h2>
-<pre><code class="text">Report a bug to slack
-
-Args:
-    'message'  :  (str)  Description of the bug
-
-Returns:
-    (bool) true if successful
-</code></pre>
-
 <h2 id="resolve">resolve</h2>
 <pre><code class="text">Resolve given LBRY URIs
 
 Args:
-    'force' (optional)  :  (bool)  force refresh and ignore cache
-    'uri'               :  (str)   uri to resolve
-    'uris' (optional)   :  (list)  uris to resolve
+    'force'           :  (bool)  force refresh and ignore cache
+    'uri' (required)  :  (str)   uri to resolve
+    'uris'            :  (list)  uris to resolve
 
 Returns:
     Dictionary of results, keyed by uri
@@ -1778,8 +1758,8 @@ Returns:
 <pre><code class="text">Resolve stream info from a LBRY name
 
 Args:
-    'name'              :  (str)   the name to resolve
-    'force' (optional)  :  (bool)  force refresh and do not check cache
+    'name' (required)  :  (str)   the name to resolve
+    'force'            :  (bool)  force refresh and do not check cache
 
 Returns:
     (dict) Metadata dictionary from name claim, None if the name is not
@@ -1825,30 +1805,30 @@ Returns:
 <pre><code class="text">Set daemon settings
 
 Args:
-    'download_directory' (optional)             :  (str)    path of download directory
-    'data_rate' (optional)                      :  (float)  0.0001
-    'download_timeout' (optional)               :  (int)    180
-    'peer_port' (optional)                      :  (int)    3333
-    'max_key_fee' (optional)                    :  (dict)   maximum key fee for downloads,
-                                                            in the format:
-                                                            {
-                                                            'currency': &lt;currency_symbol&gt;,
-                                                            'amount': &lt;amount&gt;
-                                                            }.
-                                                            In the CLI, it must be an escaped JSON string
-                                                            Supported currency symbols: LBC, USD, BTC
-    'disable_max_key_fee' (optional)            :  (bool)   False
-    'use_upnp' (optional)                       :  (bool)   True
-    'run_reflector_server' (optional)           :  (bool)   False
-    'cache_time' (optional)                     :  (int)    150
-    'reflect_uploads' (optional)                :  (bool)   True
-    'share_usage_data' (optional)               :  (bool)   True
-    'peer_search_timeout' (optional)            :  (int)    3
-    'sd_download_timeout' (optional)            :  (int)    3
-    'auto_renew_claim_height_delta' (optional)  :  (int)    0
-                                                            claims set to expire within this many blocks will be
-                                                            automatically renewed after startup (if set to 0, renews
-                                                            will not be made automatically)
+    'download_directory'             :  (str)    path of download directory
+    'data_rate'                      :  (float)  0.0001
+    'download_timeout'               :  (int)    180
+    'peer_port'                      :  (int)    3333
+    'max_key_fee'                    :  (dict)   maximum key fee for downloads,
+                                                 in the format:
+                                                 {
+                                                 'currency': &lt;currency_symbol&gt;,
+                                                 'amount': &lt;amount&gt;
+                                                 }.
+                                                 In the CLI, it must be an escaped JSON string
+                                                 Supported currency symbols: LBC, USD, BTC
+    'disable_max_key_fee'            :  (bool)   False
+    'use_upnp'                       :  (bool)   True
+    'run_reflector_server'           :  (bool)   False
+    'cache_time'                     :  (int)    150
+    'reflect_uploads'                :  (bool)   True
+    'share_usage_data'               :  (bool)   True
+    'peer_search_timeout'            :  (int)    3
+    'sd_download_timeout'            :  (int)    3
+    'auto_renew_claim_height_delta'  :  (int)    0
+                                                 claims set to expire within this many blocks will be
+                                                 automatically renewed after startup (if set to 0, renews
+                                                 will not be made automatically)
 
 Returns:
     (dict) Updated dictionary of daemon settings
@@ -1858,8 +1838,8 @@ Returns:
 <pre><code class="text">Get daemon status
 
 Args:
-    'session_status' (optional)  :  (bool)  include session status in results
-    'dht_status' (optional)      :  (bool)  include dht network and peer status
+    'session_status'  :  (bool)  include session status in results
+    'dht_status'      :  (bool)  include dht network and peer status
 
 Returns:
     (dict) lbrynet-daemon status
@@ -1909,10 +1889,10 @@ Returns:
 <pre><code class="text">Get stream availability for lbry uri
 
 Args:
-    'uri'                        :  (str)  check availability for this uri
-    'search_timeout' (optional)  :  (int)  how long to search for peers for the blob
-                                           in the dht
-    'search_timeout' (optional)  :  (int)  how long to try downloading from a peer
+    'uri' (required)  :  (str)  check availability for this uri
+    'search_timeout'  :  (int)  how long to search for peers for the blob
+                                in the dht
+    'search_timeout'  :  (int)  how long to try downloading from a peer
 
 Returns:
     (dict) {
@@ -1935,9 +1915,9 @@ Returns:
 <pre><code class="text">Get estimated cost for a lbry stream
 
 Args:
-    'uri'              :  (str)    uri to use
-    'size' (optional)  :  (float)  stream size in bytes. if provided an sd blob won't be
-                                   downloaded.
+    'uri' (required)  :  (str)    uri to use
+    'size'            :  (float)  stream size in bytes. if provided an sd blob won't be
+                                  downloaded.
 
 Returns:
     (float) Estimated cost in lbry credits, returns None if uri is not
@@ -2000,7 +1980,7 @@ Returns:
 <pre><code class="text">Get a decoded transaction from a txid
 
 Args:
-    'txid'  :  (str)  txid of the transaction
+    'txid' (required)  :  (str)  txid of the transaction
 
 Returns:
     (dict) JSON formatted transaction
@@ -2056,9 +2036,9 @@ Returns:
 <pre><code class="text">Return the balance of the wallet
 
 Args:
-    'address' (optional)              :  (str)   If provided only the balance for this
-                                                 address will be given
-    'include_unconfirmed' (optional)  :  (bool)  Include unconfirmed
+    'address'              :  (str)   If provided only the balance for this
+                                      address will be given
+    'include_unconfirmed'  :  (bool)  Include unconfirmed
 
 Returns:
     (float) amount of lbry credits in wallet
@@ -2079,7 +2059,7 @@ Returns:
 the password
 
 Args:
-    'new_password'  :  (str)  password string to be used for encrypting wallet
+    'new_password' (required)  :  (str)  password string to be used for encrypting wallet
 
 Returns:
     (bool) true if wallet is decrypted, otherwise false
@@ -2089,7 +2069,7 @@ Returns:
 <pre><code class="text">Checks if an address is associated with the current wallet.
 
 Args:
-    'address'  :  (str)  address to check
+    'address' (required)  :  (str)  address to check
 
 Returns:
     (bool) true, if address is associated with current wallet
@@ -2119,9 +2099,9 @@ Returns:
 <pre><code class="text">Create new addresses, each containing `amount` credits
 
 Args:
-    'no_broadcast' (optional)  :  (bool)   whether to broadcast or not
-    'num_addresses'            :  (int)    num of addresses to create
-    'amount'                   :  (float)  initial amount in each address
+    'no_broadcast'              :  (bool)   whether to broadcast or not
+    'num_addresses' (required)  :  (int)    num of addresses to create
+    'amount' (required)         :  (float)  initial amount in each address
 
 Returns:
     (dict) the resulting transaction
@@ -2131,7 +2111,7 @@ Returns:
 <pre><code class="text">Get public key from wallet address
 
 Args:
-    'address'  :  (str)  address for which to get the public key
+    'address' (required)  :  (str)  address for which to get the public key
 
 Returns:
     (list) list of public keys associated with address.
@@ -2144,9 +2124,9 @@ to the owner of a claim specified by uri. A tip is a claim support where the rec
 of the support is the claim address for the claim being supported.
 
 Args:
-    'amount'    :  (float)  amount of credit to send
-    'address'   :  (str)    address to send credits to
-    'claim_id'  :  (float)  claim_id of the claim to send to tip to
+    'amount' (required)    :  (float)  amount of credit to send
+    'address' (required)   :  (str)    address to send credits to
+    'claim_id' (required)  :  (float)  claim_id of the claim to send to tip to
 
 Returns:
     If sending to an address:
@@ -2165,7 +2145,7 @@ Returns:
 <pre><code class="text">Unlock an encrypted wallet
 
 Args:
-    'password'  :  (str)  password for unlocking wallet
+    'password' (required)  :  (str)  password for unlocking wallet
 
 Returns:
     (bool) true if wallet is unlocked, otherwise false
@@ -2229,18 +2209,6 @@ Returns:
       </div>
       
         
-  <div class="md-footer-social">
-    
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    
-      <a href="https://github.com/lbryio" class="md-footer-social__link fa fa-github"></a>
-    
-      <a href="https://twitter.com/lbryio" class="md-footer-social__link fa fa-twitter"></a>
-    
-      <a href="https://facebook.com/lbryio" class="md-footer-social__link fa fa-facebook"></a>
-    
-  </div>
-
       
     </div>
   </div>

@@ -3,17 +3,17 @@ repo_url: https://github.com/lbryio/lbry
 pages:
   - "API": index.md
   - "CLI": cli.md
-theme: material
 site_dir: docs
 docs_dir: docs_build
 google_analytics:
   - 'UA-60403362-1'
   - 'auto'
-extra:
+theme:
+  name: material
   palette:
     primary: 'teal'
     accent: 'green'
-  logo: 'images/lbry-white.svg'
+#  logo: 'images/lbry-white.svg'
   social:
     - type: 'github'
       link: 'https://github.com/lbryio'

@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # Generate docs: python gen_api_docs.py
@@ -8,12 +9,16 @@ import re
 import inspect
 import subprocess
 import os
+import sys
 from lbrynet.daemon.Daemon import Daemon
 
-try:
-    import mkdocs
-except ImportError:
-    raise ImportError("mkdocs is not installed")
+import pip
+installed_packages = [package.project_name for package in pip.get_installed_distributions()]
+
+for package in ["mkdocs", "mkdocs-material"]:
+    if package not in installed_packages:
+        print "'" + package + "' is not installed"
+        sys.exit(1)
 
 try:
     from tabulate import tabulate
@@ -24,7 +29,7 @@ INDENT = "    "
 REQD_CMD_REGEX = r"\(.*?=<(?P<reqd>.*?)>\)"
 OPT_CMD_REGEX = r"\[.*?=<(?P<opt>.*?)>\]"
 CMD_REGEX = r"--.*?(?P<cmd>.*?)[=,\s,<]"
-DOCS_DIR = "docs_build"
+DOCS_BUILD_DIR = "docs_build"  # must match mkdocs.yml
 
 
 def _cli_tabulate_options(_options_docstr, method):
@@ -167,9 +172,12 @@ def _api_doc(obj):
 
 
 def main():
-    curdir = os.path.dirname(os.path.realpath(__file__))
-    api_doc_path = os.path.realpath(os.path.join(curdir, '..', DOCS_DIR, 'index.md'))
-    cli_doc_path = os.path.realpath(os.path.join(curdir, '..', DOCS_DIR, 'cli.md'))
+    root_dir = os.path.dirname(os.path.dirname(__file__))
+    build_dir = os.path.realpath(os.path.join(root_dir, DOCS_BUILD_DIR))
+    if not os.path.exists(build_dir):
+        os.makedirs(build_dir)
+    api_doc_path = os.path.join(build_dir, 'index.md')
+    cli_doc_path = os.path.join(build_dir, 'cli.md')
 
     _api_docs = ''
     _cli_docs = ''
@@ -186,12 +194,13 @@ def main():
     with open(cli_doc_path, 'w+') as f:
         f.write(_cli_docs)
 
+    try:
+        subprocess.check_output("exec mkdocs build", cwd=root_dir, shell=True)
+    except subprocess.CalledProcessError as e:
+        print e.output
+        return 1
+
+    return 0
 
 if __name__ == '__main__':
-    cwd = os.path.dirname(os.path.realpath(__file__))
-    cwd = os.path.realpath(os.path.join(cwd, ".."))
-    directory = os.path.join(cwd, "docs_build")
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    proc = subprocess.Popen("exec mkdocs build", cwd=cwd, shell=True)
-    proc.kill()
+    sys.exit(main())
