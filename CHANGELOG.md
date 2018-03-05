@@ -17,7 +17,7 @@ at anytime.
   *
 
 ### Deprecated
-  *
+  * `report_bug` jsonrpc command
   *
 
 ### Changed

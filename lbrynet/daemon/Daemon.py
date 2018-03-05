@@ -1127,6 +1127,7 @@ class Daemon(AuthJSONRPCServer):
         log.info("Get version info: " + json.dumps(platform_info))
         return self._render_response(platform_info)
 
+    @AuthJSONRPCServer.deprecated()
     def jsonrpc_report_bug(self, message=None):
         """
         Report a bug to slack
