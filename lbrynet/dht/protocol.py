@@ -29,7 +29,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._sentMessages = {}
         self._partialMessages = {}
         self._partialMessagesProgress = {}
-        self._delay = Delay()
+        self._delay = Delay(0, self._node.clock.seconds)
         # keep track of outstanding writes so that they
         # can be cancelled on shutdown
         self._call_later_list = {}
