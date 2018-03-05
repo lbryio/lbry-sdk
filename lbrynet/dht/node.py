@@ -176,6 +176,11 @@ class Node(object):
             raise ValueError("%s lbrynet may already be running." % str(e))
 
     def bootstrap_join(self, known_node_addresses, finished_d):
+        """
+        Attempt to join the dht, retry every 30 seconds if unsuccessful
+        :param known_node_addresses: [(str, int)] list of hostnames and ports for known dht seed nodes
+        :param finished_d: (defer.Deferred) called when join succeeds
+        """
         @defer.inlineCallbacks
         def _resolve_seeds():
             bootstrap_contacts = []
