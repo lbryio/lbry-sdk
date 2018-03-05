@@ -13,22 +13,6 @@ at anytime.
   *
 
 ### Fixed
-  *
-  * improper parsing of arguments to CLI settings_set (https://github.com/lbryio/lbry/issues/930)
-  * unnecessarily verbose exchange rate error (https://github.com/lbryio/lbry/issues/984)
-  * value error due to a race condition when saving to the claim cache (https://github.com/lbryio/lbry/issues/1013)
-  * being unable to re-download updated content (https://github.com/lbryio/lbry/issues/951)
-  * sending error messages for failed api requests
-  * file manager startup being slow when handling thousands of files
-  * handling decryption error for blobs encrypted with an invalid key
-  * handling stream with no data blob (https://github.com/lbryio/lbry/issues/905)
-  * fetching the external ip
-  * `blob_list` returning an error with --uri parameter and incorrectly returning `[]` for streams where blobs are known (https://github.com/lbryio/lbry/issues/895)
-  * `get` failing with a non-useful error message when given a uri for a channel claim
-  * exception checking in several wallet unit tests
-  * daemon not erring properly for non-numeric values being passed to the `bid` parameter for the `publish` method
-  * `publish` command to allow updating claims with a `bid` amount higher than the wallet balance, so long as the amount is less than the wallet balance plus the bid amount of the claim being updated (https://github.com/lbryio/lbry/issues/748)
-  * incorrect `blob_num` for the stream terminator blob, which would result in creating invalid streams. Such invalid streams are detected on startup and are automatically removed (https://github.com/lbryio/lbry/issues/1124)
   * fixed the inconsistencies in API and CLI docstrings
   *
 
@@ -40,30 +24,11 @@ at anytime.
   *
   *
 ### Added
-  * link to instructions on how to change the default peer port
-  * `lbrynet-console`, a tool to run or connect to lbrynet-daemon and launch an interactive python console with the api functions built in.
-  * `--conf` CLI flag to specify an alternate config file
-  * `peer_port`, `disable_max_key_fee`, `auto_renew_claim_height_delta`, `blockchain_name`, and `lbryum_servers` to configurable settings
-  * `wallet_unlock` command (available during startup to unlock an encrypted wallet)
-  * support for wallet encryption via new commands `wallet_decrypt` and `wallet_encrypt`
-  * `channel_import`, `channel_export`, and `claim_renew` commands
-  * `blob_availability` and `stream_availability` commands for debugging download issues
-  * a new startup stage to indicate if the daemon is waiting for the `wallet_unlock` command.
-  * `abandon_info` dictionary (containing `claim_name`, `claim_id`, `address`, `amount`, `balance_delta` and `nout`) for claims, supports, and updates returned by `transaction_list`
-  * `permanent_url` string to `channel_list_mine`, `claim_list`, `claim_show`, `resolve` and `resolve_name` (see lbryio/lbryum#203)
-  * `is_mine` boolean to `channel_list` results
-  * `txid`, `nout`, `channel_claim_id`, `channel_claim_name`, `status`, `blobs_completed`, and `blobs_in_stream` fields to file objects returned by `file_list` and `get`
-  * `txid`, `nout`, `channel_claim_id`, and `channel_claim_name` filters for `file` commands (`file_list`, `file_set_status`, `file_reflect`,  and `file_delete`)
-  * unit tests for `SQLiteStorage` and updated old tests for relevant changes (https://github.com/lbryio/lbry/issues/1088)
   * scripts to autogenerate documentation
-  * 
-
-### Added
-  *
   *
 
 ### Removed
-  *
+  * short(single dashed) arguments for `lbrynet-cli`
   *
 
 
@@ -138,18 +103,6 @@ at anytime.
  * unnecessary `TempBlobManager` class
  * old storage classes used by the file manager, wallet, and blob manager
  * old `.db` database files from the data directory
-
-  * `seccure` and `gmpy` dependencies
-  * support for positional arguments in cli `settings_set`. Now only accepts settings changes in the form `--setting_key=value`
-  * `auto_re_reflect` setting from the conf file, use the `reflect_uploads` setting instead
-  * `name` argument for `claim_show` command
-  * `message` response field in file objects returned by `file_list` and `get`
-  * `include_tip_info` argument from `transaction_list`, which will now always include tip information.
-  * old and unused UI related code
-  * unnecessary `TempBlobManager` class
-  * old storage classes used by the file manager, wallet, and blob manager
-  * old `.db` database files from the data directory
-  * short(single dashed) arguments for `lbrynet-cli`
 
 ## [0.18.0] - 2017-11-08
 ### Fixed
