@@ -236,38 +236,11 @@ class Node(object):
                     yield contact
         return list(_inner())
 
-    def printContacts(self, *args):
-        print '\n\nNODE CONTACTS\n==============='
-        for i in range(len(self._routingTable._buckets)):
-            print "bucket %i" % i
-            for contact in self._routingTable._buckets[i]._contacts:
-                print "    %s:%i" % (contact.address, contact.port)
-        print '=================================='
-
     def hasContacts(self):
         for bucket in self._routingTable._buckets:
             if bucket._contacts:
                 return True
         return False
-
-    def getApproximateTotalDHTNodes(self):
-        # get the deepest bucket and the number of contacts in that bucket and multiply it
-        # by the number of equivalently deep buckets in the whole DHT to get a really bad
-        # estimate!
-        bucket = self._routingTable._buckets[self._routingTable._kbucketIndex(self.node_id)]
-        num_in_bucket = len(bucket._contacts)
-        factor = (2 ** constants.key_bits) / (bucket.rangeMax - bucket.rangeMin)
-        return num_in_bucket * factor
-
-    def getApproximateTotalHashes(self):
-        # Divide the number of hashes we know about by k to get a really, really, really
-        # bad estimate of the average number of hashes per node, then multiply by the
-        # approximate number of nodes to get a horrendous estimate of the total number
-        # of hashes in the DHT
-        num_in_data_store = len(self._dataStore._dict)
-        if num_in_data_store == 0:
-            return 0
-        return num_in_data_store * self.getApproximateTotalDHTNodes() / 8
 
     def announceHaveBlob(self, key):
         return self.iterativeAnnounceHaveBlob(key, {'port': self.peerPort, 'lbryid': self.node_id})
