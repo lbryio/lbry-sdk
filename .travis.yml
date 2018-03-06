@@ -36,6 +36,7 @@ install:
   - pip install -U pip
   - pip install -r requirements.txt
   - pip install .
+  - pip install requests[security]
 
 script:
   - pip install cython
@@ -45,3 +46,5 @@ script:
   - python -m unittest discover lbrynet/tests/integration -v
   - rvm install ruby-2.3.1
   - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
+  - pip install mkdocs mkdocs-material tabulate
+  - python scripts/gen_docs.py && mkdocs build && git diff --exit-code; code=$?; git checkout -- .; (exit $code) # check that docs are up to date; clean up changes afterwards
