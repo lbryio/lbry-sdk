@@ -54,7 +54,7 @@ class DiskBlobManager(DHTHashSupplier):
         self.blobs[blob_hash] = blob
         return defer.succeed(blob)
 
-    def _immediate_announce(self, blob_hashes):
+    def immediate_announce(self, blob_hashes):
         if self.hash_announcer:
             return self.hash_announcer.immediate_announce(blob_hashes)
         raise Exception("Hash announcer not set")
@@ -69,7 +69,7 @@ class DiskBlobManager(DHTHashSupplier):
         # we announce all blobs immediately, if announce_head_blob_only is False
         # otherwise, announce only if marked as should_announce
         if not self.announce_head_blobs_only or should_announce:
-            reactor.callLater(0, self._immediate_announce, [blob.blob_hash])
+            reactor.callLater(0, self.immediate_announce, [blob.blob_hash])
 
     def completed_blobs(self, blobhashes_to_check):
         return self._completed_blobs(blobhashes_to_check)
@@ -107,7 +107,7 @@ class DiskBlobManager(DHTHashSupplier):
 
     def immediate_announce_all_blobs(self):
         d = self._get_all_verified_blob_hashes()
-        d.addCallback(self._immediate_announce)
+        d.addCallback(self.immediate_announce)
         return d
 
     def get_all_verified_blobs(self):

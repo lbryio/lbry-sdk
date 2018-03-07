@@ -14,7 +14,7 @@ at anytime.
 
 ### Fixed
   * fixed the inconsistencies in API and CLI docstrings
-  *
+  * `blob_announce` error when announcing a single blob
 
 ### Deprecated
   * `report_bug` jsonrpc command
