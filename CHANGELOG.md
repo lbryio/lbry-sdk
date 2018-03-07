@@ -30,7 +30,7 @@ at anytime.
 ### Added
   * scripts to autogenerate documentation
   * now updating new channel also takes into consideration the original bid amount, so now channel could be updated for wallet balance + the original bid amount
-  *
+  * forward-compaitibility for upcoming DHT bencoding changes
 
 ### Removed
   * short(single dashed) arguments for `lbrynet-cli`

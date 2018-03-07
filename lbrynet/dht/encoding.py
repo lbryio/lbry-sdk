@@ -64,16 +64,9 @@ class Bencode(Encoding):
             keys = data.keys()
             keys.sort()
             for key in keys:
-                encodedDictItems += self.encode(key)
+                encodedDictItems += self.encode(key)  # TODO: keys should always be bytestrings
                 encodedDictItems += self.encode(data[key])
             return 'd%se' % encodedDictItems
-        elif isinstance(data, float):
-            # This (float data type) is a non-standard extension to the original Bencode algorithm
-            return 'f%fe' % data
-        elif data is None:
-            # This (None/NULL data type) is a non-standard extension
-            # to the original Bencode algorithm
-            return 'n'
         else:
             print data
             raise TypeError("Cannot bencode '%s' object" % type(data))
