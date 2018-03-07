@@ -1851,8 +1851,12 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Invalid channel name")
         if amount <= 0:
             raise Exception("Invalid amount")
-        if amount > self.session.wallet.get_balance():
-            raise InsufficientFundsError()
+
+        amt = yield self.session.wallet.get_max_usable_balance_for_claim(channel_name)
+        if amount > amt:
+            raise InsufficientFundsError(
+                "Please lower the bid value, the maximum amount you can specify for this claim is {}"
+                .format(amt - MAX_UPDATE_FEE_ESTIMATE))
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
         self.analytics_manager.send_new_channel()

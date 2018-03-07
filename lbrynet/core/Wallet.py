@@ -502,6 +502,10 @@ class Wallet(object):
             raise Exception("New channel claim should have no fields other than name")
         log.info("Preparing to make certificate claim for %s", channel_name)
         channel_claim = yield self._claim_certificate(parsed_channel_name.name, amount)
+        if not channel_claim['success']:
+            log.error(channel_claim)
+            msg = 'Claim to name {} failed: {}'.format(channel_name, channel_claim['reason'])
+            raise Exception(msg)
         yield self.save_claim(self._get_temp_claim_info(channel_claim, channel_name, amount))
         defer.returnValue(channel_claim)
 
