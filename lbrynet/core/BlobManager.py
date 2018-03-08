@@ -1,7 +1,7 @@
 import logging
 import os
 from sqlite3 import IntegrityError
-from twisted.internet import threads, defer, reactor
+from twisted.internet import threads, defer, reactor, task
 from lbrynet import conf
 from lbrynet.blob.blob_file import BlobFile
 from lbrynet.blob.creator import BlobFileCreator
@@ -29,10 +29,18 @@ class DiskBlobManager(DHTHashSupplier):
         self.blobs = {}
         self.blob_hashes_to_delete = {}  # {blob_hash: being_deleted (True/False)}
 
+        self.check_should_announce_lc = None
+        if conf.settings['run_reflector_server']:
+            self.check_should_announce_lc = task.LoopingCall(self.storage.verify_will_announce_all_head_and_sd_blobs)
+
     def setup(self):
+        if self.check_should_announce_lc and not self.check_should_announce_lc.running:
+            self.check_should_announce_lc.start(600)
         return defer.succeed(True)
 
     def stop(self):
+        if self.check_should_announce_lc and self.check_should_announce_lc.running:
+            self.check_should_announce_lc.stop()
         return defer.succeed(True)
 
     def get_blob(self, blob_hash, length=None):

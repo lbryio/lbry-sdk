@@ -261,12 +261,12 @@ class SQLiteStorage(object):
 
     def count_should_announce_blobs(self):
         return self.run_and_return_one_or_none(
-            "select count(*) from blob where should_announce=1 and status=?", "finished"
+            "select count(*) from blob where should_announce=1 and status='finished'"
         )
 
     def get_all_should_announce_blobs(self):
         return self.run_and_return_list(
-            "select blob_hash from blob where should_announce=1 and status=?", "finished"
+            "select blob_hash from blob where should_announce=1 and status='finished'"
         )
 
     def get_blobs_to_announce(self, hash_announcer):
@@ -275,12 +275,13 @@ class SQLiteStorage(object):
             if conf.settings['announce_head_blobs_only']:
                 r = transaction.execute(
                     "select blob_hash from blob "
-                    "where blob_hash is not null and should_announce=1 and next_announce_time<?",
+                    "where blob_hash is not null and should_announce=1 and next_announce_time<? and status='finished'",
                     (timestamp,)
                 )
             else:
                 r = transaction.execute(
-                    "select blob_hash from blob where blob_hash is not null and next_announce_time<?", (timestamp,)
+                    "select blob_hash from blob where blob_hash is not null "
+                    "and next_announce_time<? and status='finished'", (timestamp,)
                 )
 
             blobs = [b for b, in r.fetchall()]
@@ -318,6 +319,30 @@ class SQLiteStorage(object):
         for blob_info in blob_infos:
             if blob_info.get('blob_hash') and blob_info['length']:
                 yield self.add_known_blob(blob_info['blob_hash'], blob_info['length'])
+
+    def verify_will_announce_head_and_sd_blobs(self, stream_hash):
+        # fix should_announce for imported head and sd blobs
+        return self.db.runOperation(
+            "update blob set should_announce=1 "
+            "where should_announce=0 and "
+            "blob.blob_hash in "
+            "  (select b.blob_hash from blob b inner join stream s on b.blob_hash=s.sd_hash and s.stream_hash=?) "
+            "or blob.blob_hash in "
+            " (select b.blob_hash from blob b "
+            "  inner join stream_blob s2 on b.blob_hash=s2.blob_hash and s2.position=0 and s2.stream_hash=?)",
+            (stream_hash, stream_hash)
+        )
+
+    def verify_will_announce_all_head_and_sd_blobs(self):
+        return self.db.runOperation(
+            "update blob set should_announce=1 "
+            "where should_announce=0 and "
+            "blob.blob_hash in "
+            "  (select b.blob_hash from blob b inner join stream s on b.blob_hash=s.sd_hash) "
+            "or blob.blob_hash in "
+            " (select b.blob_hash from blob b "
+            "  inner join stream_blob s2 on b.blob_hash=s2.blob_hash and s2.position=0)"
+        )
 
     # # # # # # # # # stream functions # # # # # # # # #
 
@@ -392,24 +417,37 @@ class SQLiteStorage(object):
     def get_blobs_for_stream(self, stream_hash, only_completed=False):
         def _get_blobs_for_stream(transaction):
             crypt_blob_infos = []
+            stream_blobs = transaction.execute(
+                "select blob_hash, position, iv from stream_blob where stream_hash=?", (stream_hash, )
+            ).fetchall()
             if only_completed:
-                query = "select blob_hash, position, iv from stream_blob where stream_hash=? and status='finished'"
+                lengths = transaction.execute(
+                    "select b.blob_hash, b.blob_length from blob b "
+                    "inner join stream_blob s ON b.blob_hash=s.blob_hash and b.status='finished'"
+                ).fetchall()
             else:
-                query = "select blob_hash, position, iv from stream_blob where stream_hash=?"
-            stream_blobs = transaction.execute(query, (stream_hash, )).fetchall()
-            if stream_blobs:
-                for blob_hash, position, iv in stream_blobs:
-                    if blob_hash is not None:
-                        blob_length = transaction.execute("select blob_length from blob "
-                                                          "where blob_hash=?",
-                                                          (blob_hash,)).fetchone()
-                        blob_length = 0 if not blob_length else blob_length[0]
-                        crypt_blob_infos.append(CryptBlobInfo(blob_hash, position, blob_length, iv))
-                    else:
-                        crypt_blob_infos.append(CryptBlobInfo(None, position, 0, iv))
-                crypt_blob_infos = sorted(crypt_blob_infos, key=lambda info: info.blob_num)
+                lengths = transaction.execute(
+                    "select b.blob_hash, b.blob_length from blob b "
+                    "inner join stream_blob s ON b.blob_hash=s.blob_hash"
+                ).fetchall()
+
+            blob_length_dict = {}
+            for blob_hash, length in lengths:
+                blob_length_dict[blob_hash] = length
+
+            for blob_hash, position, iv in stream_blobs:
+                blob_length = blob_length_dict.get(blob_hash, 0)
+                crypt_blob_infos.append(CryptBlobInfo(blob_hash, position, blob_length, iv))
+            crypt_blob_infos = sorted(crypt_blob_infos, key=lambda info: info.blob_num)
             return crypt_blob_infos
         return self.db.runInteraction(_get_blobs_for_stream)
+
+    def get_pending_blobs_for_stream(self, stream_hash):
+        return self.run_and_return_list(
+            "select s.blob_hash from stream_blob s where stream_hash=? "
+            "inner join blob b on b.blob_hash=s.blob_hash and b.status='pending'",
+            stream_hash
+        )
 
     def get_stream_of_blob(self, blob_hash):
         return self.run_and_return_one_or_none(
