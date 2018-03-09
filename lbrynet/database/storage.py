@@ -444,8 +444,9 @@ class SQLiteStorage(object):
 
     def get_pending_blobs_for_stream(self, stream_hash):
         return self.run_and_return_list(
-            "select s.blob_hash from stream_blob s where stream_hash=? "
-            "inner join blob b on b.blob_hash=s.blob_hash and b.status='pending'",
+            "select s.blob_hash from stream_blob s "
+            "inner join blob b on b.blob_hash=s.blob_hash and b.status='pending' "
+            "where stream_hash=?",
             stream_hash
         )
 
