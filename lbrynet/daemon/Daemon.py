@@ -1852,11 +1852,16 @@ class Daemon(AuthJSONRPCServer):
         if amount <= 0:
             raise Exception("Invalid amount")
 
-        amt = yield self.session.wallet.get_max_usable_balance_for_claim(channel_name)
-        if amount > amt:
+        balance = yield self.session.wallet.get_max_usable_balance_for_claim(channel_name)
+        max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
+        if balance <= MAX_UPDATE_FEE_ESTIMATE:
+            raise InsufficientFundsError(
+                "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
+                .format(MAX_UPDATE_FEE_ESTIMATE - balance))
+        elif amount > max_bid_amount:
             raise InsufficientFundsError(
                 "Please lower the bid value, the maximum amount you can specify for this claim is {}"
-                .format(amt - MAX_UPDATE_FEE_ESTIMATE))
+                .format(max_bid_amount))
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
         self.analytics_manager.send_new_channel()
@@ -2032,11 +2037,16 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise ValueError("Bid value must be greater than 0.0")
 
-        amt = yield self.session.wallet.get_max_usable_balance_for_claim(name)
-        if bid > amt:
+        balance = yield self.session.wallet.get_max_usable_balance_for_claim(name)
+        max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
+        if balance <= MAX_UPDATE_FEE_ESTIMATE:
+            raise InsufficientFundsError(
+                "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
+                .format(MAX_UPDATE_FEE_ESTIMATE - balance))
+        elif bid > max_bid_amount:
             raise InsufficientFundsError(
                 "Please lower the bid value, the maximum amount you can specify for this claim is {}"
-                .format(amt - MAX_UPDATE_FEE_ESTIMATE))
+                .format(max_bid_amount))
 
         metadata = metadata or {}
         if fee is not None:

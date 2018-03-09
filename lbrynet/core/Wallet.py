@@ -503,7 +503,7 @@ class Wallet(object):
         log.info("Preparing to make certificate claim for %s", channel_name)
         channel_claim = yield self._claim_certificate(parsed_channel_name.name, amount)
         if not channel_claim['success']:
-            msg = 'Claiming of {} failed: {}'.format(channel_name, channel_claim['reason'])
+            msg = 'Claiming of channel {} failed: {}'.format(channel_name, channel_claim['reason'])
             log.error(msg)
             raise Exception(msg)
         yield self.save_claim(self._get_temp_claim_info(channel_claim, channel_name, amount))
