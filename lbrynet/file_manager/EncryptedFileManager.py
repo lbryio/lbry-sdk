@@ -44,8 +44,8 @@ class EncryptedFileManager(object):
     @defer.inlineCallbacks
     def setup(self):
         yield self._add_to_sd_identifier()
-        yield self._start_lbry_files()
-        log.info("Started file manager")
+        d = self._start_lbry_files()
+        d.addCallback(lambda _: log.info("Started file manager"))
 
     def get_lbry_file_status(self, lbry_file):
         return self.session.storage.get_lbry_file_status(lbry_file.rowid)

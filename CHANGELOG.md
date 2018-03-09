@@ -24,6 +24,7 @@ at anytime.
 ### Changed
   * reflector server to periodically check and set `should_announce` for sd and head blobs instead of during each request
   * reflector server to use `SQLiteStorage` to find needed blob hashes for a stream
+  * file manager startup to not block daemon startup
 
 ### Added
   * scripts to autogenerate documentation
