@@ -18,6 +18,7 @@ at anytime.
   * `blob_list` error when looking up blobs by stream or sd hash
   * issue#1107 whereing claiming a channel with the exact amount present in wallet would give out proper error
   * Fix channel creation to use same bid logic as claim ([1148])(https://github.com/lbryio/lbry/pull/1148)
+  *
 
 ### Deprecated
   * `report_bug` jsonrpc command
@@ -26,6 +27,7 @@ at anytime.
 ### Changed
   * reflector server to periodically check and set `should_announce` for sd and head blobs instead of during each request
   * reflector server to use `SQLiteStorage` to find needed blob hashes for a stream
+  *
 
 ### Added
   * scripts to autogenerate documentation
@@ -34,6 +36,7 @@ at anytime.
 
 ### Removed
   * short(single dashed) arguments for `lbrynet-cli`
+  * `flags` decorator from server.py as short flags are no longer used when using api/cli methods
   *
 
 
