@@ -502,6 +502,10 @@ class Wallet(object):
             raise Exception("New channel claim should have no fields other than name")
         log.info("Preparing to make certificate claim for %s", channel_name)
         channel_claim = yield self._claim_certificate(parsed_channel_name.name, amount)
+        if not channel_claim['success']:
+            msg = 'Claiming of channel {} failed: {}'.format(channel_name, channel_claim['reason'])
+            log.error(msg)
+            raise Exception(msg)
         yield self.save_claim(self._get_temp_claim_info(channel_claim, channel_name, amount))
         defer.returnValue(channel_claim)
 
@@ -559,8 +563,8 @@ class Wallet(object):
                                             bid, certificate_id, claim_address, change_address)
 
         if not claim['success']:
-            log.error(claim)
-            msg = 'Claim to name {} failed: {}'.format(name, claim['reason'])
+            msg = 'Claiming of name {} failed: {}'.format(name, claim['reason'])
+            log.error(msg)
             raise Exception(msg)
         claim = self._process_claim_out(claim)
         yield self.storage.save_claim(self._get_temp_claim_info(claim, name, bid), smart_decode(claim['value']))

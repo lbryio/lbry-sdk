@@ -16,6 +16,8 @@ at anytime.
   * fixed the inconsistencies in API and CLI docstrings
   * `blob_announce` error when announcing a single blob
   * `blob_list` error when looking up blobs by stream or sd hash
+  * issue#1107 whereing claiming a channel with the exact amount present in wallet would give out proper error
+  *
 
 ### Deprecated
   * `report_bug` jsonrpc command
@@ -27,6 +29,7 @@ at anytime.
 
 ### Added
   * scripts to autogenerate documentation
+  * now updating new channel also takes into consideration the original bid amount, so now channel could be updated for wallet balance + the original bid amount
   *
 
 ### Removed
