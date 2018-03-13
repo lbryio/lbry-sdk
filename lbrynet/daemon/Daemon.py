@@ -2045,7 +2045,7 @@ class Daemon(AuthJSONRPCServer):
                 .format(MAX_UPDATE_FEE_ESTIMATE - balance))
         elif bid > max_bid_amount:
             raise InsufficientFundsError(
-                "Please lower the bid value, the maximum amount you can specify for this claim is {}"
+                "Please lower the bid. After accounting for the estimated fee, you only have {} left."
                 .format(max_bid_amount))
 
         metadata = metadata or {}
