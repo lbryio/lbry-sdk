@@ -8,7 +8,7 @@ from lbrynet.database.storage import SQLiteStorage
 
 log = logging.getLogger(__name__)
 
-default_download_directory = conf.default_download_dir
+download_directory = conf.settings['download_directory']
 
 
 def run_operation(db):
@@ -129,7 +129,7 @@ def do_migration(db_dir):
         # insert the file
         transaction.execute(
             "insert or ignore into file values (?, ?, ?, ?, ?)",
-            (stream_hash, stream_name, default_download_directory.encode('hex'),
+            (stream_hash, stream_name, download_directory.encode('hex'),
              data_rate, status)
         )
 
