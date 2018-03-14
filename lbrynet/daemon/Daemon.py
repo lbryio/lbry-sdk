@@ -547,10 +547,6 @@ class Daemon(AuthJSONRPCServer):
                     config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
                 wallet = LBRYumWallet(self.storage, config)
                 return defer.succeed(wallet)
-            elif self.wallet_type == PTC_WALLET:
-                log.info("Using PTC wallet")
-                from lbrynet.core.PTCWallet import PTCWallet
-                return defer.succeed(PTCWallet(self.db_dir))
             else:
                 raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
 

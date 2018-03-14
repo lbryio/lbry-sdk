@@ -132,10 +132,6 @@ class Session(object):
         if self.node_id is None:
             self.node_id = generate_id()
 
-        if self.wallet is None:
-            from lbrynet.core.PTCWallet import PTCWallet
-            self.wallet = PTCWallet(self.db_dir)
-
         if self.use_upnp is True:
             d = self._try_upnp()
         else:
