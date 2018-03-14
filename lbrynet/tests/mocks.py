@@ -3,8 +3,10 @@ import io
 
 from Crypto.PublicKey import RSA
 from twisted.internet import defer, threads, error
+from twisted.python.failure import Failure
 
-from lbrynet.core import PTCWallet
+from lbrynet.core.client.ClientRequest import ClientRequest
+from lbrynet.core.Error import RequestCanceledError
 from lbrynet.core import BlobAvailability
 from lbrynet.core.utils import generate_id
 from lbrynet.daemon import ExchangeRateManager as ERM
@@ -75,6 +77,82 @@ class ExchangeRateManager(ERM.ExchangeRateManager):
                 feed.market, rates[feed.market]['spot'], rates[feed.market]['ts'])
 
 
+class PointTraderKeyExchanger:
+
+    def __init__(self, wallet):
+        self.wallet = wallet
+        self._protocols = []
+
+    def send_next_request(self, peer, protocol):
+        if not protocol in self._protocols:
+            r = ClientRequest({'public_key': self.wallet.encoded_public_key},
+                              'public_key')
+            d = protocol.add_request(r)
+            d.addCallback(self._handle_exchange_response, peer, r, protocol)
+            d.addErrback(self._request_failed, peer)
+            self._protocols.append(protocol)
+            return defer.succeed(True)
+        else:
+            return defer.succeed(False)
+
+    def _handle_exchange_response(self, response_dict, peer, request, protocol):
+        assert request.response_identifier in response_dict, \
+            "Expected %s in dict but did not get it" % request.response_identifier
+        assert protocol in self._protocols, "Responding protocol is not in our list of protocols"
+        peer_pub_key = response_dict[request.response_identifier]
+        self.wallet.set_public_key_for_peer(peer, peer_pub_key)
+        return True
+
+    def _request_failed(self, err, peer):
+        if not err.check(RequestCanceledError):
+            return err
+
+
+class PointTraderKeyQueryHandlerFactory:
+
+    def __init__(self, wallet):
+        self.wallet = wallet
+
+    def build_query_handler(self):
+        q_h = PointTraderKeyQueryHandler(self.wallet)
+        return q_h
+
+    def get_primary_query_identifier(self):
+        return 'public_key'
+
+    def get_description(self):
+        return ("Point Trader Address - an address for receiving payments on the "
+                "point trader testing network")
+
+
+class PointTraderKeyQueryHandler:
+
+    def __init__(self, wallet):
+        self.wallet = wallet
+        self.query_identifiers = ['public_key']
+        self.public_key = None
+        self.peer = None
+
+    def register_with_request_handler(self, request_handler, peer):
+        self.peer = peer
+        request_handler.register_query_handler(self, self.query_identifiers)
+
+    def handle_queries(self, queries):
+        if self.query_identifiers[0] in queries:
+            new_encoded_pub_key = queries[self.query_identifiers[0]]
+            try:
+                RSA.importKey(new_encoded_pub_key)
+            except (ValueError, TypeError, IndexError):
+                return defer.fail(Failure(ValueError("Client sent an invalid public key")))
+            self.public_key = new_encoded_pub_key
+            self.wallet.set_public_key_for_peer(self.peer, self.public_key)
+            fields = {'public_key': self.wallet.encoded_public_key}
+            return defer.succeed(fields)
+        if self.public_key is None:
+            return defer.fail(Failure(ValueError("Expected but did not receive a public key")))
+        else:
+            return defer.succeed({})
+
 
 class Wallet(object):
     def __init__(self):
@@ -100,10 +178,10 @@ class Wallet(object):
         return defer.succeed(True)
 
     def get_info_exchanger(self):
-        return PTCWallet.PointTraderKeyExchanger(self)
+        return PointTraderKeyExchanger(self)
 
     def get_wallet_info_query_handler_factory(self):
-        return PTCWallet.PointTraderKeyQueryHandlerFactory(self)
+        return PointTraderKeyQueryHandlerFactory(self)
 
     def reserve_points(self, *args):
         return True
