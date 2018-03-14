@@ -555,9 +555,10 @@ class Wallet(object):
         decoded = ClaimDict.load_dict(metadata)
         serialized = decoded.serialized
 
-        amt = yield self.get_max_usable_balance_for_claim(name)
-        if bid > amt:
-            raise InsufficientFundsError()
+        if self.get_balance() <= bid:
+            amt = yield self.get_max_usable_balance_for_claim(name)
+            if bid > amt:
+                raise InsufficientFundsError()
 
         claim = yield self._send_name_claim(name, serialized.encode('hex'),
                                             bid, certificate_id, claim_address, change_address)
