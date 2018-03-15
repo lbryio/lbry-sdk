@@ -2953,7 +2953,7 @@ class Daemon(AuthJSONRPCServer):
                 if sd_hash:
                     stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
                 blobs = yield self.storage.get_blobs_for_stream(stream_hash, only_completed=True)
-                blob_hashes.extend([blob.blob_hash for blob in blobs])
+                blob_hashes.extend([blob.blob_hash for blob in blobs if blob.blob_hash is not None])
             else:
                 raise Exception('single argument must be specified')
             yield self.session.blob_manager.immediate_announce(blob_hashes)
