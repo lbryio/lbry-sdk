@@ -376,7 +376,7 @@ class SQLiteStorage(object):
     def delete_stream(self, stream_hash):
         sd_hash = yield self.get_sd_blob_hash_for_stream(stream_hash)
         stream_blobs = yield self.get_blobs_for_stream(stream_hash)
-        blob_hashes = [b.blob_hash for b in stream_blobs]
+        blob_hashes = [b.blob_hash for b in stream_blobs if b.blob_hash is not None]
 
         def _delete_stream(transaction):
             transaction.execute("delete from content_claim where stream_hash=? ", (stream_hash,))
