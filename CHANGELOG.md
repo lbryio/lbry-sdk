@@ -17,7 +17,7 @@ at anytime.
   * `blob_announce` error when announcing a single blob
   * `blob_list` error when looking up blobs by stream or sd hash
   * issue#1107 whereing claiming a channel with the exact amount present in wallet would give out proper error
-  *
+  * Fix channel creation to use same bid logic as claim ([1148])(https://github.com/lbryio/lbry/pull/1148)
 
 ### Deprecated
   * `report_bug` jsonrpc command
