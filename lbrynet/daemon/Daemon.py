@@ -1851,7 +1851,7 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Invalid channel name")
         if amount <= 0:
             raise Exception("Invalid amount")
-        
+
         yield self.session.wallet.update_balance()
         if amount >= self.session.wallet.get_balance():
             balance = yield self.session.wallet.get_max_usable_balance_for_claim(channel_name)
