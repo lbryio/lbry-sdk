@@ -1852,16 +1852,18 @@ class Daemon(AuthJSONRPCServer):
         if amount <= 0:
             raise Exception("Invalid amount")
 
-        balance = yield self.session.wallet.get_max_usable_balance_for_claim(channel_name)
-        max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
-        if balance <= MAX_UPDATE_FEE_ESTIMATE:
-            raise InsufficientFundsError(
-                "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
-                .format(MAX_UPDATE_FEE_ESTIMATE - balance))
-        elif amount > max_bid_amount:
-            raise InsufficientFundsError(
-                "Please lower the bid value, the maximum amount you can specify for this claim is {}"
-                .format(max_bid_amount))
+        yield self.session.wallet.update_balance()
+        if amount >= self.session.wallet.get_balance():
+            balance = yield self.session.wallet.get_max_usable_balance_for_claim(channel_name)
+            max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
+            if balance <= MAX_UPDATE_FEE_ESTIMATE:
+                raise InsufficientFundsError(
+                    "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
+                .   format(MAX_UPDATE_FEE_ESTIMATE - balance))
+            elif amount > max_bid_amount:
+                raise InsufficientFundsError(
+                    "Please lower the bid value, the maximum amount you can specify for this channel is {}"
+                    .format(max_bid_amount))
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
         self.analytics_manager.send_new_channel()
@@ -2047,7 +2049,7 @@ class Daemon(AuthJSONRPCServer):
                     .format(MAX_UPDATE_FEE_ESTIMATE - balance))
             elif bid > max_bid_amount:
                 raise InsufficientFundsError(
-                    "Please lower the bid. After accounting for the estimated fee, you only have {} left."
+                    "Please lower the bid value, the maximum amount you can specify for this claim is {}."
                     .format(max_bid_amount))
 
         metadata = metadata or {}
