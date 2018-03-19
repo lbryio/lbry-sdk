@@ -33,26 +33,14 @@ class EncryptedFileReflectorClient(Protocol):
         self.file_sender = None
         self.producer = None
         self.streaming = False
+
+        self.blob_manager = self.factory.blob_manager
+        self.protocol_version = self.factory.protocol_version
+        self.stream_hash = self.factory.stream_hash
+
         d = self.load_descriptor()
         d.addCallback(lambda _: self.send_handshake())
-        d.addErrback(
-            lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
-
-    @property
-    def file_name(self):
-        return self.factory.file_name
-
-    @property
-    def blob_manager(self):
-        return self.factory.blob_manager
-
-    @property
-    def protocol_version(self):
-        return self.factory.protocol_version
-
-    @property
-    def stream_hash(self):
-        return self.factory.stream_hash
+        d.addErrback(lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
 
     def dataReceived(self, data):
         self.response_buff += data
@@ -131,7 +119,7 @@ class EncryptedFileReflectorClient(Protocol):
                          len(filtered))
             return filtered
 
-        d = self.factory.blob_manager.storage.get_blobs_for_stream(self.factory.stream_hash)
+        d = self.factory.blob_manager.storage.get_blobs_for_stream(self.stream_hash)
         d.addCallback(self.get_validated_blobs)
         if not self.descriptor_needed:
             d.addCallback(lambda filtered:
@@ -151,7 +139,7 @@ class EncryptedFileReflectorClient(Protocol):
         def _save_descriptor_blob(sd_blob):
             self.stream_descriptor = sd_blob
 
-        d = self.factory.blob_manager.storage.get_sd_blob_hash_for_stream(self.factory.stream_hash)
+        d = self.factory.blob_manager.storage.get_sd_blob_hash_for_stream(self.stream_hash)
         d.addCallback(self.factory.blob_manager.get_blob)
         d.addCallback(_save_descriptor_blob)
         return d
@@ -312,27 +300,13 @@ class EncryptedFileReflectorClient(Protocol):
 
 class EncryptedFileReflectorClientFactory(ClientFactory):
     protocol = EncryptedFileReflectorClient
+    protocol_version = REFLECTOR_V2
 
-    def __init__(self, lbry_file):
-        self._lbry_file = lbry_file
+    def __init__(self, blob_manager, stream_hash):
+        self.blob_manager = blob_manager
+        self.stream_hash = stream_hash
         self.p = None
         self.finished_deferred = defer.Deferred()
-
-    @property
-    def blob_manager(self):
-        return self._lbry_file.blob_manager
-
-    @property
-    def stream_hash(self):
-        return self._lbry_file.stream_hash
-
-    @property
-    def file_name(self):
-        return self._lbry_file.file_name
-
-    @property
-    def protocol_version(self):
-        return REFLECTOR_V2
 
     def buildProtocol(self, addr):
         p = self.protocol()

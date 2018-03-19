@@ -719,7 +719,7 @@ class Daemon(AuthJSONRPCServer):
             claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path,
                                                                   claim_address, change_address)
             if conf.settings['reflect_uploads']:
-                d = reupload.reflect_stream(publisher.lbry_file)
+                d = reupload.reflect_file(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
         self.analytics_manager.send_claim_action('publish')
@@ -3010,7 +3010,7 @@ class Daemon(AuthJSONRPCServer):
             raise Exception('No file found')
         lbry_file = lbry_files[0]
 
-        results = yield reupload.reflect_stream(lbry_file, reflector_server=reflector_server)
+        results = yield reupload.reflect_file(lbry_file, reflector_server=reflector_server)
         defer.returnValue(results)
 
     @defer.inlineCallbacks
