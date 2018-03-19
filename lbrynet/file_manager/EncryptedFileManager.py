@@ -7,7 +7,7 @@ import logging
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
 from lbrynet.core.Error import InvalidStreamDescriptorError
-from lbrynet.reflector.reupload import reflect_stream
+from lbrynet.reflector.reupload import reflect_file
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
@@ -254,7 +254,7 @@ class EncryptedFileManager(object):
         sem = defer.DeferredSemaphore(self.CONCURRENT_REFLECTS)
         ds = []
         for lbry_file in self.lbry_files:
-            ds.append(sem.run(reflect_stream, lbry_file))
+            ds.append(sem.run(reflect_file, lbry_file))
         yield defer.DeferredList(ds)
 
     @defer.inlineCallbacks
