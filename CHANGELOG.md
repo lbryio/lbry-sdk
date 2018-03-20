@@ -16,8 +16,8 @@ at anytime.
   * fixed the inconsistencies in API and CLI docstrings
   * `blob_announce` error when announcing a single blob
   * `blob_list` error when looking up blobs by stream or sd hash
-  * issue#1107 whereing claiming a channel with the exact amount present in wallet would give out proper error
-  * Fix channel creation to use same bid logic as claim ([1148])(https://github.com/lbryio/lbry/pull/1148)
+  * issue#1107 where claiming a channel with the exact amount present in wallet would return a confusing error
+  * channel creation to use same bid logic as for claims ([1148])(https://github.com/lbryio/lbry/pull/1148)
 
 ### Deprecated
   * `report_bug` jsonrpc command
@@ -28,9 +28,9 @@ at anytime.
   * reflector server to use `SQLiteStorage` to find needed blob hashes for a stream
 
 ### Added
-  * scripts to autogenerate documentation
+  * scripts to auto-generate documentation
   * now updating new channel also takes into consideration the original bid amount, so now channel could be updated for wallet balance + the original bid amount
-  * forward-compaitibility for upcoming DHT bencoding changes
+  * forward-compatibility for upcoming DHT bencoding changes
 
 ### Removed
   * short(single dashed) arguments for `lbrynet-cli`
