@@ -35,11 +35,11 @@ at anytime.
 
 ## [0.19.1] - 2018-03-20
 ### Fixed
- * fixed the inconsistencies in API and CLI docstrings
+ * Fixed the inconsistencies in API and CLI docstrings
  * `blob_announce` error when announcing a single blob
- * `blob_list` error when looking up blobs by stream or sd hash
- * issue#1107 where claiming a channel with the exact amount present in wallet would return a confusing error
- * channel creation to use same bid logic as for claims ([1148])(https://github.com/lbryio/lbry/pull/1148)
+ * `blob_list` error when looking up blobs by stream or sd hash ([1126](https://github.com/lbryio/lbry/pull/1126))
+ * Claiming a channel with the exact amount present in wallet would return a confusing error ([1107](https://github.com/lbryio/lbry/issues/1107))
+ * Channel creation to use same bid logic as for claims ([1148](https://github.com/lbryio/lbry/pull/1148))
 
 ### Deprecated
  * `report_bug` jsonrpc command
@@ -47,16 +47,16 @@ at anytime.
 ### Changed
  * Bumped `lbryschema` requirement to 0.0.15 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0015---2018-03-20)
  * Bumped `lbryum` requirement to 3.2.0 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#320---2018-03-20)
- * reflector server to periodically check and set `should_announce` for sd and head blobs instead of during each request
- * reflector server to use `SQLiteStorage` to find needed blob hashes for a stream
+ * Reflector server to periodically check and set `should_announce` for sd and head blobs instead of during each request
+ * Reflector server to use `SQLiteStorage` to find needed blob hashes for a stream
 
 ### Added
- * scripts to auto-generate documentation
- * now updating new channel also takes into consideration the original bid amount, so now channel could be updated for wallet balance + the original bid amount
- * forward-compatibility for upcoming DHT bencoding changes
+ * Scripts to auto-generate documentation ([1128](https://github.com/lbryio/lbry/pull/1128))
+ * Now updating new channel also takes into consideration the original bid amount, so now channel could be updated for wallet balance + the original bid amount ([1137](https://github.com/lbryio/lbry/pull/1137))
+ * Forward-compatibility for upcoming DHT bencoding changes
 
 ### Removed
- * short(single dashed) arguments for `lbrynet-cli`
+ * Short(single dashed) arguments for `lbrynet-cli`
 
 
 ## [0.19.0] - 2018-03-02
