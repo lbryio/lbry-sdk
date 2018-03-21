@@ -101,4 +101,6 @@ Then run:
 pip install --editable .
 ```
 
-This will update `lbrynet-daemon` and other executables.
+This will install `lbrynet-daemon` in such a way that the changes you make to the code will be used as soon as you restart the daemon. 
+
+Happy hacking!
