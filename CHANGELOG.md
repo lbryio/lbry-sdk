@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * incorrectly raised download cancelled error for already verified blob files
   *
 
 ### Added

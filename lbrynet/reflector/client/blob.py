@@ -49,7 +49,7 @@ class BlobReflectorClient(Protocol):
             self.factory.sent_blobs = self.sent_blobs
             if self.factory.sent_blobs:
                 log.info('Finished sending data via reflector')
-            self.factory.finished_deferred.callback(True)
+            self.factory.finished_deferred.callback(self.factory.sent_blobs)
         else:
             log.info('Reflector finished: %s', reason)
             self.factory.finished_deferred.callback(reason)
