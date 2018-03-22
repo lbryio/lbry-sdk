@@ -25,7 +25,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * `blob_reflect` command to send specific blobs to a reflector server
   *
 
 ### Removed

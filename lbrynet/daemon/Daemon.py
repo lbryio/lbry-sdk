@@ -3074,6 +3074,24 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(blob_hashes_for_return)
         defer.returnValue(response)
 
+    def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
+        """
+        Reflects specified blobs
+
+        Usage:
+            blob_reflect (<blob_hashes>...) [--reflector_server=<reflector_server>]
+
+        Options:
+            --reflector_server=<reflector_server>         (str) : reflector address
+
+        Returns:
+            (list) reflected blob hashes
+        """
+
+        d = reupload.reflect_blob_hashes(blob_hashes, self.session.blob_manager, reflector_server)
+        d.addCallback(lambda r: self._render_response(r))
+        return d
+
     def jsonrpc_blob_reflect_all(self):
         """
         Reflects all saved blobs
