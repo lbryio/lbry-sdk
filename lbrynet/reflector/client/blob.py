@@ -26,7 +26,7 @@ class BlobReflectorClient(Protocol):
         self.file_sender = None
         self.producer = None
         self.streaming = False
-        self.sent_blobs = False
+        self.reflected_blobs = []
         d = self.send_handshake()
         d.addErrback(
             lambda err: log.warning("An error occurred immediately: %s", err.getTraceback()))
@@ -46,10 +46,9 @@ class BlobReflectorClient(Protocol):
 
     def connectionLost(self, reason):
         if reason.check(error.ConnectionDone):
-            self.factory.sent_blobs = self.sent_blobs
-            if self.factory.sent_blobs:
+            if self.reflected_blobs:
                 log.info('Finished sending data via reflector')
-            self.factory.finished_deferred.callback(self.factory.sent_blobs)
+            self.factory.finished_deferred.callback(self.reflected_blobs)
         else:
             log.info('Reflector finished: %s', reason)
             self.factory.finished_deferred.callback(reason)
@@ -101,7 +100,6 @@ class BlobReflectorClient(Protocol):
         return defer.succeed(None)
 
     def start_transfer(self):
-        self.sent_blobs = True
         assert self.read_handle is not None, \
             "self.read_handle was None when trying to start the transfer"
         d = self.file_sender.beginFileTransfer(self.read_handle, self)
@@ -130,6 +128,8 @@ class BlobReflectorClient(Protocol):
             if 'received_blob' not in response_dict:
                 raise ValueError("I don't know if the blob made it to the intended destination!")
             else:
+                if response_dict['received_blob']:
+                    self.reflected_blobs.append(self.next_blob_to_send.blob_hash)
                 return self.set_not_uploading()
 
     def open_blob_for_reading(self, blob):
@@ -188,7 +188,6 @@ class BlobReflectorClientFactory(ClientFactory):
         self.blob_manager = blob_manager
         self.blobs = blobs
         self.p = None
-        self.sent_blobs = False
         self.finished_deferred = defer.Deferred()
 
     def buildProtocol(self, addr):

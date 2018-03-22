@@ -204,14 +204,18 @@ class EncryptedFileReflectorClient(Protocol):
                 raise ValueError("I don't know if the sd blob made it to the intended destination!")
             else:
                 self.received_descriptor_response = True
+                disconnect = False
                 if response_dict['received_sd_blob']:
                     self.reflected_blobs.append(self.next_blob_to_send.blob_hash)
                     log.info("Sent reflector descriptor %s", self.next_blob_to_send)
                 else:
                     log.warning("Reflector failed to receive descriptor %s",
                                 self.next_blob_to_send)
-                    self.blob_hashes_to_send.append(self.next_blob_to_send.blob_hash)
-                return self.set_not_uploading()
+                    disconnect = True
+                d = self.set_not_uploading()
+                if disconnect:
+                    d.addCallback(lambda _: self.transport.loseConnection())
+                return d
 
     def handle_normal_response(self, response_dict):
         if self.file_sender is None:  # Expecting Server Info Response
@@ -232,7 +236,6 @@ class EncryptedFileReflectorClient(Protocol):
                     log.debug("Sent reflector blob %s", self.next_blob_to_send)
                 else:
                     log.warning("Reflector failed to receive blob %s", self.next_blob_to_send)
-                    self.blob_hashes_to_send.append(self.next_blob_to_send.blob_hash)
                 return self.set_not_uploading()
 
     def open_blob_for_reading(self, blob):

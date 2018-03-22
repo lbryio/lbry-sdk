@@ -13,15 +13,15 @@ at anytime.
   *
 
 ### Fixed
-  *
-  *
+  * incorrectly raised download cancelled error for already verified blob files
+  * infinite loop where reflector client keeps trying to send failing blobs, which may be failing because they are invalid and thus will never be successfully received
 
 ### Deprecated
   *
   *
 
 ### Changed
-  * incorrectly raised download cancelled error for already verified blob files
+  *
   *
 
 ### Added
