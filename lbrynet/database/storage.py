@@ -423,12 +423,14 @@ class SQLiteStorage(object):
             if only_completed:
                 lengths = transaction.execute(
                     "select b.blob_hash, b.blob_length from blob b "
-                    "inner join stream_blob s ON b.blob_hash=s.blob_hash and b.status='finished'"
+                    "inner join stream_blob s ON b.blob_hash=s.blob_hash and b.status='finished' and s.stream_hash=?",
+                    (stream_hash, )
                 ).fetchall()
             else:
                 lengths = transaction.execute(
                     "select b.blob_hash, b.blob_length from blob b "
-                    "inner join stream_blob s ON b.blob_hash=s.blob_hash"
+                    "inner join stream_blob s ON b.blob_hash=s.blob_hash and s.stream_hash=?",
+                    (stream_hash, )
                 ).fetchall()
 
             blob_length_dict = {}

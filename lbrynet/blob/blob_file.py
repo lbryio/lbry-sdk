@@ -176,17 +176,18 @@ class BlobFile(object):
                     d.addCallbacks(lambda _: fire_finished_deferred(), errback_finished_deferred)
                     d.addCallback(lambda _: cancel_other_downloads())
                 else:
-                    errback_finished_deferred(Failure(DownloadCanceledError()))
-                    d = defer.succeed(True)
+                    d = defer.succeed(None)
+                    fire_finished_deferred()
             else:
-                err_string = "length vs expected: {0}, {1}, hash vs expected: {2}, {3}"
-                err_string = err_string.format(self.length, writer.len_so_far, self.blob_hash,
-                                               writer.blob_hash)
+                if writer.len_so_far != self.length:
+                    err_string = "blob length is %i vs expected %i" % (writer.len_so_far, self.length)
+                else:
+                    err_string = "blob hash is %s vs expected %s" % (writer.blob_hash, self.blob_hash)
                 errback_finished_deferred(Failure(InvalidDataError(err_string)))
-                d = defer.succeed(True)
+                d = defer.succeed(None)
         else:
             errback_finished_deferred(err)
-            d = defer.succeed(True)
+            d = defer.succeed(None)
         d.addBoth(lambda _: writer.close_handle())
         return d
 

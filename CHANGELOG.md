@@ -13,28 +13,50 @@ at anytime.
   *
 
 ### Fixed
-  * fixed the inconsistencies in API and CLI docstrings
-  * `blob_announce` error when announcing a single blob
-  * `blob_list` error when looking up blobs by stream or sd hash
-  * issue#1107 whereing claiming a channel with the exact amount present in wallet would give out proper error
-  * Fix channel creation to use same bid logic as claim ([1148])(https://github.com/lbryio/lbry/pull/1148)
+  * incorrectly raised download cancelled error for already verified blob files
+  * infinite loop where reflector client keeps trying to send failing blobs, which may be failing because they are invalid and thus will never be successfully received
 
 ### Deprecated
-  * `report_bug` jsonrpc command
+  *
   *
 
 ### Changed
-  * reflector server to periodically check and set `should_announce` for sd and head blobs instead of during each request
-  * reflector server to use `SQLiteStorage` to find needed blob hashes for a stream
+  *
+  *
 
 ### Added
-  * scripts to autogenerate documentation
-  * now updating new channel also takes into consideration the original bid amount, so now channel could be updated for wallet balance + the original bid amount
-  * forward-compaitibility for upcoming DHT bencoding changes
+  * `blob_reflect` command to send specific blobs to a reflector server
+  *
 
 ### Removed
-  * short(single dashed) arguments for `lbrynet-cli`
   * `flags` decorator from server.py as short flags are no longer used when using api/cli methods
+  *
+
+
+## [0.19.1] - 2018-03-20
+### Fixed
+ * Fixed the inconsistencies in API and CLI docstrings
+ * `blob_announce` error when announcing a single blob
+ * `blob_list` error when looking up blobs by stream or sd hash ([1126](https://github.com/lbryio/lbry/pull/1126))
+ * Claiming a channel with the exact amount present in wallet would return a confusing error ([1107](https://github.com/lbryio/lbry/issues/1107))
+ * Channel creation to use same bid logic as for claims ([1148](https://github.com/lbryio/lbry/pull/1148))
+
+### Deprecated
+ * `report_bug` jsonrpc command
+
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.15 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0015---2018-03-20)
+ * Bumped `lbryum` requirement to 3.2.0 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#320---2018-03-20)
+ * Reflector server to periodically check and set `should_announce` for sd and head blobs instead of during each request
+ * Reflector server to use `SQLiteStorage` to find needed blob hashes for a stream
+
+### Added
+ * Scripts to auto-generate documentation ([1128](https://github.com/lbryio/lbry/pull/1128))
+ * Now updating new channel also takes into consideration the original bid amount, so now channel could be updated for wallet balance + the original bid amount ([1137](https://github.com/lbryio/lbry/pull/1137))
+ * Forward-compatibility for upcoming DHT bencoding changes
+
+### Removed
+ * Short(single dashed) arguments for `lbrynet-cli`
 
 
 ## [0.19.0] - 2018-03-02

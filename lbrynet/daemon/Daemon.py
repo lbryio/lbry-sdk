@@ -719,7 +719,7 @@ class Daemon(AuthJSONRPCServer):
             claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path,
                                                                   claim_address, change_address)
             if conf.settings['reflect_uploads']:
-                d = reupload.reflect_stream(publisher.lbry_file)
+                d = reupload.reflect_file(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
         self.analytics_manager.send_claim_action('publish')
@@ -3009,7 +3009,7 @@ class Daemon(AuthJSONRPCServer):
             raise Exception('No file found')
         lbry_file = lbry_files[0]
 
-        results = yield reupload.reflect_stream(lbry_file, reflector_server=reflector_server)
+        results = yield reupload.reflect_file(lbry_file, reflector_server=reflector_server)
         defer.returnValue(results)
 
     @defer.inlineCallbacks
@@ -3072,6 +3072,24 @@ class Daemon(AuthJSONRPCServer):
         blob_hashes_for_return = blob_hashes[start_index:stop_index]
         response = yield self._render_response(blob_hashes_for_return)
         defer.returnValue(response)
+
+    def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
+        """
+        Reflects specified blobs
+
+        Usage:
+            blob_reflect (<blob_hashes>...) [--reflector_server=<reflector_server>]
+
+        Options:
+            --reflector_server=<reflector_server>         (str) : reflector address
+
+        Returns:
+            (list) reflected blob hashes
+        """
+
+        d = reupload.reflect_blob_hashes(blob_hashes, self.session.blob_manager, reflector_server)
+        d.addCallback(lambda r: self._render_response(r))
+        return d
 
     def jsonrpc_blob_reflect_all(self):
         """
