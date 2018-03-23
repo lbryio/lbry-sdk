@@ -2730,7 +2730,6 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(no_broadcast='--no_broadcast')
     def jsonrpc_wallet_prefill_addresses(self, num_addresses, amount, no_broadcast=False):
         """
         Create new addresses, each containing `amount` credits

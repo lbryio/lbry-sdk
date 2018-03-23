@@ -29,7 +29,7 @@ at anytime.
   *
 
 ### Removed
-  *
+  * `flags` decorator from server.py as short flags are no longer used when using api/cli methods
   *
 
 
