@@ -53,7 +53,7 @@ class DefaultFormat(MessageTranslator):
             return primitive[str(key)]  # TODO: switch to int()
 
     def fromPrimitive(self, msgPrimitive):
-        msgType = msgPrimitive[self.headerType]
+        msgType = self.get(msgPrimitive, self.headerType)
         if msgType == self.typeRequest:
             msg = msgtypes.RequestMessage(self.get(msgPrimitive, self.headerNodeID),
                                           self.get(msgPrimitive, self.headerPayload),
