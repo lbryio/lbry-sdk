@@ -1936,8 +1936,7 @@ class Daemon(AuthJSONRPCServer):
         Import serialized channel signing information (to allow signing new claims to the channel)
 
         Usage:
-            channel_import (<serialized_certificate_info> |
-                            --serialized_certificate_info=<serialized_certificate_info>)
+            channel_import (<serialized_certificate_info> | --serialized_certificate_info=<serialized_certificate_info>)
 
         Options:
             --serialized_certificate_info=<serialized_certificate_info> : (str) certificate info
@@ -2920,18 +2919,17 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @defer.inlineCallbacks
-    def jsonrpc_blob_announce(self, announce_all=None, blob_hash=None,
-                              stream_hash=None, sd_hash=None):
+    def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None, announce_all=None):
         """
         Announce blobs to the DHT
 
         Usage:
-            blob_announce [--announce_all] [<blob_hash> | --blob_hash=<blob_hash>]
-                          [<stream_hash> | --stream_hash=<stream_hash>]
-                          [<sd_hash> | --sd_hash=<sd_hash>]
+            blob_announce [<blob_hash> | --blob_hash=<blob_hash>]
+                          [<stream_hash> | --stream_hash=<stream_hash>] | [<sd_hash> | --sd_hash=<sd_hash>]
+                          [--announce_all]
 
         Options:
-            --announce_all=<announce_all>  : (bool) announce all the blobs possessed by user
+            --announce_all                 : (bool) announce all the blobs possessed by user
             --blob_hash=<blob_hash>        : (str) announce a blob, specified by blob_hash
             --stream_hash=<stream_hash>    : (str) announce all blobs associated with
                                              stream_hash

@@ -15,7 +15,7 @@ at anytime.
 ### Fixed
   * incorrectly raised download cancelled error for already verified blob files
   * infinite loop where reflector client keeps trying to send failing blobs, which may be failing because they are invalid and thus will never be successfully received
-  * regression in `stream_availability` due to error in it's docstring
+  * docstring bugs for `stream_availability`, `channel_import`, and `blob_announce`
 
 ### Deprecated
   *
@@ -27,7 +27,7 @@ at anytime.
 
 ### Added
   * `blob_reflect` command to send specific blobs to a reflector server
-  *
+  * unit test for docopt
 
 ### Removed
   * `flags` decorator from server.py as short flags are no longer used when using api/cli methods
