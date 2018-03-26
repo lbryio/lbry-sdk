@@ -3246,7 +3246,7 @@ class Daemon(AuthJSONRPCServer):
             --uri=<uri>                       : (str) check availability for this uri
             --search_timeout=<search_timeout> : (int) how long to search for peers for the blob
                                                 in the dht
-            --search_timeout=<blob_timeout>   : (int) how long to try downloading from a peer
+            --blob_timeout=<blob_timeout>   : (int) how long to try downloading from a peer
 
         Returns:
             (dict) {
