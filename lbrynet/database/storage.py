@@ -124,7 +124,8 @@ class SQLiteStorage(object):
                 blob_length integer not null,
                 next_announce_time integer not null,
                 should_announce integer not null default 0,
-                status text not null
+                status text not null,
+                last_announced_time integer
             );
             
             create table if not exists stream (
@@ -250,8 +251,8 @@ class SQLiteStorage(object):
         status = yield self.get_blob_status(blob_hash)
         if status is None:
             status = "pending"
-            yield self.db.runOperation("insert into blob values (?, ?, ?, ?, ?)",
-                                       (blob_hash, length, 0, 0, status))
+            yield self.db.runOperation("insert into blob values (?, ?, ?, ?, ?, ?)",
+                                       (blob_hash, length, 0, 0, status, 0))
         defer.returnValue(status)
 
     def should_announce(self, blob_hash):
