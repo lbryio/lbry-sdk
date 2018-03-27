@@ -1,14 +1,61 @@
 import os
 import logging
+import hashlib
 
 from twisted.internet import threads, defer
 
 from lbryum.util import hex_to_int, int_to_hex, rev_hex
 from lbryum.hashing import hash_encode, Hash, PoWHash
-from .stream import StreamController
+from .stream import StreamController, execute_serially
 from .constants import blockchain_params, HEADER_SIZE
 
 log = logging.getLogger(__name__)
+
+
+class Transaction:
+
+    def __init__(self, tx_hash, raw, height):
+        self.hash = tx_hash
+        self.raw = raw
+        self.height = height
+
+
+class BlockchainTransactions:
+
+    def __init__(self, history):
+        self.addresses = {}
+        self.transactions = {}
+        for address, transactions in history.items():
+            self.addresses[address] = []
+            for txid, raw, height in transactions:
+                tx = Transaction(txid, raw, height)
+                self.addresses[address].append(tx)
+                self.transactions[txid] = tx
+
+    def has_address(self, address):
+        return address in self.addresses
+
+    def get_transaction(self, tx_hash, *args):
+        return self.transactions.get(tx_hash, *args)
+
+    def get_transactions(self, address, *args):
+        return self.addresses.get(address, *args)
+
+    def get_status(self, address):
+        hashes = [
+            '{}:{}:'.format(tx.hash, tx.height)
+            for tx in self.get_transactions(address, [])
+        ]
+        if hashes:
+            return hashlib.sha256(''.join(hashes)).digest().encode('hex')
+
+    def has_transaction(self, tx_hash):
+        return tx_hash in self.transactions
+
+    def add_transaction(self, address, transaction):
+        self.transactions.setdefault(transaction.hash, transaction)
+        self.addresses.setdefault(address, [])
+        self.addresses[address].append(transaction)
 
 
 class BlockchainHeaders:
@@ -24,19 +71,17 @@ class BlockchainHeaders:
         self.on_changed = self._on_change_controller.stream
 
         self._size = None
-        self._write_lock = defer.DeferredLock()
 
         if not os.path.exists(path):
             with open(path, 'wb'):
                 pass
 
+    @property
+    def height(self):
+        return len(self) - 1
+
     def sync_read_length(self):
         return os.path.getsize(self.path) / HEADER_SIZE
-
-    def __len__(self):
-        if self._size is None:
-            self._size = self.sync_read_length()
-        return self._size
 
     def sync_read_header(self, height):
         if 0 <= height < len(self):
@@ -44,19 +89,21 @@ class BlockchainHeaders:
                 f.seek(height * HEADER_SIZE)
                 return f.read(HEADER_SIZE)
 
+    def __len__(self):
+        if self._size is None:
+            self._size = self.sync_read_length()
+        return self._size
+
     def __getitem__(self, height):
         assert not isinstance(height, slice),\
             "Slicing of header chain has not been implemented yet."
         header = self.sync_read_header(height)
         return self._deserialize(height, header)
 
+    @execute_serially
     @defer.inlineCallbacks
     def connect(self, start, headers):
-        yield self._write_lock.acquire()
-        try:
-            yield threads.deferToThread(self._sync_connect, start, headers)
-        finally:
-            self._write_lock.release()
+        yield threads.deferToThread(self._sync_connect, start, headers)
 
     def _sync_connect(self, start, headers):
         previous_header = None
