@@ -3,18 +3,19 @@ import logging
 
 from twisted.internet import defer, task
 from lbrynet.core import utils
+from lbrynet import conf
 
 log = logging.getLogger(__name__)
 
 
 class DHTHashAnnouncer(object):
-    def __init__(self, dht_node, storage, concurrent_announcers=25):
+    def __init__(self, dht_node, storage, concurrent_announcers=None):
         self.dht_node = dht_node
         self.storage = storage
         self.clock = dht_node.clock
         self.peer_port = dht_node.peerPort
         self.hash_queue = []
-        self.concurrent_announcers = concurrent_announcers
+        self.concurrent_announcers = concurrent_announcers or conf.settings['concurrent_announcers']
         self._manage_lc = task.LoopingCall(self.manage)
         self._manage_lc.clock = self.clock
 
