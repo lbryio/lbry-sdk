@@ -515,18 +515,20 @@ class Node(object):
         else:
             raise TypeError, 'No contact info available'
 
-        if ((self_store is False) and
-                ('token' not in value or not self.verify_token(value['token'], compact_ip))):
-            raise ValueError('Invalid or missing token')
+        if not self_store:
+            if 'token' not in value:
+                raise ValueError("Missing token")
+            if not self.verify_token(value['token'], compact_ip):
+                raise ValueError("Invalid token")
 
         if 'port' in value:
             port = int(value['port'])
             if 0 <= port <= 65536:
                 compact_port = str(struct.pack('>H', port))
             else:
-                raise TypeError, 'Invalid port'
+                raise TypeError('Invalid port')
         else:
-            raise TypeError, 'No port available'
+            raise TypeError('No port available')
 
         if 'lbryid' in value:
             if len(value['lbryid']) != constants.key_bits / 8:
@@ -535,7 +537,7 @@ class Node(object):
             else:
                 compact_address = compact_ip + compact_port + value['lbryid']
         else:
-            raise TypeError, 'No lbryid given'
+            raise TypeError('No lbryid given')
 
         now = int(time.time())
         originallyPublished = now  # - age
