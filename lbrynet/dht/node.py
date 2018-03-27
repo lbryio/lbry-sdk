@@ -54,7 +54,7 @@ class Node(object):
     application is performed via this class (or a subclass).
     """
 
-    def __init__(self, hash_announcer=None, node_id=None, udpPort=4000, dataStore=None,
+    def __init__(self, node_id=None, udpPort=4000, dataStore=None,
                  routingTableClass=None, networkProtocol=None,
                  externalIP=None, peerPort=None, listenUDP=None,
                  callLater=None, resolve=None, clock=None, peer_finder=None,
@@ -108,6 +108,7 @@ class Node(object):
         self.change_token_lc.clock = self.clock
         self.refresh_node_lc = task.LoopingCall(self._refreshNode)
         self.refresh_node_lc.clock = self.clock
+
         # Create k-buckets (for storing contacts)
         if routingTableClass is None:
             self._routingTable = routingtable.OptimizedTreeRoutingTable(self.node_id, self.clock.seconds)
@@ -138,25 +139,16 @@ class Node(object):
         self.peerPort = peerPort
         self.hash_watcher = HashWatcher(self.clock)
 
-        # will be used later
-        self._can_store = True
-
         self.peer_manager = peer_manager or PeerManager()
         self.peer_finder = peer_finder or DHTPeerFinder(self, self.peer_manager)
-        self.hash_announcer = hash_announcer or DHTHashAnnouncer(self)
 
     def __del__(self):
         log.warning("unclean shutdown of the dht node")
         if self._listeningPort is not None:
             self._listeningPort.stopListening()
 
-    @property
-    def can_store(self):
-        return self._can_store is True
-
     @defer.inlineCallbacks
     def stop(self):
-        yield self.hash_announcer.stop()
         # stop LoopingCalls:
         if self.refresh_node_lc.running:
             yield self.refresh_node_lc.stop()
@@ -234,7 +226,6 @@ class Node(object):
         self.hash_watcher.start()
         self.change_token_lc.start(constants.tokenSecretChangeInterval)
         self.refresh_node_lc.start(constants.checkRefreshInterval)
-        self.hash_announcer.run_manage_loop()
 
     @property
     def contacts(self):

@@ -2,7 +2,7 @@ import logging
 import miniupnpc
 from twisted.internet import threads, defer
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.dht import node
+from lbrynet.dht import node, hashannouncer
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.utils import generate_id
@@ -136,6 +136,7 @@ class Session(object):
             d = self._try_upnp()
         else:
             d = defer.succeed(True)
+        d.addCallback(lambda _: self.storage.setup())
         d.addCallback(lambda _: self._setup_dht())
         d.addCallback(lambda _: self._setup_other_components())
         return d
@@ -144,6 +145,8 @@ class Session(object):
         """Stop all services"""
         log.info('Stopping session.')
         ds = []
+        if self.hash_announcer:
+            self.hash_announcer.stop()
         if self.blob_tracker is not None:
             ds.append(defer.maybeDeferred(self.blob_tracker.stop))
         if self.dht_node is not None:
@@ -220,19 +223,20 @@ class Session(object):
 
     def _setup_dht(self):  # does not block startup, the dht will re-attempt if necessary
         self.dht_node = self.dht_node_class(
-            self.hash_announcer,
-            udpPort=self.dht_node_port,
             node_id=self.node_id,
+            udpPort=self.dht_node_port,
             externalIP=self.external_ip,
             peerPort=self.peer_port,
             peer_manager=self.peer_manager,
             peer_finder=self.peer_finder,
         )
+        if not self.hash_announcer:
+            self.hash_announcer = hashannouncer.DHTHashAnnouncer(self.dht_node, self.storage)
         self.peer_manager = self.dht_node.peer_manager
         self.peer_finder = self.dht_node.peer_finder
-        self.hash_announcer = self.dht_node.hash_announcer
         self._join_dht_deferred = self.dht_node.joinNetwork(self.known_dht_nodes)
         self._join_dht_deferred.addCallback(lambda _: log.info("Joined the dht"))
+        self._join_dht_deferred.addCallback(lambda _: self.hash_announcer.start())
 
     def _setup_other_components(self):
         log.debug("Setting up the rest of the components")
@@ -245,9 +249,7 @@ class Session(object):
                 raise Exception(
                     "TempBlobManager is no longer supported, specify BlobManager or db_dir")
             else:
-                self.blob_manager = DiskBlobManager(
-                    self.dht_node.hash_announcer, self.blob_dir, self.storage
-                )
+                self.blob_manager = DiskBlobManager(self.blob_dir, self.storage)
 
         if self.blob_tracker is None:
             self.blob_tracker = self.blob_tracker_class(
@@ -259,8 +261,7 @@ class Session(object):
             )
 
         self.rate_limiter.start()
-        d = self.storage.setup()
-        d.addCallback(lambda _: self.blob_manager.setup())
+        d = self.blob_manager.setup()
         d.addCallback(lambda _: self.wallet.start())
         d.addCallback(lambda _: self.blob_tracker.start())
         return d

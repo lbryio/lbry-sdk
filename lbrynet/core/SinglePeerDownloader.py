@@ -11,7 +11,6 @@ from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.client.ConnectionManager import ConnectionManager
-from lbrynet.dht.hashannouncer import DummyHashAnnouncer
 from lbrynet.dht.peerfinder import DummyPeerFinder
 
 
@@ -61,7 +60,6 @@ class SingleBlobDownloadManager(object):
 class SinglePeerDownloader(object):
     def __init__(self):
         self._payment_rate_manager = OnlyFreePaymentsManager()
-        self._announcer = DummyHashAnnouncer()
         self._rate_limiter = DummyRateLimiter()
         self._wallet = None
         self._blob_manager = None
@@ -98,7 +96,7 @@ class SinglePeerDownloader(object):
     @defer.inlineCallbacks
     def download_temp_blob_from_peer(self, peer, timeout, blob_hash):
         tmp_dir = yield threads.deferToThread(tempfile.mkdtemp)
-        tmp_blob_manager = DiskBlobManager(self._announcer, tmp_dir, tmp_dir)
+        tmp_blob_manager = DiskBlobManager(tmp_dir, tmp_dir)
         try:
             result = yield self.download_blob_from_peer(peer, timeout, blob_hash, tmp_blob_manager)
         finally:

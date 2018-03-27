@@ -10,16 +10,14 @@ log = logging.getLogger(__name__)
 
 
 class DiskBlobManager(object):
-    def __init__(self, hash_announcer, blob_dir, storage):
+    def __init__(self, blob_dir, storage):
+        """
+        This class stores blobs on the hard disk
 
-        """
-        This class stores blobs on the hard disk,
         blob_dir - directory where blobs are stored
-        db_dir - directory where sqlite database of blob information is stored
+        storage - SQLiteStorage object
         """
-        self.hash_announcer = hash_announcer
         self.storage = storage
-        self.announce_head_blobs_only = conf.settings['announce_head_blobs_only']
         self.blob_dir = blob_dir
         self.blob_creator_type = BlobFileCreator
         # TODO: consider using an LRU for blobs as there could potentially
@@ -28,7 +26,7 @@ class DiskBlobManager(object):
         self.blob_hashes_to_delete = {}  # {blob_hash: being_deleted (True/False)}
 
         self.check_should_announce_lc = None
-        if conf.settings['run_reflector_server']:
+        if conf.settings['run_reflector_server']: # TODO: move this looping call to SQLiteStorage
             self.check_should_announce_lc = task.LoopingCall(self.storage.verify_will_announce_all_head_and_sd_blobs)
 
     def setup(self):
@@ -60,40 +58,20 @@ class DiskBlobManager(object):
         self.blobs[blob_hash] = blob
         return defer.succeed(blob)
 
-    def immediate_announce(self, blob_hashes):
-        if self.hash_announcer:
-            return self.hash_announcer.immediate_announce(blob_hashes)
-        raise Exception("Hash announcer not set")
-
     @defer.inlineCallbacks
     def blob_completed(self, blob, next_announce_time=None, should_announce=True):
-        if next_announce_time is None:
-            next_announce_time = self.hash_announcer.get_next_announce_time()
         yield self.storage.add_completed_blob(
             blob.blob_hash, blob.length, next_announce_time, should_announce
         )
-        # we announce all blobs immediately, if announce_head_blob_only is False
-        # otherwise, announce only if marked as should_announce
-        if not self.announce_head_blobs_only or should_announce:
-            self.immediate_announce([blob.blob_hash])
 
     def completed_blobs(self, blobhashes_to_check):
         return self._completed_blobs(blobhashes_to_check)
-
-    def hashes_to_announce(self):
-        return self.storage.get_blobs_to_announce(self.hash_announcer)
 
     def count_should_announce_blobs(self):
         return self.storage.count_should_announce_blobs()
 
     def set_should_announce(self, blob_hash, should_announce):
-        if blob_hash in self.blobs:
-            blob = self.blobs[blob_hash]
-            if blob.get_is_verified():
-                return self.storage.set_should_announce(
-                    blob_hash, self.hash_announcer.get_next_announce_time(), should_announce
-                )
-        return defer.succeed(False)
+        return self.storage.set_should_announce(blob_hash, should_announce)
 
     def get_should_announce(self, blob_hash):
         return self.storage.should_announce(blob_hash)
@@ -108,13 +86,7 @@ class DiskBlobManager(object):
             raise Exception("Blob has a length of 0")
         new_blob = BlobFile(self.blob_dir, blob_creator.blob_hash, blob_creator.length)
         self.blobs[blob_creator.blob_hash] = new_blob
-        next_announce_time = self.hash_announcer.get_next_announce_time()
-        return self.blob_completed(new_blob, next_announce_time, should_announce)
-
-    def immediate_announce_all_blobs(self):
-        d = self._get_all_verified_blob_hashes()
-        d.addCallback(self.immediate_announce)
-        return d
+        return self.blob_completed(new_blob, should_announce)
 
     def get_all_verified_blobs(self):
         d = self._get_all_verified_blob_hashes()
