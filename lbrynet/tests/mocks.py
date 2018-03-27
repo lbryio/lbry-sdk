@@ -2,7 +2,7 @@ import struct
 import io
 
 from Crypto.PublicKey import RSA
-from twisted.internet import defer, threads, error
+from twisted.internet import defer, error
 from twisted.python.failure import Failure
 
 from lbrynet.core.client.ClientRequest import ClientRequest
@@ -25,10 +25,10 @@ class FakeLBRYFile(object):
 
 
 class Node(object):
-    def __init__(self, hash_announcer, peer_finder=None, peer_manager=None, **kwargs):
-        self.hash_announcer = hash_announcer
+    def __init__(self, peer_finder=None, peer_manager=None, **kwargs):
         self.peer_finder = peer_finder
         self.peer_manager = peer_manager
+        self.peerPort = 3333
 
     def joinNetwork(self, *args):
         return defer.succeed(True)
@@ -77,7 +77,7 @@ class ExchangeRateManager(ERM.ExchangeRateManager):
                 feed.market, rates[feed.market]['spot'], rates[feed.market]['ts'])
 
 
-class PointTraderKeyExchanger:
+class PointTraderKeyExchanger(object):
 
     def __init__(self, wallet):
         self.wallet = wallet
@@ -108,7 +108,7 @@ class PointTraderKeyExchanger:
             return err
 
 
-class PointTraderKeyQueryHandlerFactory:
+class PointTraderKeyQueryHandlerFactory(object):
 
     def __init__(self, wallet):
         self.wallet = wallet
@@ -125,7 +125,7 @@ class PointTraderKeyQueryHandlerFactory:
                 "point trader testing network")
 
 
-class PointTraderKeyQueryHandler:
+class PointTraderKeyQueryHandler(object):
 
     def __init__(self, wallet):
         self.wallet = wallet

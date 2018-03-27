@@ -8,7 +8,6 @@ from twisted.internet import defer, threads
 
 from lbrynet.tests.util import random_lbry_hash
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.dht.hashannouncer import DummyHashAnnouncer
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.Peer import Peer
 from lbrynet import conf
@@ -21,8 +20,7 @@ class BlobManagerTest(unittest.TestCase):
         conf.initialize_settings()
         self.blob_dir = tempfile.mkdtemp()
         self.db_dir = tempfile.mkdtemp()
-        hash_announcer = DummyHashAnnouncer()
-        self.bm = DiskBlobManager(hash_announcer, self.blob_dir, SQLiteStorage(self.db_dir))
+        self.bm = DiskBlobManager(self.blob_dir, SQLiteStorage(self.db_dir))
         self.peer = Peer('somehost', 22)
         yield self.bm.storage.setup()
 

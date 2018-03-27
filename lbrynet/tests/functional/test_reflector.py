@@ -29,7 +29,6 @@ class TestReflector(unittest.TestCase):
         wallet = mocks.Wallet()
         peer_manager = PeerManager.PeerManager()
         peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
-        hash_announcer = mocks.Announcer()
         sd_identifier = StreamDescriptor.StreamDescriptorIdentifier()
 
         self.expected_blobs = [
@@ -56,14 +55,14 @@ class TestReflector(unittest.TestCase):
             db_dir=self.db_dir,
             node_id="abcd",
             peer_finder=peer_finder,
-            hash_announcer=hash_announcer,
             blob_dir=self.blob_dir,
             peer_port=5553,
             use_upnp=False,
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
             external_ip="127.0.0.1",
-            dht_node_class=Node
+            dht_node_class=Node,
+            hash_announcer=mocks.Announcer()
         )
 
         self.lbry_file_manager = EncryptedFileManager.EncryptedFileManager(self.session,
@@ -76,18 +75,17 @@ class TestReflector(unittest.TestCase):
             db_dir=self.server_db_dir,
             node_id="abcd",
             peer_finder=peer_finder,
-            hash_announcer=hash_announcer,
             blob_dir=self.server_blob_dir,
             peer_port=5553,
             use_upnp=False,
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
             external_ip="127.0.0.1",
-            dht_node_class=Node
+            dht_node_class=Node,
+            hash_announcer=mocks.Announcer()
         )
 
-        self.server_blob_manager = BlobManager.DiskBlobManager(hash_announcer,
-                                                               self.server_blob_dir,
+        self.server_blob_manager = BlobManager.DiskBlobManager(self.server_blob_dir,
                                                                self.server_session.storage)
 
         self.server_lbry_file_manager = EncryptedFileManager.EncryptedFileManager(

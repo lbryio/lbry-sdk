@@ -1,6 +1,6 @@
 from collections import Counter
 import datetime
-from twisted.internet import task, threads
+from twisted.internet import task
 
 
 class HashWatcher(object):

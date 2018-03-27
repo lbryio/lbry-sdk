@@ -198,7 +198,7 @@ class NodeLookupTest(unittest.TestCase):
         h = hashlib.sha384()
         h.update('node1')
         node_id = str(h.digest())
-        self.node = lbrynet.dht.node.Node(None, node_id=node_id, udpPort=4000, networkProtocol=self._protocol)
+        self.node = lbrynet.dht.node.Node(node_id=node_id, udpPort=4000, networkProtocol=self._protocol)
         self.updPort = 81173
         self.contactsAmount = 80
         # Reinitialise the routing table

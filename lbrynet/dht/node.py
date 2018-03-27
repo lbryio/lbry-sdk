@@ -23,7 +23,6 @@ import routingtable
 import datastore
 import protocol
 from error import TimeoutError
-from hashannouncer import DHTHashAnnouncer
 from peerfinder import DHTPeerFinder
 from contact import Contact
 from hashwatcher import HashWatcher
@@ -242,7 +241,12 @@ class Node(object):
         return False
 
     def announceHaveBlob(self, key):
-        return self.iterativeAnnounceHaveBlob(key, {'port': self.peerPort, 'lbryid': self.node_id})
+        return self.iterativeAnnounceHaveBlob(
+            key, {
+                'port': self.peerPort,
+                'lbryid': self.node_id,
+            }
+        )
 
     @defer.inlineCallbacks
     def getPeersForBlob(self, blob_hash):

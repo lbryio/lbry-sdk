@@ -25,7 +25,7 @@ from lbryschema.decode import smart_decode
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet import conf
-from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
+from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.core.log_support import configure_loggly_handler

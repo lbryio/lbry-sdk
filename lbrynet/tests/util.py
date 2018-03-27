@@ -67,8 +67,8 @@ def debug_kademlia_packet(data, source, destination, node):
                 log.debug("response %s <-- %s %s (node time %s)", destination[0], source[0], packet.response,
                           node.clock.seconds())
             else:
-               log.debug("response %s <-- %s %i contacts (node time %s)", destination[0], source[0],
-                         len(packet.response), node.clock.seconds())
+                log.debug("response %s <-- %s %i contacts (node time %s)", destination[0], source[0],
+                          len(packet.response), node.clock.seconds())
         elif isinstance(packet, ErrorMessage):
             log.error("error %s <-- %s %s (node time %s)", destination[0], source[0], packet.exceptionType,
                       node.clock.seconds())

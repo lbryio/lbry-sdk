@@ -1,7 +1,7 @@
 import time
 import unittest
 from twisted.internet.task import Clock
-from twisted.internet import defer, threads
+from twisted.internet import defer
 import lbrynet.dht.protocol
 import lbrynet.dht.contact
 import lbrynet.dht.constants

@@ -59,7 +59,7 @@ class DiskBlobManager(object):
         return defer.succeed(blob)
 
     @defer.inlineCallbacks
-    def blob_completed(self, blob, next_announce_time=None, should_announce=True):
+    def blob_completed(self, blob, should_announce=False, next_announce_time=None):
         yield self.storage.add_completed_blob(
             blob.blob_hash, blob.length, next_announce_time, should_announce
         )
@@ -71,7 +71,8 @@ class DiskBlobManager(object):
         return self.storage.count_should_announce_blobs()
 
     def set_should_announce(self, blob_hash, should_announce):
-        return self.storage.set_should_announce(blob_hash, should_announce)
+        now = self.storage.clock.seconds()
+        return self.storage.set_should_announce(blob_hash, now, should_announce)
 
     def get_should_announce(self, blob_hash):
         return self.storage.should_announce(blob_hash)

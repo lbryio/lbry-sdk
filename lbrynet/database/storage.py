@@ -211,6 +211,7 @@ class SQLiteStorage(object):
         )
 
     def set_should_announce(self, blob_hash, next_announce_time, should_announce):
+        next_announce_time = next_announce_time or 0
         should_announce = 1 if should_announce else 0
         return self.db.runOperation(
             "update blob set next_announce_time=?, should_announce=? where blob_hash=?",
