@@ -1,5 +1,22 @@
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, DeferredLock, maybeDeferred, inlineCallbacks
 from twisted.python.failure import Failure
+
+
+def execute_serially(f):
+    _lock = DeferredLock()
+
+    @inlineCallbacks
+    def allow_only_one_at_a_time(*args, **kwargs):
+        yield _lock.acquire()
+        allow_only_one_at_a_time.is_running = True
+        try:
+            yield maybeDeferred(f, *args, **kwargs)
+        finally:
+            allow_only_one_at_a_time.is_running = False
+            _lock.release()
+
+    allow_only_one_at_a_time.is_running = False
+    return allow_only_one_at_a_time
 
 
 class BroadcastSubscription:

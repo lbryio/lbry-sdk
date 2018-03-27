@@ -63,57 +63,37 @@ class StratumClientProtocol(LineOnlyReceiver):
         self.on_disconnected_controller.add(True)
 
     def lineReceived(self, line):
+
         try:
             message = json.loads(line)
         except (ValueError, TypeError):
-            raise ProtocolException("Cannot decode message '%s'" % line.strip())
-        msg_id = message.get('id', 0)
-        msg_result = message.get('result')
-        msg_error = message.get('error')
-        msg_method = message.get('method')
-        msg_params = message.get('params')
-        if msg_id:
-            # It's a RPC response
-            # Perform lookup to the table of waiting requests.
+            raise ProtocolException("Cannot decode message '{}'".format(line.strip()))
+
+        if message.get('id'):
             try:
-                meta = self.lookup_table[msg_id]
-                del self.lookup_table[msg_id]
+                d = self.lookup_table.pop(message['id'])
+                if message.get('error'):
+                    d.errback(RemoteServiceException(*message['error']))
+                else:
+                    d.callback(message.get('result'))
             except KeyError:
-                # When deferred object for given message ID isn't found, it's an error
                 raise ProtocolException(
-                    "Lookup for deferred object for message ID '%s' failed." % msg_id)
-            # If there's an error, handle it as errback
-            # If both result and error are null, handle it as a success with blank result
-            if msg_error != None:
-                meta['defer'].errback(
-                    RemoteServiceException(msg_error[0], msg_error[1], msg_error[2])
-                )
-            else:
-                meta['defer'].callback(msg_result)
-        elif msg_method:
-            if msg_method == 'blockchain.headers.subscribe':
-                self.network._on_header_controller.add(msg_params[0])
-            elif msg_method == 'blockchain.address.subscribe':
-                self.network._on_address_controller.add(msg_params)
+                    "Lookup for deferred object for message ID '{}' failed.".format(message['id']))
+        elif message.get('method') in self.network.subscription_controllers:
+            controller = self.network.subscription_controllers[message['method']]
+            controller.add(message.get('params'))
         else:
             log.warning("Cannot handle message '%s'" % line)
 
-    def write_request(self, method, params, is_notification=False):
-        request_id = None if is_notification else self._get_id()
-        serialized = json.dumps({'id': request_id, 'method': method, 'params': params})
-        self.sendLine(serialized)
-        return request_id
-
-    def rpc(self, method, params, is_notification=False):
-        request_id = self.write_request(method, params, is_notification)
-        if is_notification:
-            return
-        d = defer.Deferred()
-        self.lookup_table[request_id] = {
+    def rpc(self, method, *args):
+        message_id = self._get_id()
+        message = json.dumps({
+            'id': message_id,
             'method': method,
-            'params': params,
-            'defer': d,
-        }
+            'params': args
+        })
+        self.sendLine(message)
+        d = self.lookup_table[message_id] = defer.Deferred()
         return d
 
 
@@ -147,8 +127,13 @@ class Network:
         self._on_header_controller = StreamController()
         self.on_header = self._on_header_controller.stream
 
-        self._on_transaction_controller = StreamController()
-        self.on_transaction = self._on_transaction_controller.stream
+        self._on_status_controller = StreamController()
+        self.on_status = self._on_status_controller.stream
+
+        self.subscription_controllers = {
+            'blockchain.headers.subscribe': self._on_header_controller,
+            'blockchain.address.subscribe': self._on_status_controller,
+        }
 
     @defer.inlineCallbacks
     def start(self):
@@ -182,101 +167,29 @@ class Network:
     def is_connected(self):
         return self.client is not None and self.client.connected
 
-    def rpc(self, method, params, *args, **kwargs):
+    def rpc(self, list_or_method, *args):
         if self.is_connected:
-            return self.client.rpc(method, params, *args, **kwargs)
+            return self.client.rpc(list_or_method, *args)
         else:
             raise TransportException("Attempting to send rpc request when connection is not available.")
 
-    def claimtrie_getvaluesforuris(self, block_hash, *uris):
-        return self.rpc(
-            'blockchain.claimtrie.getvaluesforuris', [block_hash] + list(uris)
-        )
+    def broadcast(self, raw_transaction):
+        return self.rpc('blockchain.transaction.broadcast', raw_transaction)
 
-    def claimtrie_getvaluesforuri(self, block_hash, uri):
-        return self.rpc('blockchain.claimtrie.getvaluesforuri', [block_hash, uri])
+    def get_history(self, address):
+        return self.rpc('blockchain.address.get_history', address)
 
-    def claimtrie_getclaimssignedbynthtoname(self, name, n):
-        return self.rpc('blockchain.claimtrie.getclaimssignedbynthtoname', [name, n])
+    def get_transaction(self, tx_hash):
+        return self.rpc('blockchain.transaction.get', tx_hash)
 
-    def claimtrie_getclaimssignedbyid(self, certificate_id):
-        return self.rpc('blockchain.claimtrie.getclaimssignedbyid', [certificate_id])
+    def get_merkle(self, tx_hash, height):
+        return self.rpc('blockchain.transaction.get_merkle', tx_hash, height)
 
-    def claimtrie_getclaimssignedby(self, name):
-        return self.rpc('blockchain.claimtrie.getclaimssignedby', [name])
+    def get_headers(self, height, count=10000):
+        return self.rpc('blockchain.block.headers', height, count)
 
-    def claimtrie_getnthclaimforname(self, name, n):
-        return self.rpc('blockchain.claimtrie.getnthclaimforname', [name, n])
+    def subscribe_headers(self):
+        return self.rpc('blockchain.headers.subscribe')
 
-    def claimtrie_getclaimsbyids(self, *claim_ids):
-        return self.rpc('blockchain.claimtrie.getclaimsbyids', list(claim_ids))
-
-    def claimtrie_getclaimbyid(self, claim_id):
-        return self.rpc('blockchain.claimtrie.getclaimbyid', [claim_id])
-
-    def claimtrie_get(self):
-        return self.rpc('blockchain.claimtrie.get', [])
-
-    def block_get_block(self, block_hash):
-        return self.rpc('blockchain.block.get_block', [block_hash])
-
-    def claimtrie_getclaimsforname(self, name):
-        return self.rpc('blockchain.claimtrie.getclaimsforname', [name])
-
-    def claimtrie_getclaimsintx(self, txid):
-        return self.rpc('blockchain.claimtrie.getclaimsintx', [txid])
-
-    def claimtrie_getvalue(self, name, block_hash=None):
-        return self.rpc('blockchain.claimtrie.getvalue', [name, block_hash])
-
-    def relayfee(self):
-        return self.rpc('blockchain.relayfee', [])
-
-    def estimatefee(self):
-        return self.rpc('blockchain.estimatefee', [])
-
-    def transaction_get(self, txid):
-        return self.rpc('blockchain.transaction.get', [txid])
-
-    def transaction_get_merkle(self, tx_hash, height, cache_only=False):
-        return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height, cache_only])
-
-    def transaction_broadcast(self, raw_transaction):
-        return self.rpc('blockchain.transaction.broadcast', [raw_transaction])
-
-    def block_get_chunk(self, index, cache_only=False):
-        return self.rpc('blockchain.block.get_chunk', [index, cache_only])
-
-    def block_get_header(self, height, cache_only=False):
-        return self.rpc('blockchain.block.get_header', [height, cache_only])
-
-    def block_headers(self, height, count=10000):
-        return self.rpc('blockchain.block.headers', [height, count])
-
-    def utxo_get_address(self, txid, pos):
-        return self.rpc('blockchain.utxo.get_address', [txid, pos])
-
-    def address_listunspent(self, address):
-        return self.rpc('blockchain.address.listunspent', [address])
-
-    def address_get_proof(self, address):
-        return self.rpc('blockchain.address.get_proof', [address])
-
-    def address_get_balance(self, address):
-        return self.rpc('blockchain.address.get_balance', [address])
-
-    def address_get_mempool(self, address):
-        return self.rpc('blockchain.address.get_mempool', [address])
-
-    def address_get_history(self, address):
-        return self.rpc('blockchain.address.get_history', [address])
-
-    def address_subscribe(self, addresses):
-        if isinstance(addresses, str):
-            return self.rpc('blockchain.address.subscribe', [addresses])
-        else:
-            msgs = map(lambda addr: ('blockchain.address.subscribe', [addr]), addresses)
-            self.network.send(msgs, self.addr_subscription_response)
-
-    def headers_subscribe(self):
-        return self.rpc('blockchain.headers.subscribe', [], True)
+    def subscribe_address(self, address):
+        return self.rpc('blockchain.address.subscribe', address)
