@@ -16,7 +16,7 @@ from .lbrycrd import op_push
 from .lbrycrd import point_to_ser, MyVerifyingKey, MySigningKey
 from .lbrycrd import regenerate_key, public_key_from_private_key
 from .lbrycrd import encode_claim_id_hex, claim_id_hash
-from .util import profiler, var_int, int_to_hex, parse_sig, rev_hex
+from .util import var_int, int_to_hex, parse_sig, rev_hex
 
 log = logging.getLogger()
 
@@ -559,7 +559,6 @@ class Transaction(object):
             fee = relay_fee
         return fee
 
-    @profiler
     def estimated_size(self):
         '''Return an estimated tx size in bytes.'''
         return len(self.serialize(-1)) / 2  # ASCII hex string

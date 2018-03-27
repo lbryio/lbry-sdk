@@ -13,10 +13,6 @@ def get_key_chain_from_xpub(xpub):
     return key, chain
 
 
-def derive_key(parent_key, chain, sequence):
-    return CKD_pub(parent_key, chain, sequence)[0]
-
-
 class AddressSequence:
 
     def __init__(self, derived_keys, gap, age_checker, pub_key, chain_key):
@@ -31,7 +27,7 @@ class AddressSequence:
         ]
 
     def generate_next_address(self):
-        new_key, _ = derive_key(self.pub_key, self.chain_key, len(self.derived_keys))
+        new_key, _ = CKD_pub(self.pub_key, self.chain_key, len(self.derived_keys))
         address = public_key_to_address(new_key)
         self.derived_keys.append(new_key.encode('hex'))
         self.addresses.append(address)
@@ -59,11 +55,11 @@ class Account:
         master_key, master_chain = get_key_chain_from_xpub(data['xpub'])
         self.receiving = AddressSequence(
             data.get('receiving', []), receiving_gap, age_checker,
-            *derive_key(master_key, master_chain, 0)
+            *CKD_pub(master_key, master_chain, 0)
         )
         self.change = AddressSequence(
             data.get('change', []), change_gap, age_checker,
-            *derive_key(master_key, master_chain, 1)
+            *CKD_pub(master_key, master_chain, 1)
         )
         self.is_old = age_checker
 
@@ -73,10 +69,6 @@ class Account:
             'change': self.change.derived_keys,
             'xpub': self.xpub
         }
-
-    def ensure_enough_addresses(self):
-        return self.receiving.ensure_enough_addresses() + \
-               self.change.ensure_enough_addresses()
 
     @property
     def sequences(self):
