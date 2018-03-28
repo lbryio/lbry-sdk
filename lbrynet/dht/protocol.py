@@ -11,7 +11,6 @@ import msgtypes
 import msgformat
 from contact import Contact
 from error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError
-from delay import Delay
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +27,6 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._sentMessages = {}
         self._partialMessages = {}
         self._partialMessagesProgress = {}
-        self._delay = Delay(0, self._node.clock.seconds)
 
     def sendRPC(self, contact, method, args, rawResponse=False):
         """ Sends an RPC to the specified contact
@@ -208,11 +206,9 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
     def _scheduleSendNext(self, txData, address):
         """Schedule the sending of the next UDP packet """
-        delay = self._delay()
-        key = object()
-        delayed_call, _ = self._node.reactor_callLater(delay, self._write_and_remove, key, txData, address)
+        delayed_call, _ = self._node.reactor_callLater(0, self._write, txData, address)
 
-    def _write_and_remove(self, key, txData, address):
+    def _write(self, txData, address):
         if self.transport:
             try:
                 self.transport.write(txData, address)
