@@ -46,8 +46,7 @@ class DHTHashAnnouncer(object):
 
     @defer.inlineCallbacks
     def immediate_announce(self, blob_hashes):
-        blob_hashes = [b for b in blob_hashes if b not in self.hash_queue]
-        self.hash_queue.extend(blob_hashes)
+        self.hash_queue.extend(b for b in blob_hashes if b not in self.hash_queue)
 
         log.info("Announcing %i blobs", len(self.hash_queue))
         start = self.clock.seconds()

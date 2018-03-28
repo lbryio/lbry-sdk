@@ -2900,17 +2900,15 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @defer.inlineCallbacks
-    def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None, announce_all=None):
+    def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None):
         """
         Announce blobs to the DHT
 
         Usage:
             blob_announce [<blob_hash> | --blob_hash=<blob_hash>]
                           [<stream_hash> | --stream_hash=<stream_hash>] | [<sd_hash> | --sd_hash=<sd_hash>]
-                          [--announce_all]
 
         Options:
-            --announce_all                 : (bool) announce all the blobs possessed by user
             --blob_hash=<blob_hash>        : (str) announce a blob, specified by blob_hash
             --stream_hash=<stream_hash>    : (str) announce all blobs associated with
                                              stream_hash
@@ -2921,40 +2919,21 @@ class Daemon(AuthJSONRPCServer):
             (bool) true if successful
         """
 
-        if announce_all:
-            yield self.session.blob_manager.immediate_announce_all_blobs()
+        blob_hashes = []
+        if blob_hash:
+            blob_hashes.append(blob_hash)
+        elif stream_hash or sd_hash:
+            if sd_hash and stream_hash:
+                raise Exception("either the sd hash or the stream hash should be provided, not both")
+            if sd_hash:
+                stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
+            blobs = yield self.storage.get_blobs_for_stream(stream_hash, only_completed=True)
+            blob_hashes.extend(blob.blob_hash for blob in blobs if blob.blob_hash is not None)
         else:
-            blob_hashes = []
-            if blob_hash:
-                blob_hashes.append(blob_hash)
-            elif stream_hash or sd_hash:
-                if sd_hash and stream_hash:
-                    raise Exception("either the sd hash or the stream hash should be provided, not both")
-                if sd_hash:
-                    stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
-                blobs = yield self.storage.get_blobs_for_stream(stream_hash, only_completed=True)
-                blob_hashes.extend([blob.blob_hash for blob in blobs if blob.blob_hash is not None])
-            else:
-                raise Exception('single argument must be specified')
-            yield self.session.blob_manager.immediate_announce(blob_hashes)
+            raise Exception('single argument must be specified')
+        yield self.storage.should_single_announce_blobs(blob_hashes, immediate=True)
         response = yield self._render_response(True)
         defer.returnValue(response)
-
-    @AuthJSONRPCServer.deprecated("blob_announce")
-    def jsonrpc_blob_announce_all(self):
-        """
-        Announce all blobs to the DHT
-
-        Usage:
-            blob_announce_all
-
-        Options:
-            None
-
-        Returns:
-            (str) Success/fail message
-        """
-        return self.jsonrpc_blob_announce(announce_all=True)
 
     @defer.inlineCallbacks
     def jsonrpc_file_reflect(self, **kwargs):

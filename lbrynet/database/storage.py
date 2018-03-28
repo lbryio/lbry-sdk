@@ -105,7 +105,8 @@ class SQLiteStorage(object):
                 next_announce_time integer not null,
                 should_announce integer not null default 0,
                 status text not null,
-                last_announced_time integer
+                last_announced_time integer,
+                single_announce integer
             );
             
             create table if not exists stream (
@@ -233,8 +234,8 @@ class SQLiteStorage(object):
         status = yield self.get_blob_status(blob_hash)
         if status is None:
             status = "pending"
-            yield self.db.runOperation("insert into blob values (?, ?, ?, ?, ?, ?)",
-                                       (blob_hash, length, 0, 0, status, 0))
+            yield self.db.runOperation("insert into blob values (?, ?, ?, ?, ?, ?, ?)",
+                                       (blob_hash, length, 0, 0, status, 0, 0))
         defer.returnValue(status)
 
     def should_announce(self, blob_hash):
@@ -254,9 +255,24 @@ class SQLiteStorage(object):
 
     def update_last_announced_blob(self, blob_hash, last_announced):
         return self.db.runOperation(
-                    "update blob set next_announce_time=?, last_announced_time=? where blob_hash=?",
+                    "update blob set next_announce_time=?, last_announced_time=?, single_announce=0 where blob_hash=?",
                     (int(last_announced + (dataExpireTimeout / 2)), int(last_announced), blob_hash)
                 )
+
+    def should_single_announce_blobs(self, blob_hashes, immediate=False):
+        def set_single_announce(transaction):
+            now = self.clock.seconds()
+            for blob_hash in blob_hashes:
+                if immediate:
+                    transaction.execute(
+                        "update blob set single_announce=1, next_announce_time=? "
+                        "where blob_hash=? and status='finished'", (int(now), blob_hash)
+                    )
+                else:
+                    transaction.execute(
+                        "update blob set single_announce=1 where blob_hash=? and status='finished'", (blob_hash, )
+                    )
+        return self.db.runInteraction(set_single_announce)
 
     def get_blobs_to_announce(self):
         def get_and_update(transaction):
@@ -264,7 +280,8 @@ class SQLiteStorage(object):
             if conf.settings['announce_head_blobs_only']:
                 r = transaction.execute(
                     "select blob_hash from blob "
-                    "where blob_hash is not null and should_announce=1 and next_announce_time<? and status='finished'",
+                    "where blob_hash is not null and "
+                    "(should_announce=1 or single_announce=1) and next_announce_time<? and status='finished'",
                     (timestamp,)
                 )
             else:
