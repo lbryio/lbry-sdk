@@ -298,6 +298,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#blob_reflect" title="blob_reflect" class="md-nav__link">
+    blob_reflect
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#blob_reflect_all" title="blob_reflect_all" class="md-nav__link">
     blob_reflect_all
   </a>
@@ -707,6 +714,13 @@
         <li class="md-nav__item">
   <a href="#blob_list" title="blob_list" class="md-nav__link">
     blob_list
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blob_reflect" title="blob_reflect" class="md-nav__link">
+    blob_reflect
   </a>
   
 </li>
@@ -1144,6 +1158,16 @@ Returns:
     (list) List of blob hashes
 </code></pre>
 
+<h2 id="blob_reflect">blob_reflect</h2>
+<pre><code class="text">Reflects specified blobs
+
+Args:
+    'reflector_server'  :  reflector  address
+
+Returns:
+    (list) reflected blob hashes
+</code></pre>
+
 <h2 id="blob_reflect_all">blob_reflect_all</h2>
 <pre><code class="text">Reflects all saved blobs
 
@@ -1179,7 +1203,7 @@ Returns:
 <pre><code class="text">Import serialized channel signing information (to allow signing new claims to the channel)
 
 Args:
-    'serialized_certificate_info'  :  (str)  certificate info
+    'serialized_certificate_info' (required)  :  (str)  certificate info
 
 Returns:
     (dict) Result dictionary
@@ -1892,7 +1916,7 @@ Args:
     'uri' (required)  :  (str)  check availability for this uri
     'search_timeout'  :  (int)  how long to search for peers for the blob
                                 in the dht
-    'search_timeout'  :  (int)  how long to try downloading from a peer
+    'blob_timeout'    :  (int)  how long to try downloading from a peer
 
 Returns:
     (dict) {

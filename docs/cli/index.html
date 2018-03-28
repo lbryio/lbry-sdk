@@ -310,6 +310,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#blob_reflect" title="blob_reflect" class="md-nav__link">
+    blob_reflect
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#blob_reflect_all" title="blob_reflect_all" class="md-nav__link">
     blob_reflect_all
   </a>
@@ -712,6 +719,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#blob_reflect" title="blob_reflect" class="md-nav__link">
+    blob_reflect
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#blob_reflect_all" title="blob_reflect_all" class="md-nav__link">
     blob_reflect_all
   </a>
@@ -1071,18 +1085,18 @@
 <pre><code class="text">Announce blobs to the DHT
 
 Usage:
-    blob_announce [--announce_all] [&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash&gt;]
-                  [&lt;stream_hash&gt; | --stream_hash=&lt;stream_hash&gt;]
-                  [&lt;sd_hash&gt; | --sd_hash=&lt;sd_hash&gt;]
+    blob_announce [&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash&gt;]
+                  [&lt;stream_hash&gt; | --stream_hash=&lt;stream_hash&gt;] | [&lt;sd_hash&gt; | --sd_hash=&lt;sd_hash&gt;]
+                  [--announce_all]
 
 
 Options:
-    --announce_all=&lt;announce_all&gt;  :  (bool)  announce all the blobs possessed by user
-    --blob_hash=&lt;blob_hash&gt;        :  (str)   announce a blob, specified by blob_hash
-    --stream_hash=&lt;stream_hash&gt;    :  (str)   announce all blobs associated with
-                                              stream_hash
-    --sd_hash=&lt;sd_hash&gt;            :  (str)   announce all blobs associated with
-                                              sd_hash and the sd_hash itself
+    --announce_all               :  (bool)  announce all the blobs possessed by user
+    --blob_hash=&lt;blob_hash&gt;      :  (str)   announce a blob, specified by blob_hash
+    --stream_hash=&lt;stream_hash&gt;  :  (str)   announce all blobs associated with
+                                            stream_hash
+    --sd_hash=&lt;sd_hash&gt;          :  (str)   announce all blobs associated with
+                                            sd_hash and the sd_hash itself
 
 Returns:
     (bool) true if successful
@@ -1172,6 +1186,20 @@ Returns:
     (list) List of blob hashes
 </code></pre>
 
+<h2 id="blob_reflect">blob_reflect</h2>
+<pre><code class="text">Reflects specified blobs
+
+Usage:
+    blob_reflect (&lt;blob_hashes&gt;...) [--reflector_server=&lt;reflector_server&gt;]
+
+
+Options:
+    --reflector_server=&lt;reflector_server&gt;         (str)  :  reflector  address
+
+Returns:
+    (list) reflected blob hashes
+</code></pre>
+
 <h2 id="blob_reflect_all">blob_reflect_all</h2>
 <pre><code class="text">Reflects all saved blobs
 
@@ -1219,8 +1247,7 @@ Returns:
 <pre><code class="text">Import serialized channel signing information (to allow signing new claims to the channel)
 
 Usage:
-    channel_import (&lt;serialized_certificate_info&gt; |
-                    --serialized_certificate_info=&lt;serialized_certificate_info&gt;)
+    channel_import (&lt;serialized_certificate_info&gt; | --serialized_certificate_info=&lt;serialized_certificate_info&gt;)
 
 
 Options:
@@ -2089,7 +2116,7 @@ Options:
     --uri=&lt;uri&gt;                        :  (str)  check availability for this uri
     --search_timeout=&lt;search_timeout&gt;  :  (int)  how long to search for peers for the blob
                                                  in the dht
-    --search_timeout=&lt;blob_timeout&gt;    :  (int)  how long to try downloading from a peer
+    --blob_timeout=&lt;blob_timeout&gt;      :  (int)  how long to try downloading from a peer
 
 Returns:
     (dict) {
