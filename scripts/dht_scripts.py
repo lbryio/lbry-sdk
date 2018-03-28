@@ -73,11 +73,33 @@ def connect(port=None):
         yield reactor.stop()
 
 
+def getApproximateTotalDHTNodes(node):
+    from lbrynet.dht import constants
+    # get the deepest bucket and the number of contacts in that bucket and multiply it
+    # by the number of equivalently deep buckets in the whole DHT to get a really bad
+    # estimate!
+    bucket = node._routingTable._buckets[node._routingTable._kbucketIndex(node.node_id)]
+    num_in_bucket = len(bucket._contacts)
+    factor = (2 ** constants.key_bits) / (bucket.rangeMax - bucket.rangeMin)
+    return num_in_bucket * factor
+
+
+def getApproximateTotalHashes(node):
+    # Divide the number of hashes we know about by k to get a really, really, really
+    # bad estimate of the average number of hashes per node, then multiply by the
+    # approximate number of nodes to get a horrendous estimate of the total number
+    # of hashes in the DHT
+    num_in_data_store = len(node._dataStore._dict)
+    if num_in_data_store == 0:
+        return 0
+    return num_in_data_store * getApproximateTotalDHTNodes(node) / 8
+
+
 @defer.inlineCallbacks
 def find(node):
     try:
-        log.info("Approximate number of nodes in DHT: %s", str(node.getApproximateTotalDHTNodes()))
-        log.info("Approximate number of blobs in DHT: %s", str(node.getApproximateTotalHashes()))
+        log.info("Approximate number of nodes in DHT: %s", str(getApproximateTotalDHTNodes(node)))
+        log.info("Approximate number of blobs in DHT: %s", str(getApproximateTotalHashes(node)))
 
         h = "578f5e82da7db97bfe0677826d452cc0c65406a8e986c9caa126af4ecdbf4913daad2f7f5d1fb0ffec17d0bf8f187f5a"
         peersFake = yield node.getPeersForBlob(h.decode("hex"))

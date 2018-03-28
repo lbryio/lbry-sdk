@@ -40,6 +40,8 @@ ANDROID = 4
 KB = 2 ** 10
 MB = 2 ** 20
 
+DEFAULT_CONCURRENT_ANNOUNCERS = 100
+
 DEFAULT_DHT_NODES = [
     ('lbrynet1.lbry.io', 4444),
     ('lbrynet2.lbry.io', 4444),
@@ -263,6 +265,7 @@ ADJUSTABLE_SETTINGS = {
     'download_timeout': (int, 180),
     'is_generous_host': (bool, True),
     'announce_head_blobs_only': (bool, True),
+    'concurrent_announcers': (int, DEFAULT_CONCURRENT_ANNOUNCERS),
     'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_list),
     'lbryum_wallet_dir': (str, default_lbryum_dir),
     'max_connections_per_stream': (int, 5),

@@ -38,10 +38,8 @@ install:
   - pip install .
 
 script:
-  - pip install cython
-  - pip install mock pylint unqlite
+  - pip install mock pylint
   - pylint lbrynet
   - PYTHONPATH=. trial lbrynet.tests
-  - python -m unittest discover lbrynet/tests/integration -v
   - rvm install ruby-2.3.1
   - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger

@@ -17,7 +17,7 @@ from twisted.protocols import basic
 
 from lbrynet import conf
 from lbrynet.core import BlobManager
-from lbrynet.core import HashAnnouncer
+from lbrynet.dht import hashannouncer
 from lbrynet.core import log_support
 from lbrynet.cryptstream import CryptStreamCreator
 
@@ -52,7 +52,7 @@ def reseed_file(input_file, sd_blob):
     sd_blob = SdBlob.new_instance(sd_blob)
     db_dir = conf.settings['data_dir']
     blobfile_dir = os.path.join(db_dir, "blobfiles")
-    announcer = HashAnnouncer.DummyHashAnnouncer()
+    announcer = hashannouncer.DummyHashAnnouncer()
     blob_manager = BlobManager.DiskBlobManager(announcer, blobfile_dir, db_dir)
     yield blob_manager.setup()
     creator = CryptStreamCreator.CryptStreamCreator(

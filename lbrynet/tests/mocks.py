@@ -1,12 +1,17 @@
+import struct
 import io
 
 from Crypto.PublicKey import RSA
-from twisted.internet import defer
+from twisted.internet import defer, error
+from twisted.python.failure import Failure
 
-from lbrynet.core import PTCWallet
+from lbrynet.core.client.ClientRequest import ClientRequest
+from lbrynet.core.Error import RequestCanceledError
 from lbrynet.core import BlobAvailability
+from lbrynet.core.utils import generate_id
 from lbrynet.daemon import ExchangeRateManager as ERM
 from lbrynet import conf
+from util import debug_kademlia_packet
 
 KB = 2**10
 
@@ -18,15 +23,18 @@ class FakeLBRYFile(object):
         self.stream_hash = stream_hash
         self.file_name = 'fake_lbry_file'
 
+
 class Node(object):
-    def __init__(self, *args, **kwargs):
-        pass
+    def __init__(self, peer_finder=None, peer_manager=None, **kwargs):
+        self.peer_finder = peer_finder
+        self.peer_manager = peer_manager
+        self.peerPort = 3333
 
     def joinNetwork(self, *args):
-        pass
+        return defer.succeed(True)
 
     def stop(self):
-        pass
+        return defer.succeed(None)
 
 
 class FakeNetwork(object):
@@ -69,6 +77,82 @@ class ExchangeRateManager(ERM.ExchangeRateManager):
                 feed.market, rates[feed.market]['spot'], rates[feed.market]['ts'])
 
 
+class PointTraderKeyExchanger(object):
+
+    def __init__(self, wallet):
+        self.wallet = wallet
+        self._protocols = []
+
+    def send_next_request(self, peer, protocol):
+        if not protocol in self._protocols:
+            r = ClientRequest({'public_key': self.wallet.encoded_public_key},
+                              'public_key')
+            d = protocol.add_request(r)
+            d.addCallback(self._handle_exchange_response, peer, r, protocol)
+            d.addErrback(self._request_failed, peer)
+            self._protocols.append(protocol)
+            return defer.succeed(True)
+        else:
+            return defer.succeed(False)
+
+    def _handle_exchange_response(self, response_dict, peer, request, protocol):
+        assert request.response_identifier in response_dict, \
+            "Expected %s in dict but did not get it" % request.response_identifier
+        assert protocol in self._protocols, "Responding protocol is not in our list of protocols"
+        peer_pub_key = response_dict[request.response_identifier]
+        self.wallet.set_public_key_for_peer(peer, peer_pub_key)
+        return True
+
+    def _request_failed(self, err, peer):
+        if not err.check(RequestCanceledError):
+            return err
+
+
+class PointTraderKeyQueryHandlerFactory(object):
+
+    def __init__(self, wallet):
+        self.wallet = wallet
+
+    def build_query_handler(self):
+        q_h = PointTraderKeyQueryHandler(self.wallet)
+        return q_h
+
+    def get_primary_query_identifier(self):
+        return 'public_key'
+
+    def get_description(self):
+        return ("Point Trader Address - an address for receiving payments on the "
+                "point trader testing network")
+
+
+class PointTraderKeyQueryHandler(object):
+
+    def __init__(self, wallet):
+        self.wallet = wallet
+        self.query_identifiers = ['public_key']
+        self.public_key = None
+        self.peer = None
+
+    def register_with_request_handler(self, request_handler, peer):
+        self.peer = peer
+        request_handler.register_query_handler(self, self.query_identifiers)
+
+    def handle_queries(self, queries):
+        if self.query_identifiers[0] in queries:
+            new_encoded_pub_key = queries[self.query_identifiers[0]]
+            try:
+                RSA.importKey(new_encoded_pub_key)
+            except (ValueError, TypeError, IndexError):
+                return defer.fail(Failure(ValueError("Client sent an invalid public key")))
+            self.public_key = new_encoded_pub_key
+            self.wallet.set_public_key_for_peer(self.peer, self.public_key)
+            fields = {'public_key': self.wallet.encoded_public_key}
+            return defer.succeed(fields)
+        if self.public_key is None:
+            return defer.fail(Failure(ValueError("Expected but did not receive a public key")))
+        else:
+            return defer.succeed({})
+
 
 class Wallet(object):
     def __init__(self):
@@ -94,10 +178,10 @@ class Wallet(object):
         return defer.succeed(True)
 
     def get_info_exchanger(self):
-        return PTCWallet.PointTraderKeyExchanger(self)
+        return PointTraderKeyExchanger(self)
 
     def get_wallet_info_query_handler_factory(self):
-        return PTCWallet.PointTraderKeyQueryHandlerFactory(self)
+        return PointTraderKeyQueryHandlerFactory(self)
 
     def reserve_points(self, *args):
         return True
@@ -163,6 +247,9 @@ class Announcer(object):
 
     def stop(self):
         pass
+
+    def get_next_announce_time(self):
+        return 0
 
 
 class GenFile(io.RawIOBase):
@@ -313,4 +400,87 @@ def mock_conf_settings(obj, settings={}):
     obj.addCleanup(_reset_settings)
 
 
+MOCK_DHT_NODES = [
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+    "DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF",
+]
 
+MOCK_DHT_SEED_DNS = { # these map to mock nodes 0, 1, and 2
+    "lbrynet1.lbry.io": "10.42.42.1",
+    "lbrynet2.lbry.io": "10.42.42.2",
+    "lbrynet3.lbry.io": "10.42.42.3",
+}
+
+
+def resolve(name, timeout=(1, 3, 11, 45)):
+    if name not in MOCK_DHT_SEED_DNS:
+        return defer.fail(error.DNSLookupError(name))
+    return defer.succeed(MOCK_DHT_SEED_DNS[name])
+
+
+class MockUDPTransport(object):
+    def __init__(self, address, port, max_packet_size, protocol):
+        self.address = address
+        self.port = port
+        self.max_packet_size = max_packet_size
+        self._node = protocol._node
+
+    def write(self, data, address):
+        dest = MockNetwork.peers[address][0]
+        debug_kademlia_packet(data, (self.address, self.port), address, self._node)
+        dest.datagramReceived(data, (self.address, self.port))
+
+
+class MockUDPPort(object):
+    def __init__(self, protocol):
+        self.protocol = protocol
+
+    def startListening(self, reason=None):
+        return self.protocol.startProtocol()
+
+    def stopListening(self, reason=None):
+        return self.protocol.stopProtocol()
+
+
+class MockNetwork(object):
+    peers = {}  # (interface, port): (protocol, max_packet_size)
+
+    @classmethod
+    def add_peer(cls, port, protocol, interface, maxPacketSize):
+        interface = protocol._node.externalIP
+        protocol.transport = MockUDPTransport(interface, port, maxPacketSize, protocol)
+        cls.peers[(interface, port)] = (protocol, maxPacketSize)
+
+
+def listenUDP(port, protocol, interface='', maxPacketSize=8192):
+    MockNetwork.add_peer(port, protocol, interface, maxPacketSize)
+    return MockUDPPort(protocol)
+
+
+def address_generator(address=(10, 42, 42, 1)):
+    def increment(addr):
+        value = struct.unpack("I", "".join([chr(x) for x in list(addr)[::-1]]))[0] + 1
+        new_addr = []
+        for i in range(4):
+            new_addr.append(value % 256)
+            value >>= 8
+        return tuple(new_addr[::-1])
+
+    while True:
+        yield "{}.{}.{}.{}".format(*address)
+        address = increment(address)
+
+
+def mock_node_generator(count=None, mock_node_ids=MOCK_DHT_NODES):
+    if mock_node_ids is None:
+        mock_node_ids = MOCK_DHT_NODES
+
+    for num, node_ip in enumerate(address_generator()):
+        if count and num >= count:
+            break
+        if num >= len(mock_node_ids):
+            node_id = generate_id().encode('hex')
+        else:
+            node_id = mock_node_ids[num]
+        yield (node_id, node_ip)

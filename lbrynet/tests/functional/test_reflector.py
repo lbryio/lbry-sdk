@@ -4,8 +4,7 @@ from twisted.trial import unittest
 from lbrynet import conf
 from lbrynet.core.StreamDescriptor import get_sd_info
 from lbrynet import reflector
-from lbrynet.core import BlobManager
-from lbrynet.core import PeerManager
+from lbrynet.core import BlobManager, PeerManager
 from lbrynet.core import Session
 from lbrynet.core import StreamDescriptor
 from lbrynet.lbry_file.client import EncryptedFileOptions
@@ -14,6 +13,8 @@ from lbrynet.file_manager import EncryptedFileManager
 
 from lbrynet.tests import mocks
 from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
+
+from lbrynet.tests.mocks import Node
 
 
 class TestReflector(unittest.TestCase):
@@ -28,7 +29,6 @@ class TestReflector(unittest.TestCase):
         wallet = mocks.Wallet()
         peer_manager = PeerManager.PeerManager()
         peer_finder = mocks.PeerFinder(5553, peer_manager, 2)
-        hash_announcer = mocks.Announcer()
         sd_identifier = StreamDescriptor.StreamDescriptorIdentifier()
 
         self.expected_blobs = [
@@ -55,13 +55,14 @@ class TestReflector(unittest.TestCase):
             db_dir=self.db_dir,
             node_id="abcd",
             peer_finder=peer_finder,
-            hash_announcer=hash_announcer,
             blob_dir=self.blob_dir,
             peer_port=5553,
             use_upnp=False,
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
-            external_ip="127.0.0.1"
+            external_ip="127.0.0.1",
+            dht_node_class=Node,
+            hash_announcer=mocks.Announcer()
         )
 
         self.lbry_file_manager = EncryptedFileManager.EncryptedFileManager(self.session,
@@ -74,17 +75,17 @@ class TestReflector(unittest.TestCase):
             db_dir=self.server_db_dir,
             node_id="abcd",
             peer_finder=peer_finder,
-            hash_announcer=hash_announcer,
             blob_dir=self.server_blob_dir,
             peer_port=5553,
             use_upnp=False,
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
-            external_ip="127.0.0.1"
+            external_ip="127.0.0.1",
+            dht_node_class=Node,
+            hash_announcer=mocks.Announcer()
         )
 
-        self.server_blob_manager = BlobManager.DiskBlobManager(hash_announcer,
-                                                               self.server_blob_dir,
+        self.server_blob_manager = BlobManager.DiskBlobManager(self.server_blob_dir,
                                                                self.server_session.storage)
 
         self.server_lbry_file_manager = EncryptedFileManager.EncryptedFileManager(
@@ -363,6 +364,7 @@ class TestReflector(unittest.TestCase):
         d.addCallback(lambda _: verify_blob_on_reflector())
         d.addCallback(lambda _: verify_stream_on_reflector())
         return d
+
 
 def iv_generator():
     iv = 0

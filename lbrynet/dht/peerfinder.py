@@ -2,7 +2,7 @@ import binascii
 import logging
 
 from zope.interface import implements
-from twisted.internet import defer, reactor
+from twisted.internet import defer
 from lbrynet.interfaces import IPeerFinder
 from lbrynet.core.utils import short_hash
 
@@ -10,7 +10,23 @@ from lbrynet.core.utils import short_hash
 log = logging.getLogger(__name__)
 
 
-class DHTPeerFinder(object):
+class DummyPeerFinder(object):
+    """This class finds peers which have announced to the DHT that they have certain blobs"""
+
+    def run_manage_loop(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def find_peers_for_blob(self, blob_hash):
+        return defer.succeed([])
+
+    def get_most_popular_hashes(self, num_to_return):
+        return []
+
+
+class DHTPeerFinder(DummyPeerFinder):
     """This class finds peers which have announced to the DHT that they have certain blobs"""
     implements(IPeerFinder)
 
@@ -47,7 +63,7 @@ class DHTPeerFinder(object):
         finished_deferred = self.dht_node.getPeersForBlob(bin_hash)
 
         if timeout is not None:
-            reactor.callLater(timeout, _trigger_timeout)
+            self.dht_node.reactor_callLater(timeout, _trigger_timeout)
 
         try:
             peer_list = yield finished_deferred

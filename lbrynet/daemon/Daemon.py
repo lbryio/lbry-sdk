@@ -25,7 +25,7 @@ from lbryschema.decode import smart_decode
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet import conf
-from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, PTC_WALLET
+from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.core.log_support import configure_loggly_handler
@@ -198,7 +198,7 @@ class Daemon(AuthJSONRPCServer):
         self.connected_to_internet = True
         self.connection_status_code = None
         self.platform = None
-        self.current_db_revision = 6
+        self.current_db_revision = 7
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self._session_id = conf.settings.get_session_id()
@@ -313,7 +313,7 @@ class Daemon(AuthJSONRPCServer):
                                                    self.session.peer_manager)
 
             try:
-                log.info("Daemon bound to port: %d", self.peer_port)
+                log.info("Peer protocol listening on TCP %d", self.peer_port)
                 self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
             except error.CannotListenError as e:
                 import traceback
@@ -547,10 +547,6 @@ class Daemon(AuthJSONRPCServer):
                     config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
                 wallet = LBRYumWallet(self.storage, config)
                 return defer.succeed(wallet)
-            elif self.wallet_type == PTC_WALLET:
-                log.info("Using PTC wallet")
-                from lbrynet.core.PTCWallet import PTCWallet
-                return defer.succeed(PTCWallet(self.db_dir))
             else:
                 raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
 
@@ -997,7 +993,7 @@ class Daemon(AuthJSONRPCServer):
     ############################################################################
 
     @defer.inlineCallbacks
-    def jsonrpc_status(self, session_status=False, dht_status=False):
+    def jsonrpc_status(self, session_status=False):
         """
         Get daemon status
 
@@ -1006,7 +1002,6 @@ class Daemon(AuthJSONRPCServer):
 
         Options:
             --session_status  : (bool) include session status in results
-            --dht_status  : (bool) include dht network and peer status
 
         Returns:
             (dict) lbrynet-daemon status
@@ -1037,18 +1032,6 @@ class Daemon(AuthJSONRPCServer):
                         'announce_queue_size': number of blobs currently queued to be announced
                         'should_announce_blobs': number of blobs that should be announced
                     }
-
-                If given the dht status option:
-                    'dht_status': {
-                        'kbps_received': current kbps receiving,
-                        'kbps_sent': current kdps being sent,
-                        'total_bytes_sent': total bytes sent,
-                        'total_bytes_received': total bytes received,
-                        'queries_received': number of queries received per second,
-                        'queries_sent': number of queries sent per second,
-                        'recent_contacts': count of recently contacted peers,
-                        'unique_contacts': count of unique peers
-                    },
             }
         """
 
@@ -1095,8 +1078,6 @@ class Daemon(AuthJSONRPCServer):
                 'announce_queue_size': announce_queue_size,
                 'should_announce_blobs': should_announce_blobs,
             }
-        if dht_status:
-            response['dht_status'] = self.session.dht_node.get_bandwidth_stats()
         defer.returnValue(response)
 
     def jsonrpc_version(self):
@@ -2919,17 +2900,15 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @defer.inlineCallbacks
-    def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None, announce_all=None):
+    def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None):
         """
         Announce blobs to the DHT
 
         Usage:
             blob_announce [<blob_hash> | --blob_hash=<blob_hash>]
                           [<stream_hash> | --stream_hash=<stream_hash>] | [<sd_hash> | --sd_hash=<sd_hash>]
-                          [--announce_all]
 
         Options:
-            --announce_all                 : (bool) announce all the blobs possessed by user
             --blob_hash=<blob_hash>        : (str) announce a blob, specified by blob_hash
             --stream_hash=<stream_hash>    : (str) announce all blobs associated with
                                              stream_hash
@@ -2940,40 +2919,21 @@ class Daemon(AuthJSONRPCServer):
             (bool) true if successful
         """
 
-        if announce_all:
-            yield self.session.blob_manager.immediate_announce_all_blobs()
+        blob_hashes = []
+        if blob_hash:
+            blob_hashes.append(blob_hash)
+        elif stream_hash or sd_hash:
+            if sd_hash and stream_hash:
+                raise Exception("either the sd hash or the stream hash should be provided, not both")
+            if sd_hash:
+                stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
+            blobs = yield self.storage.get_blobs_for_stream(stream_hash, only_completed=True)
+            blob_hashes.extend(blob.blob_hash for blob in blobs if blob.blob_hash is not None)
         else:
-            blob_hashes = []
-            if blob_hash:
-                blob_hashes.append(blob_hash)
-            elif stream_hash or sd_hash:
-                if sd_hash and stream_hash:
-                    raise Exception("either the sd hash or the stream hash should be provided, not both")
-                if sd_hash:
-                    stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
-                blobs = yield self.storage.get_blobs_for_stream(stream_hash, only_completed=True)
-                blob_hashes.extend([blob.blob_hash for blob in blobs if blob.blob_hash is not None])
-            else:
-                raise Exception('single argument must be specified')
-            yield self.session.blob_manager.immediate_announce(blob_hashes)
+            raise Exception('single argument must be specified')
+        yield self.storage.should_single_announce_blobs(blob_hashes, immediate=True)
         response = yield self._render_response(True)
         defer.returnValue(response)
-
-    @AuthJSONRPCServer.deprecated("blob_announce")
-    def jsonrpc_blob_announce_all(self):
-        """
-        Announce all blobs to the DHT
-
-        Usage:
-            blob_announce_all
-
-        Options:
-            None
-
-        Returns:
-            (str) Success/fail message
-        """
-        return self.jsonrpc_blob_announce(announce_all=True)
 
     @defer.inlineCallbacks
     def jsonrpc_file_reflect(self, **kwargs):

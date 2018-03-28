@@ -13,24 +13,37 @@ at anytime.
   *
 
 ### Fixed
-  *
-  *
+  * handling error from dht clients with old `ping` method
+  * blobs not being re-announced if no peers successfully stored, now failed announcements are re-queued
 
 ### Deprecated
   *
-  *
-
+  * 
+  
 ### Changed
-  *
-  *
+  * several internal dht functions to use inlineCallbacks
+  * `DHTHashAnnouncer` and `Node` manage functions to use `LoopingCall`s instead of scheduling with `callLater`.
+  * `store` kademlia rpc method to block on the call finishing and to return storing peer information
+  * refactored `DHTHashAnnouncer` to longer use locks, use a `DeferredSemaphore` to limit concurrent announcers
+  * decoupled `DiskBlobManager` from `DHTHashAnnouncer`
+  * blob hashes to announce to be controlled by`SQLiteStorage`
+  * kademlia protocol to not delay writes to the UDP socket
+  * `reactor` and `callLater`, `listenUDP`, and `resolve` functions to be configurable (to allow easier testing)
+  * calls to get the current time to use `reactor.seconds` (to control callLater and LoopingCall timing in tests)
+  * `blob_announce` to queue the blob announcement but not block on it
+  * blob completion to not `callLater` an immediate announce, let `SQLiteStorage` and the `DHTHashAnnouncer` handle it
+  * raise the default number of concurrent blob announcers to 100
+  * dht logging to be more verbose with errors and warnings
+  * added `single_announce` and `last_announced_time` columns to the `blob` table in sqlite
 
 ### Added
-  *
-  *
+  * virtual kademlia network and mock udp transport for dht integration tests
+  * integration tests for bootstrapping the dht
+  * configurable `concurrent_announcers` setting
 
 ### Removed
-  *
-  *
+  * `announce_all` argument from `blob_announce`
+  * old `blob_announce_all` command
 
 
 ## [0.19.2] - 2018-03-28

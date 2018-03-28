@@ -195,7 +195,7 @@ class StreamStorageTests(StorageTest):
 
         should_announce_count = yield self.storage.count_should_announce_blobs()
         self.assertEqual(should_announce_count, 2)
-        should_announce_hashes = yield self.storage.get_blobs_to_announce(FakeAnnouncer())
+        should_announce_hashes = yield self.storage.get_blobs_to_announce()
         self.assertSetEqual(set(should_announce_hashes), {sd_hash, blob1})
 
         stream_hashes = yield self.storage.get_all_streams()

@@ -1,6 +1,5 @@
 import logging
 import os
-import time
 import sqlite3
 import traceback
 from decimal import Decimal
@@ -11,6 +10,7 @@ from lbryschema.claim import ClaimDict
 from lbryschema.decode import smart_decode
 from lbrynet import conf
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
+from lbrynet.dht.constants import dataExpireTimeout
 from lbryum.constants import COIN
 
 log = logging.getLogger(__name__)
@@ -47,26 +47,6 @@ def open_file_for_writing(download_directory, suggested_file_name):
     :return: (str) basename
     """
     return threads.deferToThread(_open_file_for_writing, download_directory, suggested_file_name)
-
-
-def get_next_announce_time(hash_announcer, num_hashes_to_announce=1, min_reannounce_time=60*60,
-                           single_announce_duration=5):
-    """
-    Hash reannounce time is set to current time + MIN_HASH_REANNOUNCE_TIME,
-    unless we are announcing a lot of hashes at once which could cause the
-    the announce queue to pile up.  To prevent pile up, reannounce
-    only after a conservative estimate of when it will finish
-    to announce all the hashes.
-
-    Args:
-        num_hashes_to_announce: number of hashes that will be added to the queue
-    Returns:
-        timestamp for next announce time
-    """
-    queue_size = hash_announcer.hash_queue_size() + num_hashes_to_announce
-    reannounce = max(min_reannounce_time,
-                     queue_size * single_announce_duration)
-    return time.time() + reannounce
 
 
 def rerun_if_locked(f):
@@ -124,7 +104,9 @@ class SQLiteStorage(object):
                 blob_length integer not null,
                 next_announce_time integer not null,
                 should_announce integer not null default 0,
-                status text not null
+                status text not null,
+                last_announced_time integer,
+                single_announce integer
             );
             
             create table if not exists stream (
@@ -185,6 +167,7 @@ class SQLiteStorage(object):
         log.info("connecting to database: %s", self._db_path)
         self.db = SqliteConnection(self._db_path)
         self.db.set_reactor(reactor)
+        self.clock = reactor
 
         # used to refresh the claim attributes on a ManagedEncryptedFileDownloader when a
         # change to the associated content claim occurs. these are added by the file manager
@@ -229,6 +212,7 @@ class SQLiteStorage(object):
         )
 
     def set_should_announce(self, blob_hash, next_announce_time, should_announce):
+        next_announce_time = next_announce_time or 0
         should_announce = 1 if should_announce else 0
         return self.db.runOperation(
             "update blob set next_announce_time=?, should_announce=? where blob_hash=?",
@@ -250,8 +234,8 @@ class SQLiteStorage(object):
         status = yield self.get_blob_status(blob_hash)
         if status is None:
             status = "pending"
-            yield self.db.runOperation("insert into blob values (?, ?, ?, ?, ?)",
-                                       (blob_hash, length, 0, 0, status))
+            yield self.db.runOperation("insert into blob values (?, ?, ?, ?, ?, ?, ?)",
+                                       (blob_hash, length, 0, 0, status, 0, 0))
         defer.returnValue(status)
 
     def should_announce(self, blob_hash):
@@ -269,13 +253,35 @@ class SQLiteStorage(object):
             "select blob_hash from blob where should_announce=1 and status='finished'"
         )
 
-    def get_blobs_to_announce(self, hash_announcer):
+    def update_last_announced_blob(self, blob_hash, last_announced):
+        return self.db.runOperation(
+                    "update blob set next_announce_time=?, last_announced_time=?, single_announce=0 where blob_hash=?",
+                    (int(last_announced + (dataExpireTimeout / 2)), int(last_announced), blob_hash)
+                )
+
+    def should_single_announce_blobs(self, blob_hashes, immediate=False):
+        def set_single_announce(transaction):
+            now = self.clock.seconds()
+            for blob_hash in blob_hashes:
+                if immediate:
+                    transaction.execute(
+                        "update blob set single_announce=1, next_announce_time=? "
+                        "where blob_hash=? and status='finished'", (int(now), blob_hash)
+                    )
+                else:
+                    transaction.execute(
+                        "update blob set single_announce=1 where blob_hash=? and status='finished'", (blob_hash, )
+                    )
+        return self.db.runInteraction(set_single_announce)
+
+    def get_blobs_to_announce(self):
         def get_and_update(transaction):
-            timestamp = time.time()
+            timestamp = self.clock.seconds()
             if conf.settings['announce_head_blobs_only']:
                 r = transaction.execute(
                     "select blob_hash from blob "
-                    "where blob_hash is not null and should_announce=1 and next_announce_time<? and status='finished'",
+                    "where blob_hash is not null and "
+                    "(should_announce=1 or single_announce=1) and next_announce_time<? and status='finished'",
                     (timestamp,)
                 )
             else:
@@ -283,16 +289,8 @@ class SQLiteStorage(object):
                     "select blob_hash from blob where blob_hash is not null "
                     "and next_announce_time<? and status='finished'", (timestamp,)
                 )
-
-            blobs = [b for b, in r.fetchall()]
-            next_announce_time = get_next_announce_time(hash_announcer, len(blobs))
-            transaction.execute(
-                "update blob set next_announce_time=? where next_announce_time<?", (next_announce_time, timestamp)
-            )
-            log.debug("Got %s blobs to announce, next announce time is in %s seconds", len(blobs),
-                      next_announce_time-time.time())
+            blobs = [b[0] for b in r.fetchall()]
             return blobs
-
         return self.db.runInteraction(get_and_update)
 
     def delete_blobs_from_db(self, blob_hashes):

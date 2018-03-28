@@ -67,7 +67,7 @@ class TestStreamify(TestCase):
             blob_dir=self.blob_dir, peer_port=5553,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
-            is_generous=self.is_generous, external_ip="127.0.0.1"
+            is_generous=self.is_generous, external_ip="127.0.0.1", dht_node_class=mocks.Node
         )
 
         self.lbry_file_manager = EncryptedFileManager(self.session, sd_identifier)
@@ -112,7 +112,7 @@ class TestStreamify(TestCase):
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=self.db_dir, node_id="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
-            blob_dir=self.blob_dir, peer_port=5553,
+            blob_dir=self.blob_dir, peer_port=5553, dht_node_class=mocks.Node,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker, external_ip="127.0.0.1"
         )

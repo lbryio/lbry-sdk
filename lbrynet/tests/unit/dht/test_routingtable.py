@@ -1,12 +1,12 @@
 import hashlib
 import unittest
 
-#from lbrynet.dht import contact, routingtable, constants
-
 import lbrynet.dht.constants
 import lbrynet.dht.routingtable
 import lbrynet.dht.contact
 import lbrynet.dht.node
+import lbrynet.dht.distance
+
 
 class FakeRPCProtocol(object):
     """ Fake RPC protocol; allows lbrynet.dht.contact.Contact objects to "send" RPCs """
@@ -42,15 +42,15 @@ class TreeRoutingTableTest(unittest.TestCase):
         basicTestList = [('123456789', '123456789', 0L), ('12345', '98765', 34527773184L)]
 
         for test in basicTestList:
-            result = lbrynet.dht.node.Distance(test[0])(test[1])
+            result = lbrynet.dht.distance.Distance(test[0])(test[1])
             self.failIf(result != test[2], 'Result of _distance() should be %s but %s returned' %
                         (test[2], result))
 
         baseIp = '146.64.19.111'
         ipTestList = ['146.64.29.222', '192.68.19.333']
 
-        distanceOne = lbrynet.dht.node.Distance(baseIp)(ipTestList[0])
-        distanceTwo = lbrynet.dht.node.Distance(baseIp)(ipTestList[1])
+        distanceOne = lbrynet.dht.distance.Distance(baseIp)(ipTestList[0])
+        distanceTwo = lbrynet.dht.distance.Distance(baseIp)(ipTestList[1])
 
         self.failIf(distanceOne > distanceTwo, '%s should be closer to the base ip %s than %s' %
                     (ipTestList[0], baseIp, ipTestList[1]))
@@ -182,10 +182,6 @@ class TreeRoutingTableTest(unittest.TestCase):
                               len(self.routingTable._buckets[0]._contacts)))
         self.failIf(contact in self.routingTable._buckets[0]._contacts,
                     'New contact should have been discarded (since RPC is faked in this test)')
-
-
-
-
 
 
 class KeyErrorFixedTest(unittest.TestCase):

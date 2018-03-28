@@ -1,9 +1,9 @@
 import logging
-import time
 import socket
 import errno
 
-from twisted.internet import protocol, defer, error, reactor, task
+from twisted.internet import protocol, defer
+from lbrynet.core.call_later_manager import CallLaterManager
 
 import constants
 import encoding
@@ -11,7 +11,6 @@ import msgtypes
 import msgformat
 from contact import Contact
 from error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError
-from delay import Delay
 
 log = logging.getLogger(__name__)
 
@@ -28,104 +27,6 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._sentMessages = {}
         self._partialMessages = {}
         self._partialMessagesProgress = {}
-        self._delay = Delay()
-        # keep track of outstanding writes so that they
-        # can be cancelled on shutdown
-        self._call_later_list = {}
-
-        # keep track of bandwidth usage by peer
-        self._history_rx = {}
-        self._history_tx = {}
-        self._bytes_rx = {}
-        self._bytes_tx = {}
-        self._unique_contacts = []
-        self._queries_rx_per_second = 0
-        self._queries_tx_per_second = 0
-        self._kbps_tx = 0
-        self._kbps_rx = 0
-        self._recent_contact_count = 0
-        self._total_bytes_tx = 0
-        self._total_bytes_rx = 0
-        self._bandwidth_stats_update_lc = task.LoopingCall(self._update_bandwidth_stats)
-
-    def _update_bandwidth_stats(self):
-        recent_rx_history = {}
-        now = time.time()
-        for address, history in self._history_rx.iteritems():
-            recent_rx_history[address] = [(s, t) for (s, t) in history if now - t < 1.0]
-        qps_rx = sum(len(v) for (k, v) in recent_rx_history.iteritems())
-        bps_rx = sum(sum([x[0] for x in v]) for (k, v) in recent_rx_history.iteritems())
-        kbps_rx = round(float(bps_rx) / 1024.0, 2)
-
-        recent_tx_history = {}
-        now = time.time()
-        for address, history in self._history_tx.iteritems():
-            recent_tx_history[address] = [(s, t) for (s, t) in history if now - t < 1.0]
-        qps_tx = sum(len(v) for (k, v) in recent_tx_history.iteritems())
-        bps_tx = sum(sum([x[0] for x in v]) for (k, v) in recent_tx_history.iteritems())
-        kbps_tx = round(float(bps_tx) / 1024.0, 2)
-
-        recent_contacts = []
-        for k, v in recent_rx_history.iteritems():
-            if v:
-                recent_contacts.append(k)
-        for k, v in recent_tx_history.iteritems():
-            if v and k not in recent_contacts:
-                recent_contacts.append(k)
-
-        self._queries_rx_per_second = qps_rx
-        self._queries_tx_per_second = qps_tx
-        self._kbps_tx = kbps_tx
-        self._kbps_rx = kbps_rx
-        self._recent_contact_count = len(recent_contacts)
-        self._total_bytes_tx = sum(v for (k, v) in self._bytes_tx.iteritems())
-        self._total_bytes_rx = sum(v for (k, v) in self._bytes_rx.iteritems())
-
-    @property
-    def unique_contacts(self):
-        return self._unique_contacts
-
-    @property
-    def queries_rx_per_second(self):
-        return self._queries_rx_per_second
-
-    @property
-    def queries_tx_per_second(self):
-        return self._queries_tx_per_second
-
-    @property
-    def kbps_tx(self):
-        return self._kbps_tx
-
-    @property
-    def kbps_rx(self):
-        return self._kbps_rx
-
-    @property
-    def recent_contact_count(self):
-        return self._recent_contact_count
-
-    @property
-    def total_bytes_tx(self):
-        return self._total_bytes_tx
-
-    @property
-    def total_bytes_rx(self):
-        return self._total_bytes_rx
-
-    @property
-    def bandwidth_stats(self):
-        response = {
-            "kbps_received": self.kbps_rx,
-            "kbps_sent": self.kbps_tx,
-            "total_bytes_sent": self.total_bytes_tx,
-            "total_bytes_received": self.total_bytes_rx,
-            "queries_received": self.queries_rx_per_second,
-            "queries_sent": self.queries_tx_per_second,
-            "recent_contacts": self.recent_contact_count,
-            "unique_contacts": len(self.unique_contacts)
-        }
-        return response
 
     def sendRPC(self, contact, method, args, rawResponse=False):
         """ Sends an RPC to the specified contact
@@ -168,16 +69,15 @@ class KademliaProtocol(protocol.DatagramProtocol):
             df._rpcRawResponse = True
 
         # Set the RPC timeout timer
-        timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, msg.id)
+        timeoutCall, cancelTimeout = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, msg.id)
         # Transmit the data
         self._send(encodedMsg, msg.id, (contact.address, contact.port))
         self._sentMessages[msg.id] = (contact.id, df, timeoutCall, method, args)
+        df.addErrback(cancelTimeout)
         return df
 
     def startProtocol(self):
         log.info("DHT listening on UDP %i", self._node.port)
-        if not self._bandwidth_stats_update_lc.running:
-            self._bandwidth_stats_update_lc.start(1)
 
     def datagramReceived(self, datagram, address):
         """ Handles and parses incoming RPC messages (and responses)
@@ -206,26 +106,15 @@ class KademliaProtocol(protocol.DatagramProtocol):
         try:
             msgPrimitive = self._encoder.decode(datagram)
             message = self._translator.fromPrimitive(msgPrimitive)
-        except (encoding.DecodeError, ValueError):
+        except (encoding.DecodeError, ValueError) as err:
             # We received some rubbish here
+            log.exception("Error decoding datagram from %s:%i - %s", address[0], address[1], err)
             return
         except (IndexError, KeyError):
             log.warning("Couldn't decode dht datagram from %s", address)
             return
 
         remoteContact = Contact(message.nodeID, address[0], address[1], self)
-
-        now = time.time()
-        contact_history = self._history_rx.get(address, [])
-        if len(contact_history) > 1000:
-            contact_history = [x for x in contact_history if now - x[1] < 1.0]
-        contact_history.append((len(datagram), time.time()))
-        self._history_rx[address] = contact_history
-        bytes_rx = self._bytes_rx.get(address, 0)
-        bytes_rx += len(datagram)
-        self._bytes_rx[address] = bytes_rx
-        if address not in self.unique_contacts:
-            self._unique_contacts.append(address)
 
         # Refresh the remote node's details in the local node's k-buckets
         self._node.addContact(remoteContact)
@@ -253,8 +142,18 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     else:
                         exception_type = UnknownRemoteException
                     remoteException = exception_type(message.response)
-                    log.error("Remote exception (%s): %s", address, remoteException)
-                    df.errback(remoteException)
+                    # this error is returned by nodes that can be contacted but have an old
+                    # and broken version of the ping command, if they return it the node can
+                    # be contacted, so we'll treat it as a successful ping
+                    old_ping_error = "ping() got an unexpected keyword argument '_rpcNodeContact'"
+                    if isinstance(remoteException, TypeError) and \
+                                    remoteException.message == old_ping_error:
+                        log.debug("old pong error")
+                        df.callback('pong')
+                    else:
+                        log.error("DHT RECV REMOTE EXCEPTION FROM %s:%i: %s", address[0],
+                                  address[1], remoteException)
+                        df.errback(remoteException)
                 else:
                     # We got a result from the RPC
                     df.callback(message.response)
@@ -280,18 +179,6 @@ class KademliaProtocol(protocol.DatagramProtocol):
                future, into something similar to a message translator/encoder
                class (see C{kademlia.msgformat} and C{kademlia.encoding}).
         """
-
-        now = time.time()
-        contact_history = self._history_tx.get(address, [])
-        if len(contact_history) > 1000:
-            contact_history = [x for x in contact_history if now - x[1] < 1.0]
-        contact_history.append((len(data), time.time()))
-        self._history_tx[address] = contact_history
-        bytes_tx = self._bytes_tx.get(address, 0)
-        bytes_tx += len(data)
-        self._bytes_tx[address] = bytes_tx
-        if address not in self.unique_contacts:
-            self._unique_contacts.append(address)
 
         if len(data) > self.msgSizeLimit:
             # We have to spread the data over multiple UDP datagrams,
@@ -319,13 +206,9 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
     def _scheduleSendNext(self, txData, address):
         """Schedule the sending of the next UDP packet """
-        delay = self._delay()
-        key = object()
-        delayed_call = reactor.callLater(delay, self._write_and_remove, key, txData, address)
-        self._call_later_list[key] = delayed_call
+        delayed_call, _ = self._node.reactor_callLater(0, self._write, txData, address)
 
-    def _write_and_remove(self, key, txData, address):
-        del self._call_later_list[key]
+    def _write(self, txData, address):
         if self.transport:
             try:
                 self.transport.write(txData, address)
@@ -333,13 +216,15 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 if err.errno == errno.EWOULDBLOCK:
                     # i'm scared this may swallow important errors, but i get a million of these
                     # on Linux and it doesnt seem to affect anything  -grin
-                    log.debug("Can't send data to dht: EWOULDBLOCK")
+                    log.warning("Can't send data to dht: EWOULDBLOCK")
                 elif err.errno == errno.ENETUNREACH:
                     # this should probably try to retransmit when the network connection is back
                     log.error("Network is unreachable")
                 else:
                     log.error("DHT socket error: %s (%i)", err.message, err.errno)
                     raise err
+        else:
+            log.warning("transport not connected!")
 
     def _sendResponse(self, contact, rpcID, response):
         """ Send a RPC response to the specified contact
@@ -418,7 +303,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         # See if any progress has been made; if not, kill the message
         if self._hasProgressBeenMade(messageID):
             # Reset the RPC timeout timer
-            timeoutCall = reactor.callLater(constants.rpcTimeout, self._msgTimeout, messageID)
+            timeoutCall, _ = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, messageID)
             self._sentMessages[messageID] = (remoteContactID, df, timeoutCall, method, args)
         else:
             # No progress has been made
@@ -443,19 +328,5 @@ class KademliaProtocol(protocol.DatagramProtocol):
         Will only be called once, after all ports are disconnected.
         """
         log.info('Stopping DHT')
-
-        if self._bandwidth_stats_update_lc.running:
-            self._bandwidth_stats_update_lc.stop()
-
-        for delayed_call in self._call_later_list.values():
-            try:
-                delayed_call.cancel()
-            except (error.AlreadyCalled, error.AlreadyCancelled):
-                log.debug('Attempted to cancel a DelayedCall that was not active')
-            except Exception:
-                log.exception('Failed to cancel a DelayedCall')
-                # not sure why this is needed, but taking this out sometimes causes
-                # exceptions.AttributeError: 'Port' object has no attribute 'socket'
-                # to happen on shutdown
-                # reactor.iterate()
+        CallLaterManager.stop()
         log.info('DHT stopped')

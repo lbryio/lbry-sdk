@@ -8,7 +8,6 @@ from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.StreamDescriptor import get_sd_info, BlobStreamDescriptorReader
 from lbrynet.core import BlobManager
 from lbrynet.core import Session
-from lbrynet.core.server import DHTHashAnnouncer
 from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager import EncryptedFileManager
 from lbrynet.tests import mocks
@@ -32,10 +31,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
 
         self.session = mock.Mock(spec=Session.Session)(None, None)
         self.session.payment_rate_manager.min_blob_data_payment_rate = 0
-
-        hash_announcer = DHTHashAnnouncer.DHTHashAnnouncer(None, None)
-        self.blob_manager = BlobManager.DiskBlobManager(
-            hash_announcer, self.tmp_blob_dir, SQLiteStorage(self.tmp_db_dir))
+        self.blob_manager = BlobManager.DiskBlobManager(self.tmp_blob_dir, SQLiteStorage(self.tmp_db_dir))
         self.session.blob_manager = self.blob_manager
         self.session.storage = self.session.blob_manager.storage
         self.file_manager = EncryptedFileManager.EncryptedFileManager(self.session, object())
@@ -74,6 +70,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
         # this comes from the database, the blobs returned are sorted
         sd_info = yield get_sd_info(self.session.storage, lbry_file.stream_hash, include_blobs=True)
         self.assertDictEqual(sd_info, sd_file_info)
+        self.assertListEqual(sd_info['blobs'], sd_file_info['blobs'])
         self.assertEqual(sd_info['stream_hash'], expected_stream_hash)
         self.assertEqual(len(sd_info['blobs']), 3)
         self.assertNotEqual(sd_info['blobs'][0]['length'], 0)

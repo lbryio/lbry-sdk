@@ -1,24 +1,22 @@
 from collections import Counter
 import datetime
+from twisted.internet import task
 
 
 class HashWatcher(object):
-    def __init__(self):
+    def __init__(self, clock=None):
+        if not clock:
+            from twisted.internet import reactor as clock
         self.ttl = 600
         self.hashes = []
-        self.next_tick = None
+        self.lc = task.LoopingCall(self._remove_old_hashes)
+        self.lc.clock = clock
 
-    def tick(self):
-
-        from twisted.internet import reactor
-
-        self._remove_old_hashes()
-        self.next_tick = reactor.callLater(10, self.tick)
+    def start(self):
+        return self.lc.start(10)
 
     def stop(self):
-        if self.next_tick is not None:
-            self.next_tick.cancel()
-            self.next_tick = None
+        return self.lc.stop()
 
     def add_requested_hash(self, hashsum, contact):
         from_ip = contact.compact_ip
