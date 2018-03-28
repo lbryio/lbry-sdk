@@ -64,7 +64,7 @@ class DHTHashAnnouncer(object):
             log.debug("Failed to announce %i blobs", len(results) - len(announced_to))
         if announced_to:
             log.info('Took %s seconds to announce %i of %i attempted hashes (%f hashes per second)',
-                     now - start, len(blob_hashes), len(announced_to),
+                     now - start, len(announced_to), len(blob_hashes),
                      int(float(len(blob_hashes)) / float(now - start)))
         defer.returnValue(results)
 
