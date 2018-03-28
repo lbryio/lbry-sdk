@@ -13,9 +13,8 @@ at anytime.
   *
 
 ### Fixed
-  * incorrectly raised download cancelled error for already verified blob files
-  * infinite loop where reflector client keeps trying to send failing blobs, which may be failing because they are invalid and thus will never be successfully received
-  * docstring bugs for `stream_availability`, `channel_import`, and `blob_announce`
+  *
+  *
 
 ### Deprecated
   *
@@ -26,13 +25,29 @@ at anytime.
   *
 
 ### Added
-  * `blob_reflect` command to send specific blobs to a reflector server
-  * unit test for docopt
-
-### Removed
-  * `flags` decorator from server.py as short flags are no longer used when using api/cli methods
+  *
   *
 
+### Removed
+  *
+  *
+
+
+## [0.19.2] - 2018-03-28
+### Fixed
+ * incorrectly raised download cancelled error for already verified blob files
+ * infinite loop where reflector client keeps trying to send failing blobs, which may be failing because they are invalid and thus will never be successfully received
+ * docstring bugs for `stream_availability`, `channel_import`, and `blob_announce`
+
+### Added
+ * `blob_reflect` command to send specific blobs to a reflector server
+ * unit test for docopt
+
+### Removed
+ * `flags` decorator from server.py as short flags are no longer used when using api/cli methods
+
+### Changed
+ * Bumped `lbryum` requirement to 3.2.1 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#321---2018-03-28)
 
 ## [0.19.1] - 2018-03-20
 ### Fixed
