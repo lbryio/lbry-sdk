@@ -993,7 +993,7 @@ class Daemon(AuthJSONRPCServer):
     ############################################################################
 
     @defer.inlineCallbacks
-    def jsonrpc_status(self, session_status=False, dht_status=False):
+    def jsonrpc_status(self, session_status=False):
         """
         Get daemon status
 
@@ -1002,7 +1002,6 @@ class Daemon(AuthJSONRPCServer):
 
         Options:
             --session_status  : (bool) include session status in results
-            --dht_status  : (bool) include dht network and peer status
 
         Returns:
             (dict) lbrynet-daemon status
@@ -1033,19 +1032,6 @@ class Daemon(AuthJSONRPCServer):
                         'announce_queue_size': number of blobs currently queued to be announced
                         'should_announce_blobs': number of blobs that should be announced
                     }
-
-                If given the dht status option:
-                    'dht_status': {
-                        'kbps_received': current kbps receiving,
-                        'kbps_sent': current kdps being sent,
-                        'total_bytes_sent': total bytes sent
-                        'total_bytes_received': total bytes received
-                        'queries_received': number of queries received per second
-                        'queries_sent': number of queries sent per second
-                        'recent_contacts': count of recently contacted peers
-                        'single_hash_announce_duration': avg. seconds it takes to announce a blob
-                        'unique_contacts': count of unique peers
-                    },
             }
         """
 
@@ -1092,10 +1078,6 @@ class Daemon(AuthJSONRPCServer):
                 'announce_queue_size': announce_queue_size,
                 'should_announce_blobs': should_announce_blobs,
             }
-        if dht_status:
-            response['dht_status'] = self.session.dht_node.get_bandwidth_stats()
-            response['dht_status'].update({'single_hash_announce_duration':
-                            self.session.blob_manager.single_hash_announce_duration})
         defer.returnValue(response)
 
     def jsonrpc_version(self):

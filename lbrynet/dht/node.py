@@ -264,9 +264,6 @@ class Node(object):
     def get_most_popular_hashes(self, num_to_return):
         return self.hash_watcher.most_popular_hashes(num_to_return)
 
-    def get_bandwidth_stats(self):
-        return self._protocol.bandwidth_stats
-
     @defer.inlineCallbacks
     def iterativeAnnounceHaveBlob(self, blob_hash, value):
         known_nodes = {}
