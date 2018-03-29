@@ -213,7 +213,7 @@ class TestReflector(unittest.TestCase):
             return d
 
         def send_to_server():
-            factory = reflector.ClientFactory(self.session.blob_manager, self.stream_hash)
+            factory = reflector.ClientFactory(self.session.blob_manager, self.stream_hash, self.sd_hash)
 
             from twisted.internet import reactor
             reactor.connectTCP('localhost', self.port, factory)
@@ -346,7 +346,7 @@ class TestReflector(unittest.TestCase):
             return factory.finished_deferred
 
         def send_to_server_as_stream(result):
-            factory = reflector.ClientFactory(self.session.blob_manager, self.stream_hash)
+            factory = reflector.ClientFactory(self.session.blob_manager, self.stream_hash, self.sd_hash)
 
             from twisted.internet import reactor
             reactor.connectTCP('localhost', self.port, factory)

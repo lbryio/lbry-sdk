@@ -37,6 +37,7 @@ class EncryptedFileReflectorClient(Protocol):
         self.blob_manager = self.factory.blob_manager
         self.protocol_version = self.factory.protocol_version
         self.stream_hash = self.factory.stream_hash
+        self.sd_hash = self.factory.sd_hash
 
         d = self.load_descriptor()
         d.addCallback(lambda _: self.send_handshake())
@@ -135,14 +136,12 @@ class EncryptedFileReflectorClient(Protocol):
     def send_handshake(self):
         self.send_request({'version': self.protocol_version})
 
+    @defer.inlineCallbacks
     def load_descriptor(self):
-        def _save_descriptor_blob(sd_blob):
-            self.stream_descriptor = sd_blob
-
-        d = self.factory.blob_manager.storage.get_sd_blob_hash_for_stream(self.stream_hash)
-        d.addCallback(self.factory.blob_manager.get_blob)
-        d.addCallback(_save_descriptor_blob)
-        return d
+        if self.sd_hash:
+            self.stream_descriptor = yield self.factory.blob_manager.get_blob(self.sd_hash)
+        else:
+            raise ValueError("no sd hash for stream %s" % self.stream_hash)
 
     def parse_response(self, buff):
         try:
@@ -305,9 +304,10 @@ class EncryptedFileReflectorClientFactory(ClientFactory):
     protocol = EncryptedFileReflectorClient
     protocol_version = REFLECTOR_V2
 
-    def __init__(self, blob_manager, stream_hash):
+    def __init__(self, blob_manager, stream_hash, sd_hash):
         self.blob_manager = blob_manager
         self.stream_hash = stream_hash
+        self.sd_hash = sd_hash
         self.p = None
         self.finished_deferred = defer.Deferred()
 

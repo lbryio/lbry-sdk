@@ -24,9 +24,9 @@ def resolve(host):
 
 
 @defer.inlineCallbacks
-def _reflect_stream(blob_manager, stream_hash, reflector_server):
+def _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server):
     reflector_address, reflector_port = reflector_server[0], reflector_server[1]
-    factory = ClientFactory(blob_manager, stream_hash)
+    factory = ClientFactory(blob_manager, stream_hash, sd_hash)
     ip = yield resolve(reflector_address)
     yield reactor.connectTCP(ip, reflector_port, factory)
     result = yield factory.finished_deferred
@@ -34,7 +34,7 @@ def _reflect_stream(blob_manager, stream_hash, reflector_server):
 
 
 def _reflect_file(lbry_file, reflector_server):
-    return _reflect_stream(lbry_file.blob_manager, lbry_file.stream_hash, reflector_server)
+    return _reflect_stream(lbry_file.blob_manager, lbry_file.stream_hash, lbry_file.sd_hash, reflector_server)
 
 
 @defer.inlineCallbacks
@@ -59,6 +59,7 @@ def reflect_file(lbry_file, reflector_server=None):
     return _reflect_file(lbry_file, reflector_server)
 
 
+@defer.inlineCallbacks
 def reflect_stream(blob_manager, stream_hash, reflector_server=None):
     if reflector_server:
         if len(reflector_server.split(":")) == 2:
@@ -68,7 +69,9 @@ def reflect_stream(blob_manager, stream_hash, reflector_server=None):
             reflector_server = reflector_server, 5566
     else:
         reflector_server = random.choice(conf.settings['reflector_servers'])
-    return _reflect_stream(blob_manager, stream_hash, reflector_server)
+    sd_hash = yield blob_manager.storage.get_sd_blob_hash_for_stream(stream_hash)
+    result = yield _reflect_stream(blob_manager, stream_hash, sd_hash, reflector_server)
+    defer.returnValue(result)
 
 
 def reflect_blob_hashes(blob_hashes, blob_manager, reflector_server=None):

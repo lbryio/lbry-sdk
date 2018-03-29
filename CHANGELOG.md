@@ -35,6 +35,7 @@ at anytime.
   * raise the default number of concurrent blob announcers to 100
   * dht logging to be more verbose with errors and warnings
   * added `single_announce` and `last_announced_time` columns to the `blob` table in sqlite
+  * pass the sd hash to reflector ClientFactory instead of looking it up
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests
