@@ -39,6 +39,9 @@ class DHTHashAnnouncer(object):
         self.hash_queue.remove(blob_hash)
         defer.returnValue(result)
 
+    def hash_queue_size(self):
+        return len(self.hash_queue)
+
     def _show_announce_progress(self, size, start):
         queue_size = len(self.hash_queue)
         average_blobs_per_second = float(size - queue_size) / (self.clock.seconds() - start)
