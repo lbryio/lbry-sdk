@@ -998,7 +998,7 @@ class Daemon(AuthJSONRPCServer):
         Get daemon status
 
         Usage:
-            status [--session_status] [--dht_status]
+            status [--session_status]
 
         Options:
             --session_status  : (bool) include session status in results
