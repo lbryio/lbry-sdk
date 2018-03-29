@@ -85,7 +85,7 @@ class AuthAPIClient(object):
 
         response = http_response.json()
 
-        if response['error'] is not None:
+        if response.get('error') is not None:
             raise JSONRPCException(response['error'])
         elif 'result' not in response:
             raise JSONRPCException({
