@@ -47,6 +47,7 @@ at anytime.
   * virtual kademlia network and mock udp transport for dht integration tests
   * integration tests for bootstrapping the dht
   * configurable `concurrent_announcers` setting
+  * `peer_ping` command
 
 ### Removed
   * `announce_all` argument from `blob_announce`
