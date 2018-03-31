@@ -13,7 +13,7 @@ from txjsonrpc import jsonrpclib
 from traceback import format_exc
 
 from lbrynet import conf
-from lbrynet.core.Error import InvalidAuthenticationToken
+from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError
 from lbrynet.core import utils
 from lbrynet.daemon.auth.util import APIKey, get_auth_message
 from lbrynet.daemon.auth.client import LBRY_SECRET
@@ -119,15 +119,12 @@ class JSONRPCServerType(type):
         klass = type.__new__(mcs, name, bases, newattrs)
         klass.callable_methods = {}
         klass.deprecated_methods = {}
-        klass.authorized_functions = []
 
         for methodname in dir(klass):
             if methodname.startswith("jsonrpc_"):
                 method = getattr(klass, methodname)
                 if not hasattr(method, '_deprecated'):
                     klass.callable_methods.update({methodname.split("jsonrpc_")[1]: method})
-                    if hasattr(method, '_auth_required'):
-                        klass.authorized_functions.append(methodname.split("jsonrpc_")[1])
                 else:
                     klass.deprecated_methods.update({methodname.split("jsonrpc_")[1]: method})
         return klass
@@ -135,11 +132,6 @@ class JSONRPCServerType(type):
 
 class AuthorizedBase(object):
     __metaclass__ = JSONRPCServerType
-
-    @staticmethod
-    def auth_required(f):
-        f._auth_required = True
-        return f
 
     @staticmethod
     def deprecated(new_command=None):
@@ -151,26 +143,28 @@ class AuthorizedBase(object):
 
 
 class AuthJSONRPCServer(AuthorizedBase):
-    """Authorized JSONRPC server used as the base class for the LBRY API
+    """
+    Authorized JSONRPC server used as the base class for the LBRY API
 
     API methods are named with a leading "jsonrpc_"
 
-    Decorators:
-
-        @AuthJSONRPCServer.auth_required: this requires that the client
-            include a valid hmac authentication token in their request
-
     Attributes:
-        allowed_during_startup (list): list of api methods that are
-            callable before the server has finished startup
+        allowed_during_startup (list): list of api methods that are callable before the server has finished startup
+        sessions (dict): (dict): {<session id>: <lbrynet.daemon.auth.util.APIKey>}
+        callable_methods (dict): {<api method name>: <api method>}
 
-        sessions (dict): dictionary of active session_id:
-            lbrynet.lbrynet_daemon.auth.util.APIKey values
+    Authentication:
+        If use_authentication is true, basic HTTP and HMAC authentication will be used for all requests and the
+        service url will require a username and password.
 
-        authorized_functions (list): list of api methods that require authentication
+        To start an authenticated session a client sends an HTTP POST to <user>:<password>@<api host>:<api port>.
+        If accepted, the server replies with a TWISTED_SESSION cookie containing a session id and the message "OK".
+        The client initializes their shared secret for hmac to be the b64 encoded sha256 of their session id.
 
-        callable_methods (dict): dictionary of api_callable_name: method values
-
+        To send an authenticated request a client sends an HTTP POST to the auth api url with the TWISTED_SESSION
+        cookie and includes a hmac token in the message using the previously set shared secret. If the token is valid
+        the server will randomize the shared secret and return the new value under the LBRY_SECRET header, which the
+        client uses to generate the token for their next request.
     """
     implements(resource.IResource)
 
@@ -178,9 +172,7 @@ class AuthJSONRPCServer(AuthorizedBase):
     allowed_during_startup = []
 
     def __init__(self, use_authentication=None):
-        self._use_authentication = (
-            use_authentication if use_authentication is not None else conf.settings['use_auth_http']
-        )
+        self._use_authentication = use_authentication or conf.settings['use_auth_http']
         self.announced_startup = False
         self.sessions = {}
 
@@ -239,7 +231,9 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _render(self, request):
         time_in = utils.now()
-        # assert self._check_headers(request), InvalidHeaderError
+        if not self._check_headers(request):
+            self._render_error(Failure(InvalidHeaderError()), request, None)
+            return server.NOT_DONE_YET
         session = request.getSession()
         session_id = session.uid
         finished_deferred = request.notifyFinish()
@@ -270,36 +264,36 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._render_error(JSONRPCError(None, JSONRPCError.CODE_PARSE_ERROR), request, None)
             return server.NOT_DONE_YET
 
-        id_ = None
+        request_id = None
         try:
             function_name = parsed.get('method')
             args = parsed.get('params', {})
-            id_ = parsed.get('id', None)
+            request_id = parsed.get('id', None)
             token = parsed.pop('hmac', None)
         except AttributeError as err:
             log.warning(err)
             self._render_error(
-                JSONRPCError(None, code=JSONRPCError.CODE_INVALID_REQUEST), request, id_
+                JSONRPCError(None, code=JSONRPCError.CODE_INVALID_REQUEST), request, request_id
             )
             return server.NOT_DONE_YET
 
         reply_with_next_secret = False
         if self._use_authentication:
-            if function_name in self.authorized_functions:
-                try:
-                    self._verify_token(session_id, parsed, token)
-                except InvalidAuthenticationToken as err:
-                    log.warning("API validation failed")
-                    self._render_error(
-                        JSONRPCError.create_from_exception(
-                            err.message, code=JSONRPCError.CODE_AUTHENTICATION_ERROR,
-                            traceback=format_exc()
-                        ),
-                        request, id_
-                    )
-                    return server.NOT_DONE_YET
-                self._update_session_secret(session_id)
-                reply_with_next_secret = True
+            try:
+                self._verify_token(session_id, parsed, token)
+            except InvalidAuthenticationToken as err:
+                log.warning("API validation failed")
+                self._render_error(
+                    JSONRPCError.create_from_exception(
+                        err, code=JSONRPCError.CODE_AUTHENTICATION_ERROR,
+                        traceback=format_exc()
+                    ),
+                    request, request_id
+                )
+                return server.NOT_DONE_YET
+            request.addCookie("TWISTED_SESSION", session_id)
+            self._update_session_secret(session_id)
+            reply_with_next_secret = True
 
         try:
             fn = self._get_jsonrpc_method(function_name)
@@ -307,7 +301,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
                 JSONRPCError(None, JSONRPCError.CODE_METHOD_NOT_FOUND),
-                request, id_
+                request, request_id
             )
             return server.NOT_DONE_YET
         except NotAllowedDuringStartupError:
@@ -315,7 +309,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             self._render_error(
                 JSONRPCError("This method is unavailable until the daemon is fully started",
                              code=JSONRPCError.CODE_INVALID_REQUEST),
-                request, id_
+                request, request_id
             )
             return server.NOT_DONE_YET
 
@@ -341,7 +335,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             log.warning(params_error_message)
             self._render_error(
                 JSONRPCError(params_error_message, code=JSONRPCError.CODE_INVALID_PARAMS),
-                request, id_
+                request, request_id
             )
             return server.NOT_DONE_YET
 
@@ -353,12 +347,9 @@ class AuthJSONRPCServer(AuthorizedBase):
         # request.finish() from being called on a closed request.
         finished_deferred.addErrback(self._handle_dropped_request, d, function_name)
 
-        d.addCallback(self._callback_render, request, id_, reply_with_next_secret)
-        # TODO: don't trap RuntimeError, which is presently caught to
-        # handle deferredLists that won't peacefully cancel, namely
-        # get_lbry_files
-        d.addErrback(trap, ConnectionDone, ConnectionLost, defer.CancelledError, RuntimeError)
-        d.addErrback(self._render_error, request, id_)
+        d.addCallback(self._callback_render, request, request_id, reply_with_next_secret)
+        d.addErrback(trap, ConnectionDone, ConnectionLost, defer.CancelledError)
+        d.addErrback(self._render_error, request, request_id)
         d.addBoth(lambda _: log.debug("%s took %f",
                                       function_name,
                                       (utils.now() - time_in).total_seconds()))
@@ -371,7 +362,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         @param session_id:
         @return: secret
         """
-        log.info("Register api session")
+        log.info("Started new api session")
         token = APIKey.new(seed=session_id)
         self.sessions.update({session_id: token})
 
@@ -382,7 +373,8 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _check_headers(self, request):
         return (
             self._check_header_source(request, 'Origin') and
-            self._check_header_source(request, 'Referer'))
+            self._check_header_source(request, 'Referer')
+        )
 
     def _check_header_source(self, request, header):
         """Check if the source of the request is allowed based on the header value."""
@@ -461,7 +453,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         return None, None
 
     def _initialize_session(self, session_id):
-        if not self.sessions.get(session_id, False):
+        if not self.sessions.get(session_id):
             self._register_user_session(session_id)
             return True
         return False

@@ -1,19 +1,24 @@
-import urlparse
-import logging
-import requests
 import os
-import base64
 import json
-
-from lbrynet.daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
-from lbrynet import conf
+import urlparse
+import requests
+from requests.cookies import RequestsCookieJar
+import logging
 from jsonrpc.proxy import JSONRPCProxy
+from lbrynet import conf
+from lbrynet.daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
 
 log = logging.getLogger(__name__)
 USER_AGENT = "AuthServiceProxy/0.1"
 TWISTED_SESSION = "TWISTED_SESSION"
 LBRY_SECRET = "LBRY_SECRET"
 HTTP_TIMEOUT = 30
+
+
+def copy_cookies(cookies):
+    result = RequestsCookieJar()
+    result.update(cookies)
+    return result
 
 
 class JSONRPCException(Exception):
@@ -23,25 +28,25 @@ class JSONRPCException(Exception):
 
 
 class AuthAPIClient(object):
-    def __init__(self, key, timeout, connection, count, cookies, auth, url, login_url):
+    def __init__(self, key, timeout, connection, count, cookies, url, login_url):
         self.__api_key = key
         self.__service_url = login_url
         self.__id_count = count
         self.__url = url
-        self.__auth_header = auth
         self.__conn = connection
-        self.__cookies = cookies
+        self.__cookies = copy_cookies(cookies)
 
     def __getattr__(self, name):
         if name.startswith('__') and name.endswith('__'):
-            raise AttributeError  # Python internal stuff
+            raise AttributeError(name)
 
         def f(*args):
             return self.call(name, args[0] if args else {})
 
         return f
 
-    def call(self, method, params={}):
+    def call(self, method, params=None):
+        params = params or {}
         self.__id_count += 1
         pre_auth_post_data = {
             'version': '2',
@@ -50,41 +55,27 @@ class AuthAPIClient(object):
             'id': self.__id_count
         }
         to_auth = get_auth_message(pre_auth_post_data)
-        token = self.__api_key.get_hmac(to_auth)
-        pre_auth_post_data.update({'hmac': token})
+        pre_auth_post_data.update({'hmac': self.__api_key.get_hmac(to_auth)})
         post_data = json.dumps(pre_auth_post_data)
-        service_url = self.__service_url
-        auth_header = self.__auth_header
-        cookies = self.__cookies
-        host = self.__url.hostname
-
-        req = requests.Request(method='POST',
-                               url=service_url,
-                               data=post_data,
-                               headers={
-                                   'Host': host,
-                                   'User-Agent': USER_AGENT,
-                                   'Authorization': auth_header,
-                                   'Content-type': 'application/json'
-                               },
-                               cookies=cookies)
-        r = req.prepare()
-        http_response = self.__conn.send(r)
-        cookies = http_response.cookies
-        headers = http_response.headers
-        next_secret = headers.get(LBRY_SECRET, False)
-        if next_secret:
-            self.__api_key.secret = next_secret
-            self.__cookies = cookies
-
+        cookies = copy_cookies(self.__cookies)
+        req = requests.Request(
+            method='POST', url=self.__service_url, data=post_data, cookies=cookies,
+            headers={
+                        'Host': self.__url.hostname,
+                        'User-Agent': USER_AGENT,
+                        'Content-type': 'application/json'
+            }
+        )
+        http_response = self.__conn.send(req.prepare())
         if http_response is None:
             raise JSONRPCException({
                 'code': -342, 'message': 'missing HTTP response from server'})
-
         http_response.raise_for_status()
-
+        next_secret = http_response.headers.get(LBRY_SECRET, False)
+        if next_secret:
+            self.__api_key.secret = next_secret
+            self.__cookies = copy_cookies(http_response.cookies)
         response = http_response.json()
-
         if response.get('error') is not None:
             raise JSONRPCException(response['error'])
         elif 'result' not in response:
@@ -94,13 +85,10 @@ class AuthAPIClient(object):
             return response['result']
 
     @classmethod
-    def config(cls, key_name=None, key=None, pw_path=None,
-               timeout=HTTP_TIMEOUT,
-               connection=None, count=0,
-               cookies=None, auth=None,
-               url=None, login_url=None):
+    def config(cls, key_name=None, key=None, pw_path=None, timeout=HTTP_TIMEOUT, connection=None, count=0,
+               cookies=None, auth=None, url=None, login_url=None):
 
-        api_key_name = API_KEY_NAME if not key_name else key_name
+        api_key_name = key_name or API_KEY_NAME
         pw_path = os.path.join(conf.settings['data_dir'], ".api_keys") if not pw_path else pw_path
         if not key:
             keys = load_api_keys(pw_path)
@@ -118,41 +106,28 @@ class AuthAPIClient(object):
         id_count = count
 
         if auth is None and connection is None and cookies is None and url is None:
-            # This is a new client instance, initialize the auth header and start a session
+            # This is a new client instance, start an authenticated session
             url = urlparse.urlparse(service_url)
-            (user, passwd) = (url.username, url.password)
-            try:
-                user = user.encode('utf8')
-            except AttributeError:
-                pass
-            try:
-                passwd = passwd.encode('utf8')
-            except AttributeError:
-                pass
-            authpair = user + b':' + passwd
-            auth_header = b'Basic ' + base64.b64encode(authpair)
             conn = requests.Session()
-            conn.auth = (user, passwd)
             req = requests.Request(method='POST',
                                    url=service_url,
-                                   auth=conn.auth,
                                    headers={'Host': url.hostname,
                                             'User-Agent': USER_AGENT,
-                                            'Authorization': auth_header,
                                             'Content-type': 'application/json'},)
             r = req.prepare()
             http_response = conn.send(r)
-            cookies = http_response.cookies
+            cookies = RequestsCookieJar()
+            cookies.update(http_response.cookies)
             uid = cookies.get(TWISTED_SESSION)
             api_key = APIKey.new(seed=uid)
         else:
             # This is a client that already has a session, use it
-            auth_header = auth
             conn = connection
-            assert cookies.get(LBRY_SECRET, False), "Missing cookie"
+            if not cookies.get(LBRY_SECRET):
+                raise Exception("Missing cookie")
             secret = cookies.get(LBRY_SECRET)
             api_key = APIKey(secret, api_key_name)
-        return cls(api_key, timeout, conn, id_count, cookies, auth_header, url, service_url)
+        return cls(api_key, timeout, conn, id_count, cookies, url, service_url)
 
 
 class LBRYAPIClient(object):
