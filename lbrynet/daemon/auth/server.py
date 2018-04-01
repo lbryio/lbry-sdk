@@ -142,6 +142,13 @@ class AuthorizedBase(object):
         return f
 
     @staticmethod
+    def requires(component=None):
+        def _requires_wrapper(f):
+            setattr(f, "_requires_" + component, True)
+            return f
+        return _requires_wrapper
+
+    @staticmethod
     def deprecated(new_command=None):
         def _deprecated_wrapper(f):
             f._new_command = new_command
@@ -186,6 +193,13 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def setup(self):
         return NotImplementedError()
+
+    def register_commands(self, command_type):
+        for methodname in dir(self):
+            if methodname.startswith("jsonrpc_"):
+                method = getattr(self, methodname)
+                if hasattr(method, '_requires_' + command_type):
+                    self.allowed_during_startup.append(methodname.split("jsonrpc_")[1])
 
     def _set_headers(self, request, data, update_secret=False):
         if conf.settings['allowed_origin']:

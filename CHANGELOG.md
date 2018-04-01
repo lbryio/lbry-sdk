@@ -36,11 +36,15 @@ at anytime.
   * dht logging to be more verbose with errors and warnings
   * added `single_announce` and `last_announced_time` columns to the `blob` table in sqlite
   * pass the sd hash to reflector ClientFactory instead of looking it up
+  * 
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests
   * integration tests for bootstrapping the dht
   * configurable `concurrent_announcers` setting
+  * `register_commands` method in server.AuthJSONRPCServer to register api methods during its startup
+  * `requires` decorator in server.AuthorizedBase to decorate api calls which takes a string argument as to which component it requires
+  * `requires` decorators and necessary `register_commands` calls in Daemon to register api methods during startup
 
 ### Removed
   * `announce_all` argument from `blob_announce`
