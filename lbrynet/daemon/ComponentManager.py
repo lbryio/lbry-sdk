@@ -50,15 +50,27 @@ class ComponentManager(object):
 
     @classmethod
     @defer.inlineCallbacks
-    def setup(cls):
+    def setup(cls, **callbacks):
         """
         Start Components in sequence sorted by requirements
 
         :return: (defer.Deferred)
         """
+        for component_name, cb in callbacks.iteritems():
+            if not callable(cb):
+                raise ValueError("%s is not callable" % cb)
+            cls.get_component(component_name)
+
+        def _setup(component):
+            if component.component_name in callbacks:
+                d = component._setup()
+                d.addCallback(callbacks[component.component_name])
+                return d
+            return component.setup()
+
         stages = cls.sort_components()
         for stage in stages:
-            yield defer.DeferredList([component._setup() for component in stage])
+            yield defer.DeferredList([_setup(component) for component in stage])
 
     @classmethod
     @defer.inlineCallbacks
@@ -75,13 +87,15 @@ class ComponentManager(object):
     @classmethod
     def all_components_running(cls, *component_names):
         """
+        Check if components are running
+
         :return: (bool) True if all specified components are running
         """
-        c = {component.component_name: component for component in cls.components}
+        components = {component.component_name: component for component in cls.components}
         for component in component_names:
-            if component not in c:
+            if component not in components:
                 raise NameError("%s is not a known Component" % component)
-            if not c[component].running:
+            if not components[component].running:
                 return False
         return True
 
