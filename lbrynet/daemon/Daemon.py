@@ -185,7 +185,6 @@ class Daemon(AuthJSONRPCServer):
     def __init__(self, analytics_manager):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         self.db_dir = conf.settings['data_dir']
-        self.storage = SQLiteStorage(self.db_dir)
         self.download_directory = conf.settings['download_directory']
         if conf.settings['BLOBFILES_DIR'] == "blobfiles":
             self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
@@ -233,6 +232,7 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
         self.lbry_file_manager = None
+        self.storage = None
 
     @defer.inlineCallbacks
     def setup(self):
@@ -246,9 +246,8 @@ class Daemon(AuthJSONRPCServer):
         self.exchange_rate_manager.start()
 
         yield self._initial_setup()
-        yield threads.deferToThread(self._setup_data_directory)
-        migrated = yield self._check_db_migration()
-        yield self.storage.setup()
+        yield self.component_manager.setup()
+        self.storage = self.component_manager.get_component("database").storage
         yield self._get_session()
         yield self._check_wallet_locked()
         yield self._start_analytics()
@@ -262,15 +261,15 @@ class Daemon(AuthJSONRPCServer):
         self.startup_status = STARTUP_STAGES[5]
         log.info("Started lbrynet-daemon")
 
-        ###
-        # this should be removed with the next db revision
-        if migrated:
-            missing_channel_claim_ids = yield self.storage.get_unknown_certificate_ids()
-            while missing_channel_claim_ids:  # in case there are a crazy amount lets batch to be safe
-                batch = missing_channel_claim_ids[:100]
-                _ = yield self.session.wallet.get_claims_by_ids(*batch)
-                missing_channel_claim_ids = missing_channel_claim_ids[100:]
-        ###
+        # ###
+        # # this should be removed with the next db revision
+        # if migrated:
+        #     missing_channel_claim_ids = yield self.storage.get_unknown_certificate_ids()
+        #     while missing_channel_claim_ids:  # in case there are a crazy amount lets batch to be safe
+        #         batch = missing_channel_claim_ids[:100]
+        #         _ = yield self.session.wallet.get_claims_by_ids(*batch)
+        #         missing_channel_claim_ids = missing_channel_claim_ids[100:]
+        # ###
 
         self._auto_renew()
 
@@ -476,50 +475,6 @@ class Daemon(AuthJSONRPCServer):
         self.download_timeout = conf.settings['download_timeout']
 
         return defer.succeed(True)
-
-    def _write_db_revision_file(self, version_num):
-        with open(self.db_revision_file, mode='w') as db_revision:
-            db_revision.write(str(version_num))
-
-    def _setup_data_directory(self):
-        old_revision = 1
-        self.startup_status = STARTUP_STAGES[1]
-        log.info("Loading databases")
-        if not os.path.exists(self.download_directory):
-            os.mkdir(self.download_directory)
-        if not os.path.exists(self.db_dir):
-            os.mkdir(self.db_dir)
-            self._write_db_revision_file(self.current_db_revision)
-            log.debug("Created the db revision file: %s", self.db_revision_file)
-        if not os.path.exists(self.blobfile_dir):
-            os.mkdir(self.blobfile_dir)
-            log.debug("Created the blobfile directory: %s", str(self.blobfile_dir))
-        if not os.path.exists(self.db_revision_file):
-            log.warning("db_revision file not found. Creating it")
-            self._write_db_revision_file(self.current_db_revision)
-
-    @defer.inlineCallbacks
-    def _check_db_migration(self):
-        old_revision = 1
-        migrated = False
-        if os.path.exists(self.db_revision_file):
-            with open(self.db_revision_file, "r") as revision_read_handle:
-                old_revision = int(revision_read_handle.read().strip())
-
-        if old_revision > self.current_db_revision:
-            raise Exception('This version of lbrynet is not compatible with the database\n'
-                            'Your database is revision %i, expected %i' %
-                            (old_revision, self.current_db_revision))
-        if old_revision < self.current_db_revision:
-            from lbrynet.database.migrator import dbmigrator
-            log.info("Upgrading your databases (revision %i to %i)", old_revision, self.current_db_revision)
-            yield threads.deferToThread(
-                dbmigrator.migrate_db, self.db_dir, old_revision, self.current_db_revision
-            )
-            self._write_db_revision_file(self.current_db_revision)
-            log.info("Finished upgrading the databases.")
-            migrated = True
-        defer.returnValue(migrated)
 
     @defer.inlineCallbacks
     def _setup_lbry_file_manager(self):
