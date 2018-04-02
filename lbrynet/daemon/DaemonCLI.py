@@ -6,7 +6,7 @@ from docopt import docopt
 from collections import OrderedDict
 from lbrynet import conf
 from lbrynet.core import utils
-from lbrynet.daemon.auth.client import JSONRPCException, LBRYAPIClient
+from lbrynet.daemon.auth.client import JSONRPCException, LBRYAPIClient, AuthAPIClient
 from lbrynet.daemon.Daemon import LOADING_WALLET_CODE, Daemon
 from lbrynet.core.system_info import get_platform
 from jsonrpc.common import RPCError
@@ -93,12 +93,19 @@ def main():
         status = api.status()
     except URLError as err:
         if isinstance(err, HTTPError) and err.code == UNAUTHORIZED:
-            print_error("Daemon requires authentication, but none was provided.",
-                        suggest_help=False)
+            api = AuthAPIClient.config()
+            # this can happen if the daemon is using auth with the --http-auth flag
+            # when the config setting is to not use it
+            try:
+                status = api.status()
+            except:
+                print_error("Daemon requires authentication, but none was provided.",
+                            suggest_help=False)
+                return 1
         else:
             print_error("Could not connect to daemon. Are you sure it's running?",
                         suggest_help=False)
-        return 1
+            return 1
 
     status_code = status['startup_status']['code']
 

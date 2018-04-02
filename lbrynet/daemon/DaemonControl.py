@@ -33,12 +33,6 @@ def start():
         default=None
     )
     parser.add_argument(
-        "--wallet",
-        help="lbryum or ptc for testing, default lbryum",
-        type=str,
-        default=conf.settings['wallet']
-    )
-    parser.add_argument(
         "--http-auth", dest="useauth", action="store_true", default=conf.settings['use_auth_http']
     )
     parser.add_argument(
@@ -82,23 +76,25 @@ def start():
 
     if test_internet_connection():
         analytics_manager = analytics.Manager.new_instance()
-        start_server_and_listen(args.useauth, analytics_manager)
+        start_server_and_listen(analytics_manager)
         reactor.run()
     else:
         log.info("Not connected to internet, unable to start")
 
 
 def update_settings_from_args(args):
-    conf.settings.update({
-        'use_auth_http': args.useauth,
-        'wallet': args.wallet,
-    }, data_types=(conf.TYPE_CLI,))
+    if args.conf:
+        conf.conf_file = args.conf
 
-    conf.conf_file = args.conf
+    if args.useauth:
+        conf.settings.update({
+            'use_auth_http': args.useauth,
+        }, data_types=(conf.TYPE_CLI,))
+
 
 
 @defer.inlineCallbacks
-def start_server_and_listen(use_auth, analytics_manager):
+def start_server_and_listen(analytics_manager):
     """
     Args:
         use_auth: set to true to enable http authentication
@@ -107,7 +103,7 @@ def start_server_and_listen(use_auth, analytics_manager):
     analytics_manager.send_server_startup()
     daemon_server = DaemonServer(analytics_manager)
     try:
-        yield daemon_server.start(use_auth)
+        yield daemon_server.start(conf.settings['use_auth_http'])
         analytics_manager.send_server_startup_success()
     except Exception as e:
         log.exception('Failed to start lbrynet-daemon')

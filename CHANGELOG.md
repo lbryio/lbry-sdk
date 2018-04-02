@@ -15,6 +15,9 @@ at anytime.
 ### Fixed
   * handling error from dht clients with old `ping` method
   * blobs not being re-announced if no peers successfully stored, now failed announcements are re-queued
+  * issue where an `AuthAPIClient` (used by `lbrynet-cli`) would fail to update its session secret and keep making new auth sessions, with every other request failing
+  * `use_auth_http` in a config file being overridden by the default command line argument to `lbrynet-daemon`, now the command line value will only override the config file value if it is provided
+  * `lbrynet-cli` not automatically switching to the authenticated client if the server is detected to be using authentication. This resulted in `lbrynet-cli` failing to run when `lbrynet-daemon` was run with the `--http-auth` flag
 
 ### Deprecated
   *
@@ -36,6 +39,8 @@ at anytime.
   * dht logging to be more verbose with errors and warnings
   * added `single_announce` and `last_announced_time` columns to the `blob` table in sqlite
   * pass the sd hash to reflector ClientFactory instead of looking it up
+  * if the `use_authentication` setting is configured, use authentication for all api methods instead of only those with the `auth_required` decorator
+  * regenerate api keys on startup if the using authentication
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests
@@ -45,6 +50,8 @@ at anytime.
 ### Removed
   * `announce_all` argument from `blob_announce`
   * old `blob_announce_all` command
+  * `AuthJSONRPCServer.auth_required` decorator
+  * unused `--wallet` argument to `lbrynet-daemon`, which used to be to support `PTCWallet`.
 
 
 ## [0.19.2] - 2018-03-28

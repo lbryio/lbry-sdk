@@ -46,12 +46,13 @@ class APIKey(object):
     def compare_hmac(self, message, token):
         decoded_token = base58.b58decode(token)
         target = base58.b58decode(self.get_hmac(message))
+
         try:
-            assert len(decoded_token) == len(target), "Length mismatch"
-            r = hmac.compare_digest(decoded_token, target)
+            if len(decoded_token) != len(target):
+                return False
+            return hmac.compare_digest(decoded_token, target)
         except:
             return False
-        return r
 
 
 def load_api_keys(path):
@@ -67,7 +68,6 @@ def load_api_keys(path):
         secret = key['secret']
         expiration = key['expiration']
         keys_for_return.update({key_name: APIKey(secret, key_name, expiration)})
-
     return keys_for_return
 
 
@@ -81,11 +81,10 @@ def save_api_keys(keys, path):
 
 
 def initialize_api_key_file(key_path):
-    if not os.path.isfile(key_path):
-        keys = {}
-        new_api_key = APIKey.new(name=API_KEY_NAME)
-        keys.update({new_api_key.name: new_api_key})
-        save_api_keys(keys, key_path)
+    keys = {}
+    new_api_key = APIKey.new(name=API_KEY_NAME)
+    keys.update({new_api_key.name: new_api_key})
+    save_api_keys(keys, key_path)
 
 
 def get_auth_message(message_dict):

@@ -35,6 +35,7 @@ class PasswordChecker(object):
     @classmethod
     def load(cls, password_dict):
         passwords = {key: password_dict[key].secret for key in password_dict}
+        log.info("Loaded %i api key(s)", len(passwords))
         return cls(passwords)
 
     def requestAvatarId(self, creds):
@@ -45,4 +46,3 @@ class PasswordChecker(object):
                 return defer.succeed(creds.username)
         log.warning('Incorrect username or password')
         return defer.fail(cred_error.UnauthorizedLogin('Incorrect username or password'))
-
