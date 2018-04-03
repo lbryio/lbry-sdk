@@ -172,7 +172,7 @@ def _api_doc(obj):
 
 
 def main():
-    root_dir = os.path.dirname(os.path.dirname(__file__))
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     build_dir = os.path.realpath(os.path.join(root_dir, DOCS_BUILD_DIR))
     if not os.path.exists(build_dir):
         os.makedirs(build_dir)

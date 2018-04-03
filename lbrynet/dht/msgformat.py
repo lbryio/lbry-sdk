@@ -43,24 +43,31 @@ class MessageTranslator(object):
 class DefaultFormat(MessageTranslator):
     """ The default on-the-wire message format for this library """
     typeRequest, typeResponse, typeError = range(3)
-    headerType, headerMsgID, headerNodeID, headerPayload, headerArgs = range(5)
+    headerType, headerMsgID, headerNodeID, headerPayload, headerArgs = range(5)  # TODO: make str
+
+    @staticmethod
+    def get(primitive, key):
+        try:
+            return primitive[key]
+        except KeyError:
+            return primitive[str(key)]  # TODO: switch to int()
 
     def fromPrimitive(self, msgPrimitive):
-        msgType = msgPrimitive[self.headerType]
+        msgType = self.get(msgPrimitive, self.headerType)
         if msgType == self.typeRequest:
-            msg = msgtypes.RequestMessage(msgPrimitive[self.headerNodeID],
-                                          msgPrimitive[self.headerPayload],
-                                          msgPrimitive[self.headerArgs],
-                                          msgPrimitive[self.headerMsgID])
+            msg = msgtypes.RequestMessage(self.get(msgPrimitive, self.headerNodeID),
+                                          self.get(msgPrimitive, self.headerPayload),
+                                          self.get(msgPrimitive, self.headerArgs),
+                                          self.get(msgPrimitive, self.headerMsgID))
         elif msgType == self.typeResponse:
-            msg = msgtypes.ResponseMessage(msgPrimitive[self.headerMsgID],
-                                           msgPrimitive[self.headerNodeID],
-                                           msgPrimitive[self.headerPayload])
+            msg = msgtypes.ResponseMessage(self.get(msgPrimitive, self.headerMsgID),
+                                           self.get(msgPrimitive, self.headerNodeID),
+                                           self.get(msgPrimitive, self.headerPayload))
         elif msgType == self.typeError:
-            msg = msgtypes.ErrorMessage(msgPrimitive[self.headerMsgID],
-                                        msgPrimitive[self.headerNodeID],
-                                        msgPrimitive[self.headerPayload],
-                                        msgPrimitive[self.headerArgs])
+            msg = msgtypes.ErrorMessage(self.get(msgPrimitive, self.headerMsgID),
+                                        self.get(msgPrimitive, self.headerNodeID),
+                                        self.get(msgPrimitive, self.headerPayload),
+                                        self.get(msgPrimitive, self.headerArgs))
         else:
             # Unknown message, no payload
             msg = msgtypes.Message(msgPrimitive[self.headerMsgID], msgPrimitive[self.headerNodeID])

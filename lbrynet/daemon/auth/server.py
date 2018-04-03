@@ -149,15 +149,6 @@ class AuthorizedBase(object):
             return f
         return _deprecated_wrapper
 
-    @staticmethod
-    def flags(**kwargs):
-        def _flag_wrapper(f):
-            f._flags = {}
-            for k, v in kwargs.iteritems():
-                f._flags[v] = k
-            return f
-        return _flag_wrapper
-
 
 class AuthJSONRPCServer(AuthorizedBase):
     """Authorized JSONRPC server used as the base class for the LBRY API

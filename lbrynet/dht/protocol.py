@@ -209,7 +209,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         except (encoding.DecodeError, ValueError):
             # We received some rubbish here
             return
-        except IndexError:
+        except (IndexError, KeyError):
             log.warning("Couldn't decode dht datagram from %s", address)
             return
 

@@ -719,7 +719,7 @@ class Daemon(AuthJSONRPCServer):
             claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path,
                                                                   claim_address, change_address)
             if conf.settings['reflect_uploads']:
-                d = reupload.reflect_stream(publisher.lbry_file)
+                d = reupload.reflect_file(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
         self.analytics_manager.send_claim_action('publish')
@@ -1851,8 +1851,19 @@ class Daemon(AuthJSONRPCServer):
             raise Exception("Invalid channel name")
         if amount <= 0:
             raise Exception("Invalid amount")
-        if amount > self.session.wallet.get_balance():
-            raise InsufficientFundsError()
+
+        yield self.session.wallet.update_balance()
+        if amount >= self.session.wallet.get_balance():
+            balance = yield self.session.wallet.get_max_usable_balance_for_claim(channel_name)
+            max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
+            if balance <= MAX_UPDATE_FEE_ESTIMATE:
+                raise InsufficientFundsError(
+                    "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
+                .   format(MAX_UPDATE_FEE_ESTIMATE - balance))
+            elif amount > max_bid_amount:
+                raise InsufficientFundsError(
+                    "Please lower the bid value, the maximum amount you can specify for this channel is {}"
+                    .format(max_bid_amount))
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
         self.analytics_manager.send_new_channel()
@@ -1925,8 +1936,7 @@ class Daemon(AuthJSONRPCServer):
         Import serialized channel signing information (to allow signing new claims to the channel)
 
         Usage:
-            channel_import (<serialized_certificate_info> |
-                            --serialized_certificate_info=<serialized_certificate_info>)
+            channel_import (<serialized_certificate_info> | --serialized_certificate_info=<serialized_certificate_info>)
 
         Options:
             --serialized_certificate_info=<serialized_certificate_info> : (str) certificate info
@@ -2028,11 +2038,18 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise ValueError("Bid value must be greater than 0.0")
 
-        amt = yield self.session.wallet.get_max_usable_balance_for_claim(name)
-        if bid > amt:
-            raise InsufficientFundsError(
-                "Please lower the bid value, the maximum amount you can specify for this claim is {}"
-                .format(amt - MAX_UPDATE_FEE_ESTIMATE))
+        yield self.session.wallet.update_balance()
+        if bid >= self.session.wallet.get_balance():
+            balance = yield self.session.wallet.get_max_usable_balance_for_claim(name)
+            max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
+            if balance <= MAX_UPDATE_FEE_ESTIMATE:
+                raise InsufficientFundsError(
+                    "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
+                    .format(MAX_UPDATE_FEE_ESTIMATE - balance))
+            elif bid > max_bid_amount:
+                raise InsufficientFundsError(
+                    "Please lower the bid value, the maximum amount you can specify for this claim is {}."
+                    .format(max_bid_amount))
 
         metadata = metadata or {}
         if fee is not None:
@@ -2712,7 +2729,6 @@ class Daemon(AuthJSONRPCServer):
 
     @AuthJSONRPCServer.auth_required
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.flags(no_broadcast='--no_broadcast')
     def jsonrpc_wallet_prefill_addresses(self, num_addresses, amount, no_broadcast=False):
         """
         Create new addresses, each containing `amount` credits
@@ -2903,18 +2919,17 @@ class Daemon(AuthJSONRPCServer):
         return d
 
     @defer.inlineCallbacks
-    def jsonrpc_blob_announce(self, announce_all=None, blob_hash=None,
-                              stream_hash=None, sd_hash=None):
+    def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None, announce_all=None):
         """
         Announce blobs to the DHT
 
         Usage:
-            blob_announce [--announce_all] [<blob_hash> | --blob_hash=<blob_hash>]
-                          [<stream_hash> | --stream_hash=<stream_hash>]
-                          [<sd_hash> | --sd_hash=<sd_hash>]
+            blob_announce [<blob_hash> | --blob_hash=<blob_hash>]
+                          [<stream_hash> | --stream_hash=<stream_hash>] | [<sd_hash> | --sd_hash=<sd_hash>]
+                          [--announce_all]
 
         Options:
-            --announce_all=<announce_all>  : (bool) announce all the blobs possessed by user
+            --announce_all                 : (bool) announce all the blobs possessed by user
             --blob_hash=<blob_hash>        : (str) announce a blob, specified by blob_hash
             --stream_hash=<stream_hash>    : (str) announce all blobs associated with
                                              stream_hash
@@ -2930,17 +2945,17 @@ class Daemon(AuthJSONRPCServer):
         else:
             blob_hashes = []
             if blob_hash:
-                blob_hashes = blob_hashes.append(blob_hashes)
-            elif stream_hash:
-                pass
-            elif sd_hash:
-                stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
+                blob_hashes.append(blob_hash)
+            elif stream_hash or sd_hash:
+                if sd_hash and stream_hash:
+                    raise Exception("either the sd hash or the stream hash should be provided, not both")
+                if sd_hash:
+                    stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
+                blobs = yield self.storage.get_blobs_for_stream(stream_hash, only_completed=True)
+                blob_hashes.extend([blob.blob_hash for blob in blobs if blob.blob_hash is not None])
             else:
                 raise Exception('single argument must be specified')
-            if not blob_hash:
-                blobs = yield self.storage.get_blobs_for_stream(stream_hash, only_completed=True)
-                blob_hashes.extend([blob.blob_hash for blob in blobs])
-            yield self.session.blob_manager._immediate_announce(blob_hashes)
+            yield self.session.blob_manager.immediate_announce(blob_hashes)
         response = yield self._render_response(True)
         defer.returnValue(response)
 
@@ -2992,7 +3007,7 @@ class Daemon(AuthJSONRPCServer):
             raise Exception('No file found')
         lbry_file = lbry_files[0]
 
-        results = yield reupload.reflect_stream(lbry_file, reflector_server=reflector_server)
+        results = yield reupload.reflect_file(lbry_file, reflector_server=reflector_server)
         defer.returnValue(results)
 
     @defer.inlineCallbacks
@@ -3031,7 +3046,9 @@ class Daemon(AuthJSONRPCServer):
                 stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(sd_hash)
                 sd_hash = yield self.session.storage.get_sd_blob_hash_for_stream(stream_hash)
             if stream_hash:
-                blobs = yield self.session.storage.get_blobs_for_stream(stream_hash)
+                crypt_blobs = yield self.session.storage.get_blobs_for_stream(stream_hash)
+                blobs = [self.session.blob_manager.blobs[crypt_blob.blob_hash] for crypt_blob in crypt_blobs
+                         if crypt_blob.blob_hash is not None]
             else:
                 blobs = []
             # get_blobs_for_stream does not include the sd blob, so we'll add it manually
@@ -3053,6 +3070,24 @@ class Daemon(AuthJSONRPCServer):
         blob_hashes_for_return = blob_hashes[start_index:stop_index]
         response = yield self._render_response(blob_hashes_for_return)
         defer.returnValue(response)
+
+    def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
+        """
+        Reflects specified blobs
+
+        Usage:
+            blob_reflect (<blob_hashes>...) [--reflector_server=<reflector_server>]
+
+        Options:
+            --reflector_server=<reflector_server>         (str) : reflector address
+
+        Returns:
+            (list) reflected blob hashes
+        """
+
+        d = reupload.reflect_blob_hashes(blob_hashes, self.session.blob_manager, reflector_server)
+        d.addCallback(lambda r: self._render_response(r))
+        return d
 
     def jsonrpc_blob_reflect_all(self):
         """
@@ -3209,7 +3244,7 @@ class Daemon(AuthJSONRPCServer):
             --uri=<uri>                       : (str) check availability for this uri
             --search_timeout=<search_timeout> : (int) how long to search for peers for the blob
                                                 in the dht
-            --search_timeout=<blob_timeout>   : (int) how long to try downloading from a peer
+            --blob_timeout=<blob_timeout>   : (int) how long to try downloading from a peer
 
         Returns:
             (dict) {
