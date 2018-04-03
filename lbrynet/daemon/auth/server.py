@@ -436,7 +436,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
         duplicate_params = [
             duplicate_param
-            for duplicate_param in argspec.args[1:len(args_tup) + 2]
+            for duplicate_param in argspec.args[1:len(args_tup) + 1]
             if duplicate_param in args_dict
         ]
 
