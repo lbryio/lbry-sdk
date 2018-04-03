@@ -10,6 +10,7 @@ from lbrynet.daemon.auth.client import JSONRPCException, LBRYAPIClient, AuthAPIC
 from lbrynet.daemon.Daemon import LOADING_WALLET_CODE, Daemon
 from lbrynet.core.system_info import get_platform
 from jsonrpc.common import RPCError
+from requests.exceptions import ConnectionError
 from urllib2 import URLError, HTTPError
 from httplib import UNAUTHORIZED
 
@@ -87,11 +88,11 @@ def main():
     kwargs = set_flag_vals(flag_names, parsed)
     colorama.init()
     conf.initialize_settings()
-    api = LBRYAPIClient.get_client()
 
     try:
+        api = LBRYAPIClient.get_client()
         status = api.status()
-    except URLError as err:
+    except (URLError, ConnectionError) as err:
         if isinstance(err, HTTPError) and err.code == UNAUTHORIZED:
             api = AuthAPIClient.config()
             # this can happen if the daemon is using auth with the --http-auth flag
