@@ -48,6 +48,7 @@ from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
 from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.core.Error import NullFundsError, NegativeFundsError
+from lbrynet.dht.error import TimeoutError
 from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
@@ -2849,6 +2850,7 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response("Deleted %s" % blob_hash)
         defer.returnValue(response)
 
+    @defer.inlineCallbacks
     def jsonrpc_peer_list(self, blob_hash, timeout=None):
         """
         Get peers for blob hash
@@ -2861,15 +2863,32 @@ class Daemon(AuthJSONRPCServer):
             --timeout=<timeout>      : (int) peer search timeout in seconds
 
         Returns:
-            (list) List of contacts
+            (list) List of contact dictionaries {'host': <peer ip>, 'port': <peer port>, 'node_id': <peer node id>}
         """
 
-        timeout = timeout or conf.settings['peer_search_timeout']
+        if not utils.is_valid_blobhash(blob_hash):
+            raise Exception("invalid blob hash")
 
-        d = self.session.peer_finder.find_peers_for_blob(blob_hash, timeout=timeout)
-        d.addCallback(lambda r: [[c.host, c.port, c.is_available()] for c in r])
-        d.addCallback(lambda r: self._render_response(r))
-        return d
+        finished_deferred = self.session.dht_node.getPeersForBlob(binascii.unhexlify(blob_hash), True)
+
+        def _trigger_timeout():
+            if not finished_deferred.called:
+                log.debug("Peer search for %s timed out", blob_hash)
+                finished_deferred.cancel()
+
+        timeout = timeout or conf.settings['peer_search_timeout']
+        self.session.dht_node.reactor_callLater(timeout, _trigger_timeout)
+
+        peers = yield finished_deferred
+        results = [
+            {
+                "host": host,
+                "port": port,
+                "node_id": node_id
+            }
+            for host, port, node_id in peers
+        ]
+        defer.returnValue(results)
 
     @defer.inlineCallbacks
     def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None):
@@ -3039,6 +3058,32 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(reupload.reflect_blob_hashes, self.session.blob_manager)
         d.addCallback(lambda r: self._render_response(r))
         return d
+
+    @defer.inlineCallbacks
+    def jsonrpc_peer_ping(self, node_id):
+        """
+        Find and ping a peer by node id
+
+        Usage:
+            peer_ping (<node_id> | --node_id=<node_id>)
+
+        Returns:
+            (str) pong, or {'error': <error message>} if an error is encountered
+        """
+
+        contact = None
+        try:
+            contact = yield self.session.dht_node.findContact(node_id.decode('hex'))
+        except TimeoutError:
+            result = {'error': 'timeout finding peer'}
+            defer.returnValue(result)
+        if not contact:
+            defer.returnValue({'error': 'peer not found'})
+        try:
+            result = yield contact.ping()
+        except TimeoutError:
+            result = {'error': 'ping timeout'}
+        defer.returnValue(result)
 
     def jsonrpc_routing_table_get(self):
         """

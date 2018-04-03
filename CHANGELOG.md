@@ -42,11 +42,13 @@ at anytime.
   * if the `use_authentication` setting is configured, use authentication for all api methods instead of only those with the `auth_required` decorator
   * regenerate api keys on startup if the using authentication
   * support both positional and keyword args for api calls
+  * `peer_list` to return a list of dictionaries instead of a list of lists, added peer node ids to the results
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests
   * integration tests for bootstrapping the dht
   * configurable `concurrent_announcers` setting
+  * `peer_ping` command
 
 ### Removed
   * `announce_all` argument from `blob_announce`
