@@ -41,6 +41,7 @@ at anytime.
   * pass the sd hash to reflector ClientFactory instead of looking it up
   * if the `use_authentication` setting is configured, use authentication for all api methods instead of only those with the `auth_required` decorator
   * regenerate api keys on startup if the using authentication
+  * support both positional and keyword args for api calls
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests

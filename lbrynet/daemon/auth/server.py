@@ -314,20 +314,19 @@ class AuthJSONRPCServer(AuthorizedBase):
             return server.NOT_DONE_YET
 
         if args == EMPTY_PARAMS or args == []:
-            args_dict = {}
             _args, _kwargs = (), {}
         elif isinstance(args, dict):
-            args_dict = args
+            _args, _kwargs = (), args
         elif len(args) == 1 and isinstance(args[0], dict):
             # TODO: this is for backwards compatibility. Remove this once API and UI are updated
             # TODO: also delete EMPTY_PARAMS then
-            args_dict = args[0]
             _args, _kwargs = (), args
+        elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], dict):
+            _args, _kwargs = args
         else:
-            # d = defer.maybeDeferred(function, *args)  # if we want to support positional args too
-            raise ValueError('Args must be a dict')
+            raise ValueError('invalid args format')
 
-        params_error, erroneous_params = self._check_params(fn, args_dict)
+        params_error, erroneous_params = self._check_params(fn, _args, _kwargs)
         if params_error is not None:
             params_error_message = '{} for {} command: {}'.format(
                 params_error, function_name, ', '.join(erroneous_params)
@@ -339,7 +338,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             )
             return server.NOT_DONE_YET
 
-        d = defer.maybeDeferred(fn, self, **args_dict)
+        d = defer.maybeDeferred(fn, self, *_args, **_kwargs)
 
         # finished_deferred will callback when the request is finished
         # and errback if something went wrong. If the errback is
@@ -431,12 +430,22 @@ class AuthJSONRPCServer(AuthorizedBase):
         return self.callable_methods.get(function_path)
 
     @staticmethod
-    def _check_params(function, args_dict):
+    def _check_params(function, args_tup, args_dict):
         argspec = inspect.getargspec(undecorated(function))
         num_optional_params = 0 if argspec.defaults is None else len(argspec.defaults)
+
+        duplicate_params = [
+            duplicate_param
+            for duplicate_param in argspec.args[1:len(args_tup) + 2]
+            if duplicate_param in args_dict
+        ]
+
+        if duplicate_params:
+            return 'Duplicate parameters', duplicate_params
+
         missing_required_params = [
             required_param
-            for required_param in argspec.args[1:-num_optional_params]
+            for required_param in argspec.args[len(args_tup)+1:-num_optional_params]
             if required_param not in args_dict
         ]
         if len(missing_required_params):

@@ -40,8 +40,8 @@ class AuthAPIClient(object):
         if name.startswith('__') and name.endswith('__'):
             raise AttributeError(name)
 
-        def f(*args):
-            return self.call(name, args[0] if args else {})
+        def f(*args, **kwargs):
+            return self.call(name, [args, kwargs])
 
         return f
 
