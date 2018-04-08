@@ -8,6 +8,10 @@ from .constants import NO_SIGNATURE
 log = logging.getLogger(__name__)
 
 
+def subclass_tuple(name, base):
+    return type(name, (base,), {'__slots__': ()})
+
+
 def normalize_version(v):
     return [int(x) for x in re.sub(r'(\.0+)*$', '', v).split(".")]
 
