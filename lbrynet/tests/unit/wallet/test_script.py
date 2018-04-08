@@ -6,8 +6,8 @@ from lbrynet.wallet.script import InputScript, OutputScript
 from lbrynet.wallet.bcd_data_stream import BCDataStream
 
 
-def parse(tokens, source):
-    template = Template('test', tokens)
+def parse(opcodes, source):
+    template = Template('test', opcodes)
     s = BCDataStream()
     for t in source:
         if isinstance(t, bytes):
@@ -24,58 +24,56 @@ class TestScriptTemplates(unittest.TestCase):
 
     def test_push_data(self):
         self.assertEqual(parse(
-            (PUSH_SINGLE('script_hash'),),
-            (b'abcdef',)),
-            {'script_hash': b'abcdef'}
+                (PUSH_SINGLE('script_hash'),),
+                (b'abcdef',)
+            ), {
+                'script_hash': b'abcdef'
+            }
         )
         self.assertEqual(parse(
-            (PUSH_SINGLE('first'), PUSH_SINGLE('last')),
-            (b'Satoshi', b'Nakamoto')),
-            {'first': b'Satoshi', 'last': b'Nakamoto'}
+                (PUSH_SINGLE('first'), PUSH_SINGLE('last')),
+                (b'Satoshi', b'Nakamoto')
+            ), {
+                'first': b'Satoshi',
+                'last': b'Nakamoto'
+            }
         )
         self.assertEqual(parse(
-            (OP_HASH160, PUSH_SINGLE('script_hash'), OP_EQUAL),
-            (OP_HASH160,          b'abcdef',       OP_EQUAL)),
-            {'script_hash': b'abcdef'}
+                (OP_HASH160, PUSH_SINGLE('script_hash'), OP_EQUAL),
+                (OP_HASH160, b'abcdef', OP_EQUAL)
+            ), {
+                'script_hash': b'abcdef'
+            }
         )
 
     def test_push_data_many(self):
         self.assertEqual(parse(
-            (PUSH_MANY('names'),),
-            (b'amit',)),
-            {'names': [b'amit']}
+                (PUSH_MANY('names'),),
+                (b'amit',)
+            ), {
+                'names': [b'amit']
+            }
         )
         self.assertEqual(parse(
-            (PUSH_MANY('names'),),
-            (b'jeremy', b'amit', b'victor')),
-            {'names': [b'jeremy', b'amit', b'victor']}
+                (PUSH_MANY('names'),),
+                (b'jeremy', b'amit', b'victor')
+            ), {
+                'names': [b'jeremy', b'amit', b'victor']
+            }
         )
         self.assertEqual(parse(
-            (OP_HASH160, PUSH_MANY('names'), OP_EQUAL),
-            (OP_HASH160, b'grin', b'jack', OP_EQUAL)),
-            {'names': [b'grin', b'jack']}
-        )
-
-    def test_push_data_many_separated(self):
-        self.assertEqual(parse(
-            (PUSH_MANY('Chiefs'), OP_HASH160, PUSH_MANY('Devs')),
-            (b'jeremy', b'grin', OP_HASH160, b'lex', b'jack')),
-            {
-                'Chiefs': [b'jeremy', b'grin'],
-                'Devs': [b'lex', b'jack']
+                (OP_HASH160, PUSH_MANY('names'), OP_EQUAL),
+                (OP_HASH160, b'grin', b'jack', OP_EQUAL)
+            ), {
+                'names': [b'grin', b'jack']
             }
         )
 
-    def test_push_data_many_not_separated(self):
-        with self.assertRaisesRegexp(ParseError, 'consecutive PUSH_MANY'):
-            parse((PUSH_MANY('Chiefs'), PUSH_MANY('Devs')),
-                  (b'jeremy', b'grin', b'lex', b'jack'))
-
     def test_push_data_mixed(self):
         self.assertEqual(parse(
-            (PUSH_SINGLE('CEO'), PUSH_MANY('Devs'), PUSH_SINGLE(b'CTO'), PUSH_SINGLE(b'State')),
-            (b'jeremy', b'lex', b'amit', b'victor', b'jack', b'grin', b'NH')),
-            {
+                (PUSH_SINGLE('CEO'), PUSH_MANY('Devs'), PUSH_SINGLE(b'CTO'), PUSH_SINGLE(b'State')),
+                (b'jeremy', b'lex', b'amit', b'victor', b'jack', b'grin', b'NH')
+            ), {
                 'CEO': b'jeremy',
                 'CTO': b'grin',
                 'Devs': [b'lex', b'amit', b'victor', b'jack'],
@@ -83,10 +81,24 @@ class TestScriptTemplates(unittest.TestCase):
             }
         )
 
+    def test_push_data_many_separated(self):
+        self.assertEqual(parse(
+                (PUSH_MANY('Chiefs'), OP_HASH160, PUSH_MANY('Devs')),
+                (b'jeremy', b'grin', OP_HASH160, b'lex', b'jack')
+            ), {
+                'Chiefs': [b'jeremy', b'grin'],
+                'Devs': [b'lex', b'jack']
+            }
+        )
 
-class TestRedeemPubKeyHashInputScript(unittest.TestCase):
+    def test_push_data_many_not_separated(self):
+        with self.assertRaisesRegexp(ParseError, 'consecutive PUSH_MANY'):
+            parse((PUSH_MANY('Chiefs'), PUSH_MANY('Devs')), (b'jeremy', b'grin', b'lex', b'jack'))
 
-    def script(self, sig, pubkey):
+
+class TestRedeemPubKeyHash(unittest.TestCase):
+
+    def redeem_pubkey_hash(self, sig, pubkey):
         # this checks that factory function correctly sets up the script
         src1 = InputScript.redeem_pubkey_hash(unhexlify(sig), unhexlify(pubkey))
         self.assertEqual(src1.template.name, 'pubkey_hash')
@@ -101,7 +113,7 @@ class TestRedeemPubKeyHashInputScript(unittest.TestCase):
 
     def test_redeem_pubkey_hash_1(self):
         self.assertEqual(
-            self.script(
+            self.redeem_pubkey_hash(
                 b'30450221009dc93f25184a8d483745cd3eceff49727a317c9bfd8be8d3d04517e9cdaf8dd502200e02dc5939cad9562d2b1f303f185957581c4851c98d497af281118825e18a8301',
                 b'025415a06514230521bff3aaface31f6db9d9bbc39bf1ca60a189e78731cfd4e1b'
             ),
@@ -111,9 +123,9 @@ class TestRedeemPubKeyHashInputScript(unittest.TestCase):
         )
 
 
-class TestRedeemScriptHashInputScript(unittest.TestCase):
+class TestRedeemScriptHash(unittest.TestCase):
 
-    def script(self, sigs, pubkeys):
+    def redeem_script_hash(self, sigs, pubkeys):
         # this checks that factory function correctly sets up the script
         src1 = InputScript.redeem_script_hash(
             [unhexlify(sig) for sig in sigs],
@@ -137,7 +149,7 @@ class TestRedeemScriptHashInputScript(unittest.TestCase):
 
     def test_redeem_script_hash_1(self):
         self.assertEqual(
-            self.script([
+            self.redeem_script_hash([
                 '3045022100fec82ed82687874f2a29cbdc8334e114af645c45298e85bb1efe69fcf15c617a0220575'
                 'e40399f9ada388d8e522899f4ec3b7256896dd9b02742f6567d960b613f0401',
                 '3044022024890462f731bd1a42a4716797bad94761fc4112e359117e591c07b8520ea33b02201ac68'
@@ -164,9 +176,9 @@ class TestRedeemScriptHashInputScript(unittest.TestCase):
         )
 
 
-class TestPayPubKeyHashOutputScript(unittest.TestCase):
+class TestPayPubKeyHash(unittest.TestCase):
 
-    def script(self, pubkey_hash):
+    def pay_pubkey_hash(self, pubkey_hash):
         # this checks that factory function correctly sets up the script
         src1 = OutputScript.pay_pubkey_hash(unhexlify(pubkey_hash))
         self.assertEqual(src1.template.name, 'pay_pubkey_hash')
@@ -179,14 +191,14 @@ class TestPayPubKeyHashOutputScript(unittest.TestCase):
 
     def test_pay_pubkey_hash_1(self):
         self.assertEqual(
-            self.script(b'64d74d12acc93ba1ad495e8d2d0523252d664f4d'),
+            self.pay_pubkey_hash(b'64d74d12acc93ba1ad495e8d2d0523252d664f4d'),
             '76a91464d74d12acc93ba1ad495e8d2d0523252d664f4d88ac'
         )
 
 
-class TestPayScriptHashOutputScript(unittest.TestCase):
+class TestPayScriptHash(unittest.TestCase):
 
-    def script(self, script_hash):
+    def pay_script_hash(self, script_hash):
         # this checks that factory function correctly sets up the script
         src1 = OutputScript.pay_script_hash(unhexlify(script_hash))
         self.assertEqual(src1.template.name, 'pay_script_hash')
@@ -199,14 +211,14 @@ class TestPayScriptHashOutputScript(unittest.TestCase):
 
     def test_pay_pubkey_hash_1(self):
         self.assertEqual(
-            self.script(b'63d65a2ee8c44426d06050cfd71c0f0ff3fc41ac'),
+            self.pay_script_hash(b'63d65a2ee8c44426d06050cfd71c0f0ff3fc41ac'),
             'a91463d65a2ee8c44426d06050cfd71c0f0ff3fc41ac87'
         )
 
 
-class TestPayClaimNamePubkeyHashOutputScript(unittest.TestCase):
+class TestPayClaimNamePubkeyHash(unittest.TestCase):
 
-    def script(self, name, claim, pubkey_hash):
+    def pay_claim_name_pubkey_hash(self, name, claim, pubkey_hash):
         # this checks that factory function correctly sets up the script
         src1 = OutputScript.pay_claim_name_pubkey_hash(name, unhexlify(claim), unhexlify(pubkey_hash))
         self.assertEqual(src1.template.name, 'claim_name+pay_pubkey_hash')
@@ -223,7 +235,7 @@ class TestPayClaimNamePubkeyHashOutputScript(unittest.TestCase):
 
     def test_pay_claim_name_pubkey_hash_1(self):
         self.assertEqual(
-            self.script(
+            self.pay_claim_name_pubkey_hash(
                 # name
                 b'cats',
                 # claim
