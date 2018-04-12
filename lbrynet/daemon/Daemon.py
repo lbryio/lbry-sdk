@@ -3030,7 +3030,7 @@ class Daemon(AuthJSONRPCServer):
             blob_reflect (<blob_hashes>...) [--reflector_server=<reflector_server>]
 
         Options:
-            --reflector_server=<reflector_server>         (str) : reflector address
+            --reflector_server=<reflector_server>          : (str) reflector address
 
         Returns:
             (list) reflected blob hashes
