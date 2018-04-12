@@ -3067,6 +3067,9 @@ class Daemon(AuthJSONRPCServer):
         Usage:
             peer_ping (<node_id> | --node_id=<node_id>)
 
+        Options:
+            None
+
         Returns:
             (str) pong, or {'error': <error message>} if an error is encountered
         """
