@@ -485,6 +485,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#peer_ping" title="peer_ping" class="md-nav__link">
+    peer_ping
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#publish" title="publish" class="md-nav__link">
     publish
   </a>
@@ -894,6 +901,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#peer_ping" title="peer_ping" class="md-nav__link">
+    peer_ping
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#publish" title="publish" class="md-nav__link">
     publish
   </a>
@@ -1087,16 +1101,14 @@
 Usage:
     blob_announce [&lt;blob_hash&gt; | --blob_hash=&lt;blob_hash&gt;]
                   [&lt;stream_hash&gt; | --stream_hash=&lt;stream_hash&gt;] | [&lt;sd_hash&gt; | --sd_hash=&lt;sd_hash&gt;]
-                  [--announce_all]
 
 
 Options:
-    --announce_all               :  (bool)  announce all the blobs possessed by user
-    --blob_hash=&lt;blob_hash&gt;      :  (str)   announce a blob, specified by blob_hash
-    --stream_hash=&lt;stream_hash&gt;  :  (str)   announce all blobs associated with
-                                            stream_hash
-    --sd_hash=&lt;sd_hash&gt;          :  (str)   announce all blobs associated with
-                                            sd_hash and the sd_hash itself
+    --blob_hash=&lt;blob_hash&gt;      :  (str)  announce a blob, specified by blob_hash
+    --stream_hash=&lt;stream_hash&gt;  :  (str)  announce all blobs associated with
+                                           stream_hash
+    --sd_hash=&lt;sd_hash&gt;          :  (str)  announce all blobs associated with
+                                           sd_hash and the sd_hash itself
 
 Returns:
     (bool) true if successful
@@ -1194,7 +1206,7 @@ Usage:
 
 
 Options:
-    --reflector_server=&lt;reflector_server&gt;         (str)  :  reflector  address
+    --reflector_server=&lt;reflector_server&gt;  :  (str)  reflector address
 
 Returns:
     (list) reflected blob hashes
@@ -1795,7 +1807,21 @@ Options:
     --timeout=&lt;timeout&gt;      :  (int)  peer search timeout in seconds
 
 Returns:
-    (list) List of contacts
+    (list) List of contact dictionaries {'host': &lt;peer ip&gt;, 'port': &lt;peer port&gt;, 'node_id': &lt;peer node id&gt;}
+</code></pre>
+
+<h2 id="peer_ping">peer_ping</h2>
+<pre><code class="text">Find and ping a peer by node id
+
+Usage:
+    peer_ping (&lt;node_id&gt; | --node_id=&lt;node_id&gt;)
+
+
+Options:
+          None
+
+Returns:
+    (str) pong, or {'error': &lt;error message&gt;} if an error is encountered
 </code></pre>
 
 <h2 id="publish">publish</h2>
@@ -2052,12 +2078,11 @@ Returns:
 <pre><code class="text">Get daemon status
 
 Usage:
-    status [--session_status] [--dht_status]
+    status [--session_status]
 
 
 Options:
     --session_status  :  (bool)  include session status in results
-    --dht_status      :  (bool)  include dht network and peer status
 
 Returns:
     (dict) lbrynet-daemon status
@@ -2088,18 +2113,6 @@ Returns:
                 'announce_queue_size': number of blobs currently queued to be announced
                 'should_announce_blobs': number of blobs that should be announced
             }
-
-        If given the dht status option:
-            'dht_status': {
-                'kbps_received': current kbps receiving,
-                'kbps_sent': current kdps being sent,
-                'total_bytes_sent': total bytes sent,
-                'total_bytes_received': total bytes received,
-                'queries_received': number of queries received per second,
-                'queries_sent': number of queries sent per second,
-                'recent_contacts': count of recently contacted peers,
-                'unique_contacts': count of unique peers
-            },
     }
 </code></pre>
 
