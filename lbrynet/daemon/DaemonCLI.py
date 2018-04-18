@@ -125,7 +125,7 @@ def main():
     # TODO: check if port is bound. Error if its not
 
     try:
-        result = api.call(method, kwargs)
+        result = api.call(method, **kwargs)
         if isinstance(result, basestring):
             # printing the undumped string is prettier
             print result
