@@ -414,10 +414,11 @@ class Wallet(object):
     def save_claim(self, claim_info):
         if 'value' in claim_info:
             yield self.storage.save_claim(claim_info)
-        elif 'certificate' in claim_info:
-            yield self.storage.save_claim(claim_info['certificate'])
-        elif 'claim' in claim_info:
-            yield self.storage.save_claim(claim_info['claim'])
+        else:
+            if 'certificate' in claim_info:
+                yield self.storage.save_claim(claim_info['certificate'])
+            if 'claim' in claim_info:
+                yield self.storage.save_claim(claim_info['claim'])
 
     @defer.inlineCallbacks
     def resolve(self, *uris, **kwargs):
