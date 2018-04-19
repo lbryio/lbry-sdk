@@ -366,9 +366,10 @@ class Wallet(object):
             claim['value'] = claim_dict
             claim['hex'] = decoded.serialized.encode('hex')
         except DecodeError:
-            claim['hex'] = claim['value']
-            claim['value'] = None
-            claim['error'] = "Failed to decode value"
+            raise UnknownURI(claim['permanent_url'] if 'permanent_url' in claim else "")
+            # claim['hex'] = claim['value']
+            # claim['value'] = None
+            # claim['error'] = "Failed to decode value"
         return claim
 
     def _handle_claim_result(self, results):
