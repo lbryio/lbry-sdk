@@ -108,7 +108,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
             message = self._translator.fromPrimitive(msgPrimitive)
         except (encoding.DecodeError, ValueError) as err:
             # We received some rubbish here
-            log.exception("Error decoding datagram from %s:%i - %s", address[0], address[1], err)
+            log.warning("Error decoding datagram %s from %s:%i - %s", datagram.encode('hex'),
+                        address[0], address[1], err)
             return
         except (IndexError, KeyError):
             log.warning("Couldn't decode dht datagram from %s", address)
@@ -206,7 +207,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
     def _scheduleSendNext(self, txData, address):
         """Schedule the sending of the next UDP packet """
-        delayed_call, _ = self._node.reactor_callLater(0, self._write, txData, address)
+        delayed_call, _ = self._node.reactor_callSoon(self._write, txData, address)
 
     def _write(self, txData, address):
         if self.transport:

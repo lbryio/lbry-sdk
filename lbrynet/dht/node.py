@@ -94,6 +94,7 @@ class Node(object):
         self.reactor_resolve = resolve
         self.reactor_listenUDP = listenUDP
         self.reactor_callLater = CallLaterManager.call_later
+        self.reactor_callSoon = CallLaterManager.call_soon
         self.node_id = node_id or self._generateID()
         self.port = udpPort
         self._listeningPort = None  # object implementing Twisted

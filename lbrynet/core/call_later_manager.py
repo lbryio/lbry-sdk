@@ -1,6 +1,27 @@
+import logging
+
+log = logging.getLogger()
+
+MIN_DELAY = 0.0
+MAX_DELAY = 0.01
+DELAY_INCREMENT = 0.0001
+QUEUE_SIZE_THRESHOLD = 100
+
+
 class CallLaterManager(object):
     _callLater = None
     _pendingCallLaters = []
+    _delay = MIN_DELAY
+
+    @classmethod
+    def get_min_delay(cls):
+        cls._pendingCallLaters = [cl for cl in cls._pendingCallLaters if cl.active()]
+        queue_size = len(cls._pendingCallLaters)
+        if queue_size > QUEUE_SIZE_THRESHOLD:
+            cls._delay = min((cls._delay + DELAY_INCREMENT), MAX_DELAY)
+        else:
+            cls._delay = max((cls._delay - 2.0 * DELAY_INCREMENT), MIN_DELAY)
+        return cls._delay
 
     @classmethod
     def _cancel(cls, call_later):
@@ -52,6 +73,11 @@ class CallLaterManager(object):
         canceller = cls._cancel(call_later)
         cls._pendingCallLaters.append(call_later)
         return call_later, canceller
+
+    @classmethod
+    def call_soon(cls, what, *args, **kwargs):
+        delay = cls.get_min_delay()
+        return cls.call_later(delay, what, *args, **kwargs)
 
     @classmethod
     def setup(cls, callLater):
