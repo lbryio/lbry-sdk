@@ -245,6 +245,9 @@ class Announcer(object):
     def run_manage_loop(self):
         pass
 
+    def start(self):
+        pass
+
     def stop(self):
         pass
 
