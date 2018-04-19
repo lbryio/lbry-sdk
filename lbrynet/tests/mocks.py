@@ -25,10 +25,11 @@ class FakeLBRYFile(object):
 
 
 class Node(object):
-    def __init__(self, peer_finder=None, peer_manager=None, **kwargs):
+    def __init__(self, peer_finder=None, peer_manager=None, dht_node_port=None, peer_port=3333, **kwargs):
         self.peer_finder = peer_finder
         self.peer_manager = peer_manager
-        self.peerPort = 3333
+        self.peerPort = peer_port
+        self.udpPort = dht_node_port
 
     def joinNetwork(self, *args):
         return defer.succeed(True)

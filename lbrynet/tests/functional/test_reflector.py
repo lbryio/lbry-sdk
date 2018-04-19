@@ -14,8 +14,6 @@ from lbrynet.file_manager import EncryptedFileManager
 from lbrynet.tests import mocks
 from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
-from lbrynet.tests.mocks import Node
-
 
 class TestReflector(unittest.TestCase):
     def setUp(self):
@@ -62,7 +60,7 @@ class TestReflector(unittest.TestCase):
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
             external_ip="127.0.0.1",
-            dht_node_class=Node,
+            dht_node_class=mocks.Node,
             hash_announcer=mocks.Announcer()
         )
 
@@ -83,7 +81,7 @@ class TestReflector(unittest.TestCase):
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
             external_ip="127.0.0.1",
-            dht_node_class=Node,
+            dht_node_class=mocks.Node,
             hash_announcer=mocks.Announcer()
         )
 
