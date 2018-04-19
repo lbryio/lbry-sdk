@@ -108,7 +108,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
             message = self._translator.fromPrimitive(msgPrimitive)
         except (encoding.DecodeError, ValueError) as err:
             # We received some rubbish here
-            log.exception("Error decoding datagram from %s:%i - %s", address[0], address[1], err)
+            log.warning("Error decoding datagram %s from %s:%i - %s", datagram.encode('hex'),
+                        address[0], address[1], err)
             return
         except (IndexError, KeyError):
             log.warning("Couldn't decode dht datagram from %s", address)
