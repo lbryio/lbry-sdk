@@ -76,7 +76,7 @@ class TestReflector(unittest.TestCase):
             peer_finder=peer_finder,
             blob_dir=self.server_blob_dir,
             peer_port=5554,
-            dht_node_port=4445,
+            dht_node_port=4443,
             use_upnp=False,
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
