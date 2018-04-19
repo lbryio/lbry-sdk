@@ -45,15 +45,6 @@ class TestCoinSelectionTests(unittest.TestCase):
             utxo(CENT),
             utxo(CENT - fee),
         ]
-        self.assertEqual([CENT + fee], search(utxo_pool, CENT, 0))
-
-    def test_exact_match(self):
-        fee = utxo(CENT).spend(fake=True).fee
-        utxo_pool = [
-            utxo(CENT + fee),
-            utxo(CENT),
-            utxo(CENT - fee),
-        ]
         selector = CoinSelector(utxo_pool, CENT, 0)
         match = selector.select()
         self.assertEqual([CENT + fee], [c.amount for c in match])
