@@ -320,7 +320,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         elif len(args) == 1 and isinstance(args[0], dict):
             # TODO: this is for backwards compatibility. Remove this once API and UI are updated
             # TODO: also delete EMPTY_PARAMS then
-            _args, _kwargs = (), args
+            _args, _kwargs = (), args[0]
         elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], dict):
             _args, _kwargs = args
         else:
