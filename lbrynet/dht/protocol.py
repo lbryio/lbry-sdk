@@ -206,7 +206,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
     def _scheduleSendNext(self, txData, address):
         """Schedule the sending of the next UDP packet """
-        delayed_call, _ = self._node.reactor_callLater(0, self._write, txData, address)
+        delayed_call, _ = self._node.reactor_callSoon(self._write, txData, address)
 
     def _write(self, txData, address):
         if self.transport:

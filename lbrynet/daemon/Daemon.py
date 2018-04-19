@@ -227,7 +227,6 @@ class Daemon(AuthJSONRPCServer):
     @defer.inlineCallbacks
     def setup(self):
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
-
         configure_loggly_handler()
 
         log.info("Starting lbrynet-daemon")
@@ -412,7 +411,6 @@ class Daemon(AuthJSONRPCServer):
         log.info("Status at time of shutdown: " + self.startup_status[0])
 
         self._stop_streams()
-
         self.looping_call_manager.shutdown()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
