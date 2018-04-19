@@ -1488,8 +1488,7 @@ class Daemon(AuthJSONRPCServer):
         if claim_id is not None and txid is None and nout is None:
             claim_results = yield self.session.wallet.get_claim_by_claim_id(claim_id)
         elif txid is not None and nout is not None and claim_id is None:
-            outpoint = ClaimOutpoint(txid, nout)
-            claim_results = yield self.session.wallet.get_claim_by_outpoint(outpoint)
+            claim_results = yield self.session.wallet.get_claim_by_outpoint(txid, int(nout))
         else:
             raise Exception("Must specify either txid/nout, or claim_id")
         response = yield self._render_response(claim_results)

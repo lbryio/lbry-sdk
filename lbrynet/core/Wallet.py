@@ -446,14 +446,12 @@ class Wallet(object):
         defer.returnValue(claims)
 
     @defer.inlineCallbacks
-    def get_claim_by_outpoint(self, claim_outpoint, check_expire=True):
-        txid, nout = claim_outpoint.split(":")
-        nout = int(nout)
+    def get_claim_by_outpoint(self, txid, nout, check_expire=True):
         claim = yield self._get_claim_by_outpoint(txid, nout)
         try:
             result = self._handle_claim_result(claim)
             yield self.save_claim(result)
-        except (UnknownOutpoint) as err:
+        except UnknownOutpoint as err:
             result = {'error': err.message}
         defer.returnValue(result)
 
