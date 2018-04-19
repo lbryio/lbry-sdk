@@ -19,6 +19,7 @@ at anytime.
   * `use_auth_http` in a config file being overridden by the default command line argument to `lbrynet-daemon`, now the command line value will only override the config file value if it is provided
   * `lbrynet-cli` not automatically switching to the authenticated client if the server is detected to be using authentication. This resulted in `lbrynet-cli` failing to run when `lbrynet-daemon` was run with the `--http-auth` flag
   * fixed error when using `claim_show` with `txid` and `nout` arguments
+  * fixed resolving expired URLs
 
 ### Deprecated
   *
