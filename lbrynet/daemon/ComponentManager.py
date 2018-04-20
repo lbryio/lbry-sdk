@@ -66,7 +66,7 @@ class ComponentManager(object):
                 d = component._setup()
                 d.addCallback(callbacks[component.component_name])
                 return d
-            return component.setup()
+            return component._setup()
 
         stages = cls.sort_components()
         for stage in stages:
