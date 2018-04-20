@@ -3,13 +3,16 @@ import logging
 from twisted.internet import defer, threads
 from lbrynet import conf
 from lbrynet.database.storage import SQLiteStorage
+from lbrynet.core.Wallet import LBRYumWallet
 from lbrynet.daemon.Component import Component
+# from lbrynet.daemon import ComponentManager
 
 log = logging.getLogger(__name__)
 
 # settings must be initialized before this file is imported
 
 DATABASE_COMPONENT = "database"
+WALLET_COMPONENT = "wallet"
 
 
 class DatabaseComponent(Component):
@@ -87,3 +90,46 @@ class DatabaseComponent(Component):
     @defer.inlineCallbacks
     def stop(cls):
         yield cls.storage.stop()
+
+
+class WalletComponent(Component):
+    component_name = WALLET_COMPONENT
+    depends_on = ['database']
+    wallet = None
+
+    @staticmethod
+    def get_wallet_type():
+        return conf.settings['wallet']
+
+    @classmethod
+    @defer.inlineCallbacks
+    def setup(cls):
+        storage = DatabaseComponent.storage
+        if cls.get_wallet_type() == conf.LBRYCRD_WALLET:
+            raise ValueError('LBRYcrd Wallet is no longer supported')
+        elif cls.get_wallet_type() == conf.LBRYUM_WALLET:
+
+            log.info("Using lbryum wallet")
+
+            lbryum_servers = {address: {'t': str(port)}
+                              for address, port in conf.settings['lbryum_servers']}
+
+            config = {
+                'auto_connect': True,
+                'chain': conf.settings['blockchain_name'],
+                'default_servers': lbryum_servers
+            }
+
+            if 'use_keyring' in conf.settings:
+                config['use_keyring'] = conf.settings['use_keyring']
+            if conf.settings['lbryum_wallet_dir']:
+                config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
+            cls.wallet = LBRYumWallet(storage, config)
+            yield cls.wallet.start()
+        else:
+            raise ValueError('Wallet Type {} is not valid'.format(cls.get_wallet_type()))
+
+    @classmethod
+    @defer.inlineCallbacks
+    def stop(cls):
+        yield cls.wallet.stop()
