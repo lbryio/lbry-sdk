@@ -233,6 +233,7 @@ class Daemon(AuthJSONRPCServer):
         self.sd_identifier = StreamDescriptorIdentifier()
         self.lbry_file_manager = None
         self.storage = None
+        self.wallet = None
 
     @defer.inlineCallbacks
     def setup(self):
@@ -248,6 +249,7 @@ class Daemon(AuthJSONRPCServer):
         yield self._initial_setup()
         yield self.component_manager.setup()
         self.storage = self.component_manager.get_component("database").storage
+        self.wallet = self.component_manager.get_component("wallet").wallet
         yield self._get_session()
         yield self._check_wallet_locked()
         yield self._start_analytics()
@@ -489,33 +491,6 @@ class Daemon(AuthJSONRPCServer):
             self.analytics_manager.start()
 
     def _get_session(self):
-        def get_wallet():
-            if self.wallet_type == LBRYCRD_WALLET:
-                raise ValueError('LBRYcrd Wallet is no longer supported')
-            elif self.wallet_type == LBRYUM_WALLET:
-
-                log.info("Using lbryum wallet")
-
-                lbryum_servers = {address: {'t': str(port)}
-                                  for address, port in conf.settings['lbryum_servers']}
-
-                config = {
-                    'auto_connect': True,
-                    'chain': conf.settings['blockchain_name'],
-                    'default_servers': lbryum_servers
-                }
-
-                if 'use_keyring' in conf.settings:
-                    config['use_keyring'] = conf.settings['use_keyring']
-                if conf.settings['lbryum_wallet_dir']:
-                    config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
-                wallet = LBRYumWallet(self.storage, config)
-                return defer.succeed(wallet)
-            else:
-                raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
-
-        d = get_wallet()
-
         def create_session(wallet):
             self.session = Session(
                 conf.settings['data_rate'],
@@ -533,7 +508,9 @@ class Daemon(AuthJSONRPCServer):
             )
             self.startup_status = STARTUP_STAGES[2]
 
-        d.addCallback(create_session)
+            return defer.succeed(True)
+
+        d = create_session(self.wallet)
         d.addCallback(lambda _: self.session.setup())
         return d
 
