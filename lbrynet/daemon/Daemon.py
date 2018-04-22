@@ -649,7 +649,7 @@ class Daemon(AuthJSONRPCServer):
                               certificate_id)
         parse_lbry_uri(name)
         if not file_path:
-            stream_hash = yield self.storage.get_stream_hash_for_sd_hash(claim_dict['stream']['source']['source'])
+            stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(claim_dict['stream']['source']['source'])
             claim_out = yield publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address,
                                                        change_address)
         else:
@@ -2885,12 +2885,12 @@ class Daemon(AuthJSONRPCServer):
             if sd_hash and stream_hash:
                 raise Exception("either the sd hash or the stream hash should be provided, not both")
             if sd_hash:
-                stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
-            blobs = yield self.storage.get_blobs_for_stream(stream_hash, only_completed=True)
+                stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(sd_hash)
+            blobs = yield self.session.storage.get_blobs_for_stream(stream_hash, only_completed=True)
             blob_hashes.extend(blob.blob_hash for blob in blobs if blob.blob_hash is not None)
         else:
             raise Exception('single argument must be specified')
-        yield self.storage.should_single_announce_blobs(blob_hashes, immediate=True)
+        yield self.session.storage.should_single_announce_blobs(blob_hashes, immediate=True)
         response = yield self._render_response(True)
         defer.returnValue(response)
 
