@@ -9,9 +9,11 @@ SEED_PREFIX = '01'  # Electrum standard wallet
 SEED_PREFIX_2FA = '101'  # extended seed for two-factor authentication
 
 
-RECOMMENDED_FEE = 50000
+MAXIMUM_FEE_PER_BYTE = 50
+MAXIMUM_FEE_PER_NAME_CHAR = 200000
 COINBASE_MATURITY = 100
-COIN = 100000000
+CENT = 1000000
+COIN = 100*CENT
 
 # supported types of transaction outputs
 TYPE_ADDRESS = 1
@@ -40,10 +42,13 @@ SERVER_RETRY_INTERVAL = 10
 MAX_BATCH_QUERY_SIZE = 500
 proxy_modes = ['socks4', 'socks5', 'http']
 
-# Main network and testnet3 definitions
-# these values follow the parameters in lbrycrd/src/chainparams.cpp
-blockchain_params = {
-    'lbrycrd_main': {
+# Chain Properties
+# see: https://github.com/lbryio/lbrycrd/blob/master/src/chainparams.cpp
+MAIN_CHAIN = 'main'
+TESTNET_CHAIN = 'testnet'
+REGTEST_CHAIN = 'regtest'
+CHAINS = {
+    MAIN_CHAIN: {
         'pubkey_address': 0,
         'script_address': 5,
         'pubkey_address_prefix': 85,
@@ -53,7 +58,7 @@ blockchain_params = {
         'genesis_bits': 0x1f00ffff,
         'target_timespan': 150
     },
-    'lbrycrd_testnet': {
+    TESTNET_CHAIN: {
         'pubkey_address': 0,
         'script_address': 5,
         'pubkey_address_prefix': 111,
@@ -63,7 +68,7 @@ blockchain_params = {
         'genesis_bits': 0x1f00ffff,
         'target_timespan': 150
     },
-    'lbrycrd_regtest': {
+    REGTEST_CHAIN: {
         'pubkey_address': 0,
         'script_address': 5,
         'pubkey_address_prefix': 111,

@@ -1,36 +1,78 @@
 import os
 import logging
 import hashlib
+from binascii import hexlify
+from operator import itemgetter
 
 from twisted.internet import threads, defer
 
-from lbryum.util import hex_to_int, int_to_hex, rev_hex
-from lbryum.hashing import hash_encode, Hash, PoWHash
-from .stream import StreamController, execute_serially
-from .constants import blockchain_params, HEADER_SIZE
+from lbrynet.wallet.stream import StreamController, execute_serially
+from lbrynet.wallet.transaction import Transaction
+from lbrynet.wallet.constants import CHAINS, MAIN_CHAIN, REGTEST_CHAIN, HEADER_SIZE
+from lbrynet.wallet.util import hex_to_int, int_to_hex, rev_hex, hash_encode
+from lbrynet.wallet.hash import double_sha256, pow_hash
 
 log = logging.getLogger(__name__)
 
 
-class Transaction:
+class Address:
 
-    def __init__(self, tx_hash, raw, height):
-        self.hash = tx_hash
-        self.raw = raw
-        self.height = height
+    def __init__(self, address):
+        self.address = address
+        self.transactions = []
+
+    def add_transaction(self, transaction):
+        self.transactions.append(transaction)
 
 
-class BlockchainTransactions:
+class Ledger:
 
-    def __init__(self, history):
+    def __init__(self, config=None, db=None):
+        self.config = config or {}
+        self.db = db
         self.addresses = {}
         self.transactions = {}
-        for address, transactions in history.items():
-            self.addresses[address] = []
-            for txid, raw, height in transactions:
-                tx = Transaction(txid, raw, height)
-                self.addresses[address].append(tx)
-                self.transactions[txid] = tx
+        self.headers = BlockchainHeaders(self.headers_path, self.config.get('chain', MAIN_CHAIN))
+        self._on_transaction_controller = StreamController()
+        self.on_transaction = self._on_transaction_controller.stream
+
+    @property
+    def headers_path(self):
+        filename = 'blockchain_headers'
+        if self.config.get('chain', MAIN_CHAIN) != MAIN_CHAIN:
+            filename = '{}_headers'.format(self.config['chain'])
+        return os.path.join(self.config.get('wallet_path', ''), filename)
+
+    @defer.inlineCallbacks
+    def load(self):
+        txs = yield self.db.get_transactions()
+        for tx_hash, raw, height in txs:
+            self.transactions[tx_hash] = Transaction(raw, height)
+        txios = yield self.db.get_transaction_inputs_and_outputs()
+        for tx_hash, address_hash, input_output, amount, height in txios:
+            tx = self.transactions[tx_hash]
+            address = self.addresses.get(address_hash)
+            if address is None:
+                address = self.addresses[address_hash] = Address(address_hash)
+            tx.add_txio(address, input_output, amount)
+            address.add_transaction(tx)
+
+    def is_address_old(self, address, age_limit=2):
+        age = -1
+        for tx in self.get_transactions(address, []):
+            if tx.height == 0:
+                tx_age = 0
+            else:
+                tx_age = self.headers.height - tx.height + 1
+            if tx_age > age:
+                age = tx_age
+        return age > age_limit
+
+    def add_transaction(self, address, transaction):
+        self.transactions.setdefault(hexlify(transaction.id), transaction)
+        self.addresses.setdefault(address, [])
+        self.addresses[address].append(transaction)
+        self._on_transaction_controller.add(transaction)
 
     def has_address(self, address):
         return address in self.addresses
@@ -52,28 +94,39 @@ class BlockchainTransactions:
     def has_transaction(self, tx_hash):
         return tx_hash in self.transactions
 
-    def add_transaction(self, address, transaction):
-        self.transactions.setdefault(transaction.hash, transaction)
-        self.addresses.setdefault(address, [])
-        self.addresses[address].append(transaction)
+    def get_least_used_address(self, addresses, max_transactions=100):
+        transaction_counts = []
+        for address in addresses:
+            transactions = self.get_transactions(address, [])
+            tx_count = len(transactions)
+            if tx_count == 0:
+                return address
+            elif tx_count >= max_transactions:
+                continue
+            else:
+                transaction_counts.append((address, tx_count))
+        if transaction_counts:
+            transaction_counts.sort(key=itemgetter(1))
+            return transaction_counts[0]
 
 
 class BlockchainHeaders:
 
-    def __init__(self, path, chain='lbrycrd_main'):
+    def __init__(self, path, chain=MAIN_CHAIN):
         self.path = path
         self.chain = chain
-        self.max_target = blockchain_params[chain]['max_target']
-        self.target_timespan = blockchain_params[chain]['target_timespan']
-        self.genesis_bits = blockchain_params[chain]['genesis_bits']
+        self.max_target = CHAINS[chain]['max_target']
+        self.target_timespan = CHAINS[chain]['target_timespan']
+        self.genesis_bits = CHAINS[chain]['genesis_bits']
 
         self._on_change_controller = StreamController()
         self.on_changed = self._on_change_controller.stream
 
         self._size = None
 
-        if not os.path.exists(path):
-            with open(path, 'wb'):
+    def touch(self):
+        if not os.path.exists(self.path):
+            with open(self.path, 'wb'):
                 pass
 
     @property
@@ -175,12 +228,12 @@ class BlockchainHeaders:
     def _hash_header(self, header):
         if header is None:
             return '0' * 64
-        return hash_encode(Hash(self._serialize(header).decode('hex')))
+        return hash_encode(double_sha256(self._serialize(header).decode('hex')))
 
     def _pow_hash_header(self, header):
         if header is None:
             return '0' * 64
-        return hash_encode(PoWHash(self._serialize(header).decode('hex')))
+        return hash_encode(pow_hash(self._serialize(header).decode('hex')))
 
     def _calculate_lbry_next_work_required(self, height, first, last):
         """ See: lbrycrd/src/lbry.cpp """
@@ -189,7 +242,7 @@ class BlockchainHeaders:
             return self.genesis_bits, self.max_target
 
         # bits to target
-        if self.chain != 'lbrycrd_regtest':
+        if self.chain != REGTEST_CHAIN:
             bits = last['bits']
             bitsN = (bits >> 24) & 0xff
             assert 0x03 <= bitsN <= 0x1f, \
