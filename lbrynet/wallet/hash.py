@@ -13,6 +13,7 @@ import aes
 import base64
 import hashlib
 import hmac
+import struct
 from binascii import hexlify, unhexlify
 
 from .util import bytes_to_int, int_to_bytes
@@ -90,6 +91,10 @@ def address_to_hash_160(address):
     bytes = Base58.decode(address)
     prefix, pubkey_bytes, addr_checksum = bytes[0], bytes[1:21], bytes[21:]
     return pubkey_bytes
+
+
+def claim_id_hash(txid, n):
+    return hash160(txid + struct.pack('>I', n))
 
 
 def aes_encrypt(secret, value):

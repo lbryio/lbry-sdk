@@ -2,12 +2,10 @@ import io
 import logging
 from binascii import hexlify
 from typing import List
-from itertools import chain
 
 from lbrynet.wallet import get_wallet_manager
 from lbrynet.wallet.bcd_data_stream import BCDataStream
-from lbrynet.wallet.hash import sha256, hash160_to_address
-from lbrynet.wallet.lbrycrd import encode_claim_id_hex, claim_id_hash
+from lbrynet.wallet.hash import sha256, hash160_to_address, claim_id_hash
 from lbrynet.wallet.script import InputScript, OutputScript
 from lbrynet.wallet.wallet import Wallet
 
@@ -219,7 +217,7 @@ class Transaction:
     def get_claim_id(self, output_index):
         script = self.outputs[output_index]
         assert script.script.is_claim_name(), 'Not a name claim.'
-        return encode_claim_id_hex(claim_id_hash(self.hash, output_index))
+        return claim_id_hash(self.hash, output_index)
 
     @property
     def is_complete(self):

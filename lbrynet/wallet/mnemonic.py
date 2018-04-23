@@ -9,7 +9,7 @@ import ecdsa
 import pbkdf2
 
 from . import constants
-from .hashing import hmac_sha_512
+from .hash import hmac_sha512
 
 
 # http://www.asahi-net.or.jp/~ax2s-kmtn/ref/unicode/e_asia.html
@@ -148,5 +148,5 @@ class Mnemonic:
 
 def is_new_seed(x, prefix=constants.SEED_PREFIX):
     x = prepare_seed(x)
-    s = hmac_sha_512("Seed version", x.encode('utf8')).encode('hex')
+    s = hmac_sha512("Seed version", x.encode('utf8')).encode('hex')
     return s.startswith(prefix)
