@@ -19,21 +19,11 @@ class CoinSelector:
         debug and print([c.effective_amount for c in self.coins])
 
     def select(self):
-        if self.target > self.available:
-            return
         if not self.coins:
             return
+        if self.target > self.available:
+            return
         return self.branch_and_bound() or self.single_random_draw()
-
-    def single_random_draw(self):
-        self.random.shuffle(self.coins)
-        selection = []
-        amount = 0
-        for coin in self.coins:
-            selection.append(coin)
-            amount += coin.effective_amount
-            if amount >= self.target+self.cost_of_change:
-                return selection
 
     def branch_and_bound(self):
         # see bitcoin implementation for more info:
@@ -91,3 +81,13 @@ class CoinSelector:
             return [
                 self.coins[i] for i, include in enumerate(best_selection) if include
             ]
+
+    def single_random_draw(self):
+        self.random.shuffle(self.coins)
+        selection = []
+        amount = 0
+        for coin in self.coins:
+            selection.append(coin)
+            amount += coin.effective_amount
+            if amount >= self.target+self.cost_of_change:
+                return selection
