@@ -71,7 +71,7 @@ class TestScriptTemplates(unittest.TestCase):
 
     def test_push_data_mixed(self):
         self.assertEqual(parse(
-                (PUSH_SINGLE('CEO'), PUSH_MANY('Devs'), PUSH_SINGLE(b'CTO'), PUSH_SINGLE(b'State')),
+                (PUSH_SINGLE('CEO'), PUSH_MANY('Devs'), PUSH_SINGLE('CTO'), PUSH_SINGLE('State')),
                 (b'jeremy', b'lex', b'amit', b'victor', b'jack', b'grin', b'NH')
             ), {
                 'CEO': b'jeremy',
@@ -114,7 +114,8 @@ class TestRedeemPubKeyHash(unittest.TestCase):
     def test_redeem_pubkey_hash_1(self):
         self.assertEqual(
             self.redeem_pubkey_hash(
-                b'30450221009dc93f25184a8d483745cd3eceff49727a317c9bfd8be8d3d04517e9cdaf8dd502200e02dc5939cad9562d2b1f303f185957581c4851c98d497af281118825e18a8301',
+                b'30450221009dc93f25184a8d483745cd3eceff49727a317c9bfd8be8d3d04517e9cdaf8dd502200e'
+                b'02dc5939cad9562d2b1f303f185957581c4851c98d497af281118825e18a8301',
                 b'025415a06514230521bff3aaface31f6db9d9bbc39bf1ca60a189e78731cfd4e1b'
             ),
             '4830450221009dc93f25184a8d483745cd3eceff49727a317c9bfd8be8d3d04517e9cdaf8dd502200e02d'
