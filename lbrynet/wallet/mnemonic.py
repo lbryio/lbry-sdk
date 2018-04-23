@@ -5,14 +5,12 @@ import os
 import pkgutil
 import string
 import unicodedata
-import logging
 import ecdsa
 import pbkdf2
 
 from . import constants
 from .hashing import hmac_sha_512
 
-log = logging.getLogger(__name__)
 
 # http://www.asahi-net.or.jp/~ax2s-kmtn/ref/unicode/e_asia.html
 CJK_INTERVALS = [
@@ -98,10 +96,9 @@ class Mnemonic:
             assert ' ' not in line
             if line:
                 self.wordlist.append(line)
-        log.info("wordlist has %d words", len(self.wordlist))
 
     @classmethod
-    def mnemonic_to_seed(cls, mnemonic, passphrase):
+    def mnemonic_to_seed(cls, mnemonic, passphrase=''):
         PBKDF2_ROUNDS = 2048
         mnemonic = prepare_seed(mnemonic)
         return pbkdf2.PBKDF2(mnemonic, 'lbryum' + passphrase, iterations=PBKDF2_ROUNDS,
@@ -137,7 +134,6 @@ class Mnemonic:
         k = len(prefix) * 4
         # we add at least 16 bits
         n_added = max(16, k + num_bits - n)
-        log.info("make_seed %s adding %d bits", prefix, n_added)
         my_entropy = ecdsa.util.randrange(pow(2, n_added))
         nonce = 0
         while True:
@@ -147,7 +143,6 @@ class Mnemonic:
             assert i == self.mnemonic_decode(seed)
             if is_new_seed(seed, prefix):
                 break
-        log.info('%d words', len(seed.split()))
         return seed
 
 

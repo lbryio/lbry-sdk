@@ -1,10 +1,9 @@
-import sys
-import time
+import six
 import json
 import socket
 import logging
 from itertools import cycle
-from twisted.internet import defer, reactor, protocol, threads
+from twisted.internet import defer, reactor, protocol
 from twisted.application.internet import ClientService, CancelledError
 from twisted.internet.endpoints import clientFromString
 from twisted.protocols.basic import LineOnlyReceiver
@@ -14,6 +13,12 @@ from errors import TransportException
 from .stream import StreamController
 
 log = logging.getLogger()
+
+
+def unicode2bytes(string):
+    if isinstance(string, six.text_type):
+        return string.encode('iso-8859-1')
+    return string
 
 
 class StratumClientProtocol(LineOnlyReceiver):
@@ -65,7 +70,14 @@ class StratumClientProtocol(LineOnlyReceiver):
     def lineReceived(self, line):
 
         try:
-            message = json.loads(line)
+            # `line` comes in as a byte string but `json.loads` automatically converts everything to
+            # unicode. For keys it's not a big deal but for values there is an expectation
+            # everywhere else in wallet code that most values are byte strings.
+            message = json.loads(
+                line, object_hook=lambda obj: {
+                    k: unicode2bytes(v) for k, v in obj.items()
+                }
+            )
         except (ValueError, TypeError):
             raise ProtocolException("Cannot decode message '{}'".format(line.strip()))
 
@@ -137,7 +149,7 @@ class Network:
 
     @defer.inlineCallbacks
     def start(self):
-        for server in cycle(self.config.get('default_servers')):
+        for server in cycle(self.config['default_servers']):
             endpoint = clientFromString(reactor, 'tcp:{}:{}'.format(*server))
             self.service = ClientService(endpoint, StratumClientFactory(self))
             self.service.startService()
