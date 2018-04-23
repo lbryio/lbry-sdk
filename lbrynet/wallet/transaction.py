@@ -1,4 +1,5 @@
 import io
+import six
 import logging
 from binascii import hexlify
 from typing import List
@@ -42,7 +43,7 @@ class Input(InputOutput):
     def __init__(self, output_or_txid_index, script, sequence=0xFFFFFFFF):
         if isinstance(output_or_txid_index, Output):
             self.output = output_or_txid_index  # type: Output
-            self.output_txid = self.output.transaction.id
+            self.output_txid = self.output.transaction.hash
             self.output_index = self.output.index
         else:
             self.output = None  # type: Output
@@ -308,7 +309,7 @@ class Transaction:
                 address = hash160_to_address(txo_script.values['pubkey_hash'], wallet.chain)
                 private_key = wallet.get_private_key_for_address(address)
                 tx = self._serialize_for_signature(i)
-                txi.script.values['signature'] = private_key.sign(tx)
+                txi.script.values['signature'] = private_key.sign(tx)+six.int2byte(1)
                 txi.script.values['pubkey'] = private_key.public_key.pubkey_bytes
                 txi.script.generate()
         self._reset()

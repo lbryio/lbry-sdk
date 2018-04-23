@@ -15,10 +15,9 @@ from lbrynet.wallet import set_wallet_manager
 from lbrynet.wallet.wallet import Wallet
 from lbrynet.wallet.manager import WalletManager
 from lbrynet.wallet.transaction import Transaction, Output
-from lbrynet.wallet.constants import CENT, REGTEST_CHAIN
+from lbrynet.wallet.constants import COIN, REGTEST_CHAIN
 from lbrynet.wallet.hash import hash160_to_address, address_to_hash_160
 
-from lbryum.transaction import TYPE_ADDRESS, Transaction as OldTransaction
 
 class WalletTestCase(unittest.TestCase):
 
@@ -78,7 +77,7 @@ class StartupTests(WalletTestCase):
         address2 = manager.get_least_used_receiving_address()
         tx = Transaction()
         tx.add_inputs([output.spend()])
-        Output.pay_pubkey_hash(tx, 0, 2*CENT, address_to_hash_160(address2))
+        Output.pay_pubkey_hash(tx, 0, 2.49*COIN, address_to_hash_160(address2))
         print(tx.to_python_source())
         tx.sign(wallet)
         print(tx.to_python_source())
@@ -86,28 +85,4 @@ class StartupTests(WalletTestCase):
         yield self.lbrycrd.decoderawtransaction(hexlify(tx.raw))
         yield self.lbrycrd.sendrawtransaction(hexlify(tx.raw))
 
-
-        pk = wallet.get_private_key_for_address(address)
-        tx = OldTransaction(None)
-        tx._inputs = [{
-            'is_coinbase': False,
-            'prevout_hash': hexlify(output.transaction.id),
-            'prevout_n': output.index,
-            'sequence': 0xFFFFFFFF,
-            'pubkeys': [pk.public_key.extended_key_string()],
-            'x_pubkeys': [pk.public_key.extended_key_string()],
-            'signatures': {},
-            'address': address,
-            'num_sig': 1
-        }]
-        tx._outputs = [(TYPE_ADDRESS, address2, 2*CENT)]
-        tx.sign({
-            pk.public_key.extended_key_string(): pk
-        })
-
-        yield self.lbrycrd.decoderawtransaction(tx.serialize())
-        yield self.lbrycrd.sendrawtransaction(tx.serialize())
-
-        # send tx to lbrycrd :-D
-        # wait for it be written to block
         yield manager.stop()
