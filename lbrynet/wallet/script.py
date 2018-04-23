@@ -90,10 +90,30 @@ def read_small_integer(token):
     return (token - OP_1) + 1
 
 
-# tokens contain parsed values to be matched against opcodes
-Token = namedtuple('Token', 'value')
-DataToken = subclass_tuple('DataToken', Token)
-SmallIntegerToken = subclass_tuple('SmallIntegerToken', Token)
+class Token(namedtuple('Token', 'value')):
+    __slots__ = ()
+
+    def __repr__(self):
+        name = None
+        for var_name, var_value in globals().items():
+            if var_name.startswith('OP_') and var_value == self.value:
+                name = var_name
+                break
+        return name or self.value
+
+
+class DataToken(Token):
+    __slots__ = ()
+
+    def __repr__(self):
+        return '"{}"'.format(hexlify(self.value))
+
+
+class SmallIntegerToken(Token):
+    __slots__ = ()
+
+    def __repr__(self):
+        return 'SmallIntegerToken({})'.format(self.value)
 
 
 def token_producer(source):
@@ -259,11 +279,13 @@ class Script(object):
         self.template = template
         self.values = values
         if source:
-            self._parse(template_hint)
+            self.parse(template_hint)
         elif template and values:
-            self.source = template.generate(values)
-        else:
-            raise ValueError("Either a valid 'source' or a 'template' and 'values' are required.")
+            self.generate()
+
+    @property
+    def tokens(self):
+        return tokenize(BCDataStream(self.source))
 
     @classmethod
     def from_source_with_template(cls, source, template):
@@ -274,8 +296,8 @@ class Script(object):
         else:
             return cls(source, template_hint=template)
 
-    def _parse(self, template_hint=None):
-        tokens = tokenize(BCDataStream(self.source))
+    def parse(self, template_hint=None):
+        tokens = self.tokens
         for template in chain((template_hint,), self.templates):
             if not template:
                 continue
@@ -287,12 +309,18 @@ class Script(object):
                 continue
         raise ValueError('No matching templates for source: {}'.format(hexlify(self.source)))
 
+    def generate(self):
+        self.source = self.template.generate(self.values)
+
 
 class InputScript(Script):
+    """ Input / redeem script templates (aka scriptSig) """
 
     __slots__ = ()
 
-    # input / redeem script templates (aka scriptSig)
+    REDEEM_PUBKEY = Template('pubkey', (
+        PUSH_SINGLE('signature'),
+    ))
     REDEEM_PUBKEY_HASH = Template('pubkey_hash', (
         PUSH_SINGLE('signature'), PUSH_SINGLE('pubkey')
     ))
@@ -305,6 +333,7 @@ class InputScript(Script):
     ))
 
     templates = [
+        REDEEM_PUBKEY,
         REDEEM_PUBKEY_HASH,
         REDEEM_SCRIPT_HASH,
         REDEEM_SCRIPT
@@ -408,6 +437,14 @@ class OutputScript(Script):
             'claim': claim,
             'pubkey_hash': pubkey_hash
         })
+
+    @property
+    def is_pay_pubkey_hash(self):
+        return self.template.name.endswith('pay_pubkey_hash')
+
+    @property
+    def is_pay_script_hash(self):
+        return self.template.name.endswith('pay_script_hash')
 
     @property
     def is_claim_name(self):
