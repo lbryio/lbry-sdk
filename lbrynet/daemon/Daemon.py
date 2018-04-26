@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import binascii
 import logging.handlers
 import mimetypes
@@ -97,6 +99,16 @@ CONNECTION_MESSAGES = {
 SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
 
+FILE_SORT_FIELD_NAME = 'name'
+FILE_SORT_FIELD_DATE = 'date'
+FILE_SORT_FIELD_PRICE = 'price'
+
+FILE_SORT_ORDER_ASCENDING = 'asc'
+FILE_SORT_ORDER_DESCENDING = 'desc'
+FILE_SORT_ORDERS = [
+    FILE_SORT_ORDER_ASCENDING,
+    FILE_SORT_ORDER_DESCENDING,
+]
 
 class IterableContainer(object):
     def __iter__(self):
@@ -925,11 +937,13 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(lbry_file)
 
     @defer.inlineCallbacks
-    def _get_lbry_files(self, return_json=False, full_status=True, **kwargs):
+    def _get_lbry_files(self, return_json=False, full_status=True, sorts=None, **kwargs):
         lbry_files = list(self.lbry_file_manager.lbry_files)
         if kwargs:
             for search_type, value in iter_lbry_file_search_values(kwargs):
                 lbry_files = [l_f for l_f in lbry_files if l_f.__dict__[search_type] == value]
+        if sorts:
+            lbry_files = self._sort_lbry_files(lbry_files, sorts)
         if return_json:
             file_dicts = []
             for lbry_file in lbry_files:
@@ -938,6 +952,33 @@ class Daemon(AuthJSONRPCServer):
             lbry_files = file_dicts
         log.debug("Collected %i lbry files", len(lbry_files))
         defer.returnValue(lbry_files)
+
+    def _sort_lbry_files(self, lbry_files, sorts):
+        for field, order in sorts:
+            reverse = order == FILE_SORT_ORDER_DESCENDING
+            if field == FILE_SORT_FIELD_NAME:
+                lbry_files = sorted(lbry_files, key=lambda f: f.file_name, reverse=reverse)
+            elif field == FILE_SORT_FIELD_DATE:
+                lbry_files = sorted(lbry_files, reverse=reverse)
+            elif field == FILE_SORT_FIELD_PRICE:
+                lbry_files = sorted(lbry_files, key=lambda f: f.points_paid, reverse=reverse)
+            else:
+                raise Exception('Unrecognized sort field "{}"'.format(field))
+        return lbry_files
+
+    def _parse_lbry_files_sort(self, sort):
+        """
+        Given a sort string like 'name, desc' or 'price',
+        parse the string into a tuple of (field, order).
+        Order defaults to ascending.
+        """
+
+        pieces = sort.rsplit(',', 1)
+        field = pieces[0].strip()
+        order = pieces[1].strip().lower() if len(pieces) > 1 else None
+        if order and order not in FILE_SORT_ORDERS:
+            raise Exception('Sort order must be one of {}'.format(FILE_SORT_ORDERS))
+        return (field, order or FILE_SORT_ORDER_ASCENDING)
 
     def _get_single_peer_downloader(self):
         downloader = SinglePeerDownloader()
@@ -1358,7 +1399,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    def jsonrpc_file_list(self, **kwargs):
+    def jsonrpc_file_list(self, sort=None, **kwargs):
         """
         List files limited by optional filters
 
@@ -1366,7 +1407,7 @@ class Daemon(AuthJSONRPCServer):
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
                       [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
-                      [--claim_name=<claim_name>] [--full_status]
+                      [--claim_name=<claim_name>] [--full_status] [--sort=<sort_method>...]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1383,6 +1424,8 @@ class Daemon(AuthJSONRPCServer):
             --claim_name=<claim_name>              : (str) get file with matching claim name
             --full_status                          : (bool) full status, populate the
                                                      'message' and 'size' fields
+            --sort=<sort_method>                   : (str) sort by any of 'name', 'date', or 'price'
+                                                     to specify order append ',asc' or ',desc'
 
         Returns:
             (list) List of files
@@ -1418,7 +1461,8 @@ class Daemon(AuthJSONRPCServer):
             ]
         """
 
-        result = yield self._get_lbry_files(return_json=True, **kwargs)
+        sorts = [self._parse_lbry_files_sort(s) for s in sort] if sort else None
+        result = yield self._get_lbry_files(return_json=True, sorts=sorts, **kwargs)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
