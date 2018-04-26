@@ -1,5 +1,3 @@
-from pprint import pprint
-
 import binascii
 import logging.handlers
 import mimetypes
