@@ -467,7 +467,7 @@ class Daemon(AuthJSONRPCServer):
                 else:
                     converted = setting_type(settings[key])
                     conf.settings.update({key: converted},
-                                            data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
+                                        data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
         conf.settings.save_conf_file_settings()
 
         self.data_rate = conf.settings['data_rate']
@@ -490,29 +490,25 @@ class Daemon(AuthJSONRPCServer):
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
 
+    @defer.inlineCallbacks
     def _get_session(self):
-        def create_session(wallet):
-            self.session = Session(
-                conf.settings['data_rate'],
-                db_dir=self.db_dir,
-                node_id=self.node_id,
-                blob_dir=self.blobfile_dir,
-                dht_node_port=self.dht_node_port,
-                known_dht_nodes=conf.settings['known_dht_nodes'],
-                peer_port=self.peer_port,
-                use_upnp=self.use_upnp,
-                wallet=wallet,
-                is_generous=conf.settings['is_generous_host'],
-                external_ip=self.platform['ip'],
-                storage=self.storage
-            )
-            self.startup_status = STARTUP_STAGES[2]
+        self.session = Session(
+            conf.settings['data_rate'],
+            db_dir=self.db_dir,
+            node_id=self.node_id,
+            blob_dir=self.blobfile_dir,
+            dht_node_port=self.dht_node_port,
+            known_dht_nodes=conf.settings['known_dht_nodes'],
+            peer_port=self.peer_port,
+            use_upnp=self.use_upnp,
+            wallet=self.wallet,
+            is_generous=conf.settings['is_generous_host'],
+            external_ip=self.platform['ip'],
+            storage=self.storage
+        )
+        self.startup_status = STARTUP_STAGES[2]
 
-            return defer.succeed(True)
-
-        d = create_session(self.wallet)
-        d.addCallback(lambda _: self.session.setup())
-        return d
+        yield self.session.setup()
 
     @defer.inlineCallbacks
     def _check_wallet_locked(self):
