@@ -5,7 +5,7 @@ from lbrynet import conf
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.Wallet import LBRYumWallet
 from lbrynet.daemon.Component import Component
-# from lbrynet.daemon import ComponentManager
+from lbrynet.core.Session import Session
 
 log = logging.getLogger(__name__)
 
@@ -13,6 +13,7 @@ log = logging.getLogger(__name__)
 
 DATABASE_COMPONENT = "database"
 WALLET_COMPONENT = "wallet"
+SESSION_COMPONENT = "session"
 
 
 class DatabaseComponent(Component):
@@ -94,7 +95,7 @@ class DatabaseComponent(Component):
 
 class WalletComponent(Component):
     component_name = WALLET_COMPONENT
-    depends_on = ['database']
+    depends_on = [DATABASE_COMPONENT]
     wallet = None
 
     @staticmethod
@@ -133,3 +134,81 @@ class WalletComponent(Component):
     @defer.inlineCallbacks
     def stop(cls):
         yield cls.wallet.stop()
+
+
+class SessionComponent(Component):
+    component_name = SESSION_COMPONENT
+    depends_on = [DATABASE_COMPONENT, WALLET_COMPONENT]
+    session = None
+
+    @staticmethod
+    def get_db_dir():
+        return conf.settings['data_dir']
+
+    @staticmethod
+    def get_node_id():
+        return conf.settings.node_id
+
+    @staticmethod
+    def get_blobfile_dir():
+        if conf.settings['BLOBFILES_DIR'] == "blobfiles":
+            return os.path.join(SessionComponent.get_db_dir(), "blobfiles")
+        else:
+            log.info("Using non-default blobfiles directory: %s", conf.settings['BLOBFILES_DIR'])
+            return conf.settings['BLOBFILES_DIR']
+
+    @staticmethod
+    def get_dht_node_port():
+        return conf.settings['dht_node_port']
+
+    @staticmethod
+    def get_known_dht_nodes():
+        return conf.settings['known_dht_nodes']
+
+    @staticmethod
+    def get_peer_port():
+        return conf.settings['peer_port']
+
+    @staticmethod
+    def use_upnp():
+        return conf.settings['use_upnp']
+
+    @staticmethod
+    def is_generous_host():
+        return conf.settings['is_generous_host']
+
+    @staticmethod
+    def get_external_ip():
+        from lbrynet.core.system_info import get_platform
+        platform = get_platform(get_ip=True)
+        return platform['ip']
+
+    @classmethod
+    @defer.inlineCallbacks
+    def setup(cls):
+        wallet = WalletComponent.wallet
+        storage = DatabaseComponent.storage
+
+        log.info("in session setup")
+
+        cls.session = Session(
+            conf.settings['data_rate'],
+            db_dir=cls.get_db_dir(),
+            node_id=cls.get_node_id(),
+            blob_dir=cls.get_blobfile_dir(),
+            dht_node_port=cls.get_dht_node_port(),
+            known_dht_nodes=cls.get_known_dht_nodes(),
+            peer_port=cls.get_peer_port(),
+            use_upnp=cls.use_upnp(),
+            wallet=wallet,
+            is_generous=cls.is_generous_host(),
+            external_ip=cls.get_external_ip(),
+            storage=storage
+        )
+
+        yield cls.session.setup()
+
+    @classmethod
+    @defer.inlineCallbacks
+    def stop(cls):
+        yield cls.session.shut_down()
