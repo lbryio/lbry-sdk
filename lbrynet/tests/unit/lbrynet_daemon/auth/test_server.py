@@ -10,6 +10,8 @@ class AuthJSONRPCServerTest(unittest.TestCase):
     # and add useful general utilities like this
     # onto it.
     def setUp(self):
+        from lbrynet.conf import initialize_settings
+        initialize_settings()
         self.server = server.AuthJSONRPCServer(use_authentication=False)
 
     def test_get_server_port(self):
