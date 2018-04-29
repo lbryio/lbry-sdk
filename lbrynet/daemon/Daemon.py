@@ -12,7 +12,7 @@ import six
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 from twisted.web import server
-from twisted.internet import defer, threads, error, reactor
+from twisted.internet import defer, error, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
@@ -25,9 +25,7 @@ from lbryschema.decode import smart_decode
 
 # TODO: importing this when internet is disabled raises a socket.gaierror
 from lbrynet.core.system_info import get_lbrynet_version
-from lbrynet.database.storage import SQLiteStorage
 from lbrynet import conf
-from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.core.log_support import configure_loggly_handler
@@ -42,8 +40,6 @@ from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.StreamDescriptor import EncryptedFileStreamType
-from lbrynet.core.Session import Session
-from lbrynet.core.Wallet import LBRYumWallet
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
@@ -184,13 +180,13 @@ class Daemon(AuthJSONRPCServer):
 
     def __init__(self, analytics_manager):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
-        self.db_dir = conf.settings['data_dir']
+        # self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
-        if conf.settings['BLOBFILES_DIR'] == "blobfiles":
-            self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
-        else:
-            log.info("Using non-default blobfiles directory: %s", conf.settings['BLOBFILES_DIR'])
-            self.blobfile_dir = conf.settings['BLOBFILES_DIR']
+        # if conf.settings['BLOBFILES_DIR'] == "blobfiles":
+        #     self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
+        # else:
+        #     log.info("Using non-default blobfiles directory: %s", conf.settings['BLOBFILES_DIR'])
+        #     self.blobfile_dir = conf.settings['BLOBFILES_DIR']
         self.data_rate = conf.settings['data_rate']
         self.max_key_fee = conf.settings['max_key_fee']
         self.disable_max_key_fee = conf.settings['disable_max_key_fee']
@@ -200,8 +196,8 @@ class Daemon(AuthJSONRPCServer):
         self.delete_blobs_on_remove = conf.settings['delete_blobs_on_remove']
         self.peer_port = conf.settings['peer_port']
         self.reflector_port = conf.settings['reflector_port']
-        self.dht_node_port = conf.settings['dht_node_port']
-        self.use_upnp = conf.settings['use_upnp']
+        # self.dht_node_port = conf.settings['dht_node_port']
+        # self.use_upnp = conf.settings['use_upnp']
         self.auto_renew_claim_height_delta = conf.settings['auto_renew_claim_height_delta']
 
         self.startup_status = STARTUP_STAGES[0]
@@ -232,7 +228,7 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = StreamDescriptorIdentifier()
         self.lbry_file_manager = None
-        self.storage = None
+        # self.storage = None
         self.wallet = None
 
     @defer.inlineCallbacks
@@ -248,9 +244,10 @@ class Daemon(AuthJSONRPCServer):
 
         yield self._initial_setup()
         yield self.component_manager.setup()
-        self.storage = self.component_manager.get_component("database").storage
+        # self.storage = self.component_manager.get_component("database").storage
         self.wallet = self.component_manager.get_component("wallet").wallet
-        yield self._get_session()
+        self.startup_status = STARTUP_STAGES[2]
+        self.session = self.component_manager.get_component("session").session
         yield self._check_wallet_locked()
         yield self._start_analytics()
         yield add_lbry_file_to_sd_identifier(self.sd_identifier)
@@ -467,7 +464,7 @@ class Daemon(AuthJSONRPCServer):
                 else:
                     converted = setting_type(settings[key])
                     conf.settings.update({key: converted},
-                                        data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
+                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
         conf.settings.save_conf_file_settings()
 
         self.data_rate = conf.settings['data_rate']
@@ -490,25 +487,25 @@ class Daemon(AuthJSONRPCServer):
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
 
-    @defer.inlineCallbacks
-    def _get_session(self):
-        self.session = Session(
-            conf.settings['data_rate'],
-            db_dir=self.db_dir,
-            node_id=self.node_id,
-            blob_dir=self.blobfile_dir,
-            dht_node_port=self.dht_node_port,
-            known_dht_nodes=conf.settings['known_dht_nodes'],
-            peer_port=self.peer_port,
-            use_upnp=self.use_upnp,
-            wallet=self.wallet,
-            is_generous=conf.settings['is_generous_host'],
-            external_ip=self.platform['ip'],
-            storage=self.storage
-        )
-        self.startup_status = STARTUP_STAGES[2]
-
-        yield self.session.setup()
+    # @defer.inlineCallbacks
+    # def _get_session(self):
+    #     self.session = Session(
+    #         conf.settings['data_rate'],
+    #         db_dir=self.db_dir,
+    #         node_id=self.node_id,
+    #         blob_dir=self.blobfile_dir,
+    #         dht_node_port=self.dht_node_port,
+    #         known_dht_nodes=conf.settings['known_dht_nodes'],
+    #         peer_port=self.peer_port,
+    #         use_upnp=self.use_upnp,
+    #         wallet=self.wallet,
+    #         is_generous=conf.settings['is_generous_host'],
+    #         external_ip=self.platform['ip'],
+    #         storage=self.storage
+    #     )
+    #     self.startup_status = STARTUP_STAGES[2]
+    #
+    #     yield self.session.setup()
 
     @defer.inlineCallbacks
     def _check_wallet_locked(self):
@@ -645,7 +642,8 @@ class Daemon(AuthJSONRPCServer):
                               certificate_id)
         parse_lbry_uri(name)
         if not file_path:
-            stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(claim_dict['stream']['source']['source'])
+            stream_hash = yield self.session.storage.get_stream_hash_for_sd_hash(
+                claim_dict['stream']['source']['source'])
             claim_out = yield publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address,
                                                        change_address)
         else:
@@ -1798,11 +1796,11 @@ class Daemon(AuthJSONRPCServer):
             if balance <= MAX_UPDATE_FEE_ESTIMATE:
                 raise InsufficientFundsError(
                     "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
-                .   format(MAX_UPDATE_FEE_ESTIMATE - balance))
+                        .format(MAX_UPDATE_FEE_ESTIMATE - balance))
             elif amount > max_bid_amount:
                 raise InsufficientFundsError(
                     "Please lower the bid value, the maximum amount you can specify for this channel is {}"
-                    .format(max_bid_amount))
+                        .format(max_bid_amount))
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
         self.analytics_manager.send_new_channel()
