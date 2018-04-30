@@ -1,9 +1,11 @@
 from binascii import hexlify, unhexlify
 from twisted.trial import unittest
-from lbrynet.wallet.script import Template, ParseError, tokenize, push_data
-from lbrynet.wallet.script import PUSH_SINGLE, PUSH_MANY, OP_HASH160, OP_EQUAL
-from lbrynet.wallet.script import InputScript, OutputScript
+
 from lbrynet.wallet.bcd_data_stream import BCDataStream
+from lbrynet.wallet.basescript import Template, ParseError, tokenize, push_data
+from lbrynet.wallet.basescript import PUSH_SINGLE, PUSH_MANY, OP_HASH160, OP_EQUAL
+from lbrynet.wallet.basescript import BaseInputScript, BaseOutputScript
+from lbrynet.wallet.coins.lbc.script import OutputScript
 
 
 def parse(opcodes, source):
@@ -100,12 +102,12 @@ class TestRedeemPubKeyHash(unittest.TestCase):
 
     def redeem_pubkey_hash(self, sig, pubkey):
         # this checks that factory function correctly sets up the script
-        src1 = InputScript.redeem_pubkey_hash(unhexlify(sig), unhexlify(pubkey))
+        src1 = BaseInputScript.redeem_pubkey_hash(unhexlify(sig), unhexlify(pubkey))
         self.assertEqual(src1.template.name, 'pubkey_hash')
         self.assertEqual(hexlify(src1.values['signature']), sig)
         self.assertEqual(hexlify(src1.values['pubkey']), pubkey)
         # now we test that it will round trip
-        src2 = InputScript(src1.source)
+        src2 = BaseInputScript(src1.source)
         self.assertEqual(src2.template.name, 'pubkey_hash')
         self.assertEqual(hexlify(src2.values['signature']), sig)
         self.assertEqual(hexlify(src2.values['pubkey']), pubkey)
@@ -128,7 +130,7 @@ class TestRedeemScriptHash(unittest.TestCase):
 
     def redeem_script_hash(self, sigs, pubkeys):
         # this checks that factory function correctly sets up the script
-        src1 = InputScript.redeem_script_hash(
+        src1 = BaseInputScript.redeem_script_hash(
             [unhexlify(sig) for sig in sigs],
             [unhexlify(pubkey) for pubkey in pubkeys]
         )
@@ -139,7 +141,7 @@ class TestRedeemScriptHash(unittest.TestCase):
         self.assertEqual(subscript1.values['signatures_count'], len(sigs))
         self.assertEqual(subscript1.values['pubkeys_count'], len(pubkeys))
         # now we test that it will round trip
-        src2 = InputScript(src1.source)
+        src2 = BaseInputScript(src1.source)
         subscript2 = src2.values['script']
         self.assertEqual(src2.template.name, 'script_hash')
         self.assertEqual([hexlify(v) for v in src2.values['signatures']], sigs)
@@ -181,11 +183,11 @@ class TestPayPubKeyHash(unittest.TestCase):
 
     def pay_pubkey_hash(self, pubkey_hash):
         # this checks that factory function correctly sets up the script
-        src1 = OutputScript.pay_pubkey_hash(unhexlify(pubkey_hash))
+        src1 = BaseOutputScript.pay_pubkey_hash(unhexlify(pubkey_hash))
         self.assertEqual(src1.template.name, 'pay_pubkey_hash')
         self.assertEqual(hexlify(src1.values['pubkey_hash']), pubkey_hash)
         # now we test that it will round trip
-        src2 = OutputScript(src1.source)
+        src2 = BaseOutputScript(src1.source)
         self.assertEqual(src2.template.name, 'pay_pubkey_hash')
         self.assertEqual(hexlify(src2.values['pubkey_hash']), pubkey_hash)
         return hexlify(src1.source)
@@ -201,11 +203,11 @@ class TestPayScriptHash(unittest.TestCase):
 
     def pay_script_hash(self, script_hash):
         # this checks that factory function correctly sets up the script
-        src1 = OutputScript.pay_script_hash(unhexlify(script_hash))
+        src1 = BaseOutputScript.pay_script_hash(unhexlify(script_hash))
         self.assertEqual(src1.template.name, 'pay_script_hash')
         self.assertEqual(hexlify(src1.values['script_hash']), script_hash)
         # now we test that it will round trip
-        src2 = OutputScript(src1.source)
+        src2 = BaseOutputScript(src1.source)
         self.assertEqual(src2.template.name, 'pay_script_hash')
         self.assertEqual(hexlify(src2.values['script_hash']), script_hash)
         return hexlify(src1.source)
@@ -221,7 +223,8 @@ class TestPayClaimNamePubkeyHash(unittest.TestCase):
 
     def pay_claim_name_pubkey_hash(self, name, claim, pubkey_hash):
         # this checks that factory function correctly sets up the script
-        src1 = OutputScript.pay_claim_name_pubkey_hash(name, unhexlify(claim), unhexlify(pubkey_hash))
+        src1 = OutputScript.pay_claim_name_pubkey_hash(
+            name, unhexlify(claim), unhexlify(pubkey_hash))
         self.assertEqual(src1.template.name, 'claim_name+pay_pubkey_hash')
         self.assertEqual(src1.values['claim_name'], name)
         self.assertEqual(hexlify(src1.values['claim']), claim)
