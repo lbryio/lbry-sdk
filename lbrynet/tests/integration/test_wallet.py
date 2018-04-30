@@ -6,7 +6,7 @@ from binascii import hexlify
 
 from twisted.internet import defer, reactor, threads
 from twisted.trial import unittest
-from orchstr8.wrapper import BaseLbryServiceStack
+from orchstr8.services import BaseLbryServiceStack
 
 from lbrynet.core.call_later_manager import CallLaterManager
 from lbrynet.database.storage import SQLiteStorage
