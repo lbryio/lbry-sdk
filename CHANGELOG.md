@@ -27,6 +27,35 @@ at anytime.
 ### Added
   *
   *
+  * 
+  
+### Changed
+  * several internal dht functions to use inlineCallbacks
+  * `DHTHashAnnouncer` and `Node` manage functions to use `LoopingCall`s instead of scheduling with `callLater`.
+  * `store` kademlia rpc method to block on the call finishing and to return storing peer information
+  * refactored `DHTHashAnnouncer` to longer use locks, use a `DeferredSemaphore` to limit concurrent announcers
+  * decoupled `DiskBlobManager` from `DHTHashAnnouncer`
+  * blob hashes to announce to be controlled by`SQLiteStorage`
+  * kademlia protocol to not delay writes to the UDP socket
+  * `reactor` and `callLater`, `listenUDP`, and `resolve` functions to be configurable (to allow easier testing)
+  * calls to get the current time to use `reactor.seconds` (to control callLater and LoopingCall timing in tests)
+  * `blob_announce` to queue the blob announcement but not block on it
+  * blob completion to not `callLater` an immediate announce, let `SQLiteStorage` and the `DHTHashAnnouncer` handle it
+  * raise the default number of concurrent blob announcers to 100
+  * dht logging to be more verbose with errors and warnings
+  * added `single_announce` and `last_announced_time` columns to the `blob` table in sqlite
+  * pass the sd hash to reflector ClientFactory instead of looking it up
+  * if the `use_authentication` setting is configured, use authentication for all api methods instead of only those with the `auth_required` decorator
+  * regenerate api keys on startup if the using authentication
+  * support both positional and keyword args for api calls
+  * `peer_list` to return a list of dictionaries instead of a list of lists, added peer node ids to the results
+  * download blockchain headers from s3 before starting the wallet when the local height is more than `s3_headers_depth` (a config setting) blocks behind
+
+### Added
+  * virtual kademlia network and mock udp transport for dht integration tests
+  * integration tests for bootstrapping the dht
+  * configurable `concurrent_announcers` and `s3_headers_depth` settings
+  * `peer_ping` command
 
 ### Removed
   *
