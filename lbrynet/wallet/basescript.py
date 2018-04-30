@@ -2,8 +2,8 @@ from itertools import chain
 from binascii import hexlify
 from collections import namedtuple
 
-from .bcd_data_stream import BCDataStream
-from .util import subclass_tuple
+from lbrynet.wallet.bcd_data_stream import BCDataStream
+from lbrynet.wallet.util import subclass_tuple
 
 # bitcoin opcodes
 OP_0 = 0x00
@@ -20,11 +20,6 @@ OP_PUSHDATA2 = 0x4d
 OP_PUSHDATA4 = 0x4e
 OP_2DROP = 0x6d
 OP_DROP = 0x75
-
-# lbry custom opcodes
-OP_CLAIM_NAME = 0xb5
-OP_SUPPORT_CLAIM = 0xb6
-OP_UPDATE_CLAIM = 0xb7
 
 
 # template matching opcodes (not real opcodes)
@@ -289,12 +284,7 @@ class Script(object):
 
     @classmethod
     def from_source_with_template(cls, source, template):
-        if template in InputScript.templates:
-            return InputScript(source, template_hint=template)
-        elif template in OutputScript.templates:
-            return OutputScript(source, template_hint=template)
-        else:
-            return cls(source, template_hint=template)
+        return cls(source, template_hint=template)
 
     def parse(self, template_hint=None):
         tokens = self.tokens
@@ -313,7 +303,7 @@ class Script(object):
         self.source = self.template.generate(self.values)
 
 
-class InputScript(Script):
+class BaseInputScript(Script):
     """ Input / redeem script templates (aka scriptSig) """
 
     __slots__ = ()
@@ -362,7 +352,7 @@ class InputScript(Script):
         })
 
 
-class OutputScript(Script):
+class BaseOutputScript(Script):
 
     __slots__ = ()
 
@@ -374,48 +364,9 @@ class OutputScript(Script):
         OP_HASH160, PUSH_SINGLE('script_hash'), OP_EQUAL
     ))
 
-    CLAIM_NAME_OPCODES = (
-        OP_CLAIM_NAME, PUSH_SINGLE('claim_name'), PUSH_SINGLE('claim'),
-        OP_2DROP, OP_DROP
-    )
-    CLAIM_NAME_PUBKEY = Template('claim_name+pay_pubkey_hash', (
-        CLAIM_NAME_OPCODES + PAY_PUBKEY_HASH.opcodes
-    ))
-    CLAIM_NAME_SCRIPT = Template('claim_name+pay_script_hash', (
-        CLAIM_NAME_OPCODES + PAY_SCRIPT_HASH.opcodes
-    ))
-
-    SUPPORT_CLAIM_OPCODES = (
-        OP_SUPPORT_CLAIM, PUSH_SINGLE('claim_name'), PUSH_SINGLE('claim_id'),
-        OP_2DROP, OP_DROP
-    )
-    SUPPORT_CLAIM_PUBKEY = Template('support_claim+pay_pubkey_hash', (
-        SUPPORT_CLAIM_OPCODES + PAY_PUBKEY_HASH.opcodes
-    ))
-    SUPPORT_CLAIM_SCRIPT = Template('support_claim+pay_script_hash', (
-            SUPPORT_CLAIM_OPCODES + PAY_SCRIPT_HASH.opcodes
-    ))
-
-    UPDATE_CLAIM_OPCODES = (
-        OP_UPDATE_CLAIM, PUSH_SINGLE('claim_name'), PUSH_SINGLE('claim_id'), PUSH_SINGLE('claim'),
-        OP_2DROP, OP_2DROP
-    )
-    UPDATE_CLAIM_PUBKEY = Template('update_claim+pay_pubkey_hash', (
-            UPDATE_CLAIM_OPCODES + PAY_PUBKEY_HASH.opcodes
-    ))
-    UPDATE_CLAIM_SCRIPT = Template('update_claim+pay_script_hash', (
-            UPDATE_CLAIM_OPCODES + PAY_SCRIPT_HASH.opcodes
-    ))
-
     templates = [
         PAY_PUBKEY_HASH,
         PAY_SCRIPT_HASH,
-        CLAIM_NAME_PUBKEY,
-        CLAIM_NAME_SCRIPT,
-        SUPPORT_CLAIM_PUBKEY,
-        SUPPORT_CLAIM_SCRIPT,
-        UPDATE_CLAIM_PUBKEY,
-        UPDATE_CLAIM_SCRIPT
     ]
 
     @classmethod
@@ -430,14 +381,6 @@ class OutputScript(Script):
             'script_hash': script_hash
         })
 
-    @classmethod
-    def pay_claim_name_pubkey_hash(cls, claim_name, claim, pubkey_hash):
-        return cls(template=cls.CLAIM_NAME_PUBKEY, values={
-            'claim_name': claim_name,
-            'claim': claim,
-            'pubkey_hash': pubkey_hash
-        })
-
     @property
     def is_pay_pubkey_hash(self):
         return self.template.name.endswith('pay_pubkey_hash')
@@ -445,19 +388,3 @@ class OutputScript(Script):
     @property
     def is_pay_script_hash(self):
         return self.template.name.endswith('pay_script_hash')
-
-    @property
-    def is_claim_name(self):
-        return self.template.name.startswith('claim_name+')
-
-    @property
-    def is_support_claim(self):
-        return self.template.name.startswith('support_claim+')
-
-    @property
-    def is_update_claim(self):
-        return self.template.name.startswith('update_claim+')
-
-    @property
-    def is_claim_involved(self):
-        return self.is_claim_name or self.is_support_claim or self.is_update_claim
