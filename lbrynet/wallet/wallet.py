@@ -1,110 +1,150 @@
 import stat
 import json
 import os
+from typing import List, Dict
 
 from lbrynet.wallet.account import Account
-from lbrynet.wallet.constants import MAIN_CHAIN
+from lbrynet.wallet.basecoin import CoinRegistry, BaseCoin
+from lbrynet.wallet.baseledger import BaseLedger
+
+
+def inflate_coin(manager, coin_id, coin_dict):
+    # type: ('WalletManager', str, Dict) -> BaseCoin
+    coin_class = CoinRegistry.get_coin_class(coin_id)
+    ledger = manager.get_or_create_ledger(coin_id)
+    return coin_class(ledger, **coin_dict)
 
 
 class Wallet:
+    """ The primary role of Wallet is to encapsulate a collection
+        of accounts (seed/private keys) and the spending rules / settings
+        for the coins attached to those accounts. Wallets are represented
+        by physical files on the filesystem.
+    """
 
-    def __init__(self, **kwargs):
-        self.name = kwargs.get('name', 'Wallet')
-        self.chain = kwargs.get('chain', MAIN_CHAIN)
-        self.accounts = kwargs.get('accounts') or {0: Account.generate()}
+    def __init__(self, name='Wallet', coins=None, accounts=None, storage=None):
+        self.name = name
+        self.coins = coins or []  # type: List[BaseCoin]
+        self.accounts = accounts or []  # type: List[Account]
+        self.storage = storage or WalletStorage()
+
+    def get_or_create_coin(self, ledger, coin_dict=None):  # type: (BaseLedger, Dict) -> BaseCoin
+        for coin in self.coins:
+            if coin.__class__ is ledger.coin_class:
+                return coin
+        coin = ledger.coin_class(ledger, **(coin_dict or {}))
+        self.coins.append(coin)
+        return coin
+
+    def generate_account(self, ledger):  # type: (BaseLedger) -> Account
+        coin = self.get_or_create_coin(ledger)
+        account = Account.generate(coin)
+        self.accounts.append(account)
+        return account
 
     @classmethod
-    def from_json(cls, json_data):
-        if 'accounts' in json_data:
-            json_data = json_data.copy()
-            json_data['accounts'] = {
-                a_id: Account.from_json(a) for
-                a_id, a in json_data['accounts'].items()
-            }
-        return cls(**json_data)
+    def from_storage(cls, storage, manager):  # type: (WalletStorage, 'WalletManager') -> Wallet
+        json_dict = storage.read()
 
-    def to_json(self):
+        coins = {}
+        for coin_id, coin_dict in json_dict.get('coins', {}).items():
+            coins[coin_id] = inflate_coin(manager, coin_id, coin_dict)
+
+        accounts = []
+        for account_dict in json_dict.get('accounts', []):
+            coin_id = account_dict['coin']
+            coin = coins.get(coin_id)
+            if coin is None:
+                coin = coins[coin_id] = inflate_coin(manager, coin_id, {})
+            account = Account.from_dict(coin, account_dict)
+            accounts.append(account)
+
+        return cls(
+            name=json_dict.get('name', 'Wallet'),
+            coins=list(coins.values()),
+            accounts=accounts,
+            storage=storage
+        )
+
+    def to_dict(self):
         return {
             'name': self.name,
-            'chain': self.chain,
-            'accounts': {
-                a_id: a.to_json() for
-                a_id, a in self.accounts.items()
-            }
+            'coins': {c.get_id(): c.to_dict() for c in self.coins},
+            'accounts': [a.to_dict() for a in self.accounts]
         }
+
+    def save(self):
+        self.storage.write(self.to_dict())
 
     @property
     def default_account(self):
-        return self.accounts.get(0, None)
+        for account in self.accounts:
+            return account
 
-    @property
-    def addresses(self):
-        for account in self.accounts.values():
-            for address in account.addresses:
-                yield address
-
-    def ensure_enough_addresses(self):
-        return [
-            address
-            for account in self.accounts.values()
-            for address in account.ensure_enough_addresses()
-        ]
-
-    def get_private_key_for_address(self, address):
-        for account in self.accounts.values():
+    def get_account_private_key_for_address(self, address):
+        for account in self.accounts:
             private_key = account.get_private_key_for_address(address)
             if private_key is not None:
-                return private_key
+                return account, private_key
 
 
-class EphemeralWalletStorage(dict):
+class WalletStorage:
 
     LATEST_VERSION = 2
 
-    def save(self):
-        return json.dumps(self, indent=4, sort_keys=True)
+    DEFAULT = {
+        'version': LATEST_VERSION,
+        'name': 'Wallet',
+        'coins': {},
+        'accounts': []
+    }
 
-    def upgrade(self):
+    def __init__(self, path=None, default=None):
+        self.path = path
+        self._default = default or self.DEFAULT.copy()
+
+    @property
+    def default(self):
+        return self._default.copy()
+
+    def read(self):
+        if self.path and self.path.exists(self.path):
+            with open(self.path, "r") as f:
+                json_data = f.read()
+                json_dict = json.loads(json_data)
+                if json_dict.get('version') == self.LATEST_VERSION and \
+                        set(json_dict) == set(self._default):
+                    return json_dict
+                else:
+                    return self.upgrade(json_dict)
+        else:
+            return self.default
+
+    @classmethod
+    def upgrade(cls, json_dict):
+        json_dict = json_dict.copy()
 
         def _rename_property(old, new):
-            if old in self:
-                old_value = self[old]
-                del self[old]
-                if new not in self:
-                    self[new] = old_value
+            if old in json_dict:
+                json_dict[new] = json_dict[old]
+                del json_dict[old]
 
-        if self.get('version', 1) == 1:  # upgrade from version 1 to version 2
-            # TODO: `addr_history` should actually be imported into SQLStorage and removed from wallet.
+        version = json_dict.pop('version', -1)
+
+        if version == 1:  # upgrade from version 1 to version 2
             _rename_property('addr_history', 'history')
             _rename_property('use_encryption', 'encrypted')
             _rename_property('gap_limit', 'gap_limit_for_receiving')
-            self['version'] = 2
 
-        self.save()
+        upgraded = cls.DEFAULT
+        upgraded.update(json_dict)
+        return json_dict
 
+    def write(self, json_dict):
 
-class PermanentWalletStorage(EphemeralWalletStorage):
-
-    def __init__(self, *args, **kwargs):
-        super(PermanentWalletStorage, self).__init__(*args, **kwargs)
-        self.path = None
-
-    @classmethod
-    def from_path(cls, path):
-        if os.path.exists(path):
-            with open(path, "r") as f:
-                json_data = f.read()
-                json_dict = json.loads(json_data)
-                storage = cls(**json_dict)
-                if 'version' in storage and storage['version'] != storage.LATEST_VERSION:
-                    storage.upgrade()
-        else:
-            storage = cls()
-        storage.path = path
-        return storage
-
-    def save(self):
-        json_data = super(PermanentWalletStorage, self).save()
+        json_data = json.dumps(json_dict, indent=4, sort_keys=True)
+        if self.path is None:
+            return json_data
 
         temp_path = "%s.tmp.%s" % (self.path, os.getpid())
         with open(temp_path, "w") as f:
@@ -116,12 +156,9 @@ class PermanentWalletStorage(EphemeralWalletStorage):
             mode = os.stat(self.path).st_mode
         else:
             mode = stat.S_IREAD | stat.S_IWRITE
-
         try:
             os.rename(temp_path, self.path)
         except:
             os.remove(self.path)
             os.rename(temp_path, self.path)
         os.chmod(self.path, mode)
-
-        return json_data

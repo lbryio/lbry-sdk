@@ -1,21 +1,22 @@
+import itertools
+from typing import Dict, Generator
 from binascii import hexlify, unhexlify
-from itertools import chain
-from lbrynet.wallet import get_wallet_manager
+
+from lbrynet.wallet.basecoin import BaseCoin
 from lbrynet.wallet.mnemonic import Mnemonic
 from lbrynet.wallet.bip32 import PrivateKey, PubKey, from_extended_key_string
 from lbrynet.wallet.hash import double_sha256, aes_encrypt, aes_decrypt
-
-from lbryschema.address import public_key_to_address
 
 
 class KeyChain:
 
     def __init__(self, parent_key, child_keys, gap):
+        self.coin = parent_key.coin
         self.parent_key = parent_key  # type: PubKey
         self.child_keys = child_keys
         self.minimum_gap = gap
         self.addresses = [
-            public_key_to_address(key)
+            self.coin.public_key_to_address(key)
             for key in child_keys
         ]
 
@@ -23,9 +24,8 @@ class KeyChain:
     def has_gap(self):
         if len(self.addresses) < self.minimum_gap:
             return False
-        ledger = get_wallet_manager().ledger
         for address in self.addresses[-self.minimum_gap:]:
-            if ledger.is_address_old(address):
+            if self.coin.ledger.is_address_old(address):
                 return False
         return True
 
@@ -44,71 +44,77 @@ class KeyChain:
 
 class Account:
 
-    def __init__(self, seed, encrypted, private_key, public_key, **kwargs):
-        self.seed = seed
-        self.encrypted = encrypted
+    def __init__(self, coin, seed, encrypted, private_key, public_key,
+                 receiving_keys=None, receiving_gap=20,
+                 change_keys=None, change_gap=6):
+        self.coin = coin  # type: BaseCoin
+        self.seed = seed  # type: str
+        self.encrypted = encrypted  # type: bool
         self.private_key = private_key  # type: PrivateKey
         self.public_key = public_key  # type: PubKey
-        self.receiving_gap = kwargs.get('receiving_gap', 20)
-        self.receiving_keys = kwargs.get('receiving_keys') or \
-            KeyChain(self.public_key.child(0), [], self.receiving_gap)
-        self.change_gap = kwargs.get('change_gap', 6)
-        self.change_keys = kwargs.get('change_keys') or \
-            KeyChain(self.public_key.child(1), [], self.change_gap)
-        self.keychains = [
-            self.receiving_keys,  # child: 0
-            self.change_keys      # child: 1
-        ]
+        self.keychains = (
+            KeyChain(public_key.child(0), receiving_keys or [], receiving_gap),
+            KeyChain(public_key.child(1), change_keys or [], change_gap)
+        )
+        self.receiving_keys, self.change_keys = self.keychains
 
     @classmethod
-    def generate(cls):
+    def generate(cls, coin):  # type: (BaseCoin) -> Account
         seed = Mnemonic().make_seed()
-        return cls.generate_from_seed(seed)
+        return cls.from_seed(coin, seed)
 
     @classmethod
-    def generate_from_seed(cls, seed):
-        private_key = cls.get_private_key_from_seed(seed)
+    def from_seed(cls, coin, seed):  # type: (BaseCoin, str) -> Account
+        private_key = cls.get_private_key_from_seed(coin, seed)
         return cls(
-            seed=seed, encrypted=False,
+            coin=coin, seed=seed, encrypted=False,
             private_key=private_key,
-            public_key=private_key.public_key,
+            public_key=private_key.public_key
         )
+
+    @staticmethod
+    def get_private_key_from_seed(coin, seed):  # type: (BaseCoin, str) -> PrivateKey
+        return PrivateKey.from_seed(coin, Mnemonic.mnemonic_to_seed(seed))
 
     @classmethod
-    def from_json(cls, json_data):
-        data = json_data.copy()
-        if not data['encrypted']:
-            data['private_key'] = from_extended_key_string(data['private_key'])
-        data['public_key'] = from_extended_key_string(data['public_key'])
-        data['receiving_keys'] = KeyChain(
-            data['public_key'].child(0),
-            [unhexlify(k) for k in data['receiving_keys']],
-            data['receiving_gap']
+    def from_dict(cls, coin, d):  # type: (BaseCoin, Dict) -> Account
+        if not d['encrypted']:
+            private_key = from_extended_key_string(coin, d['private_key'])
+            public_key = private_key.public_key
+        else:
+            private_key = d['private_key']
+            public_key = from_extended_key_string(coin, d['public_key'])
+        return cls(
+            coin=coin,
+            seed=d['seed'],
+            encrypted=d['encrypted'],
+            private_key=private_key,
+            public_key=public_key,
+            receiving_keys=map(unhexlify, d['receiving_keys']),
+            receiving_gap=d['receiving_gap'],
+            change_keys=map(unhexlify, d['change_keys']),
+            change_gap=d['change_gap']
         )
-        data['change_keys'] = KeyChain(
-            data['public_key'].child(1),
-            [unhexlify(k) for k in data['change_keys']],
-            data['change_gap']
-        )
-        return cls(**data)
 
-    def to_json(self):
+    def to_dict(self):
         return {
+            'coin': self.coin.get_id(),
             'seed': self.seed,
             'encrypted': self.encrypted,
-            'private_key': self.private_key.extended_key_string(),
+            'private_key': self.private_key if self.encrypted else
+                           self.private_key.extended_key_string(),
             'public_key': self.public_key.extended_key_string(),
             'receiving_keys': [hexlify(k) for k in self.receiving_keys.child_keys],
-            'receiving_gap': self.receiving_gap,
+            'receiving_gap': self.receiving_keys.minimum_gap,
             'change_keys': [hexlify(k) for k in self.change_keys.child_keys],
-            'change_gap': self.change_gap
+            'change_gap': self.change_keys.minimum_gap
         }
 
     def decrypt(self, password):
         assert self.encrypted, "Key is not encrypted."
         secret = double_sha256(password)
         self.seed = aes_decrypt(secret, self.seed)
-        self.private_key = from_extended_key_string(aes_decrypt(secret, self.private_key))
+        self.private_key = from_extended_key_string(self.coin, aes_decrypt(secret, self.private_key))
         self.encrypted = False
 
     def encrypt(self, password):
@@ -118,13 +124,9 @@ class Account:
         self.private_key = aes_encrypt(secret, self.private_key.extended_key_string())
         self.encrypted = True
 
-    @staticmethod
-    def get_private_key_from_seed(seed):
-        return PrivateKey.from_seed(Mnemonic.mnemonic_to_seed(seed))
-
     @property
     def addresses(self):
-        return chain(self.receiving_keys.addresses, self.change_keys.addresses)
+        return itertools.chain(self.receiving_keys.addresses, self.change_keys.addresses)
 
     def get_private_key_for_address(self, address):
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
@@ -139,3 +141,47 @@ class Account:
             for keychain in self.keychains
             for address in keychain.ensure_enough_addresses()
         ]
+
+    def addresses_without_history(self):
+        for address in self.addresses:
+            if not self.coin.ledger.has_address(address):
+                yield address
+
+    def get_least_used_receiving_address(self, max_transactions=1000):
+        return self._get_least_used_address(
+            self.receiving_keys.addresses,
+            self.receiving_keys,
+            max_transactions
+        )
+
+    def get_least_used_change_address(self, max_transactions=100):
+        return self._get_least_used_address(
+            self.change_keys.addresses,
+            self.change_keys,
+            max_transactions
+        )
+
+    def _get_least_used_address(self, addresses, keychain, max_transactions):
+        ledger = self.coin.ledger
+        address = ledger.get_least_used_address(addresses, max_transactions)
+        if address:
+            return address
+        address = keychain.generate_next_address()
+        ledger.subscribe_history(address)
+        return address
+
+    def get_unspent_utxos(self):
+        return [
+            utxo
+            for address in self.addresses
+            for utxo in self.coin.ledger.get_unspent_outputs(address)
+        ]
+
+
+class AccountsView:
+
+    def __init__(self, accounts):
+        self._accounts_generator = accounts
+
+    def __iter__(self):  # type: () -> Generator[Account]
+        return self._accounts_generator()
