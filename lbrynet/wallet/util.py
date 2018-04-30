@@ -1,4 +1,17 @@
 from binascii import unhexlify, hexlify
+from collections import Sequence
+
+
+class ReadOnlyList(Sequence):
+
+    def __init__(self, lst):
+        self.lst = lst
+
+    def __getitem__(self, key):
+        return self.lst[key]
+
+    def __len__(self):
+        return len(self.lst)
 
 
 def subclass_tuple(name, base):
@@ -15,6 +28,15 @@ class cachedproperty(object):
         value = self.f(obj)
         setattr(obj, self.f.__name__, value)
         return value
+
+
+class classproperty(object):
+
+    def __init__(self, f):
+        self.f = f
+
+    def __get__(self, obj, owner):
+        return self.f(owner)
 
 
 def bytes_to_int(be_bytes):

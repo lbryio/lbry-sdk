@@ -29,6 +29,7 @@ ENV_NAMESPACE = 'LBRY_'
 LBRYCRD_WALLET = 'lbrycrd'
 LBRYUM_WALLET = 'lbryum'
 PTC_WALLET = 'ptc'
+TORBA_WALLET = 'torba'
 
 PROTOCOL_PREFIX = 'lbry'
 APP_NAME = 'LBRY'

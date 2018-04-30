@@ -10,14 +10,14 @@
 
 import struct
 import hashlib
-from binascii import unhexlify
 from six import int2byte, byte2int
 
 import ecdsa
 import ecdsa.ellipticcurve as EC
 import ecdsa.numbertheory as NT
 
-from .hash import Base58, hmac_sha512, hash160, double_sha256, public_key_to_address
+from .basecoin import BaseCoin
+from .hash import Base58, hmac_sha512, hash160, double_sha256
 from .util import cachedproperty, bytes_to_int, int_to_bytes
 
 
@@ -30,7 +30,9 @@ class _KeyBase(object):
 
     CURVE = ecdsa.SECP256k1
 
-    def __init__(self, chain_code, n, depth, parent):
+    def __init__(self, coin, chain_code, n, depth, parent):
+        if not isinstance(coin, BaseCoin):
+            raise TypeError('invalid coin')
         if not isinstance(chain_code, (bytes, bytearray)):
             raise TypeError('chain code must be raw bytes')
         if len(chain_code) != 32:
@@ -42,6 +44,7 @@ class _KeyBase(object):
         if parent is not None:
             if not isinstance(parent, type(self)):
                 raise TypeError('parent key has bad type')
+        self.coin = coin
         self.chain_code = chain_code
         self.n = n
         self.depth = depth
@@ -83,8 +86,8 @@ class _KeyBase(object):
 class PubKey(_KeyBase):
     """ A BIP32 public key. """
 
-    def __init__(self, pubkey, chain_code, n, depth, parent=None):
-        super(PubKey, self).__init__(chain_code, n, depth, parent)
+    def __init__(self, coin, pubkey, chain_code, n, depth, parent=None):
+        super(PubKey, self).__init__(coin, chain_code, n, depth, parent)
         if isinstance(pubkey, ecdsa.VerifyingKey):
             self.verifying_key = pubkey
         else:
@@ -126,7 +129,7 @@ class PubKey(_KeyBase):
     @cachedproperty
     def address(self):
         """ The public key as a P2PKH address. """
-        return public_key_to_address(self.pubkey_bytes, 'regtest')
+        return self.coin.public_key_to_address(self.pubkey_bytes)
 
     def ec_point(self):
         return self.verifying_key.pubkey.point
@@ -150,7 +153,7 @@ class PubKey(_KeyBase):
 
         verkey = ecdsa.VerifyingKey.from_public_point(point, curve=curve)
 
-        return PubKey(verkey, R, n, self.depth + 1, self)
+        return PubKey(self.coin, verkey, R, n, self.depth + 1, self)
 
     def identifier(self):
         """ Return the key's identifier as 20 bytes. """
@@ -158,7 +161,10 @@ class PubKey(_KeyBase):
 
     def extended_key(self):
         """ Return a raw extended public key. """
-        return self._extended_key(unhexlify("0488b21e"), self.pubkey_bytes)
+        return self._extended_key(
+            self.coin.extended_public_key_prefix,
+            self.pubkey_bytes
+        )
 
 
 class LowSValueSigningKey(ecdsa.SigningKey):
@@ -180,8 +186,8 @@ class PrivateKey(_KeyBase):
 
     HARDENED = 1 << 31
 
-    def __init__(self, privkey, chain_code, n, depth, parent=None):
-        super(PrivateKey, self).__init__(chain_code, n, depth, parent)
+    def __init__(self, coin, privkey, chain_code, n, depth, parent=None):
+        super(PrivateKey, self).__init__(coin, chain_code, n, depth, parent)
         if isinstance(privkey, ecdsa.SigningKey):
             self.signing_key = privkey
         else:
@@ -206,11 +212,11 @@ class PrivateKey(_KeyBase):
         return exponent
 
     @classmethod
-    def from_seed(cls, seed):
+    def from_seed(cls, coin, seed):
         # This hard-coded message string seems to be coin-independent...
         hmac = hmac_sha512(b'Bitcoin seed', seed)
         privkey, chain_code = hmac[:32], hmac[32:]
-        return cls(privkey, chain_code, 0, 0)
+        return cls(coin, privkey, chain_code, 0, 0)
 
     @cachedproperty
     def private_key_bytes(self):
@@ -222,7 +228,7 @@ class PrivateKey(_KeyBase):
         """ Return the corresponding extended public key. """
         verifying_key = self.signing_key.get_verifying_key()
         parent_pubkey = self.parent.public_key if self.parent else None
-        return PubKey(verifying_key, self.chain_code, self.n, self.depth,
+        return PubKey(self.coin, verifying_key, self.chain_code, self.n, self.depth,
                       parent_pubkey)
 
     def ec_point(self):
@@ -234,7 +240,7 @@ class PrivateKey(_KeyBase):
 
     def wif(self):
         """ Return the private key encoded in Wallet Import Format. """
-        return b'\x1c' + self.private_key_bytes + b'\x01'
+        return self.coin.private_key_to_wif(self.private_key_bytes)
 
     def address(self):
         """ The public key as a P2PKH address. """
@@ -261,7 +267,7 @@ class PrivateKey(_KeyBase):
 
         privkey = _exponent_to_bytes(exponent)
 
-        return PrivateKey(privkey, R, n, self.depth + 1, self)
+        return PrivateKey(self.coin, privkey, R, n, self.depth + 1, self)
 
     def sign(self, data):
         """ Produce a signature for piece of data by double hashing it and signing the hash. """
@@ -275,7 +281,10 @@ class PrivateKey(_KeyBase):
 
     def extended_key(self):
         """Return a raw extended private key."""
-        return self._extended_key(unhexlify("0488ade4"), b'\0' + self.private_key_bytes)
+        return self._extended_key(
+            self.coin.extended_private_key_prefix,
+            b'\0' + self.private_key_bytes
+        )
 
 
 def _exponent_to_bytes(exponent):
@@ -283,7 +292,7 @@ def _exponent_to_bytes(exponent):
     return (int2byte(0)*32 + int_to_bytes(exponent))[-32:]
 
 
-def _from_extended_key(ekey):
+def _from_extended_key(coin, ekey):
     """Return a PubKey or PrivateKey from an extended key raw bytes."""
     if not isinstance(ekey, (bytes, bytearray)):
         raise TypeError('extended key must be raw bytes')
@@ -295,21 +304,21 @@ def _from_extended_key(ekey):
     n, = struct.unpack('>I', ekey[9:13])
     chain_code = ekey[13:45]
 
-    if ekey[:4] == unhexlify("0488b21e"):
+    if ekey[:4] == coin.extended_public_key_prefix:
         pubkey = ekey[45:]
-        key = PubKey(pubkey, chain_code, n, depth)
-    elif ekey[:4] == unhexlify("0488ade4"):
+        key = PubKey(coin, pubkey, chain_code, n, depth)
+    elif ekey[:4] == coin.extended_private_key_prefix:
         if ekey[45] is not int2byte(0):
             raise ValueError('invalid extended private key prefix byte')
         privkey = ekey[46:]
-        key = PrivateKey(privkey, chain_code, n, depth)
+        key = PrivateKey(coin, privkey, chain_code, n, depth)
     else:
         raise ValueError('version bytes unrecognised')
 
     return key
 
 
-def from_extended_key_string(ekey_str):
+def from_extended_key_string(coin, ekey_str):
     """Given an extended key string, such as
 
     xpub6BsnM1W2Y7qLMiuhi7f7dbAwQZ5Cz5gYJCRzTNainXzQXYjFwtuQXHd
@@ -317,4 +326,4 @@ def from_extended_key_string(ekey_str):
 
     return a PubKey or PrivateKey.
     """
-    return _from_extended_key(Base58.decode_check(ekey_str))
+    return _from_extended_key(coin, Base58.decode_check(ekey_str))

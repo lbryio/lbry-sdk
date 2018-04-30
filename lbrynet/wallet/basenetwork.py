@@ -10,7 +10,7 @@ from twisted.protocols.basic import LineOnlyReceiver
 from errors import RemoteServiceException, ProtocolException
 from errors import TransportException
 
-from .stream import StreamController
+from lbrynet.wallet.stream import StreamController
 
 log = logging.getLogger()
 
@@ -18,6 +18,8 @@ log = logging.getLogger()
 def unicode2bytes(string):
     if isinstance(string, six.text_type):
         return string.encode('iso-8859-1')
+    elif isinstance(string, list):
+        return [unicode2bytes(s) for s in string]
     return string
 
 
@@ -125,7 +127,7 @@ class StratumClientFactory(protocol.ClientFactory):
         return client
 
 
-class Network:
+class BaseNetwork:
 
     def __init__(self, config):
         self.config = config
