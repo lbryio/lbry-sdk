@@ -294,7 +294,8 @@ ADJUSTABLE_SETTINGS = {
     'use_keyring': (bool, False),
     'wallet': (str, LBRYUM_WALLET),
     'blockchain_name': (str, 'lbrycrd_main'),
-    'lbryum_servers': (list, [('lbryum8.lbry.io', 50001), ('lbryum9.lbry.io', 50001)], server_list)
+    'lbryum_servers': (list, [('lbryum8.lbry.io', 50001), ('lbryum9.lbry.io', 50001)], server_list),
+    's3_headers_depth': (int, 96 * 10)   # download headers from s3 when the local height is more than 10 chunks behind
 }
 
 
