@@ -1,10 +1,12 @@
 import unittest
 
-from lbrynet.wallet.constants import CENT, MAXIMUM_FEE_PER_BYTE
-from lbrynet.wallet.transaction import Transaction, Output
+from lbrynet.wallet.coins.lbc.lbc import LBRYCredits
+from lbrynet.wallet.coins.bitcoin import Bitcoin
 from lbrynet.wallet.coinselection import CoinSelector, MAXIMUM_TRIES
+from lbrynet.wallet.constants import CENT
 from lbrynet.wallet.manager import WalletManager
-from lbrynet.wallet import set_wallet_manager
+
+from .test_transaction import get_output as utxo
 
 
 NULL_HASH = '\x00'*32
@@ -15,20 +17,18 @@ def search(*args, **kwargs):
     return [o.amount for o in selection] if selection else selection
 
 
-def utxo(amount):
-    return Output.pay_pubkey_hash(Transaction(), 0, amount, NULL_HASH)
-
-
 class TestCoinSelectionTests(unittest.TestCase):
 
     def setUp(self):
-        set_wallet_manager(WalletManager({'fee_per_byte': MAXIMUM_FEE_PER_BYTE}))
+        WalletManager([], {
+            LBRYCredits.ledger_class: LBRYCredits.ledger_class(LBRYCredits),
+        }).install()
 
     def test_empty_coins(self):
         self.assertIsNone(CoinSelector([], 0, 0).select())
 
     def test_skip_binary_search_if_total_not_enough(self):
-        fee = utxo(CENT).spend(fake=True).fee
+        fee = utxo(CENT).spend().fee
         big_pool = [utxo(CENT+fee) for _ in range(100)]
         selector = CoinSelector(big_pool, 101 * CENT, 0)
         self.assertIsNone(selector.select())
@@ -39,7 +39,7 @@ class TestCoinSelectionTests(unittest.TestCase):
         self.assertEqual(selector.tries, 201)
 
     def test_exact_match(self):
-        fee = utxo(CENT).spend(fake=True).fee
+        fee = utxo(CENT).spend().fee
         utxo_pool = [
             utxo(CENT + fee),
             utxo(CENT),
@@ -74,7 +74,9 @@ class TestOfficialBitcoinCoinSelectionTests(unittest.TestCase):
     #       https://murch.one/wp-content/uploads/2016/11/erhardt2016coinselection.pdf
 
     def setUp(self):
-        set_wallet_manager(WalletManager({'fee_per_byte': 0}))
+        WalletManager([], {
+            Bitcoin.ledger_class: Bitcoin.ledger_class(Bitcoin),
+        }).install()
 
     def make_hard_case(self, utxos):
         target = 0

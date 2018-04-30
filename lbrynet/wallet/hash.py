@@ -13,11 +13,9 @@ import aes
 import base64
 import hashlib
 import hmac
-import struct
 from binascii import hexlify, unhexlify
 
 from .util import bytes_to_int, int_to_bytes
-from .constants import CHAINS, MAIN_CHAIN
 
 _sha256 = hashlib.sha256
 _sha512 = hashlib.sha512
@@ -75,26 +73,6 @@ def hash_to_hex_str(x):
 def hex_str_to_hash(x):
     """ Convert a displayed hex string to a binary hash. """
     return reversed(unhexlify(x))
-
-
-def public_key_to_address(public_key, chain=MAIN_CHAIN):
-    return hash160_to_address(hash160(public_key), chain)
-
-
-def hash160_to_address(h160, chain=MAIN_CHAIN):
-    prefix = CHAINS[chain]['pubkey_address_prefix']
-    raw_address = six.int2byte(prefix) + h160
-    return Base58.encode(raw_address + double_sha256(raw_address)[0:4])
-
-
-def address_to_hash_160(address):
-    bytes = Base58.decode(address)
-    prefix, pubkey_bytes, addr_checksum = bytes[0], bytes[1:21], bytes[21:]
-    return pubkey_bytes
-
-
-def claim_id_hash(txid, n):
-    return hash160(txid + struct.pack('>I', n))
 
 
 def aes_encrypt(secret, value):
