@@ -77,8 +77,10 @@ class BackwardsCompatibleWalletManager(WalletManager):
         tx_class = ledger.transaction_class
         in_class, out_class = tx_class.input_class, tx_class.output_class
 
+        destination_address = reserved.identifier.encode('latin1')
+
         outputs = [
-            out_class.pay_pubkey_hash(amount*COIN, coin.address_to_hash160(reserved.identifier))
+            out_class.pay_pubkey_hash(amount*COIN, coin.address_to_hash160(destination_address))
         ]
 
         amount += 0.001
