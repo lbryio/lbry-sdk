@@ -108,7 +108,7 @@ class WalletStorage:
         return self._default.copy()
 
     def read(self):
-        if self.path and self.path.exists(self.path):
+        if self.path and os.path.exists(self.path):
             with open(self.path, "r") as f:
                 json_data = f.read()
                 json_dict = json.loads(json_data)

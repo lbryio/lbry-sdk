@@ -236,6 +236,9 @@ class BaseLedger:
         if status != self.get_status(address):
             self.update_history(address)
 
+    def broadcast(self, tx):
+        self.network.broadcast(hexlify(tx.raw))
+
 
 class Headers:
 

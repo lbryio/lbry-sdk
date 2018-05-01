@@ -177,6 +177,9 @@ class Account:
             for utxo in self.coin.ledger.get_unspent_outputs(address)
         ]
 
+    def get_balance(self):
+        return sum(utxo.amount for utxo in self.get_unspent_utxos())
+
 
 class AccountsView:
 
