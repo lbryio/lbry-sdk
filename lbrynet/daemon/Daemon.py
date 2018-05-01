@@ -27,7 +27,7 @@ from lbryschema.decode import smart_decode
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet import conf
-from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET
+from lbrynet.conf import LBRYCRD_WALLET, LBRYUM_WALLET, TORBA_WALLET
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.core.log_support import configure_loggly_handler
@@ -54,6 +54,7 @@ from lbrynet.dht.error import TimeoutError
 from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
+from lbrynet.wallet.compatibility import BackwardsCompatibleWalletManager
 
 log = logging.getLogger(__name__)
 
@@ -535,7 +536,11 @@ class Daemon(AuthJSONRPCServer):
 
     def _get_session(self):
         def get_wallet():
-            if self.wallet_type == LBRYCRD_WALLET:
+            if self.wallet_type == TORBA_WALLET:
+                log.info("Using torba wallet")
+                wallet = BackwardsCompatibleWalletManager.from_old_config(conf.settings)
+                return defer.succeed(wallet)
+            elif self.wallet_type == LBRYCRD_WALLET:
                 raise ValueError('LBRYcrd Wallet is no longer supported')
             elif self.wallet_type == LBRYUM_WALLET:
 
