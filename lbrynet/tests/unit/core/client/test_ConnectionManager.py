@@ -116,7 +116,7 @@ class MocServerProtocolFactory(ServerFactory):
 class TestIntegrationConnectionManager(unittest.TestCase):
     def setUp(self):
 
-        conf.initialize_settings()
+        conf.initialize_settings(False)
 
         self.TEST_PEER = Peer(LOCAL_HOST, PEER_PORT)
         self.downloader = MocDownloader()

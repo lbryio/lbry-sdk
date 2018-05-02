@@ -18,7 +18,7 @@ from lbrynet.core.cryptoutils import get_lbry_hash_obj
 class BlobManagerTest(unittest.TestCase):
     @defer.inlineCallbacks
     def setUp(self):
-        conf.initialize_settings()
+        conf.initialize_settings(False)
         self.blob_dir = tempfile.mkdtemp()
         self.db_dir = tempfile.mkdtemp()
         hash_announcer = DummyHashAnnouncer()

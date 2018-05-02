@@ -24,8 +24,9 @@ class MocSupplier(object):
             return defer.succeed([])
 
 class DHTHashAnnouncerTest(unittest.TestCase):
-
     def setUp(self):
+        from lbrynet.conf import initialize_settings
+        initialize_settings(False)
         self.num_blobs = 10
         self.blobs_to_announce = []
         for i in range(0, self.num_blobs):

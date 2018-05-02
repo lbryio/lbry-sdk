@@ -5,6 +5,7 @@ from twisted.internet import defer
 
 from lbrynet.core import PTCWallet
 from lbrynet.core import BlobAvailability
+from lbrynet.dht.node import Node as RealNode
 from lbrynet.daemon import ExchangeRateManager as ERM
 from lbrynet import conf
 
@@ -18,12 +19,10 @@ class FakeLBRYFile(object):
         self.stream_hash = stream_hash
         self.file_name = 'fake_lbry_file'
 
-class Node(object):
-    def __init__(self, *args, **kwargs):
-        pass
 
-    def joinNetwork(self, *args):
-        pass
+class Node(RealNode):
+    def joinNetwork(self, known_node_addresses=None):
+        return defer.succeed(None)
 
     def stop(self):
         pass
@@ -301,6 +300,7 @@ create_stream_sd_file = {
 
 
 def mock_conf_settings(obj, settings={}):
+    conf.initialize_settings(False)
     original_settings = conf.settings
     conf.settings = conf.Config(conf.FIXED_SETTINGS, conf.ADJUSTABLE_SETTINGS)
     conf.settings.installation_id = conf.settings.get_installation_id()
