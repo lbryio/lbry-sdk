@@ -44,11 +44,12 @@ at anytime.
   * regenerate api keys on startup if the using authentication
   * support both positional and keyword args for api calls
   * `peer_list` to return a list of dictionaries instead of a list of lists, added peer node ids to the results
+  * download blockchain headers from s3 before starting the wallet when the local height is more than `s3_headers_depth` (a config setting) blocks behind
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests
   * integration tests for bootstrapping the dht
-  * configurable `concurrent_announcers` setting
+  * configurable `concurrent_announcers` and `s3_headers_depth` settings
   * `peer_ping` command
 
 ### Removed

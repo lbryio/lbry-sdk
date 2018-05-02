@@ -85,7 +85,7 @@ class StorageTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def setUp(self):
-        conf.initialize_settings()
+        conf.initialize_settings(False)
         self.db_dir = tempfile.mkdtemp()
         self.storage = SQLiteStorage(self.db_dir)
         yield self.storage.setup()
