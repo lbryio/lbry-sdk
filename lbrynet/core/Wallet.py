@@ -127,7 +127,7 @@ class Wallet(object):
                 if s3_height > local_height:
                     with open(os.path.join(self.config.path, "blockchain_headers"), "w") as headers_file:
                         headers_file.write(raw_headers)
-                    log.info("updated headers from s3")
+                    log.info("fetched headers from s3 (s3 height: %i)", s3_height)
                 else:
                     log.warning("s3 is more out of date than we are")
             else:
@@ -162,7 +162,7 @@ class Wallet(object):
             port = int(self.config.get('default_servers')[server_url]['t'])
             try:
                 remote_height = yield self.get_remote_height(server_url, port)
-                log.debug("%s:%i remote height: %i, local height: %s", server_url, port, remote_height, local_height)
+                log.info("%s:%i height: %i, local height: %s", server_url, port, remote_height, local_height)
                 if remote_height > local_height + s3_headers_depth:
                     defer.returnValue(True)
             except Exception as err:
