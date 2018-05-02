@@ -9,6 +9,7 @@ from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import RequestCanceledError
 from lbrynet.core import BlobAvailability
 from lbrynet.core.utils import generate_id
+from lbrynet.dht.node import Node as RealNode
 from lbrynet.daemon import ExchangeRateManager as ERM
 from lbrynet import conf
 from util import debug_kademlia_packet
@@ -24,15 +25,9 @@ class FakeLBRYFile(object):
         self.file_name = 'fake_lbry_file'
 
 
-class Node(object):
-    def __init__(self, peer_finder=None, peer_manager=None, dht_node_port=None, peer_port=3333, **kwargs):
-        self.peer_finder = peer_finder
-        self.peer_manager = peer_manager
-        self.peerPort = peer_port
-        self.udpPort = dht_node_port
-
-    def joinNetwork(self, *args):
-        return defer.succeed(True)
+class Node(RealNode):
+    def joinNetwork(self, known_node_addresses=None):
+        return defer.succeed(None)
 
     def stop(self):
         return defer.succeed(None)
@@ -392,6 +387,7 @@ create_stream_sd_file = {
 
 
 def mock_conf_settings(obj, settings={}):
+    conf.initialize_settings(False)
     original_settings = conf.settings
     conf.settings = conf.Config(conf.FIXED_SETTINGS, conf.ADJUSTABLE_SETTINGS)
     conf.settings.installation_id = conf.settings.get_installation_id()
