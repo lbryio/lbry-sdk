@@ -230,7 +230,7 @@ class TestFileListSorting(trial.unittest.TestCase):
         self.assertNotEqual(expected, received)
 
     def _get_fake_lbry_files(self):
-        return [self._get_fake_lbry_file() for _ in xrange(10)]
+        return [self._get_fake_lbry_file() for _ in range(10)]
 
     def _get_fake_lbry_file(self):
         lbry_file = mock.Mock(spec=ManagedEncryptedFileDownloader)
