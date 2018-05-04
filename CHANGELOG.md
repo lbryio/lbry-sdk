@@ -21,8 +21,8 @@ at anytime.
   *
 
 ### Changed
-  * download blockchain headers from s3 before starting the wallet when the local height is more than s3_headers_depth (a config setting) blocks behind
-  * un-deprecated report_bug command
+  *
+  *
 
 ### Added
   *
@@ -31,6 +31,12 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.19.3] - 2018-05-04
+### Changed
+ * download blockchain headers from s3 before starting the wallet when the local height is more than s3_headers_depth (a config setting) blocks behind
+ * un-deprecated report_bug command
 
 
 ## [0.19.2] - 2018-03-28
