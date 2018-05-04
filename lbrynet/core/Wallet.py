@@ -125,7 +125,7 @@ class Wallet(object):
                 s3_height = (len(raw_headers) / HEADER_SIZE) - 1
                 local_height = self.local_header_file_height()
                 if s3_height > local_height:
-                    with open(os.path.join(self.config.path, "blockchain_headers"), "w") as headers_file:
+                    with open(os.path.join(self.config.path, "blockchain_headers"), "wb") as headers_file:
                         headers_file.write(raw_headers)
                     log.info("updated headers from s3")
                 else:
