@@ -25,6 +25,7 @@ at anytime.
   * 
   
 ### Changed
+  * testing lbryschema tox branch
   * several internal dht functions to use inlineCallbacks
   * `DHTHashAnnouncer` and `Node` manage functions to use `LoopingCall`s instead of scheduling with `callLater`.
   * `store` kademlia rpc method to block on the call finishing and to return storing peer information
