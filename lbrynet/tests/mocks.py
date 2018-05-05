@@ -1,7 +1,10 @@
+import base64
 import struct
 import io
 
-from Crypto.PublicKey import RSA
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 from twisted.internet import defer, error
 from twisted.python.failure import Failure
 
@@ -15,6 +18,12 @@ from lbrynet import conf
 from util import debug_kademlia_packet
 
 KB = 2**10
+PUBLIC_EXPOENT = 65537  # http://www.daemonology.net/blog/2009-06-11-cryptographic-right-answers.html
+
+
+def decode_rsa_key(pem_key):
+    decoded = base64.b64decode(''.join(pem_key.splitlines()[1:-1]))
+    return serialization.load_der_public_key(decoded, default_backend())
 
 
 class FakeLBRYFile(object):
@@ -137,9 +146,9 @@ class PointTraderKeyQueryHandler(object):
         if self.query_identifiers[0] in queries:
             new_encoded_pub_key = queries[self.query_identifiers[0]]
             try:
-                RSA.importKey(new_encoded_pub_key)
+                decode_rsa_key(new_encoded_pub_key)
             except (ValueError, TypeError, IndexError):
-                return defer.fail(Failure(ValueError("Client sent an invalid public key")))
+                return defer.fail(Failure(ValueError("Client sent an invalid public key: {}".format(new_encoded_pub_key))))
             self.public_key = new_encoded_pub_key
             self.wallet.set_public_key_for_peer(self.peer, self.public_key)
             fields = {'public_key': self.wallet.encoded_public_key}
@@ -152,8 +161,10 @@ class PointTraderKeyQueryHandler(object):
 
 class Wallet(object):
     def __init__(self):
-        self.private_key = RSA.generate(1024)
-        self.encoded_public_key = self.private_key.publickey().exportKey()
+        self.private_key = rsa.generate_private_key(public_exponent=PUBLIC_EXPOENT,
+                                                    key_size=1024, backend=default_backend())
+        self.encoded_public_key = self.private_key.public_key().public_bytes(serialization.Encoding.PEM,
+                                                                             serialization.PublicFormat.PKCS1)
         self._config = None
         self.network = None
         self.wallet = None

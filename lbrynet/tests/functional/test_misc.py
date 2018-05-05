@@ -7,8 +7,7 @@ import sys
 import random
 import unittest
 
-from Crypto import Random
-from Crypto.Hash import MD5
+from hashlib import md5
 from lbrynet import conf
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.Session import Session
@@ -98,9 +97,6 @@ class LbryUploader(object):
         from twisted.internet import reactor
         self.reactor = reactor
         logging.debug("Starting the uploader")
-        Random.atfork()
-        r = random.Random()
-        r.seed("start_lbry_uploader")
         wallet = FakeWallet()
         peer_manager = PeerManager()
         peer_finder = FakePeerFinder(5553, peer_manager, 1)
@@ -191,10 +187,6 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
 
     logging.debug("Starting the uploader")
 
-    Random.atfork()
-
-    r = random.Random()
-    r.seed("start_lbry_reuploader")
 
     wallet = FakeWallet()
     peer_port = 5553 + n
@@ -297,7 +289,6 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
 
     logging.debug("Starting the uploader")
 
-    Random.atfork()
 
     wallet = FakeWallet()
     peer_manager = PeerManager()
@@ -515,7 +506,7 @@ class TestTransfer(TestCase):
 
         def check_md5_sum():
             f = open(os.path.join(db_dir, 'test_file'))
-            hashsum = MD5.new()
+            hashsum = md5()
             hashsum.update(f.read())
             self.assertEqual(hashsum.hexdigest(), "4ca2aafb4101c1e42235aad24fbb83be")
 
@@ -688,7 +679,7 @@ class TestTransfer(TestCase):
 
         def check_md5_sum():
             f = open(os.path.join(db_dir, 'test_file'))
-            hashsum = MD5.new()
+            hashsum = md5()
             hashsum.update(f.read())
             self.assertEqual(hashsum.hexdigest(), "4ca2aafb4101c1e42235aad24fbb83be")
 
@@ -811,7 +802,7 @@ class TestTransfer(TestCase):
 
         def check_md5_sum():
             f = open('test_file')
-            hashsum = MD5.new()
+            hashsum = md5()
             hashsum.update(f.read())
             self.assertEqual(hashsum.hexdigest(), "e5941d615f53312fd66638239c1f90d5")
 

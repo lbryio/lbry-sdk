@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 
-from Crypto.Hash import MD5
+from hashlib import md5
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer, threads
 
@@ -127,7 +127,7 @@ class TestStreamify(TestCase):
             self.assertTrue(lbry_file.sd_hash, sd_hash)
             yield lbry_file.start()
             f = open('test_file')
-            hashsum = MD5.new()
+            hashsum = md5()
             hashsum.update(f.read())
             self.assertEqual(hashsum.hexdigest(), "68959747edc73df45e45db6379dd7b3b")
 
