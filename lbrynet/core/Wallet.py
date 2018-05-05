@@ -93,13 +93,23 @@ class Wallet(object):
 
     @defer.inlineCallbacks
     def fetch_headers_from_s3(self):
-        response = yield treq.get(HEADERS_URL)
-        if not response.length % HEADER_SIZE:  # should be divisible by the header size
-            s3_height = (response.length / HEADER_SIZE) - 1
+        local_header_size = self.local_header_file_size()
+        resume_header = {"Range": "bytes={}-".format(local_header_size)}
+        response = yield treq.get(HEADERS_URL, headers=resume_header)
+        got_406 = response.code == 406  # our file is bigger
+        final_size_after_download = response.length + local_header_size
+        # should have something to download and a final length divisible by the header size
+        if not got_406 and final_size_after_download and not final_size_after_download % HEADER_SIZE:
+            s3_height = (final_size_after_download / HEADER_SIZE) - 1
             local_height = self.local_header_file_height()
             if s3_height > local_height:
-                with open(os.path.join(self.config.path, "blockchain_headers"), "wb") as headers_file:
-                    yield treq.collect(response, headers_file.write)
+                if local_header_size:
+                    log.info("Resuming download of %i bytes from s3", response.length)
+                    with open(os.path.join(self.config.path, "blockchain_headers"), "a+b") as headers_file:
+                        yield treq.collect(response, headers_file.write)
+                else:
+                    with open(os.path.join(self.config.path, "blockchain_headers"), "wb") as headers_file:
+                        yield treq.collect(response, headers_file.write)
                 log.info("fetched headers from s3 (s3 height: %i)", s3_height)
             else:
                 log.warning("s3 is more out of date than we are")
@@ -107,10 +117,14 @@ class Wallet(object):
             log.error("invalid size for headers from s3")
 
     def local_header_file_height(self):
+        return max((self.local_header_file_size() / HEADER_SIZE) - 1, 0)
+
+    def local_header_file_size(self):
         headers_path = os.path.join(self.config.path, "blockchain_headers")
         if os.path.isfile(headers_path):
-            return max((os.stat(headers_path).st_size / 112) - 1, 0)
+            return os.stat(headers_path).st_size
         return 0
+
 
     @defer.inlineCallbacks
     def get_remote_height(self, server, port):
@@ -136,7 +150,7 @@ class Wallet(object):
             try:
                 remote_height = yield self.get_remote_height(server_url, port)
                 log.info("%s:%i height: %i, local height: %s", server_url, port, remote_height, local_height)
-                if remote_height > local_height + s3_headers_depth:
+                if remote_height > (local_height + s3_headers_depth):
                     defer.returnValue(True)
             except Exception as err:
                 log.warning("error requesting remote height from %s:%i - %s", server_url, port, err)
