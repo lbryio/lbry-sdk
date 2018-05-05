@@ -1,8 +1,9 @@
 import time
-import requests
 import logging
 import json
-from twisted.internet import defer, threads
+
+import treq
+from twisted.internet import defer
 from twisted.internet.task import LoopingCall
 
 from lbrynet.core.Error import InvalidExchangeRateResponse
@@ -52,9 +53,10 @@ class MarketFeed(object):
     def is_online(self):
         return self._online
 
+    @defer.inlineCallbacks
     def _make_request(self):
-        r = requests.get(self.url, self.params, timeout=self.REQUESTS_TIMEOUT)
-        return r.text
+        response = yield treq.get(self.url, params=self.params, timeout=self.REQUESTS_TIMEOUT)
+        defer.returnValue((yield response.content()))
 
     def _handle_response(self, response):
         return NotImplementedError
@@ -75,7 +77,7 @@ class MarketFeed(object):
         self._online = False
 
     def _update_price(self):
-        d = threads.deferToThread(self._make_request)
+        d = self._make_request()
         d.addCallback(self._handle_response)
         d.addCallback(self._subtract_fee)
         d.addCallback(self._save_price)
