@@ -25,6 +25,7 @@ at anytime.
   * 
   
 ### Changed
+  * changed txrequests for treq
   * changed cryptography version to 2.2.2
   * removed pycrypto dependency, replacing all calls to cryptography
   * several internal dht functions to use inlineCallbacks
