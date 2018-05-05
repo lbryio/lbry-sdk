@@ -1,14 +1,38 @@
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding, utils
+
 from lbrynet import conf
 
 from twisted.web.client import Agent, FileBodyProducer, Headers, ResponseDone
 from twisted.internet import threads, defer, protocol
-from Crypto.Hash import SHA
-from Crypto.PublicKey import RSA
-from Crypto.Signature import PKCS1_PSS
+from hashlib import sha1
 from StringIO import StringIO
 import time
 import json
 import binascii
+
+
+def gen_rsa_key(bits):
+    PUBLIC_EXPOENT = 65537  # http://www.daemonology.net/blog/2009-06-11-cryptographic-right-answers.html
+    return rsa.generate_private_key(public_exponent=PUBLIC_EXPOENT,
+                                    key_size=4096, backend=default_backend())
+
+
+def sign(private_key, recipient_public_key=None, amount=None):
+    encoded_public_key = private_key.public_key().public_bytes(serialization.Encoding.PEM,
+                                                               serialization.PublicFormat.PKCS1)
+    timestamp = time.time()
+    h = sha1()
+    h.update(encoded_public_key)
+    if amount and recipient_public_key:
+        h.update(recipient_public_key)
+        h.update(str(amount))
+    h.update(str(timestamp))
+    signature = private_key.sign(h.digest(), padding.PSS(mgf=padding.MGF1(hashes.SHA1()),
+                                                         salt_length=padding.PSS.MAX_LENGTH),
+                                 utils.Prehashed(hashes.SHA1()))
+    return encoded_public_key, timestamp, binascii.hexlify(signature)
 
 
 class BeginningPrinter(protocol.Protocol):
@@ -64,7 +88,9 @@ def print_error(err):
 
 def register_new_account(private_key):
     data = {}
-    data['pub_key'] = private_key.publickey().exportKey()
+    encoded_public_key = private_key.public_key().public_bytes(serialization.Encoding.PEM,
+                                                               serialization.PublicFormat.PKCS1)
+    data['pub_key'] = encoded_public_key
 
     def get_success_from_body(body):
         r = json.loads(body)
@@ -79,15 +105,7 @@ def register_new_account(private_key):
 
 
 def send_points(private_key, recipient_public_key, amount):
-    encoded_public_key = private_key.publickey().exportKey()
-    timestamp = time.time()
-    h = SHA.new()
-    h.update(encoded_public_key)
-    h.update(recipient_public_key)
-    h.update(str(amount))
-    h.update(str(timestamp))
-    signer = PKCS1_PSS.new(private_key)
-    signature = binascii.hexlify(signer.sign(h))
+    encoded_public_key, timestamp, signature = sign(private_key, recipient_public_key, amount)
 
     data = {}
     data['sender_pub_key'] = encoded_public_key
@@ -110,13 +128,7 @@ def send_points(private_key, recipient_public_key, amount):
 
 
 def get_recent_transactions(private_key):
-    encoded_public_key = private_key.publickey().exportKey()
-    timestamp = time.time()
-    h = SHA.new()
-    h.update(encoded_public_key)
-    h.update(str(timestamp))
-    signer = PKCS1_PSS.new(private_key)
-    signature = binascii.hexlify(signer.sign(h))
+    encoded_public_key, timestamp, signature = sign(private_key)
 
     data = {}
     data['pub_key'] = encoded_public_key
@@ -140,13 +152,7 @@ def get_recent_transactions(private_key):
 
 
 def get_balance(private_key):
-    encoded_public_key = private_key.publickey().exportKey()
-    timestamp = time.time()
-    h = SHA.new()
-    h.update(encoded_public_key)
-    h.update(str(timestamp))
-    signer = PKCS1_PSS.new(private_key)
-    signature = binascii.hexlify(signer.sign(h))
+    encoded_public_key, timestamp, signature = sign(private_key)
 
     data = {}
     data['pub_key'] = encoded_public_key
@@ -203,13 +209,15 @@ def run_full_test():
         return dl
 
     def do_transfer(unused, amount):
-        d = send_points(keys[0], keys[1].publickey().exportKey(), amount)
+        encoded_public_key = keys[1].public_key().public_bytes(serialization.Encoding.PEM,
+                                                               serialization.PublicFormat.PKCS1)
+        d = send_points(keys[0], encoded_public_key, amount)
         return d
 
-    d1 = threads.deferToThread(RSA.generate, 4096)
+    d1 = threads.deferToThread(gen_rsa_key, 4096)
     d1.addCallback(save_key)
     d1.addCallback(register_new_account)
-    d2 = threads.deferToThread(RSA.generate, 4096)
+    d2 = threads.deferToThread(gen_rsa_key, 4096)
     d2.addCallback(save_key)
     d2.addCallback(register_new_account)
     dlist = defer.DeferredList([d1, d2])
@@ -222,6 +230,7 @@ def run_full_test():
 
 
 if __name__ == "__main__":
+    conf.initialize_settings()
 
     from twisted.internet import reactor
 
