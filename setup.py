@@ -23,7 +23,6 @@ requires = [
     'lbryschema==0.0.15',
     'lbryum==3.2.1',
     'miniupnpc',
-    'pycrypto',
     'pyyaml',
     'requests',
     'txrequests',
