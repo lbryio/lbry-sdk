@@ -25,7 +25,6 @@ requires = [
     'miniupnpc',
     'pyyaml',
     'requests',
-    'txrequests',
     'txJSON-RPC',
     'zope.interface',
     'docopt'

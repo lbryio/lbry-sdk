@@ -20,7 +20,6 @@ pyyaml==3.12
 PyGithub==1.34
 qrcode==5.2.2
 requests==2.9.1
-txrequests==0.9.5
 service_identity==16.0.0
 six>=1.9.0
 slowaes==0.1a1
