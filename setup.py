@@ -27,6 +27,7 @@ requires = [
     'requests',
     'txJSON-RPC',
     'zope.interface',
+    'treq',
     'docopt'
 ]
 

@@ -148,7 +148,8 @@ class PointTraderKeyQueryHandler(object):
             try:
                 decode_rsa_key(new_encoded_pub_key)
             except (ValueError, TypeError, IndexError):
-                return defer.fail(Failure(ValueError("Client sent an invalid public key: {}".format(new_encoded_pub_key))))
+                value_error = ValueError("Client sent an invalid public key: {}".format(new_encoded_pub_key))
+                return defer.fail(Failure(value_error))
             self.public_key = new_encoded_pub_key
             self.wallet.set_public_key_for_peer(self.peer, self.public_key)
             fields = {'public_key': self.wallet.encoded_public_key}

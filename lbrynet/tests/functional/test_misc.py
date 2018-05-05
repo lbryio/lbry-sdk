@@ -4,7 +4,6 @@ import os
 import platform
 import shutil
 import sys
-import random
 import unittest
 
 from hashlib import md5

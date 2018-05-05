@@ -26,3 +26,4 @@ slowaes==0.1a1
 txJSON-RPC==0.5
 wsgiref==0.1.2
 zope.interface==4.3.3
+treq==17.8.0
