@@ -1,5 +1,5 @@
 Twisted==16.6.0
-cryptography==2.0.3
+cryptography==2.2.2
 appdirs==1.4.3
 argparse==1.2.1
 docopt==0.6.2
