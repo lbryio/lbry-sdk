@@ -9,6 +9,7 @@ import json
 import textwrap
 import signal
 from copy import deepcopy
+from operator import attrgetter
 from twisted.web import server
 from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
@@ -96,10 +97,6 @@ CONNECTION_MESSAGES = {
 
 SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
-
-FILE_SORT_FIELD_NAME = 'name'
-FILE_SORT_FIELD_DATE = 'date'
-FILE_SORT_FIELD_PRICE = 'price'
 
 FILE_SORT_DIRECTION_ASCENDING = 'asc'
 FILE_SORT_DIRECTION_DESCENDING = 'desc'
@@ -935,13 +932,11 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(lbry_file)
 
     @defer.inlineCallbacks
-    def _get_lbry_files(self, return_json=False, full_status=True, sort_by=None, **kwargs):
+    def _get_lbry_files(self, return_json=False, full_status=True, **kwargs):
         lbry_files = list(self.lbry_file_manager.lbry_files)
         if kwargs:
             for search_type, value in iter_lbry_file_search_values(kwargs):
                 lbry_files = [l_f for l_f in lbry_files if l_f.__dict__[search_type] == value]
-        if sort_by:
-            lbry_files = self._sort_lbry_files(lbry_files, sort_by)
         if return_json:
             file_dicts = []
             for lbry_file in lbry_files:
@@ -954,25 +949,29 @@ class Daemon(AuthJSONRPCServer):
     def _sort_lbry_files(self, lbry_files, sort_by):
         for field, direction in sort_by:
             is_reverse = direction == FILE_SORT_DIRECTION_DESCENDING
-            if field == FILE_SORT_FIELD_NAME:
-                lbry_files = sorted(lbry_files, key=lambda f: f.file_name, reverse=is_reverse)
-            elif field == FILE_SORT_FIELD_DATE:
-                lbry_files = sorted(lbry_files, reverse=is_reverse)
-            elif field == FILE_SORT_FIELD_PRICE:
-                lbry_files = sorted(lbry_files, key=lambda f: f.points_paid, reverse=is_reverse)
-            else:
-                raise Exception('Unrecognized sort field "{}"'.format(field))
+            key_getter = None
+            if field:
+                search_path = field.split('.')
+                def key_getter(value):
+                    for key in search_path:
+                        try:
+                            value = value[key]
+                        except KeyError as e:
+                            errmsg = 'Failed to sort by "{}", key "{}" was not found.'
+                            raise Exception(errmsg.format(field, e.message))
+                    return value
+            lbry_files = sorted(lbry_files, key=key_getter, reverse=is_reverse)
         return lbry_files
 
     def _parse_lbry_files_sort(self, sort):
         """
-        Given a sort string like 'name, desc' or 'price',
+        Given a sort string like 'file_name, desc' or 'points_paid',
         parse the string into a tuple of (field, direction).
         Direction defaults to ascending.
         """
 
         pieces = sort.rsplit(',', 1)
-        field = pieces[0].strip()
+        field = pieces[0].strip() or None
         direction = pieces[1].strip().lower() if len(pieces) > 1 else None
         if direction and direction not in FILE_SORT_DIRECTIONS:
             raise Exception('Sort direction must be one of {}'.format(FILE_SORT_DIRECTIONS))
@@ -1422,8 +1421,9 @@ class Daemon(AuthJSONRPCServer):
             --claim_name=<claim_name>              : (str) get file with matching claim name
             --full_status                          : (bool) full status, populate the
                                                      'message' and 'size' fields
-            --sort=<sort_method>                   : (str) sort by any of 'name', 'date', or 'price'
-                                                     to specify direction append ',asc' or ',desc'
+            --sort=<sort_method>                   : (str) sort by any property, like 'file_name'
+                                                     or 'metadata.author'; to specify direction
+                                                     append ',asc' or ',desc'
 
         Returns:
             (list) List of files
@@ -1459,8 +1459,10 @@ class Daemon(AuthJSONRPCServer):
             ]
         """
 
-        sort_by = [self._parse_lbry_files_sort(s) for s in sort] if sort else None
-        result = yield self._get_lbry_files(return_json=True, sort_by=sort_by, **kwargs)
+        result = yield self._get_lbry_files(return_json=True, **kwargs)
+        if sort:
+            sort_by = [self._parse_lbry_files_sort(s) for s in sort]
+            result = self._sort_lbry_files(result, sort_by)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
