@@ -25,6 +25,8 @@ at anytime.
   * 
   
 ### Changed
+  * check headers file integrity on startup, removing/truncating the file to force re-download when necessary
+  * support partial headers file download from S3
   * changed txrequests for treq
   * changed cryptography version to 2.2.2
   * removed pycrypto dependency, replacing all calls to cryptography
