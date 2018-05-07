@@ -9,7 +9,6 @@ import json
 import textwrap
 import signal
 from copy import deepcopy
-from operator import attrgetter
 from twisted.web import server
 from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
