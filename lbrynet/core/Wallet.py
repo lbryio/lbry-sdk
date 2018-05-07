@@ -10,6 +10,7 @@ from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
 from twisted.internet.error import ConnectionAborted
 
+from hashlib import sha256
 from lbryum import wallet as lbryum_wallet
 from lbryum.network import Network
 from lbryum.simple_config import SimpleConfig
@@ -127,7 +128,6 @@ class Wallet(object):
             return os.stat(headers_path).st_size
         return 0
 
-
     @defer.inlineCallbacks
     def get_remote_height(self, server, port):
         connected = defer.Deferred()
@@ -143,6 +143,7 @@ class Wallet(object):
         from lbrynet import conf
         if conf.settings['blockchain_name'] != "lbrycrd_main":
             defer.returnValue(False)
+        self._check_header_file_integrity(conf)
         s3_headers_depth = conf.settings['s3_headers_depth']
         if not s3_headers_depth:
             defer.returnValue(False)
@@ -157,6 +158,27 @@ class Wallet(object):
             except Exception as err:
                 log.warning("error requesting remote height from %s:%i - %s", server_url, port, err)
         defer.returnValue(False)
+
+    def _check_header_file_integrity(self, conf):
+        # TODO: temporary workaround for usability. move to txlbryum and check headers instead of file integrity
+        hashsum = sha256()
+        checksum_height, checksum = conf.settings['HEADERS_FILE_SHA256_CHECKSUM']
+        checksum_length_in_bytes = checksum_height * HEADER_SIZE
+        if self.local_header_file_size() < checksum_length_in_bytes:
+            return
+        headers_path = os.path.join(self.config.path, "blockchain_headers")
+        with open(headers_path, "rb") as headers_file:
+            hashsum.update(headers_file.read(checksum_length_in_bytes))
+        current_checksum = hashsum.hexdigest()
+        if current_checksum != checksum:
+            msg = "Expected checksum {}, got {}".format(checksum, current_checksum)
+            log.warning("Wallet file corrupted, checksum mismatch. " + msg)
+            log.warning("Deleting header file so it can be downloaded again.")
+            os.unlink(headers_path)
+        elif (self.local_header_file_size() % HEADER_SIZE) != 0:
+            log.warning("Header file is good up to checkpoint height, but incomplete. Truncating to checkpoint.")
+            with open(headers_path, "rb+") as headers_file:
+                headers_file.truncate(checksum_length_in_bytes)
 
     @defer.inlineCallbacks
     def start(self):
