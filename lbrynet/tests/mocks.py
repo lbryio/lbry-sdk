@@ -18,7 +18,7 @@ from lbrynet import conf
 from util import debug_kademlia_packet
 
 KB = 2**10
-PUBLIC_EXPOENT = 65537  # http://www.daemonology.net/blog/2009-06-11-cryptographic-right-answers.html
+PUBLIC_EXPONENT = 65537  # http://www.daemonology.net/blog/2009-06-11-cryptographic-right-answers.html
 
 
 def decode_rsa_key(pem_key):
@@ -162,7 +162,7 @@ class PointTraderKeyQueryHandler(object):
 
 class Wallet(object):
     def __init__(self):
-        self.private_key = rsa.generate_private_key(public_exponent=PUBLIC_EXPOENT,
+        self.private_key = rsa.generate_private_key(public_exponent=PUBLIC_EXPONENT,
                                                     key_size=1024, backend=default_backend())
         self.encoded_public_key = self.private_key.public_key().public_bytes(serialization.Encoding.PEM,
                                                                              serialization.PublicFormat.PKCS1)

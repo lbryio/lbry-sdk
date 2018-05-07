@@ -98,8 +98,10 @@ class Wallet(object):
         response = yield treq.get(HEADERS_URL, headers=resume_header)
         got_406 = response.code == 406  # our file is bigger
         final_size_after_download = response.length + local_header_size
+        if got_406:
+            log.warning("s3 is more out of date than we are")
         # should have something to download and a final length divisible by the header size
-        if not got_406 and final_size_after_download and not final_size_after_download % HEADER_SIZE:
+        elif final_size_after_download and not final_size_after_download % HEADER_SIZE:
             s3_height = (final_size_after_download / HEADER_SIZE) - 1
             local_height = self.local_header_file_height()
             if s3_height > local_height:
