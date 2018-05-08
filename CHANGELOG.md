@@ -57,7 +57,11 @@ at anytime.
   * old `blob_announce_all` command
   * `AuthJSONRPCServer.auth_required` decorator
   * unused `--wallet` argument to `lbrynet-daemon`, which used to be to support `PTCWallet`.
-
+  
+## [0.19.3] - 2018-05-04
+### Changed
+ * download blockchain headers from s3 before starting the wallet when the local height is more than s3_headers_depth (a config setting) blocks behind (https://github.com/lbryio/lbry/pull/1177)
+ * un-deprecated report_bug command (https://github.com/lbryio/lbry/commit/f8e418fb4448a3ed1531657f8b3c608fb568af85)
 
 ## [0.19.2] - 2018-03-28
 ### Fixed
