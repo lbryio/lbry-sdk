@@ -683,40 +683,34 @@ class SQLiteStorage(object):
 
     @defer.inlineCallbacks
     def get_content_claim(self, stream_hash, include_supports=True):
-        def _get_content_claim(transaction):
-            claim_id = transaction.execute(
-                "select claim.claim_outpoint from content_claim "
-                "inner join claim on claim.claim_outpoint=content_claim.claim_outpoint and content_claim.stream_hash=? "
-                "order by claim.rowid desc", (stream_hash, )
+        def _get_claim_from_stream_hash(transaction):
+            claim_info = transaction.execute(
+                "select c.*, "
+                "case when c.channel_claim_id is not null then "
+                "(select claim_name from claim where claim_id==c.channel_claim_id) "
+                "else null end as channel_name from content_claim "
+                "inner join claim c on c.claim_outpoint=content_claim.claim_outpoint "
+                "and content_claim.stream_hash=? order by c.rowid desc", (stream_hash,)
             ).fetchone()
-            if not claim_id:
+            if not claim_info:
                 return None
-            return claim_id[0]
+            channel_name = claim_info[-1]
+            result = _format_claim_response(*claim_info[:-1])
+            if channel_name:
+                result['channel_name'] = channel_name
+            return result
 
-        content_claim_outpoint = yield self.db.runInteraction(_get_content_claim)
-        result = None
-        if content_claim_outpoint:
-            result = yield self.get_claim(content_claim_outpoint, include_supports)
+        result = yield self.db.runInteraction(_get_claim_from_stream_hash)
+        if result and include_supports:
+            supports = yield self.get_supports(result['claim_id'])
+            result['supports'] = supports
+            result['effective_amount'] = float(
+                sum([support['amount'] for support in supports]) + result['amount']
+            )
         defer.returnValue(result)
 
     @defer.inlineCallbacks
     def get_claim(self, claim_outpoint, include_supports=True):
-        def _claim_response(outpoint, claim_id, name, amount, height, serialized, channel_id, address, claim_sequence):
-            r = {
-                "name": name,
-                "claim_id": claim_id,
-                "address": address,
-                "claim_sequence": claim_sequence,
-                "value": ClaimDict.deserialize(serialized.decode('hex')).claim_dict,
-                "height": height,
-                "amount": float(Decimal(amount) / Decimal(COIN)),
-                "nout": int(outpoint.split(":")[1]),
-                "txid": outpoint.split(":")[0],
-                "channel_claim_id": channel_id,
-                "channel_name": None
-            }
-            return r
-
         def _get_claim(transaction):
             claim_info = transaction.execute("select c.*, "
                                              "case when c.channel_claim_id is not null then "
@@ -724,7 +718,7 @@ class SQLiteStorage(object):
                                              "else null end as channel_name from claim c where claim_outpoint = ?",
                                              (claim_outpoint,)).fetchone()
             channel_name = claim_info[-1]
-            result = _claim_response(*claim_info[:-1])
+            result = _format_claim_response(*claim_info[:-1])
             if channel_name:
                 result['channel_name'] = channel_name
             return result
@@ -792,3 +786,21 @@ class SQLiteStorage(object):
             "where r.timestamp is null or r.timestamp < ?",
             self.clock.seconds() - conf.settings['auto_re_reflect_interval']
         )
+
+
+# Helper functions
+def _format_claim_response(outpoint, claim_id, name, amount, height, serialized, channel_id, address, claim_sequence):
+    r = {
+        "name": name,
+        "claim_id": claim_id,
+        "address": address,
+        "claim_sequence": claim_sequence,
+        "value": ClaimDict.deserialize(serialized.decode('hex')).claim_dict,
+        "height": height,
+        "amount": float(Decimal(amount) / Decimal(COIN)),
+        "nout": int(outpoint.split(":")[1]),
+        "txid": outpoint.split(":")[0],
+        "channel_claim_id": channel_id,
+        "channel_name": None
+    }
+    return r
