@@ -718,16 +718,15 @@ class SQLiteStorage(object):
             return r
 
         def _get_claim(transaction):
-            claim_info = transaction.execute(
-                "select * from claim where claim_outpoint=?", (claim_outpoint, )
-            ).fetchone()
-            result = _claim_response(*claim_info)
-            if result['channel_claim_id']:
-                channel_name_result = transaction.execute(
-                    "select claim_name from claim where claim_id=?", (result['channel_claim_id'], )
-                ).fetchone()
-                if channel_name_result:
-                    result['channel_name'] = channel_name_result[0]
+            claim_info = transaction.execute("select c.*, "
+                                             "case when c.channel_claim_id is not null then "
+                                             "(select claim_name from claim where claim_id==c.channel_claim_id) "
+                                             "else null end as channel_name from claim c where claim_outpoint = ?",
+                                             (claim_outpoint,)).fetchone()
+            channel_name = claim_info[-1]
+            result = _claim_response(*claim_info[:-1])
+            if channel_name:
+                result['channel_name'] = channel_name
             return result
 
         result = yield self.db.runInteraction(_get_claim)
