@@ -31,7 +31,7 @@ class EncryptedFileManager(object):
 
     def __init__(self, session, sd_identifier):
 
-        self.auto_re_reflect = conf.settings['reflect_uploads']
+        self.auto_re_reflect = conf.settings['reflect_uploads'] and conf.settings['auto_re_reflect_interval'] > 0
         self.auto_re_reflect_interval = conf.settings['auto_re_reflect_interval']
         self.session = session
         self.storage = session.storage
@@ -140,7 +140,7 @@ class EncryptedFileManager(object):
 
         log.info("Started %i lbry files", len(self.lbry_files))
         if self.auto_re_reflect is True:
-            safe_start_looping_call(self.lbry_file_reflector, self.auto_re_reflect_interval)
+            safe_start_looping_call(self.lbry_file_reflector, self.auto_re_reflect_interval / 10)
 
     @defer.inlineCallbacks
     def _stop_lbry_file(self, lbry_file):
@@ -253,8 +253,10 @@ class EncryptedFileManager(object):
     def reflect_lbry_files(self):
         sem = defer.DeferredSemaphore(self.CONCURRENT_REFLECTS)
         ds = []
+        sd_hashes_to_reflect = yield self.storage.get_streams_to_re_reflect()
         for lbry_file in self.lbry_files:
-            ds.append(sem.run(reflect_file, lbry_file))
+            if lbry_file.sd_hash in sd_hashes_to_reflect:
+                ds.append(sem.run(reflect_file, lbry_file))
         yield defer.DeferredList(ds)
 
     @defer.inlineCallbacks

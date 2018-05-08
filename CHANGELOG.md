@@ -45,6 +45,8 @@ at anytime.
   * support both positional and keyword args for api calls
   * `peer_list` to return a list of dictionaries instead of a list of lists, added peer node ids to the results
   * download blockchain headers from s3 before starting the wallet when the local height is more than `s3_headers_depth` (a config setting) blocks behind
+  * track successful reflector uploads in sqlite to minimize how many streams are attempted by auto re-reflect
+  * increase the default `auto_re_reflect_interval` to a day
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests
