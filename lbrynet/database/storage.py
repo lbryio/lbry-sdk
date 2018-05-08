@@ -552,7 +552,7 @@ class SQLiteStorage(object):
                 )
         return self.db.runInteraction(_save_support)
 
-    def get_supports(self, claim_id):
+    def get_supports(self, *claim_ids):
         def _format_support(outpoint, supported_id, amount, address):
             return {
                 "txid": outpoint.split(":")[0],
@@ -563,10 +563,15 @@ class SQLiteStorage(object):
             }
 
         def _get_supports(transaction):
+            if len(claim_ids) == 1:
+                bind = "=?"
+            else:
+                bind = "in ({})".format(','.join('?' for _ in range(len(claim_ids))))
             return [
                 _format_support(*support_info)
                 for support_info in transaction.execute(
-                    "select * from support where claim_id=?", (claim_id, )
+                    "select * from support where claim_id {}".format(bind),
+                    tuple(claim_ids)
                 ).fetchall()
             ]
 
