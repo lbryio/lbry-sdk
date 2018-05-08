@@ -113,7 +113,8 @@ class Wallet(object):
                 else:
                     with open(os.path.join(self.config.path, "blockchain_headers"), "wb") as headers_file:
                         yield treq.collect(response, headers_file.write)
-                log.info("fetched headers from s3 (s3 height: %i)", s3_height)
+                log.info("fetched headers from s3 (s3 height: %i), now verifying integrity after download.", s3_height)
+                self._check_header_file_integrity()
             else:
                 log.warning("s3 is more out of date than we are")
         else:
@@ -143,7 +144,7 @@ class Wallet(object):
         from lbrynet import conf
         if conf.settings['blockchain_name'] != "lbrycrd_main":
             defer.returnValue(False)
-        self._check_header_file_integrity(conf)
+        self._check_header_file_integrity()
         s3_headers_depth = conf.settings['s3_headers_depth']
         if not s3_headers_depth:
             defer.returnValue(False)
@@ -159,8 +160,11 @@ class Wallet(object):
                 log.warning("error requesting remote height from %s:%i - %s", server_url, port, err)
         defer.returnValue(False)
 
-    def _check_header_file_integrity(self, conf):
+    def _check_header_file_integrity(self):
         # TODO: temporary workaround for usability. move to txlbryum and check headers instead of file integrity
+        from lbrynet import conf
+        if conf.settings['blockchain_name'] != "lbrycrd_main":
+            return
         hashsum = sha256()
         checksum_height, checksum = conf.settings['HEADERS_FILE_SHA256_CHECKSUM']
         checksum_length_in_bytes = checksum_height * HEADER_SIZE
