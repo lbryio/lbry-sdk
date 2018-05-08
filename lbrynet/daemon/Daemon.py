@@ -244,7 +244,7 @@ class Daemon(AuthJSONRPCServer):
         yield self._start_analytics()
         yield add_lbry_file_to_sd_identifier(self.sd_identifier)
         yield self._setup_stream_identifier()
-        yield self._setup_lbry_file_manager()
+        yield self._setup_lbry_file_manager(verify_streams=migrated)
         yield self._setup_query_handlers()
         yield self._setup_server()
         log.info("Starting balance: " + str(self.session.wallet.get_balance()))
@@ -512,11 +512,11 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(migrated)
 
     @defer.inlineCallbacks
-    def _setup_lbry_file_manager(self):
+    def _setup_lbry_file_manager(self, verify_streams):
         log.info('Starting the file manager')
         self.startup_status = STARTUP_STAGES[3]
         self.lbry_file_manager = EncryptedFileManager(self.session, self.sd_identifier)
-        yield self.lbry_file_manager.setup()
+        yield self.lbry_file_manager.setup(verify_streams)
         log.info('Done setting up file manager')
 
     def _start_analytics(self):

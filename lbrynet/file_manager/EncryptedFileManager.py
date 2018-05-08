@@ -42,9 +42,9 @@ class EncryptedFileManager(object):
         self.lbry_file_reflector = task.LoopingCall(self.reflect_lbry_files)
 
     @defer.inlineCallbacks
-    def setup(self):
+    def setup(self, verify_streams=False):
         yield self._add_to_sd_identifier()
-        yield self._start_lbry_files()
+        yield self._start_lbry_files(verify_streams)
         log.info("Started file manager")
 
     def get_lbry_file_status(self, lbry_file):
@@ -97,7 +97,7 @@ class EncryptedFileManager(object):
         )
 
     @defer.inlineCallbacks
-    def _start_lbry_file(self, file_info, payment_rate_manager):
+    def _start_lbry_file(self, file_info, payment_rate_manager, verify_stream):
         lbry_file = self._get_lbry_file(
             file_info['row_id'], file_info['stream_hash'], payment_rate_manager, file_info['sd_hash'],
             file_info['key'], file_info['stream_name'], file_info['file_name'], file_info['download_directory'],
@@ -105,10 +105,12 @@ class EncryptedFileManager(object):
         )
         yield lbry_file.get_claim_info()
         try:
-            # verify the stream is valid (we might have downloaded an invalid stream
-            # in the past when the validation check didn't work)
-            stream_info = yield get_sd_info(self.storage, file_info['stream_hash'], include_blobs=True)
-            validate_descriptor(stream_info)
+            # verify if the stream is valid (we might have downloaded an invalid stream
+            # in the past when the validation check didn't work. This runs after every
+            # migration to ensure blobs migrated from that past version gets verified)
+            if verify_stream:
+                stream_info = yield get_sd_info(self.storage, file_info['stream_hash'], include_blobs=True)
+                validate_descriptor(stream_info)
         except InvalidStreamDescriptorError as err:
             log.warning("Stream for descriptor %s is invalid (%s), cleaning it up",
                         lbry_file.sd_hash, err.message)
@@ -126,7 +128,7 @@ class EncryptedFileManager(object):
                 log.warning("Failed to start %i", file_info.get('rowid'))
 
     @defer.inlineCallbacks
-    def _start_lbry_files(self):
+    def _start_lbry_files(self, verify_streams):
         files = yield self.session.storage.get_all_lbry_files()
         b_prm = self.session.base_payment_rate_manager
         payment_rate_manager = NegotiatedPaymentRateManager(b_prm, self.session.blob_tracker)
@@ -134,7 +136,7 @@ class EncryptedFileManager(object):
         log.info("Starting %i files", len(files))
         dl = []
         for file_info in files:
-            dl.append(self._start_lbry_file(file_info, payment_rate_manager))
+            dl.append(self._start_lbry_file(file_info, payment_rate_manager, verify_streams))
 
         yield defer.DeferredList(dl)
 
