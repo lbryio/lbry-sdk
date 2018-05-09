@@ -715,6 +715,44 @@ class SQLiteStorage(object):
         defer.returnValue(result)
 
     @defer.inlineCallbacks
+    def get_claims_from_stream_hashes(self, stream_hashes, include_supports=True):
+        def _batch_get_claim(transaction):
+            results = {}
+            bind = "({})".format(','.join('?' for _ in range(len(stream_hashes))))
+            claim_infos = transaction.execute(
+                "select content_claim.stream_hash, c.*, "
+                "case when c.channel_claim_id is not null then "
+                "(select claim_name from claim where claim_id==c.channel_claim_id) "
+                "else null end as channel_name from content_claim "
+                "inner join claim c on c.claim_outpoint=content_claim.claim_outpoint "
+                "and content_claim.stream_hash in {} order by c.rowid desc".format(bind),
+                tuple(stream_hashes)
+            ).fetchall()
+            for claim_info in claim_infos:
+                channel_name = claim_info[-1]
+                stream_hash = claim_info[0]
+                result = _format_claim_response(*claim_info[1:-1])
+                if channel_name:
+                    result['channel_name'] = channel_name
+                results[stream_hash] = result
+            return results
+
+        claims = yield self.db.runInteraction(_batch_get_claim)
+        if include_supports:
+            all_supports = {}
+            for support in (yield self.get_supports(*[claim['claim_id'] for claim in claims.values()])):
+                all_supports.setdefault(support['claim_id'], []).append(support)
+            for stream_hash in claims.keys():
+                claim = claims[stream_hash]
+                supports = all_supports.get(claim['claim_id'], [])
+                claim['supports'] = supports
+                claim['effective_amount'] = float(
+                    sum([support['amount'] for support in supports]) + claim['amount']
+                )
+                claims[stream_hash] = claim
+        defer.returnValue(claims)
+
+    @defer.inlineCallbacks
     def get_claim(self, claim_outpoint, include_supports=True):
         def _get_claim(transaction):
             claim_info = transaction.execute("select c.*, "

@@ -97,13 +97,14 @@ class EncryptedFileManager(object):
         )
 
     @defer.inlineCallbacks
-    def _start_lbry_file(self, file_info, payment_rate_manager, verify_stream):
+    def _start_lbry_file(self, file_info, payment_rate_manager, verify_stream, claim_info):
         lbry_file = self._get_lbry_file(
             file_info['row_id'], file_info['stream_hash'], payment_rate_manager, file_info['sd_hash'],
             file_info['key'], file_info['stream_name'], file_info['file_name'], file_info['download_directory'],
             file_info['suggested_file_name']
         )
-        yield lbry_file.get_claim_info()
+        if claim_info:
+            lbry_file.set_claim_info(claim_info)
         try:
             # verify if the stream is valid (we might have downloaded an invalid stream
             # in the past when the validation check didn't work. This runs after every
@@ -130,13 +131,15 @@ class EncryptedFileManager(object):
     @defer.inlineCallbacks
     def _start_lbry_files(self, verify_streams):
         files = yield self.session.storage.get_all_lbry_files()
+        claim_infos = yield self.session.storage.get_claims_from_stream_hashes([file['stream_hash'] for file in files])
         b_prm = self.session.base_payment_rate_manager
         payment_rate_manager = NegotiatedPaymentRateManager(b_prm, self.session.blob_tracker)
 
         log.info("Starting %i files", len(files))
         dl = []
         for file_info in files:
-            dl.append(self._start_lbry_file(file_info, payment_rate_manager, verify_streams))
+            claim_info = claim_infos.get(file_info['stream_hash'])
+            dl.append(self._start_lbry_file(file_info, payment_rate_manager, verify_streams, claim_info))
 
         yield defer.DeferredList(dl)
 
