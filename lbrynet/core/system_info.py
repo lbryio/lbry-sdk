@@ -37,7 +37,7 @@ def get_platform(get_ip=True):
         "build": build_type.BUILD,  # CI server sets this during build step
     }
 
-    # TODO: remove this from get_platform and add a get_external_ip function using txrequests
+    # TODO: remove this from get_platform and add a get_external_ip function using treq
     if get_ip:
         try:
             response = json.loads(urlopen("https://api.lbry.io/ip").read())

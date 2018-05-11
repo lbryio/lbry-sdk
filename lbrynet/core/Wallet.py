@@ -3,15 +3,14 @@ from collections import defaultdict, deque
 import datetime
 import logging
 from decimal import Decimal
+
+import treq
 from zope.interface import implements
 from twisted.internet import threads, reactor, defer, task
 from twisted.python.failure import Failure
-from twisted.python.threadpool import ThreadPool
-from twisted._threads._ithreads import AlreadyQuit
 from twisted.internet.error import ConnectionAborted
-from txrequests import Session as _TxRequestsSession
-from requests import Session as requestsSession
 
+from hashlib import sha256
 from lbryum import wallet as lbryum_wallet
 from lbryum.network import Network
 from lbryum.simple_config import SimpleConfig
@@ -34,29 +33,6 @@ from lbrynet.core.Error import UnknownClaimID, UnknownURI, NegativeFundsError, U
 from lbrynet.core.Error import DownloadCanceledError, RequestCanceledError
 
 log = logging.getLogger(__name__)
-
-
-class TxRequestsSession(_TxRequestsSession):
-    # Session from txrequests would throw AlreadyQuit errors, this catches them
-    def __init__(self, pool=None, minthreads=1, maxthreads=4, **kwargs):
-        requestsSession.__init__(self, **kwargs)  # pylint: disable=non-parent-init-called
-        self.ownPool = False
-        if pool is None:
-            self.ownPool = True
-            pool = ThreadPool(minthreads=minthreads, maxthreads=maxthreads)
-            # unclosed ThreadPool leads to reactor hangs at shutdown
-            # this is a problem in many situation, so better enforce pool stop here
-
-            def stop_pool():
-                try:
-                    pool.stop()
-                except AlreadyQuit:
-                    pass
-
-            reactor.addSystemEventTrigger("after", "shutdown", stop_pool)
-        self.pool = pool
-        if self.ownPool:
-            pool.start()
 
 
 class ReservedPoints(object):
@@ -118,25 +94,39 @@ class Wallet(object):
 
     @defer.inlineCallbacks
     def fetch_headers_from_s3(self):
-        with TxRequestsSession() as s:
-            r = yield s.get(HEADERS_URL)
-            raw_headers = r.content
-            if not len(raw_headers) % HEADER_SIZE:  # should be divisible by the header size
-                s3_height = (len(raw_headers) / HEADER_SIZE) - 1
-                local_height = self.local_header_file_height()
-                if s3_height > local_height:
-                    with open(os.path.join(self.config.path, "blockchain_headers"), "wb") as headers_file:
-                        headers_file.write(raw_headers)
-                    log.info("fetched headers from s3 (s3 height: %i)", s3_height)
+        local_header_size = self.local_header_file_size()
+        resume_header = {"Range": "bytes={}-".format(local_header_size)}
+        response = yield treq.get(HEADERS_URL, headers=resume_header)
+        got_406 = response.code == 406  # our file is bigger
+        final_size_after_download = response.length + local_header_size
+        if got_406:
+            log.warning("s3 is more out of date than we are")
+        # should have something to download and a final length divisible by the header size
+        elif final_size_after_download and not final_size_after_download % HEADER_SIZE:
+            s3_height = (final_size_after_download / HEADER_SIZE) - 1
+            local_height = self.local_header_file_height()
+            if s3_height > local_height:
+                if local_header_size:
+                    log.info("Resuming download of %i bytes from s3", response.length)
+                    with open(os.path.join(self.config.path, "blockchain_headers"), "a+b") as headers_file:
+                        yield treq.collect(response, headers_file.write)
                 else:
-                    log.warning("s3 is more out of date than we are")
+                    with open(os.path.join(self.config.path, "blockchain_headers"), "wb") as headers_file:
+                        yield treq.collect(response, headers_file.write)
+                log.info("fetched headers from s3 (s3 height: %i), now verifying integrity after download.", s3_height)
+                self._check_header_file_integrity()
             else:
-                log.error("invalid size for headers from s3")
+                log.warning("s3 is more out of date than we are")
+        else:
+            log.error("invalid size for headers from s3")
 
     def local_header_file_height(self):
+        return max((self.local_header_file_size() / HEADER_SIZE) - 1, 0)
+
+    def local_header_file_size(self):
         headers_path = os.path.join(self.config.path, "blockchain_headers")
         if os.path.isfile(headers_path):
-            return max((os.stat(headers_path).st_size / 112) - 1, 0)
+            return os.stat(headers_path).st_size
         return 0
 
     @defer.inlineCallbacks
@@ -154,6 +144,7 @@ class Wallet(object):
         from lbrynet import conf
         if conf.settings['blockchain_name'] != "lbrycrd_main":
             defer.returnValue(False)
+        self._check_header_file_integrity()
         s3_headers_depth = conf.settings['s3_headers_depth']
         if not s3_headers_depth:
             defer.returnValue(False)
@@ -163,11 +154,35 @@ class Wallet(object):
             try:
                 remote_height = yield self.get_remote_height(server_url, port)
                 log.info("%s:%i height: %i, local height: %s", server_url, port, remote_height, local_height)
-                if remote_height > local_height + s3_headers_depth:
+                if remote_height > (local_height + s3_headers_depth):
                     defer.returnValue(True)
             except Exception as err:
                 log.warning("error requesting remote height from %s:%i - %s", server_url, port, err)
         defer.returnValue(False)
+
+    def _check_header_file_integrity(self):
+        # TODO: temporary workaround for usability. move to txlbryum and check headers instead of file integrity
+        from lbrynet import conf
+        if conf.settings['blockchain_name'] != "lbrycrd_main":
+            return
+        hashsum = sha256()
+        checksum_height, checksum = conf.settings['HEADERS_FILE_SHA256_CHECKSUM']
+        checksum_length_in_bytes = checksum_height * HEADER_SIZE
+        if self.local_header_file_size() < checksum_length_in_bytes:
+            return
+        headers_path = os.path.join(self.config.path, "blockchain_headers")
+        with open(headers_path, "rb") as headers_file:
+            hashsum.update(headers_file.read(checksum_length_in_bytes))
+        current_checksum = hashsum.hexdigest()
+        if current_checksum != checksum:
+            msg = "Expected checksum {}, got {}".format(checksum, current_checksum)
+            log.warning("Wallet file corrupted, checksum mismatch. " + msg)
+            log.warning("Deleting header file so it can be downloaded again.")
+            os.unlink(headers_path)
+        elif (self.local_header_file_size() % HEADER_SIZE) != 0:
+            log.warning("Header file is good up to checkpoint height, but incomplete. Truncating to checkpoint.")
+            with open(headers_path, "rb+") as headers_file:
+                headers_file.truncate(checksum_length_in_bytes)
 
     @defer.inlineCallbacks
     def start(self):

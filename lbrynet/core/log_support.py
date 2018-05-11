@@ -6,8 +6,7 @@ import os
 import sys
 import traceback
 
-from txrequests import Session
-from requests.exceptions import ConnectionError
+import treq
 from twisted.internet import defer
 import twisted.python.log
 
@@ -35,13 +34,13 @@ TRACE = 5
 
 
 class HTTPSHandler(logging.Handler):
-    def __init__(self, url, fqdn=False, localname=None, facility=None, session=None):
+    def __init__(self, url, fqdn=False, localname=None, facility=None, cookies=None):
         logging.Handler.__init__(self)
         self.url = url
         self.fqdn = fqdn
         self.localname = localname
         self.facility = facility
-        self.session = session if session is not None else Session()
+        self.cookies = cookies or {}
 
     def get_full_message(self, record):
         if record.exc_info:
@@ -52,10 +51,8 @@ class HTTPSHandler(logging.Handler):
     @defer.inlineCallbacks
     def _emit(self, record):
         payload = self.format(record)
-        try:
-            yield self.session.post(self.url, data=payload)
-        except ConnectionError:
-            pass
+        response = yield treq.post(self.url, data=payload, cookies=self.cookies)
+        self.cookies.update(response.cookies())
 
     def emit(self, record):
         return self._emit(record)

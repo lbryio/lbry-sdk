@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from Crypto.Cipher import AES
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
 import mock
 from twisted.trial import unittest
 from twisted.internet import defer
@@ -18,7 +18,7 @@ MB = 2**20
 
 def iv_generator():
     while True:
-        yield '3' * AES.block_size
+        yield '3' * (AES.block_size / 8)
 
 
 class CreateEncryptedFileTest(unittest.TestCase):
@@ -47,7 +47,7 @@ class CreateEncryptedFileTest(unittest.TestCase):
     @defer.inlineCallbacks
     def create_file(self, filename):
         handle = mocks.GenFile(3*MB, '1')
-        key = '2'*AES.block_size
+        key = '2' * (AES.block_size / 8)
         out = yield EncryptedFileCreator.create_lbry_file(self.session, self.file_manager, filename, handle,
                                                           key, iv_generator())
         defer.returnValue(out)
