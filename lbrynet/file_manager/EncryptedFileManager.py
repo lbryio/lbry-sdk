@@ -6,12 +6,11 @@ import logging
 
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
-from lbrynet.core.Error import InvalidStreamDescriptorError
 from lbrynet.reflector.reupload import reflect_file
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
-from lbrynet.core.StreamDescriptor import EncryptedFileStreamType, get_sd_info, validate_descriptor
+from lbrynet.core.StreamDescriptor import EncryptedFileStreamType, get_sd_info
 from lbrynet.cryptstream.client.CryptStreamDownloader import AlreadyStoppedError
 from lbrynet.cryptstream.client.CryptStreamDownloader import CurrentlyStoppingError
 from lbrynet.core.utils import safe_start_looping_call, safe_stop_looping_call
@@ -42,9 +41,9 @@ class EncryptedFileManager(object):
         self.lbry_file_reflector = task.LoopingCall(self.reflect_lbry_files)
 
     @defer.inlineCallbacks
-    def setup(self, verify_streams=False):
+    def setup(self):
         yield self._add_to_sd_identifier()
-        yield self._start_lbry_files(verify_streams)
+        yield self._start_lbry_files()
         log.info("Started file manager")
 
     def get_lbry_file_status(self, lbry_file):
@@ -96,8 +95,7 @@ class EncryptedFileManager(object):
             suggested_file_name=suggested_file_name
         )
 
-    @defer.inlineCallbacks
-    def _start_lbry_file(self, file_info, payment_rate_manager, verify_stream, claim_info):
+    def _start_lbry_file(self, file_info, payment_rate_manager, claim_info):
         lbry_file = self._get_lbry_file(
             file_info['row_id'], file_info['stream_hash'], payment_rate_manager, file_info['sd_hash'],
             file_info['key'], file_info['stream_name'], file_info['file_name'], file_info['download_directory'],
@@ -106,42 +104,26 @@ class EncryptedFileManager(object):
         if claim_info:
             lbry_file.set_claim_info(claim_info)
         try:
-            # verify if the stream is valid (we might have downloaded an invalid stream
-            # in the past when the validation check didn't work. This runs after every
-            # migration to ensure blobs migrated from that past version gets verified)
-            if verify_stream:
-                stream_info = yield get_sd_info(self.storage, file_info['stream_hash'], include_blobs=True)
-                validate_descriptor(stream_info)
-        except InvalidStreamDescriptorError as err:
-            log.warning("Stream for descriptor %s is invalid (%s), cleaning it up",
-                        lbry_file.sd_hash, err.message)
-            yield lbry_file.delete_data()
-            yield self.session.storage.delete_stream(lbry_file.stream_hash)
-        else:
-            try:
-                # restore will raise an Exception if status is unknown
-                lbry_file.restore(file_info['status'])
-                self.storage.content_claim_callbacks[lbry_file.stream_hash] = lbry_file.get_claim_info
-                self.lbry_files.append(lbry_file)
-                if len(self.lbry_files) % 500 == 0:
-                    log.info("Started %i files", len(self.lbry_files))
-            except Exception:
-                log.warning("Failed to start %i", file_info.get('rowid'))
+            # restore will raise an Exception if status is unknown
+            lbry_file.restore(file_info['status'])
+            self.storage.content_claim_callbacks[lbry_file.stream_hash] = lbry_file.get_claim_info
+            self.lbry_files.append(lbry_file)
+            if len(self.lbry_files) % 500 == 0:
+                log.info("Started %i files", len(self.lbry_files))
+        except Exception:
+            log.warning("Failed to start %i", file_info.get('rowid'))
 
     @defer.inlineCallbacks
-    def _start_lbry_files(self, verify_streams):
+    def _start_lbry_files(self):
         files = yield self.session.storage.get_all_lbry_files()
         claim_infos = yield self.session.storage.get_claims_from_stream_hashes([file['stream_hash'] for file in files])
         b_prm = self.session.base_payment_rate_manager
         payment_rate_manager = NegotiatedPaymentRateManager(b_prm, self.session.blob_tracker)
 
         log.info("Starting %i files", len(files))
-        dl = []
         for file_info in files:
             claim_info = claim_infos.get(file_info['stream_hash'])
-            dl.append(self._start_lbry_file(file_info, payment_rate_manager, verify_streams, claim_info))
-
-        yield defer.DeferredList(dl)
+            self._start_lbry_file(file_info, payment_rate_manager, claim_info)
 
         log.info("Started %i lbry files", len(self.lbry_files))
         if self.auto_re_reflect is True:

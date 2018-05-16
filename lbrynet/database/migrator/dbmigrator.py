@@ -18,6 +18,8 @@ def migrate_db(db_dir, start, end):
             from lbrynet.database.migrator.migrate6to7 import do_migration
         elif current == 7:
             from lbrynet.database.migrator.migrate7to8 import do_migration
+        elif current == 8:
+            from lbrynet.database.migrator.migrate8to9 import do_migration
         else:
             raise Exception("DB migration of version {} to {} is not available".format(current,
                                                                                        current+1))
