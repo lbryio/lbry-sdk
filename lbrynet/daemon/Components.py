@@ -6,6 +6,7 @@ from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.Wallet import LBRYumWallet
 from lbrynet.daemon.Component import Component
 from lbrynet.core.Session import Session
+from lbrynet.dht import node, hashannouncer
 
 log = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ log = logging.getLogger(__name__)
 DATABASE_COMPONENT = "database"
 WALLET_COMPONENT = "wallet"
 SESSION_COMPONENT = "session"
+DHT_COMPONENT = "dht"
 
 
 class DatabaseComponent(Component):
@@ -212,3 +214,56 @@ class SessionComponent(Component):
     @defer.inlineCallbacks
     def stop(cls):
         yield cls.session.shut_down()
+
+
+class DHTComponennt(Component):
+    component_name = DHT_COMPONENT
+    depends_on = [DATABASE_COMPONENT]
+    dht_node = None
+    dht_node_class = node.Node
+
+    @staticmethod
+    def get_node_id():
+        return conf.settings.node_id
+
+    @staticmethod
+    def get_dht_node_port():
+        return conf.settings['dht_node_port']
+
+    @staticmethod
+    def get_known_dht_nodes():
+        return conf.settings['known_dht_nodes']
+
+    @staticmethod
+    def get_peer_port():
+        return conf.settings['peer_port']
+
+    @staticmethod
+    def get_external_ip():
+        from lbrynet.core.system_info import get_platform
+        platform = get_platform(get_ip=True)
+        return platform['ip']
+
+    @classmethod
+    @defer.inlineCallbacks
+    def setup(cls):
+        storage = DatabaseComponent.storage
+
+        cls.dht_node = cls.dht_node_class(
+            node_id=cls.get_node_id(),
+            udpPort=cls.get_dht_node_port(),
+            externalIP=cls.get_external_ip(),
+            peerPort=cls.get_peer_port()
+        )
+        if not cls.hash_announcer:
+            cls.hash_announcer = hashannouncer.DHTHashAnnouncer(cls.dht_node, storage)
+        cls.peer_manager = cls.dht_node.peer_manager
+        cls.peer_finder = cls.dht_node.peer_finder
+        cls._join_dht_deferred = cls.dht_node.joinNetwork(cls.get_known_dht_nodes())
+        cls._join_dht_deferred.addCallback(lambda _: log.info("Joined the dht"))
+        cls._join_dht_deferred.addCallback(lambda _: cls.hash_announcer.start())
+
+    @classmethod
+    @defer.inlineCallbacks
+    def stop(cls):
+        raise NotImplementedError()
