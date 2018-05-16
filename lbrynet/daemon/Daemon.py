@@ -36,6 +36,7 @@ from lbrynet.daemon.Downloader import GetStream
 from lbrynet.daemon.Publisher import Publisher
 from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.daemon.auth.server import AuthJSONRPCServer
+from lbrynet.daemon.claims_comparator import arrange_results
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
@@ -2293,6 +2294,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_name_claims()
+        d.addCallback(arrange_results)
         d.addCallback(lambda claims: self._render_response(claims))
         return d
 
@@ -2331,7 +2333,8 @@ class Daemon(AuthJSONRPCServer):
         """
 
         claims = yield self.session.wallet.get_claims_for_name(name)
-        defer.returnValue(claims)
+        result = arrange_results(claims)
+        defer.returnValue(result)
 
     @defer.inlineCallbacks
     def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
