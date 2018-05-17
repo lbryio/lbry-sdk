@@ -168,6 +168,8 @@ def server_port(server_and_port):
 def server_list(servers):
     return [server_port(server) for server in servers]
 
+def server_list_reverse(servers):
+    return ["%s:%s" % (server, port) for server, port in servers]
 
 class Env(envparse.Env):
     """An Env parser that automatically namespaces the variables with LBRY"""
@@ -267,7 +269,7 @@ ADJUSTABLE_SETTINGS = {
     'is_generous_host': (bool, True),
     'announce_head_blobs_only': (bool, True),
     'concurrent_announcers': (int, DEFAULT_CONCURRENT_ANNOUNCERS),
-    'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_list),
+    'known_dht_nodes': (list, DEFAULT_DHT_NODES, server_list, server_list_reverse),
     'lbryum_wallet_dir': (str, default_lbryum_dir),
     'max_connections_per_stream': (int, 5),
     'seek_head_blob_first': (bool, True),
@@ -285,7 +287,7 @@ ADJUSTABLE_SETTINGS = {
     # event the initial upload failed or was disconnected part way through, provided the auto_re_reflect_interval > 0)
     'reflect_uploads': (bool, True),
     'auto_re_reflect_interval': (int, 86400),  # set to 0 to disable
-    'reflector_servers': (list, [('reflector2.lbry.io', 5566)], server_list),
+    'reflector_servers': (list, [('reflector2.lbry.io', 5566)], server_list, server_list_reverse),
     'run_reflector_server': (bool, False),
     'sd_download_timeout': (int, 3),
     'share_usage_data': (bool, True),  # whether to share usage stats and diagnostic info with LBRY
@@ -295,7 +297,8 @@ ADJUSTABLE_SETTINGS = {
     'use_keyring': (bool, False),
     'wallet': (str, LBRYUM_WALLET),
     'blockchain_name': (str, 'lbrycrd_main'),
-    'lbryum_servers': (list, [('lbryum8.lbry.io', 50001), ('lbryum9.lbry.io', 50001)], server_list),
+    'lbryum_servers': (list, [('lbryum8.lbry.io', 50001), ('lbryum9.lbry.io',
+        50001)], server_list, server_list_reverse),
     's3_headers_depth': (int, 96 * 10)   # download headers from s3 when the local height is more than 10 chunks behind
 }
 
@@ -497,18 +500,30 @@ class Config(object):
             path = conf_file
         else:
             path = self.get_conf_filename()
-
+        # reverse the conversions done after loading the settings from the conf
+        # file
+        rev = self._convert_conf_file_lists_reverse(self._data[TYPE_PERSISTED])
         ext = os.path.splitext(path)[1]
         encoder = settings_encoders.get(ext, False)
         assert encoder is not False, 'Unknown settings format %s' % ext
         with open(path, 'w') as settings_file:
-            settings_file.write(encoder(self._data[TYPE_PERSISTED]))
+            settings_file.write(encoder(rev))
+
+    @staticmethod
+    def _convert_conf_file_lists_reverse(converted):
+        rev = {}
+        for k in converted.iterkeys():
+            if k in ADJUSTABLE_SETTINGS and len(ADJUSTABLE_SETTINGS[k]) == 4:
+                rev[k] = ADJUSTABLE_SETTINGS[k][3](converted[k])
+            else:
+                rev[k] = converted[k]
+        return rev
 
     @staticmethod
     def _convert_conf_file_lists(decoded):
         converted = {}
         for k, v in decoded.iteritems():
-            if k in ADJUSTABLE_SETTINGS and len(ADJUSTABLE_SETTINGS[k]) == 3:
+            if k in ADJUSTABLE_SETTINGS and len(ADJUSTABLE_SETTINGS[k]) >= 3:
                 converted[k] = ADJUSTABLE_SETTINGS[k][2](v)
             else:
                 converted[k] = v
