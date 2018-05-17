@@ -1,12 +1,15 @@
 import os
 import logging
 from twisted.internet import defer, threads
+
 from lbrynet import conf
-from lbrynet.database.storage import SQLiteStorage
+from lbrynet.core.Session import Session
 from lbrynet.core.Wallet import LBRYumWallet
 from lbrynet.daemon.Component import Component
-from lbrynet.core.Session import Session
+from lbrynet.database.storage import SQLiteStorage
 from lbrynet.dht import node, hashannouncer
+
+from lbrynet.core.utils import generate_id
 
 log = logging.getLogger(__name__)
 
@@ -18,21 +21,38 @@ SESSION_COMPONENT = "session"
 DHT_COMPONENT = "dht"
 
 
+class ConfigSettings:
+    @staticmethod
+    def get_conf_setting(setting_name):
+        return conf.settings[setting_name]
+
+    @staticmethod
+    def get_blobfiles_dir():
+        if conf.settings['BLOBFILES_DIR'] == "blobfiles":
+            return os.path.join(GCS("data_dir"), "blobfiles")
+        else:
+            log.info("Using non-default blobfiles directory: %s", conf.settings['BLOBFILES_DIR'])
+            return conf.settings['BLOBFILES_DIR']
+
+    @staticmethod
+    def get_node_id():
+        return conf.settings.node_id
+
+    @staticmethod
+    def get_external_ip():
+        from lbrynet.core.system_info import get_platform
+        platform = get_platform(get_ip=True)
+        return platform['ip']
+
+
+# Shorthand for common ConfigSettings methods
+CS = ConfigSettings
+GCS = ConfigSettings.get_conf_setting
+
+
 class DatabaseComponent(Component):
     component_name = DATABASE_COMPONENT
     storage = None
-
-    @staticmethod
-    def get_db_dir():
-        return conf.settings['data_dir']
-
-    @staticmethod
-    def get_download_directory():
-        return conf.settings['download_directory']
-
-    @staticmethod
-    def get_blobfile_dir():
-        return conf.settings['BLOBFILES_DIR']
 
     @staticmethod
     def get_current_db_revision():
@@ -52,15 +72,19 @@ class DatabaseComponent(Component):
     def setup(cls):
         # check directories exist, create them if they don't
         log.info("Loading databases")
-        if not os.path.exists(cls.get_download_directory()):
-            os.mkdir(cls.get_download_directory())
-        if not os.path.exists(cls.get_db_dir()):
-            os.mkdir(cls.get_db_dir())
+
+        if not os.path.exists(GCS('download_directory')):
+            os.mkdir(GCS('download_directory'))
+
+        if not os.path.exists(GCS('data_dir')):
+            os.mkdir(GCS('data_dir'))
             cls._write_db_revision_file(cls.get_current_db_revision())
             log.debug("Created the db revision file: %s", cls.get_revision_filename())
-        if not os.path.exists(cls.get_blobfile_dir()):
-            os.mkdir(cls.get_blobfile_dir())
-            log.debug("Created the blobfile directory: %s", str(cls.get_blobfile_dir()))
+
+        if not os.path.exists(CS.get_blobfiles_dir()):
+            os.mkdir(CS.get_blobfiles_dir())
+            log.debug("Created the blobfile directory: %s", str(CS.get_blobfiles_dir()))
+
         if not os.path.exists(cls.get_revision_filename()):
             log.warning("db_revision file not found. Creating it")
             cls._write_db_revision_file(cls.get_current_db_revision())
@@ -78,14 +102,14 @@ class DatabaseComponent(Component):
             from lbrynet.database.migrator import dbmigrator
             log.info("Upgrading your databases (revision %i to %i)", old_revision, cls.get_current_db_revision())
             yield threads.deferToThread(
-                dbmigrator.migrate_db, cls.get_db_dir(), old_revision, cls.get_current_db_revision()
+                dbmigrator.migrate_db, CS.get_blobfiles_dir(), old_revision, cls.get_current_db_revision()
             )
             cls._write_db_revision_file(cls.get_current_db_revision())
             log.info("Finished upgrading the databases.")
             migrated = True
 
         # start SQLiteStorage
-        cls.storage = SQLiteStorage(cls.get_db_dir())
+        cls.storage = SQLiteStorage(CS.get_blobfiles_dir())
         yield cls.storage.setup()
         defer.returnValue(migrated)
 
@@ -99,38 +123,37 @@ class WalletComponent(Component):
     component_name = WALLET_COMPONENT
     depends_on = [DATABASE_COMPONENT]
     wallet = None
-
-    @staticmethod
-    def get_wallet_type():
-        return conf.settings['wallet']
+    wallet_type = None
 
     @classmethod
     @defer.inlineCallbacks
     def setup(cls):
         storage = DatabaseComponent.storage
-        if cls.get_wallet_type() == conf.LBRYCRD_WALLET:
+        cls.wallet_type = GCS('wallet')
+
+        if cls.wallet_type == conf.LBRYCRD_WALLET:
             raise ValueError('LBRYcrd Wallet is no longer supported')
-        elif cls.get_wallet_type() == conf.LBRYUM_WALLET:
+        elif cls.wallet_type == conf.LBRYUM_WALLET:
 
             log.info("Using lbryum wallet")
 
             lbryum_servers = {address: {'t': str(port)}
-                              for address, port in conf.settings['lbryum_servers']}
+                              for address, port in GCS('lbryum_servers')}
 
             config = {
                 'auto_connect': True,
-                'chain': conf.settings['blockchain_name'],
+                'chain': GCS('blockchain_name'),
                 'default_servers': lbryum_servers
             }
 
             if 'use_keyring' in conf.settings:
-                config['use_keyring'] = conf.settings['use_keyring']
+                config['use_keyring'] = GCS('use_keyring')
             if conf.settings['lbryum_wallet_dir']:
-                config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
+                config['lbryum_path'] = GCS('lbryum_wallet_dir')
             cls.wallet = LBRYumWallet(storage, config)
             yield cls.wallet.start()
         else:
-            raise ValueError('Wallet Type {} is not valid'.format(cls.get_wallet_type()))
+            raise ValueError('Wallet Type {} is not valid'.format(cls.wallet_type))
 
     @classmethod
     @defer.inlineCallbacks
@@ -140,71 +163,32 @@ class WalletComponent(Component):
 
 class SessionComponent(Component):
     component_name = SESSION_COMPONENT
-    depends_on = [DATABASE_COMPONENT, WALLET_COMPONENT]
+    depends_on = [DATABASE_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT]
     session = None
 
-    @staticmethod
-    def get_db_dir():
-        return conf.settings['data_dir']
-
-    @staticmethod
-    def get_node_id():
-        return conf.settings.node_id
-
-    @staticmethod
-    def get_blobfile_dir():
-        if conf.settings['BLOBFILES_DIR'] == "blobfiles":
-            return os.path.join(SessionComponent.get_db_dir(), "blobfiles")
-        else:
-            log.info("Using non-default blobfiles directory: %s", conf.settings['BLOBFILES_DIR'])
-            return conf.settings['BLOBFILES_DIR']
-
-    @staticmethod
-    def get_dht_node_port():
-        return conf.settings['dht_node_port']
-
-    @staticmethod
-    def get_known_dht_nodes():
-        return conf.settings['known_dht_nodes']
-
-    @staticmethod
-    def get_peer_port():
-        return conf.settings['peer_port']
-
-    @staticmethod
-    def use_upnp():
-        return conf.settings['use_upnp']
-
-    @staticmethod
-    def is_generous_host():
-        return conf.settings['is_generous_host']
-
-    @staticmethod
-    def get_external_ip():
-        from lbrynet.core.system_info import get_platform
-        platform = get_platform(get_ip=True)
-        return platform['ip']
 
     @classmethod
     @defer.inlineCallbacks
     def setup(cls):
         wallet = WalletComponent.wallet
         storage = DatabaseComponent.storage
+        dht_node = DHTComponennt.dht_node
 
         log.info("in session setup")
 
         cls.session = Session(
-            conf.settings['data_rate'],
-            db_dir=cls.get_db_dir(),
-            node_id=cls.get_node_id(),
-            blob_dir=cls.get_blobfile_dir(),
-            dht_node_port=cls.get_dht_node_port(),
-            known_dht_nodes=cls.get_known_dht_nodes(),
-            peer_port=cls.get_peer_port(),
-            use_upnp=cls.use_upnp(),
+            GCS('data_rate'),
+            db_dir=GCS('data_dir'),
+            node_id=CS.get_node_id(),
+            blob_dir=CS.get_blobfiles_dir(),
+            dht_node=dht_node,
+            dht_node_port=GCS('dht_node_port'),
+            known_dht_nodes=GCS('known_dht_nodes'),
+            peer_port=GCS('peer_port'),
+            use_upnp=GCS('use_upnp'),
             wallet=wallet,
-            is_generous=cls.is_generous_host(),
-            external_ip=cls.get_external_ip(),
+            is_generous=GCS('is_generous_host'),
+            external_ip=CS.get_external_ip(),
             storage=storage
         )
 
@@ -222,44 +206,26 @@ class DHTComponennt(Component):
     dht_node = None
     dht_node_class = node.Node
 
-    @staticmethod
-    def get_node_id():
-        return conf.settings.node_id
-
-    @staticmethod
-    def get_dht_node_port():
-        return conf.settings['dht_node_port']
-
-    @staticmethod
-    def get_known_dht_nodes():
-        return conf.settings['known_dht_nodes']
-
-    @staticmethod
-    def get_peer_port():
-        return conf.settings['peer_port']
-
-    @staticmethod
-    def get_external_ip():
-        from lbrynet.core.system_info import get_platform
-        platform = get_platform(get_ip=True)
-        return platform['ip']
-
     @classmethod
     @defer.inlineCallbacks
     def setup(cls):
         storage = DatabaseComponent.storage
 
+        node_id = CS.get_node_id()
+        if node_id is None:
+            node_id = generate_id()
+
         cls.dht_node = cls.dht_node_class(
-            node_id=cls.get_node_id(),
-            udpPort=cls.get_dht_node_port(),
-            externalIP=cls.get_external_ip(),
-            peerPort=cls.get_peer_port()
+            node_id=node_id,
+            udpPort=GCS('dht_node_port'),
+            externalIP=CS.get_external_ip(),
+            peerPort=GCS('peer_port')
         )
         if not cls.hash_announcer:
             cls.hash_announcer = hashannouncer.DHTHashAnnouncer(cls.dht_node, storage)
         cls.peer_manager = cls.dht_node.peer_manager
         cls.peer_finder = cls.dht_node.peer_finder
-        cls._join_dht_deferred = cls.dht_node.joinNetwork(cls.get_known_dht_nodes())
+        cls._join_dht_deferred = cls.dht_node.joinNetwork(GCS('known_dht_nodes')())
         cls._join_dht_deferred.addCallback(lambda _: log.info("Joined the dht"))
         cls._join_dht_deferred.addCallback(lambda _: cls.hash_announcer.start())
 
