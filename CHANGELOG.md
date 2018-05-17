@@ -67,6 +67,7 @@ at anytime.
   * refactored dht iterativeFind
   * sort dht contacts returned by `findCloseNodes` in the routing table
   * disabled Cryptonator price feed
+  * `claim_list` and `claim_list_mine` in Daemon `return` sorted results 
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests
