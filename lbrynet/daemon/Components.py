@@ -21,7 +21,7 @@ SESSION_COMPONENT = "session"
 DHT_COMPONENT = "dht"
 
 
-class ConfigSettings:
+class ConfigSettings(object):
     @staticmethod
     def get_conf_setting(setting_name):
         return conf.settings[setting_name]
@@ -166,13 +166,12 @@ class SessionComponent(Component):
     depends_on = [DATABASE_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT]
     session = None
 
-
     @classmethod
     @defer.inlineCallbacks
     def setup(cls):
         wallet = WalletComponent.wallet
         storage = DatabaseComponent.storage
-        dht_node = DHTComponennt.dht_node
+        dht_node = DHTComponent.dht_node
 
         log.info("in session setup")
 
@@ -182,6 +181,7 @@ class SessionComponent(Component):
             node_id=CS.get_node_id(),
             blob_dir=CS.get_blobfiles_dir(),
             dht_node=dht_node,
+            hash_announcer=DHTComponent.hash_announcer,
             dht_node_port=GCS('dht_node_port'),
             known_dht_nodes=GCS('known_dht_nodes'),
             peer_port=GCS('peer_port'),
@@ -200,10 +200,11 @@ class SessionComponent(Component):
         yield cls.session.shut_down()
 
 
-class DHTComponennt(Component):
+class DHTComponent(Component):
     component_name = DHT_COMPONENT
     depends_on = [DATABASE_COMPONENT]
     dht_node = None
+    hash_announcer = None
     dht_node_class = node.Node
 
     @classmethod
@@ -225,11 +226,13 @@ class DHTComponennt(Component):
             cls.hash_announcer = hashannouncer.DHTHashAnnouncer(cls.dht_node, storage)
         cls.peer_manager = cls.dht_node.peer_manager
         cls.peer_finder = cls.dht_node.peer_finder
-        cls._join_dht_deferred = cls.dht_node.joinNetwork(GCS('known_dht_nodes')())
-        cls._join_dht_deferred.addCallback(lambda _: log.info("Joined the dht"))
-        cls._join_dht_deferred.addCallback(lambda _: cls.hash_announcer.start())
+        yield cls.dht_node.joinNetwork(GCS('known_dht_nodes'))
+        log.info("Joined the dht")
+        yield cls.hash_announcer.start()
 
     @classmethod
     @defer.inlineCallbacks
     def stop(cls):
-        raise NotImplementedError()
+        yield cls.hash_announcer.stop()
+        yield cls.dht_node.stop()
+
