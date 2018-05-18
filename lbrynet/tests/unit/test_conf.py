@@ -77,3 +77,18 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(str, type(conf.default_download_dir))
         self.assertEqual(str, type(conf.default_data_dir))
         self.assertEqual(str, type(conf.default_lbryum_dir))
+
+    def test_conversion_reversal(self):
+        # simulate decoding, conversion, conversion reversal and encoding of
+        # server list settings from the config file.
+        settings = self.get_mock_config_instance()
+        encoder = conf.settings_encoders['.yml']
+        decoder = conf.settings_decoders['.yml']
+        conf_file_entry = "lbryum_servers: ['localhost:5001', 'localhost:5002']"
+        decoded = decoder(conf_file_entry)
+        converted = settings._convert_conf_file_lists(decoded)
+        converted_reversed = settings._convert_conf_file_lists_reverse(converted)
+        encoded = encoder(converted_reversed)
+        self.assertEqual(conf_file_entry, encoded.strip())
+        self.assertEqual(decoded, converted_reversed)
+
