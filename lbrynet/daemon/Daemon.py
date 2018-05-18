@@ -36,7 +36,6 @@ from lbrynet.daemon.Downloader import GetStream
 from lbrynet.daemon.Publisher import Publisher
 from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
 from lbrynet.daemon.auth.server import AuthJSONRPCServer
-from lbrynet.daemon.claims_comparator import arrange_results
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
@@ -162,6 +161,12 @@ class AlwaysSend(object):
         d = defer.maybeDeferred(self.value_generator, *self.args, **self.kwargs)
         d.addCallback(lambda v: (True, v))
         return d
+
+
+def arrange_results(claims):
+    for claim in claims:
+        claim['result'].sort(key=lambda d: (d['height'], d['name'], d['claim_id'], d['txid'], d['nout']))
+    return claims
 
 
 class Daemon(AuthJSONRPCServer):
