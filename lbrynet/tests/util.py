@@ -19,6 +19,10 @@ DEFAULT_ISO_TIME = time.mktime(DEFAULT_TIMESTAMP.timetuple())
 
 log = logging.getLogger("lbrynet.tests.util")
 
+def create_conf_file(entry):
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.yml') as conf:
+        conf.write(entry)
+        return conf.name
 
 def mk_db_and_blob_dir():
     db_dir = tempfile.mkdtemp()
