@@ -538,7 +538,6 @@ class Config(object):
             path = conf_file
         else:
             path = self.get_conf_filename()
-
         ext = os.path.splitext(path)[1]
         decoder = settings_decoders.get(ext, False)
         assert decoder is not False, 'Unknown settings format %s' % ext
@@ -645,6 +644,8 @@ def get_default_env():
     for k, v in ADJUSTABLE_SETTINGS.iteritems():
         if len(v) == 3:
             env_defaults[k] = (v[0], None, v[2])
+        elif len(v) == 4:
+            env_defaults[k] = (v[0], None, v[2], v[3])
         else:
             env_defaults[k] = (v[0], None)
     return Env(**env_defaults)
