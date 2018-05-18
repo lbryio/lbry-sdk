@@ -15,6 +15,7 @@ from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_id
 from lbrynet.core.StreamDescriptor import get_sd_info
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter
+from lbrynet.daemon.Component import ComponentManager
 
 from lbrynet.tests import mocks
 
@@ -26,10 +27,12 @@ FakeAnnouncer = mocks.Announcer
 GenFile = mocks.GenFile
 test_create_stream_sd_file = mocks.create_stream_sd_file
 DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
+component_manager = ComponentManager
 
 
 class TestStreamify(TestCase):
     maxDiff = 5000
+
     def setUp(self):
         mocks.mock_conf_settings(self)
         self.session = None
@@ -37,6 +40,12 @@ class TestStreamify(TestCase):
         self.is_generous = True
         self.db_dir = tempfile.mkdtemp()
         self.blob_dir = os.path.join(self.db_dir, "blobfiles")
+        self.dht_node = self.setUpDHTComponent()
+        self.wallet = FakeWallet()
+        self.peer_manager = PeerManager()
+        self.peer_finder = FakePeerFinder(5553, self.peer_manager, 2)
+        self.rate_limiter = DummyRateLimiter()
+        self.sd_identifier = StreamDescriptorIdentifier()
         os.mkdir(self.blob_dir)
 
     @defer.inlineCallbacks
@@ -53,27 +62,25 @@ class TestStreamify(TestCase):
         if os.path.exists("test_file"):
             os.remove("test_file")
 
+    def setUpDHTComponent(self):
+        self.dht_component = ComponentManager.get_component('dht')
+        self.dht_component.dht_node_class = FakeNode
+        self.dht_component.hash_announcer = FakeAnnouncer()
+        self.dht_component.setup()
+        return self.dht_component.dht_node
+
     def test_create_stream(self):
-        wallet = FakeWallet()
-        peer_manager = PeerManager()
-        peer_finder = FakePeerFinder(5553, peer_manager, 2)
-        hash_announcer = FakeAnnouncer()
-        rate_limiter = DummyRateLimiter()
-        sd_identifier = StreamDescriptorIdentifier()
 
         self.session = Session(
-            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=self.db_dir, node_id="abcd",
-            peer_finder=peer_finder, hash_announcer=hash_announcer,
-            blob_dir=self.blob_dir, peer_port=5553,
-            use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-            blob_tracker_class=DummyBlobAvailabilityTracker,
-            is_generous=self.is_generous, external_ip="127.0.0.1", dht_node_class=mocks.Node
+            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=self.db_dir, node_id="abcd", peer_finder=self.peer_finder,
+            blob_dir=self.blob_dir, peer_port=5553, use_upnp=False, rate_limiter=self.rate_limiter, wallet=self.wallet,
+            blob_tracker_class=DummyBlobAvailabilityTracker, external_ip="127.0.0.1", dht_node=self.dht_node
         )
 
-        self.lbry_file_manager = EncryptedFileManager(self.session, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.sd_identifier)
 
         d = self.session.setup()
-        d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
+        d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self.lbry_file_manager.setup())
 
         def verify_equal(sd_info):
@@ -102,22 +109,14 @@ class TestStreamify(TestCase):
         return d
 
     def test_create_and_combine_stream(self):
-        wallet = FakeWallet()
-        peer_manager = PeerManager()
-        peer_finder = FakePeerFinder(5553, peer_manager, 2)
-        hash_announcer = FakeAnnouncer()
-        rate_limiter = DummyRateLimiter()
-        sd_identifier = StreamDescriptorIdentifier()
 
         self.session = Session(
-            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=self.db_dir, node_id="abcd",
-            peer_finder=peer_finder, hash_announcer=hash_announcer,
-            blob_dir=self.blob_dir, peer_port=5553, dht_node_class=mocks.Node,
-            use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-            blob_tracker_class=DummyBlobAvailabilityTracker, external_ip="127.0.0.1"
+            conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=self.db_dir, node_id="abcd", peer_finder=self.peer_finder,
+            blob_dir=self.blob_dir, peer_port=5553, use_upnp=False, rate_limiter=self.rate_limiter, wallet=self.wallet,
+            blob_tracker_class=DummyBlobAvailabilityTracker, external_ip="127.0.0.1", dht_node=self.dht_node
         )
 
-        self.lbry_file_manager = EncryptedFileManager(self.session, sd_identifier)
+        self.lbry_file_manager = EncryptedFileManager(self.session, self.sd_identifier)
 
         @defer.inlineCallbacks
         def create_stream():
@@ -132,7 +131,7 @@ class TestStreamify(TestCase):
             self.assertEqual(hashsum.hexdigest(), "68959747edc73df45e45db6379dd7b3b")
 
         d = self.session.setup()
-        d.addCallback(lambda _: add_lbry_file_to_sd_identifier(sd_identifier))
+        d.addCallback(lambda _: add_lbry_file_to_sd_identifier(self.sd_identifier))
         d.addCallback(lambda _: self.lbry_file_manager.setup())
         d.addCallback(lambda _: create_stream())
         return d
