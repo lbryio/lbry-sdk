@@ -163,7 +163,7 @@ class AlwaysSend(object):
         return d
 
 
-def arrange_results(claims):
+def sort_claim_results(claims):
     for claim in claims:
         claim['result'].sort(key=lambda d: (d['height'], d['name'], d['claim_id'], d['txid'], d['nout']))
     return claims
@@ -2299,7 +2299,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_name_claims()
-        d.addCallback(arrange_results)
+        d.addCallback(sort_claim_results)
         d.addCallback(lambda claims: self._render_response(claims))
         return d
 
@@ -2338,7 +2338,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         claims = yield self.session.wallet.get_claims_for_name(name)
-        result = arrange_results(claims)
+        result = sort_claim_results(claims)
         defer.returnValue(result)
 
     @defer.inlineCallbacks
