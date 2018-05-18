@@ -5,7 +5,6 @@ from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.dht import node, hashannouncer
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
-from lbrynet.core.utils import generate_id
 from lbrynet.core.PaymentRateManager import BasePaymentRateManager, OnlyFreePaymentsManager
 
 log = logging.getLogger(__name__)
@@ -124,15 +123,18 @@ class Session(object):
 
         log.debug("Starting session.")
 
-        if self.node_id is None:
-            self.node_id = generate_id()
+        if self.peer_manager is None:
+            self.peer_manager = self.dht_node.peer_manager
+
+        if self.peer_finder is None:
+            self.peer_finder = self.dht_node.peer_finder
 
         if self.use_upnp is True:
             d = self._try_upnp()
         else:
             d = defer.succeed(True)
         d.addCallback(lambda _: self.storage.setup())
-        d.addCallback(lambda _: self._setup_dht())
+        # d.addCallback(lambda _: self._setup_dht())
         d.addCallback(lambda _: self._setup_other_components())
         return d
 
@@ -140,16 +142,10 @@ class Session(object):
         """Stop all services"""
         log.info('Stopping session.')
         ds = []
-        if self.hash_announcer:
-            self.hash_announcer.stop()
         # if self.blob_tracker is not None:
         #     ds.append(defer.maybeDeferred(self.blob_tracker.stop))
-        if self.dht_node is not None:
-            ds.append(defer.maybeDeferred(self.dht_node.stop))
         if self.rate_limiter is not None:
             ds.append(defer.maybeDeferred(self.rate_limiter.stop))
-        if self.wallet is not None:
-            ds.append(defer.maybeDeferred(self.wallet.stop))
         if self.blob_manager is not None:
             ds.append(defer.maybeDeferred(self.blob_manager.stop))
         if self.use_upnp is True:

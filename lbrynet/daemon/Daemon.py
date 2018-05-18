@@ -430,6 +430,7 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: self._stop_file_manager())
         d.addErrback(log.fail(), 'Failure while shutting down')
         if self.session is not None:
+            d.addCallback(lambda _: self.component_manager.stop())
             d.addCallback(lambda _: self.session.shut_down())
             d.addErrback(log.fail(), 'Failure while shutting down')
         return d
