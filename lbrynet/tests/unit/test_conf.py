@@ -81,7 +81,6 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(str, type(conf.default_lbryum_dir))
 
     def test_load_save_load_config_file(self):
-        #settings = self.get_mock_config_instance()
         conf_entry = 'lbryum_servers: ["localhost:50001", "localhost:50002"]\n'
         conf_temp = create_conf_file(conf_entry)
         conf.conf_file = conf_temp
@@ -92,6 +91,8 @@ class SettingsTest(unittest.TestCase):
         settings = conf.Config({}, adjustable_settings, environment=env)
         conf.settings = settings
         settings.load_conf_file_settings()
+        first = settings.get('lbryum_servers', data_type=conf.TYPE_PERSISTED)
         settings.save_conf_file_settings()
         settings.load_conf_file_settings()
-
+        second = settings.get('lbryum_servers', data_type=conf.TYPE_PERSISTED)
+        self.assertEqual(first, second)
