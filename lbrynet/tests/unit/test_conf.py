@@ -4,7 +4,6 @@ import json
 from twisted.trial import unittest
 from lbrynet import conf
 from lbrynet.core.Error import InvalidCurrencyError
-from lbrynet.tests import mocks
 from lbrynet.tests.util import create_conf_file, remove_conf_file
 
 class SettingsTest(unittest.TestCase):
