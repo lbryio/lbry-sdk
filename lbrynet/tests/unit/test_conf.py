@@ -5,7 +5,7 @@ from twisted.trial import unittest
 from lbrynet import conf
 from lbrynet.core.Error import InvalidCurrencyError
 from lbrynet.tests import mocks
-from lbrynet.tests.util import create_conf_file
+from lbrynet.tests.util import create_conf_file, remove_conf_file
 
 class SettingsTest(unittest.TestCase):
     def setUp(self):
@@ -84,7 +84,7 @@ class SettingsTest(unittest.TestCase):
         conf_entry = 'lbryum_servers: ["localhost:50001", "localhost:50002"]\n'
         conf_temp = create_conf_file(conf_entry)
         conf.conf_file = conf_temp
-        adjustable_settings={'data_dir': (str, conf.default_data_dir),
+        adjustable_settings = {'data_dir': (str, conf.default_data_dir),
                 'lbryum_servers': (list, [('localhost', 5001)],
                     conf.server_list, conf.server_list_reverse)}
         env = conf.Env(**adjustable_settings)
@@ -93,6 +93,12 @@ class SettingsTest(unittest.TestCase):
         settings.load_conf_file_settings()
         first = settings.get('lbryum_servers', data_type=conf.TYPE_PERSISTED)
         settings.save_conf_file_settings()
-        settings.load_conf_file_settings()
+        try:
+            settings.load_conf_file_settings()
+        except Exception, e:
+            remove_conf_file(conf_temp)
+            raise Exception(e)
         second = settings.get('lbryum_servers', data_type=conf.TYPE_PERSISTED)
+        remove_conf_file(conf_temp)
         self.assertEqual(first, second)
+
