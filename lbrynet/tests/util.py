@@ -22,7 +22,10 @@ log = logging.getLogger("lbrynet.tests.util")
 def create_conf_file(entry):
     with tempfile.NamedTemporaryFile(delete=False, suffix='.yml') as conf:
         conf.write(entry)
-        return conf.name
+    return conf.name
+
+def remove_conf_file(filename):
+    os.remove(filename)
 
 def mk_db_and_blob_dir():
     db_dir = tempfile.mkdtemp()
