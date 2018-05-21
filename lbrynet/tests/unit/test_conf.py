@@ -1,10 +1,10 @@
 import os
 import json
 
+import tempfile
 from twisted.trial import unittest
 from lbrynet import conf
 from lbrynet.core.Error import InvalidCurrencyError
-from lbrynet.tests.util import create_conf_file, remove_conf_file
 
 class SettingsTest(unittest.TestCase):
     def setUp(self):
@@ -79,25 +79,29 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(str, type(conf.default_data_dir))
         self.assertEqual(str, type(conf.default_lbryum_dir))
 
-    def test_load_save_load_config_file(self):
-        conf_entry = 'lbryum_servers: ["localhost:50001", "localhost:50002"]\n'
-        conf_temp = create_conf_file(conf_entry)
-        conf.conf_file = conf_temp
+    def test_load_save_config_file(self):
+        # setup settings
         adjustable_settings = {'data_dir': (str, conf.default_data_dir),
                 'lbryum_servers': (list, [('localhost', 5001)],
                     conf.server_list, conf.server_list_reverse)}
         env = conf.Env(**adjustable_settings)
         settings = conf.Config({}, adjustable_settings, environment=env)
         conf.settings = settings
-        settings.load_conf_file_settings()
-        first = settings.get('lbryum_servers', data_type=conf.TYPE_PERSISTED)
-        settings.save_conf_file_settings()
-        try:
+        # setup tempfile
+        conf_entry = "lbryum_servers: ['localhost:50001', 'localhost:50002']\n"
+        with tempfile.NamedTemporaryFile(suffix='.yml') as conf_file:
+            conf_file.write(conf_entry)
+            conf_file.seek(0)
+            conf.conf_file = conf_file.name
+            # load and save settings from conf file
             settings.load_conf_file_settings()
-        except Exception, e:
-            remove_conf_file(conf_temp)
-            raise Exception(e)
-        second = settings.get('lbryum_servers', data_type=conf.TYPE_PERSISTED)
-        remove_conf_file(conf_temp)
-        self.assertEqual(first, second)
+            settings.save_conf_file_settings()
+            # test if overwritten entry equals original entry
+            # use decoded versions, because format might change without
+            # changing the interpretation
+            decoder = conf.settings_decoders['.yml']
+            conf_decoded = decoder(conf_entry)
+            conf_entry_new = conf_file.read()
+            conf_decoded_new = decoder(conf_entry_new)
+            self.assertEqual(conf_decoded, conf_decoded_new)
 
