@@ -250,14 +250,14 @@ class TestFileListSorting(trial.unittest.TestCase):
         deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
         failure_assertion = self.assertFailure(deferred, Exception)
         exception = self.successResultOf(failure_assertion)
-        expected_message = 'Failed to sort by "meta.author", key "meta" was not found.'
+        expected_message = 'Failed to get "meta.author", key "meta" was not found.'
         self.assertEquals(expected_message, exception.message)
 
         sort_options = ['metadata.foo.bar']
         deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
         failure_assertion = self.assertFailure(deferred, Exception)
         exception = self.successResultOf(failure_assertion)
-        expected_message = 'Failed to sort by "metadata.foo.bar", key "foo" was not found.'
+        expected_message = 'Failed to get "metadata.foo.bar", key "foo" was not found.'
         self.assertEquals(expected_message, exception.message)
 
     def _get_fake_lbry_files(self):

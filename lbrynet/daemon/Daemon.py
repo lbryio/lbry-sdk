@@ -97,12 +97,9 @@ CONNECTION_MESSAGES = {
 SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
 
-FILE_SORT_DIRECTION_ASCENDING = 'asc'
-FILE_SORT_DIRECTION_DESCENDING = 'desc'
-FILE_SORT_DIRECTIONS = (
-    FILE_SORT_DIRECTION_ASCENDING,
-    FILE_SORT_DIRECTION_DESCENDING,
-)
+DIRECTION_ASCENDING = 'asc'
+DIRECTION_DESCENDING = 'desc'
+DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
 
 class IterableContainer(object):
     def __iter__(self):
@@ -947,18 +944,8 @@ class Daemon(AuthJSONRPCServer):
 
     def _sort_lbry_files(self, lbry_files, sort_by):
         for field, direction in sort_by:
-            is_reverse = direction == FILE_SORT_DIRECTION_DESCENDING
-            key_getter = None
-            if field:
-                search_path = field.split('.')
-                def key_getter(value):
-                    for key in search_path:
-                        try:
-                            value = value[key]
-                        except KeyError as e:
-                            errmsg = 'Failed to sort by "{}", key "{}" was not found.'
-                            raise Exception(errmsg.format(field, e.message))
-                    return value
+            is_reverse = direction == DIRECTION_DESCENDING
+            key_getter = create_key_getter(field) if field else None
             lbry_files = sorted(lbry_files, key=key_getter, reverse=is_reverse)
         return lbry_files
 
@@ -969,12 +956,13 @@ class Daemon(AuthJSONRPCServer):
         Direction defaults to ascending.
         """
 
-        pieces = sort.rsplit(',', 1)
-        field = pieces[0].strip() or None
-        direction = pieces[1].strip().lower() if len(pieces) > 1 else None
-        if direction and direction not in FILE_SORT_DIRECTIONS:
-            raise Exception('Sort direction must be one of {}'.format(FILE_SORT_DIRECTIONS))
-        return (field, direction or FILE_SORT_DIRECTION_ASCENDING)
+        pieces = [p.strip() for p in sort.split(',')]
+        field = pieces.pop(0)
+        direction = DIRECTION_ASCENDING
+        if pieces and pieces[0] in DIRECTIONS:
+            direction = pieces[0]
+        return field, direction
+
 
     def _get_single_peer_downloader(self):
         downloader = SinglePeerDownloader()
@@ -3435,3 +3423,16 @@ def get_blob_payment_rate_manager(session, payment_rate_manager=None):
             payment_rate_manager = rate_managers[payment_rate_manager]
             log.info("Downloading blob with rate manager: %s", payment_rate_manager)
     return payment_rate_manager or session.payment_rate_manager
+
+
+def create_key_getter(field):
+    search_path = field.split('.')
+    def key_getter(value):
+        for key in search_path:
+            try:
+                value = value[key]
+            except KeyError as e:
+                errmsg = 'Failed to get "{}", key "{}" was not found.'
+                raise Exception(errmsg.format(field, e.message))
+        return value
+    return key_getter
