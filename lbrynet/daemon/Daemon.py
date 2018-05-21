@@ -163,6 +163,12 @@ class AlwaysSend(object):
         return d
 
 
+def sort_claim_results(claims):
+    for claim in claims:
+        claim['result'].sort(key=lambda d: (d['height'], d['name'], d['claim_id'], d['txid'], d['nout']))
+    return claims
+
+
 class Daemon(AuthJSONRPCServer):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
@@ -2293,6 +2299,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_name_claims()
+        d.addCallback(sort_claim_results)
         d.addCallback(lambda claims: self._render_response(claims))
         return d
 
@@ -2331,7 +2338,8 @@ class Daemon(AuthJSONRPCServer):
         """
 
         claims = yield self.session.wallet.get_claims_for_name(name)
-        defer.returnValue(claims)
+        result = sort_claim_results(claims)
+        defer.returnValue(result)
 
     @defer.inlineCallbacks
     def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
