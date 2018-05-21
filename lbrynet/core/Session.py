@@ -35,7 +35,7 @@ class Session(object):
                  known_dht_nodes=None, peer_finder=None, hash_announcer=None, blob_dir=None, blob_manager=None,
                  peer_port=None, use_upnp=True, rate_limiter=None, wallet=None, dht_node_class=node.Node,
                  blob_tracker_class=None, payment_rate_manager_class=None, is_generous=True, external_ip=None,
-                 storage=None, dht_node=None):
+                 storage=None, dht_node=None, peer_manager=None):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
         @param db_dir: The directory in which levelDB files should be stored
@@ -93,6 +93,7 @@ class Session(object):
         """
         self.db_dir = db_dir
         self.node_id = node_id
+        self.peer_manager = peer_manager
         self.peer_finder = peer_finder
         self.hash_announcer = hash_announcer
         self.dht_node_port = dht_node_port
@@ -122,15 +123,18 @@ class Session(object):
 
         log.debug("Starting session.")
 
-        if self.peer_finder is None:
-            self.peer_finder = self.dht_node.peer_finder
+        if self.dht_node is not None:
+            if self.peer_manager is None:
+                self.peer_manager = self.dht_node.peer_manager
+
+            if self.peer_finder is None:
+                self.peer_finder = self.dht_node.peer_finder
 
         if self.use_upnp is True:
             d = self._try_upnp()
         else:
             d = defer.succeed(True)
         d.addCallback(lambda _: self.storage.setup())
-        # d.addCallback(lambda _: self._setup_dht())
         d.addCallback(lambda _: self._setup_other_components())
         return d
 
