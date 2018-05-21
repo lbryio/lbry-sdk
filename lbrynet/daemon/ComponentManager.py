@@ -5,16 +5,30 @@ log = logging.getLogger(__name__)
 
 
 class ComponentManager(object):
-    components = set()
+    default_component_classes = {}
 
-    @classmethod
-    def sort_components(cls, reverse=False):
+    def __init__(self, **override_components):
+        self.component_classes = {}
+        self.components = set()
+
+        for component_name, component_class in self.default_component_classes.iteritems():
+            if component_name in override_components:
+                component_class = override_components.pop(component_name)
+            self.component_classes[component_name] = component_class
+
+        if override_components:
+            raise SyntaxError("unexpected components: %s" % override_components)
+
+        for component_class in self.component_classes.itervalues():
+            self.components.add(component_class(self))
+
+    def sort_components(self, reverse=False):
         """
         Sort components by requirements
         """
         steps = []
         staged = set()
-        components = set(cls.components)
+        components = set(self.components)
 
         # components with no requirements
         step = []
@@ -48,18 +62,19 @@ class ComponentManager(object):
             steps.reverse()
         return steps
 
-    @classmethod
     @defer.inlineCallbacks
-    def setup(cls, **callbacks):
+    def setup(self, **callbacks):
         """
         Start Components in sequence sorted by requirements
 
         :return: (defer.Deferred)
         """
+
         for component_name, cb in callbacks.iteritems():
+            if component_name not in self.component_classes:
+                raise NameError("unknown component: %s" % component_name)
             if not callable(cb):
                 raise ValueError("%s is not callable" % cb)
-            cls.get_component(component_name)
 
         def _setup(component):
             if component.component_name in callbacks:
@@ -68,30 +83,28 @@ class ComponentManager(object):
                 return d
             return component._setup()
 
-        stages = cls.sort_components()
+        stages = self.sort_components()
         for stage in stages:
             yield defer.DeferredList([_setup(component) for component in stage])
 
-    @classmethod
     @defer.inlineCallbacks
-    def stop(cls):
+    def stop(self):
         """
         Stop Components in reversed startup order
 
         :return: (defer.Deferred)
         """
-        stages = cls.sort_components(reverse=True)
+        stages = self.sort_components(reverse=True)
         for stage in stages:
             yield defer.DeferredList([component._stop() for component in stage])
 
-    @classmethod
-    def all_components_running(cls, *component_names):
+    def all_components_running(self, *component_names):
         """
         Check if components are running
 
         :return: (bool) True if all specified components are running
         """
-        components = {component.component_name: component for component in cls.components}
+        components = {component.component_name: component for component in self.components}
         for component in component_names:
             if component not in components:
                 raise NameError("%s is not a known Component" % component)
@@ -99,9 +112,8 @@ class ComponentManager(object):
                 return False
         return True
 
-    @classmethod
-    def get_component(cls, component_name):
-        for component in cls.components:
+    def get_component(self, component_name):
+        for component in self.components:
             if component.component_name == component_name:
                 return component
         raise NameError(component_name)

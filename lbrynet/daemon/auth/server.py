@@ -133,7 +133,6 @@ class JSONRPCServerType(type):
 
 class AuthorizedBase(object):
     __metaclass__ = JSONRPCServerType
-    component_manager = ComponentManager
 
     @staticmethod
     def deprecated(new_command=None):
@@ -173,10 +172,11 @@ class AuthJSONRPCServer(AuthorizedBase):
     isLeaf = True
     allowed_during_startup = []
 
-    def __init__(self, use_authentication=None):
+    def __init__(self, use_authentication=None, component_manager=None):
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
         self.announced_startup = False
         self.sessions = {}
+        self.component_manager = component_manager or ComponentManager()
 
     def setup(self):
         return NotImplementedError()

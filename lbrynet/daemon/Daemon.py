@@ -178,8 +178,8 @@ class Daemon(AuthJSONRPCServer):
         'daemon_stop', 'status', 'version', 'wallet_unlock'
     ]
 
-    def __init__(self, analytics_manager):
-        AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
+    def __init__(self, analytics_manager, component_manager=None):
+        AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'], component_manager)
         # self.db_dir = conf.settings['data_dir']
         self.download_directory = conf.settings['download_directory']
         # if conf.settings['BLOBFILES_DIR'] == "blobfiles":
