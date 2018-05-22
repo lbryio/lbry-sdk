@@ -2329,7 +2329,6 @@ class Daemon(AuthJSONRPCServer):
         """
 
         d = self.session.wallet.get_name_claims()
-        d.addCallback(sort_claim_results)
         d.addCallback(lambda claims: self._render_response(claims))
         return d
 
