@@ -43,7 +43,8 @@ class TreeRoutingTable(object):
         self._parentNodeID = parentNodeID
         self._buckets = [kbucket.KBucket(rangeMin=0, rangeMax=2 ** constants.key_bits, node_id=self._parentNodeID)]
         if not getTime:
-            from time import time as getTime
+            from twisted.internet import reactor
+            getTime = reactor.seconds
         self._getTime = getTime
 
     def addContact(self, contact):
