@@ -1,5 +1,4 @@
 import UserDict
-import time
 import constants
 from interface import IDataStore
 from zope.interface import implements
@@ -9,17 +8,21 @@ class DictDataStore(UserDict.DictMixin):
     """ A datastore using an in-memory Python dictionary """
     implements(IDataStore)
 
-    def __init__(self):
+    def __init__(self, getTime=None):
         # Dictionary format:
         # { <key>: (<value>, <lastPublished>, <originallyPublished> <originalPublisherID>) }
         self._dict = {}
+        if not getTime:
+            from twisted.internet import reactor
+            getTime = reactor.seconds
+        self._getTime = getTime
 
     def keys(self):
         """ Return a list of the keys in this data store """
         return self._dict.keys()
 
     def removeExpiredPeers(self):
-        now = int(time.time())
+        now = int(self._getTime())
 
         def notExpired(peer):
             if (now - peer[2]) > constants.dataExpireTimeout:
