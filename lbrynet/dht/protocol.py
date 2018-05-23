@@ -9,7 +9,6 @@ import constants
 import encoding
 import msgtypes
 import msgformat
-from contact import Contact
 from error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError
 
 log = logging.getLogger(__name__)
@@ -29,7 +28,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._partialMessagesProgress = {}
 
     def sendRPC(self, contact, method, args, rawResponse=False):
-        """ Sends an RPC to the specified contact
+        """
+        Sends an RPC to the specified contact
 
         @param contact: The contact (remote node) to send the RPC to
         @type contact: kademlia.contacts.Contact
@@ -60,19 +60,39 @@ class KademliaProtocol(protocol.DatagramProtocol):
         encodedMsg = self._encoder.encode(msgPrimitive)
 
         if args:
-            log.debug("DHT SEND CALL %s(%s)", method, args[0].encode('hex'))
+            log.debug("%s:%i SEND CALL %s(%s) TO %s:%i", self._node.externalIP, self._node.port, method,
+                      args[0].encode('hex'), contact.address, contact.port)
         else:
-            log.debug("DHT SEND CALL %s", method)
+            log.debug("%s:%i SEND CALL %s TO %s:%i", self._node.externalIP, self._node.port,  method,
+                      contact.address, contact.port)
 
         df = defer.Deferred()
         if rawResponse:
             df._rpcRawResponse = True
 
+        def _remove_contact(failure):  # remove the contact from the routing table and track the failure
+            try:
+                self._node.removeContact(contact)
+            except (ValueError, IndexError):
+                pass
+            contact.update_last_failed()
+            return failure
+
+        def _update_contact(result):  # refresh the contact in the routing table
+            contact.update_last_replied()
+            d = self._node.addContact(contact)
+            d.addCallback(lambda _: result)
+            return d
+
+        df.addCallbacks(_update_contact, _remove_contact)
+
         # Set the RPC timeout timer
         timeoutCall, cancelTimeout = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, msg.id)
+
         # Transmit the data
         self._send(encodedMsg, msg.id, (contact.address, contact.port))
-        self._sentMessages[msg.id] = (contact.id, df, timeoutCall, method, args)
+        self._sentMessages[msg.id] = (contact, df, timeoutCall, cancelTimeout, method, args)
+
         df.addErrback(cancelTimeout)
         return df
 
@@ -115,46 +135,80 @@ class KademliaProtocol(protocol.DatagramProtocol):
             log.warning("Couldn't decode dht datagram from %s", address)
             return
 
-        remoteContact = Contact(message.nodeID, address[0], address[1], self)
-
-        # Refresh the remote node's details in the local node's k-buckets
-        self._node.addContact(remoteContact)
         if isinstance(message, msgtypes.RequestMessage):
             # This is an RPC method request
-            self._handleRPC(remoteContact, message.id, message.request, message.args)
+            remoteContact = self._node.contact_manager.make_contact(message.nodeID, address[0], address[1], self)
+            remoteContact.update_last_requested()
+            # only add a requesting contact to the routing table if it has replied to one of our requests
+            if remoteContact.contact_is_good is True:
+                df = self._node.addContact(remoteContact)
+            else:
+                df = defer.succeed(None)
+            df.addCallback(lambda _: self._handleRPC(remoteContact, message.id, message.request, message.args))
+            # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it
+            # will be added to our routing table if successful
+            if remoteContact.contact_is_good is None and remoteContact.lastReplied is None:
+                df.addCallback(lambda _: self._ping_queue.enqueue_maybe_ping(remoteContact))
+        elif isinstance(message, msgtypes.ErrorMessage):
+            # The RPC request raised a remote exception; raise it locally
+            if message.exceptionType in BUILTIN_EXCEPTIONS:
+                exception_type = BUILTIN_EXCEPTIONS[message.exceptionType]
+            else:
+                exception_type = UnknownRemoteException
+            remoteException = exception_type(message.response)
+            log.error("DHT RECV REMOTE EXCEPTION FROM %s:%i: %s", address[0],
+                      address[1], remoteException)
+            if message.id in self._sentMessages:
+                # Cancel timeout timer for this RPC
+                remoteContact, df, timeoutCall, timeoutCanceller, method = self._sentMessages[message.id][0:5]
+                timeoutCanceller()
+                del self._sentMessages[message.id]
 
+                # reject replies coming from a different address than what we sent our request to
+                if (remoteContact.address, remoteContact.port) != address:
+                    log.warning("Sent request to node %s at %s:%i, got reply from %s:%i",
+                                remoteContact.log_id(), remoteContact.address,
+                                remoteContact.port, address[0], address[1])
+                    df.errback(TimeoutError(remoteContact.id))
+                    return
+
+                # this error is returned by nodes that can be contacted but have an old
+                # and broken version of the ping command, if they return it the node can
+                # be contacted, so we'll treat it as a successful ping
+                old_ping_error = "ping() got an unexpected keyword argument '_rpcNodeContact'"
+                if isinstance(remoteException, TypeError) and \
+                        remoteException.message == old_ping_error:
+                    log.debug("old pong error")
+                    df.callback('pong')
+                else:
+                    df.errback(remoteException)
         elif isinstance(message, msgtypes.ResponseMessage):
             # Find the message that triggered this response
             if message.id in self._sentMessages:
                 # Cancel timeout timer for this RPC
-                df, timeoutCall = self._sentMessages[message.id][1:3]
-                timeoutCall.cancel()
+                remoteContact, df, timeoutCall, timeoutCanceller, method = self._sentMessages[message.id][0:5]
+                timeoutCanceller()
                 del self._sentMessages[message.id]
+                log.debug("%s:%i RECV response to %s from %s:%i", self._node.externalIP, self._node.port,
+                          method, remoteContact.address, remoteContact.port)
+
+                # When joining the network we made Contact objects for the seed nodes with node ids set to None
+                # Thus, the sent_to_id will also be None, and the contact objects need the ids to be manually set.
+                # These replies have be distinguished from those where the node id in the datagram does not match
+                # the node id of the node we sent a message to (these messages are treated as an error)
+                if remoteContact.id and remoteContact.id != message.nodeID:  # sent_to_id will be None for bootstrap
+                    log.debug("mismatch: (%s) %s:%i (%s vs %s)", method, remoteContact.address, remoteContact.port,
+                              remoteContact.log_id(False), message.nodeID.encode('hex'))
+                    df.errback(TimeoutError(remoteContact.id))
+                    return
+                elif not remoteContact.id:
+                    remoteContact.set_id(message.nodeID)
 
                 if hasattr(df, '_rpcRawResponse'):
                     # The RPC requested that the raw response message
                     # and originating address be returned; do not
                     # interpret it
                     df.callback((message, address))
-                elif isinstance(message, msgtypes.ErrorMessage):
-                    # The RPC request raised a remote exception; raise it locally
-                    if message.exceptionType in BUILTIN_EXCEPTIONS:
-                        exception_type = BUILTIN_EXCEPTIONS[message.exceptionType]
-                    else:
-                        exception_type = UnknownRemoteException
-                    remoteException = exception_type(message.response)
-                    # this error is returned by nodes that can be contacted but have an old
-                    # and broken version of the ping command, if they return it the node can
-                    # be contacted, so we'll treat it as a successful ping
-                    old_ping_error = "ping() got an unexpected keyword argument '_rpcNodeContact'"
-                    if isinstance(remoteException, TypeError) and \
-                                    remoteException.message == old_ping_error:
-                        log.debug("old pong error")
-                        df.callback('pong')
-                    else:
-                        log.error("DHT RECV REMOTE EXCEPTION FROM %s:%i: %s", address[0],
-                                  address[1], remoteException)
-                        df.errback(remoteException)
                 else:
                     # We got a result from the RPC
                     df.callback(message.response)
@@ -259,28 +313,29 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
         # Execute the RPC
         func = getattr(self._node, method, None)
-        if callable(func) and hasattr(func, 'rpcmethod'):
+        if callable(func) and hasattr(func, "rpcmethod"):
             # Call the exposed Node method and return the result to the deferred callback chain
             if args:
-                log.debug("DHT RECV CALL %s(%s) %s:%i", method, args[0].encode('hex'),
-                          senderContact.address, senderContact.port)
+                log.debug("%s:%i RECV CALL %s(%s) %s:%i", self._node.externalIP, self._node.port, method,
+                          args[0].encode('hex'), senderContact.address, senderContact.port)
             else:
-                log.debug("DHT RECV CALL %s %s:%i", method, senderContact.address,
-                          senderContact.port)
+                log.debug("%s:%i RECV CALL %s %s:%i", self._node.externalIP, self._node.port,  method,
+                          senderContact.address, senderContact.port)
             try:
                 if method != 'ping':
-                    kwargs = {'_rpcNodeID': senderContact.id, '_rpcNodeContact': senderContact}
-                    result = func(*args, **kwargs)
+                    result = func(senderContact, *args)
                 else:
                     result = func()
             except Exception, e:
-                log.exception("error handling request for %s: %s", senderContact.address, method)
+                log.exception("error handling request for %s:%i %s", senderContact.address,
+                              senderContact.port, method)
                 df.errback(e)
             else:
                 df.callback(result)
         else:
             # No such exposed method
             df.errback(AttributeError('Invalid method: %s' % method))
+        return df
 
     def _msgTimeout(self, messageID):
         """ Called when an RPC request message times out """
@@ -289,30 +344,30 @@ class KademliaProtocol(protocol.DatagramProtocol):
             # This should never be reached
             log.error("deferred timed out, but is not present in sent messages list!")
             return
-        remoteContactID, df, timeout_call, method, args = self._sentMessages[messageID]
+        remoteContact, df, timeout_call, timeout_canceller, method, args = self._sentMessages[messageID]
         if self._partialMessages.has_key(messageID):
             # We are still receiving this message
-            self._msgTimeoutInProgress(messageID, remoteContactID, df, method, args)
+            self._msgTimeoutInProgress(messageID, timeout_canceller, remoteContact, df, method, args)
             return
         del self._sentMessages[messageID]
         # The message's destination node is now considered to be dead;
         # raise an (asynchronous) TimeoutError exception and update the host node
-        self._node.removeContact(remoteContactID)
-        df.errback(TimeoutError(remoteContactID))
+        df.errback(TimeoutError(remoteContact.id))
 
-    def _msgTimeoutInProgress(self, messageID, remoteContactID, df, method, args):
+    def _msgTimeoutInProgress(self, messageID, timeoutCanceller, remoteContact, df, method, args):
         # See if any progress has been made; if not, kill the message
         if self._hasProgressBeenMade(messageID):
             # Reset the RPC timeout timer
-            timeoutCall, _ = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, messageID)
-            self._sentMessages[messageID] = (remoteContactID, df, timeoutCall, method, args)
+            timeoutCanceller()
+            timeoutCall, cancelTimeout = self._node.reactor_callLater(constants.rpcTimeout, self._msgTimeout, messageID)
+            self._sentMessages[messageID] = (remoteContact, df, timeoutCall, cancelTimeout, method, args)
         else:
             # No progress has been made
             if messageID in self._partialMessagesProgress:
                 del self._partialMessagesProgress[messageID]
             if messageID in self._partialMessages:
                 del self._partialMessages[messageID]
-            df.errback(TimeoutError(remoteContactID))
+            df.errback(TimeoutError(remoteContact.id))
 
     def _hasProgressBeenMade(self, messageID):
         return (

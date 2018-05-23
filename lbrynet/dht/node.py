@@ -24,7 +24,7 @@ import datastore
 import protocol
 from error import TimeoutError
 from peerfinder import DHTPeerFinder
-from contact import Contact
+from contact import ContactManager
 from distance import Distance
 
 
@@ -51,6 +51,7 @@ class MockKademliaHelper(object):
             clock = clock or reactor
 
         self.clock = clock
+        self.contact_manager = ContactManager(self.clock.seconds)
         self.reactor_listenUDP = listenUDP
         self.reactor_resolve = resolve
 
@@ -276,8 +277,10 @@ class Node(MockKademliaHelper):
             is_closer = Distance(blob_hash).is_closer(self.node_id, contacts[-1].id)
             if is_closer:
                 contacts.pop()
-                yield self.store(blob_hash, value, originalPublisherID=self.node_id,
-                                 self_store=True)
+                self_contact = self.contact_manager.make_contact(self.node_id, self.externalIP,
+                                                                 self.port, self._protocol)
+                token = self.make_token(self_contact.compact_ip())
+                yield self.store(self_contact, blob_hash, token, self.peerPort)
         elif self.externalIP is not None:
             pass
         else:
@@ -403,17 +406,17 @@ class Node(MockKademliaHelper):
         @param contact: The contact to add to this node's k-buckets
         @type contact: kademlia.contact.Contact
         """
-        self._routingTable.addContact(contact)
+        return self._routingTable.addContact(contact)
 
-    def removeContact(self, contactID):
+    def removeContact(self, contact):
         """ Remove the contact with the specified node ID from this node's
         table of known nodes. This is a simple wrapper for the same method
         in this object's RoutingTable object
 
-        @param contactID: The node ID of the contact to remove
-        @type contactID: str
+        @param contact: The Contact object to remove
+        @type contact: _Contact
         """
-        self._routingTable.removeContact(contactID)
+        self._routingTable.removeContact(contact)
 
     def findContact(self, contactID):
         """ Find a entangled.kademlia.contact.Contact object for the specified
@@ -430,10 +433,11 @@ class Node(MockKademliaHelper):
             contact = self._routingTable.getContact(contactID)
             df = defer.Deferred()
             df.callback(contact)
-        except ValueError:
+        except (ValueError, IndexError):
             def parseResults(nodes):
+                node_ids = [c.id for c in nodes]
                 if contactID in nodes:
-                    contact = nodes[nodes.index(contactID)]
+                    contact = nodes[node_ids.index(contactID)]
                     return contact
                 else:
                     return None
@@ -451,11 +455,11 @@ class Node(MockKademliaHelper):
         return 'pong'
 
     @rpcmethod
-    def store(self, key, value, originalPublisherID=None, self_store=False, **kwargs):
+    def store(self, rpc_contact, blob_hash, token, port, originalPublisherID=None, age=0):
         """ Store the received data in this node's local hash table
 
-        @param key: The hashtable key of the data
-        @type key: str
+        @param blob_hash: The hashtable key of the data
+        @type blob_hash: str
         @param value: The actual data (the value associated with C{key})
         @type value: str
         @param originalPublisherID: The node ID of the node that is the
@@ -473,54 +477,24 @@ class Node(MockKademliaHelper):
                (which is the case currently) might not be a good idea... will have
                to fix this (perhaps use a stream from the Protocol class?)
         """
-        # Get the sender's ID (if any)
         if originalPublisherID is None:
-            if '_rpcNodeID' in kwargs:
-                originalPublisherID = kwargs['_rpcNodeID']
-            else:
-                raise TypeError, 'No NodeID given. Therefore we can\'t store this node'
-
-        if self_store is True and self.externalIP:
-            contact = Contact(self.node_id, self.externalIP, self.port, None, None)
-            compact_ip = contact.compact_ip()
-        elif '_rpcNodeContact' in kwargs:
-            contact = kwargs['_rpcNodeContact']
-            compact_ip = contact.compact_ip()
+            originalPublisherID = rpc_contact.id
+        compact_ip = rpc_contact.compact_ip()
+        if not self.verify_token(token, compact_ip):
+            raise ValueError("Invalid token")
+        if 0 <= port <= 65536:
+            compact_port = str(struct.pack('>H', port))
         else:
-            raise TypeError, 'No contact info available'
+            raise TypeError('Invalid port')
 
-        if not self_store:
-            if 'token' not in value:
-                raise ValueError("Missing token")
-            if not self.verify_token(value['token'], compact_ip):
-                raise ValueError("Invalid token")
-
-        if 'port' in value:
-            port = int(value['port'])
-            if 0 <= port <= 65536:
-                compact_port = str(struct.pack('>H', port))
-            else:
-                raise TypeError('Invalid port')
-        else:
-            raise TypeError('No port available')
-
-        if 'lbryid' in value:
-            if len(value['lbryid']) != constants.key_bits / 8:
-                raise ValueError('Invalid lbryid (%i bytes): %s' % (len(value['lbryid']),
-                                                                    value['lbryid'].encode('hex')))
-            else:
-                compact_address = compact_ip + compact_port + value['lbryid']
-        else:
-            raise TypeError('No lbryid given')
-
+        compact_address = compact_ip + compact_port + rpc_contact.id
         now = int(time.time())
-        originallyPublished = now  # - age
-        self._dataStore.addPeerToBlob(key, compact_address, now, originallyPublished,
-                                      originalPublisherID)
+        originallyPublished = now - age
+        self._dataStore.addPeerToBlob(blob_hash, compact_address, now, originallyPublished, originalPublisherID)
         return 'OK'
 
     @rpcmethod
-    def findNode(self, key, **kwargs):
+    def findNode(self, rpc_contact, key):
         """ Finds a number of known nodes closest to the node/value with the
         specified key.
 
@@ -533,20 +507,17 @@ class Node(MockKademliaHelper):
                  node is returning all of the contacts that it knows of.
         @rtype: list
         """
+        if len(key) != constants.key_bits / 8:
+            raise ValueError("invalid contact id length: %i" % len(key))
 
-        # Get the sender's ID (if any)
-        if '_rpcNodeID' in kwargs:
-            rpc_sender_id = kwargs['_rpcNodeID']
-        else:
-            rpc_sender_id = None
-        contacts = self._routingTable.findCloseNodes(key, constants.k, rpc_sender_id)
+        contacts = self._routingTable.findCloseNodes(key, constants.k, rpc_contact.id)
         contact_triples = []
         for contact in contacts:
             contact_triples.append((contact.id, contact.address, contact.port))
         return contact_triples
 
     @rpcmethod
-    def findValue(self, key, **kwargs):
+    def findValue(self, rpc_contact, key):
         """ Return the value associated with the specified key if present in
         this node's data, otherwise execute FIND_NODE for the key
 
@@ -558,16 +529,18 @@ class Node(MockKademliaHelper):
         @rtype: dict or list
         """
 
+        if len(key) != constants.key_bits / 8:
+            raise ValueError("invalid blob hash length: %i" % len(key))
+
+        response = {
+            'token': self.make_token(rpc_contact.compact_ip()),
+        }
+
         if self._dataStore.hasPeersForBlob(key):
-            rval = {key: self._dataStore.getPeersForBlob(key)}
+            response[key] = self._dataStore.getPeersForBlob(key)
         else:
-            contact_triples = self.findNode(key, **kwargs)
-            rval = {'contacts': contact_triples}
-        if '_rpcNodeContact' in kwargs:
-            contact = kwargs['_rpcNodeContact']
-            compact_ip = contact.compact_ip()
-            rval['token'] = self.make_token(compact_ip)
-        return rval
+            response['contacts'] = self.findNode(rpc_contact, key)
+        return response
 
     def _generateID(self):
         """ Generates an n-bit pseudo-random identifier
@@ -606,13 +579,15 @@ class Node(MockKademliaHelper):
                  return a list of the k closest nodes to the specified key
         @rtype: twisted.internet.defer.Deferred
         """
-        findValue = rpc != 'findNode'
+
+        if len(key) != constants.key_bits / 8:
+            raise ValueError("invalid key length: %i" % len(key))
 
         if startupShortlist is None:
             shortlist = self._routingTable.findCloseNodes(key, constants.k)
-            if key != self.node_id:
-                # Update the "last accessed" timestamp for the appropriate k-bucket
-                self._routingTable.touchKBucket(key)
+            # if key != self.node_id:
+            #     # Update the "last accessed" timestamp for the appropriate k-bucket
+            #     self._routingTable.touchKBucket(key)
             if len(shortlist) == 0:
                 log.warning("This node doesnt know any other nodes")
                 # This node doesn't know of any other nodes
@@ -621,7 +596,7 @@ class Node(MockKademliaHelper):
                 result = yield fakeDf
                 defer.returnValue(result)
         else:
-            # This is used during the bootstrap process; node ID's are most probably fake
+            # This is used during the bootstrap process
             shortlist = startupShortlist
 
         outerDf = defer.Deferred()

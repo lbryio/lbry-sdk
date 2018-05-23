@@ -202,16 +202,16 @@ class TreeRoutingTable(object):
             bucketIndex += 1
         return refreshIDs
 
-    def removeContact(self, contactID):
-        """ Remove the contact with the specified node ID from the routing
-        table
-
-        @param contactID: The node ID of the contact to remove
-        @type contactID: str
+    def removeContact(self, contact):
         """
-        bucketIndex = self._kbucketIndex(contactID)
+        Remove the contact from the routing table
+
+        @param contact: The contact to remove
+        @type contact: dht.contact._Contact
+        """
+        bucketIndex = self._kbucketIndex(contact.id)
         try:
-            self._buckets[bucketIndex].removeContact(contactID)
+            self._buckets[bucketIndex].removeContact(contact)
         except ValueError:
             return
 
