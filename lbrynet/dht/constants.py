@@ -43,8 +43,6 @@ dataExpireTimeout = 86400  # 24 hours
 
 tokenSecretChangeInterval = 300  # 5 minutes
 
-peer_request_timeout = 10
-
 ######## IMPLEMENTATION-SPECIFIC CONSTANTS ###########
 
 #: The interval in which the node should check its whether any buckets need refreshing,
