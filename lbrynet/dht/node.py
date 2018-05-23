@@ -122,20 +122,9 @@ class Node(object):
         # Initialize the data storage mechanism used by this node
         self.token_secret = self._generateID()
         self.old_token_secret = None
-        if dataStore is None:
-            self._dataStore = datastore.DictDataStore()
-        else:
-            self._dataStore = dataStore
-            # Try to restore the node's state...
-            if 'nodeState' in self._dataStore:
-                state = self._dataStore['nodeState']
-                self.node_id = state['id']
-                for contactTriple in state['closestNodes']:
-                    contact = Contact(
-                        contactTriple[0], contactTriple[1], contactTriple[2], self._protocol)
-                    self._routingTable.addContact(contact)
         self.externalIP = externalIP
         self.peerPort = peerPort
+        self._dataStore = dataStore or datastore.DictDataStore()
         self.peer_manager = peer_manager or PeerManager()
         self.peer_finder = peer_finder or DHTPeerFinder(self, self.peer_manager)
 
