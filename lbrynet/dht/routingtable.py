@@ -47,6 +47,26 @@ class TreeRoutingTable(object):
             getTime = reactor.seconds
         self._getTime = getTime
 
+    def get_contacts(self):
+        contacts = []
+        for i in range(len(self._buckets)):
+            for contact in self._buckets[i]._contacts:
+                contacts.append(contact)
+        return contacts
+
+    def _shouldSplit(self, bucketIndex, toAdd):
+        #  https://stackoverflow.com/questions/32129978/highly-unbalanced-kademlia-routing-table/32187456#32187456
+        if self._buckets[bucketIndex].keyInRange(self._parentNodeID):
+            return True
+        contacts = self.get_contacts()
+        distance = Distance(self._parentNodeID)
+        contacts.sort(key=lambda c: distance(c.id))
+        if len(contacts) < constants.k:
+            kth_contact = contacts[-1]
+        else:
+            kth_contact = contacts[constants.k-1]
+        return distance(toAdd) < distance(kth_contact.id)
+
     def addContact(self, contact):
         """ Add the given contact to the correct k-bucket; if it already
         exists, its status will be updated
@@ -63,7 +83,7 @@ class TreeRoutingTable(object):
         except kbucket.BucketFull:
             # The bucket is full; see if it can be split (by checking
             # if its range includes the host node's id)
-            if self._buckets[bucketIndex].keyInRange(self._parentNodeID):
+            if self._shouldSplit(bucketIndex, contact.id):
                 self._splitBucket(bucketIndex)
                 # Retry the insertion attempt
                 self.addContact(contact)
