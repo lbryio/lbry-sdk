@@ -40,7 +40,8 @@ class DictDataStore(UserDict.DictMixin):
 
     def addPeerToBlob(self, key, value, lastPublished, originallyPublished, originalPublisherID):
         if key in self._dict:
-            self._dict[key].append((value, lastPublished, originallyPublished, originalPublisherID))
+            if value not in map(lambda store_tuple: store_tuple[0], self._dict[key]):
+                self._dict[key].append((value, lastPublished, originallyPublished, originalPublisherID))
         else:
             self._dict[key] = [(value, lastPublished, originallyPublished, originalPublisherID)]
 
