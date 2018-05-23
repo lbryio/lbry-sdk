@@ -234,7 +234,7 @@ class Session(object):
             self.hash_announcer = hashannouncer.DHTHashAnnouncer(self.dht_node, self.storage)
         self.peer_manager = self.dht_node.peer_manager
         self.peer_finder = self.dht_node.peer_finder
-        self._join_dht_deferred = self.dht_node.joinNetwork(self.known_dht_nodes)
+        self._join_dht_deferred = self.dht_node.start(self.known_dht_nodes)
         self._join_dht_deferred.addCallback(lambda _: log.info("Joined the dht"))
         self._join_dht_deferred.addCallback(lambda _: self.hash_announcer.start())
 
