@@ -6,7 +6,7 @@ class KBucket(object):
     """ Description - later
     """
 
-    def __init__(self, rangeMin, rangeMax):
+    def __init__(self, rangeMin, rangeMax, node_id):
         """
         @param rangeMin: The lower boundary for the range in the n-bit ID
                          space covered by this k-bucket
@@ -17,6 +17,7 @@ class KBucket(object):
         self.rangeMin = rangeMin
         self.rangeMax = rangeMax
         self._contacts = list()
+        self._node_id = node_id
 
     def addContact(self, contact):
         """ Add contact to _contact list in the right order. This will move the

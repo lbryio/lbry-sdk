@@ -40,8 +40,8 @@ class TreeRoutingTable(object):
         @type parentNodeID: str
         """
         # Create the initial (single) k-bucket covering the range of the entire n-bit ID space
-        self._buckets = [kbucket.KBucket(rangeMin=0, rangeMax=2 ** constants.key_bits)]
         self._parentNodeID = parentNodeID
+        self._buckets = [kbucket.KBucket(rangeMin=0, rangeMax=2 ** constants.key_bits, node_id=self._parentNodeID)]
         if not getTime:
             from time import time as getTime
         self._getTime = getTime
@@ -272,7 +272,7 @@ class TreeRoutingTable(object):
         oldBucket = self._buckets[oldBucketIndex]
         splitPoint = oldBucket.rangeMax - (oldBucket.rangeMax - oldBucket.rangeMin) / 2
         # Create a new k-bucket to cover the range split off from the old bucket
-        newBucket = kbucket.KBucket(splitPoint, oldBucket.rangeMax)
+        newBucket = kbucket.KBucket(splitPoint, oldBucket.rangeMax, self._parentNodeID)
         oldBucket.rangeMax = splitPoint
         # Now, add the new bucket into the routing table tree
         self._buckets.insert(oldBucketIndex + 1, newBucket)
