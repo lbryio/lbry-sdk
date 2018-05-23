@@ -2903,24 +2903,22 @@ class Daemon(AuthJSONRPCServer):
         if not utils.is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
 
-        finished_deferred = self.session.dht_node.getPeersForBlob(binascii.unhexlify(blob_hash), True)
+        finished_deferred = self.session.dht_node.iterativeFindValue(binascii.unhexlify(blob_hash))
 
-        def _trigger_timeout():
-            if not finished_deferred.called:
-                log.debug("Peer search for %s timed out", blob_hash)
-                finished_deferred.cancel()
+        def trap_timeout(err):
+            err.trap(defer.TimeoutError)
+            return []
 
-        timeout = timeout or conf.settings['peer_search_timeout']
-        self.session.dht_node.reactor_callLater(timeout, _trigger_timeout)
-
+        finished_deferred.addTimeout(timeout or conf.settings['peer_search_timeout'], self.session.dht_node.clock)
+        finished_deferred.addErrback(trap_timeout)
         peers = yield finished_deferred
         results = [
             {
+                "node_id": node_id.encode('hex'),
                 "host": host,
-                "port": port,
-                "node_id": node_id
+                "port": port
             }
-            for host, port, node_id in peers
+            for node_id, host, port in peers
         ]
         defer.returnValue(results)
 
