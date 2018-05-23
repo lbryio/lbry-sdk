@@ -650,14 +650,19 @@ class Node(MockKademliaHelper):
     def _refreshNode(self):
         """ Periodically called to perform k-bucket refreshes and data
         replication/republishing as necessary """
-
         yield self._refreshRoutingTable()
         self._dataStore.removeExpiredPeers()
         defer.returnValue(None)
 
+    def _refreshContacts(self):
+        return defer.DeferredList(
+            [self._protocol._ping_queue.enqueue_maybe_ping(contact) for contact in self.contacts]
+        )
+
     @defer.inlineCallbacks
     def _refreshRoutingTable(self):
         nodeIDs = self._routingTable.getRefreshList(0, True)
+        yield self._refreshContacts()
         while nodeIDs:
             searchID = nodeIDs.pop()
             yield self.iterativeFindNode(searchID)

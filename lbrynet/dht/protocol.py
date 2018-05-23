@@ -85,6 +85,7 @@ class PingQueue(object):
     def enqueue_maybe_ping(self, contact):
         return self._semaphore.run(self._add_contact, contact)
 
+
 class KademliaProtocol(protocol.DatagramProtocol):
     """ Implements all low-level network-related functions of a Kademlia node """
 
