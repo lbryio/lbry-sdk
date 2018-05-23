@@ -657,7 +657,7 @@ class Node(MockKademliaHelper):
 
     @defer.inlineCallbacks
     def _refreshRoutingTable(self):
-        nodeIDs = self._routingTable.getRefreshList(0, False)
+        nodeIDs = self._routingTable.getRefreshList(0, True)
         while nodeIDs:
             searchID = nodeIDs.pop()
             yield self.iterativeFindNode(searchID)
