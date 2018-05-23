@@ -39,3 +39,7 @@ class TimeoutError(Exception):
             msg = 'Timeout connecting to uninitialized node'
         Exception.__init__(self, msg)
         self.remote_contact_id = remote_contact_id
+
+
+class TransportNotConnected(Exception):
+    pass

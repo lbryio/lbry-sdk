@@ -4,12 +4,12 @@ import errno
 
 from twisted.internet import protocol, defer
 from lbrynet.core.call_later_manager import CallLaterManager
+from error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
 
 import constants
 import encoding
 import msgtypes
 import msgformat
-from error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._sentMessages = {}
         self._partialMessages = {}
         self._partialMessagesProgress = {}
+        self._listening = defer.Deferred(None)
 
     def sendRPC(self, contact, method, args, rawResponse=False):
         """
@@ -97,7 +98,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
         return df
 
     def startProtocol(self):
-        log.info("DHT listening on UDP %i", self._node.port)
+        log.info("DHT listening on UDP %s:%i", self._node.externalIP, self._node.port)
+        self._listening.callback(True)
 
     def datagramReceived(self, datagram, address):
         """ Handles and parses incoming RPC messages (and responses)
@@ -279,7 +281,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     log.error("DHT socket error: %s (%i)", err.message, err.errno)
                     raise err
         else:
-            log.warning("transport not connected!")
+            raise TransportNotConnected()
 
     def _sendResponse(self, contact, rpcID, response):
         """ Send a RPC response to the specified contact

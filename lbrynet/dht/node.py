@@ -223,7 +223,8 @@ class Node(MockKademliaHelper):
         """
 
         self.start_listening()
-        #        #TODO: Refresh all k-buckets further away than this node's closest neighbour
+        yield self._protocol._listening
+        # TODO: Refresh all k-buckets further away than this node's closest neighbour
         self.safe_start_looping_call(self._change_token_lc, constants.tokenSecretChangeInterval)
         # Start refreshing k-buckets periodically, if necessary
         self.bootstrap_join(known_node_addresses or [], self._joinDeferred)
