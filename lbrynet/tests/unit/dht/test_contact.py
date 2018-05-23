@@ -1,16 +1,24 @@
-import unittest
-
-from lbrynet.dht import contact
+from twisted.internet import task
+from twisted.trial import unittest
+from lbrynet.core.utils import generate_id
+from lbrynet.dht.contact import ContactManager
+from lbrynet.dht import constants
 
 
 class ContactOperatorsTest(unittest.TestCase):
     """ Basic tests case for boolean operators on the Contact class """
     def setUp(self):
-        self.firstContact = contact.Contact('firstContactID', '127.0.0.1', 1000, None, 1)
-        self.secondContact = contact.Contact('2ndContactID', '192.168.0.1', 1000, None, 32)
-        self.secondContactCopy = contact.Contact('2ndContactID', '192.168.0.1', 1000, None, 32)
-        self.firstContactDifferentValues = contact.Contact(
-            'firstContactID', '192.168.1.20', 1000, None, 50)
+        self.contact_manager = ContactManager()
+        self.node_ids = [generate_id(), generate_id(), generate_id()]
+        self.firstContact = self.contact_manager.make_contact(self.node_ids[1], '127.0.0.1', 1000, None, 1)
+        self.secondContact = self.contact_manager.make_contact(self.node_ids[0], '192.168.0.1', 1000, None, 32)
+        self.secondContactCopy = self.contact_manager.make_contact(self.node_ids[0], '192.168.0.1', 1000, None, 32)
+        self.firstContactDifferentValues = self.contact_manager.make_contact(self.node_ids[1], '192.168.1.20',
+                                                                             1000, None, 50)
+
+    def testNoDuplicateContactObjects(self):
+        self.assertTrue(self.secondContact is self.secondContactCopy)
+        self.assertTrue(self.firstContact is not self.firstContactDifferentValues)
 
     def testBoolean(self):
         """ Test "equals" and "not equals" comparisons """
@@ -23,15 +31,6 @@ class ContactOperatorsTest(unittest.TestCase):
         self.failUnlessEqual(
             self.secondContact, self.secondContactCopy,
             'Different copies of the same Contact instance should be equal')
-
-    def testStringComparisons(self):
-        """ Test comparisons of Contact objects with str types """
-        self.failUnlessEqual(
-            'firstContactID', self.firstContact,
-            'The node ID string must be equal to the contact object')
-        self.failIfEqual(
-            'some random string', self.firstContact,
-            "The tested string should not be equal to the contact object (not equal to it's ID)")
 
     def testIllogicalComparisons(self):
         """ Test comparisons with non-Contact and non-str types """

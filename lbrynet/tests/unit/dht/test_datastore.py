@@ -4,19 +4,19 @@
 # the GNU Lesser General Public License Version 3, or any later version.
 # See the COPYING file included in this archive
 
-import unittest
+from twisted.trial import unittest
 import time
-
-import lbrynet.dht.datastore
-import lbrynet.dht.constants
-
 import hashlib
+
+from lbrynet.dht.datastore import DictDataStore
+from lbrynet.dht import constants
+
 
 class DictDataStoreTest(unittest.TestCase):
     """ Basic tests case for the reference DataStore API and implementation """
     def setUp(self):
-        self.ds = lbrynet.dht.datastore.DictDataStore()
-        h = hashlib.sha1()
+        self.ds = DictDataStore()
+        h = hashlib.sha384()
         h.update('g')
         hashKey = h.digest()
         h2 = hashlib.sha1()
@@ -78,7 +78,7 @@ class DictDataStoreTest(unittest.TestCase):
         h2 = hashlib.sha1()
         h2.update('test2')
         key2 = h2.digest()
-        td = lbrynet.dht.constants.dataExpireTimeout - 100
+        td = constants.dataExpireTimeout - 100
         td2 = td + td
         self.ds.addPeerToBlob(h1, 'val1', now - td, now - td, '1')
         self.ds.addPeerToBlob(h1, 'val2', now - td2, now - td2, '2')
@@ -128,16 +128,3 @@ class DictDataStoreTest(unittest.TestCase):
 #
 #        # Read back the meta-data
 #        for key, value in self.cases:
-
-
-
-
-def suite():
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(DictDataStoreTest))
-    return suite
-
-
-if __name__ == '__main__':
-    # If this module is executed from the commandline, run all its tests
-    unittest.TextTestRunner().run(suite())
