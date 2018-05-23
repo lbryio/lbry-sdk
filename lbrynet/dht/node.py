@@ -25,7 +25,6 @@ import protocol
 from error import TimeoutError
 from peerfinder import DHTPeerFinder
 from contact import Contact
-from hashwatcher import HashWatcher
 from distance import Distance
 
 
@@ -137,8 +136,6 @@ class Node(object):
                     self._routingTable.addContact(contact)
         self.externalIP = externalIP
         self.peerPort = peerPort
-        self.hash_watcher = HashWatcher(self.clock)
-
         self.peer_manager = peer_manager or PeerManager()
         self.peer_finder = peer_finder or DHTPeerFinder(self, self.peer_manager)
 
@@ -156,8 +153,6 @@ class Node(object):
             yield self.change_token_lc.stop()
         if self._listeningPort is not None:
             yield self._listeningPort.stopListening()
-        if self.hash_watcher.lc.running:
-            yield self.hash_watcher.stop()
 
     def start_listening(self):
         if not self._listeningPort:
@@ -223,7 +218,6 @@ class Node(object):
         # Start refreshing k-buckets periodically, if necessary
         self.bootstrap_join(known_node_addresses or [], self._joinDeferred)
         yield self._joinDeferred
-        self.hash_watcher.start()
         self.change_token_lc.start(constants.tokenSecretChangeInterval)
         self.refresh_node_lc.start(constants.checkRefreshInterval)
 
@@ -570,7 +564,6 @@ class Node(object):
             contact = kwargs['_rpcNodeContact']
             compact_ip = contact.compact_ip()
             rval['token'] = self.make_token(compact_ip)
-            self.hash_watcher.add_requested_hash(key, contact)
         return rval
 
     def _generateID(self):
