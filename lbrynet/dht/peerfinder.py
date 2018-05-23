@@ -4,7 +4,6 @@ import logging
 from zope.interface import implements
 from twisted.internet import defer
 from lbrynet.interfaces import IPeerFinder
-from lbrynet.core.utils import short_hash
 
 
 log = logging.getLogger(__name__)
@@ -13,17 +12,8 @@ log = logging.getLogger(__name__)
 class DummyPeerFinder(object):
     """This class finds peers which have announced to the DHT that they have certain blobs"""
 
-    def run_manage_loop(self):
-        pass
-
-    def stop(self):
-        pass
-
-    def find_peers_for_blob(self, blob_hash):
+    def find_peers_for_blob(self, blob_hash, timeout=None, filter_self=True):
         return defer.succeed([])
-
-    def get_most_popular_hashes(self, num_to_return):
-        return []
 
 
 class DHTPeerFinder(DummyPeerFinder):
@@ -39,11 +29,8 @@ class DHTPeerFinder(DummyPeerFinder):
         self.peer_manager = peer_manager
         self.peers = []
 
-    def stop(self):
-        pass
-
     @defer.inlineCallbacks
-    def find_peers_for_blob(self, blob_hash, timeout=None, filter_self=False):
+    def find_peers_for_blob(self, blob_hash, timeout=None, filter_self=True):
         """
         Find peers for blob in the DHT
         blob_hash (str): blob hash to look for
@@ -54,32 +41,19 @@ class DHTPeerFinder(DummyPeerFinder):
         Returns:
         list of peers for the blob
         """
-        def _trigger_timeout():
-            if not finished_deferred.called:
-                log.debug("Peer search for %s timed out", short_hash(blob_hash))
-                finished_deferred.cancel()
-
         bin_hash = binascii.unhexlify(blob_hash)
-        finished_deferred = self.dht_node.getPeersForBlob(bin_hash)
-
-        if timeout is not None:
-            self.dht_node.reactor_callLater(timeout, _trigger_timeout)
-
+        finished_deferred = self.dht_node.iterativeFindValue(bin_hash)
+        if timeout:
+            finished_deferred.addTimeout(timeout, self.dht_node.clock)
         try:
             peer_list = yield finished_deferred
-        except defer.CancelledError:
+        except defer.TimeoutError:
             peer_list = []
 
         peers = set(peer_list)
-        good_peers = []
-        for host, port in peers:
+        results = []
+        for node_id, host, port in peers:
             if filter_self and (host, port) == (self.dht_node.externalIP, self.dht_node.peerPort):
                 continue
-            peer = self.peer_manager.get_peer(host, port)
-            if peer.is_available() is True:
-                good_peers.append(peer)
-
-        defer.returnValue(good_peers)
-
-    def get_most_popular_hashes(self, num_to_return):
-        return self.dht_node.get_most_popular_hashes(num_to_return)
+            results.append(self.peer_manager.get_peer(host, port))
+        defer.returnValue(results)

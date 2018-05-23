@@ -261,9 +261,6 @@ class Node(object):
                             expanded_peers.append((host, port, peer_node_id))
         defer.returnValue(expanded_peers)
 
-    def get_most_popular_hashes(self, num_to_return):
-        return self.hash_watcher.most_popular_hashes(num_to_return)
-
     @defer.inlineCallbacks
     def iterativeAnnounceHaveBlob(self, blob_hash, value):
         known_nodes = {}
