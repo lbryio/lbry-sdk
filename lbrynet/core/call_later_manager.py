@@ -38,7 +38,8 @@ class CallLaterManager(object):
 
             if call_later.active():
                 call_later.cancel()
-            cls._pendingCallLaters.remove(call_later)
+            if call_later in cls._pendingCallLaters:
+                cls._pendingCallLaters.remove(call_later)
             return reason
         return cancel
 
@@ -53,7 +54,7 @@ class CallLaterManager(object):
             canceller = cls._cancel(cls._pendingCallLaters[0])
             try:
                 canceller()
-            except (defer.CancelledError, defer.AlreadyCalledError):
+            except (defer.CancelledError, defer.AlreadyCalledError, ValueError):
                 pass
 
     @classmethod
