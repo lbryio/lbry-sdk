@@ -106,7 +106,7 @@ class TreeRoutingTable(object):
                 # contact, and append the new one
                 df.addErrback(replaceContact, head_contact.id)
 
-    def findCloseNodes(self, key, count, _rpcNodeID=None):
+    def findCloseNodes(self, key, count, sender_node_id=None):
         """ Finds a number of known nodes closest to the node/value with the
         specified key.
 
@@ -114,10 +114,10 @@ class TreeRoutingTable(object):
         @type key: str
         @param count: the amount of contacts to return
         @type count: int
-        @param _rpcNodeID: Used during RPC, this is be the sender's Node ID
-                           Whatever ID is passed in the paramater will get
-                           excluded from the list of returned contacts.
-        @type _rpcNodeID: str
+        @param sender_node_id: Used during RPC, this is be the sender's Node ID
+                               Whatever ID is passed in the paramater will get
+                               excluded from the list of returned contacts.
+        @type sender_node_id: str
 
         @return: A list of node contacts (C{kademlia.contact.Contact instances})
                  closest to the specified key.
@@ -129,7 +129,8 @@ class TreeRoutingTable(object):
         bucketIndex = self._kbucketIndex(key)
 
         if bucketIndex < len(self._buckets):
-            closestNodes = self._buckets[bucketIndex].getContacts(count, _rpcNodeID)
+            # sort these
+            closestNodes = self._buckets[bucketIndex].getContacts(count, sender_node_id, sort_distance_to=key)
         else:
             closestNodes = []
         # This method must return k contacts (even if we have the node
@@ -142,21 +143,27 @@ class TreeRoutingTable(object):
         def get_remain(closest):
             return min(count, constants.k) - len(closest)
 
-        # Fill up the node list to k nodes, starting with the closest neighbouring nodes known
+        distance = Distance(key)
+
         while len(closestNodes) < min(count, constants.k) and (canGoLower or canGoHigher):
-            # TODO: this may need to be optimized
-            # TODO: add "key" kwarg to getContacts() to sort contacts returned by xor distance
-            # to the key
+            iteration_contacts = []
+            # get contacts from lower and/or higher buckets without sorting them
             if canGoLower and len(closestNodes) < min(count, constants.k):
-                closestNodes.extend(
-                    self._buckets[bucketIndex - i].getContacts(get_remain(closestNodes),
-                                                               _rpcNodeID))
+                lower_bucket = self._buckets[bucketIndex - i]
+                contacts = lower_bucket.getContacts(get_remain(closestNodes), sender_node_id, sort_distance_to=False)
+                iteration_contacts.extend(contacts)
                 canGoLower = bucketIndex - (i + 1) >= 0
+
             if canGoHigher and len(closestNodes) < min(count, constants.k):
-                closestNodes.extend(self._buckets[bucketIndex + i].getContacts(
-                    get_remain(closestNodes), _rpcNodeID))
+                higher_bucket = self._buckets[bucketIndex + i]
+                contacts = higher_bucket.getContacts(get_remain(closestNodes), sender_node_id, sort_distance_to=False)
+                iteration_contacts.extend(contacts)
                 canGoHigher = bucketIndex + (i + 1) < len(self._buckets)
             i += 1
+            # sort the combined contacts and add as many as possible/needed to the combined contact list
+            iteration_contacts.sort(key=lambda c: distance(c.id), reverse=True)
+            while len(iteration_contacts) and len(closestNodes) < min(count, constants.k):
+                closestNodes.append(iteration_contacts.pop())
         return closestNodes
 
     def getContact(self, contactID):
