@@ -7,7 +7,7 @@ import logging
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
 from lbrynet.reflector.reupload import reflect_file
-from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
+# from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.core.StreamDescriptor import EncryptedFileStreamType, get_sd_info
@@ -118,12 +118,12 @@ class EncryptedFileManager(object):
         files = yield self.session.storage.get_all_lbry_files()
         claim_infos = yield self.session.storage.get_claims_from_stream_hashes([file['stream_hash'] for file in files])
         b_prm = self.session.base_payment_rate_manager
-        payment_rate_manager = NegotiatedPaymentRateManager(b_prm, self.session.blob_tracker)
+        # payment_rate_manager = NegotiatedPaymentRateManager(b_prm, self.session.blob_tracker)
 
         log.info("Starting %i files", len(files))
         for file_info in files:
             claim_info = claim_infos.get(file_info['stream_hash'])
-            self._start_lbry_file(file_info, payment_rate_manager, claim_info)
+            self._start_lbry_file(file_info, b_prm, claim_info)
 
         log.info("Started %i lbry files", len(self.lbry_files))
         if self.auto_re_reflect is True:

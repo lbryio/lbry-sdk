@@ -6,7 +6,7 @@ from lbrynet.dht import node, hashannouncer
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.utils import generate_id
-from lbrynet.core.PaymentRateManager import BasePaymentRateManager, NegotiatedPaymentRateManager
+from lbrynet.core.PaymentRateManager import BasePaymentRateManager, OnlyFreePaymentsManager
 from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
 
 log = logging.getLogger(__name__)
@@ -107,8 +107,8 @@ class Session(object):
             self.known_dht_nodes = []
         self.blob_dir = blob_dir
         self.blob_manager = blob_manager
-        self.blob_tracker = None
-        self.blob_tracker_class = blob_tracker_class or BlobAvailabilityTracker
+        # self.blob_tracker = None
+        # self.blob_tracker_class = blob_tracker_class or BlobAvailabilityTracker
         self.peer_port = peer_port
         self.use_upnp = use_upnp
         self.rate_limiter = rate_limiter
@@ -118,9 +118,9 @@ class Session(object):
         self.dht_node_class = dht_node_class
         self.dht_node = None
         self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
-        self.payment_rate_manager = None
-        self.payment_rate_manager_class = payment_rate_manager_class or NegotiatedPaymentRateManager
-        self.is_generous = is_generous
+        self.payment_rate_manager = OnlyFreePaymentsManager()
+        # self.payment_rate_manager_class = payment_rate_manager_class or NegotiatedPaymentRateManager
+        # self.is_generous = is_generous
         self.storage = storage or SQLiteStorage(self.db_dir)
         self._join_dht_deferred = None
 
@@ -147,8 +147,8 @@ class Session(object):
         ds = []
         if self.hash_announcer:
             self.hash_announcer.stop()
-        if self.blob_tracker is not None:
-            ds.append(defer.maybeDeferred(self.blob_tracker.stop))
+        # if self.blob_tracker is not None:
+        #     ds.append(defer.maybeDeferred(self.blob_tracker.stop))
         if self.dht_node is not None:
             ds.append(defer.maybeDeferred(self.dht_node.stop))
         if self.rate_limiter is not None:
@@ -251,19 +251,19 @@ class Session(object):
             else:
                 self.blob_manager = DiskBlobManager(self.blob_dir, self.storage)
 
-        if self.blob_tracker is None:
-            self.blob_tracker = self.blob_tracker_class(
-                self.blob_manager, self.dht_node.peer_finder, self.dht_node
-            )
-        if self.payment_rate_manager is None:
-            self.payment_rate_manager = self.payment_rate_manager_class(
-                self.base_payment_rate_manager, self.blob_tracker, self.is_generous
-            )
+        # if self.blob_tracker is None:
+        #     self.blob_tracker = self.blob_tracker_class(
+        #         self.blob_manager, self.dht_node.peer_finder, self.dht_node
+        #     )
+        # if self.payment_rate_manager is None:
+        #     self.payment_rate_manager = self.payment_rate_manager_class(
+        #         self.base_payment_rate_manager, self.blob_tracker, self.is_generous
+        #     )
 
         self.rate_limiter.start()
         d = self.blob_manager.setup()
         d.addCallback(lambda _: self.wallet.start())
-        d.addCallback(lambda _: self.blob_tracker.start())
+        # d.addCallback(lambda _: self.blob_tracker.start())
         return d
 
     def _unset_upnp(self):
