@@ -7,7 +7,6 @@ from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.utils import generate_id
 from lbrynet.core.PaymentRateManager import BasePaymentRateManager, OnlyFreePaymentsManager
-from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
 
 log = logging.getLogger(__name__)
 

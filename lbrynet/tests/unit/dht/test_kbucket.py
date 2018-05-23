@@ -69,13 +69,15 @@ class KBucketTest(unittest.TestCase):
         if constants.k >= 2:
             for i in range(constants.k-2):
                 node_ids.append(generate_id())
-                tmpContact = self.contact_manager.make_contact(node_ids[-1], next(self.address_generator), 4444, 0, None)
+                tmpContact = self.contact_manager.make_contact(node_ids[-1], next(self.address_generator), 4444, 0,
+                                                               None)
                 self.kbucket.addContact(tmpContact)
         else:
             # add k contacts
             for i in range(constants.k):
                 node_ids.append(generate_id())
-                tmpContact = self.contact_manager.make_contact(node_ids[-1], next(self.address_generator), 4444, 0, None)
+                tmpContact = self.contact_manager.make_contact(node_ids[-1], next(self.address_generator), 4444, 0,
+                                                               None)
                 self.kbucket.addContact(tmpContact)
 
         # try to get too many contacts

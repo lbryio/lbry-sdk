@@ -124,8 +124,8 @@ class TreeRoutingTable(object):
                     """
                     failure.trap(TimeoutError)
                     log.debug("Replacing dead contact in bucket %i: %s:%i (%s) with %s:%i (%s)", bucketIndex,
-                              deadContact.address, deadContact.port, deadContact.log_id(), contact.address, contact.port,
-                              contact.log_id())
+                              deadContact.address, deadContact.port, deadContact.log_id(), contact.address,
+                              contact.port, contact.log_id())
                     try:
                         self._buckets[bucketIndex].removeContact(deadContact)
                     except ValueError:

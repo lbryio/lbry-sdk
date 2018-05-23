@@ -8,12 +8,9 @@ import hashlib
 from twisted.trial import unittest
 import struct
 
-from twisted.internet import protocol, defer, selectreactor
-from lbrynet.dht.msgtypes import ResponseMessage
+from twisted.internet import defer
 from lbrynet.dht.node import Node
 from lbrynet.dht import constants
-from lbrynet.dht.datastore import DictDataStore
-from lbrynet.dht.routingtable import TreeRoutingTable
 
 
 class NodeIDTest(unittest.TestCase):

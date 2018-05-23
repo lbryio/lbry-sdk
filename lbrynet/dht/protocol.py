@@ -137,7 +137,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             log.debug("%s:%i SEND CALL %s(%s) TO %s:%i", self._node.externalIP, self._node.port, method,
                       args[0].encode('hex'), contact.address, contact.port)
         else:
-            log.debug("%s:%i SEND CALL %s TO %s:%i", self._node.externalIP, self._node.port,  method,
+            log.debug("%s:%i SEND CALL %s TO %s:%i", self._node.externalIP, self._node.port, method,
                       contact.address, contact.port)
 
         df = defer.Deferred()
@@ -395,7 +395,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 log.debug("%s:%i RECV CALL %s(%s) %s:%i", self._node.externalIP, self._node.port, method,
                           args[0].encode('hex'), senderContact.address, senderContact.port)
             else:
-                log.debug("%s:%i RECV CALL %s %s:%i", self._node.externalIP, self._node.port,  method,
+                log.debug("%s:%i RECV CALL %s %s:%i", self._node.externalIP, self._node.port, method,
                           senderContact.address, senderContact.port)
             try:
                 if method != 'ping':
