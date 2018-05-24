@@ -9,7 +9,6 @@
 import binascii
 import hashlib
 import struct
-import time
 import logging
 from twisted.internet import defer, error, task
 
