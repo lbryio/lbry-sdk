@@ -1,3 +1,4 @@
+certifi==2018.4.16
 Twisted==16.6.0
 cryptography==2.2.2
 appdirs==1.4.3
