@@ -14,6 +14,7 @@ class TestPeerExpiration(TestKademliaBase):
         removed_nodes = []
         self.show_info()
 
+        # stop 5 nodes
         for _ in range(5):
             n = self.nodes[0]
             removed_nodes.append(n)
@@ -23,11 +24,15 @@ class TestPeerExpiration(TestKademliaBase):
 
         offline_addresses = self.get_routable_addresses().difference(self.get_online_addresses())
         self.assertSetEqual(offline_addresses, removed_addresses)
+
         get_nodes_with_stale_contacts = lambda: filter(lambda node: any(contact.address in offline_addresses
                                                        for contact in node.contacts), self.nodes + self._seeds)
+
         self.assertRaises(AssertionError, self.verify_all_nodes_are_routable)
         self.assertTrue(len(get_nodes_with_stale_contacts()) > 1)
-        for _ in range(90):
+
+        # run the network for an hour, which should expire the removed nodes
+        for _ in range(60):
             log.info("Time is %f, nodes with stale contacts: %i/%i", self.clock.seconds(),
                      len(get_nodes_with_stale_contacts()), len(self.nodes + self._seeds))
             self.pump_clock(60)
@@ -35,9 +40,26 @@ class TestPeerExpiration(TestKademliaBase):
         self.verify_all_nodes_are_routable()
         self.verify_all_nodes_are_pingable()
 
-        restarted_node = removed_nodes[0]
-        yield self.run_reactor(1, [restarted_node.start([(seed_name, 4444)
-                                                         for seed_name in sorted(self.seed_dns.keys())])])
 
+class TestReJoinExpiredPeer(TestKademliaBase):
+    network_size = 40
+
+    @defer.inlineCallbacks
+    def test_re_join_expired_peer(self):
+
+        removed_node = self.nodes[0]
+        self.nodes.remove(removed_node)
+        yield self.run_reactor(1, [removed_node.stop()])
+
+        # run the network for an hour, which should expire the removed node
+        for _ in range(60):
+            self.pump_clock(60)
+        self.verify_all_nodes_are_routable()
+        self.verify_all_nodes_are_pingable()
+        self.nodes.append(removed_node)
+        yield self.run_reactor(
+            31, [removed_node.start([(seed_name, 4444) for seed_name in sorted(self.seed_dns.keys())])]
+        )
+        self.pump_clock(901)
         self.verify_all_nodes_are_routable()
         self.verify_all_nodes_are_pingable()
