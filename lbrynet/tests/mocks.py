@@ -250,9 +250,6 @@ class Announcer(object):
     def hash_queue_size(self):
         return 0
 
-    def add_supplier(self, supplier):
-        pass
-
     def immediate_announce(self, *args):
         pass
 
