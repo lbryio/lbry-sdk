@@ -656,7 +656,7 @@ class Node(MockKademliaHelper):
 
     def _refreshContacts(self):
         return defer.DeferredList(
-            [self._protocol._ping_queue.enqueue_maybe_ping(contact) for contact in self.contacts]
+            [contact.ping() for contact in self.contacts], consumeErrors=True
         )
 
     @defer.inlineCallbacks
