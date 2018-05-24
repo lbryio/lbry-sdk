@@ -159,6 +159,7 @@ class Node(MockKademliaHelper):
         yield self.safe_stop_looping_call(self._change_token_lc)
         if self._listeningPort is not None:
             yield self._listeningPort.stopListening()
+        self._listeningPort = None
 
     def start_listening(self):
         if not self._listeningPort:

@@ -171,6 +171,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
     def startProtocol(self):
         log.info("DHT listening on UDP %s:%i", self._node.externalIP, self._node.port)
+        if self._listening.called:
+            self._listening = defer.Deferred()
         self._listening.callback(True)
         return self._ping_queue.start()
 
