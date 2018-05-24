@@ -39,27 +39,3 @@ class TestPeerExpiration(TestKademliaBase):
         self.assertTrue(len(get_nodes_with_stale_contacts()) == 0)
         self.verify_all_nodes_are_routable()
         self.verify_all_nodes_are_pingable()
-
-
-class TestReJoinExpiredPeer(TestKademliaBase):
-    network_size = 40
-
-    @defer.inlineCallbacks
-    def test_re_join_expired_peer(self):
-
-        removed_node = self.nodes[0]
-        self.nodes.remove(removed_node)
-        yield self.run_reactor(1, [removed_node.stop()])
-
-        # run the network for an hour, which should expire the removed node
-        for _ in range(60):
-            self.pump_clock(60)
-        self.verify_all_nodes_are_routable()
-        self.verify_all_nodes_are_pingable()
-        self.nodes.append(removed_node)
-        yield self.run_reactor(
-            31, [removed_node.start([(seed_name, 4444) for seed_name in sorted(self.seed_dns.keys())])]
-        )
-        self.pump_clock(901)
-        self.verify_all_nodes_are_routable()
-        self.verify_all_nodes_are_pingable()
