@@ -30,6 +30,14 @@ from iterativefind import iterativeFind
 log = logging.getLogger(__name__)
 
 
+def expand_peer(compact_peer_info):
+    host = ".".join([str(ord(d)) for d in compact_peer_info[:4]])
+    port, = struct.unpack('>H', compact_peer_info[4:6])
+    peer_node_id = compact_peer_info[6:]
+    return (peer_node_id, host, port)
+
+
+
 def rpcmethod(func):
     """ Decorator to expose Node methods as remote procedure calls
 
@@ -142,7 +150,7 @@ class Node(MockKademliaHelper):
         self.old_token_secret = None
         self.externalIP = externalIP
         self.peerPort = peerPort
-        self._dataStore = dataStore or datastore.DictDataStore()
+        self._dataStore = dataStore or datastore.DictDataStore(self.clock.seconds)
         self.peer_manager = peer_manager or PeerManager()
         self.peer_finder = peer_finder or DHTPeerFinder(self, self.peer_manager)
         self._join_deferred = None
@@ -428,11 +436,9 @@ class Node(MockKademliaHelper):
         if find_result:
             if key in find_result:
                 for peer in find_result[key]:
-                    host = ".".join([str(ord(d)) for d in peer[:4]])
-                    port, = struct.unpack('>H', peer[4:6])
-                    peer_node_id = peer[6:]
-                    if (host, port, peer_node_id) not in expanded_peers:
-                        expanded_peers.append((peer_node_id, host, port))
+                    expanded = expand_peer(peer)
+                    if expanded not in expanded_peers:
+                        expanded_peers.append(expanded)
             # TODO: get this working
             # if 'closestNodeNoValue' in find_result:
             #     closest_node_without_value = find_result['closestNodeNoValue']
@@ -532,7 +538,7 @@ class Node(MockKademliaHelper):
             raise TypeError('Invalid port')
 
         compact_address = compact_ip + compact_port + rpc_contact.id
-        now = int(time.time())
+        now = int(self.clock.seconds())
         originallyPublished = now - age
         self._dataStore.addPeerToBlob(blob_hash, compact_address, now, originallyPublished, originalPublisherID)
         return 'OK'

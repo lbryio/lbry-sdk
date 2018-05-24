@@ -23,18 +23,16 @@ class DictDataStore(UserDict.DictMixin):
 
     def removeExpiredPeers(self):
         now = int(self._getTime())
-
-        def notExpired(peer):
-            if (now - peer[2]) > constants.dataExpireTimeout:
-                return False
-            return True
-
         for key in self._dict.keys():
-            unexpired_peers = filter(notExpired, self._dict[key])
-            self._dict[key] = unexpired_peers
+            unexpired_peers = filter(lambda peer: now - peer[2] < constants.dataExpireTimeout, self._dict[key])
+            if not unexpired_peers:
+                del self._dict[key]
+            else:
+                self._dict[key] = unexpired_peers
 
     def hasPeersForBlob(self, key):
-        if key in self._dict and len(self._dict[key]) > 0:
+        if key in self._dict and len(filter(lambda peer: self._getTime() - peer[2] < constants.dataExpireTimeout,
+                                            self._dict[key])):
             return True
         return False
 
@@ -46,8 +44,10 @@ class DictDataStore(UserDict.DictMixin):
             self._dict[key] = [(value, lastPublished, originallyPublished, originalPublisherID)]
 
     def getPeersForBlob(self, key):
-        if key in self._dict:
-            return [val[0] for val in self._dict[key]]
+        return [] if key not in self._dict else [
+            val[0] for val in filter(lambda peer: self._getTime() - peer[2] < constants.dataExpireTimeout,
+                                     self._dict[key])
+        ]
 
     def removePeer(self, value):
         for key in self._dict:
