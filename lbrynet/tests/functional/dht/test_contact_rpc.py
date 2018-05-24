@@ -9,9 +9,7 @@ import lbrynet.dht.constants
 import lbrynet.dht.msgtypes
 from lbrynet.dht.error import TimeoutError
 from lbrynet.dht.node import Node, rpcmethod
-from lbrynet.core.call_later_manager import CallLaterManager
 from mock_transport import listenUDP, resolve
-
 
 log = logging.getLogger()
 
@@ -23,12 +21,10 @@ class KademliaProtocolTest(unittest.TestCase):
 
     def setUp(self):
         self._reactor = Clock()
-        CallLaterManager.setup(self._reactor.callLater)
         self.node = Node(node_id='1' * 48, udpPort=self.udpPort, externalIP="127.0.0.1", listenUDP=listenUDP,
                          resolve=resolve, clock=self._reactor, callLater=self._reactor.callLater)
 
     def tearDown(self):
-        CallLaterManager.stop()
         del self._reactor
 
     @defer.inlineCallbacks
