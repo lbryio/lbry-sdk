@@ -1,4 +1,13 @@
+import ipaddress
 from lbrynet.dht import constants
+
+
+def is_valid_ipv4(address):
+    try:
+        ip = ipaddress.ip_address(address.decode())  # this needs to be unicode, thus the decode()
+        return ip.version == 4
+    except ipaddress.AddressValueError:
+        return False
 
 
 class _Contact(object):
@@ -9,11 +18,15 @@ class _Contact(object):
     """
 
     def __init__(self, contactManager, id, ipAddress, udpPort, networkProtocol, firstComm):
-        self._contactManager = contactManager
-        self._id = id
         if id is not None:
             if not len(id) == constants.key_bits / 8:
                 raise ValueError("invalid node id: %s" % id.encode('hex'))
+        if not 0 <= udpPort <= 65536:
+            raise ValueError("invalid port")
+        if not is_valid_ipv4(ipAddress):
+            raise ValueError("invalid ip address")
+        self._contactManager = contactManager
+        self._id = id
         self.address = ipAddress
         self.port = udpPort
         self._networkProtocol = networkProtocol

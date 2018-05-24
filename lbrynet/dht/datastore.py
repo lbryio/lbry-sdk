@@ -21,36 +21,54 @@ class DictDataStore(UserDict.DictMixin):
         """ Return a list of the keys in this data store """
         return self._dict.keys()
 
+    def filter_bad_and_expired_peers(self, key):
+        """
+        Returns only non-expired and unknown/good peers
+        """
+        return filter(
+            lambda peer:
+            self._getTime() - peer[3] < constants.dataExpireTimeout and peer[0].contact_is_good is not False,
+            self._dict[key]
+        )
+
+    def filter_expired_peers(self, key):
+        """
+        Returns only non-expired peers
+        """
+        return filter(lambda peer: self._getTime() - peer[2] < constants.dataExpireTimeout, self._dict[key])
+
     def removeExpiredPeers(self):
-        now = int(self._getTime())
         for key in self._dict.keys():
-            unexpired_peers = filter(lambda peer: now - peer[2] < constants.dataExpireTimeout, self._dict[key])
+            unexpired_peers = self.filter_expired_peers(key)
             if not unexpired_peers:
                 del self._dict[key]
             else:
                 self._dict[key] = unexpired_peers
 
     def hasPeersForBlob(self, key):
-        if key in self._dict and len(filter(lambda peer: self._getTime() - peer[2] < constants.dataExpireTimeout,
-                                            self._dict[key])):
+        if key in self._dict and len(self.filter_bad_and_expired_peers(key)):
             return True
         return False
 
-    def addPeerToBlob(self, key, value, lastPublished, originallyPublished, originalPublisherID):
+    def addPeerToBlob(self, contact, key, compact_address, lastPublished, originallyPublished, originalPublisherID):
         if key in self._dict:
-            if value not in map(lambda store_tuple: store_tuple[0], self._dict[key]):
-                self._dict[key].append((value, lastPublished, originallyPublished, originalPublisherID))
+            if compact_address not in map(lambda store_tuple: store_tuple[1], self._dict[key]):
+                self._dict[key].append((contact, compact_address, lastPublished, originallyPublished, originalPublisherID))
         else:
-            self._dict[key] = [(value, lastPublished, originallyPublished, originalPublisherID)]
+            self._dict[key] = [(contact, compact_address, lastPublished, originallyPublished, originalPublisherID)]
 
     def getPeersForBlob(self, key):
-        return [] if key not in self._dict else [
-            val[0] for val in filter(lambda peer: self._getTime() - peer[2] < constants.dataExpireTimeout,
-                                     self._dict[key])
-        ]
+        return [] if key not in self._dict else [val[1] for val in self.filter_bad_and_expired_peers(key)]
 
     def removePeer(self, value):
         for key in self._dict:
-            self._dict[key] = [val for val in self._dict[key] if val[0] != value]
+            self._dict[key] = [val for val in self._dict[key] if val[1] != value]
             if not self._dict[key]:
                 del self._dict[key]
+
+    def getStoringContacts(self):
+        contacts = set()
+        for key in self._dict:
+            for values in self._dict[key]:
+                contacts.add(values[0])
+        return list(contacts)

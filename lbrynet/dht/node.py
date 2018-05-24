@@ -506,15 +506,20 @@ class Node(MockKademliaHelper):
 
     @rpcmethod
     def store(self, rpc_contact, blob_hash, token, port, originalPublisherID=None, age=0):
-        """ Store the received data in this node's local hash table
+        """ Store the received data in this node's local datastore
 
-        @param blob_hash: The hashtable key of the data
+        @param blob_hash: The hash of the data
         @type blob_hash: str
-        @param value: The actual data (the value associated with C{key})
-        @type value: str
-        @param originalPublisherID: The node ID of the node that is the
-                                    B{original} publisher of the data
+
+        @param token: The token we previously returned when this contact sent us a findValue
+        @type token: str
+
+        @param port: The TCP port the contact is listening on for requests for this blob (the peerPort)
+        @type port: int
+
+        @param originalPublisherID: The node ID of the node that is the publisher of the data
         @type originalPublisherID: str
+
         @param age: The relative age of the data (time in seconds since it was
                     originally published). Note that the original publish time
                     isn't actually given, to compensate for clock skew between
@@ -522,11 +527,8 @@ class Node(MockKademliaHelper):
         @type age: int
 
         @rtype: str
-
-        @todo: Since the data (value) may be large, passing it around as a buffer
-               (which is the case currently) might not be a good idea... will have
-               to fix this (perhaps use a stream from the Protocol class?)
         """
+
         if originalPublisherID is None:
             originalPublisherID = rpc_contact.id
         compact_ip = rpc_contact.compact_ip()
@@ -536,11 +538,11 @@ class Node(MockKademliaHelper):
             compact_port = str(struct.pack('>H', port))
         else:
             raise TypeError('Invalid port')
-
         compact_address = compact_ip + compact_port + rpc_contact.id
         now = int(self.clock.seconds())
         originallyPublished = now - age
-        self._dataStore.addPeerToBlob(blob_hash, compact_address, now, originallyPublished, originalPublisherID)
+        self._dataStore.addPeerToBlob(rpc_contact, blob_hash, compact_address, now, originallyPublished,
+                                      originalPublisherID)
         return 'OK'
 
     @rpcmethod
@@ -658,11 +660,19 @@ class Node(MockKademliaHelper):
         replication/republishing as necessary """
         yield self._refreshRoutingTable()
         self._dataStore.removeExpiredPeers()
+        yield self._refreshStoringPeers()
         defer.returnValue(None)
 
     def _refreshContacts(self):
         return defer.DeferredList(
             [contact.ping() for contact in self.contacts], consumeErrors=True
+        )
+
+    def _refreshStoringPeers(self):
+        storing_contacts = self._dataStore.getStoringContacts()
+        return defer.DeferredList(
+            [self._protocol._ping_queue.enqueue_maybe_ping(contact) for contact in storing_contacts],
+            consumeErrors=True
         )
 
     @defer.inlineCallbacks
