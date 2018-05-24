@@ -62,6 +62,7 @@ at anytime.
   * configurable `concurrent_announcers` and `s3_headers_depth` settings
   * `peer_ping` command
   * linux distro and desktop name added to analytics
+  * certifi module for Twisted SSL verification on Windows
 
 ### Removed
   * `announce_all` argument from `blob_announce`
