@@ -1,5 +1,4 @@
 import binascii
-import certifi
 import logging.handlers
 import mimetypes
 import os
@@ -233,10 +232,6 @@ class Daemon(AuthJSONRPCServer):
 
     @defer.inlineCallbacks
     def setup(self):
-        # Set SSL_CERT_FILE env variable for Twisted SSL verification on Windows
-        if 'win' in sys.platform:
-            os.environ['SSL_CERT_FILE'] = certifi.where()
-
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
         configure_loggly_handler()
 

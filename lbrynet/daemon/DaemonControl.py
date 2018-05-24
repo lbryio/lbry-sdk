@@ -1,3 +1,9 @@
+import certifi
+# Set SSL_CERT_FILE env variable for Twisted SSL verification on Windows
+# This needs to happen before anything else
+if 'win' in sys.platform:
+    os.environ['SSL_CERT_FILE'] = certifi.where()
+
 from lbrynet.core import log_support
 
 import argparse
