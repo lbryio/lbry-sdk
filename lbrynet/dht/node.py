@@ -53,10 +53,9 @@ class MockKademliaHelper(object):
         self.contact_manager = ContactManager(self.clock.seconds)
         self.reactor_listenUDP = listenUDP
         self.reactor_resolve = resolve
-
-        CallLaterManager.setup(callLater)
-        self.reactor_callLater = CallLaterManager.call_later
-        self.reactor_callSoon = CallLaterManager.call_soon
+        self.call_later_manager = CallLaterManager(callLater)
+        self.reactor_callLater = self.call_later_manager.call_later
+        self.reactor_callSoon = self.call_later_manager.call_soon
 
         self._listeningPort = None  # object implementing Twisted
         # IListeningPort This will contain a deferred created when

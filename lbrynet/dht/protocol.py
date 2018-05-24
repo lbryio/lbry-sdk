@@ -4,7 +4,6 @@ import errno
 from collections import deque
 
 from twisted.internet import protocol, defer
-from lbrynet.core.call_later_manager import CallLaterManager
 from error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
 
 import constants
@@ -461,5 +460,5 @@ class KademliaProtocol(protocol.DatagramProtocol):
         """
         log.info('Stopping DHT')
         self._ping_queue.stop()
-        CallLaterManager.stop()
+        self._node.call_later_manager.stop()
         log.info('DHT stopped')
