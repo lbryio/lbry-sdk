@@ -2,7 +2,6 @@ import binascii
 import logging.handlers
 import mimetypes
 import os
-import sys
 import base58
 import requests
 import urllib
