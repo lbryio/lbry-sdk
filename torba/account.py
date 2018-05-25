@@ -102,11 +102,11 @@ class Account:
             'seed': self.seed,
             'encrypted': self.encrypted,
             'private_key': self.private_key if self.encrypted else
-                           self.private_key.extended_key_string(),
-            'public_key': self.public_key.extended_key_string(),
-            'receiving_keys': [hexlify(k).decode('iso-8859-1') for k in self.receiving_keys.child_keys],
+                           self.private_key.extended_key_string().decode(),
+            'public_key': self.public_key.extended_key_string().decode(),
+            'receiving_keys': [hexlify(k).decode() for k in self.receiving_keys.child_keys],
             'receiving_gap': self.receiving_keys.minimum_gap,
-            'change_keys': [hexlify(k).decode('iso-8859-1') for k in self.change_keys.child_keys],
+            'change_keys': [hexlify(k).decode() for k in self.change_keys.child_keys],
             'change_gap': self.change_keys.minimum_gap
         }
 

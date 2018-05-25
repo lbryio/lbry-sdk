@@ -39,25 +39,25 @@ class TestAccount(unittest.TestCase):
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
-            'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-            '6yz3jMbycrLrRMpeAJxR8qDg8'
+            b'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
+            b'6yz3jMbycrLrRMpeAJxR8qDg8'
         )
         self.assertEqual(
             account.public_key.extended_key_string(),
-            'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-            'iW44g14WF52fYC5J483wqQ5ZP'
+            b'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
+            b'iW44g14WF52fYC5J483wqQ5ZP'
         )
         self.assertEqual(
             account.receiving_keys.generate_next_address(),
-            '1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP'
+            b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP'
         )
-        private_key = account.get_private_key_for_address('1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
+        private_key = account.get_private_key_for_address(b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
         self.assertEqual(
             private_key.extended_key_string(),
-            'xprv9xNEfQ296VTRaEUDZ8oKq74xw2U6kpj486vFUB4K1wT9U25GX4UwuzFgJN1YuRrqkQ5TTwCpkYnjNpSoHS'
-            'BaEigNHPkoeYbuPMRo6mRUjxg'
+            b'xprv9xNEfQ296VTRaEUDZ8oKq74xw2U6kpj486vFUB4K1wT9U25GX4UwuzFgJN1YuRrqkQ5TTwCpkYnjNpSoHS'
+            b'BaEigNHPkoeYbuPMRo6mRUjxg'
         )
-        self.assertIsNone(account.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX'))
+        self.assertIsNone(account.get_private_key_for_address(b'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX'))
 
         self.assertEqual(
             hexlify(private_key.wif()),
@@ -92,12 +92,12 @@ class TestAccount(unittest.TestCase):
         self.assertEqual(len(account.receiving_keys.addresses), 2)
         self.assertEqual(
             account.receiving_keys.addresses[0],
-            '1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP'
+            b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP'
         )
         self.assertEqual(len(account.change_keys.addresses), 1)
         self.assertEqual(
             account.change_keys.addresses[0],
-            '1PUbu1D1f3c244JPRSJKBCxRqui5NT6geR'
+            b'1PUbu1D1f3c244JPRSJKBCxRqui5NT6geR'
         )
 
         self.maxDiff = None

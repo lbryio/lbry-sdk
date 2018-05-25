@@ -1,6 +1,10 @@
-import mock
 from unittest import TestCase
 from torba.hash import aes_decrypt, aes_encrypt
+
+try:
+    from unittest import mock
+except ImportError:
+    import mock
 
 
 class TestAESEncryptDecrypt(TestCase):

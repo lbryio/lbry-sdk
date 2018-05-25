@@ -86,12 +86,12 @@ class TestWalletCreation(unittest.TestCase):
         self.assertEqual(len(account.receiving_keys.addresses), 2)
         self.assertEqual(
             account.receiving_keys.addresses[0],
-            '1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP'
+            b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP'
         )
         self.assertEqual(len(account.change_keys.addresses), 1)
         self.assertEqual(
             account.change_keys.addresses[0],
-            '1PUbu1D1f3c244JPRSJKBCxRqui5NT6geR'
+            b'1PUbu1D1f3c244JPRSJKBCxRqui5NT6geR'
         )
         wallet_dict['coins'] = {'btc_mainnet': {'fee_per_byte': 50}}
         self.assertDictEqual(wallet_dict, wallet.to_dict())

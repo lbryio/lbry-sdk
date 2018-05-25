@@ -2,12 +2,11 @@ import os
 import re
 from setuptools import setup, find_packages
 
-init_file = open(os.path.join(os.path.dirname(__path__), 'torba', '__init__.py')).read()
-version = re.search('\d+\.\d+\.\d+', init_file).group()
+import torba
 
 setup(
     name='torba',
-    version=version,
+    version=torba.__version__,
     url='https://github.com/lbryio/torba',
     license='MIT',
     author='LBRY Inc.',
@@ -29,7 +28,7 @@ setup(
     ),
     packages=find_packages(exclude=('tests',)),
     include_package_data=True,
-    python_requires='>=2.7,>=3.6',
+    python_requires='>=2.7',
     install_requires=(
         'twisted',
         'ecdsa',
