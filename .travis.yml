@@ -1,4 +1,3 @@
-sudo: false
 language: python
 
 python:
@@ -6,14 +5,8 @@ python:
   - "3.6"
 
 install: pip install tox-travis coverage
-
-script:
-  - tox
+script: tox
 
 after_success:
   - coverage combine tests/
   - bash <(curl -s https://codecov.io/bash)
-
-branches:
-  only: 
-    - master
