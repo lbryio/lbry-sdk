@@ -164,8 +164,7 @@ class AlwaysSend(object):
 
 
 def sort_claim_results(claims):
-    for claim in claims:
-        claim['result'].sort(key=lambda d: (d['height'], d['name'], d['claim_id'], d['txid'], d['nout']))
+    claims.sort(key=lambda d: (d['height'], d['name'], d['claim_id'], d['txid'], d['nout']))
     return claims
 
 
@@ -2337,9 +2336,9 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        claims = yield self.session.wallet.get_claims_for_name(name)
-        result = sort_claim_results(claims)
-        defer.returnValue(result)
+        claims = yield self.session.wallet.get_claims_for_name(name)  # type: dict
+        sort_claim_results(claims['claims'])
+        defer.returnValue(claims)
 
     @defer.inlineCallbacks
     def jsonrpc_claim_list_by_channel(self, page=0, page_size=10, uri=None, uris=[]):
