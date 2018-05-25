@@ -52,7 +52,6 @@ at anytime.
   * download blockchain headers from s3 before starting the wallet when the local height is more than `s3_headers_depth` (a config setting) blocks behind
   * track successful reflector uploads in sqlite to minimize how many streams are attempted by auto re-reflect
   * increase the default `auto_re_reflect_interval` to a day
-  * `claim_list` and `claim_list_mine` in Daemon `return` sorted results 
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests
