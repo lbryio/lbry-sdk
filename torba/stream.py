@@ -1,5 +1,9 @@
+import six
 from twisted.internet.defer import Deferred, DeferredLock, maybeDeferred, inlineCallbacks
 from twisted.python.failure import Failure
+
+if six.PY3:
+    import asyncio
 
 
 def execute_serially(f):
@@ -123,6 +127,23 @@ class Stream:
 
     def listen(self, on_data, on_error=None, on_done=None):
         return self._controller._listen(on_data, on_error, on_done)
+
+    def where(self, condition):
+        deferred = Deferred()
+
+        def where_test(value):
+            if condition(value):
+                self._cancel_and_callback(subscription, deferred, value)
+
+        subscription = self.listen(
+            where_test,
+            lambda error, traceback: self._cancel_and_error(subscription, deferred, error, traceback)
+        )
+
+        return deferred
+
+    def async_where(self, condition):
+        return self.where(condition).asFuture(asyncio.get_event_loop())
 
     @property
     def first(self):

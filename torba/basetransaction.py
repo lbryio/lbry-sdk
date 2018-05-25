@@ -1,7 +1,7 @@
 import six
 import logging
 from typing import List
-from collections import namedtuple
+from binascii import hexlify
 
 from torba.basecoin import BaseCoin
 from torba.basescript import BaseInputScript, BaseOutputScript
@@ -161,7 +161,7 @@ class BaseTransaction:
     @property
     def id(self):
         if self._id is None:
-            self._id = self.hash[::-1]
+            self._id = hexlify(self.hash[::-1])
         return self._id
 
     @property

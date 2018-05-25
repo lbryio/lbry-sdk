@@ -105,7 +105,7 @@ class BaseLedger:
         if address not in self.addresses:
             self.addresses[address] = Address(self.coin_class.address_to_hash160(address))
         self.addresses[address].add_transaction(transaction)
-        self.transactions.setdefault(hexlify(transaction.id), transaction)
+        self.transactions.setdefault(transaction.id, transaction)
         self._on_transaction_controller.add(transaction)
 
     def has_address(self, address):
