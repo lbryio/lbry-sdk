@@ -54,7 +54,7 @@ from lbrynet.dht.error import TimeoutError
 from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
-from lbrynet.wallet.compatibility import BackwardsCompatibleWalletManager
+from lbrynet.wallet.manager import BackwardsCompatibleWalletManager
 
 log = logging.getLogger(__name__)
 

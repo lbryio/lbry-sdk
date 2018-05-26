@@ -1,4 +1,4 @@
-from lbrynet.wallet.baseledger import BaseLedger
+from torba.baseledger import BaseLedger
 
 from .network import Network
 
