@@ -1,12 +1,13 @@
 from binascii import hexlify, unhexlify
 from twisted.trial import unittest
 
-from lbrynet.wallet.account import Account
-from lbrynet.wallet.coins.lbc import LBC
-from lbrynet.wallet.coins.lbc.transaction import Transaction, Output, Input
-from lbrynet.wallet.constants import CENT, COIN
-from lbrynet.wallet.manager import WalletManager
-from lbrynet.wallet.wallet import Wallet
+from torba.account import Account
+from torba.constants import CENT, COIN
+from torba.wallet import Wallet
+
+from lbrynet.wallet.coin import LBC
+from lbrynet.wallet.transaction import Transaction, Output, Input
+from lbrynet.wallet.manager import LbryWalletManager
 
 
 NULL_HASH = '\x00'*32
@@ -36,20 +37,16 @@ def get_claim_transaction(claim_name, claim=''):
     )
 
 
-def get_lbc_wallet():
-    lbc = LBC.from_dict({
-        'fee_per_byte': FEE_PER_BYTE,
-        'fee_per_name_char': FEE_PER_CHAR
-    })
-    return Wallet('Main', [lbc], [Account.generate(lbc)])
+def get_wallet_and_coin():
+    ledger = LbryWalletManager().get_or_create_ledger(LBC.get_id())
+    coin = LBC(ledger)
+    return Wallet('Main', [coin], [Account.generate(coin, u'lbryum')]), coin
 
 
 class TestSizeAndFeeEstimation(unittest.TestCase):
 
     def setUp(self):
-        self.wallet = get_lbc_wallet()
-        self.coin = self.wallet.coins[0]
-        WalletManager([self.wallet], {})
+        self.wallet, self.coin = get_wallet_and_coin()
 
     def io_fee(self, io):
         return self.coin.get_input_output_fee(io)
@@ -227,10 +224,11 @@ class TestTransactionSerialization(unittest.TestCase):
 class TestTransactionSigning(unittest.TestCase):
 
     def test_sign(self):
-        lbc = LBC()
-        wallet = Wallet('Main', [lbc], [Account.from_seed(
-            lbc, 'carbon smart garage balance margin twelve chest sword toast envelope '
-                 'bottom stomach absent'
+        ledger = LbryWalletManager().get_or_create_ledger(LBC.get_id())
+        coin = LBC(ledger)
+        wallet = Wallet('Main', [coin], [Account.from_seed(
+            coin, u'carbon smart garage balance margin twelve chest sword toast envelope bottom sto'
+                  u'mach absent', u'lbryum'
         )])
         account = wallet.default_account
 

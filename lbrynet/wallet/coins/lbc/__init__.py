@@ -1,1 +1,0 @@
-from .coin import LBC, LBCTestNet, LBCRegTest

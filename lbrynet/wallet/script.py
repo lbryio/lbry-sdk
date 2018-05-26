@@ -1,5 +1,5 @@
-from lbrynet.wallet.basescript import BaseInputScript, BaseOutputScript, Template
-from lbrynet.wallet.basescript import PUSH_SINGLE, OP_DROP, OP_2DROP
+from torba.basescript import BaseInputScript, BaseOutputScript, Template
+from torba.basescript import PUSH_SINGLE, OP_DROP, OP_2DROP
 
 
 class InputScript(BaseInputScript):
