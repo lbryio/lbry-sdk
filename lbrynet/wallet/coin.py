@@ -1,7 +1,7 @@
 from six import int2byte
 from binascii import unhexlify
 
-from lbrynet.wallet.basecoin import BaseCoin
+from torba.basecoin import BaseCoin
 
 from .ledger import MainNetLedger, TestNetLedger, RegTestLedger
 from .transaction import Transaction
