@@ -1,7 +1,7 @@
 import struct
 
-from lbrynet.wallet.basetransaction import BaseTransaction, BaseInput, BaseOutput
-from lbrynet.wallet.hash import hash160
+from torba.basetransaction import BaseTransaction, BaseInput, BaseOutput
+from torba.hash import hash160
 
 from .script import InputScript, OutputScript
 

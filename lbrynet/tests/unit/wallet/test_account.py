@@ -1,20 +1,18 @@
 from twisted.trial import unittest
 
-from lbrynet.wallet.coins.lbc import LBC
-from lbrynet.wallet.manager import WalletManager
-from lbrynet.wallet.wallet import Account
+from lbrynet.wallet import LBC
+from lbrynet.wallet.manager import LbryWalletManager
+from torba.wallet import Account
 
 
 class TestAccount(unittest.TestCase):
 
     def setUp(self):
-        coin = LBC()
-        ledger = coin.ledger_class
-        WalletManager([], {ledger: ledger(coin)}).install()
-        self.coin = coin
+        ledger = LbryWalletManager().get_or_create_ledger(LBC.get_id())
+        self.coin = LBC(ledger)
 
     def test_generate_account(self):
-        account = Account.generate(self.coin)
+        account = Account.generate(self.coin, u'lbryum')
         self.assertEqual(account.coin, self.coin)
         self.assertIsNotNone(account.seed)
         self.assertEqual(account.public_key.coin, self.coin)
@@ -34,8 +32,9 @@ class TestAccount(unittest.TestCase):
     def test_generate_account_from_seed(self):
         account = Account.from_seed(
             self.coin,
-            "carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            "sent"
+            u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
+            u"sent",
+            u"lbryum"
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
