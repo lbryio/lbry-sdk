@@ -9,7 +9,7 @@ services:
 ## Lbrynet ##
 #############
   lbrynet:
-    image: registry.gitlab.com/chamunks/lbry/lbry-as-a-container:latest
+    build: .
     restart: always
     ports:
       - 4444:4444
