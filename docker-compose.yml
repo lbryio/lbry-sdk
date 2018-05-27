@@ -1,0 +1,19 @@
+## To-Do:
+## * [] setup webhooks in gitlab on projects that build containers for this.
+## * [] Get the thing tested & perfected.
+## * [] Healthchecks on all containers ideally without needing a custom container.
+version: '3.4'
+services:
+
+#############
+## Lbrynet ##
+#############
+  lbrynet:
+    image: registry.gitlab.com/chamunks/lbry/lbry-as-a-container:latest
+    restart: always
+    ports:
+      - 4444:4444
+      - 50001:50001
+    ## host volumes for persistent data such as wallet private keys.
+    volumes:
+      - ./data/:/app
