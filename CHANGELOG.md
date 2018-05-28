@@ -58,6 +58,7 @@ at anytime.
   * integration tests for bootstrapping the dht
   * configurable `concurrent_announcers` and `s3_headers_depth` settings
   * `peer_ping` command
+  * linux distro and desktop name added to analytics
 
 ### Removed
   * `announce_all` argument from `blob_announce`
