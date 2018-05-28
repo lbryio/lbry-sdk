@@ -185,7 +185,7 @@ class Manager(object):
 
     @staticmethod
     def _make_context(platform, wallet):
-        return {
+        context= {
             'app': {
                 'name': 'lbrynet',
                 'version': platform['lbrynet_version'],
@@ -206,6 +206,10 @@ class Manager(object):
                 'version': '1.0.0'
             },
         }
+        if 'desktop' in platform and 'distro' in platform:
+            context['os']['desktop'] = platform['desktop']
+            context['os']['distro'] = platform['distro']
+        return context
 
     @staticmethod
     def _if_deferred(maybe_deferred, callback, *args, **kwargs):
