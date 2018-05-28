@@ -4,10 +4,14 @@ from twisted.internet import defer, threads
 
 from lbrynet import conf
 from lbrynet.core.Session import Session
+from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
 from lbrynet.core.Wallet import LBRYumWallet
 from lbrynet.daemon.Component import Component
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.dht import node, hashannouncer
+from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
+from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
+from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
 
 from lbrynet.core.utils import generate_id
 
@@ -19,6 +23,9 @@ DATABASE_COMPONENT = "database"
 WALLET_COMPONENT = "wallet"
 SESSION_COMPONENT = "session"
 DHT_COMPONENT = "dht"
+HASH_ANNOUNCER_COMPONENT = "hashAnnouncer"
+STREAM_IDENTIFIER_COMPONENT = "streamIdentifier"
+FILE_MANAGER_COMPONENT = "fileManager"
 
 
 class ConfigSettings(object):
@@ -125,8 +132,8 @@ class WalletComponent(Component):
     component_name = WALLET_COMPONENT
     depends_on = [DATABASE_COMPONENT]
 
-    def __init__(self, component_mananger):
-        Component.__init__(self, component_mananger)
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
         self.wallet = None
 
     @defer.inlineCallbacks
@@ -166,10 +173,10 @@ class WalletComponent(Component):
 
 class SessionComponent(Component):
     component_name = SESSION_COMPONENT
-    depends_on = [DATABASE_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT]
+    depends_on = [DATABASE_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT]
 
-    def __init__(self, component_mananger):
-        Component.__init__(self, component_mananger)
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
         self.session = None
 
     @defer.inlineCallbacks
@@ -180,7 +187,7 @@ class SessionComponent(Component):
             node_id=CS.get_node_id(),
             blob_dir=CS.get_blobfiles_dir(),
             dht_node=self.component_manager.get_component(DHT_COMPONENT).dht_node,
-            hash_announcer=self.component_manager.get_component(DHT_COMPONENT).dht_node.hash_announcer,
+            hash_announcer=self.component_manager.get_component(HASH_ANNOUNCER_COMPONENT).hash_announcer,
             dht_node_port=GCS('dht_node_port'),
             known_dht_nodes=GCS('known_dht_nodes'),
             peer_port=GCS('peer_port'),
@@ -199,7 +206,10 @@ class SessionComponent(Component):
 
 class DHTComponent(Component):
     component_name = DHT_COMPONENT
-    depends_on = [DATABASE_COMPONENT]
+
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
+        self.dht_node = None
 
     @defer.inlineCallbacks
     def setup(self):
@@ -213,14 +223,77 @@ class DHTComponent(Component):
             externalIP=CS.get_external_ip(),
             peerPort=GCS('peer_port')
         )
-        if not self.hash_announcer:
-            storage = self.component_manager.get_component(DATABASE_COMPONENT).storage
-            self.hash_announcer = hashannouncer.DHTHashAnnouncer(self.dht_node, storage)
         yield self.dht_node.joinNetwork(GCS('known_dht_nodes'))
         log.info("Joined the dht")
+
+    @defer.inlineCallbacks
+    def stop(self):
+        yield self.dht_node.stop()
+
+
+class HashAnnouncer(Component):
+    component_name = HASH_ANNOUNCER_COMPONENT
+    depends_on = [DHT_COMPONENT, DATABASE_COMPONENT]
+
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
+        self.hash_announcer = None
+
+    @defer.inlineCallbacks
+    def setup(self):
+        storage = self.component_manager.get_component(DATABASE_COMPONENT).storage
+        dht_node = self.component_manager.get_component(DHT_COMPONENT).dht_node
+        self.hash_announcer = hashannouncer.DHTHashAnnouncer(dht_node, storage)
         yield self.hash_announcer.start()
 
     @defer.inlineCallbacks
     def stop(self):
         yield self.hash_announcer.stop()
-        yield self.dht_node.stop()
+
+
+class StreamIdentifier(Component):
+    component_name = STREAM_IDENTIFIER_COMPONENT
+    depends_on = [SESSION_COMPONENT]
+
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
+        self.sd_identifier = StreamDescriptorIdentifier()
+
+    @defer.inlineCallbacks
+    def setup(self):
+        session = self.component_manager.get_component(SESSION_COMPONENT).session
+        add_lbry_file_to_sd_identifier(self.sd_identifier)
+        file_saver_factory = EncryptedFileSaverFactory(
+            session.peer_finder,
+            session.rate_limiter,
+            session.blob_manager,
+            session.storage,
+            session.wallet,
+            GCS('download_directory')
+        )
+        yield self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
+
+    def stop(self):
+        pass
+
+
+class FileManager(Component):
+    component_name = FILE_MANAGER_COMPONENT
+    depends_on = [SESSION_COMPONENT, STREAM_IDENTIFIER_COMPONENT]
+
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
+        self.file_manager = None
+
+    @defer.inlineCallbacks
+    def setup(self):
+        session = self.component_manager.get_component(SESSION_COMPONENT).session
+        sd_identifier = self.component_manager.get_component(STREAM_IDENTIFIER_COMPONENT).sd_identifier
+        log.info('Starting the file manager')
+        self.file_manager = EncryptedFileManager(session, sd_identifier)
+        yield self.file_manager.setup()
+        log.info('Done setting up file manager')
+
+    @defer.inlineCallbacks
+    def stop(self):
+        yield self.file_manager.stop()
