@@ -2,6 +2,7 @@ import platform
 import json
 import subprocess
 import os
+import distro
 
 from urllib2 import urlopen, URLError
 from lbryschema import __version__ as lbryschema_version
@@ -36,6 +37,9 @@ def get_platform(get_ip=True):
         "lbryschema_version": lbryschema_version,
         "build": build_type.BUILD,  # CI server sets this during build step
     }
+    if p["os_system"] == "Linux":
+        p["distro"] = distro.info()
+        p["desktop"] = os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown')
 
     # TODO: remove this from get_platform and add a get_external_ip function using treq
     if get_ip:
