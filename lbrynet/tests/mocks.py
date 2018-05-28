@@ -1,7 +1,10 @@
+import base64
 import struct
 import io
 
-from Crypto.PublicKey import RSA
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 from twisted.internet import defer, error
 from twisted.python.failure import Failure
 
@@ -9,11 +12,18 @@ from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import RequestCanceledError
 from lbrynet.core import BlobAvailability
 from lbrynet.core.utils import generate_id
+from lbrynet.dht.node import Node as RealNode
 from lbrynet.daemon import ExchangeRateManager as ERM
 from lbrynet import conf
 from util import debug_kademlia_packet
 
 KB = 2**10
+PUBLIC_EXPONENT = 65537  # http://www.daemonology.net/blog/2009-06-11-cryptographic-right-answers.html
+
+
+def decode_rsa_key(pem_key):
+    decoded = base64.b64decode(''.join(pem_key.splitlines()[1:-1]))
+    return serialization.load_der_public_key(decoded, default_backend())
 
 
 class FakeLBRYFile(object):
@@ -24,15 +34,9 @@ class FakeLBRYFile(object):
         self.file_name = 'fake_lbry_file'
 
 
-class Node(object):
-    def __init__(self, peer_finder=None, peer_manager=None, dht_node_port=None, peer_port=3333, **kwargs):
-        self.peer_finder = peer_finder
-        self.peer_manager = peer_manager
-        self.peerPort = peer_port
-        self.udpPort = dht_node_port
-
-    def joinNetwork(self, *args):
-        return defer.succeed(True)
+class Node(RealNode):
+    def joinNetwork(self, known_node_addresses=None):
+        return defer.succeed(None)
 
     def stop(self):
         return defer.succeed(None)
@@ -142,9 +146,10 @@ class PointTraderKeyQueryHandler(object):
         if self.query_identifiers[0] in queries:
             new_encoded_pub_key = queries[self.query_identifiers[0]]
             try:
-                RSA.importKey(new_encoded_pub_key)
+                decode_rsa_key(new_encoded_pub_key)
             except (ValueError, TypeError, IndexError):
-                return defer.fail(Failure(ValueError("Client sent an invalid public key")))
+                value_error = ValueError("Client sent an invalid public key: {}".format(new_encoded_pub_key))
+                return defer.fail(Failure(value_error))
             self.public_key = new_encoded_pub_key
             self.wallet.set_public_key_for_peer(self.peer, self.public_key)
             fields = {'public_key': self.wallet.encoded_public_key}
@@ -157,8 +162,10 @@ class PointTraderKeyQueryHandler(object):
 
 class Wallet(object):
     def __init__(self):
-        self.private_key = RSA.generate(1024)
-        self.encoded_public_key = self.private_key.publickey().exportKey()
+        self.private_key = rsa.generate_private_key(public_exponent=PUBLIC_EXPONENT,
+                                                    key_size=1024, backend=default_backend())
+        self.encoded_public_key = self.private_key.public_key().public_bytes(serialization.Encoding.PEM,
+                                                                             serialization.PublicFormat.PKCS1)
         self._config = None
         self.network = None
         self.wallet = None
@@ -392,6 +399,7 @@ create_stream_sd_file = {
 
 
 def mock_conf_settings(obj, settings={}):
+    conf.initialize_settings(False)
     original_settings = conf.settings
     conf.settings = conf.Config(conf.FIXED_SETTINGS, conf.ADJUSTABLE_SETTINGS)
     conf.settings.installation_id = conf.settings.get_installation_id()

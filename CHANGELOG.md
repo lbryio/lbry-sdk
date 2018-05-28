@@ -25,6 +25,11 @@ at anytime.
   * 
   
 ### Changed
+  * check headers file integrity on startup, removing/truncating the file to force re-download when necessary
+  * support partial headers file download from S3
+  * changed txrequests for treq
+  * changed cryptography version to 2.2.2
+  * removed pycrypto dependency, replacing all calls to cryptography
   * several internal dht functions to use inlineCallbacks
   * `DHTHashAnnouncer` and `Node` manage functions to use `LoopingCall`s instead of scheduling with `callLater`.
   * `store` kademlia rpc method to block on the call finishing and to return storing peer information
@@ -44,11 +49,14 @@ at anytime.
   * regenerate api keys on startup if the using authentication
   * support both positional and keyword args for api calls
   * `peer_list` to return a list of dictionaries instead of a list of lists, added peer node ids to the results
+  * download blockchain headers from s3 before starting the wallet when the local height is more than `s3_headers_depth` (a config setting) blocks behind
+  * track successful reflector uploads in sqlite to minimize how many streams are attempted by auto re-reflect
+  * increase the default `auto_re_reflect_interval` to a day
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests
   * integration tests for bootstrapping the dht
-  * configurable `concurrent_announcers` setting
+  * configurable `concurrent_announcers` and `s3_headers_depth` settings
   * `peer_ping` command
 
 ### Removed
@@ -56,7 +64,11 @@ at anytime.
   * old `blob_announce_all` command
   * `AuthJSONRPCServer.auth_required` decorator
   * unused `--wallet` argument to `lbrynet-daemon`, which used to be to support `PTCWallet`.
-
+  
+## [0.19.3] - 2018-05-04
+### Changed
+ * download blockchain headers from s3 before starting the wallet when the local height is more than s3_headers_depth (a config setting) blocks behind (https://github.com/lbryio/lbry/pull/1177)
+ * un-deprecated report_bug command (https://github.com/lbryio/lbry/commit/f8e418fb4448a3ed1531657f8b3c608fb568af85)
 
 ## [0.19.2] - 2018-03-28
 ### Fixed

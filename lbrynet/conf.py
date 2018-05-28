@@ -236,6 +236,7 @@ FIXED_SETTINGS = {
     'SLACK_WEBHOOK': ('nUE0pUZ6Yl9bo29epl5moTSwnl5wo20ip2IlqzywMKZiIQSFZR5'
                       'AHx4mY0VmF0WQZ1ESEP9kMHZlp1WzJwWOoKN3ImR1M2yUAaMyqGZ='),
     'WALLET_TYPES': [LBRYUM_WALLET, LBRYCRD_WALLET],
+    'HEADERS_FILE_SHA256_CHECKSUM': (366295, 'b0c8197153a33ccbc52fb81a279588b6015b68b7726f73f6a2b81f7e25bfe4b9')
 }
 
 ADJUSTABLE_SETTINGS = {
@@ -280,10 +281,10 @@ ADJUSTABLE_SETTINGS = {
     'peer_port': (int, 3333),
     'pointtrader_server': (str, 'http://127.0.0.1:2424'),
     'reflector_port': (int, 5566),
-    # if reflect_uploads is True, send files to reflector (after publishing as well as a
-    # periodic check in the event the initial upload failed or was disconnected part way through
+    # if reflect_uploads is True, send files to reflector after publishing (as well as a periodic check in the
+    # event the initial upload failed or was disconnected part way through, provided the auto_re_reflect_interval > 0)
     'reflect_uploads': (bool, True),
-    'auto_re_reflect_interval': (int, 3600),
+    'auto_re_reflect_interval': (int, 86400),  # set to 0 to disable
     'reflector_servers': (list, [('reflector2.lbry.io', 5566)], server_list),
     'run_reflector_server': (bool, False),
     'sd_download_timeout': (int, 3),
@@ -294,7 +295,8 @@ ADJUSTABLE_SETTINGS = {
     'use_keyring': (bool, False),
     'wallet': (str, LBRYUM_WALLET),
     'blockchain_name': (str, 'lbrycrd_main'),
-    'lbryum_servers': (list, [('lbryum8.lbry.io', 50001), ('lbryum9.lbry.io', 50001)], server_list)
+    'lbryum_servers': (list, [('lbryum8.lbry.io', 50001), ('lbryum9.lbry.io', 50001)], server_list),
+    's3_headers_depth': (int, 96 * 10)   # download headers from s3 when the local height is more than 10 chunks behind
 }
 
 

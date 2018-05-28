@@ -157,6 +157,13 @@ class SQLiteStorage(object):
                 amount integer not null,
                 address text not null
             );
+            
+            create table if not exists reflected_stream (
+                sd_hash text not null,
+                reflector_address text not null,
+                timestamp integer,
+                primary key (sd_hash, reflector_address)
+            );
     """
 
     def __init__(self, db_dir, reactor=None):
@@ -765,3 +772,24 @@ class SQLiteStorage(object):
                     (height, outpoint)
                 )
         return self.db.runInteraction(_save_claim_heights)
+
+    # # # # # # # # # reflector functions # # # # # # # # #
+
+    def update_reflected_stream(self, sd_hash, reflector_address, success=True):
+        if success:
+            return self.db.runOperation(
+                "insert or replace into reflected_stream values (?, ?, ?)",
+                (sd_hash, reflector_address, self.clock.seconds())
+            )
+        return self.db.runOperation(
+            "delete from reflected_stream where sd_hash=? and reflector_address=?",
+            (sd_hash, reflector_address)
+        )
+
+    def get_streams_to_re_reflect(self):
+        return self.run_and_return_list(
+            "select s.sd_hash from stream s "
+            "left outer join reflected_stream r on s.sd_hash=r.sd_hash "
+            "where r.timestamp is null or r.timestamp < ?",
+            self.clock.seconds() - conf.settings['auto_re_reflect_interval']
+        )
