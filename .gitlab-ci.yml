@@ -1,0 +1,14 @@
+image: ubuntu:18.04
+
+before_script:
+  - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+
+build:
+  stage: build
+  script:
+  ## Add a prep.sh file eventually when we add a configuration function to this container.
+  # - ./docker/prep.sh
+  - docker build -t registry.gitlab.com/chamunks/lbry/$CI_COMMIT_REF_NAME:latest .
+  - docker-compose stop
+  - docker-compose rm -f
+  - docker-compose up -d
