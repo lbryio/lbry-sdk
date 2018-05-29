@@ -2,7 +2,6 @@ import platform
 import json
 import subprocess
 import os
-import distro
 
 from urllib2 import urlopen, URLError
 from lbryschema import __version__ as lbryschema_version
@@ -38,6 +37,7 @@ def get_platform(get_ip=True):
         "build": build_type.BUILD,  # CI server sets this during build step
     }
     if p["os_system"] == "Linux":
+        import distro
         p["distro"] = distro.info()
         p["desktop"] = os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown')
 
