@@ -53,7 +53,7 @@ class PingQueue(object):
         checked = []
         while now > self._enqueued_contacts[contact]:
             checked.append(contact)
-            if contact.contact_is_good is None:
+            if not contact.contact_is_good:
                 pinged.append(contact)
             if not len(self._queue):
                 break
