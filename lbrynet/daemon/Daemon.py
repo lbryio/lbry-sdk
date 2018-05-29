@@ -29,6 +29,7 @@ from lbrynet import conf
 from lbrynet.reflector import reupload
 from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.core.log_support import configure_loggly_handler
+from lbrynet.daemon.Component import ComponentManager
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.daemon.Downloader import GetStream
 from lbrynet.daemon.Publisher import Publisher
@@ -37,9 +38,7 @@ from lbrynet.daemon.auth.server import AuthJSONRPCServer
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import download_sd_blob
-from lbrynet.core.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.core.looping_call_manager import LoopingCallManager
-from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
 from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
@@ -177,32 +176,22 @@ class Daemon(AuthJSONRPCServer):
     ]
 
     def __init__(self, analytics_manager, component_manager=None):
-        AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'], component_manager)
-        # self.db_dir = conf.settings['data_dir']
+        AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         self.download_directory = conf.settings['download_directory']
-        # if conf.settings['BLOBFILES_DIR'] == "blobfiles":
-        #     self.blobfile_dir = os.path.join(self.db_dir, "blobfiles")
-        # else:
-        #     log.info("Using non-default blobfiles directory: %s", conf.settings['BLOBFILES_DIR'])
-        #     self.blobfile_dir = conf.settings['BLOBFILES_DIR']
         self.data_rate = conf.settings['data_rate']
         self.max_key_fee = conf.settings['max_key_fee']
         self.disable_max_key_fee = conf.settings['disable_max_key_fee']
         self.download_timeout = conf.settings['download_timeout']
         self.run_reflector_server = conf.settings['run_reflector_server']
-        self.wallet_type = conf.settings['wallet']
         self.delete_blobs_on_remove = conf.settings['delete_blobs_on_remove']
         self.peer_port = conf.settings['peer_port']
         self.reflector_port = conf.settings['reflector_port']
-        # self.dht_node_port = conf.settings['dht_node_port']
-        # self.use_upnp = conf.settings['use_upnp']
         self.auto_renew_claim_height_delta = conf.settings['auto_renew_claim_height_delta']
 
         self.startup_status = STARTUP_STAGES[0]
         self.connected_to_internet = True
         self.connection_status_code = None
         self.platform = None
-        self.current_db_revision = 9
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self._session_id = conf.settings.get_session_id()
@@ -226,8 +215,7 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager = LoopingCallManager(calls)
         self.sd_identifier = None
         self.file_manager = None
-        # self.storage = None
-        self.wallet = None
+        self.component_manager = component_manager or ComponentManager(self.analytics_manager)
 
     @defer.inlineCallbacks
     def setup(self):
@@ -242,7 +230,6 @@ class Daemon(AuthJSONRPCServer):
 
         yield self._initial_setup()
         yield self.component_manager.setup()
-        self.wallet = self.component_manager.get_component("wallet").wallet
         self.startup_status = STARTUP_STAGES[2]
         self.session = self.component_manager.get_component("session").session
         yield self._check_wallet_locked()
@@ -250,8 +237,9 @@ class Daemon(AuthJSONRPCServer):
         self.sd_identifier = self.component_manager.get_component("streamIdentifier").sd_identifier
         self.startup_status = STARTUP_STAGES[3]
         self.file_manager = self.component_manager.get_component("fileManager").file_manager
-        yield self._setup_query_handlers()
-        yield self._setup_server()
+        # yield self._setup_query_handlers()
+        self.query_handlers = self.component_manager.get_component("queryHandler").queryHandlers
+        # yield self._setup_server()
         log.info("Starting balance: " + str(self.session.wallet.get_balance()))
         self.announced_startup = True
         self.startup_status = STARTUP_STAGES[5]
@@ -365,24 +353,6 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda _: self._start_reflector())
         return d
 
-    def _setup_query_handlers(self):
-        handlers = [
-            BlobRequestHandlerFactory(
-                self.session.blob_manager,
-                self.session.wallet,
-                self.session.payment_rate_manager,
-                self.analytics_manager
-            ),
-            self.session.wallet.get_wallet_info_query_handler_factory(),
-        ]
-        return self._add_query_handlers(handlers)
-
-    def _add_query_handlers(self, query_handlers):
-        for handler in query_handlers:
-            query_id = handler.get_primary_query_identifier()
-            self.query_handlers[query_id] = handler
-        return defer.succeed(None)
-
     @staticmethod
     def _already_shutting_down(sig_num, frame):
         log.info("Already shutting down")
@@ -460,26 +430,6 @@ class Daemon(AuthJSONRPCServer):
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
 
-    # @defer.inlineCallbacks
-    # def _get_session(self):
-    #     self.session = Session(
-    #         conf.settings['data_rate'],
-    #         db_dir=self.db_dir,
-    #         node_id=self.node_id,
-    #         blob_dir=self.blobfile_dir,
-    #         dht_node_port=self.dht_node_port,
-    #         known_dht_nodes=conf.settings['known_dht_nodes'],
-    #         peer_port=self.peer_port,
-    #         use_upnp=self.use_upnp,
-    #         wallet=self.wallet,
-    #         is_generous=conf.settings['is_generous_host'],
-    #         external_ip=self.platform['ip'],
-    #         storage=self.storage
-    #     )
-    #     self.startup_status = STARTUP_STAGES[2]
-    #
-    #     yield self.session.setup()
-
     @defer.inlineCallbacks
     def _check_wallet_locked(self):
         wallet = self.session.wallet
@@ -487,19 +437,6 @@ class Daemon(AuthJSONRPCServer):
             self.startup_status = STARTUP_STAGES[7]
 
         yield wallet.check_locked()
-
-    def _setup_stream_identifier(self):
-        file_saver_factory = EncryptedFileSaverFactory(
-            self.session.peer_finder,
-            self.session.rate_limiter,
-            self.session.blob_manager,
-            self.session.storage,
-            self.session.wallet,
-            self.download_directory
-        )
-        self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType,
-                                                         file_saver_factory)
-        return defer.succeed(None)
 
     def _download_blob(self, blob_hash, rate_manager=None, timeout=None):
         """
