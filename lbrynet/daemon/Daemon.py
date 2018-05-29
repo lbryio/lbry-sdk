@@ -14,6 +14,7 @@ from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
+import lbryschema
 from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError, DecodeError
