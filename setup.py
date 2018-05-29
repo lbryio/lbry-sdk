@@ -17,6 +17,7 @@ from setuptools import setup, find_packages
 requires = [
     'Twisted',
     'appdirs',
+    'distro',
     'base58',
     'envparse',
     'jsonrpc',

@@ -36,6 +36,10 @@ def get_platform(get_ip=True):
         "lbryschema_version": lbryschema_version,
         "build": build_type.BUILD,  # CI server sets this during build step
     }
+    if p["os_system"] == "Linux":
+        import distro
+        p["distro"] = distro.info()
+        p["desktop"] = os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown')
 
     # TODO: remove this from get_platform and add a get_external_ip function using treq
     if get_ip:
