@@ -1,3 +1,6 @@
+from lbrynet.dht import constants
+
+
 class Distance(object):
     """Calculate the XOR result between two string variables.
 
@@ -6,6 +9,8 @@ class Distance(object):
     """
 
     def __init__(self, key):
+        if len(key) != constants.key_bits / 8:
+            raise ValueError("invalid key length: %i", len(key))
         self.key = key
         self.val_key_one = long(key.encode('hex'), 16)
 
