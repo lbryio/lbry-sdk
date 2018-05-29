@@ -139,6 +139,9 @@ class _Contact(object):
         host Node's C{_protocol} object).
         """
 
+        if name not in ['ping', 'findValue', 'findNode', 'store']:
+            raise AttributeError("unknown command: %s" % name)
+
         def _sendRPC(*args, **kwargs):
             return self._networkProtocol.sendRPC(self, name, args, **kwargs)
 
