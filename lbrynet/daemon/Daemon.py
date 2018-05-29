@@ -16,6 +16,7 @@ from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
+import lbryschema
 from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError, DecodeError
@@ -43,7 +44,7 @@ from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, download_sd_blob
 from lbrynet.core.StreamDescriptor import EncryptedFileStreamType
 from lbrynet.core.Session import Session
-from lbrynet.core.Wallet import LBRYumWallet
+#from lbrynet.core.Wallet import LBRYumWallet
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
@@ -54,7 +55,7 @@ from lbrynet.dht.error import TimeoutError
 from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
-from lbrynet.wallet.manager import BackwardsCompatibleWalletManager
+from lbrynet.wallet.manager import LbryWalletManager
 
 log = logging.getLogger(__name__)
 
@@ -538,7 +539,8 @@ class Daemon(AuthJSONRPCServer):
         def get_wallet():
             if self.wallet_type == TORBA_WALLET:
                 log.info("Using torba wallet")
-                wallet = BackwardsCompatibleWalletManager.from_old_config(conf.settings)
+                wallet = LbryWalletManager.from_old_config(conf.settings)
+                lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
                 return defer.succeed(wallet)
             elif self.wallet_type == LBRYCRD_WALLET:
                 raise ValueError('LBRYcrd Wallet is no longer supported')
