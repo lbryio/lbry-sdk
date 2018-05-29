@@ -30,6 +30,8 @@ at anytime.
   * changed txrequests for treq
   * changed cryptography version to 2.2.2
   * removed pycrypto dependency, replacing all calls to cryptography
+  * full verification of streams only during migration instead of every startup
+  * database batching functions for starting up the file manager
   * several internal dht functions to use inlineCallbacks
   * `DHTHashAnnouncer` and `Node` manage functions to use `LoopingCall`s instead of scheduling with `callLater`.
   * `store` kademlia rpc method to block on the call finishing and to return storing peer information

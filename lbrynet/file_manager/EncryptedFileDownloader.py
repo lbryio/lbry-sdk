@@ -56,18 +56,21 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.channel_name = None
         self.metadata = None
 
+    def set_claim_info(self, claim_info):
+        self.claim_id = claim_info['claim_id']
+        self.txid = claim_info['txid']
+        self.nout = claim_info['nout']
+        self.channel_claim_id = claim_info['channel_claim_id']
+        self.outpoint = "%s:%i" % (self.txid, self.nout)
+        self.claim_name = claim_info['name']
+        self.channel_name = claim_info['channel_name']
+        self.metadata = claim_info['value']['stream']['metadata']
+
     @defer.inlineCallbacks
     def get_claim_info(self, include_supports=True):
         claim_info = yield self.storage.get_content_claim(self.stream_hash, include_supports)
         if claim_info:
-            self.claim_id = claim_info['claim_id']
-            self.txid = claim_info['txid']
-            self.nout = claim_info['nout']
-            self.channel_claim_id = claim_info['channel_claim_id']
-            self.outpoint = "%s:%i" % (self.txid, self.nout)
-            self.claim_name = claim_info['name']
-            self.channel_name = claim_info['channel_name']
-            self.metadata = claim_info['value']['stream']['metadata']
+            self.set_claim_info(claim_info)
 
         defer.returnValue(claim_info)
 
