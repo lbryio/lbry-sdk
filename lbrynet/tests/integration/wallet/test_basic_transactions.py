@@ -2,36 +2,34 @@ import asyncio
 from binascii import hexlify
 from orchstr8.testcase import IntegrationTestCase
 from torba.constants import COIN
+from lbrynet.wallet.transaction import Transaction, Input, Output
 
 
-class StartupTests(IntegrationTestCase):
+class BasicTransactionTests(IntegrationTestCase):
 
     VERBOSE = True
 
-    async def test_balance(self):
-        account = self.wallet.default_account
-        coin = account.coin
-        ledger = self.manager.ledgers[coin.ledger_class]
-        address = account.get_least_used_receiving_address()
-        sendtxid = await self.lbrycrd.sendtoaddress(address.decode(), 2.5)
+    async def test_sending_and_recieving(self):
+
+        self.assertEqual(await self.lbrycrd.get_balance(), 10.0)
+        self.assertEqual(self.manager.get_balance(), 0.0)
+
+        address = self.account.get_least_used_receiving_address()
+        sendtxid = await self.lbrycrd.send_to_address(address.decode(), 5.5)
         await self.lbrycrd.generate(1)
-        await ledger.on_transaction.where(
-            lambda tx: tx.id.decode() == sendtxid
-        )
-        utxo = account.get_unspent_utxos()[0]
-        address2 = account.get_least_used_receiving_address()
-        tx_class = ledger.transaction_class
-        Input, Output = tx_class.input_class, tx_class.output_class
-        tx = tx_class() \
-            .add_inputs([Input.spend(utxo)]) \
-            .add_outputs([Output.pay_pubkey_hash(int(2.49*COIN), coin.address_to_hash160(address2))]) \
-            .sign(account)
-        await self.lbrycrd.decoderawtransaction(hexlify(tx.raw))
-        sendtxid = await self.lbrycrd.sendrawtransaction(hexlify(tx.raw))
+        await self.on_transaction(sendtxid)
+
+        self.assertAlmostEqual(await self.lbrycrd.get_balance(), 5.5, places=2)
+        self.assertEqual(self.manager.get_balance(), 5.5)
+
+        lbrycrd_address = await self.lbrycrd.get_raw_change_address()
+        tx = self.manager.send_amount_to_address(5, lbrycrd_address)
+        await self.broadcast(tx)
+        await self.on_transaction(tx.id.decode())
         await self.lbrycrd.generate(1)
-        await ledger.on_transaction.where(
-            lambda tx: tx.id.decode() == sendtxid
-        )
+
+        self.assertAlmostEqual(await self.lbrycrd.get_balance(), 11.5, places=2)
+        #self.assertEqual(self.manager.get_balance(), 0.5)
 
 
 class AbandonClaimLookup(IntegrationTestCase):
