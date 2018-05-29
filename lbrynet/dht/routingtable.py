@@ -244,7 +244,7 @@ class TreeRoutingTable(object):
         refreshIDs = []
         now = int(self._getTime())
         for bucket in self._buckets[startIndex:]:
-            if force or now - bucket.lastAccessed >= constants.checkRefreshInterval:
+            if force or now - bucket.lastAccessed >= constants.refreshTimeout:
                 searchID = self._randomIDInBucketRange(bucketIndex)
                 refreshIDs.append(searchID)
             bucketIndex += 1
