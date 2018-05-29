@@ -185,7 +185,7 @@ class Manager(object):
 
     @staticmethod
     def _make_context(platform, wallet):
-        context= {
+        context = {
             'app': {
                 'name': 'lbrynet',
                 'version': platform['lbrynet_version'],
