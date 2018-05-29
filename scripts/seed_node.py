@@ -5,6 +5,8 @@ import argparse
 import hashlib
 from copy import deepcopy
 from urllib import urlopen
+from twisted.internet.epollreactor import install as install_epoll
+install_epoll()
 from twisted.internet import reactor, defer
 from twisted.web import resource
 from twisted.web.server import Site
@@ -54,7 +56,7 @@ def format_contact(contact):
 
 
 class MultiSeedRPCServer(AuthJSONRPCServer):
-    def __init__(self, starting_node_port=4455, nodes=50, rpc_port=5280):
+    def __init__(self, starting_node_port, nodes, rpc_port):
         AuthJSONRPCServer.__init__(self, False)
         self.port = None
         self.rpc_port = rpc_port
@@ -208,7 +210,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--rpc_port', default=5280)
     parser.add_argument('--starting_port', default=4455)
-    parser.add_argument('--nodes', default=50)
+    parser.add_argument('--nodes', default=32)
     args = parser.parse_args()
     MultiSeedRPCServer(int(args.starting_port), int(args.nodes), int(args.rpc_port))
     reactor.run()
