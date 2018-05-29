@@ -6,10 +6,12 @@ log = logging.getLogger(__name__)
 
 class ComponentManager(object):
     default_component_classes = {}
+    # analytics_manager = None
 
-    def __init__(self, **override_components):
+    def __init__(self, analytics_manager=None, **override_components):
         self.component_classes = {}
         self.components = set()
+        self.analytics_manager = analytics_manager
 
         for component_name, component_class in self.default_component_classes.iteritems():
             if component_name in override_components:

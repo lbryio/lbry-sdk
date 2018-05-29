@@ -1,11 +1,13 @@
 import os
 import logging
-from twisted.internet import defer, threads
+from twisted.internet import defer, threads, reactor, error
 
 from lbrynet import conf
 from lbrynet.core.Session import Session
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
 from lbrynet.core.Wallet import LBRYumWallet
+from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
+from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.daemon.Component import Component
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.dht import node, hashannouncer
@@ -26,6 +28,8 @@ DHT_COMPONENT = "dht"
 HASH_ANNOUNCER_COMPONENT = "hashAnnouncer"
 STREAM_IDENTIFIER_COMPONENT = "streamIdentifier"
 FILE_MANAGER_COMPONENT = "fileManager"
+QUERY_HANDLER_COMPONENT = "queryHandler"
+SERVER_COMPONENET = "server"
 
 
 class ConfigSettings(object):
@@ -297,3 +301,65 @@ class FileManager(Component):
     @defer.inlineCallbacks
     def stop(self):
         yield self.file_manager.stop()
+
+
+class QueryHandler(Component):
+    component_name = QUERY_HANDLER_COMPONENT
+    depends_on = [SESSION_COMPONENT]
+
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
+        self.queryHandlers = {}
+
+    def setup(self):
+        session = self.component_manager.get_component(SESSION_COMPONENT).session
+        handlers = [
+            BlobRequestHandlerFactory(
+                session.blob_manager,
+                session.wallet,
+                session.payment_rate_manager,
+                self.component_manager.analytics_manager
+            ),
+            session.wallet.get_wallet_info_query_handler_factory(),
+        ]
+
+        for handler in handlers:
+            query_id = handler.get_primary_query_identifier()
+            self.queryHandlers[query_id] = handler
+
+    def stop(self):
+        pass
+
+
+class Server(Component):
+    component_name = SERVER_COMPONENET
+    depends_on = [QUERY_HANDLER_COMPONENT, SESSION_COMPONENT]
+
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
+        self.lbry_server_port = None
+
+    def setup(self):
+        peer_port = GCS('peer_port')
+        session = self.component_manager.get_component('session').session
+        query_handlers = self.component_manager.get_component('queryHandler').queryHandlers
+
+        if peer_port is not None:
+            server_factory = ServerProtocolFactory(session.rate_limiter, query_handlers, session.peer_manager)
+
+            try:
+                log.info("Peer protocol listening on TCP %d", peer_port)
+                self.lbry_server_port = reactor.listenTCP(peer_port, server_factory)
+            except error.CannotListenError as e:
+                import traceback
+                log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for"
+                          " more details.", peer_port)
+                log.error("%s", traceback.format_exc())
+                raise ValueError("%s lbrynet may already be running on your computer." % str(e))
+
+    @defer.inlineCallbacks
+    def stop(self):
+        if self.lbry_server_port is not None:
+            self.lbry_server_port, old_port = None, self.lbry_server_port
+            log.info('Stop listening on port %s', old_port.port)
+            yield old_port.stopListening()
