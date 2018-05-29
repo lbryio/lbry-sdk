@@ -17,7 +17,6 @@ from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
 from lbrynet.daemon.auth.util import APIKey, get_auth_message
 from lbrynet.daemon.auth.client import LBRY_SECRET
-from lbrynet.daemon.Component import ComponentManager
 from lbrynet.undecorated import undecorated
 
 log = logging.getLogger(__name__)
@@ -172,11 +171,10 @@ class AuthJSONRPCServer(AuthorizedBase):
     isLeaf = True
     allowed_during_startup = []
 
-    def __init__(self, use_authentication=None, component_manager=None):
+    def __init__(self, use_authentication=None):
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
         self.announced_startup = False
         self.sessions = {}
-        self.component_manager = component_manager or ComponentManager()
 
     def setup(self):
         return NotImplementedError()
