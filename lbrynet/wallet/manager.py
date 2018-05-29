@@ -42,7 +42,10 @@ class LbryWalletManager(BaseWalletManager):
     def from_old_config(cls, settings):
         coin_id = 'lbc_{}'.format(settings['blockchain_name'][-7:])
         wallet_manager = cls.from_config({
-            'ledgers': {coin_id: {'default_servers': settings['lbryum_servers']}}
+            'ledgers': {coin_id: {
+                'default_servers': settings['lbryum_servers'],
+                'wallet_path': settings['lbryum_wallet_dir']
+            }}
         })
         ledger = wallet_manager.ledgers.values()[0]
         wallet_manager.create_wallet(
@@ -58,7 +61,7 @@ class LbryWalletManager(BaseWalletManager):
         return self.stop_ledgers()
 
     def get_balance(self):
-        return self.default_account.get_balance()
+        return float(self.default_account.get_balance()) / float(COIN)
 
     def get_best_blockhash(self):
         return defer.succeed('')
@@ -66,48 +69,34 @@ class LbryWalletManager(BaseWalletManager):
     def get_unused_address(self):
         return defer.succeed(self.default_account.get_least_used_receiving_address())
 
+    def get_new_address(self):
+        return self.get_unused_address()
+
     def reserve_points(self, address, amount):
         # TODO: check if we have enough to cover amount
         return ReservedPoints(address, amount)
 
     def send_points_to_address(self, reserved, amount):
-        account = self.default_account
-        coin = account.coin
-        ledger = coin.ledger
-        tx_class = ledger.transaction_class
-        in_class, out_class = tx_class.input_class, tx_class.output_class
-
         destination_address = reserved.identifier.encode('latin1')
-
-        outputs = [
-            out_class.pay_pubkey_hash(amount*COIN, coin.address_to_hash160(destination_address))
-        ]
-
-        amount += 0.001
-
-        amount = amount*COIN
-
-        # TODO: use CoinSelector
-        utxos = account.get_unspent_utxos()
-        total = account.get_balance()
-        if amount < total and total-amount > 0.00001*COIN:
-            change_destination = account.get_least_used_change_address()
-            outputs.append(
-                out_class.pay_pubkey_hash(total-amount, coin.address_to_hash160(change_destination))
-            )
-
-        tx = tx_class() \
-            .add_inputs([in_class.spend(utxo) for utxo in utxos]) \
-            .add_outputs(outputs)\
-            .sign(account)
-
-        return ledger.broadcast(tx)
+        return self.send_amount_to_address(amount, destination_address)
 
     def get_wallet_info_query_handler_factory(self):
         return LBRYcrdAddressQueryHandlerFactory(self)
 
     def get_info_exchanger(self):
         return LBRYcrdAddressRequester(self)
+
+    def resolve(self, *uris, **kwargs):
+        return defer.succeed({})
+
+    def get_name_claims(self):
+        return defer.succeed([])
+
+    def address_is_mine(self, address):
+        return defer.succeed(True)
+
+    def get_history(self):
+        return defer.succeed([])
 
 
 class ReservedPoints:
