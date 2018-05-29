@@ -1,6 +1,7 @@
 import logging
 from twisted.trial import unittest
 from twisted.internet import defer, task
+from lbrynet.dht import constants
 from lbrynet.dht.node import Node
 from mock_transport import resolve, listenUDP, MOCK_DHT_SEED_DNS, mock_node_generator
 
@@ -45,8 +46,8 @@ class TestKademliaBase(unittest.TestCase):
         """
         for _ in range(int(n * (1.0 / float(step)))):
             self.clock.advance(step)
-        if tick_callback and callable(tick_callback):
-            tick_callback(self.clock.seconds())
+            if tick_callback and callable(tick_callback):
+                tick_callback(self.clock.seconds())
 
     def run_reactor(self, seconds, deferreds, tick_callback=None):
         d = defer.DeferredList(deferreds)
@@ -110,14 +111,14 @@ class TestKademliaBase(unittest.TestCase):
             seed_dl.append(
                 seed.start(known_addresses)
             )
-        yield self.run_reactor(901, seed_dl)
+        yield self.run_reactor(constants.checkRefreshInterval+1, seed_dl)
         while len(self.nodes + self._seeds) < self.network_size:
             network_dl = []
             for i in range(min(10, self.network_size - len(self._seeds) - len(self.nodes))):
                 network_dl.append(self.add_node())
-            yield self.run_reactor(31, network_dl)
+            yield self.run_reactor(constants.checkRefreshInterval*2+1, network_dl)
         self.assertEqual(len(self.nodes + self._seeds), self.network_size)
-        self.pump_clock(1800)
+        self.pump_clock(3600)
         self.verify_all_nodes_are_routable()
         self.verify_all_nodes_are_pingable()
 

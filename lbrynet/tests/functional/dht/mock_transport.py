@@ -1,7 +1,7 @@
 import struct
+import hashlib
 import logging
 from twisted.internet import defer, error
-from lbrynet.core.utils import generate_id
 from lbrynet.dht.encoding import Bencode
 from lbrynet.dht.error import DecodeError
 from lbrynet.dht.msgformat import DefaultFormat
@@ -121,7 +121,9 @@ def mock_node_generator(count=None, mock_node_ids=MOCK_DHT_NODES):
         if count and num >= count:
             break
         if num >= len(mock_node_ids):
-            node_id = generate_id().encode('hex')
+            h = hashlib.sha384()
+            h.update("node %i" % num)
+            node_id = h.hexdigest()
         else:
             node_id = mock_node_ids[num]
         yield (node_id, node_ip)
