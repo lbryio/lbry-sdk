@@ -11,7 +11,7 @@ from lbryschema.decode import smart_decode
 from lbrynet import conf
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 from lbrynet.dht.constants import dataExpireTimeout
-from lbryum.constants import COIN
+from torba.constants import COIN
 
 log = logging.getLogger(__name__)
 
