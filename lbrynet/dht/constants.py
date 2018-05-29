@@ -45,17 +45,13 @@ tokenSecretChangeInterval = 300  # 5 minutes
 
 ######## IMPLEMENTATION-SPECIFIC CONSTANTS ###########
 
-#: The interval in which the node should check its whether any buckets need refreshing,
-#: or whether any data needs to be republished (in seconds)
+#: The interval for the node to check whether any buckets need refreshing
 checkRefreshInterval = refreshTimeout / 5
 
 #: Max size of a single UDP datagram, in bytes. If a message is larger than this, it will
 #: be spread across several UDP packets.
 udpDatagramMaxSize = 8192  # 8 KB
 
-from lbrynet.core.cryptoutils import get_lbry_hash_obj
-
-h = get_lbry_hash_obj()
-key_bits = h.digest_size * 8  # 384 bits
+key_bits = 384
 
 rpc_id_length = 20
