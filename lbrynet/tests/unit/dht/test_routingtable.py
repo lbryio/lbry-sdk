@@ -159,7 +159,8 @@ class TreeRoutingTableTest(unittest.TestCase):
         self.failUnlessEqual(len(self.routingTable._buckets[1]._contacts), 2)
 
         #  try adding a contact who is further from us than the k'th known contact
-        nodeID = '020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'.decode('hex')
+        nodeID = '020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+        nodeID = nodeID.decode('hex')
         contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
         self.assertFalse(self.routingTable._shouldSplit(self.routingTable._kbucketIndex(contact.id), contact.id))
         yield self.routingTable.addContact(contact)

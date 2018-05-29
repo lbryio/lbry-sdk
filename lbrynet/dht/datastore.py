@@ -51,7 +51,9 @@ class DictDataStore(UserDict.DictMixin):
     def addPeerToBlob(self, contact, key, compact_address, lastPublished, originallyPublished, originalPublisherID):
         if key in self._dict:
             if compact_address not in map(lambda store_tuple: store_tuple[1], self._dict[key]):
-                self._dict[key].append((contact, compact_address, lastPublished, originallyPublished, originalPublisherID))
+                self._dict[key].append(
+                    (contact, compact_address, lastPublished, originallyPublished, originalPublisherID)
+                )
         else:
             self._dict[key] = [(contact, compact_address, lastPublished, originallyPublished, originalPublisherID)]
 

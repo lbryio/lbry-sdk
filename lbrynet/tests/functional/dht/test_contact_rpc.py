@@ -131,38 +131,8 @@ class KademliaProtocolTest(unittest.TestCase):
         raised locally """
         remote_node = Node(node_id='2' * 48, udpPort=self.udpPort, externalIP="127.0.0.2", listenUDP=listenUDP,
                            resolve=resolve, clock=self._reactor, callLater=self._reactor.callLater)
-        remote_node.start_listening()
         remote_contact = remote_node.contact_manager.make_contact('2' * 48, '127.0.0.2', 9182, self.node._protocol)
-        self.node.addContact(remote_contact)
-
-        self.error = None
-
-        def handleError(f):
-            try:
-                f.raiseException()
-            except AttributeError, e:
-                # This is the expected outcome since the remote node did not publish the method
-                self.error = None
-            except Exception, e:
-                self.error = 'The remote method failed, but the wrong exception was raised; ' \
-                             'expected AttributeError, got %s' % type(e)
-
-        def handleResult(result):
-            self.error = 'The remote method executed successfully, returning: "%s"; ' \
-                         'this RPC should not have been allowed.' % result
-
-        self.node.start_listening()
-        self._reactor.pump([1 for _ in range(10)])
-        # Simulate the RPC
-        df = remote_contact.not_a_rpc_function()
-        df.addCallback(handleResult)
-        df.addErrback(handleError)
-        self._reactor.pump([1 for _ in range(10)])
-        self.failIf(self.error, self.error)
-        # The list of sent RPC messages should be empty at this stage
-        self.failUnlessEqual(len(self.node._protocol._sentMessages), 0,
-                             'The protocol is still waiting for a RPC result, '
-                             'but the transaction is already done!')
+        self.assertRaises(AttributeError, getattr, remote_contact, "not_a_rpc_function")
 
     def testRPCRequestArgs(self):
         """ Tests if an RPC requiring arguments is executed correctly """
