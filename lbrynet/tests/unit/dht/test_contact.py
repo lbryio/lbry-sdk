@@ -15,6 +15,14 @@ class ContactOperatorsTest(unittest.TestCase):
         self.secondContactCopy = self.contact_manager.make_contact(self.node_ids[0], '192.168.0.1', 1000, None, 32)
         self.firstContactDifferentValues = self.contact_manager.make_contact(self.node_ids[1], '192.168.1.20',
                                                                              1000, None, 50)
+        self.assertRaises(ValueError, self.contact_manager.make_contact, self.node_ids[1], '192.168.1.20',
+                                                                             100000, None)
+        self.assertRaises(ValueError, self.contact_manager.make_contact, self.node_ids[1], '192.168.1.20.1',
+                          1000, None)
+        self.assertRaises(ValueError, self.contact_manager.make_contact, self.node_ids[1], 'this is not an ip',
+                          1000, None)
+        self.assertRaises(ValueError, self.contact_manager.make_contact, "this is not a node id", '192.168.1.20.1',
+                          1000, None)
 
     def testNoDuplicateContactObjects(self):
         self.assertTrue(self.secondContact is self.secondContactCopy)
@@ -74,7 +82,7 @@ class TestContactLastReplied(unittest.TestCase):
     def test_good_turned_stale(self):
         self.contact.update_last_replied()
         self.assertTrue(self.contact.contact_is_good is True)
-        self.clock.advance((constants.refreshTimeout / 4) - 1)
+        self.clock.advance(constants.checkRefreshInterval - 1)
         self.assertTrue(self.contact.contact_is_good is True)
         self.clock.advance(1)
         self.assertTrue(self.contact.contact_is_good is None)
@@ -112,7 +120,7 @@ class TestContactLastReplied(unittest.TestCase):
         self.assertTrue(self.contact.contact_is_good is True)
 
         # it goes stale
-        self.clock.advance((constants.refreshTimeout / 4) - 2)
+        self.clock.advance(constants.checkRefreshInterval - 2)
         self.assertTrue(self.contact.contact_is_good is True)
         self.clock.advance(1)
         self.assertTrue(self.contact.contact_is_good is None)
@@ -134,7 +142,7 @@ class TestContactLastRequested(unittest.TestCase):
         self.assertTrue(self.contact.contact_is_good is True)
 
         # it goes stale
-        self.clock.advance((constants.refreshTimeout / 4) - 1)
+        self.clock.advance(constants.checkRefreshInterval - 1)
         self.assertTrue(self.contact.contact_is_good is True)
         self.clock.advance(1)
         self.assertTrue(self.contact.contact_is_good is None)

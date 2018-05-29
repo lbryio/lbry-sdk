@@ -63,10 +63,7 @@ class TreeRoutingTable(object):
         contacts = self.get_contacts()
         distance = Distance(self._parentNodeID)
         contacts.sort(key=lambda c: distance(c.id))
-        if len(contacts) < constants.k:
-            kth_contact = contacts[-1]
-        else:
-            kth_contact = contacts[constants.k-1]
+        kth_contact = contacts[-1] if len(contacts) < constants.k else contacts[constants.k-1]
         return distance(toAdd) < distance(kth_contact.id)
 
     def addContact(self, contact):
@@ -91,7 +88,6 @@ class TreeRoutingTable(object):
                 # Retry the insertion attempt
                 return self.addContact(contact)
             else:
-
                 # We can't split the k-bucket
                 #
                 # The 13 page kademlia paper specifies that the least recently contacted node in the bucket

@@ -27,21 +27,12 @@ class TreeRoutingTableTest(unittest.TestCase):
         """ Test to see if distance method returns correct result"""
 
         # testList holds a couple 3-tuple (variable1, variable2, result)
-        basicTestList = [('123456789', '123456789', 0L), ('12345', '98765', 34527773184L)]
+        basicTestList = [(chr(170) * 48, chr(85) * 48, long((chr(255) * 48).encode('hex'), 16))]
 
         for test in basicTestList:
             result = Distance(test[0])(test[1])
             self.failIf(result != test[2], 'Result of _distance() should be %s but %s returned' %
                         (test[2], result))
-
-        baseIp = '146.64.19.111'
-        ipTestList = ['146.64.29.222', '192.68.19.333']
-
-        distanceOne = Distance(baseIp)(ipTestList[0])
-        distanceTwo = Distance(baseIp)(ipTestList[1])
-
-        self.failIf(distanceOne > distanceTwo, '%s should be closer to the base ip %s than %s' %
-                    (ipTestList[0], baseIp, ipTestList[1]))
 
     @defer.inlineCallbacks
     def testAddContact(self):
@@ -50,7 +41,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         h = hashlib.sha384()
         h.update('node2')
         contactID = h.digest()
-        contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 91824, self.protocol)
+        contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.protocol)
         # Now add it...
         yield self.routingTable.addContact(contact)
         # ...and request the closest nodes to it (will retrieve it)
@@ -66,7 +57,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         h = hashlib.sha384()
         h.update('node2')
         contactID = h.digest()
-        contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 91824, self.protocol)
+        contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.protocol)
         # Now add it...
         yield self.routingTable.addContact(contact)
         # ...and get it again
@@ -80,7 +71,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         """
 
         # Create a contact with the same ID as the local node's ID
-        contact = self.contact_manager.make_contact(self.nodeID, '127.0.0.1', 91824, self.protocol)
+        contact = self.contact_manager.make_contact(self.nodeID, '127.0.0.1', 9182, self.protocol)
         # Now try to add it
         yield self.routingTable.addContact(contact)
         # ...and request the closest nodes to it using FIND_NODE
@@ -94,7 +85,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         h = hashlib.sha384()
         h.update('node2')
         contactID = h.digest()
-        contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 91824, self.protocol)
+        contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.protocol)
         # Now add it...
         yield self.routingTable.addContact(contact)
         # Verify addition
@@ -113,7 +104,7 @@ class TreeRoutingTableTest(unittest.TestCase):
             h = hashlib.sha384()
             h.update('remote node %d' % i)
             nodeID = h.digest()
-            contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 91824, self.protocol)
+            contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
             yield self.routingTable.addContact(contact)
         self.failUnlessEqual(len(self.routingTable._buckets), 1,
                              'Only k nodes have been added; the first k-bucket should now '
@@ -122,7 +113,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         h = hashlib.sha384()
         h.update('yet another remote node')
         nodeID = h.digest()
-        contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 91824, self.protocol)
+        contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
         yield self.routingTable.addContact(contact)
         self.failUnlessEqual(len(self.routingTable._buckets), 2,
                              'k+1 nodes have been added; the first k-bucket should have been '
@@ -140,55 +131,43 @@ class TreeRoutingTableTest(unittest.TestCase):
     @defer.inlineCallbacks
     def testFullSplit(self):
         """
-        Test that a bucket is not split if it full, but does not cover the range
-        containing the parent node's ID
+        Test that a bucket is not split if it is full, but the new contact is not closer than the kth closest contact
         """
 
-        self.routingTable._parentNodeID = 49 * 'a'
-        # more than 384 bits; this will not be in the range of _any_ k-bucket
+        self.routingTable._parentNodeID = 48 * chr(255)
 
         node_ids = [
-            "d4a27096d81e3c4efacce9f940e887c956f736f859c8037b556efec6fdda5c388ae92bae96b9eb204b24da2f376c4282",
-            "553c0bfe119c35247c8cb8124091acb5c05394d5be7b019f6b1a5e18036af7a6148711ad6d47a0f955047bf9eac868aa",
-            "671a179c251c90863f46e7ef54264cbbad743fe3127871064d8f051ce4124fcbd893339e11358f621655e37bd6a74097",
-            "f896bafeb7ffb14b92986e3b08ee06807fdd5be34ab43f4f52559a5bbf0f12dedcd8556801f97c334b3ac9be7a0f7a93",
-            "33a7deb380eb4707211184798b66840c22c396e8cde00b75b64f9ead09bad1141b56d35a93bd511adb28c6708eecc39d",
-            "5e1e8ca575b536ae5ec52f7766ada904a64ebaad805909b1067ec3c984bf99909c9fcdd37e04ea5c5c043ea8830100ce",
-            "ee18857d0c1f7fc413424f3ffead4871f2499646d4c2ac16f35f0c8864318ca21596915f18f85a3a25f8ceaa56c844aa",
-            "68039f78fbf130873e7cce2f71f39d217dcb7f3fe562d64a85de4e21ee980b4a800f51bf6851d2bbf10e6590fe0d46b2"
+            "100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
         ]
 
         # Add k contacts
-        for i in range(constants.k):
-            h = hashlib.sha384()
-            h.update('remote node %d' % i)
-            nodeID = h.digest()
-            self.assertEquals(nodeID, node_ids[i].decode('hex'))
-            contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 91824, self.protocol)
+        for nodeID in node_ids:
+            # self.assertEquals(nodeID, node_ids[i].decode('hex'))
+            contact = self.contact_manager.make_contact(nodeID.decode('hex'), '127.0.0.1', 9182, self.protocol)
             yield self.routingTable.addContact(contact)
-        self.failUnlessEqual(len(self.routingTable._buckets), 1)
-        self.failUnlessEqual(len(self.routingTable._buckets[0]._contacts), constants.k)
+        self.failUnlessEqual(len(self.routingTable._buckets), 2)
+        self.failUnlessEqual(len(self.routingTable._buckets[0]._contacts), 8)
+        self.failUnlessEqual(len(self.routingTable._buckets[1]._contacts), 2)
 
         #  try adding a contact who is further from us than the k'th known contact
-        h = hashlib.sha384()
-        h.update('yet another remote node!')
-        nodeID = h.digest()
-        contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 91824, self.protocol)
-        yield self.routingTable.addContact(contact)
-        self.failUnlessEqual(len(self.routingTable._buckets), 1)
-        self.failUnlessEqual(len(self.routingTable._buckets[0]._contacts), constants.k)
-        self.failIf(contact in self.routingTable._buckets[0]._contacts)
-
-        #  try adding a contact who is closer to us than the k'th known contact
-        h = hashlib.sha384()
-        h.update('yet another remote node')
-        nodeID = h.digest()
-        contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 91824, self.protocol)
+        nodeID = '020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'.decode('hex')
+        contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
+        self.assertFalse(self.routingTable._shouldSplit(self.routingTable._kbucketIndex(contact.id), contact.id))
         yield self.routingTable.addContact(contact)
         self.failUnlessEqual(len(self.routingTable._buckets), 2)
-        self.failUnlessEqual(len(self.routingTable._buckets[0]._contacts), 5)
-        self.failUnlessEqual(len(self.routingTable._buckets[1]._contacts), 4)
-        self.failIf(contact not in self.routingTable._buckets[1]._contacts)
+        self.failUnlessEqual(len(self.routingTable._buckets[0]._contacts), 8)
+        self.failUnlessEqual(len(self.routingTable._buckets[1]._contacts), 2)
+        self.failIf(contact in self.routingTable._buckets[0]._contacts)
+        self.failIf(contact in self.routingTable._buckets[1]._contacts)
 
 
 # class KeyErrorFixedTest(unittest.TestCase):

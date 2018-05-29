@@ -32,14 +32,11 @@ class Session(object):
     peers can connect to this peer.
     """
 
-    def __init__(self, blob_data_payment_rate, db_dir=None,
-                 node_id=None, peer_manager=None, dht_node_port=None,
-                 known_dht_nodes=None, peer_finder=None,
-                 hash_announcer=None, blob_dir=None,
-                 blob_manager=None, peer_port=None, use_upnp=True,
-                 rate_limiter=None, wallet=None,
-                 dht_node_class=node.Node, blob_tracker_class=None,
-                 payment_rate_manager_class=None, is_generous=True, external_ip=None, storage=None):
+    def __init__(self, blob_data_payment_rate, db_dir=None, node_id=None, peer_manager=None, dht_node_port=None,
+                 known_dht_nodes=None, peer_finder=None, hash_announcer=None, blob_dir=None, blob_manager=None,
+                 peer_port=None, use_upnp=True, rate_limiter=None, wallet=None, dht_node_class=node.Node,
+                 blob_tracker_class=None, payment_rate_manager_class=None, is_generous=True, external_ip=None,
+                 storage=None):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
         @param db_dir: The directory in which levelDB files should be stored

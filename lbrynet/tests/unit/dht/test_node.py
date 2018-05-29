@@ -85,7 +85,7 @@ class NodeContactTest(unittest.TestCase):
         h = hashlib.sha384()
         h.update('node1')
         contactID = h.digest()
-        contact = self.node.contact_manager.make_contact(contactID, '127.0.0.1', 91824, self.node._protocol)
+        contact = self.node.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.node._protocol)
         # Now add it...
         yield self.node.addContact(contact)
         # ...and request the closest nodes to it using FIND_NODE
@@ -99,7 +99,7 @@ class NodeContactTest(unittest.TestCase):
     def testAddSelfAsContact(self):
         """ Tests the node's behaviour when attempting to add itself as a contact """
         # Create a contact with the same ID as the local node's ID
-        contact = self.node.contact_manager.make_contact(self.node.node_id, '127.0.0.1', 91824, None)
+        contact = self.node.contact_manager.make_contact(self.node.node_id, '127.0.0.1', 9182, None)
         # Now try to add it
         yield self.node.addContact(contact)
         # ...and request the closest nodes to it using FIND_NODE
