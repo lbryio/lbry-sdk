@@ -36,7 +36,6 @@ def expand_peer(compact_peer_info):
     return (peer_node_id, host, port)
 
 
-
 def rpcmethod(func):
     """ Decorator to expose Node methods as remote procedure calls
 
@@ -132,6 +131,7 @@ class Node(MockKademliaHelper):
         self.port = udpPort
         self._change_token_lc = self.get_looping_call(self.change_token)
         self._refresh_node_lc = self.get_looping_call(self._refreshNode)
+        self._refresh_contacts_lc = self.get_looping_call(self._refreshContacts)
 
         # Create k-buckets (for storing contacts)
         if routingTableClass is None:
@@ -164,6 +164,7 @@ class Node(MockKademliaHelper):
         # stop LoopingCalls:
         yield self.safe_stop_looping_call(self._refresh_node_lc)
         yield self.safe_stop_looping_call(self._change_token_lc)
+        yield self.safe_stop_looping_call(self._refresh_contacts_lc)
         if self._listeningPort is not None:
             yield self._listeningPort.stopListening()
         self._listeningPort = None
@@ -283,6 +284,7 @@ class Node(MockKademliaHelper):
         self.safe_start_looping_call(self._change_token_lc, constants.tokenSecretChangeInterval)
         # Start refreshing k-buckets periodically, if necessary
         self.safe_start_looping_call(self._refresh_node_lc, constants.checkRefreshInterval)
+        self.safe_start_looping_call(self._refresh_contacts_lc, 60)
 
     @property
     def contacts(self):
@@ -664,20 +666,18 @@ class Node(MockKademliaHelper):
 
     def _refreshContacts(self):
         return defer.DeferredList(
-            [contact.ping() for contact in self.contacts], consumeErrors=True
+            [self._protocol._ping_queue.enqueue_maybe_ping(contact, delay=0) for contact in self.contacts]
         )
 
     def _refreshStoringPeers(self):
         storing_contacts = self._dataStore.getStoringContacts()
         return defer.DeferredList(
-            [self._protocol._ping_queue.enqueue_maybe_ping(contact) for contact in storing_contacts],
-            consumeErrors=True
+            [self._protocol._ping_queue.enqueue_maybe_ping(contact, delay=0) for contact in storing_contacts]
         )
 
     @defer.inlineCallbacks
     def _refreshRoutingTable(self):
-        nodeIDs = self._routingTable.getRefreshList(0, True)
-        yield self._refreshContacts()
+        nodeIDs = self._routingTable.getRefreshList(0, False)
         while nodeIDs:
             searchID = nodeIDs.pop()
             yield self.iterativeFindNode(searchID)
