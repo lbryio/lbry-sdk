@@ -68,7 +68,7 @@ class _Contact(object):
         """
         failures = self.failures
         now = self.getTime()
-        delay = constants.refreshTimeout / 4
+        delay = constants.checkRefreshInterval
 
         if failures:
             if self.lastReplied and len(failures) >= 2 and self.lastReplied < failures[-2]:
