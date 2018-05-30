@@ -30,7 +30,7 @@ HASH_ANNOUNCER_COMPONENT = "hashAnnouncer"
 STREAM_IDENTIFIER_COMPONENT = "streamIdentifier"
 FILE_MANAGER_COMPONENT = "fileManager"
 QUERY_HANDLER_COMPONENT = "queryHandler"
-SERVER_COMPONENT = "server"
+SERVER_COMPONENT = "peerProtocolServer"
 REFLECTOR_COMPONENT = "reflector"
 
 
@@ -305,16 +305,20 @@ class FileManager(Component):
         yield self.file_manager.stop()
 
 
-class QueryHandler(Component):
-    component_name = QUERY_HANDLER_COMPONENT
+class PeerProtocolServer(Component):
+    component_name = SERVER_COMPONENT
     depends_on = [SESSION_COMPONENT]
 
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
-        self.queryHandlers = {}
+        self.lbry_server_port = None
 
+    @defer.inlineCallbacks
     def setup(self):
+        query_handlers = {}
+        peer_port = GCS('peer_port')
         session = self.component_manager.get_component(SESSION_COMPONENT).session
+
         handlers = [
             BlobRequestHandlerFactory(
                 session.blob_manager,
@@ -327,25 +331,7 @@ class QueryHandler(Component):
 
         for handler in handlers:
             query_id = handler.get_primary_query_identifier()
-            self.queryHandlers[query_id] = handler
-
-    def stop(self):
-        pass
-
-
-class Server(Component):
-    component_name = SERVER_COMPONENT
-    depends_on = [QUERY_HANDLER_COMPONENT, SESSION_COMPONENT]
-
-    def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
-        self.lbry_server_port = None
-
-    @defer.inlineCallbacks
-    def setup(self):
-        peer_port = GCS('peer_port')
-        session = self.component_manager.get_component(SESSION_COMPONENT).session
-        query_handlers = self.component_manager.get_component(QUERY_HANDLER_COMPONENT).queryHandlers
+            query_handlers[query_id] = handler
 
         if peer_port is not None:
             server_factory = ServerProtocolFactory(session.rate_limiter, query_handlers, session.peer_manager)
