@@ -27,7 +27,6 @@ from lbryschema.decode import smart_decode
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet import conf
 from lbrynet.reflector import reupload
-from lbrynet.reflector import ServerFactory as reflector_server_factory
 from lbrynet.core.log_support import configure_loggly_handler
 from lbrynet.daemon.Component import ComponentManager
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
@@ -39,7 +38,6 @@ from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.core.looping_call_manager import LoopingCallManager
-from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
 from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.core.Error import NullFundsError, NegativeFundsError
@@ -182,10 +180,7 @@ class Daemon(AuthJSONRPCServer):
         self.max_key_fee = conf.settings['max_key_fee']
         self.disable_max_key_fee = conf.settings['disable_max_key_fee']
         self.download_timeout = conf.settings['download_timeout']
-        self.run_reflector_server = conf.settings['run_reflector_server']
         self.delete_blobs_on_remove = conf.settings['delete_blobs_on_remove']
-        self.peer_port = conf.settings['peer_port']
-        self.reflector_port = conf.settings['reflector_port']
         self.auto_renew_claim_height_delta = conf.settings['auto_renew_claim_height_delta']
 
         self.startup_status = STARTUP_STAGES[0]
@@ -204,7 +199,6 @@ class Daemon(AuthJSONRPCServer):
 
         self.wallet_user = None
         self.wallet_password = None
-        self.query_handlers = {}
         self.waiting_on = {}
         self.streams = {}
         self.exchange_rate_manager = ExchangeRateManager()
@@ -230,16 +224,11 @@ class Daemon(AuthJSONRPCServer):
 
         yield self._initial_setup()
         yield self.component_manager.setup()
-        self.startup_status = STARTUP_STAGES[2]
         self.session = self.component_manager.get_component("session").session
         yield self._check_wallet_locked()
         yield self._start_analytics()
         self.sd_identifier = self.component_manager.get_component("streamIdentifier").sd_identifier
-        self.startup_status = STARTUP_STAGES[3]
         self.file_manager = self.component_manager.get_component("fileManager").file_manager
-        # yield self._setup_query_handlers()
-        self.query_handlers = self.component_manager.get_component("queryHandler").queryHandlers
-        # yield self._setup_server()
         log.info("Starting balance: " + str(self.session.wallet.get_balance()))
         self.announced_startup = True
         self.startup_status = STARTUP_STAGES[5]
@@ -289,70 +278,6 @@ class Daemon(AuthJSONRPCServer):
                 log.info("Failed to renew claim at outpoint:%s, reason:%s",
                          outpoint, result['reason'])
 
-    def _start_server(self):
-        if self.peer_port is not None:
-            server_factory = ServerProtocolFactory(self.session.rate_limiter,
-                                                   self.query_handlers,
-                                                   self.session.peer_manager)
-
-            try:
-                log.info("Peer protocol listening on TCP %d", self.peer_port)
-                self.lbry_server_port = reactor.listenTCP(self.peer_port, server_factory)
-            except error.CannotListenError as e:
-                import traceback
-                log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for"
-                          " more details.", self.peer_port)
-                log.error("%s", traceback.format_exc())
-                raise ValueError("%s lbrynet may already be running on your computer." % str(e))
-        return defer.succeed(True)
-
-    def _start_reflector(self):
-        if self.run_reflector_server:
-            log.info("Starting reflector server")
-            if self.reflector_port is not None:
-                reflector_factory = reflector_server_factory(
-                    self.session.peer_manager,
-                    self.session.blob_manager,
-                    self.file_manager
-                )
-                try:
-                    self.reflector_server_port = reactor.listenTCP(self.reflector_port,
-                                                                   reflector_factory)
-                    log.info('Started reflector on port %s', self.reflector_port)
-                except error.CannotListenError as e:
-                    log.exception("Couldn't bind reflector to port %d", self.reflector_port)
-                    raise ValueError(
-                        "{} lbrynet may already be running on your computer.".format(e))
-        return defer.succeed(True)
-
-    def _stop_reflector(self):
-        if self.run_reflector_server:
-            log.info("Stopping reflector server")
-            try:
-                if self.reflector_server_port is not None:
-                    self.reflector_server_port, p = None, self.reflector_server_port
-                    return defer.maybeDeferred(p.stopListening)
-            except AttributeError:
-                return defer.succeed(True)
-        return defer.succeed(True)
-
-    def _stop_server(self):
-        try:
-            if self.lbry_server_port is not None:
-                self.lbry_server_port, old_port = None, self.lbry_server_port
-                log.info('Stop listening on port %s', old_port.port)
-                return defer.maybeDeferred(old_port.stopListening)
-            else:
-                return defer.succeed(True)
-        except AttributeError:
-            return defer.succeed(True)
-
-    def _setup_server(self):
-        self.startup_status = STARTUP_STAGES[4]
-        d = self._start_server()
-        d.addCallback(lambda _: self._start_reflector())
-        return d
-
     @staticmethod
     def _already_shutting_down(sig_num, frame):
         log.info("Already shutting down")
@@ -375,13 +300,8 @@ class Daemon(AuthJSONRPCServer):
         if self.analytics_manager:
             self.analytics_manager.shutdown()
 
-        d = self._stop_server()
-        d.addErrback(log.fail(), 'Failure while shutting down')
-        d.addCallback(lambda _: self._stop_reflector())
-        d.addErrback(log.fail(), 'Failure while shutting down')
-        if self.session is not None:
-            d.addCallback(lambda _: self.component_manager.stop())
-            d.addCallback(lambda _: self.session.shut_down())
+        if self.component_manager is not None:
+            d = self.component_manager.stop()
             d.addErrback(log.fail(), 'Failure while shutting down')
         return d
 
