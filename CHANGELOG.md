@@ -61,6 +61,7 @@ at anytime.
   * integration tests for bootstrapping the dht
   * configurable `concurrent_announcers` and `s3_headers_depth` settings
   * `peer_ping` command
+  * `--sort` option in `file_list`
   * linux distro and desktop name added to analytics
   * certifi module for Twisted SSL verification on Windows
 

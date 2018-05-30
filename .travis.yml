@@ -35,6 +35,7 @@ before_install:
 install:
   - pip install -U pip==9.0.3
   - pip install -r requirements.txt
+  - pip install -r requirements_testing.txt
   - pip install .
 
 script:

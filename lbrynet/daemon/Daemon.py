@@ -97,6 +97,9 @@ CONNECTION_MESSAGES = {
 SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
 
+DIRECTION_ASCENDING = 'asc'
+DIRECTION_DESCENDING = 'desc'
+DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
 
 class IterableContainer(object):
     def __iter__(self):
@@ -944,6 +947,28 @@ class Daemon(AuthJSONRPCServer):
         log.debug("Collected %i lbry files", len(lbry_files))
         defer.returnValue(lbry_files)
 
+    def _sort_lbry_files(self, lbry_files, sort_by):
+        for field, direction in sort_by:
+            is_reverse = direction == DIRECTION_DESCENDING
+            key_getter = create_key_getter(field) if field else None
+            lbry_files = sorted(lbry_files, key=key_getter, reverse=is_reverse)
+        return lbry_files
+
+    def _parse_lbry_files_sort(self, sort):
+        """
+        Given a sort string like 'file_name, desc' or 'points_paid',
+        parse the string into a tuple of (field, direction).
+        Direction defaults to ascending.
+        """
+
+        pieces = [p.strip() for p in sort.split(',')]
+        field = pieces.pop(0)
+        direction = DIRECTION_ASCENDING
+        if pieces and pieces[0] in DIRECTIONS:
+            direction = pieces[0]
+        return field, direction
+
+
     def _get_single_peer_downloader(self):
         downloader = SinglePeerDownloader()
         downloader.setup(self.session.wallet)
@@ -1363,7 +1388,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    def jsonrpc_file_list(self, **kwargs):
+    def jsonrpc_file_list(self, sort=None, **kwargs):
         """
         List files limited by optional filters
 
@@ -1371,7 +1396,7 @@ class Daemon(AuthJSONRPCServer):
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
                       [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
-                      [--claim_name=<claim_name>] [--full_status]
+                      [--claim_name=<claim_name>] [--full_status] [--sort=<sort_method>...]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1388,6 +1413,9 @@ class Daemon(AuthJSONRPCServer):
             --claim_name=<claim_name>              : (str) get file with matching claim name
             --full_status                          : (bool) full status, populate the
                                                      'message' and 'size' fields
+            --sort=<sort_method>                   : (str) sort by any property, like 'file_name'
+                                                     or 'metadata.author'; to specify direction
+                                                     append ',asc' or ',desc'
 
         Returns:
             (list) List of files
@@ -1424,6 +1452,9 @@ class Daemon(AuthJSONRPCServer):
         """
 
         result = yield self._get_lbry_files(return_json=True, **kwargs)
+        if sort:
+            sort_by = [self._parse_lbry_files_sort(s) for s in sort]
+            result = self._sort_lbry_files(result, sort_by)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
@@ -3398,3 +3429,16 @@ def get_blob_payment_rate_manager(session, payment_rate_manager=None):
             payment_rate_manager = rate_managers[payment_rate_manager]
             log.info("Downloading blob with rate manager: %s", payment_rate_manager)
     return payment_rate_manager or session.payment_rate_manager
+
+
+def create_key_getter(field):
+    search_path = field.split('.')
+    def key_getter(value):
+        for key in search_path:
+            try:
+                value = value[key]
+            except KeyError as e:
+                errmsg = 'Failed to get "{}", key "{}" was not found.'
+                raise Exception(errmsg.format(field, e.message))
+        return value
+    return key_getter
