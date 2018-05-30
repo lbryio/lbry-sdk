@@ -9,7 +9,7 @@ class ComponentType(type):
     def __new__(mcs, name, bases, newattrs):
         klass = type.__new__(mcs, name, bases, newattrs)
         if name != "Component":
-            ComponentManager.default_component_classes[name] = klass
+            ComponentManager.default_component_classes[klass.component_name] = klass
         return klass
 
 
