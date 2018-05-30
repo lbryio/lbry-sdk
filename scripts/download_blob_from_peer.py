@@ -14,7 +14,7 @@ from lbrynet.core import log_support, Wallet, Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.StreamDescriptor import BlobStreamDescriptorReader
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.dht.hashannouncer import DummyHashAnnouncer
+from lbrynet.database.storage import SQLiteStorage
 
 log = logging.getLogger()
 
@@ -45,13 +45,13 @@ def main(args=None):
 @defer.inlineCallbacks
 def download_it(peer, timeout, blob_hash):
     tmp_dir = yield threads.deferToThread(tempfile.mkdtemp)
-    announcer = DummyHashAnnouncer()
-    tmp_blob_manager = DiskBlobManager(announcer, tmp_dir, tmp_dir)
+    storage = SQLiteStorage(tmp_dir, reactor)
+    yield storage.setup()
+    tmp_blob_manager = DiskBlobManager(tmp_dir, storage)
 
     config = {'auto_connect': True}
     if conf.settings['lbryum_wallet_dir']:
         config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
-    storage = Wallet.InMemoryStorage()
     wallet = Wallet.LBRYumWallet(storage, config)
 
     downloader = SinglePeerDownloader()
@@ -76,8 +76,9 @@ def download_it(peer, timeout, blob_hash):
                         pass
                     if info:
                         break
-                    time.sleep(
-                        0.1)  # there's some kind of race condition where it sometimes doesnt write the blob to disk in time
+
+                    # there's some kind of race condition where it sometimes doesnt write the blob to disk in time
+                    time.sleep(0.1)
 
                 if info is not None:
                     pprint(info)

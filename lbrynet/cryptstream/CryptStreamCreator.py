@@ -1,12 +1,12 @@
 """
 Utility for creating Crypt Streams, which are encrypted blobs and associated metadata.
 """
-
+import os
 import logging
+
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from twisted.internet import interfaces, defer
 from zope.interface import implements
-from Crypto import Random
-from Crypto.Cipher import AES
 from lbrynet.cryptstream.CryptBlob import CryptStreamBlobMaker
 
 
@@ -101,13 +101,13 @@ class CryptStreamCreator(object):
     @staticmethod
     def random_iv_generator():
         while 1:
-            yield Random.new().read(AES.block_size)
+            yield os.urandom(AES.block_size / 8)
 
     def setup(self):
         """Create the symmetric key if it wasn't provided"""
 
         if self.key is None:
-            self.key = Random.new().read(AES.block_size)
+            self.key = os.urandom(AES.block_size / 8)
 
         return defer.succeed(True)
 

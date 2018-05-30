@@ -1,6 +1,6 @@
 import mock
 from twisted.trial import unittest
-
+from lbrynet import conf
 from lbrynet.tests.mocks import mock_conf_settings
 from lbrynet.daemon.auth import server
 
@@ -10,6 +10,7 @@ class AuthJSONRPCServerTest(unittest.TestCase):
     # and add useful general utilities like this
     # onto it.
     def setUp(self):
+        conf.initialize_settings(False)
         self.server = server.AuthJSONRPCServer(use_authentication=False)
 
     def test_get_server_port(self):

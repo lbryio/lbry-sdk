@@ -4,11 +4,9 @@ import os
 import platform
 import shutil
 import sys
-import random
 import unittest
 
-from Crypto import Random
-from Crypto.Hash import MD5
+from hashlib import md5
 from lbrynet import conf
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.core.Session import Session
@@ -22,7 +20,6 @@ from twisted.internet import defer, threads, task
 from twisted.trial.unittest import TestCase
 from twisted.python.failure import Failure
 
-from lbrynet.dht.node import Node
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter, RateLimiter
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -99,9 +96,6 @@ class LbryUploader(object):
         from twisted.internet import reactor
         self.reactor = reactor
         logging.debug("Starting the uploader")
-        Random.atfork()
-        r = random.Random()
-        r.seed("start_lbry_uploader")
         wallet = FakeWallet()
         peer_manager = PeerManager()
         peer_finder = FakePeerFinder(5553, peer_manager, 1)
@@ -115,7 +109,7 @@ class LbryUploader(object):
             node_id="abcd", peer_finder=peer_finder, hash_announcer=hash_announcer,
             peer_port=5553, dht_node_port=4445, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
-            dht_node_class=Node, is_generous=self.is_generous, external_ip="127.0.0.1")
+            dht_node_class=FakeNode, is_generous=self.is_generous, external_ip="127.0.0.1")
         self.lbry_file_manager = EncryptedFileManager(self.session, self.sd_identifier)
         if self.ul_rate_limit is not None:
             self.session.rate_limiter.set_ul_limit(self.ul_rate_limit)
@@ -192,10 +186,6 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
 
     logging.debug("Starting the uploader")
 
-    Random.atfork()
-
-    r = random.Random()
-    r.seed("start_lbry_reuploader")
 
     wallet = FakeWallet()
     peer_port = 5553 + n
@@ -207,7 +197,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
 
     db_dir, blob_dir = mk_db_and_blob_dir()
     session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
-                      node_id="abcd" + str(n), dht_node_port=4446,
+                      node_id="abcd" + str(n), dht_node_port=4446, dht_node_class=FakeNode,
                       peer_finder=peer_finder, hash_announcer=hash_announcer,
                       blob_dir=blob_dir, peer_port=peer_port,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
@@ -298,7 +288,6 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
 
     logging.debug("Starting the uploader")
 
-    Random.atfork()
 
     wallet = FakeWallet()
     peer_manager = PeerManager()
@@ -315,7 +304,7 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
     db_dir, blob_dir = mk_db_and_blob_dir()
 
     session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, node_id="efgh",
-                      peer_finder=peer_finder, hash_announcer=hash_announcer,
+                      peer_finder=peer_finder, hash_announcer=hash_announcer, dht_node_class=FakeNode,
                       blob_dir=blob_dir, peer_port=peer_port, dht_node_port=4446,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                       blob_tracker_class=DummyBlobAvailabilityTracker,
@@ -497,7 +486,7 @@ class TestTransfer(TestCase):
             blob_dir=blob_dir, peer_port=5553, dht_node_port=4445,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
-            dht_node_class=Node, is_generous=self.is_generous, external_ip="127.0.0.1")
+            dht_node_class=FakeNode, is_generous=self.is_generous, external_ip="127.0.0.1")
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, sd_identifier)
@@ -516,7 +505,7 @@ class TestTransfer(TestCase):
 
         def check_md5_sum():
             f = open(os.path.join(db_dir, 'test_file'))
-            hashsum = MD5.new()
+            hashsum = md5()
             hashsum.update(f.read())
             self.assertEqual(hashsum.hexdigest(), "4ca2aafb4101c1e42235aad24fbb83be")
 
@@ -582,7 +571,7 @@ class TestTransfer(TestCase):
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, node_id="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
-            blob_dir=blob_dir, peer_port=5553, dht_node_port=4445,
+            blob_dir=blob_dir, peer_port=5553, dht_node_port=4445, dht_node_class=FakeNode,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
             is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1], external_ip="127.0.0.1")
@@ -662,7 +651,7 @@ class TestTransfer(TestCase):
 
         db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
-                               node_id="abcd", peer_finder=peer_finder, dht_node_port=4445,
+                               node_id="abcd", peer_finder=peer_finder, dht_node_port=4445, dht_node_class=FakeNode,
                                hash_announcer=hash_announcer, blob_dir=blob_dir, peer_port=5553,
                                use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                                blob_tracker_class=DummyBlobAvailabilityTracker,
@@ -689,7 +678,7 @@ class TestTransfer(TestCase):
 
         def check_md5_sum():
             f = open(os.path.join(db_dir, 'test_file'))
-            hashsum = MD5.new()
+            hashsum = md5()
             hashsum.update(f.read())
             self.assertEqual(hashsum.hexdigest(), "4ca2aafb4101c1e42235aad24fbb83be")
 
@@ -769,7 +758,7 @@ class TestTransfer(TestCase):
         sd_identifier = StreamDescriptorIdentifier()
 
         db_dir, blob_dir = mk_db_and_blob_dir()
-        self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
+        self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, dht_node_class=FakeNode,
                                node_id="abcd", peer_finder=peer_finder, dht_node_port=4445,
                                hash_announcer=hash_announcer, blob_dir=blob_dir,
                                peer_port=5553, use_upnp=False, rate_limiter=rate_limiter,
@@ -812,7 +801,7 @@ class TestTransfer(TestCase):
 
         def check_md5_sum():
             f = open('test_file')
-            hashsum = MD5.new()
+            hashsum = md5()
             hashsum.update(f.read())
             self.assertEqual(hashsum.hexdigest(), "e5941d615f53312fd66638239c1f90d5")
 

@@ -105,3 +105,6 @@ class StratumClient(ClientFactory):
 
     def blockchain_address_get_history(self, address):
         return self._rpc('blockchain.address.get_history', [address])
+
+    def blockchain_block_get_server_height(self):
+        return self._rpc('blockchain.block.get_server_height', [])

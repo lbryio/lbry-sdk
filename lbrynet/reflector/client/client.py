@@ -55,6 +55,16 @@ class EncryptedFileReflectorClient(Protocol):
             d.addCallback(lambda _: self.send_next_request())
             d.addErrback(self.response_failure_handler)
 
+    def store_result(self, result):
+        if not self.needed_blobs or len(self.reflected_blobs) == len(self.needed_blobs):
+            reflected = True
+        else:
+            reflected = False
+
+        d = self.blob_manager.storage.update_reflected_stream(self.sd_hash, self.transport.getPeer().host, reflected)
+        d.addCallback(lambda _: result)
+        return d
+
     def connectionLost(self, reason):
         # make sure blob file readers get closed
         self.set_not_uploading()
@@ -68,15 +78,17 @@ class EncryptedFileReflectorClient(Protocol):
             else:
                 log.info('Finished sending reflector %i blobs for %s',
                          len(self.reflected_blobs), self.stream_descriptor)
-            self.factory.finished_deferred.callback(self.reflected_blobs)
+            result = self.reflected_blobs
         elif reason.check(error.ConnectionLost):
             log.warning("Stopped reflecting %s after sending %i blobs",
                         self.stream_descriptor, len(self.reflected_blobs))
-            self.factory.finished_deferred.callback(self.reflected_blobs)
+            result = self.reflected_blobs
         else:
             log.info('Reflector finished for %s: %s', self.stream_descriptor,
                      reason)
-            self.factory.finished_deferred.callback(reason)
+            result = reason
+        self.factory.finished_deferred.addCallback(self.store_result)
+        self.factory.finished_deferred.callback(result)
 
     #  IConsumer stuff
 

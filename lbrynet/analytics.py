@@ -1,8 +1,8 @@
 import collections
 import logging
+
+import treq
 from twisted.internet import defer, task
-from requests import auth
-from txrequests import Session
 
 from lbrynet import conf
 from lbrynet.core import looping_call_manager, utils, system_info
@@ -185,7 +185,7 @@ class Manager(object):
 
     @staticmethod
     def _make_context(platform, wallet):
-        return {
+        context = {
             'app': {
                 'name': 'lbrynet',
                 'version': platform['lbrynet_version'],
@@ -206,6 +206,10 @@ class Manager(object):
                 'version': '1.0.0'
             },
         }
+        if 'desktop' in platform and 'distro' in platform:
+            context['os']['desktop'] = platform['desktop']
+            context['os']['distro'] = platform['distro']
+        return context
 
     @staticmethod
     def _if_deferred(maybe_deferred, callback, *args, **kwargs):
@@ -216,8 +220,8 @@ class Manager(object):
 
 
 class Api(object):
-    def __init__(self, session, url, write_key, enabled):
-        self.session = session
+    def __init__(self, cookies, url, write_key, enabled):
+        self.cookies = cookies
         self.url = url
         self._write_key = write_key
         self._enabled = enabled
@@ -232,14 +236,17 @@ class Api(object):
         #   timeout will have expired.
         #
         # by forcing the connection to close, we will disable the keep-alive.
+
+        def update_cookies(response):
+            self.cookies.update(response.cookies())
+            return response
+
         assert endpoint[0] == '/'
-        headers = {"Connection": "close"}
-        return self.session.post(
-            self.url + endpoint,
-            json=data,
-            auth=auth.HTTPBasicAuth(self._write_key, ''),
-            headers=headers
-        )
+        headers = {b"Connection": b"close"}
+        d = treq.post(self.url + endpoint, auth=(self._write_key, ''), json=data,
+                      headers=headers, cookies=self.cookies)
+        d.addCallback(update_cookies)
+        return d
 
     def track(self, event):
         """Send a single tracking event"""
@@ -257,11 +264,10 @@ class Api(object):
     @classmethod
     def new_instance(cls, enabled=None):
         """Initialize an instance using values from the configuration"""
-        session = Session()
         if enabled is None:
             enabled = conf.settings['share_usage_data']
         return cls(
-            session,
+            {},
             conf.settings['ANALYTICS_ENDPOINT'],
             utils.deobfuscate(conf.settings['ANALYTICS_TOKEN']),
             enabled,

@@ -85,7 +85,7 @@ class StorageTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def setUp(self):
-        conf.initialize_settings()
+        conf.initialize_settings(False)
         self.db_dir = tempfile.mkdtemp()
         self.storage = SQLiteStorage(self.db_dir)
         yield self.storage.setup()
@@ -161,6 +161,25 @@ class BlobStorageTests(StorageTest):
         yield self.storage.delete_blobs_from_db(blob_hashes)
         blob_hashes = yield self.storage.get_all_blob_hashes()
         self.assertEqual(blob_hashes, [])
+
+
+class SupportsStorageTests(StorageTest):
+    @defer.inlineCallbacks
+    def test_supports_storage(self):
+        claim_ids = [random_lbry_hash() for _ in range(10)]
+        random_supports = [{"txid": random_lbry_hash(), "nout":i, "address": "addr{}".format(i), "amount": i}
+                    for i in range(20)]
+        expected_supports = {}
+        for idx, claim_id in enumerate(claim_ids):
+            yield self.storage.save_supports(claim_id, random_supports[idx*2:idx*2+2])
+            for random_support in random_supports[idx*2:idx*2+2]:
+                random_support['claim_id'] = claim_id
+                expected_supports.setdefault(claim_id, []).append(random_support)
+        supports = yield self.storage.get_supports(claim_ids[0])
+        self.assertEqual(supports, expected_supports[claim_ids[0]])
+        all_supports = yield self.storage.get_supports(*claim_ids)
+        for support in all_supports:
+            self.assertIn(support, expected_supports[support['claim_id']])
 
 
 class StreamStorageTests(StorageTest):

@@ -5,11 +5,13 @@ from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
 from lbrynet.tests.mocks import mock_conf_settings
 
-from Crypto import Random
-from Crypto.Cipher import AES
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
 import random
 import string
 import StringIO
+import os
+
+AES_BLOCK_SIZE_BYTES = AES.block_size / 8
 
 class MocBlob(object):
     def __init__(self):
@@ -44,8 +46,8 @@ class TestCryptBlob(unittest.TestCase):
         # max blob size is 2*2**20 -1 ( -1 due to required padding in the end )
         blob = MocBlob()
         blob_num = 0
-        key = Random.new().read(AES.block_size)
-        iv = Random.new().read(AES.block_size)
+        key = os.urandom(AES_BLOCK_SIZE_BYTES)
+        iv = os.urandom(AES_BLOCK_SIZE_BYTES)
         maker = CryptBlob.CryptStreamBlobMaker(key, iv, blob_num, blob)
         write_size = size_of_data
         string_to_encrypt = random_string(size_of_data)
@@ -54,7 +56,7 @@ class TestCryptBlob(unittest.TestCase):
         done, num_bytes = maker.write(string_to_encrypt)
         yield maker.close()
         self.assertEqual(size_of_data, num_bytes)
-        expected_encrypted_blob_size = ((size_of_data / AES.block_size) + 1) * AES.block_size
+        expected_encrypted_blob_size = ((size_of_data / AES_BLOCK_SIZE_BYTES) + 1) * AES_BLOCK_SIZE_BYTES
         self.assertEqual(expected_encrypted_blob_size, len(blob.data))
 
         if size_of_data < MAX_BLOB_SIZE-1:

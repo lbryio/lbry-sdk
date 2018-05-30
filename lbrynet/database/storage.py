@@ -157,6 +157,13 @@ class SQLiteStorage(object):
                 amount integer not null,
                 address text not null
             );
+            
+            create table if not exists reflected_stream (
+                sd_hash text not null,
+                reflector_address text not null,
+                timestamp integer,
+                primary key (sd_hash, reflector_address)
+            );
     """
 
     def __init__(self, db_dir, reactor=None):
@@ -545,7 +552,7 @@ class SQLiteStorage(object):
                 )
         return self.db.runInteraction(_save_support)
 
-    def get_supports(self, claim_id):
+    def get_supports(self, *claim_ids):
         def _format_support(outpoint, supported_id, amount, address):
             return {
                 "txid": outpoint.split(":")[0],
@@ -556,10 +563,15 @@ class SQLiteStorage(object):
             }
 
         def _get_supports(transaction):
+            if len(claim_ids) == 1:
+                bind = "=?"
+            else:
+                bind = "in ({})".format(','.join('?' for _ in range(len(claim_ids))))
             return [
                 _format_support(*support_info)
                 for support_info in transaction.execute(
-                    "select * from support where claim_id=?", (claim_id, )
+                    "select * from support where claim_id {}".format(bind),
+                    tuple(claim_ids)
                 ).fetchall()
             ]
 
@@ -676,51 +688,82 @@ class SQLiteStorage(object):
 
     @defer.inlineCallbacks
     def get_content_claim(self, stream_hash, include_supports=True):
-        def _get_content_claim(transaction):
-            claim_id = transaction.execute(
-                "select claim.claim_outpoint from content_claim "
-                "inner join claim on claim.claim_outpoint=content_claim.claim_outpoint and content_claim.stream_hash=? "
-                "order by claim.rowid desc", (stream_hash, )
+        def _get_claim_from_stream_hash(transaction):
+            claim_info = transaction.execute(
+                "select c.*, "
+                "case when c.channel_claim_id is not null then "
+                "(select claim_name from claim where claim_id==c.channel_claim_id) "
+                "else null end as channel_name from content_claim "
+                "inner join claim c on c.claim_outpoint=content_claim.claim_outpoint "
+                "and content_claim.stream_hash=? order by c.rowid desc", (stream_hash,)
             ).fetchone()
-            if not claim_id:
+            if not claim_info:
                 return None
-            return claim_id[0]
+            channel_name = claim_info[-1]
+            result = _format_claim_response(*claim_info[:-1])
+            if channel_name:
+                result['channel_name'] = channel_name
+            return result
 
-        content_claim_outpoint = yield self.db.runInteraction(_get_content_claim)
-        result = None
-        if content_claim_outpoint:
-            result = yield self.get_claim(content_claim_outpoint, include_supports)
+        result = yield self.db.runInteraction(_get_claim_from_stream_hash)
+        if result and include_supports:
+            supports = yield self.get_supports(result['claim_id'])
+            result['supports'] = supports
+            result['effective_amount'] = float(
+                sum([support['amount'] for support in supports]) + result['amount']
+            )
         defer.returnValue(result)
 
     @defer.inlineCallbacks
-    def get_claim(self, claim_outpoint, include_supports=True):
-        def _claim_response(outpoint, claim_id, name, amount, height, serialized, channel_id, address, claim_sequence):
-            r = {
-                "name": name,
-                "claim_id": claim_id,
-                "address": address,
-                "claim_sequence": claim_sequence,
-                "value": ClaimDict.deserialize(serialized.decode('hex')).claim_dict,
-                "height": height,
-                "amount": float(Decimal(amount) / Decimal(COIN)),
-                "nout": int(outpoint.split(":")[1]),
-                "txid": outpoint.split(":")[0],
-                "channel_claim_id": channel_id,
-                "channel_name": None
-            }
-            return r
+    def get_claims_from_stream_hashes(self, stream_hashes, include_supports=True):
+        def _batch_get_claim(transaction):
+            results = {}
+            bind = "({})".format(','.join('?' for _ in range(len(stream_hashes))))
+            claim_infos = transaction.execute(
+                "select content_claim.stream_hash, c.*, "
+                "case when c.channel_claim_id is not null then "
+                "(select claim_name from claim where claim_id==c.channel_claim_id) "
+                "else null end as channel_name from content_claim "
+                "inner join claim c on c.claim_outpoint=content_claim.claim_outpoint "
+                "and content_claim.stream_hash in {} order by c.rowid desc".format(bind),
+                tuple(stream_hashes)
+            ).fetchall()
+            for claim_info in claim_infos:
+                channel_name = claim_info[-1]
+                stream_hash = claim_info[0]
+                result = _format_claim_response(*claim_info[1:-1])
+                if channel_name:
+                    result['channel_name'] = channel_name
+                results[stream_hash] = result
+            return results
 
+        claims = yield self.db.runInteraction(_batch_get_claim)
+        if include_supports:
+            all_supports = {}
+            for support in (yield self.get_supports(*[claim['claim_id'] for claim in claims.values()])):
+                all_supports.setdefault(support['claim_id'], []).append(support)
+            for stream_hash in claims.keys():
+                claim = claims[stream_hash]
+                supports = all_supports.get(claim['claim_id'], [])
+                claim['supports'] = supports
+                claim['effective_amount'] = float(
+                    sum([support['amount'] for support in supports]) + claim['amount']
+                )
+                claims[stream_hash] = claim
+        defer.returnValue(claims)
+
+    @defer.inlineCallbacks
+    def get_claim(self, claim_outpoint, include_supports=True):
         def _get_claim(transaction):
-            claim_info = transaction.execute(
-                "select * from claim where claim_outpoint=?", (claim_outpoint, )
-            ).fetchone()
-            result = _claim_response(*claim_info)
-            if result['channel_claim_id']:
-                channel_name_result = transaction.execute(
-                    "select claim_name from claim where claim_id=?", (result['channel_claim_id'], )
-                ).fetchone()
-                if channel_name_result:
-                    result['channel_name'] = channel_name_result[0]
+            claim_info = transaction.execute("select c.*, "
+                                             "case when c.channel_claim_id is not null then "
+                                             "(select claim_name from claim where claim_id==c.channel_claim_id) "
+                                             "else null end as channel_name from claim c where claim_outpoint = ?",
+                                             (claim_outpoint,)).fetchone()
+            channel_name = claim_info[-1]
+            result = _format_claim_response(*claim_info[:-1])
+            if channel_name:
+                result['channel_name'] = channel_name
             return result
 
         result = yield self.db.runInteraction(_get_claim)
@@ -765,3 +808,42 @@ class SQLiteStorage(object):
                     (height, outpoint)
                 )
         return self.db.runInteraction(_save_claim_heights)
+
+    # # # # # # # # # reflector functions # # # # # # # # #
+
+    def update_reflected_stream(self, sd_hash, reflector_address, success=True):
+        if success:
+            return self.db.runOperation(
+                "insert or replace into reflected_stream values (?, ?, ?)",
+                (sd_hash, reflector_address, self.clock.seconds())
+            )
+        return self.db.runOperation(
+            "delete from reflected_stream where sd_hash=? and reflector_address=?",
+            (sd_hash, reflector_address)
+        )
+
+    def get_streams_to_re_reflect(self):
+        return self.run_and_return_list(
+            "select s.sd_hash from stream s "
+            "left outer join reflected_stream r on s.sd_hash=r.sd_hash "
+            "where r.timestamp is null or r.timestamp < ?",
+            self.clock.seconds() - conf.settings['auto_re_reflect_interval']
+        )
+
+
+# Helper functions
+def _format_claim_response(outpoint, claim_id, name, amount, height, serialized, channel_id, address, claim_sequence):
+    r = {
+        "name": name,
+        "claim_id": claim_id,
+        "address": address,
+        "claim_sequence": claim_sequence,
+        "value": ClaimDict.deserialize(serialized.decode('hex')).claim_dict,
+        "height": height,
+        "amount": float(Decimal(amount) / Decimal(COIN)),
+        "nout": int(outpoint.split(":")[1]),
+        "txid": outpoint.split(":")[0],
+        "channel_claim_id": channel_id,
+        "channel_name": None
+    }
+    return r

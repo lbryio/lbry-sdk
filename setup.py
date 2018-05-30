@@ -17,18 +17,18 @@ from setuptools import setup, find_packages
 requires = [
     'Twisted',
     'appdirs',
+    'distro',
     'base58',
     'envparse',
     'jsonrpc',
-    'lbryschema==0.0.15',
-    'lbryum==3.2.1',
+    'lbryschema==0.0.16rc2',
+    'lbryum==3.2.2rc1',
     'miniupnpc',
-    'pycrypto',
     'pyyaml',
     'requests',
-    'txrequests',
     'txJSON-RPC',
     'zope.interface',
+    'treq',
     'docopt'
 ]
 
