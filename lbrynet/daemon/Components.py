@@ -14,6 +14,7 @@ from lbrynet.dht import node, hashannouncer
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
+from lbrynet.reflector import ServerFactory as reflector_server_factory
 
 from lbrynet.core.utils import generate_id
 
@@ -29,7 +30,8 @@ HASH_ANNOUNCER_COMPONENT = "hashAnnouncer"
 STREAM_IDENTIFIER_COMPONENT = "streamIdentifier"
 FILE_MANAGER_COMPONENT = "fileManager"
 QUERY_HANDLER_COMPONENT = "queryHandler"
-SERVER_COMPONENET = "server"
+SERVER_COMPONENT = "server"
+REFLECTOR_COMPONENT = "reflector"
 
 
 class ConfigSettings(object):
@@ -332,24 +334,25 @@ class QueryHandler(Component):
 
 
 class Server(Component):
-    component_name = SERVER_COMPONENET
+    component_name = SERVER_COMPONENT
     depends_on = [QUERY_HANDLER_COMPONENT, SESSION_COMPONENT]
 
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
         self.lbry_server_port = None
 
+    @defer.inlineCallbacks
     def setup(self):
         peer_port = GCS('peer_port')
-        session = self.component_manager.get_component('session').session
-        query_handlers = self.component_manager.get_component('queryHandler').queryHandlers
+        session = self.component_manager.get_component(SESSION_COMPONENT).session
+        query_handlers = self.component_manager.get_component(QUERY_HANDLER_COMPONENT).queryHandlers
 
         if peer_port is not None:
             server_factory = ServerProtocolFactory(session.rate_limiter, query_handlers, session.peer_manager)
 
             try:
                 log.info("Peer protocol listening on TCP %d", peer_port)
-                self.lbry_server_port = reactor.listenTCP(peer_port, server_factory)
+                self.lbry_server_port = yield reactor.listenTCP(peer_port, server_factory)
             except error.CannotListenError as e:
                 import traceback
                 log.error("Couldn't bind to port %d. Visit lbry.io/faq/how-to-change-port for"
@@ -363,3 +366,35 @@ class Server(Component):
             self.lbry_server_port, old_port = None, self.lbry_server_port
             log.info('Stop listening on port %s', old_port.port)
             yield old_port.stopListening()
+
+
+class Reflector(Component):
+    component_name = REFLECTOR_COMPONENT
+    depends_on = [SESSION_COMPONENT, FILE_MANAGER_COMPONENT]
+
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
+        self.reflector_server_port = GCS('reflector_port')
+        self.run_reflector_server = GCS('run_reflector_server')
+
+    @defer.inlineCallbacks
+    def setup(self):
+        session = self.component_manager.get_component(SESSION_COMPONENT).session
+        file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT).file_manager
+
+        if self.run_reflector_server and self.reflector_server_port is not None:
+            log.info("Starting reflector server")
+            reflector_factory = reflector_server_factory(session.peer_manager, session.blob_manager, file_manager)
+            try:
+                self.reflector_server_port = yield reactor.listenTCP(self.reflector_server_port, reflector_factory)
+                log.info('Started reflector on port %s', self.reflector_server_port)
+            except error.CannotListenError as e:
+                log.exception("Couldn't bind reflector to port %d", self.reflector_server_port)
+                raise ValueError("{} lbrynet may already be running on your computer.".format(e))
+
+    def stop(self):
+        if self.run_reflector_server and self.reflector_server_port is not None:
+            log.info("Stopping reflector server")
+            if self.reflector_server_port is not None:
+                self.reflector_server_port, p = None, self.reflector_server_port
+                yield p.stopListening
