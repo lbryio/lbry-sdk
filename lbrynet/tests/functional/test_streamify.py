@@ -16,6 +16,7 @@ from lbrynet.core.StreamDescriptor import get_sd_info
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter
 from lbrynet.daemon.Component import ComponentManager
+from lbrynet.daemon.Components import DHTComponent
 
 from lbrynet.tests import mocks
 
@@ -27,7 +28,17 @@ FakeAnnouncer = mocks.Announcer
 GenFile = mocks.GenFile
 test_create_stream_sd_file = mocks.create_stream_sd_file
 DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
-component_manager = ComponentManager
+
+
+class MockDHTComponent(DHTComponent):
+    def __init__(self, component_manager):
+        super(DHTComponent, self).__init__(component_manager)
+        self.peer_manager = PeerManager()
+        self.peer_finder = FakePeerFinder(3333, self.peer_manager, 1)
+
+    def setup(self):
+        self.dht_node = FakeNode()
+        return super(MockDHTComponent, self).setup()
 
 
 class TestStreamify(TestCase):
@@ -35,12 +46,13 @@ class TestStreamify(TestCase):
 
     def setUp(self):
         mocks.mock_conf_settings(self)
+        self.component_manager = ComponentManager(None, dht=MockDHTComponent)
         self.session = None
         self.lbry_file_manager = None
         self.is_generous = True
         self.db_dir = tempfile.mkdtemp()
         self.blob_dir = os.path.join(self.db_dir, "blobfiles")
-        self.dht_node = self.setUpDHTComponent()
+        self.dht_node = self.component_manager.get_component("dht")
         self.wallet = FakeWallet()
         self.peer_manager = PeerManager()
         self.peer_finder = FakePeerFinder(5553, self.peer_manager, 2)
