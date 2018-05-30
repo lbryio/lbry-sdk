@@ -98,8 +98,7 @@ class StorageTest(unittest.TestCase):
     @defer.inlineCallbacks
     def store_fake_blob(self, blob_hash, blob_length=100, next_announce=0, should_announce=0):
         yield self.storage.add_completed_blob(blob_hash, blob_length, next_announce,
-                                              should_announce)
-        yield self.storage.set_blob_status(blob_hash, "finished")
+                                              should_announce, "finished")
 
     @defer.inlineCallbacks
     def store_fake_stream_blob(self, stream_hash, blob_hash, blob_num, length=100, iv="DEADBEEF"):
