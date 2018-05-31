@@ -15,7 +15,6 @@ from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_id
 from lbrynet.core.StreamDescriptor import get_sd_info
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter
-from lbrynet.daemon.Component import ComponentManager
 
 from lbrynet.tests import mocks
 
@@ -60,13 +59,6 @@ class TestStreamify(TestCase):
         yield threads.deferToThread(shutil.rmtree, self.db_dir)
         if os.path.exists("test_file"):
             os.remove("test_file")
-
-    def setUpDHTComponent(self):
-        self.dht_component = ComponentManager.get_component('dht')
-        self.dht_component.dht_node_class = FakeNode
-        self.dht_component.hash_announcer = FakeAnnouncer()
-        self.dht_component.setup()
-        return self.dht_component.dht_node
 
     def test_create_stream(self):
 
