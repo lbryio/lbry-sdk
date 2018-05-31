@@ -48,11 +48,28 @@ def format_contact(contact):
     return {
         "node_id": contact.id.encode('hex'),
         "address": contact.address,
-        "port": contact.port,
+        "nodePort": contact.port,
         "lastReplied": contact.lastReplied,
         "lastRequested": contact.lastRequested,
-        "failedRPCs": contact.failedRPCs
+        "failedRPCs": contact.failedRPCs,
+        "lastFailed": None if not contact.failures else contact.failures[-1]
     }
+
+
+def format_datastore(node):
+    datastore = deepcopy(node._dataStore._dict)
+    result = {}
+    for key, values in datastore.iteritems():
+        contacts = []
+        for (contact, value, last_published, originally_published, original_publisher_id) in values:
+            contact_dict = format_contact(contact)
+            contact_dict['peerPort'] = struct.unpack('>H', value[4:6])[0]
+            contact_dict['lastPublished'] = last_published
+            contact_dict['originallyPublished'] = originally_published
+            contact_dict['originalPublisherID'] = original_publisher_id.encode('hex')
+            contacts.append(contact_dict)
+        result[key.encode('hex')] = contacts
+    return result
 
 
 class MultiSeedRPCServer(AuthJSONRPCServer):
@@ -103,26 +120,17 @@ class MultiSeedRPCServer(AuthJSONRPCServer):
         return defer.succeed([node.node_id.encode('hex') for node in self._nodes])
 
     def jsonrpc_node_datastore(self, node_id):
-        def format_datastore(node):
-            datastore = deepcopy(node._dataStore._dict)
-            result = {}
-            for key, values in datastore.iteritems():
-                contacts = []
-                for (value, last_published, originally_published, original_publisher_id) in values:
-                    host = ".".join([str(ord(d)) for d in value[:4]])
-                    port, = struct.unpack('>H', value[4:6])
-                    peer_node_id = value[6:]
-                    contact_dict = format_contact(node.contact_manager.make_contact(peer_node_id, host, port))
-                    contact_dict['lastPublished'] = last_published
-                    contact_dict['originallyPublished'] = originally_published
-                    contact_dict['originalPublisherID'] = original_publisher_id
-                    contacts.append(contact_dict)
-                result[key.encode('hex')] = contacts
-            return result
-
         for node in self._nodes:
             if node.node_id == node_id.decode('hex'):
                 return defer.succeed(format_datastore(node))
+
+    def jsonrpc_get_nodes_who_stored(self, blob_hash):
+        storing_nodes = {}
+        for node in self._nodes:
+            datastore = format_datastore(node)
+            if blob_hash in datastore:
+                storing_nodes[node.node_id.encode('hex')] = datastore[blob_hash]
+        return defer.succeed(storing_nodes)
 
     def jsonrpc_node_routing_table(self, node_id):
         def format_bucket(bucket):
