@@ -25,6 +25,7 @@ at anytime.
   * 
   
 ### Changed
+  * refactor `add_completed_blobs` on storage.py, simplifying into less queries
   * check headers file integrity on startup, removing/truncating the file to force re-download when necessary
   * support partial headers file download from S3
   * changed txrequests for treq

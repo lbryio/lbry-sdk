@@ -208,27 +208,15 @@ class SQLiteStorage(object):
 
     # # # # # # # # # blob functions # # # # # # # # #
 
-    @defer.inlineCallbacks
-    def add_completed_blob(self, blob_hash, length, next_announce_time, should_announce):
+    def add_completed_blob(self, blob_hash, length, next_announce_time, should_announce, status="finished"):
         log.debug("Adding a completed blob. blob_hash=%s, length=%i", blob_hash, length)
-        yield self.add_known_blob(blob_hash, length)
-        yield self.set_blob_status(blob_hash, "finished")
-        yield self.set_should_announce(blob_hash, next_announce_time, should_announce)
-        yield self.db.runOperation(
-            "update blob set blob_length=? where blob_hash=?", (length, blob_hash)
-        )
+        values = (blob_hash, length, next_announce_time or 0, int(bool(should_announce)), status, 0, 0)
+        return self.db.runOperation("insert or replace into blob values (?, ?, ?, ?, ?, ?, ?)", values)
 
     def set_should_announce(self, blob_hash, next_announce_time, should_announce):
-        next_announce_time = next_announce_time or 0
-        should_announce = 1 if should_announce else 0
         return self.db.runOperation(
             "update blob set next_announce_time=?, should_announce=? where blob_hash=?",
-            (next_announce_time, should_announce, blob_hash)
-        )
-
-    def set_blob_status(self, blob_hash, status):
-        return self.db.runOperation(
-            "update blob set status=? where blob_hash=?", (status, blob_hash)
+            (next_announce_time or 0, int(bool(should_announce)), blob_hash)
         )
 
     def get_blob_status(self, blob_hash):
