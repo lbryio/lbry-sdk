@@ -37,7 +37,7 @@ test_create_stream_sd_file = mocks.create_stream_sd_file
 DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 log_format = "%(funcName)s(): %(message)s"
-logging.basicConfig(level=logging.DEBUG, format=log_format)
+logging.basicConfig(level=logging.CRITICAL, format=log_format)
 
 
 def require_system(system):
