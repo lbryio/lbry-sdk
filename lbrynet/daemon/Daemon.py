@@ -12,7 +12,7 @@ import six
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 from twisted.web import server
-from twisted.internet import defer, error, reactor
+from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
 
