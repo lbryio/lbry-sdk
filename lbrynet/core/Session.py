@@ -2,7 +2,6 @@ import logging
 import miniupnpc
 from twisted.internet import threads, defer
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.dht import node
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.PaymentRateManager import BasePaymentRateManager, OnlyFreePaymentsManager
