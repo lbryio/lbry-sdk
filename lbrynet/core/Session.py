@@ -2,7 +2,7 @@ import logging
 import miniupnpc
 from twisted.internet import threads, defer
 from lbrynet.core.BlobManager import DiskBlobManager
-from lbrynet.dht import node, hashannouncer
+from lbrynet.dht import node
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.PaymentRateManager import BasePaymentRateManager, OnlyFreePaymentsManager
@@ -33,9 +33,9 @@ class Session(object):
 
     def __init__(self, blob_data_payment_rate, db_dir=None, node_id=None, dht_node_port=None,
                  known_dht_nodes=None, peer_finder=None, hash_announcer=None, blob_dir=None, blob_manager=None,
-                 peer_port=None, use_upnp=True, rate_limiter=None, wallet=None, dht_node_class=node.Node,
-                 blob_tracker_class=None, payment_rate_manager_class=None, is_generous=True, external_ip=None,
-                 storage=None, dht_node=None, peer_manager=None):
+                 peer_port=None, use_upnp=True, rate_limiter=None, wallet=None, blob_tracker_class=None,
+                 payment_rate_manager_class=None, is_generous=True, external_ip=None, storage=None,
+                 dht_node=None, peer_manager=None):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
         @param db_dir: The directory in which levelDB files should be stored
@@ -110,7 +110,6 @@ class Session(object):
         self.external_ip = external_ip
         self.upnp_redirects = []
         self.wallet = wallet
-        self.dht_node_class = dht_node_class
         self.dht_node = dht_node
         self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
         self.payment_rate_manager = OnlyFreePaymentsManager()

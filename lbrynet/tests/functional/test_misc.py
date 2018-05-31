@@ -37,7 +37,7 @@ test_create_stream_sd_file = mocks.create_stream_sd_file
 DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 
 log_format = "%(funcName)s(): %(message)s"
-logging.basicConfig(level=logging.CRITICAL, format=log_format)
+logging.basicConfig(level=logging.DEBUG, format=log_format)
 
 
 def require_system(system):
@@ -103,13 +103,15 @@ class LbryUploader(object):
         rate_limiter = RateLimiter()
         self.sd_identifier = StreamDescriptorIdentifier()
         self.db_dir, self.blob_dir = mk_db_and_blob_dir()
+        dht_node = FakeNode(peer_finder=peer_finder, peer_manager=peer_manager, udpPort=4445, peerPort=5553,
+                        node_id="abcd", externalIP="127.0.0.1")
 
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=self.db_dir, blob_dir=self.blob_dir,
             node_id="abcd", peer_finder=peer_finder, hash_announcer=hash_announcer,
             peer_port=5553, dht_node_port=4445, use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
-            dht_node_class=FakeNode, is_generous=self.is_generous, external_ip="127.0.0.1")
+            dht_node=dht_node, is_generous=self.is_generous, external_ip="127.0.0.1")
         self.lbry_file_manager = EncryptedFileManager(self.session, self.sd_identifier)
         if self.ul_rate_limit is not None:
             self.session.rate_limiter.set_ul_limit(self.ul_rate_limit)
@@ -197,7 +199,7 @@ def start_lbry_reuploader(sd_hash, kill_event, dead_event,
 
     db_dir, blob_dir = mk_db_and_blob_dir()
     session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
-                      node_id="abcd" + str(n), dht_node_port=4446, dht_node_class=FakeNode,
+                      node_id="abcd" + str(n), dht_node_port=4446,
                       peer_finder=peer_finder, hash_announcer=hash_announcer,
                       blob_dir=blob_dir, peer_port=peer_port,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
@@ -303,13 +305,16 @@ def start_blob_uploader(blob_hash_queue, kill_event, dead_event, slow, is_genero
 
     db_dir, blob_dir = mk_db_and_blob_dir()
 
+    dht_node = FakeNode(peer_finder=peer_finder, peer_manager=peer_manager, udpPort=4445, peerPort=5553,
+                    node_id="abcd", externalIP="127.0.0.1")
+
     session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, node_id="efgh",
-                      peer_finder=peer_finder, hash_announcer=hash_announcer, dht_node_class=FakeNode,
+                      peer_finder=peer_finder, hash_announcer=hash_announcer,
                       blob_dir=blob_dir, peer_port=peer_port, dht_node_port=4446,
                       use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                       blob_tracker_class=DummyBlobAvailabilityTracker,
                       is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1],
-                      external_ip="127.0.0.1")
+                      external_ip="127.0.0.1", dht_node=dht_node)
 
     if slow is True:
         session.rate_limiter.set_ul_limit(2 ** 11)
@@ -478,6 +483,8 @@ class TestTransfer(TestCase):
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
+        dht_node = FakeNode(peer_finder=peer_finder, peer_manager=peer_manager, udpPort=4445, peerPort=5553,
+                        node_id="abcd", externalIP="127.0.0.1")
 
         db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(
@@ -486,7 +493,7 @@ class TestTransfer(TestCase):
             blob_dir=blob_dir, peer_port=5553, dht_node_port=4445,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
             blob_tracker_class=DummyBlobAvailabilityTracker,
-            dht_node_class=FakeNode, is_generous=self.is_generous, external_ip="127.0.0.1")
+            dht_node=dht_node, is_generous=self.is_generous, external_ip="127.0.0.1")
 
         self.lbry_file_manager = EncryptedFileManager(
             self.session, sd_identifier)
@@ -566,14 +573,16 @@ class TestTransfer(TestCase):
         peer_finder = FakePeerFinder(5553, peer_manager, 2)
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
+        dht_node = FakeNode(peer_finder=peer_finder, peer_manager=peer_manager, udpPort=4445, peerPort=5553,
+                        node_id="abcd", externalIP="127.0.0.1")
 
         db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(
             conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, node_id="abcd",
             peer_finder=peer_finder, hash_announcer=hash_announcer,
-            blob_dir=blob_dir, peer_port=5553, dht_node_port=4445, dht_node_class=FakeNode,
+            blob_dir=blob_dir, peer_port=5553, dht_node_port=4445,
             use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
-            blob_tracker_class=DummyBlobAvailabilityTracker,
+            blob_tracker_class=DummyBlobAvailabilityTracker, dht_node=dht_node,
             is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1], external_ip="127.0.0.1")
 
         d1 = self.wait_for_hash_from_queue(blob_hash_queue_1)
@@ -646,17 +655,19 @@ class TestTransfer(TestCase):
         hash_announcer = FakeAnnouncer()
         rate_limiter = DummyRateLimiter()
         sd_identifier = StreamDescriptorIdentifier()
+        dht_node = FakeNode(peer_finder=peer_finder, peer_manager=peer_manager, udpPort=4445, peerPort=5553,
+                        node_id="abcd", externalIP="127.0.0.1")
 
         downloaders = []
 
         db_dir, blob_dir = mk_db_and_blob_dir()
         self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
-                               node_id="abcd", peer_finder=peer_finder, dht_node_port=4445, dht_node_class=FakeNode,
+                               node_id="abcd", peer_finder=peer_finder, dht_node_port=4445,
                                hash_announcer=hash_announcer, blob_dir=blob_dir, peer_port=5553,
                                use_upnp=False, rate_limiter=rate_limiter, wallet=wallet,
                                blob_tracker_class=DummyBlobAvailabilityTracker,
                                is_generous=conf.ADJUSTABLE_SETTINGS['is_generous_host'][1],
-                               external_ip="127.0.0.1")
+                               external_ip="127.0.0.1", dht_node=dht_node)
 
         self.lbry_file_manager = EncryptedFileManager(self.session, sd_identifier)
 
@@ -758,7 +769,7 @@ class TestTransfer(TestCase):
         sd_identifier = StreamDescriptorIdentifier()
 
         db_dir, blob_dir = mk_db_and_blob_dir()
-        self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir, dht_node_class=FakeNode,
+        self.session = Session(conf.ADJUSTABLE_SETTINGS['data_rate'][1], db_dir=db_dir,
                                node_id="abcd", peer_finder=peer_finder, dht_node_port=4445,
                                hash_announcer=hash_announcer, blob_dir=blob_dir,
                                peer_port=5553, use_upnp=False, rate_limiter=rate_limiter,
