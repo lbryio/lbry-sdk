@@ -53,10 +53,10 @@ class _IterativeFind(object):
     def is_find_value_request(self):
         return self.rpc == "findValue"
 
-    def is_closer(self, responseMsg):
+    def is_closer(self, contact):
         if not self.closest_node:
             return True
-        return self.distance.is_closer(responseMsg.nodeID, self.closest_node.id)
+        return self.distance.is_closer(contact.id, self.closest_node.id)
 
     def getContactTriples(self, result):
         if self.is_find_value_request:
@@ -73,16 +73,15 @@ class _IterativeFind(object):
         contact_list.sort(key=lambda c: self.distance(c.id))
 
     @defer.inlineCallbacks
-    def extendShortlist(self, contact, responseTuple):
+    def extendShortlist(self, contact, result):
         # The "raw response" tuple contains the response message and the originating address info
-        responseMsg = responseTuple[0]
-        originAddress = responseTuple[1]  # tuple: (ip address, udp port)
+        originAddress = (contact.address, contact.port)
         if self.finished_deferred.called:
-            defer.returnValue(responseMsg.nodeID)
+            defer.returnValue(contact.id)
         if self.node.contact_manager.is_ignored(originAddress):
             raise ValueError("contact is ignored")
-        if responseMsg.nodeID == self.node.node_id:
-            defer.returnValue(responseMsg.nodeID)
+        if contact.id == self.node.node_id:
+            defer.returnValue(contact.id)
 
         yield self._lock.acquire()
 
@@ -92,7 +91,6 @@ class _IterativeFind(object):
             self.shortlist.append(contact)
 
         # Now grow extend the (unverified) shortlist with the returned contacts
-        result = responseMsg.response
         # TODO: some validation on the result (for guarding against attacks)
         # If we are looking for a value, first see if this result is the value
         # we are looking for before treating it as a list of contact triples
@@ -107,7 +105,7 @@ class _IterativeFind(object):
                 # - mark it as the closest "empty" node, if it is
                 # TODO: store to this peer after finding the value as per the kademlia spec
                 if 'closestNodeNoValue' in self.find_value_result:
-                    if self.is_closer(responseMsg):
+                    if self.is_closer(contact):
                         self.find_value_result['closestNodeNoValue'] = contact
                 else:
                     self.find_value_result['closestNodeNoValue'] = contact
@@ -130,14 +128,14 @@ class _IterativeFind(object):
                     self.sortByDistance(self.active_contacts)
                     self.finished_deferred.callback(self.active_contacts[:min(constants.k, len(self.active_contacts))])
 
-        defer.returnValue(responseMsg.nodeID)
+        defer.returnValue(contact.id)
 
     @defer.inlineCallbacks
     def probeContact(self, contact):
         fn = getattr(contact, self.rpc)
         try:
-            response_tuple = yield fn(self.key, rawResponse=True)
-            result = yield self.extendShortlist(contact, response_tuple)
+            response = yield fn(self.key)
+            result = yield self.extendShortlist(contact, response)
             defer.returnValue(result)
         except (TimeoutError, defer.CancelledError, ValueError, IndexError):
             defer.returnValue(contact.id)

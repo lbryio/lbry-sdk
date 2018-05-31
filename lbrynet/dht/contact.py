@@ -34,6 +34,7 @@ class _Contact(object):
         self.getTime = self._contactManager._get_time
         self.lastReplied = None
         self.lastRequested = None
+        self.protocolVersion = constants.protocolVersion
 
     @property
     def lastInteracted(self):
@@ -120,6 +121,9 @@ class _Contact(object):
         failures.append(self.getTime())
         self._contactManager._rpc_failures[(self.address, self.port)] = failures
 
+    def update_protocol_version(self, version):
+        self.protocolVersion = version
+
     def __str__(self):
         return '<%s.%s object; IP address: %s, UDP port: %d>' % (
             self.__module__, self.__class__.__name__, self.address, self.port)
@@ -143,7 +147,7 @@ class _Contact(object):
             raise AttributeError("unknown command: %s" % name)
 
         def _sendRPC(*args, **kwargs):
-            return self._networkProtocol.sendRPC(self, name, args, **kwargs)
+            return self._networkProtocol.sendRPC(self, name, args)
 
         return _sendRPC
 

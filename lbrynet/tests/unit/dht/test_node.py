@@ -62,7 +62,7 @@ class NodeDataTest(unittest.TestCase):
     def testStore(self):
         """ Tests if the node can store (and privately retrieve) some data """
         for key, port in self.cases:
-            yield self.node.store(self.contact, key, self.token, port, self.contact.id)
+            yield self.node.store(self.contact, key, self.token, port, self.contact.id, 0)
         for key, value in self.cases:
             expected_result = self.contact.compact_ip() + str(struct.pack('>H', value)) + \
                               self.contact.id

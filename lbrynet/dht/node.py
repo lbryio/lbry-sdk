@@ -315,7 +315,7 @@ class Node(MockKademliaHelper):
                 self_contact = self.contact_manager.make_contact(self.node_id, self.externalIP,
                                                                  self.port, self._protocol)
                 token = self.make_token(self_contact.compact_ip())
-                yield self.store(self_contact, blob_hash, token, self.peerPort)
+                yield self.store(self_contact, blob_hash, token, self.peerPort, self.node_id, 0)
         elif self.externalIP is not None:
             pass
         else:
@@ -327,15 +327,15 @@ class Node(MockKademliaHelper):
         def announce_to_contact(contact):
             known_nodes[contact.id] = contact
             try:
-                responseMsg, originAddress = yield contact.findValue(blob_hash, rawResponse=True)
-                res = yield contact.store(blob_hash, responseMsg.response['token'], self.peerPort)
+                response = yield contact.findValue(blob_hash)
+                res = yield contact.store(blob_hash, response['token'], self.peerPort, self.node_id, 0)
                 if res != "OK":
                     raise ValueError(res)
                 contacted.append(contact)
-                log.debug("Stored %s to %s (%s)", blob_hash.encode('hex'), contact.id.encode('hex'), originAddress[0])
+                log.debug("Stored %s to %s (%s)", binascii.hexlify(blob_hash), contact.log_id(), contact.address)
             except protocol.TimeoutError:
                 log.debug("Timeout while storing blob_hash %s at %s",
-                          blob_hash.encode('hex')[:16], contact.log_id())
+                          binascii.hexlify(blob_hash), contact.log_id())
             except ValueError as err:
                 log.error("Unexpected response: %s" % err.message)
             except Exception as err:
@@ -348,7 +348,7 @@ class Node(MockKademliaHelper):
 
         yield defer.DeferredList(dl)
 
-        log.debug("Stored %s to %i of %i attempted peers", blob_hash.encode('hex')[:16],
+        log.debug("Stored %s to %i of %i attempted peers", binascii.hexlify(blob_hash),
                   len(contacted), len(contacts))
 
         contacted_node_ids = [c.id.encode('hex') for c in contacted]
@@ -506,7 +506,7 @@ class Node(MockKademliaHelper):
         return 'pong'
 
     @rpcmethod
-    def store(self, rpc_contact, blob_hash, token, port, originalPublisherID=None, age=0):
+    def store(self, rpc_contact, blob_hash, token, port, originalPublisherID, age):
         """ Store the received data in this node's local datastore
 
         @param blob_hash: The hash of the data
@@ -588,6 +588,9 @@ class Node(MockKademliaHelper):
         response = {
             'token': self.make_token(rpc_contact.compact_ip()),
         }
+
+        if self._protocol._protocolVersion:
+            response['protocolVersion'] = self._protocol._protocolVersion
 
         if self._dataStore.hasPeersForBlob(key):
             response[key] = self._dataStore.getPeersForBlob(key)

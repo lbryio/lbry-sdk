@@ -55,3 +55,5 @@ udpDatagramMaxSize = 8192  # 8 KB
 key_bits = 384
 
 rpc_id_length = 20
+
+protocolVersion = 1

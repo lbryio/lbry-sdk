@@ -102,8 +102,37 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._partialMessagesProgress = {}
         self._listening = defer.Deferred(None)
         self._ping_queue = PingQueue(self._node)
+        self._protocolVersion = constants.protocolVersion
 
-    def sendRPC(self, contact, method, args, rawResponse=False):
+    def _migrate_incoming_rpc_args(self, contact, method, *args):
+        if method == 'store' and contact.protocolVersion == 0:
+            if isinstance(args[1], dict):
+                blob_hash = args[0]
+                token = args[1].pop('token', None)
+                port = args[1].pop('port', -1)
+                originalPublisherID = args[1].pop('lbryid', None)
+                age = 0
+                return (blob_hash, token, port, originalPublisherID, age), {}
+        return args, {}
+
+    def _migrate_outgoing_rpc_args(self, contact, method, *args):
+        """
+        This will reformat protocol version 0 arguments for the store function and will add the
+        protocol version keyword argument to calls to contacts who will accept it
+        """
+        if contact.protocolVersion == 0:
+            if method == 'store':
+                blob_hash, token, port, originalPublisherID, age = args
+                args = (blob_hash, {'token': token, 'port': port, 'lbryid': originalPublisherID}, originalPublisherID,
+                        False)
+                return args
+            return args
+        if args and isinstance(args[-1], dict):
+            args[-1]['protocolVersion'] = self._protocolVersion
+            return args
+        return args + ({'protocolVersion': self._protocolVersion},)
+
+    def sendRPC(self, contact, method, args):
         """
         Sends an RPC to the specified contact
 
@@ -114,14 +143,6 @@ class KademliaProtocol(protocol.DatagramProtocol):
         @param args: A list of (non-keyword) arguments to pass to the remote
                     method, in the correct order
         @type args: tuple
-        @param rawResponse: If this is set to C{True}, the caller of this RPC
-                            will receive a tuple containing the actual response
-                            message object and the originating address tuple as
-                            a result; in other words, it will not be
-                            interpreted by this class. Unless something special
-                            needs to be done with the metadata associated with
-                            the message, this should remain C{False}.
-        @type rawResponse: bool
 
         @return: This immediately returns a deferred object, which will return
                  the result of the RPC call, or raise the relevant exception
@@ -131,7 +152,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
                  C{ErrorMessage}).
         @rtype: twisted.internet.defer.Deferred
         """
-        msg = msgtypes.RequestMessage(self._node.node_id, method, args)
+        msg = msgtypes.RequestMessage(self._node.node_id, method, self._migrate_outgoing_rpc_args(contact, method,
+                                                                                                  *args))
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)
 
@@ -143,8 +165,6 @@ class KademliaProtocol(protocol.DatagramProtocol):
                       contact.address, contact.port)
 
         df = defer.Deferred()
-        if rawResponse:
-            df._rpcRawResponse = True
 
         def _remove_contact(failure):  # remove the contact from the routing table and track the failure
             try:
@@ -156,6 +176,11 @@ class KademliaProtocol(protocol.DatagramProtocol):
 
         def _update_contact(result):  # refresh the contact in the routing table
             contact.update_last_replied()
+            if method == 'findValue':
+                if 'protocolVersion' not in result:
+                    contact.update_protocol_version(0)
+                else:
+                    contact.update_protocol_version(result.pop('protocolVersion'))
             d = self._node.addContact(contact)
             d.addCallback(lambda _: result)
             return d
@@ -284,14 +309,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
                 elif not remoteContact.id:
                     remoteContact.set_id(message.nodeID)
 
-                if hasattr(df, '_rpcRawResponse'):
-                    # The RPC requested that the raw response message
-                    # and originating address be returned; do not
-                    # interpret it
-                    df.callback((message, address))
-                else:
-                    # We got a result from the RPC
-                    df.callback(message.response)
+                # We got a result from the RPC
+                df.callback(message.response)
             else:
                 # If the original message isn't found, it must have timed out
                 # TODO: we should probably do something with this...
@@ -395,20 +414,25 @@ class KademliaProtocol(protocol.DatagramProtocol):
         func = getattr(self._node, method, None)
         if callable(func) and hasattr(func, "rpcmethod"):
             # Call the exposed Node method and return the result to the deferred callback chain
-            if args:
-                log.debug("%s:%i RECV CALL %s(%s) %s:%i", self._node.externalIP, self._node.port, method,
-                          args[0].encode('hex'), senderContact.address, senderContact.port)
-            else:
-                log.debug("%s:%i RECV CALL %s %s:%i", self._node.externalIP, self._node.port, method,
+            # if args:
+            #     log.debug("%s:%i RECV CALL %s(%s) %s:%i", self._node.externalIP, self._node.port, method,
+            #               args[0].encode('hex'), senderContact.address, senderContact.port)
+            # else:
+            log.debug("%s:%i RECV CALL %s %s:%i", self._node.externalIP, self._node.port, method,
                           senderContact.address, senderContact.port)
+            if args and isinstance(args[-1], dict) and 'protocolVersion' in args[-1]:  # args don't need reformatting
+                senderContact.update_protocol_version(int(args[-1].pop('protocolVersion')))
+                a, kw = tuple(args[:-1]), args[-1]
+            else:
+                senderContact.update_protocol_version(0)
+                a, kw = self._migrate_incoming_rpc_args(senderContact, method, *args)
             try:
                 if method != 'ping':
-                    result = func(senderContact, *args)
+                    result = func(senderContact, *a)
                 else:
                     result = func()
             except Exception, e:
-                log.exception("error handling request for %s:%i %s", senderContact.address,
-                              senderContact.port, method)
+                log.exception("error handling request for %s:%i %s", senderContact.address, senderContact.port, method)
                 df.errback(e)
             else:
                 df.callback(result)
