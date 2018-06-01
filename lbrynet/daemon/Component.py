@@ -39,6 +39,9 @@ class Component(object):
     def stop(self):
         raise NotImplementedError()  # override
 
+    def component(self):
+        raise NotImplementedError()  # override
+
     @defer.inlineCallbacks
     def _setup(self):
         try:

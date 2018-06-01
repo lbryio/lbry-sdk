@@ -6,7 +6,6 @@ log = logging.getLogger(__name__)
 
 class ComponentManager(object):
     default_component_classes = {}
-    # analytics_manager = None
 
     def __init__(self, analytics_manager=None, **override_components):
         self.component_classes = {}
@@ -114,8 +113,30 @@ class ComponentManager(object):
                 return False
         return True
 
+    # "database": true,
+    # "dht": true,
+    # "fileManager": false,
+    # "hashAnnouncer": true,
+    # "peerProtocolServer": true,
+    # "reflector": false,
+    # "session": true,
+    # "streamIdentifier": true,
+    # "wallet": true
+
+    def comp(self):
+        """
+        List status of all the components, whether they are running or not
+
+        :return: (dict) {(str) component_name: (bool) True is running else False}
+        """
+        status = dict()
+        for component in self.components:
+            status[component.component_name] = component.running
+
+        return status
+
     def get_component(self, component_name):
         for component in self.components:
             if component.component_name == component_name:
-                return component
+                return component.component
         raise NameError(component_name)

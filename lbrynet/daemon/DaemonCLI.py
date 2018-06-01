@@ -107,20 +107,20 @@ def main():
             print_error("Could not connect to daemon. Are you sure it's running?",
                         suggest_help=False)
             return 1
-
-    status_code = status['startup_status']['code']
-
-    if status_code != "started" and method not in Daemon.allowed_during_startup:
-        print "Daemon is in the process of starting. Please try again in a bit."
-        message = status['startup_status']['message']
-        if message:
-            if (
-                status['startup_status']['code'] == LOADING_WALLET_CODE
-                and status['blockchain_status']['blocks_behind'] > 0
-            ):
-                message += '. Blocks left: ' + str(status['blockchain_status']['blocks_behind'])
-            print "  Status: " + message
-        return 1
+    #
+    # status_code = status['startup_status']['code']
+    #
+    # if status_code != "started" and method not in Daemon.allowed_during_startup:
+    #     print "Daemon is in the process of starting. Please try again in a bit."
+    #     message = status['startup_status']['message']
+    #     if message:
+    #         if (
+    #             status['startup_status']['code'] == LOADING_WALLET_CODE
+    #             and status['blockchain_status']['blocks_behind'] > 0
+    #         ):
+    #             message += '. Blocks left: ' + str(status['blockchain_status']['blocks_behind'])
+    #         print "  Status: " + message
+    #     return 1
 
     # TODO: check if port is bound. Error if its not
 

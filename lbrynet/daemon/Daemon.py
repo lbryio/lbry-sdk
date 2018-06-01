@@ -170,7 +170,7 @@ class Daemon(AuthJSONRPCServer):
     """
 
     allowed_during_startup = [
-        'daemon_stop', 'status', 'version', 'wallet_unlock'
+        'daemon_stop', 'status', 'version', 'wallet_unlock', 'blah'
     ]
 
     def __init__(self, analytics_manager, component_manager=None):
@@ -224,11 +224,11 @@ class Daemon(AuthJSONRPCServer):
 
         yield self._initial_setup()
         yield self.component_manager.setup()
-        self.session = self.component_manager.get_component("session").session
+        self.session = self.component_manager.get_component("session")
         yield self._check_wallet_locked()
         yield self._start_analytics()
-        self.sd_identifier = self.component_manager.get_component("streamIdentifier").sd_identifier
-        self.file_manager = self.component_manager.get_component("fileManager").file_manager
+        self.sd_identifier = self.component_manager.get_component("streamIdentifier")
+        self.file_manager = self.component_manager.get_component("fileManager")
         log.info("Starting balance: " + str(self.session.wallet.get_balance()))
         self.announced_startup = True
         self.startup_status = STARTUP_STAGES[5]
@@ -798,8 +798,7 @@ class Daemon(AuthJSONRPCServer):
                 'is_running': bool,
                 'is_first_run': bool,
                 'startup_status': {
-                    'code': status code,
-                    'message': status message
+                    (str) component_name: (bool) True if running else False,
                 },
                 'connection_status': {
                     'code': connection status code,
@@ -835,10 +834,7 @@ class Daemon(AuthJSONRPCServer):
             'installation_id': conf.settings.installation_id,
             'is_running': self.announced_startup,
             'is_first_run': self.session.wallet.is_first_run if has_wallet else None,
-            'startup_status': {
-                'code': self.startup_status[0],
-                'message': self.startup_status[1],
-            },
+            'startup_status': self.component_manager.comp(),
             'connection_status': {
                 'code': self.connection_status_code,
                 'message': (
@@ -866,6 +862,19 @@ class Daemon(AuthJSONRPCServer):
                 'should_announce_blobs': should_announce_blobs,
             }
         defer.returnValue(response)
+
+    def jsonrpc_blah(self):
+        """
+        Usage:
+            blah
+
+        Options:
+            None
+
+        Returns:
+            blah bla
+        """
+        return self._render_response(self.component_manager.all_components_running("database", "dht", "wallet"))#""fileManager", "hashAnnouncer", "peerProtocolServer", "reflector", "session", "streamIdentifier", "wallet"))
 
     def jsonrpc_version(self):
         """
@@ -1040,6 +1049,7 @@ class Daemon(AuthJSONRPCServer):
         """
         return self._render_response(sorted([command for command in self.callable_methods.keys()]))
 
+    # @AuthJSONRPCServer.require("wallet")
     def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
         """
         Return the balance of the wallet
