@@ -4,6 +4,7 @@ import json
 import inspect
 
 from decimal import Decimal
+from functools import wraps
 from zope.interface import implements
 from twisted.web import server, resource
 from twisted.internet import defer
@@ -140,6 +141,22 @@ class AuthorizedBase(object):
             f._deprecated = True
             return f
         return _deprecated_wrapper
+
+    @staticmethod
+    def require(*components, **component_conditionals):
+        def _wrap(fn):
+            @wraps(fn)
+            def _inner(self, *args, **kwargs):
+                if self.component_manager.all_components_running(*components):
+                    return fn(*args, **kwargs)
+                if component_conditionals:
+                    for component_name, condition in component_conditionals.iteritems():
+                        assert callable(condition)
+                        if not condition(self.component_manager.get_component(component_name)):
+                            raise Exception("not all required component conditions are met")
+                raise Exception("not all required components are set up")
+            return _inner
+        return _wrap
 
 
 class AuthJSONRPCServer(AuthorizedBase):

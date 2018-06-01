@@ -30,7 +30,7 @@ HASH_ANNOUNCER_COMPONENT = "hashAnnouncer"
 STREAM_IDENTIFIER_COMPONENT = "streamIdentifier"
 FILE_MANAGER_COMPONENT = "fileManager"
 QUERY_HANDLER_COMPONENT = "queryHandler"
-SERVER_COMPONENT = "peerProtocolServer"
+PEER_PROTOCOL_SERVER_COMPONENT = "peerProtocolServer"
 REFLECTOR_COMPONENT = "reflector"
 
 
@@ -69,6 +69,10 @@ class DatabaseComponent(Component):
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
         self.storage = None
+
+    @property
+    def component(self):
+        return self.storage
 
     @staticmethod
     def get_current_db_revision():
@@ -142,9 +146,13 @@ class WalletComponent(Component):
         Component.__init__(self, component_manager)
         self.wallet = None
 
+    @property
+    def component(self):
+        return self.wallet
+
     @defer.inlineCallbacks
     def setup(self):
-        storage = self.component_manager.get_component(DATABASE_COMPONENT).storage
+        storage = self.component_manager.get_component(DATABASE_COMPONENT)
         wallet_type = GCS('wallet')
 
         if wallet_type == conf.LBRYCRD_WALLET:
@@ -185,6 +193,10 @@ class SessionComponent(Component):
         Component.__init__(self, component_manager)
         self.session = None
 
+    @property
+    def component(self):
+        return self.session
+
     @defer.inlineCallbacks
     def setup(self):
         self.session = Session(
@@ -192,16 +204,16 @@ class SessionComponent(Component):
             db_dir=GCS('data_dir'),
             node_id=CS.get_node_id(),
             blob_dir=CS.get_blobfiles_dir(),
-            dht_node=self.component_manager.get_component(DHT_COMPONENT).dht_node,
-            hash_announcer=self.component_manager.get_component(HASH_ANNOUNCER_COMPONENT).hash_announcer,
+            dht_node=self.component_manager.get_component(DHT_COMPONENT),
+            hash_announcer=self.component_manager.get_component(HASH_ANNOUNCER_COMPONENT),
             dht_node_port=GCS('dht_node_port'),
             known_dht_nodes=GCS('known_dht_nodes'),
             peer_port=GCS('peer_port'),
             use_upnp=GCS('use_upnp'),
-            wallet=self.component_manager.get_component(WALLET_COMPONENT).wallet,
+            wallet=self.component_manager.get_component(WALLET_COMPONENT),
             is_generous=GCS('is_generous_host'),
             external_ip=CS.get_external_ip(),
-            storage=self.component_manager.get_component(DATABASE_COMPONENT).storage
+            storage=self.component_manager.get_component(DATABASE_COMPONENT)
         )
         yield self.session.setup()
 
@@ -216,6 +228,10 @@ class DHTComponent(Component):
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
         self.dht_node = None
+
+    @property
+    def component(self):
+        return self.dht_node
 
     @defer.inlineCallbacks
     def setup(self):
@@ -245,10 +261,14 @@ class HashAnnouncer(Component):
         Component.__init__(self, component_manager)
         self.hash_announcer = None
 
+    @property
+    def component(self):
+        return self.hash_announcer
+
     @defer.inlineCallbacks
     def setup(self):
-        storage = self.component_manager.get_component(DATABASE_COMPONENT).storage
-        dht_node = self.component_manager.get_component(DHT_COMPONENT).dht_node
+        storage = self.component_manager.get_component(DATABASE_COMPONENT)
+        dht_node = self.component_manager.get_component(DHT_COMPONENT)
         self.hash_announcer = hashannouncer.DHTHashAnnouncer(dht_node, storage)
         yield self.hash_announcer.start()
 
@@ -265,9 +285,13 @@ class StreamIdentifier(Component):
         Component.__init__(self, component_manager)
         self.sd_identifier = StreamDescriptorIdentifier()
 
+    @property
+    def component(self):
+        return self.sd_identifier
+
     @defer.inlineCallbacks
     def setup(self):
-        session = self.component_manager.get_component(SESSION_COMPONENT).session
+        session = self.component_manager.get_component(SESSION_COMPONENT)
         add_lbry_file_to_sd_identifier(self.sd_identifier)
         file_saver_factory = EncryptedFileSaverFactory(
             session.peer_finder,
@@ -291,10 +315,14 @@ class FileManager(Component):
         Component.__init__(self, component_manager)
         self.file_manager = None
 
+    @property
+    def component(self):
+        return self.file_manager
+
     @defer.inlineCallbacks
     def setup(self):
-        session = self.component_manager.get_component(SESSION_COMPONENT).session
-        sd_identifier = self.component_manager.get_component(STREAM_IDENTIFIER_COMPONENT).sd_identifier
+        session = self.component_manager.get_component(SESSION_COMPONENT)
+        sd_identifier = self.component_manager.get_component(STREAM_IDENTIFIER_COMPONENT)
         log.info('Starting the file manager')
         self.file_manager = EncryptedFileManager(session, sd_identifier)
         yield self.file_manager.setup()
@@ -306,18 +334,22 @@ class FileManager(Component):
 
 
 class PeerProtocolServer(Component):
-    component_name = SERVER_COMPONENT
+    component_name = PEER_PROTOCOL_SERVER_COMPONENT
     depends_on = [SESSION_COMPONENT]
 
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
         self.lbry_server_port = None
 
+    @property
+    def component(self):
+        return self.lbry_server_port
+
     @defer.inlineCallbacks
     def setup(self):
         query_handlers = {}
         peer_port = GCS('peer_port')
-        session = self.component_manager.get_component(SESSION_COMPONENT).session
+        session = self.component_manager.get_component(SESSION_COMPONENT)
 
         handlers = [
             BlobRequestHandlerFactory(
@@ -363,10 +395,14 @@ class Reflector(Component):
         self.reflector_server_port = GCS('reflector_port')
         self.run_reflector_server = GCS('run_reflector_server')
 
+    @property
+    def component(self):
+        return self
+
     @defer.inlineCallbacks
     def setup(self):
-        session = self.component_manager.get_component(SESSION_COMPONENT).session
-        file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT).file_manager
+        session = self.component_manager.get_component(SESSION_COMPONENT)
+        file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
 
         if self.run_reflector_server and self.reflector_server_port is not None:
             log.info("Starting reflector server")
