@@ -25,7 +25,7 @@ def unicode2bytes(string):
 def bytes2unicode(maybe_bytes):
     if isinstance(maybe_bytes, bytes):
         return maybe_bytes.decode()
-    elif isinstance(maybe_bytes, list):
+    elif isinstance(maybe_bytes, (list, tuple)):
         return [bytes2unicode(b) for b in maybe_bytes]
     return maybe_bytes
 
