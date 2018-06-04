@@ -2231,7 +2231,7 @@ class Daemon(AuthJSONRPCServer):
                 results[chan_uri] = {"error": "%s is not a valid uri" % chan_uri}
 
         resolved = yield self.wallet.resolve(*valid_uris, check_cache=False, page=page,
-                                                     page_size=page_size)
+                                             page_size=page_size)
         for u in resolved:
             if 'error' in resolved[u]:
                 results[u] = resolved[u]
@@ -3004,7 +3004,7 @@ class Daemon(AuthJSONRPCServer):
         result['node_id'] = self.dht_node.node_id.encode('hex')
         return self._render_response(result)
 
-    @AuthJSONRPCServer.requires("dht", "wallet") # the single peer downloader needs wallet access
+    @AuthJSONRPCServer.requires("dht", "wallet")  # the single peer downloader needs wallet access
     def jsonrpc_blob_availability(self, blob_hash, search_timeout=None, blob_timeout=None):
         """
         Get blob availability
