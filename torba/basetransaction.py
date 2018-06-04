@@ -97,13 +97,13 @@ class BaseInput(InputOutput):
 
 class BaseOutputAmountEstimator(object):
 
-    __slots__ = 'coin', 'output', 'fee', 'effective_amount'
+    __slots__ = 'coin', 'txi', 'txo', 'fee', 'effective_amount'
 
     def __init__(self, coin, txo):  # type: (BaseCoin, BaseOutput) -> None
         self.coin = coin
-        self.output = txo
-        txi = coin.transaction_class.input_class.spend(txo)
-        self.fee = coin.get_input_output_fee(txi)
+        self.txo = txo
+        self.txi = coin.transaction_class.input_class.spend(txo)
+        self.fee = coin.get_input_output_fee(self.txi)
         self.effective_amount = txo.amount - self.fee
 
     def __lt__(self, other):
