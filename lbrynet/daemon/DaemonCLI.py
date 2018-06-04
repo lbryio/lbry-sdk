@@ -7,7 +7,7 @@ from collections import OrderedDict
 from lbrynet import conf
 from lbrynet.core import utils
 from lbrynet.daemon.auth.client import JSONRPCException, LBRYAPIClient, AuthAPIClient
-from lbrynet.daemon.Daemon import LOADING_WALLET_CODE, Daemon
+from lbrynet.daemon.Daemon import Daemon
 from lbrynet.core.system_info import get_platform
 from jsonrpc.common import RPCError
 from requests.exceptions import ConnectionError
