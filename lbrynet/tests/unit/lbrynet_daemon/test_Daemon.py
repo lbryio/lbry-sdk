@@ -40,10 +40,10 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     }
     daemon = LBRYDaemon(None)
     daemon.session = mock.Mock(spec=Session.Session)
-    daemon.session.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
-    daemon.session.wallet.wallet = mock.Mock(spec=NewWallet)
-    daemon.session.wallet.wallet.use_encryption = False
-    daemon.session.wallet.network = FakeNetwork()
+    daemon.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
+    daemon.wallet.wallet = mock.Mock(spec=NewWallet)
+    daemon.wallet.wallet.use_encryption = False
+    daemon.wallet.network = FakeNetwork()
     daemon.session.storage = mock.Mock(spec=SQLiteStorage)
     market_feeds = [BTCLBCFeed(), USDBTCFeed()]
     daemon.exchange_rate_manager = DummyExchangeRateManager(market_feeds, rates)
@@ -73,7 +73,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
             {"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
     daemon._resolve_name = lambda _: defer.succeed(metadata)
     migrated = smart_decode(json.dumps(metadata))
-    daemon.session.wallet.resolve = lambda *_: defer.succeed(
+    daemon.wallet.resolve = lambda *_: defer.succeed(
         {"test": {'claim': {'value': migrated.claim_dict}}})
     return daemon
 
@@ -119,8 +119,8 @@ class TestJsonRpc(trial.unittest.TestCase):
         mock_conf_settings(self)
         util.resetTime(self)
         self.test_daemon = get_test_daemon()
-        self.test_daemon.session.wallet.is_first_run = False
-        self.test_daemon.session.wallet.get_best_blockhash = noop
+        self.test_daemon.wallet.is_first_run = False
+        self.test_daemon.wallet.get_best_blockhash = noop
 
     def test_status(self):
         d = defer.maybeDeferred(self.test_daemon.jsonrpc_status)
