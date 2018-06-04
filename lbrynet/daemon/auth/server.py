@@ -143,16 +143,16 @@ class AuthorizedBase(object):
         return _deprecated_wrapper
 
     @staticmethod
-    def require(*components, **component_conditionals):
+    def requires(*components, **component_conditionals):
         def _wrap(fn):
             @wraps(fn)
-            def _inner(self, *args, **kwargs):
-                if self.component_manager.all_components_running(*components):
+            def _inner(*args, **kwargs):
+                if args[0].component_manager.all_components_running(*components):
                     return fn(*args, **kwargs)
                 if component_conditionals:
                     for component_name, condition in component_conditionals.iteritems():
                         assert callable(condition)
-                        if not condition(self.component_manager.get_component(component_name)):
+                        if not condition(args[0].component_manager.get_component(component_name)):
                             raise Exception("not all required component conditions are met")
                 raise Exception("not all required components are set up")
             return _inner
@@ -433,9 +433,9 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
             raise UnknownAPIMethodError(function_path)
-        if not self.announced_startup:
-            if function_path not in self.allowed_during_startup:
-                raise NotAllowedDuringStartupError(function_path)
+        # if not self.announced_startup:
+        #     if function_path not in self.allowed_during_startup:
+        #         raise NotAllowedDuringStartupError(function_path)
 
     def _get_jsonrpc_method(self, function_path):
         if function_path in self.deprecated_methods:
