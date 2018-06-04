@@ -5,6 +5,9 @@ from twisted.internet import defer
 from torba.account import AccountsView
 from torba.basecoin import CoinRegistry
 from torba.baseledger import BaseLedger
+from torba.basetransaction import NULL_HASH
+from torba.coinselection import CoinSelector
+from torba.constants import COIN
 from torba.wallet import Wallet, WalletStorage
 
 
@@ -81,3 +84,42 @@ class WalletManager:
             l.stop() for l in self.ledgers.values()
         ])
         self.running = False
+
+    def send_amount_to_address(self, amount, address):
+        amount = int(amount * COIN)
+
+        account = self.default_account
+        coin = account.coin
+        ledger = coin.ledger
+        tx_class = ledger.transaction_class
+        in_class, out_class = tx_class.input_class, tx_class.output_class
+
+        estimators = [
+            txo.get_estimator(coin) for txo in account.get_unspent_utxos()
+        ]
+
+        cost_of_output = coin.get_input_output_fee(
+            out_class.pay_pubkey_hash(COIN, NULL_HASH)
+        )
+
+        selector = CoinSelector(estimators, amount, cost_of_output)
+        spendables = selector.select()
+        if not spendables:
+            raise ValueError('Not enough funds to cover this transaction.')
+
+        outputs = [
+            out_class.pay_pubkey_hash(amount, coin.address_to_hash160(address))
+        ]
+
+        spent_sum = sum(s.effective_amount for s in spendables)
+        if spent_sum > amount:
+            change_address = account.get_least_used_change_address()
+            change_hash160 = coin.address_to_hash160(change_address)
+            outputs.append(out_class.pay_pubkey_hash(spent_sum - amount, change_hash160))
+
+        tx = tx_class() \
+            .add_inputs([s.txi for s in spendables]) \
+            .add_outputs(outputs) \
+            .sign(account)
+
+        return tx
