@@ -1,3 +1,4 @@
+import time
 import logging
 import mimetypes
 import os
@@ -20,7 +21,7 @@ class Publisher(object):
 
     @defer.inlineCallbacks
     def create_and_publish_stream(self, name, bid, claim_dict, file_path, claim_address=None,
-                                  change_address=None):
+                                  change_address=None, publish_time=None):
         """Create lbry file and make claim"""
         log.info('Starting publish for %s', name)
         if not os.path.isfile(file_path):
@@ -39,6 +40,7 @@ class Publisher(object):
         claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
         claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
+        claim_dict['stream']['source']['publishTime'] = publish_time or int(time.time())
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)

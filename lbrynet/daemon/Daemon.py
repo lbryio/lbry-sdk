@@ -709,7 +709,7 @@ class Daemon(AuthJSONRPCServer):
 
     @defer.inlineCallbacks
     def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate_id=None,
-                        claim_address=None, change_address=None):
+                        claim_address=None, change_address=None, publish_time=None):
 
         publisher = Publisher(self.session, self.lbry_file_manager, self.session.wallet,
                               certificate_id)
@@ -720,7 +720,7 @@ class Daemon(AuthJSONRPCServer):
                                                        change_address)
         else:
             claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path,
-                                                                  claim_address, change_address)
+                                                                  claim_address, change_address, publish_time)
             if conf.settings['reflect_uploads']:
                 d = reupload.reflect_file(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
@@ -1958,7 +1958,7 @@ class Daemon(AuthJSONRPCServer):
                         description=None, author=None, language=None, license=None,
                         license_url=None, thumbnail=None, preview=None, nsfw=None, sources=None,
                         channel_name=None, channel_id=None,
-                        claim_address=None, change_address=None):
+                        claim_address=None, change_address=None, publish_time=None):
         """
         Make a new name claim and publish associated data to lbrynet,
         update over existing claim if user already has a claim for name.
@@ -1983,6 +1983,7 @@ class Daemon(AuthJSONRPCServer):
                     [--preview=<preview>] [--nsfw=<nsfw>] [--sources=<sources>]
                     [--channel_name=<channel_name>] [--channel_id=<channel_id>]
                     [--claim_address=<claim_address>] [--change_address=<change_address>]
+                    [--publish_time=<publish_time>]
 
         Options:
             --name=<name>                  : (str) name of the content
@@ -2019,6 +2020,8 @@ class Daemon(AuthJSONRPCServer):
                                              private key is in the wallet.
            --claim_address=<claim_address> : (str) address where the claim is sent to, if not specified
                                              new address wil automatically be created
+           --publish_time=<publish_time>   : (int) seconds since Unix epoch, if not specified
+                                             current UTC time will be used.
 
         Returns:
             (dict) Dictionary containing result of the claim
@@ -2158,7 +2161,7 @@ class Daemon(AuthJSONRPCServer):
             certificate_id = None
 
         result = yield self._publish_stream(name, bid, claim_dict, file_path, certificate_id,
-                                            claim_address, change_address)
+                                            claim_address, change_address, publish_time)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
