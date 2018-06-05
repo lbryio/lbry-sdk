@@ -21,17 +21,13 @@ def remove_brackets(key):
     return key
 
 
-def set_flag_vals(flag_names, parsed_args):
+def set_kwargs(parsed_args):
     kwargs = OrderedDict()
     for key, arg in parsed_args.iteritems():
         if arg is None:
             continue
-        elif key.startswith("--"):
-            if remove_brackets(key[2:]) not in kwargs:
-                k = remove_brackets(key[2:])
-        elif key in flag_names:
-            if remove_brackets(flag_names[key]) not in kwargs:
-                k = remove_brackets(flag_names[key])
+        elif key.startswith("--") and remove_brackets(key[2:]) not in kwargs:
+            k = remove_brackets(key[2:])
         elif remove_brackets(key) not in kwargs:
             k = remove_brackets(key)
         kwargs[k] = guess_type(arg, k)
@@ -79,26 +75,22 @@ def main():
         method = new_method
 
     fn = Daemon.callable_methods[method]
-    if hasattr(fn, "_flags"):
-        flag_names = fn._flags
-    else:
-        flag_names = {}
 
     parsed = docopt(fn.__doc__, args)
-    kwargs = set_flag_vals(flag_names, parsed)
+    kwargs = set_kwargs(parsed)
     colorama.init()
     conf.initialize_settings()
 
     try:
         api = LBRYAPIClient.get_client()
-        status = api.status()
+        api.status()
     except (URLError, ConnectionError) as err:
         if isinstance(err, HTTPError) and err.code == UNAUTHORIZED:
             api = AuthAPIClient.config()
             # this can happen if the daemon is using auth with the --http-auth flag
             # when the config setting is to not use it
             try:
-                status = api.status()
+                api.status()
             except:
                 print_error("Daemon requires authentication, but none was provided.",
                             suggest_help=False)
@@ -107,20 +99,6 @@ def main():
             print_error("Could not connect to daemon. Are you sure it's running?",
                         suggest_help=False)
             return 1
-    #
-    # status_code = status['startup_status']['code']
-    #
-    # if status_code != "started" and method not in Daemon.allowed_during_startup:
-    #     print "Daemon is in the process of starting. Please try again in a bit."
-    #     message = status['startup_status']['message']
-    #     if message:
-    #         if (
-    #             status['startup_status']['code'] == LOADING_WALLET_CODE
-    #             and status['blockchain_status']['blocks_behind'] > 0
-    #         ):
-    #             message += '. Blocks left: ' + str(status['blockchain_status']['blocks_behind'])
-    #         print "  Status: " + message
-    #     return 1
 
     # TODO: check if port is bound. Error if its not
 
