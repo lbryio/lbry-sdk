@@ -49,23 +49,6 @@ from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloade
 log = logging.getLogger(__name__)
 
 INITIALIZING_CODE = 'initializing'
-LOADING_DB_CODE = 'loading_db'
-LOADING_WALLET_CODE = 'loading_wallet'
-LOADING_FILE_MANAGER_CODE = 'loading_file_manager'
-LOADING_SERVER_CODE = 'loading_server'
-STARTED_CODE = 'started'
-WAITING_FOR_FIRST_RUN_CREDITS = 'waiting_for_credits'
-WAITING_FOR_UNLOCK = 'waiting_for_wallet_unlock'
-STARTUP_STAGES = [
-    (INITIALIZING_CODE, 'Initializing'),
-    (LOADING_DB_CODE, 'Loading databases'),
-    (LOADING_WALLET_CODE, 'Catching up with the blockchain'),
-    (LOADING_FILE_MANAGER_CODE, 'Setting up file manager'),
-    (LOADING_SERVER_CODE, 'Starting lbrynet'),
-    (STARTED_CODE, 'Started lbrynet'),
-    (WAITING_FOR_FIRST_RUN_CREDITS, 'Waiting for first run credits'),
-    (WAITING_FOR_UNLOCK, 'Waiting for user to unlock the wallet using the wallet_unlock command')
-]
 
 # TODO: make this consistent with the stages in Downloader.py
 DOWNLOAD_METADATA_CODE = 'downloading_metadata'
@@ -169,10 +152,6 @@ class Daemon(AuthJSONRPCServer):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
-    allowed_during_startup = [
-        'daemon_stop', 'status', 'version', 'wallet_unlock', 'blah'
-    ]
-
     def __init__(self, analytics_manager, component_manager=None):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         self.download_directory = conf.settings['download_directory']
@@ -183,7 +162,6 @@ class Daemon(AuthJSONRPCServer):
         self.delete_blobs_on_remove = conf.settings['delete_blobs_on_remove']
         self.auto_renew_claim_height_delta = conf.settings['auto_renew_claim_height_delta']
 
-        self.startup_status = STARTUP_STAGES[0]
         self.connected_to_internet = True
         self.connection_status_code = None
         self.platform = None
@@ -239,7 +217,6 @@ class Daemon(AuthJSONRPCServer):
         self.file_manager = self.component_manager.get_component("fileManager")
         log.info("Starting balance: " + str(self.wallet.get_balance()))
         self.announced_startup = True
-        self.startup_status = STARTUP_STAGES[5]
         log.info("Started lbrynet-daemon")
 
         self._auto_renew()
@@ -301,7 +278,6 @@ class Daemon(AuthJSONRPCServer):
         signal.signal(signal.SIGTERM, self._already_shutting_down)
 
         log.info("Closing lbrynet session")
-        log.info("Status at time of shutdown: " + self.startup_status[0])
 
         self._stop_streams()
         self.looping_call_manager.shutdown()
@@ -320,9 +296,7 @@ class Daemon(AuthJSONRPCServer):
     @defer.inlineCallbacks
     def _check_wallet_locked(self):
         wallet = self.wallet
-        if wallet.wallet.use_encryption:
-            self.startup_status = STARTUP_STAGES[7]
-
+        # if wallet.wallet.use_encryption: STARTUP Stage was set earlier, figure out what to do now
         yield wallet.check_locked()
 
     def _download_blob(self, blob_hash, rate_manager=None, timeout=None):
@@ -2798,7 +2772,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(results)
 
     @defer.inlineCallbacks
-    @AuthJSONRPCServer.requires("storage", "session", "wallet")
+    @AuthJSONRPCServer.requires("database", "session", "wallet")
     def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
                           finished=None, page_size=None, page=None):
         """
