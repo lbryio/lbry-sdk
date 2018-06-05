@@ -113,16 +113,6 @@ class ComponentManager(object):
                 return False
         return True
 
-    # "database": true,
-    # "dht": true,
-    # "fileManager": false,
-    # "hashAnnouncer": true,
-    # "peerProtocolServer": true,
-    # "reflector": false,
-    # "session": true,
-    # "streamIdentifier": true,
-    # "wallet": true
-
     def comp(self):
         """
         List status of all the components, whether they are running or not
