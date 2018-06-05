@@ -35,6 +35,15 @@ class _Contact(object):
         self.lastReplied = None
         self.lastRequested = None
         self.protocolVersion = constants.protocolVersion
+        self._token = (None, 0)  # token, timestamp
+
+    def update_token(self, token):
+        self._token = token, self.getTime()
+
+    @property
+    def token(self):
+        # expire the token 1 minute early to be safe
+        return self._token[0] if self._token[1] + 240 > self.getTime() else None
 
     @property
     def lastInteracted(self):
