@@ -375,7 +375,8 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     # this should probably try to retransmit when the network connection is back
                     log.error("Network is unreachable")
                 else:
-                    log.error("DHT socket error: %s (%i)", err.message, err.errno)
+                    log.error("DHT socket error sending %i bytes to %s:%i - %s (code %i)",
+                              len(txData), address[0], address[1], err.message, err.errno)
                     raise err
         else:
             raise TransportNotConnected()
