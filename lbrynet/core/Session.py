@@ -118,7 +118,6 @@ class Session(object):
         # self.payment_rate_manager_class = payment_rate_manager_class or NegotiatedPaymentRateManager
         # self.is_generous = is_generous
         self.storage = storage or SQLiteStorage(self.db_dir)
-        self._join_dht_deferred = None
 
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
@@ -230,9 +229,9 @@ class Session(object):
             self.hash_announcer = hashannouncer.DHTHashAnnouncer(self.dht_node, self.storage)
         self.peer_manager = self.dht_node.peer_manager
         self.peer_finder = self.dht_node.peer_finder
-        self._join_dht_deferred = self.dht_node.start(self.known_dht_nodes)
-        self._join_dht_deferred.addCallback(lambda _: log.info("Joined the dht"))
-        self._join_dht_deferred.addCallback(lambda _: self.hash_announcer.start())
+        d = self.dht_node.start(self.known_dht_nodes)
+        d.addCallback(lambda _: log.info("Joined the dht"))
+        d.addCallback(lambda _: self.hash_announcer.start())
 
     def _setup_other_components(self):
         log.debug("Setting up the rest of the components")
