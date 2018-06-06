@@ -171,8 +171,6 @@ class KademliaProtocolTest(unittest.TestCase):
             result.pop('protocolVersion')
             return result
 
-        self.assertEquals(self.remote_contact.protocolVersion, 1)
-
         self.remote_node.findValue = findValue
         d = self.remote_contact.findValue(fake_blob)
         self._reactor.advance(3)
@@ -196,9 +194,6 @@ class KademliaProtocolTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def testStoreToPre_0_20_0_Node(self):
-
-        self.remote_node._protocol._protocolVersion = 0
-
         def _dont_migrate(contact, method, *args):
             return args, {}
 
@@ -224,8 +219,6 @@ class KademliaProtocolTest(unittest.TestCase):
                 contact, key, value['token'], value['port'], originalPublisherID, 0
             )
 
-        self.assertEquals(self.remote_contact.protocolVersion, 1)
-
         self.remote_node.findValue = findValue
         self.remote_node.store = store
 
@@ -247,9 +240,6 @@ class KademliaProtocolTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def testStoreFromPre_0_20_0_Node(self):
-
-        self.remote_node._protocol._protocolVersion = 0
-
         def _dont_migrate(contact, method, *args):
             return args
 
