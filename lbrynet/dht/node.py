@@ -235,7 +235,7 @@ class Node(MockKademliaHelper):
                 defer.returnValue(None)
             else:
                 # find the closest peers to us
-                closest = yield self._iterativeFind(self.node_id, shortlist)
+                closest = yield self._iterativeFind(self.node_id, shortlist if not self.contacts else None)
                 yield _ping_contacts(closest)
                 # query random hashes in our bucket key ranges to fill or split them
                 random_ids_in_range = self._routingTable.getRefreshList(force=True)
