@@ -592,6 +592,8 @@ class Node(MockKademliaHelper):
         """
         return generate_id()
 
+    # from lbrynet.core.utils import profile_deferred
+    # @profile_deferred()
     @defer.inlineCallbacks
     def _iterativeFind(self, key, startupShortlist=None, rpc='findNode'):
         """ The basic Kademlia iterative lookup operation (for nodes/values)
