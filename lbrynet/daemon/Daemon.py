@@ -3150,18 +3150,13 @@ class Daemon(AuthJSONRPCServer):
         """
 
         result = {}
-        data_store = deepcopy(self.session.dht_node._dataStore._dict)
+        data_store = self.session.dht_node._dataStore._dict
         datastore_len = len(data_store)
         hosts = {}
 
         if datastore_len:
             for k, v in data_store.iteritems():
-                for value, lastPublished, originallyPublished, originalPublisherID in v:
-                    try:
-                        contact = self.session.dht_node._routingTable.getContact(
-                            originalPublisherID)
-                    except (ValueError, IndexError):
-                        continue
+                for contact, value, lastPublished, originallyPublished, originalPublisherID in v:
                     if contact in hosts:
                         blobs = hosts[contact]
                     else:
