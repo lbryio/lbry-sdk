@@ -22,7 +22,6 @@ import datastore
 import protocol
 from peerfinder import DHTPeerFinder
 from contact import ContactManager
-from distance import Distance
 from iterativefind import iterativeFind
 
 
@@ -156,7 +155,7 @@ class Node(MockKademliaHelper):
 
     def __del__(self):
         log.warning("unclean shutdown of the dht node")
-        if self._listeningPort is not None:
+        if hasattr(self, "_listeningPort") and self._listeningPort is not None:
             self._listeningPort.stopListening()
 
     @defer.inlineCallbacks
