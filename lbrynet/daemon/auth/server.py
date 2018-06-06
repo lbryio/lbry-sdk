@@ -16,6 +16,7 @@ from traceback import format_exc
 from lbrynet import conf
 from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
+from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
 from lbrynet.daemon.auth.util import APIKey, get_auth_message
 from lbrynet.daemon.auth.client import LBRY_SECRET
 from lbrynet.undecorated import undecorated
@@ -151,10 +152,11 @@ class AuthorizedBase(object):
                     return fn(*args, **kwargs)
                 if component_conditionals:
                     for component_name, condition in component_conditionals.iteritems():
-                        assert callable(condition)
+                        if not callable(condition):
+                            raise SyntaxError("The specified condition is invalid/not callable")
                         if not condition(args[0].component_manager.get_component(component_name)):
-                            raise Exception("not all required component conditions are met")
-                raise Exception("not all required components are set up")
+                            ComponentStartConditionNotMet("Not all conditions required to start component are met")
+                ComponentsNotStarted("Not all required components are set up(%s)", components)
             return _inner
         return _wrap
 
@@ -433,9 +435,6 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
             raise UnknownAPIMethodError(function_path)
-        # if not self.announced_startup:
-        #     if function_path not in self.allowed_during_startup:
-        #         raise NotAllowedDuringStartupError(function_path)
 
     def _get_jsonrpc_method(self, function_path):
         if function_path in self.deprecated_methods:
