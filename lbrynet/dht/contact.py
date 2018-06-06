@@ -34,7 +34,7 @@ class _Contact(object):
         self.getTime = self._contactManager._get_time
         self.lastReplied = None
         self.lastRequested = None
-        self.protocolVersion = constants.protocolVersion
+        self.protocolVersion = 0
         self._token = (None, 0)  # token, timestamp
 
     def update_token(self, token):
