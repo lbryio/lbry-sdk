@@ -18,6 +18,7 @@ class DHTHashAnnouncer(object):
         self.concurrent_announcers = concurrent_announcers or conf.settings['concurrent_announcers']
         self._manage_lc = task.LoopingCall(self.manage)
         self._manage_lc.clock = self.clock
+        self.sem = defer.DeferredSemaphore(self.concurrent_announcers)
 
     def start(self):
         self._manage_lc.start(30)
@@ -55,8 +56,9 @@ class DHTHashAnnouncer(object):
         progress_lc = task.LoopingCall(self._show_announce_progress, len(self.hash_queue), start)
         progress_lc.clock = self.clock
         progress_lc.start(60, now=False)
-        s = defer.DeferredSemaphore(self.concurrent_announcers)
-        results = yield utils.DeferredDict({blob_hash: s.run(self.do_store, blob_hash) for blob_hash in blob_hashes})
+        results = yield utils.DeferredDict(
+            {blob_hash: self.sem.run(self.do_store, blob_hash) for blob_hash in blob_hashes}
+        )
         now = self.clock.seconds()
 
         progress_lc.stop()
