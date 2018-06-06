@@ -25,7 +25,7 @@ k = 8
 replacementCacheSize = 8
 
 #: Timeout for network operations (in seconds)
-rpcTimeout = 8
+rpcTimeout = 5
 
 # number of rpc attempts to make before a timeout results in the node being removed as a contact
 rpcAttempts = 5
