@@ -121,14 +121,14 @@ class DatabaseComponent(Component):
             from lbrynet.database.migrator import dbmigrator
             log.info("Upgrading your databases (revision %i to %i)", old_revision, self.get_current_db_revision())
             yield threads.deferToThread(
-                dbmigrator.migrate_db, CS.get_blobfiles_dir(), old_revision, self.get_current_db_revision()
+                dbmigrator.migrate_db, GCS('data_dir'), old_revision, self.get_current_db_revision()
             )
             self._write_db_revision_file(self.get_current_db_revision())
             log.info("Finished upgrading the databases.")
             migrated = True
 
         # start SQLiteStorage
-        self.storage = SQLiteStorage(CS.get_blobfiles_dir())
+        self.storage = SQLiteStorage(GCS('data_dir'))
         yield self.storage.setup()
         defer.returnValue(migrated)
 

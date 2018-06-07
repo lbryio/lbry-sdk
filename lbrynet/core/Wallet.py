@@ -938,9 +938,7 @@ class LBRYumWallet(Wallet):
         self._lag_counter = 0
         self.blocks_behind = 0
         self.catchup_progress = 0
-
-        # fired when the wallet actually unlocks (wallet_unlocked_d can be called multiple times)
-        self.wallet_unlock_success = defer.Deferred()
+        self.is_wallet_unlocked = None
 
     def _is_first_run(self):
         return (not self.printed_retrieving_headers and
@@ -953,21 +951,23 @@ class LBRYumWallet(Wallet):
         return self._cmd_runner
 
     def check_locked(self):
-        if not self.wallet.use_encryption:
-            log.info("Wallet is not encrypted")
-            self.wallet_unlock_success.callback(True)
-        elif not self._cmd_runner:
+        """
+        Checks if the wallet is encrypted(locked) or not
+
+        :return: (boolean) indicating whether the wallet is locked or not
+        """
+        if not self._cmd_runner:
             raise Exception("Command runner hasn't been initialized yet")
         elif self._cmd_runner.locked:
             log.info("Waiting for wallet password")
             self.wallet_unlocked_d.addCallback(self.unlock)
-        return self.wallet_unlock_success
+        return self.is_wallet_unlocked
 
     def unlock(self, password):
         if self._cmd_runner and self._cmd_runner.locked:
             try:
                 self._cmd_runner.unlock_wallet(password)
-                self.wallet_unlock_success.callback(True)
+                self.is_wallet_unlocked = True
                 log.info("Unlocked the wallet!")
             except InvalidPassword:
                 log.warning("Incorrect password, try again")
@@ -1054,6 +1054,7 @@ class LBRYumWallet(Wallet):
             wallet.create_main_account()
             wallet.synchronize()
         self.wallet = wallet
+        self.is_wallet_unlocked = True if not self.wallet.use_encryption else False
         self._check_large_wallet()
         return defer.succeed(True)
 
