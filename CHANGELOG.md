@@ -36,10 +36,10 @@ at anytime.
   * several internal dht functions to use inlineCallbacks
   * `DHTHashAnnouncer` and `Node` manage functions to use `LoopingCall`s instead of scheduling with `callLater`.
   * `store` kademlia rpc method to block on the call finishing and to return storing peer information
-  * refactored `DHTHashAnnouncer` to longer use locks, use a `DeferredSemaphore` to limit concurrent announcers
+  * refactored `DHTHashAnnouncer` to no longer use locks, use a `DeferredSemaphore` to limit concurrent announcers
   * decoupled `DiskBlobManager` from `DHTHashAnnouncer`
   * blob hashes to announce to be controlled by`SQLiteStorage`
-  * kademlia protocol to not delay writes to the UDP socket
+  * kademlia protocol to minimally delay writes to the UDP socket
   * `reactor` and `callLater`, `listenUDP`, and `resolve` functions to be configurable (to allow easier testing)
   * calls to get the current time to use `reactor.seconds` (to control callLater and LoopingCall timing in tests)
   * `blob_announce` to queue the blob announcement but not block on it
@@ -56,21 +56,34 @@ at anytime.
   * track successful reflector uploads in sqlite to minimize how many streams are attempted by auto re-reflect
   * increase the default `auto_re_reflect_interval` to a day
   * predictable result sorting for `claim_list` and `claim_list_mine`
+  * changed the bucket splitting condition in the dht routing table to be more aggressive
+  * ping dht nodes who have stored to us periodically to determine whether we should include them as an active peer for the hash when we are queried. Nodes that are known to be not reachable by the node storing the record are no longer returned as peers by the storing node.
+  * temporarily disabled data price negotiation, treat all data as free
+  * changed dht bootstrap join process to better populate the routing table initially
+  * cache dht node tokens used during announcement to minimize the number of requests that are needed
+  * implement BEP0005 dht rules to classify nodes as good, bad, or unknown and for when to add them to the routing table (http://www.bittorrent.org/beps/bep_0005.html)
+  * refactored internal dht contact class to track failure counts/times, the time the contact last replied to us, and the time the node last requested something fom us
+  * refactored dht iterativeFind
+  * sort dht contacts returned by `findCloseNodes` in the routing table
+  * disabled Cryptonator price feed
 
 ### Added
   * virtual kademlia network and mock udp transport for dht integration tests
-  * integration tests for bootstrapping the dht
+  * functional tests for bootstrapping the dht, announcing and expiring hashes, finding and pinging nodes, protocol version 0/1 backwards/forwards compatibility, and rejoining the network
   * configurable `concurrent_announcers` and `s3_headers_depth` settings
   * `peer_ping` command
   * `--sort` option in `file_list`
   * linux distro and desktop name added to analytics
   * certifi module for Twisted SSL verification on Windows
+  * protocol version to dht requests and to the response from `findValue`
+  * added `port` field to contacts returned by `routing_table_get`
 
 ### Removed
   * `announce_all` argument from `blob_announce`
   * old `blob_announce_all` command
   * `AuthJSONRPCServer.auth_required` decorator
   * unused `--wallet` argument to `lbrynet-daemon`, which used to be to support `PTCWallet`.
+  * `OptimizedTreeRoutingTable` class used by the dht node for the time being
   
 ## [0.19.3] - 2018-05-04
 ### Changed
