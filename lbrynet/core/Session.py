@@ -166,24 +166,24 @@ class Session(object):
             if not mapping:
                 return port
             if upnp.lanaddr == mapping[0]:
-                return mapping
+                return mapping[1]
             return get_free_port(upnp, port + 1, protocol)
 
-        def get_port_mapping(upnp, internal_port, protocol, description):
+        def get_port_mapping(upnp, port, protocol, description):
             # try to map to the requested port, if there is already a mapping use the next external
             # port available
             if protocol not in ['UDP', 'TCP']:
                 raise Exception("invalid protocol")
-            external_port = get_free_port(upnp, internal_port, protocol)
-            if isinstance(external_port, tuple):
+            port = get_free_port(upnp, port, protocol)
+            if isinstance(port, tuple):
                 log.info("Found existing UPnP redirect %s:%i (%s) to %s:%i, using it",
-                         self.external_ip, external_port[1], protocol, upnp.lanaddr, internal_port)
-                return external_port[1], protocol
-            upnp.addportmapping(external_port, protocol, upnp.lanaddr, internal_port,
+                         self.external_ip, port, protocol, upnp.lanaddr, port)
+                return port
+            upnp.addportmapping(port, protocol, upnp.lanaddr, port,
                                 description, '')
-            log.info("Set UPnP redirect %s:%i (%s) to %s:%i", self.external_ip, external_port,
-                     protocol, upnp.lanaddr, internal_port)
-            return external_port, protocol
+            log.info("Set UPnP redirect %s:%i (%s) to %s:%i", self.external_ip, port,
+                     protocol, upnp.lanaddr, port)
+            return port
 
         def threaded_try_upnp():
             if self.use_upnp is False:
@@ -198,13 +198,11 @@ class Session(object):
                     # best not to rely on this external ip, the router can be behind layers of NATs
                     self.external_ip = external_ip
                 if self.peer_port:
-                    self.upnp_redirects.append(
-                        get_port_mapping(u, self.peer_port, 'TCP', 'LBRY peer port')
-                    )
+                    self.peer_port = get_port_mapping(u, self.peer_port, 'TCP', 'LBRY peer port')
+                    self.upnp_redirects.append((self.peer_port, 'TCP'))
                 if self.dht_node_port:
-                    self.upnp_redirects.append(
-                        get_port_mapping(u, self.dht_node_port, 'UDP', 'LBRY DHT port')
-                    )
+                    self.dht_node_port = get_port_mapping(u, self.dht_node_port, 'UDP', 'LBRY DHT port')
+                    self.upnp_redirects.append((self.dht_node_port, 'UDP'))
                 return True
             return False
 
