@@ -136,8 +136,10 @@ class _IterativeFind(object):
     def should_stop(self):
         if self.prev_closest_node and self.closest_node and self.distance.is_closer(self.prev_closest_node.id,
                                                                                     self.closest_node.id):
+            # we're getting further away
             return True
         if len(self.active_contacts) >= constants.k:
+            # we have enough results
             return True
         return False
 
@@ -149,7 +151,7 @@ class _IterativeFind(object):
             self.prev_closest_node = self.closest_node
             self.closest_node = self.active_contacts[0]
 
-        # Sort and store the current shortList length before contacting other nodes
+        # Sort the current shortList before contacting other nodes
         self.sortByDistance(self.shortlist)
         probes = []
         already_contacted_addresses = {(c.address, c.port) for c in self.already_contacted}
@@ -181,13 +183,13 @@ class _IterativeFind(object):
 
             d.addCallback(_remove_probes)
 
-        elif not self.finished_deferred.called and not self.active_probes:
+        elif not self.finished_deferred.called and not self.active_probes or self.should_stop():
             # If no probes were sent, there will not be any improvement, so we're done
             self.sortByDistance(self.active_contacts)
             self.finished_deferred.callback(self.active_contacts[:min(constants.k, len(self.active_contacts))])
-        elif not self.finished_deferred.called and self.should_stop():
-            self.sortByDistance(self.active_contacts)
-            self.finished_deferred.callback(self.active_contacts[:min(constants.k, len(self.active_contacts))])
+        elif not self.finished_deferred.called:
+            # Force the next iteration
+            self.searchIteration()
 
     def searchIteration(self, delay=constants.iterativeLookupDelay):
         def _cancel_pending_iterations(result):
