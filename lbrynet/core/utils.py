@@ -1,20 +1,22 @@
 import base64
 import datetime
-import logging
 import random
 import socket
 import string
 import json
-
+import traceback
+import functools
+import logging
 import pkg_resources
+from twisted.python.failure import Failure
 from twisted.internet import defer
 from lbryschema.claim import ClaimDict
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
+log = logging.getLogger(__name__)
+
 # digest_size is in bytes, and blob hashes are hex encoded
 blobhash_length = get_lbry_hash_obj().digest_size * 2
-
-log = logging.getLogger(__name__)
 
 
 # defining these time functions here allows for easier overriding in testing
@@ -172,16 +174,6 @@ def DeferredDict(d, consumeErrors=False):
         if success:
             response[k] = result
     defer.returnValue(response)
-
-
-
-import traceback
-import functools
-import logging
-from twisted.internet import defer
-from twisted.python.failure import Failure
-
-log = logging.getLogger(__name__)
 
 
 class DeferredProfiler(object):
