@@ -146,17 +146,21 @@ class AuthorizedBase(object):
     @staticmethod
     def requires(*components, **component_conditionals):
         def _wrap(fn):
+            @defer.inlineCallbacks
             @wraps(fn)
             def _inner(*args, **kwargs):
-                if args[0].component_manager.all_components_running(*components):
-                    return fn(*args, **kwargs)
                 if component_conditionals:
                     for component_name, condition in component_conditionals.iteritems():
                         if not callable(condition):
                             raise SyntaxError("The specified condition is invalid/not callable")
-                        if not condition(args[0].component_manager.get_component(component_name)):
-                            ComponentStartConditionNotMet("Not all conditions required to start component are met")
-                ComponentsNotStarted("Not all required components are set up(%s)", components)
+                        if not (yield condition(args[0].component_manager.get_component(component_name))):
+                            raise ComponentStartConditionNotMet(
+                                "Not all conditions required to start component are met")
+                if args[0].component_manager.all_components_running(*components):
+                    result = yield fn(*args, **kwargs)
+                    defer.returnValue(result)
+                else:
+                    raise ComponentsNotStarted("Not all required components are set up:", components)
             return _inner
         return _wrap
 
@@ -168,7 +172,6 @@ class AuthJSONRPCServer(AuthorizedBase):
     API methods are named with a leading "jsonrpc_"
 
     Attributes:
-        allowed_during_startup (list): list of api methods that are callable before the server has finished startup
         sessions (dict): (dict): {<session id>: <lbrynet.daemon.auth.util.APIKey>}
         callable_methods (dict): {<api method name>: <api method>}
 
