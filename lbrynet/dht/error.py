@@ -33,6 +33,13 @@ class TimeoutError(Exception):
     def __init__(self, remote_contact_id):
         # remote_contact_id is a binary blob so we need to convert it
         # into something more readable
-        msg = 'Timeout connecting to {}'.format(binascii.hexlify(remote_contact_id))
+        if remote_contact_id:
+            msg = 'Timeout connecting to {}'.format(binascii.hexlify(remote_contact_id))
+        else:
+            msg = 'Timeout connecting to uninitialized node'
         Exception.__init__(self, msg)
         self.remote_contact_id = remote_contact_id
+
+
+class TransportNotConnected(Exception):
+    pass

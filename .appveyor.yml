@@ -23,7 +23,7 @@ clone_folder: c:\projects\lbry
 test_script:
 - cd C:\projects\lbry\
 - pip install cython
-- pip install mock pylint unqlite
+- pip install mock pylint unqlite Faker
 - pip install .
 - pylint lbrynet
 # disable tests for now so that appveyor can build the app

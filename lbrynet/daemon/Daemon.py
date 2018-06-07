@@ -2903,24 +2903,22 @@ class Daemon(AuthJSONRPCServer):
         if not utils.is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
 
-        finished_deferred = self.session.dht_node.getPeersForBlob(binascii.unhexlify(blob_hash), True)
+        finished_deferred = self.session.dht_node.iterativeFindValue(binascii.unhexlify(blob_hash))
 
-        def _trigger_timeout():
-            if not finished_deferred.called:
-                log.debug("Peer search for %s timed out", blob_hash)
-                finished_deferred.cancel()
+        def trap_timeout(err):
+            err.trap(defer.TimeoutError)
+            return []
 
-        timeout = timeout or conf.settings['peer_search_timeout']
-        self.session.dht_node.reactor_callLater(timeout, _trigger_timeout)
-
+        finished_deferred.addTimeout(timeout or conf.settings['peer_search_timeout'], self.session.dht_node.clock)
+        finished_deferred.addErrback(trap_timeout)
         peers = yield finished_deferred
         results = [
             {
+                "node_id": node_id.encode('hex'),
                 "host": host,
-                "port": port,
-                "node_id": node_id
+                "port": port
             }
-            for host, port, node_id in peers
+            for node_id, host, port in peers
         ]
         defer.returnValue(results)
 
@@ -3139,6 +3137,7 @@ class Daemon(AuthJSONRPCServer):
                     <bucket index>: [
                         {
                             "address": (str) peer address,
+                            "port": (int) peer udp port
                             "node_id": (str) peer node id,
                             "blobs": (list) blob hashes announced by peer
                         }
@@ -3151,18 +3150,13 @@ class Daemon(AuthJSONRPCServer):
         """
 
         result = {}
-        data_store = deepcopy(self.session.dht_node._dataStore._dict)
+        data_store = self.session.dht_node._dataStore._dict
         datastore_len = len(data_store)
         hosts = {}
 
         if datastore_len:
             for k, v in data_store.iteritems():
-                for value, lastPublished, originallyPublished, originalPublisherID in v:
-                    try:
-                        contact = self.session.dht_node._routingTable.getContact(
-                            originalPublisherID)
-                    except ValueError:
-                        continue
+                for contact, value, lastPublished, originallyPublished, originalPublisherID in v:
                     if contact in hosts:
                         blobs = hosts[contact]
                     else:
@@ -3184,6 +3178,7 @@ class Daemon(AuthJSONRPCServer):
                     blobs = []
                 host = {
                     "address": contact.address,
+                    "port": contact.port,
                     "node_id": contact.id.encode("hex"),
                     "blobs": blobs,
                 }

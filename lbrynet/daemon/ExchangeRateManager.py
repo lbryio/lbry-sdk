@@ -206,7 +206,12 @@ class CryptonatorFeed(MarketFeed):
 class ExchangeRateManager(object):
     def __init__(self):
         self.market_feeds = [
-           LBRYioBTCFeed(), LBRYioFeed(), BittrexFeed(), CryptonatorBTCFeed(), CryptonatorFeed()]
+            LBRYioBTCFeed(),
+            LBRYioFeed(),
+            BittrexFeed(),
+            # CryptonatorBTCFeed(),
+            # CryptonatorFeed()
+        ]
 
     def start(self):
         log.info("Starting exchange rate manager")

@@ -1,7 +1,7 @@
 import curses
 import time
-from jsonrpc.proxy import JSONRPCProxy
 import logging
+from lbrynet.daemon import get_client
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.FileHandler("dht contacts.log"))
@@ -9,7 +9,7 @@ log.addHandler(logging.FileHandler("dht contacts.log"))
 log.setLevel(logging.INFO)
 stdscr = curses.initscr()
 
-api = JSONRPCProxy.from_url("http://localhost:5279")
+api = get_client()
 
 
 def init_curses():
@@ -53,7 +53,7 @@ def refresh(last_contacts, last_blobs):
         stdscr.addstr(y, 0, "bucket %s" % i)
         y += 1
         for h in sorted(buckets[i], key=lambda x: x['node_id'].decode('hex')):
-            stdscr.addstr(y, 0, '%s (%s) - %i blobs' % (h['node_id'], h['address'],
+            stdscr.addstr(y, 0, '%s (%s:%i) - %i blobs' % (h['node_id'], h['address'], h['port'],
                                                         len(h['blobs'])))
             y += 1
         y += 1

@@ -23,18 +23,14 @@ class BlobAvailabilityTracker(object):
         self._blob_manager = blob_manager
         self._peer_finder = peer_finder
         self._dht_node = dht_node
-        self._check_popular = LoopingCall(self._update_most_popular)
         self._check_mine = LoopingCall(self._update_mine)
 
     def start(self):
         log.info("Starting blob availability tracker.")
-        self._check_popular.start(600)
         self._check_mine.start(600)
 
     def stop(self):
         log.info("Stopping blob availability tracker.")
-        if self._check_popular.running:
-            self._check_popular.stop()
         if self._check_mine.running:
             self._check_mine.stop()
 
@@ -67,17 +63,6 @@ class BlobAvailabilityTracker(object):
         d.addCallback(lambda r: [[c.host, c.port, c.is_available()] for c in r])
         d.addCallback(lambda peers: _save_peer_info(blob, peers))
         return d
-
-    def _get_most_popular(self):
-        dl = []
-        for (hash, _) in self._dht_node.get_most_popular_hashes(10):
-            encoded = hash.encode('hex')
-            dl.append(self._update_peers_for_blob(encoded))
-        return defer.DeferredList(dl)
-
-    def _update_most_popular(self):
-        d = self._get_most_popular()
-        d.addCallback(lambda _: self._set_mean_peers())
 
     def _update_mine(self):
         def _get_peers(blobs):
