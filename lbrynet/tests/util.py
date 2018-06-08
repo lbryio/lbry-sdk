@@ -10,11 +10,6 @@ import mock
 DEFAULT_TIMESTAMP = datetime.datetime(2016, 1, 1)
 DEFAULT_ISO_TIME = time.mktime(DEFAULT_TIMESTAMP.timetuple())
 
-<<<<<<< HEAD
-log = logging.getLogger("lbrynet.tests.util")
-=======
->>>>>>> 2619c396d980944802a3f7e0800e92794cc3de5a
-
 
 def mk_db_and_blob_dir():
     db_dir = tempfile.mkdtemp()
