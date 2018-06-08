@@ -1,10 +1,12 @@
 import six
 import logging
-from typing import List
+from typing import List, Iterable, Generator
 from binascii import hexlify
 
-from torba.basecoin import BaseCoin
+from torba import baseledger
 from torba.basescript import BaseInputScript, BaseOutputScript
+from torba.coinselection import CoinSelector
+from torba.constants import COIN
 from torba.bcd_data_stream import BCDataStream
 from torba.hash import sha256
 from torba.account import Account
@@ -18,6 +20,17 @@ NULL_HASH = b'\x00'*32
 
 
 class InputOutput(object):
+
+    def __init__(self, txid):
+        self._txid = txid  # type: bytes
+        self.transaction = None  # type: BaseTransaction
+        self.index = None  # type: int
+
+    @property
+    def txid(self):
+        if self._txid is None:
+            self._txid = self.transaction.id
+        return self._txid
 
     @property
     def size(self):
@@ -37,10 +50,11 @@ class BaseInput(InputOutput):
     NULL_SIGNATURE = b'\x00'*72
     NULL_PUBLIC_KEY = b'\x00'*33
 
-    def __init__(self, output_or_txid_index, script, sequence=0xFFFFFFFF):
+    def __init__(self, output_or_txid_index, script, sequence=0xFFFFFFFF, txid=None):
+        super(BaseInput, self).__init__(txid)
         if isinstance(output_or_txid_index, BaseOutput):
             self.output = output_or_txid_index  # type: BaseOutput
-            self.output_txid = self.output.transaction.hash
+            self.output_txid = self.output.transaction.id
             self.output_index = self.output.index
         else:
             self.output = None  # type: BaseOutput
@@ -52,7 +66,7 @@ class BaseInput(InputOutput):
 
     def link_output(self, output):
         assert self.output is None
-        assert self.output_txid == output.transaction.hash
+        assert self.output_txid == output.transaction.id
         assert self.output_index == output.index
         self.output = output
 
@@ -95,15 +109,14 @@ class BaseInput(InputOutput):
         stream.write_uint32(self.sequence)
 
 
-class BaseOutputAmountEstimator(object):
+class BaseOutputEffectiveAmountEstimator(object):
 
     __slots__ = 'coin', 'txi', 'txo', 'fee', 'effective_amount'
 
-    def __init__(self, coin, txo):  # type: (BaseCoin, BaseOutput) -> None
-        self.coin = coin
+    def __init__(self, ledger, txo):  # type: (baseledger.BaseLedger, BaseOutput) -> None
         self.txo = txo
-        self.txi = coin.transaction_class.input_class.spend(txo)
-        self.fee = coin.get_input_output_fee(self.txi)
+        self.txi = ledger.transaction_class.input_class.spend(txo)
+        self.fee = ledger.get_input_output_fee(self.txi)
         self.effective_amount = txo.amount - self.fee
 
     def __lt__(self, other):
@@ -113,16 +126,15 @@ class BaseOutputAmountEstimator(object):
 class BaseOutput(InputOutput):
 
     script_class = None
-    estimator_class = BaseOutputAmountEstimator
+    estimator_class = BaseOutputEffectiveAmountEstimator
 
-    def __init__(self, amount, script):
+    def __init__(self, amount, script, txid=None):
+        super(BaseOutput, self).__init__(txid)
         self.amount = amount  # type: int
         self.script = script  # type: BaseOutputScript
-        self.transaction = None  # type: BaseTransaction
-        self.index = None  # type: int
 
-    def get_estimator(self, coin):
-        return self.estimator_class(coin, self)
+    def get_estimator(self, ledger):
+        return self.estimator_class(ledger, self)
 
     @classmethod
     def pay_pubkey_hash(cls, amount, pubkey_hash):
@@ -145,23 +157,25 @@ class BaseTransaction:
     input_class = None
     output_class = None
 
-    def __init__(self, raw=None, version=1, locktime=0, height=None, is_saved=False):
+    def __init__(self, raw=None, version=1, locktime=0):
         self._raw = raw
         self._hash = None
         self._id = None
         self.version = version  # type: int
         self.locktime = locktime  # type: int
-        self.height = height  # type: int
         self._inputs = []  # type: List[BaseInput]
         self._outputs = []  # type: List[BaseOutput]
-        self.is_saved = is_saved  # type: bool
         if raw is not None:
             self._deserialize()
 
     @property
+    def hex_id(self):
+        return hexlify(self.id)
+
+    @property
     def id(self):
         if self._id is None:
-            self._id = hexlify(self.hash[::-1])
+            self._id = self.hash[::-1]
         return self._id
 
     @property
@@ -189,18 +203,19 @@ class BaseTransaction:
     def outputs(self):  # type: () -> ReadOnlyList[BaseOutput]
         return ReadOnlyList(self._outputs)
 
-    def add_inputs(self, inputs):
-        self._inputs.extend(inputs)
+    def _add(self, new_ios, existing_ios):
+        for txio in new_ios:
+            txio.transaction = self
+            txio.index = len(existing_ios)
+            existing_ios.append(txio)
         self._reset()
         return self
 
+    def add_inputs(self, inputs):
+        return self._add(inputs, self._inputs)
+
     def add_outputs(self, outputs):
-        for txo in outputs:
-            txo.transaction = self
-            txo.index = len(self._outputs)
-            self._outputs.append(txo)
-        self._reset()
-        return self
+        return self._add(outputs, self._outputs)
 
     @property
     def fee(self):
@@ -260,16 +275,76 @@ class BaseTransaction:
             ])
             self.locktime = stream.read_uint32()
 
-    def sign(self, account):  # type: (Account) -> BaseTransaction
+    @classmethod
+    def get_effective_amount_estimators(cls, funding_accounts):
+        # type: (Iterable[Account]) -> Generator[BaseOutputEffectiveAmountEstimator]
+        for account in funding_accounts:
+            for utxo in account.coin.ledger.get_unspent_outputs(account):
+                yield utxo.get_estimator(account.coin)
+
+    @classmethod
+    def ensure_all_have_same_ledger(cls, funding_accounts, change_account=None):
+        # type: (Iterable[Account], Account) -> baseledger.BaseLedger
+        ledger = None
+        for account in funding_accounts:
+            if ledger is None:
+                ledger = account.coin.ledger
+            if ledger != account.coin.ledger:
+                raise ValueError(
+                    'All funding accounts used to create a transaction must be on the same ledger.'
+                )
+        if change_account is not None and change_account.coin.ledger != ledger:
+            raise ValueError('Change account must use same ledger as funding accounts.')
+        return ledger
+
+    @classmethod
+    def pay(cls, outputs, funding_accounts, change_account):
+        """ Efficiently spend utxos from funding_accounts to cover the new outputs. """
+
+        tx = cls().add_outputs(outputs)
+        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+        amount = ledger.get_transaction_base_fee(tx)
+        selector = CoinSelector(
+            list(cls.get_effective_amount_estimators(funding_accounts)),
+            amount,
+            ledger.get_input_output_fee(
+                cls.output_class.pay_pubkey_hash(COIN, NULL_HASH)
+            )
+        )
+
+        spendables = selector.select()
+        if not spendables:
+            raise ValueError('Not enough funds to cover this transaction.')
+
+        spent_sum = sum(s.effective_amount for s in spendables)
+        if spent_sum > amount:
+            change_address = change_account.get_least_used_change_address()
+            change_hash160 = change_account.coin.address_to_hash160(change_address)
+            change_amount = spent_sum - amount
+            tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
+
+        tx.add_inputs([s.txi for s in spendables])
+        tx.sign(funding_accounts)
+        return tx
+
+    @classmethod
+    def liquidate(cls, assets, funding_accounts, change_account):
+        """ Spend assets (utxos) supplementing with funding_accounts if fee is higher than asset value. """
+
+    def sign(self, funding_accounts):  # type: (Iterable[Account]) -> BaseTransaction
+        ledger = self.ensure_all_have_same_ledger(funding_accounts)
         for i, txi in enumerate(self._inputs):
             txo_script = txi.output.script
             if txo_script.is_pay_pubkey_hash:
-                address = account.coin.hash160_to_address(txo_script.values['pubkey_hash'])
+                address = ledger.coin_class.hash160_to_address(txo_script.values['pubkey_hash'])
+                account = ledger.accounts.get_account_for_address(address)
                 private_key = account.get_private_key_for_address(address)
                 tx = self._serialize_for_signature(i)
                 txi.script.values['signature'] = private_key.sign(tx)+six.int2byte(1)
                 txi.script.values['pubkey'] = private_key.public_key.pubkey_bytes
                 txi.script.generate()
+            else:
+                raise NotImplementedError("Don't know how to spend this output.")
         self._reset()
         return self
 

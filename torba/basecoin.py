@@ -44,22 +44,13 @@ class BaseCoin(six.with_metaclass(CoinRegistry)):
 
     def __init__(self, ledger, fee_per_byte):
         self.ledger = ledger
-        self.fee_per_byte = fee_per_byte
 
     @classmethod
     def get_id(cls):
         return '{}_{}'.format(cls.symbol.lower(), cls.network.lower())
 
     def to_dict(self):
-        return {'fee_per_byte': self.fee_per_byte}
-
-    def get_input_output_fee(self, io):
-        """ Fee based on size of the input / output. """
-        return self.fee_per_byte * io.size
-
-    def get_transaction_base_fee(self, tx):
-        """ Fee for the transaction header and all outputs; without inputs. """
-        return self.fee_per_byte * tx.base_size
+        return {}
 
     def hash160_to_address(self, h160):
         raw_address = self.pubkey_address_prefix + h160

@@ -2,7 +2,7 @@ import six
 from random import Random
 from typing import List
 
-from torba.basetransaction import BaseOutputAmountEstimator
+import torba
 
 MAXIMUM_TRIES = 100000
 
@@ -10,7 +10,7 @@ MAXIMUM_TRIES = 100000
 class CoinSelector:
 
     def __init__(self, txos, target, cost_of_change, seed=None):
-        # type: (List[BaseOutputAmountEstimator], int, int, str) -> None
+        # type: (List[torba.basetransaction.BaseOutputAmountEstimator], int, int, str) -> None
         self.txos = txos
         self.target = target
         self.cost_of_change = cost_of_change

@@ -1,7 +1,7 @@
 from twisted.trial import unittest
 
-from torba.coin.btc import BTC
-from torba.manager import WalletManager
+from torba.coin.bitcoinsegwit import BTC
+from torba.basemanager import WalletManager
 from torba.wallet import Account, Wallet, WalletStorage
 
 from .ftc import FTC

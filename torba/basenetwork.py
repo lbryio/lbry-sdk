@@ -137,8 +137,8 @@ class StratumClientFactory(protocol.ClientFactory):
 
 class BaseNetwork:
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, ledger):
+        self.config = ledger.config
         self.client = None
         self.service = None
         self.running = False

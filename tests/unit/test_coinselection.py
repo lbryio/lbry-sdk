@@ -1,9 +1,9 @@
 import unittest
 
-from torba.coin.btc import BTC
+from torba.coin.bitcoinsegwit import BTC
 from torba.coinselection import CoinSelector, MAXIMUM_TRIES
 from torba.constants import CENT
-from torba.manager import WalletManager
+from torba.basemanager import WalletManager
 
 from .test_transaction import Output, get_output as utxo
 

@@ -5,13 +5,13 @@ from twisted.internet import defer
 from torba.account import AccountsView
 from torba.basecoin import CoinRegistry
 from torba.baseledger import BaseLedger
-from torba.basetransaction import NULL_HASH
+from torba.basetransaction import BaseTransaction, NULL_HASH
 from torba.coinselection import CoinSelector
 from torba.constants import COIN
 from torba.wallet import Wallet, WalletStorage
 
 
-class WalletManager:
+class BaseWalletManager(object):
 
     def __init__(self, wallets=None, ledgers=None):
         self.wallets = wallets or []  # type: List[Wallet]
@@ -35,9 +35,21 @@ class WalletManager:
         ledger_class = coin_class.ledger_class
         ledger = self.ledgers.get(ledger_class)
         if ledger is None:
-            ledger = ledger_class(self.get_accounts_view(coin_class), ledger_config or {})
+            ledger = self.create_ledger(ledger_class, self.get_accounts_view(coin_class), ledger_config or {})
             self.ledgers[ledger_class] = ledger
         return ledger
+
+    def create_ledger(self, ledger_class, accounts, config):
+        return ledger_class(accounts, config)
+
+    @defer.inlineCallbacks
+    def get_balance(self):
+        balances = {}
+        for ledger in self.ledgers:
+            for account in self.get_accounts(ledger.coin_class):
+                balances.setdefault(ledger.coin_class.name, 0)
+                balances[ledger.coin_class.name] += yield account.get_balance()
+        defer.returnValue(balances)
 
     @property
     def default_wallet(self):
@@ -72,14 +84,14 @@ class WalletManager:
         return wallet.generate_account(ledger)
 
     @defer.inlineCallbacks
-    def start_ledgers(self):
+    def start(self):
         self.running = True
         yield defer.DeferredList([
             l.start() for l in self.ledgers.values()
         ])
 
     @defer.inlineCallbacks
-    def stop_ledgers(self):
+    def stop(self):
         yield defer.DeferredList([
             l.stop() for l in self.ledgers.values()
         ])
@@ -91,12 +103,13 @@ class WalletManager:
         account = self.default_account
         coin = account.coin
         ledger = coin.ledger
-        tx_class = ledger.transaction_class
+        tx_class = ledger.transaction_class  # type: BaseTransaction
         in_class, out_class = tx_class.input_class, tx_class.output_class
 
         estimators = [
             txo.get_estimator(coin) for txo in account.get_unspent_utxos()
         ]
+        tx_class.create()
 
         cost_of_output = coin.get_input_output_fee(
             out_class.pay_pubkey_hash(COIN, NULL_HASH)

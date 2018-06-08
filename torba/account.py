@@ -1,6 +1,7 @@
 import itertools
 from typing import Dict, Generator
 from binascii import hexlify, unhexlify
+from twisted.internet import defer
 
 from torba.basecoin import BaseCoin
 from torba.mnemonic import Mnemonic
@@ -20,14 +21,14 @@ class KeyChain:
             for key in child_keys
         ]
 
-    @property
+    @defer.inlineCallbacks
     def has_gap(self):
         if len(self.addresses) < self.minimum_gap:
-            return False
+            defer.returnValue(False)
         for address in self.addresses[-self.minimum_gap:]:
-            if self.coin.ledger.is_address_old(address):
-                return False
-        return True
+            if (yield self.coin.ledger.is_address_old(address)):
+                defer.returnValue(False)
+        defer.returnValue(True)
 
     def generate_next_address(self):
         child_key = self.parent_key.child(len(self.child_keys))
@@ -35,11 +36,12 @@ class KeyChain:
         self.addresses.append(child_key.address)
         return child_key.address
 
+    @defer.inlineCallbacks
     def ensure_enough_addresses(self):
         starting_length = len(self.addresses)
-        while not self.has_gap:
+        while not (yield self.has_gap()):
             self.generate_next_address()
-        return self.addresses[starting_length:]
+        defer.returnValue(self.addresses[starting_length:])
 
 
 class Account:
@@ -135,50 +137,39 @@ class Account:
                 if address == match:
                     return self.private_key.child(a).child(b)
 
+    @defer.inlineCallbacks
     def ensure_enough_addresses(self):
-        return [
-            address
-            for keychain in self.keychains
-            for address in keychain.ensure_enough_addresses()
-        ]
-
-    def addresses_without_history(self):
-        for address in self.addresses:
-            if not self.coin.ledger.has_address(address):
-                yield address
+        addresses = []
+        for keychain in self.keychains:
+            for address in (yield keychain.ensure_enough_addresses()):
+                addresses.append(address)
+        defer.returnValue(addresses)
 
     def get_least_used_receiving_address(self, max_transactions=1000):
         return self._get_least_used_address(
-            self.receiving_keys.addresses,
             self.receiving_keys,
             max_transactions
         )
 
     def get_least_used_change_address(self, max_transactions=100):
         return self._get_least_used_address(
-            self.change_keys.addresses,
             self.change_keys,
             max_transactions
         )
 
-    def _get_least_used_address(self, addresses, keychain, max_transactions):
+    def _get_least_used_address(self, keychain, max_transactions):
         ledger = self.coin.ledger
-        address = ledger.get_least_used_address(addresses, max_transactions)
+        address = ledger.get_least_used_address(self, keychain, max_transactions)
         if address:
             return address
         address = keychain.generate_next_address()
         ledger.subscribe_history(address)
         return address
 
-    def get_unspent_utxos(self):
-        return [
-            utxo
-            for address in self.addresses
-            for utxo in self.coin.ledger.get_unspent_outputs(address)
-        ]
-
+    @defer.inlineCallbacks
     def get_balance(self):
-        return sum(utxo.amount for utxo in self.get_unspent_utxos())
+        utxos = yield self.coin.ledger.get_unspent_outputs(self)
+        defer.returnValue(sum(utxo.amount for utxo in utxos))
 
 
 class AccountsView:
@@ -188,3 +179,13 @@ class AccountsView:
 
     def __iter__(self):  # type: () -> Generator[Account]
         return self._accounts_generator()
+
+    def addresses(self):
+        for account in self:
+            for address in account.addresses:
+                yield address
+
+    def get_account_for_address(self, address):
+        for account in self:
+            if address in account.addresses:
+                return account

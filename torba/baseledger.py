@@ -1,17 +1,18 @@
 import os
 import hashlib
+import struct
 from binascii import hexlify, unhexlify
 from typing import List, Dict, Type
 from operator import itemgetter
 
 from twisted.internet import threads, defer, task, reactor
 
+from torba import basetransaction, basedatabase
 from torba.account import Account, AccountsView
 from torba.basecoin import BaseCoin
-from torba.basetransaction import BaseTransaction
 from torba.basenetwork import BaseNetwork
 from torba.stream import StreamController, execute_serially
-from torba.util import hex_to_int, int_to_hex, rev_hex, hash_encode
+from torba.util import int_to_hex, rev_hex, hash_encode
 from torba.hash import double_sha256, pow_hash
 
 
@@ -28,22 +29,11 @@ class Address:
         return len(self.transactions)
 
     def add_transaction(self, transaction):
-        self.transactions.append(transaction)
-
-    def get_unspent_utxos(self):
-        inputs, outputs, utxos = [], [], []
-        for tx in self:
-            for txi in tx.inputs:
-                inputs.append((txi.output_txid, txi.output_index))
-            for txo in tx.outputs:
-                if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == self.pubkey_hash:
-                    outputs.append((txo, txo.transaction.hash, txo.index))
-        for output in set(outputs):
-            if output[1:] not in inputs:
-                yield output[0]
+        if transaction not in self.transactions:
+            self.transactions.append(transaction)
 
 
-class BaseLedger:
+class BaseLedger(object):
 
     # coin_class is automatically set by BaseCoin metaclass
     # when it creates the Coin classes, there is a 1..1 relationship
@@ -52,21 +42,38 @@ class BaseLedger:
     # but many coin instances can exist linking back to the single Ledger instance.
     coin_class = None  # type: Type[BaseCoin]
     network_class = None  # type: Type[BaseNetwork]
+    headers_class = None  # type: Type[BaseHeaders]
+    database_class = None  # type: Type[basedatabase.BaseSQLiteWalletStorage]
 
-    verify_bits_to_target = True
+    default_fee_per_byte = 10
 
-    def __init__(self, accounts, config=None, network=None, db=None):
+    def __init__(self, accounts, config=None, db=None, network=None,
+                 fee_per_byte=default_fee_per_byte):
         self.accounts = accounts  # type: AccountsView
         self.config = config or {}
-        self.db = db
-        self.addresses = {}  # type: Dict[str, Address]
-        self.transactions = {}  # type: Dict[str, BaseTransaction]
-        self.headers = Headers(self)
-        self._on_transaction_controller = StreamController()
-        self.on_transaction = self._on_transaction_controller.stream
-        self.network = network or self.network_class(self.config)
+        self.db = db or self.database_class(self)  # type: basedatabase.BaseSQLiteWalletStorage
+        self.network = network or self.network_class(self)
         self.network.on_header.listen(self.process_header)
         self.network.on_status.listen(self.process_status)
+        self.headers = self.headers_class(self)
+        self.fee_per_byte = fee_per_byte
+
+        self._on_transaction_controller = StreamController()
+        self.on_transaction = self._on_transaction_controller.stream
+
+    @property
+    def path(self):
+        return os.path.join(
+            self.config['wallet_path'], self.coin_class.get_id()
+        )
+
+    def get_input_output_fee(self, io):
+        """ Fee based on size of the input / output. """
+        return self.fee_per_byte * io.size
+
+    def get_transaction_base_fee(self, tx):
+        """ Fee for the transaction header and all outputs; without inputs. """
+        return self.fee_per_byte * tx.base_size
 
     @property
     def transaction_class(self):
@@ -77,79 +84,51 @@ class BaseLedger:
         return cls(json_dict)
 
     @defer.inlineCallbacks
-    def load(self):
-        txs = yield self.db.get_transactions()
-        for tx_hash, raw, height in txs:
-            self.transactions[tx_hash] = self.transaction_class(raw, height)
-        txios = yield self.db.get_transaction_inputs_and_outputs()
-        for tx_hash, address_hash, input_output, amount, height in txios:
-            tx = self.transactions[tx_hash]
-            address = self.addresses.get(address_hash)
-            if address is None:
-                address = self.addresses[address_hash] = Address(self.coin_class.address_to_hash160(address_hash))
-            tx.add_txio(address, input_output, amount)
-            address.add_transaction(tx)
-
     def is_address_old(self, address, age_limit=2):
-        age = -1
-        for tx in self.get_transactions(address, []):
-            if tx.height == 0:
-                tx_age = 0
-            else:
-                tx_age = self.headers.height - tx.height + 1
-            if tx_age > age:
-                age = tx_age
+        height = yield self.db.get_earliest_block_height_for_address(address)
+        if height is None:
+            return False
+        age = self.headers.height - height + 1
         return age > age_limit
 
-    def add_transaction(self, address, transaction):  # type: (str, BaseTransaction) -> None
-        if address not in self.addresses:
-            self.addresses[address] = Address(self.coin_class.address_to_hash160(address))
-        self.addresses[address].add_transaction(transaction)
-        self.transactions.setdefault(transaction.id, transaction)
+    @defer.inlineCallbacks
+    def add_transaction(self, transaction, height):  # type: (basetransaction.BaseTransaction, int) -> None
+        yield self.db.add_transaction(transaction, height, False, False)
         self._on_transaction_controller.add(transaction)
 
     def has_address(self, address):
-        return address in self.addresses
+        return address in self.accounts.addresses
 
-    def get_transaction(self, tx_hash, *args):
-        return self.transactions.get(tx_hash, *args)
+    @defer.inlineCallbacks
+    def get_least_used_address(self, account, keychain, max_transactions=100):
+        used_addresses = yield self.db.get_used_addresses(account)
+        unused_set = set(keychain.addresses) - set(map(itemgetter(0), used_addresses))
+        if unused_set:
+            defer.returnValue(unused_set.pop())
+        if used_addresses and used_addresses[0][1] < max_transactions:
+            defer.returnValue(used_addresses[0][0])
 
-    def get_transactions(self, address, *args):
-        return self.addresses.get(address, *args)
+    def get_unspent_outputs(self, account):
+        return self.db.get_utxos(account, self.transaction_class.output_class)
 
-    def get_status(self, address):
-        hashes = [
-            '{}:{}:'.format(hexlify(tx.hash), tx.height).encode()
-            for tx in self.get_transactions(address, []) if tx.height is not None
-        ]
-        if hashes:
-            return hexlify(hashlib.sha256(b''.join(hashes)).digest())
-
-    def has_transaction(self, tx_hash):
-        return tx_hash in self.transactions
-
-    def get_least_used_address(self, addresses, max_transactions=100):
-        transaction_counts = []
-        for address in addresses:
-            transactions = self.get_transactions(address, [])
-            tx_count = len(transactions)
-            if tx_count == 0:
-                return address
-            elif tx_count >= max_transactions:
-                continue
-            else:
-                transaction_counts.append((address, tx_count))
-        if transaction_counts:
-            transaction_counts.sort(key=itemgetter(1))
-            return transaction_counts[0]
-
-    def get_unspent_outputs(self, address):
-        if address in self.addresses:
-            return list(self.addresses[address].get_unspent_utxos())
-        return []
+#    def get_unspent_outputs(self, account):
+#        inputs, outputs, utxos = set(), set(), set()
+#        for address in self.addresses.values():
+#            for tx in address:
+#                for txi in tx.inputs:
+#                    inputs.add((hexlify(txi.output_txid), txi.output_index))
+#                for txo in tx.outputs:
+#                    if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == address.pubkey_hash:
+#                        outputs.add((txo, txo.transaction.id, txo.index))
+#        for output in outputs:
+#            if output[1:] not in inputs:
+#                yield output[0]
 
     @defer.inlineCallbacks
     def start(self):
+        if not os.path.exists(self.path):
+            os.mkdir(self.path)
+        yield self.db.start()
         first_connection = self.network.on_connected.first
         self.network.start()
         yield first_connection
@@ -197,13 +176,14 @@ class BaseLedger:
         # this avoids situation where we're getting status updates to addresses we know
         # need to update anyways. Continue to get history and create more addresses until
         # all missing addresses are created and history for them is fully restored.
-        account.ensure_enough_addresses()
-        addresses = list(account.addresses_without_history())
+        yield account.ensure_enough_addresses()
+        used_addresses = yield self.db.get_used_addresses(account)
+        addresses = set(account.addresses) - set(map(itemgetter(0), used_addresses))
         while addresses:
             yield defer.DeferredList([
                 self.update_history(a) for a in addresses
             ])
-            addresses = account.ensure_enough_addresses()
+            addresses = yield account.ensure_enough_addresses()
 
         # By this point all of the addresses should be restored and we
         # can now subscribe all of them to receive updates.
@@ -212,32 +192,49 @@ class BaseLedger:
             for address in account.addresses
         ])
 
+    def _get_status_from_history(self, history):
+        hashes = [
+            '{}:{}:'.format(hash.decode(), height).encode()
+            for hash, height in map(itemgetter('tx_hash', 'height'), history)
+        ]
+        if hashes:
+            return hexlify(hashlib.sha256(b''.join(hashes)).digest())
+
     @defer.inlineCallbacks
-    def update_history(self, address):
+    def update_history(self, address, remote_status=None):
         history = yield self.network.get_history(address)
-        for hash in map(itemgetter('tx_hash'), history):
-            transaction = self.get_transaction(hash)
-            if not transaction:
+        for hash, height in map(itemgetter('tx_hash', 'height'), history):
+            if not (yield self.db.has_transaction(hash)):
                 raw = yield self.network.get_transaction(hash)
                 transaction = self.transaction_class(unhexlify(raw))
-            self.add_transaction(address, transaction)
+                yield self.add_transaction(transaction, height)
+        if remote_status is None:
+            remote_status = self._get_status_from_history(history)
+        if remote_status:
+            yield self.db.set_address_status(address, remote_status)
 
     @defer.inlineCallbacks
     def subscribe_history(self, address):
-        status = yield self.network.subscribe_address(address)
-        if status != self.get_status(address):
-            yield self.update_history(address)
+        remote_status = yield self.network.subscribe_address(address)
+        local_status = yield self.db.get_address_status(address)
+        if local_status != remote_status:
+            yield self.update_history(address, remote_status)
 
+    @defer.inlineCallbacks
     def process_status(self, response):
-        address, status = response
-        if status != self.get_status(address):
-            task.deferLater(reactor, 0, self.update_history, address)
+        address, remote_status = response
+        local_status = yield self.db.get_address_status(address)
+        if local_status != remote_status:
+            yield self.update_history(address, remote_status)
 
     def broadcast(self, tx):
         return self.network.broadcast(hexlify(tx.raw))
 
 
-class Headers:
+class BaseHeaders:
+
+    header_size = 80
+    verify_bits_to_target = True
 
     def __init__(self, ledger):
         self.ledger = ledger
@@ -247,9 +244,7 @@ class Headers:
 
     @property
     def path(self):
-        wallet_path = self.ledger.config.get('wallet_path', '')
-        filename = '{}_headers'.format(self.ledger.coin_class.get_id())
-        return os.path.join(wallet_path, filename)
+        return os.path.join(self.ledger.path, 'headers')
 
     def touch(self):
         if not os.path.exists(self.path):
@@ -261,13 +256,13 @@ class Headers:
         return len(self) - 1
 
     def sync_read_length(self):
-        return os.path.getsize(self.path) // self.ledger.header_size
+        return os.path.getsize(self.path) // self.header_size
 
     def sync_read_header(self, height):
         if 0 <= height < len(self):
             with open(self.path, 'rb') as f:
-                f.seek(height * self.ledger.header_size)
-                return f.read(self.ledger.header_size)
+                f.seek(height * self.header_size)
+                return f.read(self.header_size)
 
     def __len__(self):
         if self._size is None:
@@ -295,7 +290,7 @@ class Headers:
             previous_header = header
 
         with open(self.path, 'r+b') as f:
-            f.seek(start * self.ledger.header_size)
+            f.seek(start * self.header_size)
             f.write(headers)
             f.truncate()
 
@@ -306,9 +301,9 @@ class Headers:
         self._on_change_controller.add(change)
 
     def _iterate_headers(self, height, headers):
-        assert len(headers) % self.ledger.header_size == 0
-        for idx in range(len(headers) // self.ledger.header_size):
-            start, end = idx * self.ledger.header_size, (idx + 1) * self.ledger.header_size
+        assert len(headers) % self.header_size == 0
+        for idx in range(len(headers) // self.header_size):
+            start, end = idx * self.header_size, (idx + 1) * self.header_size
             header = headers[start:end]
             yield self._deserialize(height+idx, header)
 
@@ -317,15 +312,16 @@ class Headers:
         assert previous_hash == header['prev_block_hash'], \
             "prev hash mismatch: {} vs {}".format(previous_hash, header['prev_block_hash'])
 
-        bits, target = self._calculate_lbry_next_work_required(height, previous_header, header)
+        bits, target = self._calculate_next_work_required(height, previous_header, header)
         assert bits == header['bits'], \
             "bits mismatch: {} vs {} (hash: {})".format(
             bits, header['bits'], self._hash_header(header))
 
-        _pow_hash = self._pow_hash_header(header)
-        assert int(b'0x' + _pow_hash, 16) <= target, \
-            "insufficient proof of work: {} vs target {}".format(
-            int(b'0x' + _pow_hash, 16), target)
+        # TODO: FIX ME!!!
+        #_pow_hash = self._pow_hash_header(header)
+        #assert int(b'0x' + _pow_hash, 16) <= target, \
+        #    "insufficient proof of work: {} vs target {}".format(
+        #    int(b'0x' + _pow_hash, 16), target)
 
     @staticmethod
     def _serialize(header):
@@ -333,7 +329,6 @@ class Headers:
             int_to_hex(header['version'], 4),
             rev_hex(header['prev_block_hash']),
             rev_hex(header['merkle_root']),
-            rev_hex(header['claim_trie_root']),
             int_to_hex(int(header['timestamp']), 4),
             int_to_hex(int(header['bits']), 4),
             int_to_hex(int(header['nonce']), 4)
@@ -341,15 +336,16 @@ class Headers:
 
     @staticmethod
     def _deserialize(height, header):
+        version, = struct.unpack('<I', header[:4])
+        timestamp, bits, nonce = struct.unpack('<III', header[68:80])
         return {
-            'version': hex_to_int(header[0:4]),
+            'block_height': height,
+            'version': version,
             'prev_block_hash': hash_encode(header[4:36]),
             'merkle_root': hash_encode(header[36:68]),
-            'claim_trie_root': hash_encode(header[68:100]),
-            'timestamp': hex_to_int(header[100:104]),
-            'bits': hex_to_int(header[104:108]),
-            'nonce': hex_to_int(header[108:112]),
-            'block_height': height
+            'timestamp': timestamp,
+            'bits': bits,
+            'nonce': nonce,
         }
 
     def _hash_header(self, header):
@@ -362,16 +358,15 @@ class Headers:
             return b'0' * 64
         return hash_encode(pow_hash(unhexlify(self._serialize(header))))
 
-    def _calculate_lbry_next_work_required(self, height, first, last):
-        """ See: lbrycrd/src/lbry.cpp """
+    def _calculate_next_work_required(self, height, first, last):
 
         if height == 0:
             return self.ledger.genesis_bits, self.ledger.max_target
 
-        if self.ledger.verify_bits_to_target:
+        if self.verify_bits_to_target:
             bits = last['bits']
             bitsN = (bits >> 24) & 0xff
-            assert 0x03 <= bitsN <= 0x1f, \
+            assert 0x03 <= bitsN <= 0x1d, \
                 "First part of bits should be in [0x03, 0x1d], but it was {}".format(hex(bitsN))
             bitsBase = bits & 0xffffff
             assert 0x8000 <= bitsBase <= 0x7fffff, \

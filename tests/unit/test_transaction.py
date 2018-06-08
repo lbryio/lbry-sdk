@@ -2,9 +2,9 @@ from binascii import hexlify, unhexlify
 from twisted.trial import unittest
 
 from torba.account import Account
-from torba.coin.btc import BTC, Transaction, Output, Input
+from torba.coin.bitcoinsegwit import BTC, Transaction, Output, Input
 from torba.constants import CENT, COIN
-from torba.manager import WalletManager
+from torba.basemanager import WalletManager
 from torba.wallet import Wallet
 
 
