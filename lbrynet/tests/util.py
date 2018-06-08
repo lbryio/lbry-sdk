@@ -19,7 +19,6 @@ DEFAULT_ISO_TIME = time.mktime(DEFAULT_TIMESTAMP.timetuple())
 
 log = logging.getLogger("lbrynet.tests.util")
 
-
 def mk_db_and_blob_dir():
     db_dir = tempfile.mkdtemp()
     blob_dir = tempfile.mkdtemp()
