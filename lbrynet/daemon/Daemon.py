@@ -193,7 +193,9 @@ class Daemon(AuthJSONRPCServer):
             Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
         }
         self.looping_call_manager = LoopingCallManager(calls)
+        log.info("printed")
         self.component_manager = component_manager or ComponentManager(self.analytics_manager)
+        log.info("printed 2")
 
     @defer.inlineCallbacks
     def setup(self):
