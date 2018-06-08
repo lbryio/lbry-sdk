@@ -117,13 +117,12 @@ class EncryptedFileManager(object):
     def _start_lbry_files(self):
         files = yield self.session.storage.get_all_lbry_files()
         claim_infos = yield self.session.storage.get_claims_from_stream_hashes([file['stream_hash'] for file in files])
-        b_prm = self.session.base_payment_rate_manager
-        # payment_rate_manager = NegotiatedPaymentRateManager(b_prm, self.session.blob_tracker)
+        prm = self.session.payment_rate_manager
 
         log.info("Starting %i files", len(files))
         for file_info in files:
             claim_info = claim_infos.get(file_info['stream_hash'])
-            self._start_lbry_file(file_info, b_prm, claim_info)
+            self._start_lbry_file(file_info, prm, claim_info)
 
         log.info("Started %i lbry files", len(self.lbry_files))
         if self.auto_re_reflect is True:
