@@ -4,7 +4,7 @@
 # the GNU Lesser General Public License Version 3, or any later version.
 # See the COPYING file included in this archive
 
-import unittest
+from twisted.trial import unittest
 
 from lbrynet.dht.msgtypes import RequestMessage, ResponseMessage, ErrorMessage
 from lbrynet.dht.msgformat import MessageTranslator, DefaultFormat

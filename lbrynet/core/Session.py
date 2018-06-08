@@ -6,8 +6,7 @@ from lbrynet.dht import node, hashannouncer
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.utils import generate_id
-from lbrynet.core.PaymentRateManager import BasePaymentRateManager, NegotiatedPaymentRateManager
-from lbrynet.core.BlobAvailability import BlobAvailabilityTracker
+from lbrynet.core.PaymentRateManager import BasePaymentRateManager, OnlyFreePaymentsManager
 
 log = logging.getLogger(__name__)
 
@@ -33,14 +32,11 @@ class Session(object):
     peers can connect to this peer.
     """
 
-    def __init__(self, blob_data_payment_rate, db_dir=None,
-                 node_id=None, peer_manager=None, dht_node_port=None,
-                 known_dht_nodes=None, peer_finder=None,
-                 hash_announcer=None, blob_dir=None,
-                 blob_manager=None, peer_port=None, use_upnp=True,
-                 rate_limiter=None, wallet=None,
-                 dht_node_class=node.Node, blob_tracker_class=None,
-                 payment_rate_manager_class=None, is_generous=True, external_ip=None, storage=None):
+    def __init__(self, blob_data_payment_rate, db_dir=None, node_id=None, peer_manager=None, dht_node_port=None,
+                 known_dht_nodes=None, peer_finder=None, hash_announcer=None, blob_dir=None, blob_manager=None,
+                 peer_port=None, use_upnp=True, rate_limiter=None, wallet=None, dht_node_class=node.Node,
+                 blob_tracker_class=None, payment_rate_manager_class=None, is_generous=True, external_ip=None,
+                 storage=None):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
         @param db_dir: The directory in which levelDB files should be stored
@@ -107,8 +103,8 @@ class Session(object):
             self.known_dht_nodes = []
         self.blob_dir = blob_dir
         self.blob_manager = blob_manager
-        self.blob_tracker = None
-        self.blob_tracker_class = blob_tracker_class or BlobAvailabilityTracker
+        # self.blob_tracker = None
+        # self.blob_tracker_class = blob_tracker_class or BlobAvailabilityTracker
         self.peer_port = peer_port
         self.use_upnp = use_upnp
         self.rate_limiter = rate_limiter
@@ -118,11 +114,10 @@ class Session(object):
         self.dht_node_class = dht_node_class
         self.dht_node = None
         self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
-        self.payment_rate_manager = None
-        self.payment_rate_manager_class = payment_rate_manager_class or NegotiatedPaymentRateManager
-        self.is_generous = is_generous
+        self.payment_rate_manager = OnlyFreePaymentsManager()
+        # self.payment_rate_manager_class = payment_rate_manager_class or NegotiatedPaymentRateManager
+        # self.is_generous = is_generous
         self.storage = storage or SQLiteStorage(self.db_dir)
-        self._join_dht_deferred = None
 
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""
@@ -147,8 +142,8 @@ class Session(object):
         ds = []
         if self.hash_announcer:
             self.hash_announcer.stop()
-        if self.blob_tracker is not None:
-            ds.append(defer.maybeDeferred(self.blob_tracker.stop))
+        # if self.blob_tracker is not None:
+        #     ds.append(defer.maybeDeferred(self.blob_tracker.stop))
         if self.dht_node is not None:
             ds.append(defer.maybeDeferred(self.dht_node.stop))
         if self.rate_limiter is not None:
@@ -171,24 +166,24 @@ class Session(object):
             if not mapping:
                 return port
             if upnp.lanaddr == mapping[0]:
-                return mapping
+                return mapping[1]
             return get_free_port(upnp, port + 1, protocol)
 
-        def get_port_mapping(upnp, internal_port, protocol, description):
+        def get_port_mapping(upnp, port, protocol, description):
             # try to map to the requested port, if there is already a mapping use the next external
             # port available
             if protocol not in ['UDP', 'TCP']:
                 raise Exception("invalid protocol")
-            external_port = get_free_port(upnp, internal_port, protocol)
-            if isinstance(external_port, tuple):
+            port = get_free_port(upnp, port, protocol)
+            if isinstance(port, tuple):
                 log.info("Found existing UPnP redirect %s:%i (%s) to %s:%i, using it",
-                         self.external_ip, external_port[1], protocol, upnp.lanaddr, internal_port)
-                return external_port[1], protocol
-            upnp.addportmapping(external_port, protocol, upnp.lanaddr, internal_port,
+                         self.external_ip, port, protocol, upnp.lanaddr, port)
+                return port
+            upnp.addportmapping(port, protocol, upnp.lanaddr, port,
                                 description, '')
-            log.info("Set UPnP redirect %s:%i (%s) to %s:%i", self.external_ip, external_port,
-                     protocol, upnp.lanaddr, internal_port)
-            return external_port, protocol
+            log.info("Set UPnP redirect %s:%i (%s) to %s:%i", self.external_ip, port,
+                     protocol, upnp.lanaddr, port)
+            return port
 
         def threaded_try_upnp():
             if self.use_upnp is False:
@@ -203,13 +198,11 @@ class Session(object):
                     # best not to rely on this external ip, the router can be behind layers of NATs
                     self.external_ip = external_ip
                 if self.peer_port:
-                    self.upnp_redirects.append(
-                        get_port_mapping(u, self.peer_port, 'TCP', 'LBRY peer port')
-                    )
+                    self.peer_port = get_port_mapping(u, self.peer_port, 'TCP', 'LBRY peer port')
+                    self.upnp_redirects.append((self.peer_port, 'TCP'))
                 if self.dht_node_port:
-                    self.upnp_redirects.append(
-                        get_port_mapping(u, self.dht_node_port, 'UDP', 'LBRY DHT port')
-                    )
+                    self.dht_node_port = get_port_mapping(u, self.dht_node_port, 'UDP', 'LBRY DHT port')
+                    self.upnp_redirects.append((self.dht_node_port, 'UDP'))
                 return True
             return False
 
@@ -234,9 +227,9 @@ class Session(object):
             self.hash_announcer = hashannouncer.DHTHashAnnouncer(self.dht_node, self.storage)
         self.peer_manager = self.dht_node.peer_manager
         self.peer_finder = self.dht_node.peer_finder
-        self._join_dht_deferred = self.dht_node.joinNetwork(self.known_dht_nodes)
-        self._join_dht_deferred.addCallback(lambda _: log.info("Joined the dht"))
-        self._join_dht_deferred.addCallback(lambda _: self.hash_announcer.start())
+        d = self.dht_node.start(self.known_dht_nodes)
+        d.addCallback(lambda _: log.info("Joined the dht"))
+        d.addCallback(lambda _: self.hash_announcer.start())
 
     def _setup_other_components(self):
         log.debug("Setting up the rest of the components")
@@ -251,19 +244,19 @@ class Session(object):
             else:
                 self.blob_manager = DiskBlobManager(self.blob_dir, self.storage)
 
-        if self.blob_tracker is None:
-            self.blob_tracker = self.blob_tracker_class(
-                self.blob_manager, self.dht_node.peer_finder, self.dht_node
-            )
-        if self.payment_rate_manager is None:
-            self.payment_rate_manager = self.payment_rate_manager_class(
-                self.base_payment_rate_manager, self.blob_tracker, self.is_generous
-            )
+        # if self.blob_tracker is None:
+        #     self.blob_tracker = self.blob_tracker_class(
+        #         self.blob_manager, self.dht_node.peer_finder, self.dht_node
+        #     )
+        # if self.payment_rate_manager is None:
+        #     self.payment_rate_manager = self.payment_rate_manager_class(
+        #         self.base_payment_rate_manager, self.blob_tracker, self.is_generous
+        #     )
 
         self.rate_limiter.start()
         d = self.blob_manager.setup()
         d.addCallback(lambda _: self.wallet.start())
-        d.addCallback(lambda _: self.blob_tracker.start())
+        # d.addCallback(lambda _: self.blob_tracker.start())
         return d
 
     def _unset_upnp(self):

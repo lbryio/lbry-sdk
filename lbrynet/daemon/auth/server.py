@@ -13,7 +13,7 @@ from txjsonrpc import jsonrpclib
 from traceback import format_exc
 
 from lbrynet import conf
-from lbrynet.core.Error import InvalidAuthenticationToken, InvalidHeaderError
+from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
 from lbrynet.daemon.auth.util import APIKey, get_auth_message
 from lbrynet.daemon.auth.client import LBRY_SECRET
@@ -231,9 +231,9 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _render(self, request):
         time_in = utils.now()
-        if not self._check_headers(request):
-            self._render_error(Failure(InvalidHeaderError()), request, None)
-            return server.NOT_DONE_YET
+        # if not self._check_headers(request):
+        #     self._render_error(Failure(InvalidHeaderError()), request, None)
+        #     return server.NOT_DONE_YET
         session = request.getSession()
         session_id = session.uid
         finished_deferred = request.notifyFinish()

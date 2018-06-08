@@ -1,20 +1,22 @@
 import base64
 import datetime
-import logging
 import random
 import socket
 import string
 import json
-
+import traceback
+import functools
+import logging
 import pkg_resources
+from twisted.python.failure import Failure
 from twisted.internet import defer
 from lbryschema.claim import ClaimDict
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
+log = logging.getLogger(__name__)
+
 # digest_size is in bytes, and blob hashes are hex encoded
 blobhash_length = get_lbry_hash_obj().digest_size * 2
-
-log = logging.getLogger(__name__)
 
 
 # defining these time functions here allows for easier overriding in testing
@@ -172,3 +174,70 @@ def DeferredDict(d, consumeErrors=False):
         if success:
             response[k] = result
     defer.returnValue(response)
+
+
+class DeferredProfiler(object):
+    def __init__(self):
+        self.profile_results = {}
+
+    def add_result(self, fn, start_time, finished_time, stack, success):
+        self.profile_results[fn].append((start_time, finished_time, stack, success))
+
+    def show_profile_results(self, fn):
+        profile_results = list(self.profile_results[fn])
+        call_counts = {
+            caller: [(start, finished, finished - start, success)
+                     for (start, finished, _caller, success) in profile_results
+                     if _caller == caller]
+            for caller in set(result[2] for result in profile_results)
+        }
+
+        log.info("called %s %i times from %i sources\n", fn.__name__, len(profile_results), len(call_counts))
+        for caller in sorted(list(call_counts.keys()), key=lambda c: len(call_counts[c]), reverse=True):
+            call_info = call_counts[caller]
+            times = [r[2] for r in call_info]
+            own_time = sum(times)
+            times.sort()
+            longest = 0 if not times else times[-1]
+            shortest = 0 if not times else times[0]
+            log.info(
+                "%i successes and %i failures\nlongest %f, shortest %f, avg %f\ncaller:\n%s",
+                len([r for r in call_info if r[3]]),
+                len([r for r in call_info if not r[3]]),
+                longest, shortest, own_time / float(len(call_info)), caller
+            )
+
+    def profiled_deferred(self, reactor=None):
+        if not reactor:
+            from twisted.internet import reactor
+
+        def _cb(result, fn, start, caller_info):
+            if isinstance(result, (Failure, Exception)):
+                error = result
+                result = None
+            else:
+                error = None
+            self.add_result(fn, start, reactor.seconds(), caller_info, error is None)
+            if error is None:
+                return result
+            raise error
+
+        def _profiled_deferred(fn):
+            reactor.addSystemEventTrigger("after", "shutdown", self.show_profile_results, fn)
+            self.profile_results[fn] = []
+
+            @functools.wraps(fn)
+            def _wrapper(*args, **kwargs):
+                caller_info = "".join(traceback.format_list(traceback.extract_stack()[-3:-1]))
+                start = reactor.seconds()
+                d = defer.maybeDeferred(fn, *args, **kwargs)
+                d.addBoth(_cb, fn, start, caller_info)
+                return d
+
+            return _wrapper
+
+        return _profiled_deferred
+
+
+_profiler = DeferredProfiler()
+profile_deferred = _profiler.profiled_deferred

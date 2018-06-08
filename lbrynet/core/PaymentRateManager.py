@@ -93,6 +93,7 @@ class OnlyFreePaymentsManager(object):
 
         self.base = BasePaymentRateManager(0.0, 0.0)
         self.points_paid = 0.0
+        self.min_blob_data_payment_rate = 0.0
         self.generous = True
         self.strategy = OnlyFreeStrategy()
 

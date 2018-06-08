@@ -82,8 +82,7 @@ class SettingsTest(unittest.TestCase):
     def test_load_save_config_file(self):
         # setup settings
         adjustable_settings = {'data_dir': (str, conf.default_data_dir),
-                'lbryum_servers': (list, [('localhost', 5001)],
-                    conf.server_list, conf.server_list_reverse)}
+                'lbryum_servers': (list, [])}
         env = conf.Env(**adjustable_settings)
         settings = conf.Config({}, adjustable_settings, environment=env)
         conf.settings = settings

@@ -1,3 +1,4 @@
+certifi==2018.4.16
 Twisted==16.6.0
 cryptography==2.2.2
 appdirs==1.4.3
@@ -12,8 +13,8 @@ GitPython==2.1.3
 jsonrpc==1.2
 jsonrpclib==0.1.7
 keyring==10.4.0
-git+https://github.com/lbryio/lbryschema.git@v0.0.15#egg=lbryschema
-git+https://github.com/lbryio/lbryum.git@v3.2.1#egg=lbryum
+git+https://github.com/lbryio/lbryschema.git@v0.0.16rc2#egg=lbryschema
+git+https://github.com/lbryio/lbryum.git@v3.2.2rc1#egg=lbryum
 miniupnpc==1.9
 pbkdf2==1.3
 pyyaml==3.12

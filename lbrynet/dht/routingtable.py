@@ -7,9 +7,11 @@
 
 import random
 from zope.interface import implements
+from twisted.internet import defer
 import constants
 import kbucket
-import protocol
+from error import TimeoutError
+from distance import Distance
 from interface import IRoutingTable
 import logging
 
@@ -40,11 +42,29 @@ class TreeRoutingTable(object):
         @type parentNodeID: str
         """
         # Create the initial (single) k-bucket covering the range of the entire n-bit ID space
-        self._buckets = [kbucket.KBucket(rangeMin=0, rangeMax=2 ** constants.key_bits)]
         self._parentNodeID = parentNodeID
+        self._buckets = [kbucket.KBucket(rangeMin=0, rangeMax=2 ** constants.key_bits, node_id=self._parentNodeID)]
         if not getTime:
-            from time import time as getTime
+            from twisted.internet import reactor
+            getTime = reactor.seconds
         self._getTime = getTime
+
+    def get_contacts(self):
+        contacts = []
+        for i in range(len(self._buckets)):
+            for contact in self._buckets[i]._contacts:
+                contacts.append(contact)
+        return contacts
+
+    def _shouldSplit(self, bucketIndex, toAdd):
+        #  https://stackoverflow.com/questions/32129978/highly-unbalanced-kademlia-routing-table/32187456#32187456
+        if self._buckets[bucketIndex].keyInRange(self._parentNodeID):
+            return True
+        contacts = self.get_contacts()
+        distance = Distance(self._parentNodeID)
+        contacts.sort(key=lambda c: distance(c.id))
+        kth_contact = contacts[-1] if len(contacts) < constants.k else contacts[constants.k-1]
+        return distance(toAdd) < distance(kth_contact.id)
 
     def addContact(self, contact):
         """ Add the given contact to the correct k-bucket; if it already
@@ -52,60 +72,76 @@ class TreeRoutingTable(object):
 
         @param contact: The contact to add to this node's k-buckets
         @type contact: kademlia.contact.Contact
-        """
-        if contact.id == self._parentNodeID:
-            return
 
+        @rtype: defer.Deferred
+        """
+
+        if contact.id == self._parentNodeID:
+            return defer.succeed(None)
         bucketIndex = self._kbucketIndex(contact.id)
         try:
             self._buckets[bucketIndex].addContact(contact)
         except kbucket.BucketFull:
-            # The bucket is full; see if it can be split (by checking
-            # if its range includes the host node's id)
-            if self._buckets[bucketIndex].keyInRange(self._parentNodeID):
+            # The bucket is full; see if it can be split (by checking if its range includes the host node's id)
+            if self._shouldSplit(bucketIndex, contact.id):
                 self._splitBucket(bucketIndex)
                 # Retry the insertion attempt
-                self.addContact(contact)
+                return self.addContact(contact)
             else:
                 # We can't split the k-bucket
-                # NOTE:
-                # In section 2.4 of the 13-page version of the
-                # Kademlia paper, it is specified that in this case,
-                # the new contact should simply be dropped. However,
-                # in section 2.2, it states that the head contact in
-                # the k-bucket (i.e. the least-recently seen node)
-                # should be pinged - if it does not reply, it should
-                # be dropped, and the new contact added to the tail of
-                # the k-bucket. This implementation follows section
-                # 2.2 regarding this point.
+                #
+                # The 13 page kademlia paper specifies that the least recently contacted node in the bucket
+                # shall be pinged. If it fails to reply it is replaced with the new contact. If the ping is successful
+                # the new contact is ignored and not added to the bucket (sections 2.2 and 2.4).
+                #
+                # A reasonable extension to this is BEP 0005, which extends the above:
+                #
+                #    Not all nodes that we learn about are equal. Some are "good" and some are not.
+                #    Many nodes using the DHT are able to send queries and receive responses,
+                #    but are not able to respond to queries from other nodes. It is important that
+                #    each node's routing table must contain only known good nodes. A good node is
+                #    a node has responded to one of our queries within the last 15 minutes. A node
+                #    is also good if it has ever responded to one of our queries and has sent us a
+                #    query within the last 15 minutes. After 15 minutes of inactivity, a node becomes
+                #    questionable. Nodes become bad when they fail to respond to multiple queries
+                #    in a row. Nodes that we know are good are given priority over nodes with unknown status.
+                #
+                # When there are bad or questionable nodes in the bucket, the least recent is selected for
+                # potential replacement (BEP 0005). When all nodes in the bucket are fresh, the head (least recent)
+                # contact is selected as described in section 2.2 of the kademlia paper. In both cases the new contact
+                # is ignored if the pinged node replies.
 
-                def replaceContact(failure, deadContactID):
-                    """ Callback for the deferred PING RPC to see if the head
-                    node in the k-bucket is still responding
+                def replaceContact(failure, deadContact):
+                    """
+                    Callback for the deferred PING RPC to see if the node to be replaced in the k-bucket is still
+                    responding
 
                     @type failure: twisted.python.failure.Failure
                     """
-                    failure.trap(protocol.TimeoutError)
-                    if len(deadContactID) != constants.key_bits / 8:
-                        raise ValueError("invalid contact id")
-                    log.debug("Replacing dead contact: %s", deadContactID.encode('hex'))
+                    failure.trap(TimeoutError)
+                    log.debug("Replacing dead contact in bucket %i: %s:%i (%s) with %s:%i (%s)", bucketIndex,
+                              deadContact.address, deadContact.port, deadContact.log_id(), contact.address,
+                              contact.port, contact.log_id())
                     try:
-                        # Remove the old contact...
-                        self._buckets[bucketIndex].removeContact(deadContactID)
+                        self._buckets[bucketIndex].removeContact(deadContact)
                     except ValueError:
                         # The contact has already been removed (probably due to a timeout)
                         pass
-                    # ...and add the new one at the tail of the bucket
-                    self.addContact(contact)
+                    return self.addContact(contact)
 
-                # Ping the least-recently seen contact in this k-bucket
-                head_contact = self._buckets[bucketIndex]._contacts[0]
-                df = head_contact.ping()
-                # If there's an error (i.e. timeout), remove the head
-                # contact, and append the new one
-                df.addErrback(replaceContact, head_contact.id)
+                not_good_contacts = self._buckets[bucketIndex].getBadOrUnknownContacts()
+                if not_good_contacts:
+                    to_replace = not_good_contacts[0]
+                else:
+                    to_replace = self._buckets[bucketIndex]._contacts[0]
+                df = to_replace.ping()
+                df.addErrback(replaceContact, to_replace)
+                return df
+        else:
+            self.touchKBucketByIndex(bucketIndex)
+            return defer.succeed(None)
 
-    def findCloseNodes(self, key, count, _rpcNodeID=None):
+    def findCloseNodes(self, key, count, sender_node_id=None):
         """ Finds a number of known nodes closest to the node/value with the
         specified key.
 
@@ -113,10 +149,10 @@ class TreeRoutingTable(object):
         @type key: str
         @param count: the amount of contacts to return
         @type count: int
-        @param _rpcNodeID: Used during RPC, this is be the sender's Node ID
-                           Whatever ID is passed in the paramater will get
-                           excluded from the list of returned contacts.
-        @type _rpcNodeID: str
+        @param sender_node_id: Used during RPC, this is be the sender's Node ID
+                               Whatever ID is passed in the paramater will get
+                               excluded from the list of returned contacts.
+        @type sender_node_id: str
 
         @return: A list of node contacts (C{kademlia.contact.Contact instances})
                  closest to the specified key.
@@ -128,7 +164,8 @@ class TreeRoutingTable(object):
         bucketIndex = self._kbucketIndex(key)
 
         if bucketIndex < len(self._buckets):
-            closestNodes = self._buckets[bucketIndex].getContacts(count, _rpcNodeID)
+            # sort these
+            closestNodes = self._buckets[bucketIndex].getContacts(count, sender_node_id, sort_distance_to=key)
         else:
             closestNodes = []
         # This method must return k contacts (even if we have the node
@@ -141,21 +178,27 @@ class TreeRoutingTable(object):
         def get_remain(closest):
             return min(count, constants.k) - len(closest)
 
-        # Fill up the node list to k nodes, starting with the closest neighbouring nodes known
+        distance = Distance(key)
+
         while len(closestNodes) < min(count, constants.k) and (canGoLower or canGoHigher):
-            # TODO: this may need to be optimized
-            # TODO: add "key" kwarg to getContacts() to sort contacts returned by xor distance
-            # to the key
+            iteration_contacts = []
+            # get contacts from lower and/or higher buckets without sorting them
             if canGoLower and len(closestNodes) < min(count, constants.k):
-                closestNodes.extend(
-                    self._buckets[bucketIndex - i].getContacts(get_remain(closestNodes),
-                                                               _rpcNodeID))
+                lower_bucket = self._buckets[bucketIndex - i]
+                contacts = lower_bucket.getContacts(get_remain(closestNodes), sender_node_id, sort_distance_to=False)
+                iteration_contacts.extend(contacts)
                 canGoLower = bucketIndex - (i + 1) >= 0
+
             if canGoHigher and len(closestNodes) < min(count, constants.k):
-                closestNodes.extend(self._buckets[bucketIndex + i].getContacts(
-                    get_remain(closestNodes), _rpcNodeID))
+                higher_bucket = self._buckets[bucketIndex + i]
+                contacts = higher_bucket.getContacts(get_remain(closestNodes), sender_node_id, sort_distance_to=False)
+                iteration_contacts.extend(contacts)
                 canGoHigher = bucketIndex + (i + 1) < len(self._buckets)
             i += 1
+            # sort the combined contacts and add as many as possible/needed to the combined contact list
+            iteration_contacts.sort(key=lambda c: distance(c.id), reverse=True)
+            while len(iteration_contacts) and len(closestNodes) < min(count, constants.k):
+                closestNodes.append(iteration_contacts.pop())
         return closestNodes
 
     def getContact(self, contactID):
@@ -195,23 +238,24 @@ class TreeRoutingTable(object):
         """
         bucketIndex = startIndex
         refreshIDs = []
+        now = int(self._getTime())
         for bucket in self._buckets[startIndex:]:
-            if force or (int(self._getTime()) - bucket.lastAccessed >= constants.refreshTimeout):
+            if force or now - bucket.lastAccessed >= constants.refreshTimeout:
                 searchID = self._randomIDInBucketRange(bucketIndex)
                 refreshIDs.append(searchID)
             bucketIndex += 1
         return refreshIDs
 
-    def removeContact(self, contactID):
-        """ Remove the contact with the specified node ID from the routing
-        table
-
-        @param contactID: The node ID of the contact to remove
-        @type contactID: str
+    def removeContact(self, contact):
         """
-        bucketIndex = self._kbucketIndex(contactID)
+        Remove the contact from the routing table
+
+        @param contact: The contact to remove
+        @type contact: dht.contact._Contact
+        """
+        bucketIndex = self._kbucketIndex(contact.id)
         try:
-            self._buckets[bucketIndex].removeContact(contactID)
+            self._buckets[bucketIndex].removeContact(contact)
         except ValueError:
             return
 
@@ -222,7 +266,9 @@ class TreeRoutingTable(object):
         @param key: A key in the range of the target k-bucket
         @type key: str
         """
-        bucketIndex = self._kbucketIndex(key)
+        self.touchKBucketByIndex(self._kbucketIndex(key))
+
+    def touchKBucketByIndex(self, bucketIndex):
         self._buckets[bucketIndex].lastAccessed = int(self._getTime())
 
     def _kbucketIndex(self, key):
@@ -272,7 +318,7 @@ class TreeRoutingTable(object):
         oldBucket = self._buckets[oldBucketIndex]
         splitPoint = oldBucket.rangeMax - (oldBucket.rangeMax - oldBucket.rangeMin) / 2
         # Create a new k-bucket to cover the range split off from the old bucket
-        newBucket = kbucket.KBucket(splitPoint, oldBucket.rangeMax)
+        newBucket = kbucket.KBucket(splitPoint, oldBucket.rangeMax, self._parentNodeID)
         oldBucket.rangeMax = splitPoint
         # Now, add the new bucket into the routing table tree
         self._buckets.insert(oldBucketIndex + 1, newBucket)
@@ -284,76 +330,16 @@ class TreeRoutingTable(object):
         for contact in newBucket._contacts:
             oldBucket.removeContact(contact)
 
+    def contactInRoutingTable(self, address_tuple):
+        for bucket in self._buckets:
+            for contact in bucket.getContacts(sort_distance_to=False):
+                if address_tuple[0] == contact.address and address_tuple[1] == contact.port:
+                    return True
+        return False
 
-class OptimizedTreeRoutingTable(TreeRoutingTable):
-    """ A version of the "tree"-type routing table specified by Kademlia,
-    along with contact accounting optimizations specified in section 4.1 of
-    of the 13-page version of the Kademlia paper.
-    """
-
-    def __init__(self, parentNodeID, getTime=None):
-        TreeRoutingTable.__init__(self, parentNodeID, getTime)
-        # Cache containing nodes eligible to replace stale k-bucket entries
-        self._replacementCache = {}
-
-    def addContact(self, contact):
-        """ Add the given contact to the correct k-bucket; if it already
-        exists, its status will be updated
-
-        @param contact: The contact to add to this node's k-buckets
-        @type contact: kademlia.contact.Contact
-        """
-
-        if contact.id == self._parentNodeID:
-            return
-
-        # Initialize/reset the "successively failed RPC" counter
-        contact.failedRPCs = 0
-
-        bucketIndex = self._kbucketIndex(contact.id)
-        try:
-            self._buckets[bucketIndex].addContact(contact)
-        except kbucket.BucketFull:
-            # The bucket is full; see if it can be split (by checking
-            # if its range includes the host node's id)
-            if self._buckets[bucketIndex].keyInRange(self._parentNodeID):
-                self._splitBucket(bucketIndex)
-                # Retry the insertion attempt
-                self.addContact(contact)
-            else:
-                # We can't split the k-bucket
-                # NOTE: This implementation follows section 4.1 of the 13 page version
-                # of the Kademlia paper (optimized contact accounting without PINGs
-                # - results in much less network traffic, at the expense of some memory)
-
-                # Put the new contact in our replacement cache for the
-                # corresponding k-bucket (or update it's position if
-                # it exists already)
-                if bucketIndex not in self._replacementCache:
-                    self._replacementCache[bucketIndex] = []
-                if contact in self._replacementCache[bucketIndex]:
-                    self._replacementCache[bucketIndex].remove(contact)
-                elif len(self._replacementCache[bucketIndex]) >= constants.replacementCacheSize:
-                    self._replacementCache[bucketIndex].pop(0)
-                self._replacementCache[bucketIndex].append(contact)
-
-    def removeContact(self, contactID):
-        """ Remove the contact with the specified node ID from the routing
-        table
-
-        @param contactID: The node ID of the contact to remove
-        @type contactID: str
-        """
-        bucketIndex = self._kbucketIndex(contactID)
-        try:
-            contact = self._buckets[bucketIndex].getContact(contactID)
-        except ValueError:
-            return
-        contact.failedRPCs += 1
-        if contact.failedRPCs >= constants.rpcAttempts:
-            self._buckets[bucketIndex].removeContact(contactID)
-            # Replace this stale contact with one from our replacement cache, if we have any
-            if bucketIndex in self._replacementCache:
-                if len(self._replacementCache[bucketIndex]) > 0:
-                    self._buckets[bucketIndex].addContact(
-                        self._replacementCache[bucketIndex].pop())
+    def bucketsWithContacts(self):
+        count = 0
+        for bucket in self._buckets:
+            if len(bucket):
+                count += 1
+        return count

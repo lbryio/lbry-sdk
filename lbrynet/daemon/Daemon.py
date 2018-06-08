@@ -97,6 +97,9 @@ CONNECTION_MESSAGES = {
 SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
 
+DIRECTION_ASCENDING = 'asc'
+DIRECTION_DESCENDING = 'desc'
+DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
 
 class IterableContainer(object):
     def __iter__(self):
@@ -163,6 +166,11 @@ class AlwaysSend(object):
         return d
 
 
+def sort_claim_results(claims):
+    claims.sort(key=lambda d: (d['height'], d['name'], d['claim_id'], d['txid'], d['nout']))
+    return claims
+
+
 class Daemon(AuthJSONRPCServer):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
@@ -199,7 +207,7 @@ class Daemon(AuthJSONRPCServer):
         self.connected_to_internet = True
         self.connection_status_code = None
         self.platform = None
-        self.current_db_revision = 8
+        self.current_db_revision = 9
         self.db_revision_file = conf.settings.get_db_revision_filename()
         self.session = None
         self._session_id = conf.settings.get_session_id()
@@ -939,6 +947,28 @@ class Daemon(AuthJSONRPCServer):
         log.debug("Collected %i lbry files", len(lbry_files))
         defer.returnValue(lbry_files)
 
+    def _sort_lbry_files(self, lbry_files, sort_by):
+        for field, direction in sort_by:
+            is_reverse = direction == DIRECTION_DESCENDING
+            key_getter = create_key_getter(field) if field else None
+            lbry_files = sorted(lbry_files, key=key_getter, reverse=is_reverse)
+        return lbry_files
+
+    def _parse_lbry_files_sort(self, sort):
+        """
+        Given a sort string like 'file_name, desc' or 'points_paid',
+        parse the string into a tuple of (field, direction).
+        Direction defaults to ascending.
+        """
+
+        pieces = [p.strip() for p in sort.split(',')]
+        field = pieces.pop(0)
+        direction = DIRECTION_ASCENDING
+        if pieces and pieces[0] in DIRECTIONS:
+            direction = pieces[0]
+        return field, direction
+
+
     def _get_single_peer_downloader(self):
         downloader = SinglePeerDownloader()
         downloader.setup(self.session.wallet)
@@ -1358,7 +1388,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    def jsonrpc_file_list(self, **kwargs):
+    def jsonrpc_file_list(self, sort=None, **kwargs):
         """
         List files limited by optional filters
 
@@ -1366,7 +1396,7 @@ class Daemon(AuthJSONRPCServer):
             file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
                       [--rowid=<rowid>] [--claim_id=<claim_id>] [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
-                      [--claim_name=<claim_name>] [--full_status]
+                      [--claim_name=<claim_name>] [--full_status] [--sort=<sort_method>...]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1383,6 +1413,9 @@ class Daemon(AuthJSONRPCServer):
             --claim_name=<claim_name>              : (str) get file with matching claim name
             --full_status                          : (bool) full status, populate the
                                                      'message' and 'size' fields
+            --sort=<sort_method>                   : (str) sort by any property, like 'file_name'
+                                                     or 'metadata.author'; to specify direction
+                                                     append ',asc' or ',desc'
 
         Returns:
             (list) List of files
@@ -1419,6 +1452,9 @@ class Daemon(AuthJSONRPCServer):
         """
 
         result = yield self._get_lbry_files(return_json=True, **kwargs)
+        if sort:
+            sort_by = [self._parse_lbry_files_sort(s) for s in sort]
+            result = self._sort_lbry_files(result, sort_by)
         response = yield self._render_response(result)
         defer.returnValue(response)
 
@@ -2330,7 +2366,8 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        claims = yield self.session.wallet.get_claims_for_name(name)
+        claims = yield self.session.wallet.get_claims_for_name(name)  # type: dict
+        sort_claim_results(claims['claims'])
         defer.returnValue(claims)
 
     @defer.inlineCallbacks
@@ -2866,24 +2903,22 @@ class Daemon(AuthJSONRPCServer):
         if not utils.is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
 
-        finished_deferred = self.session.dht_node.getPeersForBlob(binascii.unhexlify(blob_hash), True)
+        finished_deferred = self.session.dht_node.iterativeFindValue(binascii.unhexlify(blob_hash))
 
-        def _trigger_timeout():
-            if not finished_deferred.called:
-                log.debug("Peer search for %s timed out", blob_hash)
-                finished_deferred.cancel()
+        def trap_timeout(err):
+            err.trap(defer.TimeoutError)
+            return []
 
-        timeout = timeout or conf.settings['peer_search_timeout']
-        self.session.dht_node.reactor_callLater(timeout, _trigger_timeout)
-
+        finished_deferred.addTimeout(timeout or conf.settings['peer_search_timeout'], self.session.dht_node.clock)
+        finished_deferred.addErrback(trap_timeout)
         peers = yield finished_deferred
         results = [
             {
+                "node_id": node_id.encode('hex'),
                 "host": host,
-                "port": port,
-                "node_id": node_id
+                "port": port
             }
-            for host, port, node_id in peers
+            for node_id, host, port in peers
         ]
         defer.returnValue(results)
 
@@ -3102,6 +3137,7 @@ class Daemon(AuthJSONRPCServer):
                     <bucket index>: [
                         {
                             "address": (str) peer address,
+                            "port": (int) peer udp port
                             "node_id": (str) peer node id,
                             "blobs": (list) blob hashes announced by peer
                         }
@@ -3114,18 +3150,13 @@ class Daemon(AuthJSONRPCServer):
         """
 
         result = {}
-        data_store = deepcopy(self.session.dht_node._dataStore._dict)
+        data_store = self.session.dht_node._dataStore._dict
         datastore_len = len(data_store)
         hosts = {}
 
         if datastore_len:
             for k, v in data_store.iteritems():
-                for value, lastPublished, originallyPublished, originalPublisherID in v:
-                    try:
-                        contact = self.session.dht_node._routingTable.getContact(
-                            originalPublisherID)
-                    except ValueError:
-                        continue
+                for contact, value, lastPublished, originallyPublished, originalPublisherID in v:
                     if contact in hosts:
                         blobs = hosts[contact]
                     else:
@@ -3147,6 +3178,7 @@ class Daemon(AuthJSONRPCServer):
                     blobs = []
                 host = {
                     "address": contact.address,
+                    "port": contact.port,
                     "node_id": contact.id.encode("hex"),
                     "blobs": blobs,
                 }
@@ -3392,3 +3424,16 @@ def get_blob_payment_rate_manager(session, payment_rate_manager=None):
             payment_rate_manager = rate_managers[payment_rate_manager]
             log.info("Downloading blob with rate manager: %s", payment_rate_manager)
     return payment_rate_manager or session.payment_rate_manager
+
+
+def create_key_getter(field):
+    search_path = field.split('.')
+    def key_getter(value):
+        for key in search_path:
+            try:
+                value = value[key]
+            except KeyError as e:
+                errmsg = 'Failed to get "{}", key "{}" was not found.'
+                raise Exception(errmsg.format(field, e.message))
+        return value
+    return key_getter
