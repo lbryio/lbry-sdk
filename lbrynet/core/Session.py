@@ -128,11 +128,12 @@ class Session(object):
             if self.peer_finder is None:
                 self.peer_finder = self.dht_node.peer_finder
 
-        if self.use_upnp is True:
-            d = self._try_upnp()
-        else:
-            d = defer.succeed(True)
-        d.addCallback(lambda _: self.storage.setup())
+        # if self.use_upnp is True:
+        #     d = self._try_upnp()
+        # else:
+        #     d = defer.succeed(True)
+        # d.addCallback(lambda _: self.storage.setup())
+        d = self.storage.setup()
         d.addCallback(lambda _: self._setup_other_components())
         return d
 
@@ -146,8 +147,8 @@ class Session(object):
             ds.append(defer.maybeDeferred(self.rate_limiter.stop))
         if self.blob_manager is not None:
             ds.append(defer.maybeDeferred(self.blob_manager.stop))
-        if self.use_upnp is True:
-            ds.append(defer.maybeDeferred(self._unset_upnp))
+        # if self.use_upnp is True:
+        #     ds.append(defer.maybeDeferred(self._unset_upnp))
         return defer.DeferredList(ds)
 
     def _try_upnp(self):

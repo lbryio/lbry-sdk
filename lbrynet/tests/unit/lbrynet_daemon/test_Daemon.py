@@ -1,11 +1,10 @@
 import mock
 import json
-import unittest
 import random
 from os import path
 
 from twisted.internet import defer
-from twisted import trial
+from twisted.trial import unittest
 
 from faker import Faker
 
@@ -78,7 +77,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     return daemon
 
 
-class TestCostEst(trial.unittest.TestCase):
+class TestCostEst(unittest.TestCase):
     def setUp(self):
         mock_conf_settings(self)
         util.resetTime(self)
@@ -111,7 +110,7 @@ class TestCostEst(trial.unittest.TestCase):
         self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
 
 
-class TestJsonRpc(trial.unittest.TestCase):
+class TestJsonRpc(unittest.TestCase):
     def setUp(self):
         def noop():
             return None
@@ -134,7 +133,7 @@ class TestJsonRpc(trial.unittest.TestCase):
         # self.assertSubstring('daemon status', d.result)
 
 
-class TestFileListSorting(trial.unittest.TestCase):
+class TestFileListSorting(unittest.TestCase):
     def setUp(self):
         mock_conf_settings(self)
         util.resetTime(self)
