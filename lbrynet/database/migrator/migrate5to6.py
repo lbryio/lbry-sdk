@@ -4,11 +4,72 @@ import json
 import logging
 from lbryschema.decode import smart_decode
 from lbrynet import conf
-from lbrynet.database.storage import SQLiteStorage
 
 log = logging.getLogger(__name__)
 
 download_directory = conf.settings['download_directory']
+
+CREATE_TABLES_QUERY = """
+            pragma foreign_keys=on;
+            pragma journal_mode=WAL;
+
+            create table if not exists blob (
+                blob_hash char(96) primary key not null,
+                blob_length integer not null,
+                next_announce_time integer not null,
+                should_announce integer not null default 0,
+                status text not null
+            );
+
+            create table if not exists stream (
+                stream_hash char(96) not null primary key,
+                sd_hash char(96) not null references blob,
+                stream_key text not null,
+                stream_name text not null,
+                suggested_filename text not null
+            );
+
+            create table if not exists stream_blob (
+                stream_hash char(96) not null references stream,
+                blob_hash char(96) references blob,
+                position integer not null,
+                iv char(32) not null,
+                primary key (stream_hash, blob_hash)
+            );
+
+            create table if not exists claim (
+                claim_outpoint text not null primary key,
+                claim_id char(40) not null,
+                claim_name text not null,
+                amount integer not null,
+                height integer not null,
+                serialized_metadata blob not null,
+                channel_claim_id text,
+                address text not null,
+                claim_sequence integer not null
+            );
+
+            create table if not exists file (
+                stream_hash text primary key not null references stream,
+                file_name text not null,
+                download_directory text not null,
+                blob_data_rate real not null,
+                status text not null
+            );
+
+            create table if not exists content_claim (
+                stream_hash text unique not null references file,
+                claim_outpoint text not null references claim,
+                primary key (stream_hash, claim_outpoint)
+            );
+
+            create table if not exists support (
+                support_outpoint text not null primary key,
+                claim_id text not null,
+                amount integer not null,
+                address text not null
+            );
+    """
 
 
 def run_operation(db):
@@ -148,7 +209,7 @@ def do_migration(db_dir):
     @run_operation(connection)
     def _make_db(new_db):
         # create the new tables
-        new_db.executescript(SQLiteStorage.CREATE_TABLES_QUERY)
+        new_db.executescript(CREATE_TABLES_QUERY)
 
         # first migrate the blobs
         blobs = blobs_db_cursor.execute("select * from blobs").fetchall()
@@ -245,13 +306,20 @@ def do_migration(db_dir):
                     continue
 
         log.info("migrated %i content claims", new_db.execute("select count(*) from content_claim").fetchone()[0])
+    try:
+        _make_db()  # pylint: disable=no-value-for-parameter
+    except sqlite3.OperationalError as err:
+        if err.message == "table blob has 7 columns but 5 values were supplied":
+            log.warning("detected a failed previous migration to revision 6, repairing it")
+            connection.close()
+            os.remove(new_db_path)
+            return do_migration(db_dir)
+        raise err
 
-    _make_db()  # pylint: disable=no-value-for-parameter
     connection.close()
     blobs_db.close()
     lbryfile_db.close()
     metadata_db.close()
-    log.info("successfully migrated the database")
     # os.remove(os.path.join(db_dir, "blockchainname.db"))
     # os.remove(os.path.join(db_dir, 'lbryfile_info.db'))
     # os.remove(os.path.join(db_dir, 'blobs.db'))

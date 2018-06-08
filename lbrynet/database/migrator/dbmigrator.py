@@ -1,5 +1,7 @@
 import logging
 
+log = logging.getLogger(__name__)
+
 
 def migrate_db(db_dir, start, end):
     current = start
@@ -25,6 +27,7 @@ def migrate_db(db_dir, start, end):
                                                                                        current+1))
         do_migration(db_dir)
         current += 1
+        log.info("successfully migrated the database from revision %i to %i", current - 1, current)
     return None
 
 
