@@ -13,6 +13,7 @@ at anytime.
   *
 
 ### Fixed
+  * fix prm/brm typo
   * handling error from dht clients with old `ping` method
   * blobs not being re-announced if no peers successfully stored, now failed announcements are re-queued
   * issue where an `AuthAPIClient` (used by `lbrynet-cli`) would fail to update its session secret and keep making new auth sessions, with every other request failing
