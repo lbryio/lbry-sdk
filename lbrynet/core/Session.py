@@ -32,7 +32,7 @@ class Session(object):
     def __init__(self, blob_data_payment_rate, db_dir=None, node_id=None, dht_node_port=None,
                  known_dht_nodes=None, peer_finder=None, hash_announcer=None, blob_dir=None, blob_manager=None,
                  peer_port=None, rate_limiter=None, wallet=None, external_ip=None, storage=None,
-                 dht_node=None, peer_manager=None):
+                 dht_node=None, peer_manager=None, download_mirrors=None):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
         @param db_dir: The directory in which levelDB files should be stored
@@ -104,6 +104,7 @@ class Session(object):
         self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
         self.payment_rate_manager = OnlyFreePaymentsManager()
         self.storage = storage or SQLiteStorage(self.db_dir)
+        self.download_mirrors = download_mirrors
 
     def setup(self):
         """Create the blob directory and database if necessary, start all desired services"""

@@ -7,7 +7,7 @@ from twisted.internet import threads, defer
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
 from lbrynet.core.Error import UnknownStreamTypeError, InvalidStreamDescriptorError
-
+from lbrynet.core.HTTPBlobDownloader import HTTPBlobDownloader
 
 log = logging.getLogger(__name__)
 
@@ -445,7 +445,10 @@ def download_sd_blob(session, blob_hash, payment_rate_manager, timeout=None):
                                           payment_rate_manager,
                                           session.wallet,
                                           timeout)
+    mirror = HTTPBlobDownloader(session.blob_manager, [blob_hash], session.download_mirrors)
+    mirror.start()
     sd_blob = yield downloader.download()
+    mirror.stop()
     sd_reader = BlobStreamDescriptorReader(sd_blob)
     sd_info = yield sd_reader.get_info()
     try:

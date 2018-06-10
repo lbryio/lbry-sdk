@@ -8,6 +8,7 @@ from zope.interface import implements
 from twisted.internet import defer
 
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
+from lbrynet.core.HTTPBlobDownloader import HTTPBlobDownloader
 from lbrynet.core.utils import short_hash
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaver
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileDownloader
@@ -37,7 +38,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
     def __init__(self, rowid, stream_hash, peer_finder, rate_limiter, blob_manager, storage, lbry_file_manager,
                  payment_rate_manager, wallet, download_directory, file_name, stream_name, sd_hash, key,
-                 suggested_file_name):
+                 suggested_file_name, download_mirrors=None):
         EncryptedFileSaver.__init__(
             self, stream_hash, peer_finder, rate_limiter, blob_manager, storage, payment_rate_manager, wallet,
             download_directory, key, stream_name, file_name
@@ -55,6 +56,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         self.channel_claim_id = None
         self.channel_name = None
         self.metadata = None
+        self.mirror = HTTPBlobDownloader(self.blob_manager, servers=download_mirrors) if download_mirrors else None
 
     def set_claim_info(self, claim_info):
         self.claim_id = claim_info['claim_id']
@@ -94,6 +96,8 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     @defer.inlineCallbacks
     def stop(self, err=None, change_status=True):
         log.debug('Stopping download for stream %s', short_hash(self.stream_hash))
+        if self.mirror:
+            self.mirror.stop()
         # EncryptedFileSaver deletes metadata when it's stopped. We don't want that here.
         yield EncryptedFileDownloader.stop(self, err=err)
         if change_status is True:
@@ -123,6 +127,10 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
         yield EncryptedFileSaver._start(self)
         status = yield self._save_status()
         log_status(self.sd_hash, status)
+        if self.mirror:
+            blobs = yield self.storage.get_blobs_for_stream(self.stream_hash)
+            self.mirror.blob_hashes = [b.blob_hash for b in blobs if b.blob_hash is not None]
+            self.mirror.start()
         defer.returnValue(status)
 
     def _get_finished_deferred_callback_value(self):

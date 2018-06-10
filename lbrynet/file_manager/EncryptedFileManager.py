@@ -92,7 +92,8 @@ class EncryptedFileManager(object):
             stream_name=stream_name,
             sd_hash=sd_hash,
             key=key,
-            suggested_file_name=suggested_file_name
+            suggested_file_name=suggested_file_name,
+            download_mirrors=self.session.download_mirrors
         )
 
     def _start_lbry_file(self, file_info, payment_rate_manager, claim_info):
