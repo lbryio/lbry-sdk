@@ -1,9 +1,9 @@
 import unittest
 
-from torba.coin.bitcoinsegwit import BTC
+from torba.coin.bitcoinsegwit import MainNetLedger
 from torba.coinselection import CoinSelector, MAXIMUM_TRIES
 from torba.constants import CENT
-from torba.basemanager import WalletManager
+from torba.manager import WalletManager
 
 from .test_transaction import Output, get_output as utxo
 
@@ -19,12 +19,12 @@ def search(*args, **kwargs):
 class BaseSelectionTestCase(unittest.TestCase):
 
     def setUp(self):
-        ledger = WalletManager().get_or_create_ledger(BTC.get_id())
-        self.coin = BTC(ledger)
+        self.ledger = MainNetLedger(db=':memory:')
+        return self.ledger.db.start()
 
     def estimates(self, *args):
         txos = args if isinstance(args[0], Output) else args[0]
-        return [txo.get_estimator(self.coin) for txo in txos]
+        return [txo.get_estimator(self.ledger) for txo in txos]
 
 
 class TestCoinSelectionTests(BaseSelectionTestCase):
@@ -33,7 +33,7 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
         self.assertIsNone(CoinSelector([], 0, 0).select())
 
     def test_skip_binary_search_if_total_not_enough(self):
-        fee = utxo(CENT).get_estimator(self.coin).fee
+        fee = utxo(CENT).get_estimator(self.ledger).fee
         big_pool = self.estimates(utxo(CENT+fee) for _ in range(100))
         selector = CoinSelector(big_pool, 101 * CENT, 0)
         self.assertIsNone(selector.select())

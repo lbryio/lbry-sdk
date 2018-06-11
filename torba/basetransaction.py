@@ -3,13 +3,12 @@ import logging
 from typing import List, Iterable, Generator
 from binascii import hexlify
 
-from torba import baseledger
 from torba.basescript import BaseInputScript, BaseOutputScript
 from torba.coinselection import CoinSelector
 from torba.constants import COIN
 from torba.bcd_data_stream import BCDataStream
 from torba.hash import sha256
-from torba.account import Account
+from torba.baseaccount import BaseAccount
 from torba.util import ReadOnlyList
 
 
@@ -45,7 +44,7 @@ class InputOutput(object):
 
 class BaseInput(InputOutput):
 
-    script_class = None
+    script_class = BaseInputScript
 
     NULL_SIGNATURE = b'\x00'*72
     NULL_PUBLIC_KEY = b'\x00'*33
@@ -113,7 +112,7 @@ class BaseOutputEffectiveAmountEstimator(object):
 
     __slots__ = 'coin', 'txi', 'txo', 'fee', 'effective_amount'
 
-    def __init__(self, ledger, txo):  # type: (baseledger.BaseLedger, BaseOutput) -> None
+    def __init__(self, ledger, txo):  # type: (BaseLedger, BaseOutput) -> None
         self.txo = txo
         self.txi = ledger.transaction_class.input_class.spend(txo)
         self.fee = ledger.get_input_output_fee(self.txi)
@@ -125,7 +124,7 @@ class BaseOutputEffectiveAmountEstimator(object):
 
 class BaseOutput(InputOutput):
 
-    script_class = None
+    script_class = BaseOutputScript
     estimator_class = BaseOutputEffectiveAmountEstimator
 
     def __init__(self, amount, script, txid=None):
@@ -154,8 +153,8 @@ class BaseOutput(InputOutput):
 
 class BaseTransaction:
 
-    input_class = None
-    output_class = None
+    input_class = BaseInput
+    output_class = BaseOutput
 
     def __init__(self, raw=None, version=1, locktime=0):
         self._raw = raw
@@ -277,23 +276,23 @@ class BaseTransaction:
 
     @classmethod
     def get_effective_amount_estimators(cls, funding_accounts):
-        # type: (Iterable[Account]) -> Generator[BaseOutputEffectiveAmountEstimator]
+        # type: (Iterable[BaseAccount]) -> Generator[BaseOutputEffectiveAmountEstimator]
         for account in funding_accounts:
             for utxo in account.coin.ledger.get_unspent_outputs(account):
                 yield utxo.get_estimator(account.coin)
 
     @classmethod
     def ensure_all_have_same_ledger(cls, funding_accounts, change_account=None):
-        # type: (Iterable[Account], Account) -> baseledger.BaseLedger
+        # type: (Iterable[BaseAccount], BaseAccount) -> baseledger.BaseLedger
         ledger = None
         for account in funding_accounts:
             if ledger is None:
-                ledger = account.coin.ledger
-            if ledger != account.coin.ledger:
+                ledger = account.ledger
+            if ledger != account.ledger:
                 raise ValueError(
                     'All funding accounts used to create a transaction must be on the same ledger.'
                 )
-        if change_account is not None and change_account.coin.ledger != ledger:
+        if change_account is not None and change_account.ledger != ledger:
             raise ValueError('Change account must use same ledger as funding accounts.')
         return ledger
 
@@ -331,14 +330,13 @@ class BaseTransaction:
     def liquidate(cls, assets, funding_accounts, change_account):
         """ Spend assets (utxos) supplementing with funding_accounts if fee is higher than asset value. """
 
-    def sign(self, funding_accounts):  # type: (Iterable[Account]) -> BaseTransaction
+    def sign(self, funding_accounts):  # type: (Iterable[BaseAccount]) -> BaseTransaction
         ledger = self.ensure_all_have_same_ledger(funding_accounts)
         for i, txi in enumerate(self._inputs):
             txo_script = txi.output.script
             if txo_script.is_pay_pubkey_hash:
-                address = ledger.coin_class.hash160_to_address(txo_script.values['pubkey_hash'])
-                account = ledger.accounts.get_account_for_address(address)
-                private_key = account.get_private_key_for_address(address)
+                address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
+                private_key = ledger.get_private_key_for_address(address)
                 tx = self._serialize_for_signature(i)
                 txi.script.values['signature'] = private_key.sign(tx)+six.int2byte(1)
                 txi.script.values['pubkey'] = private_key.public_key.pubkey_bytes

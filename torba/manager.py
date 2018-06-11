@@ -2,8 +2,7 @@ import functools
 from typing import List, Dict, Type
 from twisted.internet import defer
 
-from torba.account import AccountsView
-from torba.basecoin import CoinRegistry
+from torba.baseaccount import AccountsView
 from torba.baseledger import BaseLedger
 from torba.basetransaction import BaseTransaction, NULL_HASH
 from torba.coinselection import CoinSelector
@@ -11,7 +10,7 @@ from torba.constants import COIN
 from torba.wallet import Wallet, WalletStorage
 
 
-class BaseWalletManager(object):
+class WalletManager(object):
 
     def __init__(self, wallets=None, ledgers=None):
         self.wallets = wallets or []  # type: List[Wallet]
@@ -35,12 +34,12 @@ class BaseWalletManager(object):
         ledger_class = coin_class.ledger_class
         ledger = self.ledgers.get(ledger_class)
         if ledger is None:
-            ledger = self.create_ledger(ledger_class, self.get_accounts_view(coin_class), ledger_config or {})
+            ledger = self.create_ledger(ledger_class, ledger_config or {})
             self.ledgers[ledger_class] = ledger
         return ledger
 
-    def create_ledger(self, ledger_class, accounts, config):
-        return ledger_class(accounts, config)
+    def create_ledger(self, ledger_class, config):
+        return ledger_class(config)
 
     @defer.inlineCallbacks
     def get_balance(self):

@@ -1,38 +1,48 @@
 from binascii import hexlify
 from twisted.trial import unittest
+from twisted.internet import defer
 
-from torba.coin.bitcoinsegwit import BTC
-from torba.basemanager import WalletManager
-from torba.wallet import Account
+from torba.coin.bitcoinsegwit import MainNetLedger
 
 
 class TestAccount(unittest.TestCase):
 
     def setUp(self):
-        ledger = WalletManager().get_or_create_ledger(BTC.get_id())
-        self.coin = BTC(ledger)
+        self.ledger = MainNetLedger(db=':memory:')
+        return self.ledger.db.start()
 
+    @defer.inlineCallbacks
     def test_generate_account(self):
-        account = Account.generate(self.coin, u"torba")
-        self.assertEqual(account.coin, self.coin)
+        account = self.ledger.account_class.generate(self.ledger, u"torba")
+        self.assertEqual(account.ledger, self.ledger)
         self.assertIsNotNone(account.seed)
-        self.assertEqual(account.public_key.coin, self.coin)
+        self.assertEqual(account.public_key.ledger, self.ledger)
         self.assertEqual(account.private_key.public_key, account.public_key)
 
-        self.assertEqual(len(account.receiving_keys.child_keys), 0)
-        self.assertEqual(len(account.receiving_keys.addresses), 0)
-        self.assertEqual(len(account.change_keys.child_keys), 0)
-        self.assertEqual(len(account.change_keys.addresses), 0)
+        keys = yield account.receiving.get_keys()
+        addresses = yield account.receiving.get_addresses()
+        self.assertEqual(len(keys), 0)
+        self.assertEqual(len(addresses), 0)
+        keys = yield account.change.get_keys()
+        addresses = yield account.change.get_addresses()
+        self.assertEqual(len(keys), 0)
+        self.assertEqual(len(addresses), 0)
 
-        account.ensure_enough_addresses()
-        self.assertEqual(len(account.receiving_keys.child_keys), 20)
-        self.assertEqual(len(account.receiving_keys.addresses), 20)
-        self.assertEqual(len(account.change_keys.child_keys), 6)
-        self.assertEqual(len(account.change_keys.addresses), 6)
+        yield account.ensure_enough_useable_addresses()
 
+        keys = yield account.receiving.get_keys()
+        addresses = yield account.receiving.get_addresses()
+        self.assertEqual(len(keys), 20)
+        self.assertEqual(len(addresses), 20)
+        keys = yield account.change.get_keys()
+        addresses = yield account.change.get_addresses()
+        self.assertEqual(len(keys), 6)
+        self.assertEqual(len(addresses), 6)
+
+    @defer.inlineCallbacks
     def test_generate_account_from_seed(self):
-        account = Account.from_seed(
-            self.coin,
+        account = self.ledger.account_class.from_seed(
+            self.ledger,
             u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
             u"sent",
             u"torba"
@@ -47,23 +57,22 @@ class TestAccount(unittest.TestCase):
             b'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
             b'iW44g14WF52fYC5J483wqQ5ZP'
         )
-        self.assertEqual(
-            account.receiving_keys.generate_next_address(),
-            b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP'
-        )
-        private_key = account.get_private_key_for_address(b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
+        address = yield account.receiving.ensure_enough_useable_addresses()
+        self.assertEqual(address[0], b'1PGDB1CRy8UxPCrkcakRqroVnHxqzvUZhp')
+        private_key = yield self.ledger.get_private_key_for_address(b'1PGDB1CRy8UxPCrkcakRqroVnHxqzvUZhp')
         self.assertEqual(
             private_key.extended_key_string(),
-            b'xprv9xNEfQ296VTRaEUDZ8oKq74xw2U6kpj486vFUB4K1wT9U25GX4UwuzFgJN1YuRrqkQ5TTwCpkYnjNpSoHS'
-            b'BaEigNHPkoeYbuPMRo6mRUjxg'
+            b'xprv9xNEfQ296VTRc5QF7AZZ1WTimGzMs54FepRXVxbyypJXCrUKjxsYSyk5EhHYNxU4ApsaBr8AQ4sYo86BbGh2dZSddGXU1CMGwExvnyckjQn'
         )
-        self.assertIsNone(account.get_private_key_for_address(b'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX'))
+        invalid_key = yield self.ledger.get_private_key_for_address(b'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
+        self.assertIsNone(invalid_key)
 
         self.assertEqual(
             hexlify(private_key.wif()),
-            b'1cc27be89ad47ef932562af80e95085eb0ab2ae3e5c019b1369b8b05ff2e94512f01'
+            b'1c5664e848772b199644ab390b5c27d2f6664d9cdfdb62e1c7ac25151b00858b7a01'
         )
 
+    @defer.inlineCallbacks
     def test_load_and_save_account(self):
         account_data = {
             'seed':
@@ -77,29 +86,22 @@ class TestAccount(unittest.TestCase):
                 'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
                 'iW44g14WF52fYC5J483wqQ5ZP',
             'receiving_gap': 10,
-            'receiving_keys': [
-                '0222345947a59dca4a3363ffa81ac87dd907d2b2feff57383eaeddbab266ca5f2d',
-                '03fdc9826d5d00a484188cba8eb7dba5877c0323acb77905b7bcbbab35d94be9f6'
-            ],
             'change_gap': 10,
-            'change_keys': [
-                '038836be4147836ed6b4df6a89e0d9f1b1c11cec529b7ff5407de57f2e5b032c83'
-            ]
         }
 
-        account = Account.from_dict(self.coin, account_data)
+        account = self.ledger.account_class.from_dict(self.ledger, account_data)
 
-        self.assertEqual(len(account.receiving_keys.addresses), 2)
-        self.assertEqual(
-            account.receiving_keys.addresses[0],
-            b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP'
-        )
-        self.assertEqual(len(account.change_keys.addresses), 1)
-        self.assertEqual(
-            account.change_keys.addresses[0],
-            b'1PUbu1D1f3c244JPRSJKBCxRqui5NT6geR'
-        )
+        yield account.ensure_enough_useable_addresses()
+
+        keys = yield account.receiving.get_keys()
+        addresses = yield account.receiving.get_addresses()
+        self.assertEqual(len(keys), 10)
+        self.assertEqual(len(addresses), 10)
+        keys = yield account.change.get_keys()
+        addresses = yield account.change.get_addresses()
+        self.assertEqual(len(keys), 10)
+        self.assertEqual(len(addresses), 10)
 
         self.maxDiff = None
-        account_data['coin'] = 'btc_mainnet'
+        account_data['ledger'] = 'btc_mainnet'
         self.assertDictEqual(account_data, account.to_dict())

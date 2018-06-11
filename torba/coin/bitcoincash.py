@@ -13,7 +13,7 @@ from torba.basescript import BaseInputScript, BaseOutputScript
 from torba.basetransaction import BaseTransaction, BaseInput, BaseOutput
 from torba.basecoin import BaseCoin
 from torba.basedatabase import BaseSQLiteWalletStorage
-from torba.basemanager import BaseWalletManager
+from torba.manager import BaseWalletManager
 
 
 class WalletManager(BaseWalletManager):
