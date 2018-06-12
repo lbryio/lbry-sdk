@@ -338,7 +338,7 @@ class Config(object):
 
         self._data[TYPE_DEFAULT].update(self._fixed_defaults)
         self._data[TYPE_DEFAULT].update(
-            {k: v[1] for (k, v) in self._adjustable_defaults.iteritems()})
+            {k: v[1] for (k, v) in self._adjustable_defaults.items()})
 
         if persisted_settings is None:
             persisted_settings = {}
@@ -645,7 +645,7 @@ settings = None
 
 def get_default_env():
     env_defaults = {}
-    for k, v in ADJUSTABLE_SETTINGS.iteritems():
+    for k, v in ADJUSTABLE_SETTINGS.items():
         if len(v) == 3:
             env_defaults[k] = (v[0], None, v[2])
         elif len(v) == 4:
