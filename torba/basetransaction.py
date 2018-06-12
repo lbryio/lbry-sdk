@@ -3,6 +3,8 @@ import logging
 from typing import List, Iterable, Generator
 from binascii import hexlify
 
+from twisted.internet import defer
+
 from torba.basescript import BaseInputScript, BaseOutputScript
 from torba.coinselection import CoinSelector
 from torba.constants import COIN
@@ -20,10 +22,10 @@ NULL_HASH = b'\x00'*32
 
 class InputOutput(object):
 
-    def __init__(self, txid):
+    def __init__(self, txid, index=None):
         self._txid = txid  # type: bytes
         self.transaction = None  # type: BaseTransaction
-        self.index = None  # type: int
+        self.index = index  # type: int
 
     @property
     def txid(self):
@@ -53,7 +55,7 @@ class BaseInput(InputOutput):
         super(BaseInput, self).__init__(txid)
         if isinstance(output_or_txid_index, BaseOutput):
             self.output = output_or_txid_index  # type: BaseOutput
-            self.output_txid = self.output.transaction.id
+            self.output_txid = self.output.txid
             self.output_index = self.output.index
         else:
             self.output = None  # type: BaseOutput
@@ -127,8 +129,8 @@ class BaseOutput(InputOutput):
     script_class = BaseOutputScript
     estimator_class = BaseOutputEffectiveAmountEstimator
 
-    def __init__(self, amount, script, txid=None):
-        super(BaseOutput, self).__init__(txid)
+    def __init__(self, amount, script, txid=None, index=None):
+        super(BaseOutput, self).__init__(txid, index)
         self.amount = amount  # type: int
         self.script = script  # type: BaseOutputScript
 
@@ -275,11 +277,15 @@ class BaseTransaction:
             self.locktime = stream.read_uint32()
 
     @classmethod
+    @defer.inlineCallbacks
     def get_effective_amount_estimators(cls, funding_accounts):
         # type: (Iterable[BaseAccount]) -> Generator[BaseOutputEffectiveAmountEstimator]
+        estimators = []
         for account in funding_accounts:
-            for utxo in account.coin.ledger.get_unspent_outputs(account):
-                yield utxo.get_estimator(account.coin)
+            utxos = yield account.ledger.get_unspent_outputs(account)
+            for utxo in utxos:
+                estimators.append(utxo.get_estimator(account.ledger))
+        defer.returnValue(estimators)
 
     @classmethod
     def ensure_all_have_same_ledger(cls, funding_accounts, change_account=None):
@@ -297,15 +303,17 @@ class BaseTransaction:
         return ledger
 
     @classmethod
+    @defer.inlineCallbacks
     def pay(cls, outputs, funding_accounts, change_account):
+        # type: (List[BaseOutput], List[BaseAccount], BaseAccount) -> BaseTransaction
         """ Efficiently spend utxos from funding_accounts to cover the new outputs. """
 
         tx = cls().add_outputs(outputs)
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         amount = ledger.get_transaction_base_fee(tx)
+        txos = yield cls.get_effective_amount_estimators(funding_accounts)
         selector = CoinSelector(
-            list(cls.get_effective_amount_estimators(funding_accounts)),
-            amount,
+            txos, amount,
             ledger.get_input_output_fee(
                 cls.output_class.pay_pubkey_hash(COIN, NULL_HASH)
             )
@@ -317,14 +325,14 @@ class BaseTransaction:
 
         spent_sum = sum(s.effective_amount for s in spendables)
         if spent_sum > amount:
-            change_address = change_account.get_least_used_change_address()
-            change_hash160 = change_account.coin.address_to_hash160(change_address)
+            change_address = change_account.change.get_or_create_usable_address()
+            change_hash160 = change_account.ledger.address_to_hash160(change_address)
             change_amount = spent_sum - amount
             tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
 
         tx.add_inputs([s.txi for s in spendables])
         tx.sign(funding_accounts)
-        return tx
+        defer.returnValue(tx)
 
     @classmethod
     def liquidate(cls, assets, funding_accounts, change_account):

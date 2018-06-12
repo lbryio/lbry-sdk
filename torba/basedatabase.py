@@ -1,7 +1,11 @@
 import logging
+from typing import List, Union
+
 import sqlite3
 from twisted.internet import defer
 from twisted.enterprise import adbapi
+
+import torba.baseaccount
 
 log = logging.getLogger(__name__)
 
@@ -34,17 +38,19 @@ class SQLiteMixin(object):
         return trans.execute(sql).fetchall()
 
     def _insert_sql(self, table, data):
+        # type: (str, dict) -> tuple[str, List]
         columns, values = [], []
         for column, value in data.items():
             columns.append(column)
             values.append(value)
-        sql = "REPLACE INTO %s (%s) VALUES (%s)".format(
+        sql = "REPLACE INTO {} ({}) VALUES ({})".format(
             table, ', '.join(columns), ', '.join(['?'] * len(values))
         )
         return sql, values
 
     @defer.inlineCallbacks
     def query_one_value_list(self, query, params):
+        # type: (str, Union[dict,tuple]) -> defer.Deferred[List]
         result = yield self.db.runQuery(query, params)
         if result:
             defer.returnValue([i[0] for i in result])
@@ -137,27 +143,7 @@ class BaseDatabase(SQLiteMixin):
         CREATE_TXI_TABLE
     )
 
-    def get_missing_transactions(self, address, txids):
-        def _steps(t):
-            missing = []
-            chunk_size = 100
-            for i in range(0, len(txids), chunk_size):
-                chunk = txids[i:i + chunk_size]
-                t.execute(
-                    "SELECT 1 FROM tx WHERE txid=?",
-                    (sqlite3.Binary(txid) for txid in chunk)
-                )
-            if not t.execute("SELECT 1 FROM tx WHERE txid=?", (sqlite3.Binary(tx.id),)).fetchone():
-                t.execute(*self._insert_sql('tx', {
-                    'txid': sqlite3.Binary(tx.id),
-                    'raw': sqlite3.Binary(tx.raw),
-                    'height': height,
-                    'is_confirmed': is_confirmed,
-                    'is_verified': is_verified
-                }))
-        return self.db.runInteraction(_steps)
-
-    def add_transaction(self, address, tx, height, is_confirmed, is_verified):
+    def add_transaction(self, address, hash, tx, height, is_confirmed, is_verified):
         def _steps(t):
             if not t.execute("SELECT 1 FROM tx WHERE txid=?", (sqlite3.Binary(tx.id),)).fetchone():
                 t.execute(*self._insert_sql('tx', {
@@ -167,46 +153,37 @@ class BaseDatabase(SQLiteMixin):
                     'is_confirmed': is_confirmed,
                     'is_verified': is_verified
                 }))
-            t.execute(*self._insert_sql(
-                "insert into txo values (?, ?, ?, ?, ?, ?, ?, ?, ?)", (
-                    sqlite3.Binary(account.public_key.address),
-                    sqlite3.Binary(txo.script.values['pubkey_hash']),
-                    sqlite3.Binary(txo.txid),
-                    txo.index,
-                    txo.amount,
-                    sqlite3.Binary(txo.script.source),
-                    txo.script.is_claim_name,
-                    txo.script.is_support_claim,
-                    txo.script.is_update_claim
-                )
+            for txo in tx.outputs:
+                if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == hash:
+                    t.execute(*self._insert_sql("txo", {
+                        'txid': sqlite3.Binary(tx.id),
+                        'address': sqlite3.Binary(address),
+                        'position': txo.index,
+                        'amount': txo.amount,
+                        'script': sqlite3.Binary(txo.script.source)
+                    }))
+                elif txo.script.is_pay_script_hash:
+                    # TODO: implement script hash payments
+                    print('Database.add_transaction pay script hash is not implemented!')
 
-            ))
-            txoid = t.execute(
-                "select rowid from txo where txid=? and pos=?", (
-                    sqlite3.Binary(txi.output_txid), txi.output_index
-                )
-            ).fetchone()[0]
-            t.execute(
-                "insert into txi values (?, ?, ?)", (
-                    sqlite3.Binary(account.public_key.address),
-                    sqlite3.Binary(txi.txid),
-                    txoid
-                )
-            )
-
+            for txi in tx.inputs:
+                txoid = t.execute(
+                    "SELECT txoid, address FROM txo WHERE txid = ? AND position = ?",
+                    (sqlite3.Binary(txi.output_txid), txi.output_index)
+                ).fetchone()
+                if txoid:
+                    t.execute(*self._insert_sql("txi", {
+                        'txid': sqlite3.Binary(tx.id),
+                        'address': sqlite3.Binary(address),
+                        'txoid': txoid,
+                    }))
         return self.db.runInteraction(_steps)
-
-    @defer.inlineCallbacks
-    def has_transaction(self, txid):
-        result = yield self.db.runQuery(
-            "select rowid from tx where txid=?", (txid,)
-        )
-        defer.returnValue(bool(result))
 
     @defer.inlineCallbacks
     def get_balance_for_account(self, account):
         result = yield self.db.runQuery(
-            "select sum(amount) from txo where account=:account and rowid not in (select txo from txi where account=:account)",
+            "SELECT SUM(amount) FROM txo NATURAL JOIN pubkey_address WHERE account=:account AND "
+            "txoid NOT IN (SELECT txoid FROM txi)",
             {'account': sqlite3.Binary(account.public_key.address)}
         )
         if result:
@@ -218,12 +195,9 @@ class BaseDatabase(SQLiteMixin):
     def get_utxos(self, account, output_class):
         utxos = yield self.db.runQuery(
             """
-            SELECT
-              amount, script, txid
-            FROM txo
-            WHERE
-              account=:account AND
-              txoid NOT IN (SELECT txoid FROM txi WHERE account=:account)
+            SELECT amount, script, txid, position
+            FROM txo NATURAL JOIN pubkey_address 
+            WHERE account=:account AND txoid NOT IN (SELECT txoid FROM txi)
             """,
             {'account': sqlite3.Binary(account.public_key.address)}
         )
@@ -231,7 +205,8 @@ class BaseDatabase(SQLiteMixin):
             output_class(
                 values[0],
                 output_class.script_class(values[1]),
-                values[2]
+                values[2],
+                index=values[3]
             ) for values in utxos
         ])
 
@@ -250,64 +225,58 @@ class BaseDatabase(SQLiteMixin):
             values.append(sqlite3.Binary(pubkey.pubkey_bytes))
         return self.db.runOperation(sql, values)
 
-    def get_keys(self, account, chain):
-        return self.query_one_value_list(
-            "SELECT pubkey FROM pubkey_address WHERE account = ? AND chain = ?",
-            (sqlite3.Binary(account.public_key.address), chain)
-        )
+    def get_addresses(self, account, chain, limit=None, details=False):
+        sql = ["SELECT {} FROM pubkey_address WHERE account = :account"]
+        params = {'account': sqlite3.Binary(account.public_key.address)}
+        if chain is not None:
+            sql.append("AND chain = :chain")
+            params['chain'] = chain
+        sql.append("ORDER BY position DESC")
+        if limit is not None:
+            sql.append("LIMIT {}".format(limit))
+        if details:
+            return self.query_dict_value_list(' '.join(sql), ('address', 'position', 'used_times'), params)
+        else:
+            return self.query_one_value_list(' '.join(sql).format('address'), params)
 
-    def get_address_details(self, address):
-        return self.query_dict_value(
-            "SELECT {} FROM pubkey_address WHERE address = ?",
-            ('account', 'chain', 'position'), (sqlite3.Binary(address),)
-        )
-
-    def get_addresses(self, account, chain):
-        return self.query_one_value_list(
-            "SELECT address FROM pubkey_address WHERE account = ? AND chain = ?",
-            (sqlite3.Binary(account.public_key.address), chain)
-        )
-
-    def get_last_address_index(self, account, chain):
-        return self.query_one_value(
-            """
-            SELECT position FROM pubkey_address 
-            WHERE account = ? AND chain = ?
-            ORDER BY position DESC LIMIT 1""",
-            (sqlite3.Binary(account.public_key.address), chain),
-            default=0
-        )
-
-    def _usable_address_sql(self, account, chain, exclude_used_times):
-        return """
-            SELECT address FROM pubkey_address 
-            WHERE
-              account = :account AND
-              chain = :chain AND 
-              used_times <= :exclude_used_times
-        """, {
+    def _used_address_sql(self, account, chain, comparison_op, used_times, limit=None):
+        sql = [
+            "SELECT address FROM pubkey_address",
+            "WHERE account = :account AND"
+        ]
+        params = {
             'account': sqlite3.Binary(account.public_key.address),
-            'chain': chain,
-            'exclude_used_times': exclude_used_times
+            'used_times': used_times
         }
+        if chain is not None:
+            sql.append("chain = :chain AND")
+            params['chain'] = chain
+        sql.append("used_times {} :used_times".format(comparison_op))
+        sql.append("ORDER BY used_times ASC")
+        if limit is not None:
+            sql.append('LIMIT {}'.format(limit))
+        return ' '.join(sql), params
 
-    def get_usable_addresses(self, account, chain, exclude_used_times=2):
-        return self.query_one_value_list(*self._usable_address_sql(
-            account, chain, exclude_used_times
+    def get_unused_addresses(self, account, chain):
+        # type: (torba.baseaccount.BaseAccount, int) -> defer.Deferred[List[str]]
+        return self.query_one_value_list(*self._used_address_sql(
+            account, chain, '=', 0
         ))
 
-    def get_usable_address_count(self, account, chain, exclude_used_times=2):
-        return self.query_count(*self._usable_address_sql(
-            account, chain, exclude_used_times
+    def get_usable_addresses(self, account, chain, max_used_times, limit):
+        return self.query_one_value_list(*self._used_address_sql(
+            account, chain, '<=', max_used_times, limit
         ))
 
-    def get_address_history(self, address):
-        return self.query_one_value(
-            "SELECT history FROM pubkey_address WHERE address = ?", (sqlite3.Binary(address),)
+    def get_address(self, address):
+        return self.query_dict_value(
+            "SELECT {} FROM pubkey_address WHERE address= :address",
+            ('address', 'account', 'chain', 'position', 'pubkey', 'history', 'used_times'),
+            {'address': sqlite3.Binary(address)}
         )
 
-    def set_address_status(self, address, status):
+    def set_address_history(self, address, history):
         return self.db.runOperation(
-            "replace into address_status (address, status) values (?, ?)", (address,status)
+            "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
+            (sqlite3.Binary(history), history.count(b':')//2, sqlite3.Binary(address))
         )
-

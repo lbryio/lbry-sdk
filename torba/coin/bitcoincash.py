@@ -1,6 +1,6 @@
-__coin__ = 'BitcoinCash'
 __node_daemon__ = 'bitcoind'
 __node_cli__ = 'bitcoin-cli'
+__node_bin__ = 'bitcoin-abc-0.17.2/bin'
 __node_url__ = (
     'https://download.bitcoinabc.org/0.17.2/linux/bitcoin-abc-0.17.2-x86_64-linux-gnu.tar.gz'
 )
@@ -11,7 +11,6 @@ from torba.baseledger import BaseLedger, BaseHeaders
 from torba.basenetwork import BaseNetwork
 from torba.basescript import BaseInputScript, BaseOutputScript
 from torba.basetransaction import BaseTransaction, BaseInput, BaseOutput
-from torba.basecoin import BaseCoin
 from torba.basedatabase import BaseSQLiteWalletStorage
 from torba.manager import BaseWalletManager
 

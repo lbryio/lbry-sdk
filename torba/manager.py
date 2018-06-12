@@ -2,8 +2,7 @@ import functools
 from typing import List, Dict, Type
 from twisted.internet import defer
 
-from torba.baseaccount import AccountsView
-from torba.baseledger import BaseLedger
+from torba.baseledger import BaseLedger, LedgerRegistry
 from torba.basetransaction import BaseTransaction, NULL_HASH
 from torba.coinselection import CoinSelector
 from torba.constants import COIN
@@ -29,9 +28,8 @@ class WalletManager(object):
             wallets.append(wallet)
         return manager
 
-    def get_or_create_ledger(self, coin_id, ledger_config=None):
-        coin_class = CoinRegistry.get_coin_class(coin_id)
-        ledger_class = coin_class.ledger_class
+    def get_or_create_ledger(self, ledger_id, ledger_config=None):
+        ledger_class = LedgerRegistry.get_ledger_class(ledger_id)
         ledger = self.ledgers.get(ledger_class)
         if ledger is None:
             ledger = self.create_ledger(ledger_class, ledger_config or {})
@@ -100,17 +98,16 @@ class WalletManager(object):
         amount = int(amount * COIN)
 
         account = self.default_account
-        coin = account.coin
-        ledger = coin.ledger
+        ledger = account.ledger
         tx_class = ledger.transaction_class  # type: BaseTransaction
         in_class, out_class = tx_class.input_class, tx_class.output_class
 
         estimators = [
-            txo.get_estimator(coin) for txo in account.get_unspent_utxos()
+            txo.get_estimator(ledger) for txo in account.get_unspent_utxos()
         ]
         tx_class.create()
 
-        cost_of_output = coin.get_input_output_fee(
+        cost_of_output = ledger.get_input_output_fee(
             out_class.pay_pubkey_hash(COIN, NULL_HASH)
         )
 

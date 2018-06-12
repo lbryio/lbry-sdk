@@ -76,7 +76,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         raw_address = self.pubkey_address_prefix + h160
         return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
 
-    def account_created(self, account):
+    def account_created(self, account):  # type: (baseaccount.BaseAccount) -> None
         self.accounts.add(account)
 
     @staticmethod
@@ -94,7 +94,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
     @property
     def path(self):
-        return os.path.join(self.config['path'], self.get_id())
+        return os.path.join(self.config['wallet_path'], self.get_id())
 
     def get_input_output_fee(self, io):
         """ Fee based on size of the input / output. """
@@ -104,29 +104,17 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         """ Fee for the transaction header and all outputs; without inputs. """
         return self.fee_per_byte * tx.base_size
 
-    def get_keys(self, account, chain):
-        return self.db.get_keys(account, chain)
-
     @defer.inlineCallbacks
-    def add_transaction(self, transaction, height):  # type: (basetransaction.BaseTransaction, int) -> None
-        yield self.db.add_transaction(transaction, height, False, False)
+    def add_transaction(self, address, transaction, height):
+        # type: (bytes, basetransaction.BaseTransaction, int) -> None
+        yield self.db.add_transaction(
+            address, self.address_to_hash160(address), transaction, height, False, False
+        )
         self._on_transaction_controller.add(transaction)
-
-    def has_address(self, address):
-        return address in self.accounts.addresses
-
-    @defer.inlineCallbacks
-    def get_least_used_address(self, account, keychain, max_transactions=100):
-        used_addresses = yield self.db.get_used_addresses(account)
-        unused_set = set(keychain.addresses) - set(map(itemgetter(0), used_addresses))
-        if unused_set:
-            defer.returnValue(unused_set.pop())
-        if used_addresses and used_addresses[0][1] < max_transactions:
-            defer.returnValue(used_addresses[0][0])
 
     @defer.inlineCallbacks
     def get_private_key_for_address(self, address):
-        match = yield self.db.get_address_details(address)
+        match = yield self.db.get_address(address)
         if match:
             for account in self.accounts:
                 if bytes(match['account']) == account.public_key.address:
@@ -147,6 +135,19 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 #        for output in outputs:
 #            if output[1:] not in inputs:
 #                yield output[0]
+
+    @defer.inlineCallbacks
+    def get_local_status(self, address):
+        address_details = yield self.db.get_address(address)
+        hash = hashlib.sha256(address_details['history']).digest()
+        defer.returnValue(hexlify(hash))
+
+    @defer.inlineCallbacks
+    def get_local_history(self, address):
+        address_details = yield self.db.get_address(address)
+        history = address_details['history'] or b''
+        parts = history.split(b':')[:-1]
+        defer.returnValue(list(zip(parts[0::2], map(int, parts[1::2]))))
 
     @defer.inlineCallbacks
     def start(self):
@@ -195,62 +196,57 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         ])
 
     @defer.inlineCallbacks
-    def update_account(self, account):  # type: (Account) -> defer.Defferred
+    def update_account(self, account):  # type: (baseaccount.BaseAccount) -> defer.Defferred
         # Before subscribing, download history for any addresses that don't have any,
         # this avoids situation where we're getting status updates to addresses we know
         # need to update anyways. Continue to get history and create more addresses until
         # all missing addresses are created and history for them is fully restored.
-        yield account.ensure_enough_addresses()
-        addresses = yield account.get_unused_addresses(account)
+        yield account.ensure_address_gap()
+        addresses = yield account.get_unused_addresses()
         while addresses:
             yield defer.DeferredList([
                 self.update_history(a) for a in addresses
             ])
-            addresses = yield account.ensure_enough_addresses()
+            addresses = yield account.ensure_address_gap()
 
         # By this point all of the addresses should be restored and we
         # can now subscribe all of them to receive updates.
-        yield defer.DeferredList([
-            self.subscribe_history(address)
-            for address in account.addresses
-        ])
-
-    def _get_status_from_history(self, history):
-        hashes = [
-            '{}:{}:'.format(hash.decode(), height).encode()
-            for hash, height in map(itemgetter('tx_hash', 'height'), history)
-        ]
-        if hashes:
-            return hexlify(hashlib.sha256(b''.join(hashes)).digest())
+        all_addresses = yield account.get_addresses()
+        yield defer.DeferredList(
+            list(map(self.subscribe_history, all_addresses))
+        )
 
     @defer.inlineCallbacks
-    def update_history(self, address, remote_status=None):
-        history = yield self.network.get_history(address)
-        hashes = list(map(itemgetter('tx_hash'), history))
-        for hash, height in map(itemgetter('tx_hash', 'height'), history):
+    def update_history(self, address):
+        remote_history = yield self.network.get_history(address)
+        local = yield self.get_local_history(address)
 
-            if not (yield self.db.has_transaction(hash)):
-                raw = yield self.network.get_transaction(hash)
-                transaction = self.transaction_class(unhexlify(raw))
-                yield self.add_transaction(transaction, height)
-        if remote_status is None:
-            remote_status = self._get_status_from_history(history)
-        if remote_status:
-            yield self.db.set_address_status(address, remote_status)
+        history_parts = []
+        for i, (hash, height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
+            history_parts.append('{}:{}:'.format(hash.decode(), height))
+            if i < len(local) and local[i] == (hash, height):
+                continue
+            raw = yield self.network.get_transaction(hash)
+            transaction = self.transaction_class(unhexlify(raw))
+            yield self.add_transaction(address, transaction, height)
+
+        yield self.db.set_address_history(
+            address, ''.join(history_parts).encode()
+        )
 
     @defer.inlineCallbacks
     def subscribe_history(self, address):
         remote_status = yield self.network.subscribe_address(address)
-        local_status = yield self.db.get_address_status(address)
+        local_status = yield self.get_local_status(address)
         if local_status != remote_status:
-            yield self.update_history(address, remote_status)
+            yield self.update_history(address)
 
     @defer.inlineCallbacks
     def process_status(self, response):
         address, remote_status = response
-        local_status = yield self.db.get_address_status(address)
+        local_status = yield self.get_local_status(address)
         if local_status != remote_status:
-            yield self.update_history(address, remote_status)
+            yield self.update_history(address)
 
     def broadcast(self, tx):
         return self.network.broadcast(hexlify(tx.raw))

@@ -1,7 +1,7 @@
 from typing import Dict
-from binascii import unhexlify
 from twisted.internet import defer
 
+import torba.baseledger
 from torba.mnemonic import Mnemonic
 from torba.bip32 import PrivateKey, PubKey, from_extended_key_string
 from torba.hash import double_sha256, aes_encrypt, aes_decrypt
@@ -9,55 +9,59 @@ from torba.hash import double_sha256, aes_encrypt, aes_decrypt
 
 class KeyChain:
 
-    def __init__(self, account, parent_key, chain_number, minimum_usable_addresses):
+    def __init__(self, account, parent_key, chain_number, gap, maximum_use_per_address):
+        # type: ('BaseAccount', PubKey, int, int, int) -> None
         self.account = account
         self.db = account.ledger.db
-        self.main_key = parent_key.child(chain_number)  # type: PubKey
+        self.main_key = parent_key.child(chain_number)
         self.chain_number = chain_number
-        self.minimum_usable_addresses = minimum_usable_addresses
+        self.gap = gap
+        self.maximum_use_per_address = maximum_use_per_address
 
-    def get_keys(self):
-        return self.db.get_keys(self.account, self.chain_number)
+    def get_addresses(self, limit=None, details=False):
+        return self.db.get_addresses(self.account, self.chain_number, limit, details)
 
-    def get_addresses(self):
-        return self.db.get_addresses(self.account, self.chain_number)
+    def get_usable_addresses(self, limit=None):
+        return self.db.get_usable_addresses(
+            self.account, self.chain_number, self.maximum_use_per_address, limit
+        )
 
     @defer.inlineCallbacks
-    def ensure_enough_useable_addresses(self):
-        usable_address_count = yield self.db.get_usable_address_count(
-            self.account, self.chain_number
-        )
-
-        if usable_address_count >= self.minimum_usable_addresses:
-            defer.returnValue([])
-
-        new_addresses_needed = self.minimum_usable_addresses - usable_address_count
-
-        start = yield self.db.get_last_address_index(
-            self.account, self.chain_number
-        )
-        end = start + new_addresses_needed
-
+    def generate_keys(self, start, end):
         new_keys = []
-        for index in range(start+1, end+1):
+        for index in range(start, end+1):
             new_keys.append((index, self.main_key.child(index)))
-
         yield self.db.add_keys(
             self.account, self.chain_number, new_keys
         )
-
-        defer.returnValue([
-            key[1].address for key in new_keys
-        ])
+        defer.returnValue([key[1].address for key in new_keys])
 
     @defer.inlineCallbacks
-    def has_gap(self):
-        if len(self.addresses) < self.minimum_gap:
-            defer.returnValue(False)
-        for address in self.addresses[-self.minimum_gap:]:
-            if (yield self.ledger.is_address_old(address)):
-                defer.returnValue(False)
-        defer.returnValue(True)
+    def ensure_address_gap(self):
+        addresses = yield self.get_addresses(self.gap, True)
+
+        existing_gap = 0
+        for address in addresses:
+            if address['used_times'] == 0:
+                existing_gap += 1
+            else:
+                break
+
+        if existing_gap == self.gap:
+            defer.returnValue([])
+
+        start = addresses[0]['position']+1 if addresses else 0
+        end = start + (self.gap - existing_gap)
+        new_keys = yield self.generate_keys(start, end-1)
+        defer.returnValue(new_keys)
+
+    @defer.inlineCallbacks
+    def get_or_create_usable_address(self):
+        addresses = yield self.get_usable_addresses(1)
+        if addresses:
+            return addresses[0]
+        addresses = yield self.ensure_address_gap()
+        return addresses[0]
 
 
 class BaseAccount:
@@ -67,26 +71,28 @@ class BaseAccount:
     public_key_class = PubKey
 
     def __init__(self, ledger, seed, encrypted, private_key,
-                 public_key, receiving_gap=20, change_gap=6):
-        self.ledger = ledger  # type: baseledger.BaseLedger
-        self.seed = seed  # type: str
-        self.encrypted = encrypted  # type: bool
-        self.private_key = private_key  # type: PrivateKey
-        self.public_key = public_key  # type: PubKey
+                 public_key, receiving_gap=20, change_gap=6,
+                 receiving_maximum_use_per_address=2, change_maximum_use_per_address=2):
+        # type: (torba.baseledger.BaseLedger, str, bool, PrivateKey, PubKey, int, int, int, int) -> None
+        self.ledger = ledger
+        self.seed = seed
+        self.encrypted = encrypted
+        self.private_key = private_key
+        self.public_key = public_key
         self.receiving, self.change = self.keychains = (
-            KeyChain(self, public_key, 0, receiving_gap),
-            KeyChain(self, public_key, 1, change_gap)
+            KeyChain(self, public_key, 0, receiving_gap, receiving_maximum_use_per_address),
+            KeyChain(self, public_key, 1, change_gap, change_maximum_use_per_address)
         )
         ledger.account_created(self)
 
     @classmethod
-    def generate(cls, ledger, password):  # type: (baseledger.BaseLedger, str) -> BaseAccount
+    def generate(cls, ledger, password):  # type: (torba.baseledger.BaseLedger, str) -> BaseAccount
         seed = cls.mnemonic_class().make_seed()
         return cls.from_seed(ledger, seed, password)
 
     @classmethod
     def from_seed(cls, ledger, seed, password):
-        # type: (baseledger.BaseLedger, str, str) -> BaseAccount
+        # type: (torba.baseledger.BaseLedger, str, str) -> BaseAccount
         private_key = cls.get_private_key_from_seed(ledger, seed, password)
         return cls(
             ledger=ledger, seed=seed, encrypted=False,
@@ -96,13 +102,13 @@ class BaseAccount:
 
     @classmethod
     def get_private_key_from_seed(cls, ledger, seed, password):
-        # type: (baseledger.BaseLedger, str, str) -> PrivateKey
+        # type: (torba.baseledger.BaseLedger, str, str) -> PrivateKey
         return cls.private_key_class.from_seed(
             ledger, cls.mnemonic_class.mnemonic_to_seed(seed, password)
         )
 
     @classmethod
-    def from_dict(cls, ledger, d):  # type: (baseledger.BaseLedger, Dict) -> BaseAccount
+    def from_dict(cls, ledger, d):  # type: (torba.baseledger.BaseLedger, Dict) -> BaseAccount
         if not d['encrypted']:
             private_key = from_extended_key_string(ledger, d['private_key'])
             public_key = private_key.public_key
@@ -116,7 +122,9 @@ class BaseAccount:
             private_key=private_key,
             public_key=public_key,
             receiving_gap=d['receiving_gap'],
-            change_gap=d['change_gap']
+            change_gap=d['change_gap'],
+            receiving_maximum_use_per_address=d['receiving_maximum_use_per_address'],
+            change_maximum_use_per_address=d['change_maximum_use_per_address']
         )
 
     def to_dict(self):
@@ -127,8 +135,10 @@ class BaseAccount:
             'private_key': self.private_key if self.encrypted else
                            self.private_key.extended_key_string(),
             'public_key': self.public_key.extended_key_string(),
-            'receiving_gap': self.receiving.minimum_usable_addresses,
-            'change_gap': self.change.minimum_usable_addresses,
+            'receiving_gap': self.receiving.gap,
+            'change_gap': self.change.gap,
+            'receiving_maximum_use_per_address': self.receiving.maximum_use_per_address,
+            'change_maximum_use_per_address': self.change.maximum_use_per_address
         }
 
     def decrypt(self, password):
@@ -146,39 +156,22 @@ class BaseAccount:
         self.encrypted = True
 
     @defer.inlineCallbacks
-    def ensure_enough_useable_addresses(self):
+    def ensure_address_gap(self):
         addresses = []
         for keychain in self.keychains:
-            new_addresses = yield keychain.ensure_enough_useable_addresses()
+            new_addresses = yield keychain.ensure_address_gap()
             addresses.extend(new_addresses)
         defer.returnValue(addresses)
+
+    def get_addresses(self, limit=None, details=False):
+        return self.ledger.db.get_addresses(self, None, limit, details)
+
+    def get_unused_addresses(self):
+        return self.ledger.db.get_unused_addresses(self, None)
 
     def get_private_key(self, chain, index):
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
         return self.private_key.child(chain).child(index)
 
-    def get_least_used_receiving_address(self, max_transactions=1000):
-        return self._get_least_used_address(
-            self.receiving_keys,
-            max_transactions
-        )
-
-    def get_least_used_change_address(self, max_transactions=100):
-        return self._get_least_used_address(
-            self.change_keys,
-            max_transactions
-        )
-
-    def _get_least_used_address(self, keychain, max_transactions):
-        ledger = self.ledger
-        address = ledger.get_least_used_address(self, keychain, max_transactions)
-        if address:
-            return address
-        address = keychain.generate_next_address()
-        ledger.subscribe_history(address)
-        return address
-
-    @defer.inlineCallbacks
     def get_balance(self):
-        utxos = yield self.ledger.get_unspent_outputs(self)
-        defer.returnValue(sum(utxo.amount for utxo in utxos))
+        return self.ledger.db.get_balance_for_account(self)

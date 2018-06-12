@@ -5,6 +5,66 @@ from twisted.internet import defer
 from torba.coin.bitcoinsegwit import MainNetLedger
 
 
+class TestKeyChain(unittest.TestCase):
+
+    def setUp(self):
+        self.ledger = MainNetLedger(db=':memory:')
+        return self.ledger.db.start()
+
+    @defer.inlineCallbacks
+    def test_address_gap_algorithm(self):
+        account = self.ledger.account_class.generate(self.ledger, u"torba")
+
+        # save records out of order to make sure we're really testing ORDER BY
+        # and not coincidentally getting records in the correct order
+        yield account.receiving.generate_keys(4, 7)
+        yield account.receiving.generate_keys(0, 3)
+        yield account.receiving.generate_keys(8, 11)
+        keys = yield account.receiving.get_addresses(None, True)
+        self.assertEqual(
+            [key['position'] for key in keys],
+            [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+        )
+
+        # we have 12, but default gap is 20
+        new_keys = yield account.receiving.ensure_address_gap()
+        self.assertEqual(len(new_keys), 8)
+        keys = yield account.receiving.get_addresses(None, True)
+        self.assertEqual(
+            [key['position'] for key in keys],
+            [19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+        )
+
+        # case #1: no new addresses needed
+        empty = yield account.receiving.ensure_address_gap()
+        self.assertEqual(len(empty), 0)
+
+        # case #2: only one new addressed needed
+        keys = yield account.receiving.get_addresses(None, True)
+        yield self.ledger.db.set_address_history(keys[19]['address'], 'a:1:')
+        new_keys = yield account.receiving.ensure_address_gap()
+        self.assertEqual(len(new_keys), 1)
+
+        # case #3: 20 addresses needed
+        keys = yield account.receiving.get_addresses(None, True)
+        yield self.ledger.db.set_address_history(keys[0]['address'], 'a:1:')
+        new_keys = yield account.receiving.ensure_address_gap()
+        self.assertEqual(len(new_keys), 20)
+
+    @defer.inlineCallbacks
+    def test_create_usable_address(self):
+        account = self.ledger.account_class.generate(self.ledger, u"torba")
+
+        keys = yield account.receiving.get_addresses(None, True)
+        self.assertEqual(len(keys), 0)
+
+        address = yield account.receiving.get_or_create_usable_address()
+        self.assertIsNotNone(address)
+
+        keys = yield account.receiving.get_addresses(None, True)
+        self.assertEqual(len(keys), 20)
+
+
 class TestAccount(unittest.TestCase):
 
     def setUp(self):
@@ -19,24 +79,16 @@ class TestAccount(unittest.TestCase):
         self.assertEqual(account.public_key.ledger, self.ledger)
         self.assertEqual(account.private_key.public_key, account.public_key)
 
-        keys = yield account.receiving.get_keys()
         addresses = yield account.receiving.get_addresses()
-        self.assertEqual(len(keys), 0)
         self.assertEqual(len(addresses), 0)
-        keys = yield account.change.get_keys()
         addresses = yield account.change.get_addresses()
-        self.assertEqual(len(keys), 0)
         self.assertEqual(len(addresses), 0)
 
-        yield account.ensure_enough_useable_addresses()
+        yield account.ensure_address_gap()
 
-        keys = yield account.receiving.get_keys()
         addresses = yield account.receiving.get_addresses()
-        self.assertEqual(len(keys), 20)
         self.assertEqual(len(addresses), 20)
-        keys = yield account.change.get_keys()
         addresses = yield account.change.get_addresses()
-        self.assertEqual(len(keys), 6)
         self.assertEqual(len(addresses), 6)
 
     @defer.inlineCallbacks
@@ -57,19 +109,23 @@ class TestAccount(unittest.TestCase):
             b'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
             b'iW44g14WF52fYC5J483wqQ5ZP'
         )
-        address = yield account.receiving.ensure_enough_useable_addresses()
-        self.assertEqual(address[0], b'1PGDB1CRy8UxPCrkcakRqroVnHxqzvUZhp')
-        private_key = yield self.ledger.get_private_key_for_address(b'1PGDB1CRy8UxPCrkcakRqroVnHxqzvUZhp')
+        address = yield account.receiving.ensure_address_gap()
+        self.assertEqual(address[0], b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
+
+        self.maxDiff = None
+        private_key = yield self.ledger.get_private_key_for_address(b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
         self.assertEqual(
             private_key.extended_key_string(),
-            b'xprv9xNEfQ296VTRc5QF7AZZ1WTimGzMs54FepRXVxbyypJXCrUKjxsYSyk5EhHYNxU4ApsaBr8AQ4sYo86BbGh2dZSddGXU1CMGwExvnyckjQn'
+            b'xprv9xNEfQ296VTRaEUDZ8oKq74xw2U6kpj486vFUB4K1wT9U25GX4UwuzFgJN1YuRrqkQ5TTwCpkYnjNpSoH'
+            b'SBaEigNHPkoeYbuPMRo6mRUjxg'
         )
+
         invalid_key = yield self.ledger.get_private_key_for_address(b'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
         self.assertIsNone(invalid_key)
 
         self.assertEqual(
             hexlify(private_key.wif()),
-            b'1c5664e848772b199644ab390b5c27d2f6664d9cdfdb62e1c7ac25151b00858b7a01'
+            b'1cc27be89ad47ef932562af80e95085eb0ab2ae3e5c019b1369b8b05ff2e94512f01'
         )
 
     @defer.inlineCallbacks
@@ -80,26 +136,24 @@ class TestAccount(unittest.TestCase):
                 "h absent",
             'encrypted': False,
             'private_key':
-                'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-                '6yz3jMbycrLrRMpeAJxR8qDg8',
+                b'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
+                b'6yz3jMbycrLrRMpeAJxR8qDg8',
             'public_key':
-                'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-                'iW44g14WF52fYC5J483wqQ5ZP',
+                b'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
+                b'iW44g14WF52fYC5J483wqQ5ZP',
             'receiving_gap': 10,
+            'receiving_maximum_use_per_address': 2,
             'change_gap': 10,
+            'change_maximum_use_per_address': 2
         }
 
         account = self.ledger.account_class.from_dict(self.ledger, account_data)
 
-        yield account.ensure_enough_useable_addresses()
+        yield account.ensure_address_gap()
 
-        keys = yield account.receiving.get_keys()
         addresses = yield account.receiving.get_addresses()
-        self.assertEqual(len(keys), 10)
         self.assertEqual(len(addresses), 10)
-        keys = yield account.change.get_keys()
         addresses = yield account.change.get_addresses()
-        self.assertEqual(len(keys), 10)
         self.assertEqual(len(addresses), 10)
 
         self.maxDiff = None

@@ -1,6 +1,6 @@
-__coin__ = 'BitcoinSegwit'
 __node_daemon__ = 'bitcoind'
 __node_cli__ = 'bitcoin-cli'
+__node_bin__ = 'bitcoin-0.16.0/bin'
 __node_url__ = (
     'https://bitcoin.org/bin/bitcoin-core-0.16.0/bitcoin-0.16.0-x86_64-linux-gnu.tar.gz'
 )
@@ -29,10 +29,15 @@ class UnverifiedHeaders(BaseHeaders):
 
 
 class RegTestLedger(MainNetLedger):
-    network_name = 'regtest'
     headers_class = UnverifiedHeaders
+    network_name = 'regtest'
+
+    pubkey_address_prefix = int2byte(111)
+    script_address_prefix = int2byte(196)
+    extended_public_key_prefix = unhexlify('043587cf')
+    extended_private_key_prefix = unhexlify('04358394')
+
     max_target = 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
     genesis_hash = '0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206'
     genesis_bits = 0x207fffff
     target_timespan = 1
-    verify_bits_to_target = False
