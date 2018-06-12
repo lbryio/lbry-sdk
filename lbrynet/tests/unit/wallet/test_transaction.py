@@ -1,16 +1,16 @@
 from binascii import hexlify, unhexlify
 from twisted.trial import unittest
 
-from torba.account import Account
+from torba.baseaccount import Account
 from torba.constants import CENT, COIN
 from torba.wallet import Wallet
+from torba.basetransaction import NULL_HASH
 
 from lbrynet.wallet.coin import LBC
 from lbrynet.wallet.transaction import Transaction, Output, Input
 from lbrynet.wallet.manager import LbryWalletManager
 
 
-NULL_HASH = '\x00'*32
 FEE_PER_BYTE = 50
 FEE_PER_CHAR = 200000
 
@@ -31,7 +31,7 @@ def get_transaction(txo=None):
         .add_outputs([txo or Output.pay_pubkey_hash(CENT, NULL_HASH)])
 
 
-def get_claim_transaction(claim_name, claim=''):
+def get_claim_transaction(claim_name, claim=b''):
     return get_transaction(
         Output.pay_claim_name_pubkey_hash(CENT, claim_name, claim, NULL_HASH)
     )
@@ -70,15 +70,15 @@ class TestSizeAndFeeEstimation(unittest.TestCase):
 
     def test_claim_name_transaction_size_and_fee(self):
         # fee based on claim name is the larger fee
-        claim_name = 'verylongname'
-        tx = get_claim_transaction(claim_name, '0'*4000)
+        claim_name = b'verylongname'
+        tx = get_claim_transaction(claim_name, b'0'*4000)
         base_size = tx.size - 1 - tx.inputs[0].size
         self.assertEqual(tx.size, 4225)
         self.assertEqual(tx.base_size, base_size)
         self.assertEqual(self.coin.get_transaction_base_fee(tx), len(claim_name) * FEE_PER_CHAR)
         # fee based on total bytes is the larger fee
-        claim_name = 'a'
-        tx = get_claim_transaction(claim_name, '0'*4000)
+        claim_name = b'a'
+        tx = get_claim_transaction(claim_name, b'0'*4000)
         base_size = tx.size - 1 - tx.inputs[0].size
         self.assertEqual(tx.size, 4214)
         self.assertEqual(tx.base_size, base_size)
@@ -168,7 +168,7 @@ class TestTransactionSerialization(unittest.TestCase):
             "00001976a914f521178feb733a719964e1da4a9efb09dcc39cfa88ac00000000"
         )
         tx = Transaction(raw)
-        self.assertEqual(hexlify(tx.id), b'666c3d15de1d6949a4fe717126c368e274b36957dce29fd401138c1e87e92a62')
+        self.assertEqual(tx.id, b'666c3d15de1d6949a4fe717126c368e274b36957dce29fd401138c1e87e92a62')
         self.assertEqual(tx.version, 1)
         self.assertEqual(tx.locktime, 0)
         self.assertEqual(len(tx.inputs), 1)
@@ -238,11 +238,10 @@ class TestTransactionSigning(unittest.TestCase):
         pubkey_hash2 = account.coin.address_to_hash160(address2)
 
         tx = Transaction() \
-            .add_inputs([Input.spend(get_output(2*COIN, pubkey_hash1))]) \
-            .add_outputs([Output.pay_pubkey_hash(1.9*COIN, pubkey_hash2)]) \
+            .add_inputs([Input.spend(get_output(int(2*COIN), pubkey_hash1))]) \
+            .add_outputs([Output.pay_pubkey_hash(int(1.9*COIN), pubkey_hash2)]) \
             .sign(account)
 
-        print(hexlify(tx.inputs[0].script.values['signature']))
         self.assertEqual(
             hexlify(tx.inputs[0].script.values['signature']),
             b'304402200dafa26ad7cf38c5a971c8a25ce7d85a076235f146126762296b1223c42ae21e022020ef9eeb8'

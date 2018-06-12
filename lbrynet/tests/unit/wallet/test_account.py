@@ -38,25 +38,25 @@ class TestAccount(unittest.TestCase):
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
-            'LprvXPsFZUGgrX1X9HiyxABZSf6hWJK7kHv4zGZRyyiHbBq5Wu94cE1DMvttnpLYReTPNW4eYwX9dWMvTz3PrB'
-            'wwbRafEeA1ZXL69U2egM4QJdq'
+            b'LprvXPsFZUGgrX1X9HiyxABZSf6hWJK7kHv4zGZRyyiHbBq5Wu94cE1DMvttnpLYReTPNW4eYwX9dWMvTz3PrB'
+            b'wwbRafEeA1ZXL69U2egM4QJdq'
         )
         self.assertEqual(
             account.public_key.extended_key_string(),
-            'Lpub2hkYkGHXktBhLpwUhKKogyuJ1M7Gt9EkjFTVKyDqZiZpWdhLuCoT1eKDfXfysMFfG4SzfXXcA2SsHzrjHK'
-            'Ea5aoCNRBAhjT5NPLV6hXtvEi'
+            b'Lpub2hkYkGHXktBhLpwUhKKogyuJ1M7Gt9EkjFTVKyDqZiZpWdhLuCoT1eKDfXfysMFfG4SzfXXcA2SsHzrjHK'
+            b'Ea5aoCNRBAhjT5NPLV6hXtvEi'
         )
         self.assertEqual(
             account.receiving_keys.generate_next_address(),
-            'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx'
+            b'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx'
         )
-        private_key = account.get_private_key_for_address('bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
+        private_key = account.get_private_key_for_address(b'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
         self.assertEqual(
             private_key.extended_key_string(),
-            'LprvXTnmVLXGKvRGo2ihBE6LJ771G3VVpAx2zhTJvjnx5P3h6iZ4VJX8PvwTcgzJZ1hqXX61Wpn4pQoP6n2wgp'
-            'S8xjzCM6H2uGzCXuAMy5H9vtA'
+            b'LprvXTnmVLXGKvRGo2ihBE6LJ771G3VVpAx2zhTJvjnx5P3h6iZ4VJX8PvwTcgzJZ1hqXX61Wpn4pQoP6n2wgp'
+            b'S8xjzCM6H2uGzCXuAMy5H9vtA'
         )
-        self.assertIsNone(account.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX'))
+        self.assertIsNone(account.get_private_key_for_address(b'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX'))
 
     def test_load_and_save_account(self):
         account_data = {
@@ -86,12 +86,12 @@ class TestAccount(unittest.TestCase):
         self.assertEqual(len(account.receiving_keys.addresses), 2)
         self.assertEqual(
             account.receiving_keys.addresses[0],
-            'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx'
+            b'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx'
         )
         self.assertEqual(len(account.change_keys.addresses), 1)
         self.assertEqual(
             account.change_keys.addresses[0],
-            'bFpHENtqugKKHDshKFq2Mnb59Y2bx4vKgL'
+            b'bFpHENtqugKKHDshKFq2Mnb59Y2bx4vKgL'
         )
 
         account_data['coin'] = 'lbc_mainnet'
