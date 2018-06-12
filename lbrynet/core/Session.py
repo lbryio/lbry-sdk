@@ -1,5 +1,4 @@
 import logging
-import miniupnpc
 from twisted.internet import threads, defer
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.database.storage import SQLiteStorage
@@ -128,11 +127,6 @@ class Session(object):
             if self.peer_finder is None:
                 self.peer_finder = self.dht_node.peer_finder
 
-        # if self.use_upnp is True:
-        #     d = self._try_upnp()
-        # else:
-        #     d = defer.succeed(True)
-        # d.addCallback(lambda _: self.storage.setup())
         d = self.storage.setup()
         d.addCallback(lambda _: self._setup_other_components())
         return d
@@ -150,64 +144,6 @@ class Session(object):
         # if self.use_upnp is True:
         #     ds.append(defer.maybeDeferred(self._unset_upnp))
         return defer.DeferredList(ds)
-
-    def _try_upnp(self):
-
-        log.debug("In _try_upnp")
-
-        def get_free_port(upnp, port, protocol):
-            # returns an existing mapping if it exists
-            mapping = upnp.getspecificportmapping(port, protocol)
-            if not mapping:
-                return port
-            if upnp.lanaddr == mapping[0]:
-                return mapping[1]
-            return get_free_port(upnp, port + 1, protocol)
-
-        def get_port_mapping(upnp, port, protocol, description):
-            # try to map to the requested port, if there is already a mapping use the next external
-            # port available
-            if protocol not in ['UDP', 'TCP']:
-                raise Exception("invalid protocol")
-            port = get_free_port(upnp, port, protocol)
-            if isinstance(port, tuple):
-                log.info("Found existing UPnP redirect %s:%i (%s) to %s:%i, using it",
-                         self.external_ip, port, protocol, upnp.lanaddr, port)
-                return port
-            upnp.addportmapping(port, protocol, upnp.lanaddr, port,
-                                description, '')
-            log.info("Set UPnP redirect %s:%i (%s) to %s:%i", self.external_ip, port,
-                     protocol, upnp.lanaddr, port)
-            return port
-
-        def threaded_try_upnp():
-            if self.use_upnp is False:
-                log.debug("Not using upnp")
-                return False
-            u = miniupnpc.UPnP()
-            num_devices_found = u.discover()
-            if num_devices_found > 0:
-                u.selectigd()
-                external_ip = u.externalipaddress()
-                if external_ip != '0.0.0.0' and not self.external_ip:
-                    # best not to rely on this external ip, the router can be behind layers of NATs
-                    self.external_ip = external_ip
-                if self.peer_port:
-                    self.peer_port = get_port_mapping(u, self.peer_port, 'TCP', 'LBRY peer port')
-                    self.upnp_redirects.append((self.peer_port, 'TCP'))
-                if self.dht_node_port:
-                    self.dht_node_port = get_port_mapping(u, self.dht_node_port, 'UDP', 'LBRY DHT port')
-                    self.upnp_redirects.append((self.dht_node_port, 'UDP'))
-                return True
-            return False
-
-        def upnp_failed(err):
-            log.warning("UPnP failed. Reason: %s", err.getErrorMessage())
-            return False
-
-        d = threads.deferToThread(threaded_try_upnp)
-        d.addErrback(upnp_failed)
-        return d
 
     def _setup_other_components(self):
         log.debug("Setting up the rest of the components")
@@ -233,26 +169,4 @@ class Session(object):
 
         self.rate_limiter.start()
         d = self.blob_manager.setup()
-        return d
-
-    def _unset_upnp(self):
-        log.info("Unsetting upnp for session")
-
-        def threaded_unset_upnp():
-            u = miniupnpc.UPnP()
-            num_devices_found = u.discover()
-            if num_devices_found > 0:
-                u.selectigd()
-                for port, protocol in self.upnp_redirects:
-                    if u.getspecificportmapping(port, protocol) is None:
-                        log.warning(
-                            "UPnP redirect for %s %d was removed by something else.",
-                            protocol, port)
-                    else:
-                        u.deleteportmapping(port, protocol)
-                        log.info("Removed UPnP redirect for %s %d.", protocol, port)
-                self.upnp_redirects = []
-
-        d = threads.deferToThread(threaded_unset_upnp)
-        d.addErrback(lambda err: str(err))
         return d
