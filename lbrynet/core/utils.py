@@ -62,9 +62,9 @@ def safe_stop_looping_call(looping_call):
 def generate_id(num=None):
     h = get_lbry_hash_obj()
     if num is not None:
-        h.update(str(num))
+        h.update(str(num).encode())
     else:
-        h.update(str(random.getrandbits(512)))
+        h.update(str(random.getrandbits(512)).encode())
     return h.digest()
 
 
