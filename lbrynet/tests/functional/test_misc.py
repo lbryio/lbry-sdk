@@ -39,6 +39,7 @@ DummyBlobAvailabilityTracker = mocks.BlobAvailabilityTracker
 log_format = "%(funcName)s(): %(message)s"
 logging.basicConfig(level=logging.CRITICAL, format=log_format)
 
+TEST_SKIP_STRING_ANDROID = "Test cannot pass on Android because multiprocessing is not supported at the OS level."
 
 def require_system(system):
     def wrapper(fn):
@@ -853,3 +854,10 @@ class TestTransfer(TestCase):
         d.addBoth(stop)
 
         return d
+
+    if is_android():
+        test_lbry_transfer.skip = TEST_SKIP_STRING_ANDROID
+        test_last_blob_retrieval.skip = TEST_SKIP_STRING_ANDROID
+        test_double_download.skip = TEST_SKIP_STRING_ANDROID
+        test_multiple_uploaders.skip = TEST_SKIP_STRING_ANDROID
+
