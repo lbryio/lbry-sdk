@@ -111,6 +111,7 @@ class TestCostEst(unittest.TestCase):
 
 
 class TestJsonRpc(unittest.TestCase):
+
     def setUp(self):
         def noop():
             return None
@@ -125,12 +126,13 @@ class TestJsonRpc(unittest.TestCase):
         d = defer.maybeDeferred(self.test_daemon.jsonrpc_status)
         d.addCallback(lambda status: self.assertDictContainsSubset({'is_running': False}, status))
 
-    @unittest.skipIf(is_android(),
-                     'Test cannot pass on Android because PYTHONOPTIMIZE removes the docstrings.')
     def test_help(self):
         d = defer.maybeDeferred(self.test_daemon.jsonrpc_help, command='status')
         d.addCallback(lambda result: self.assertSubstring('daemon status', result['help']))
         # self.assertSubstring('daemon status', d.result)
+
+    if is_android():
+        test_help.skip = "Test cannot pass on Android because PYTHONOPTIMIZE removes the docstrings."
 
 
 class TestFileListSorting(unittest.TestCase):

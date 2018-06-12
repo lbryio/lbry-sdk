@@ -30,7 +30,6 @@ from lbrynet import conf
 from lbrynet.reflector import reupload
 from lbrynet.core.log_support import configure_loggly_handler
 from lbrynet.daemon.Component import ComponentManager
-from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaverFactory
 from lbrynet.daemon.Downloader import GetStream
 from lbrynet.daemon.Publisher import Publisher
 from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
