@@ -34,6 +34,16 @@ at anytime.
 
 
 ## [0.20.0] - 2018-06-13
+
+### TL;DR
+  This milestone release includes a large number of bug fixes, changes and additions covering all aspects of the daemon. Notable improvements include:
+
+  * Faster and more reliable downloading and uploading of content resulting from substantial work done on the Distributed Hash Table algorithms and protocol.
+  * Faster blockchain synchronization (headers) by downloading them from Amazon S3 under certain conditions.
+  * Faster overall app startup due to better optimized SQL queries.
+  * Power users of the `lbrynet-cli` will benefit from many bug fixes to commonly used commands and improvements in sorting of output.
+  * Please review the full change log for more details on specific fixes, changes and additions.
+
 ### Fixed
  * fix payment rate manager typo ([1236](https://github.com/lbryio/lbry/pull/1236))
  * handling error from dht clients with old `ping` method
