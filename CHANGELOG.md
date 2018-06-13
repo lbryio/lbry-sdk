@@ -13,77 +13,96 @@ at anytime.
   *
 
 ### Fixed
-  * fix payment rate manager typo ([1236](https://github.com/lbryio/lbry/pull/1236))
-  * handling error from dht clients with old `ping` method 
-  * blobs not being re-announced if no peers successfully stored, now failed announcements are re-queued
-  * issue where an `AuthAPIClient` (used by `lbrynet-cli`) would fail to update its session secret and keep making new auth sessions, with every other request failing
-  * `use_auth_http` in a config file being overridden by the default command line argument to `lbrynet-daemon`, now the command line value will only override the config file value if it is provided
-  * `lbrynet-cli` not automatically switching to the authenticated client if the server is detected to be using authentication. This resulted in `lbrynet-cli` failing to run when `lbrynet-daemon` was run with the `--http-auth` flag
-  * fixed error when using `claim_show` with `txid` and `nout` arguments
-  * fixed error when saving server list to conf file ([1209](https://github.com/lbryio/lbry/pull/1209))
+  *
+  *
 
 ### Deprecated
   *
-  * 
-  
+  *
+
 ### Changed
-  * if the `use_authentication` setting is configured, use authentication for all api methods instead of only those with the `auth_required` decorator
-  * regenerate api keys on startup if the using authentication
-  * support both positional and keyword args for api calls
-  * `blob_announce` to queue the blob announcement but not block on it
-  * `peer_list` to return a list of dictionaries instead of a list of lists, added peer node ids to the results
-  * predictable result sorting for `claim_list` and `claim_list_mine` ([1216](https://github.com/lbryio/lbry/pull/1216) and [1208](https://github.com/lbryio/lbry/pull/1208))
-  * increase the default `auto_re_reflect_interval` setting to a day and the default `concurrent_announcers` setting to 10
-  * download blockchain headers from s3 before starting the wallet when the local height is more than `s3_headers_depth` (a config setting) blocks behind ([1177](https://github.com/lbryio/lbry/pull/1177))
-  * check headers file integrity on startup, removing/truncating the file to force re-download when necessary
-  * support partial headers file download from S3 ([1189](https://github.com/lbryio/lbry/pull/1189))
-  * refactor `add_completed_blobs` on storage.py, simplifying into less queries ([1226](https://github.com/lbryio/lbry/pull/1226))
-  * full verification of streams only during database migration instead of every startup ([1195](https://github.com/lbryio/lbry/pull/1195))
-  * database batching functions for starting up the file manager
-  * added `single_announce` and `last_announced_time` columns to the `blob` table in sqlite
-  * track successful reflector uploads in sqlite to minimize how many streams are attempted by auto re-reflect ([1194](https://github.com/lbryio/lbry/pull/1194))
-  * pass the sd hash to reflector ClientFactory instead of looking it up from the database
-  * dht logging to be more verbose with errors and warnings
-  * `store` kademlia rpc method to block on the call finishing and to return storing peer information
-  * kademlia protocol to minimally delay writes to the UDP socket
-  * several internal dht functions to use inlineCallbacks
-  * `DHTHashAnnouncer` and `Node` manage functions to use `LoopingCall`s instead of scheduling with `callLater`.
-  * refactored `DHTHashAnnouncer` to no longer use locks, use a `DeferredSemaphore` to limit concurrent announcers
-  * decoupled `DiskBlobManager` from `DHTHashAnnouncer`, get blob hashes to announce from `SQLiteStorage`. The blob manager no longer announces blobs after they are completed, the hash announcer takes care of this now.
-  * changed the bucket splitting condition in the dht routing table to be more aggressive
-  * ping dht nodes who have stored to us periodically to determine whether we should include them as an active peer for the hash when we are queried. Nodes that are known to be not reachable by the node storing the record are no longer returned as peers by the storing node.
-  * changed dht bootstrap join process to better populate the routing table initially
-  * cache dht node tokens used during announcement to minimize the number of requests that are needed
-  * implement BEP0005 dht rules to classify nodes as good, bad, or unknown and for when to add them to the routing table (http://www.bittorrent.org/beps/bep_0005.html)
-  * refactored internal dht contact class to track failure counts/times, the time the contact last replied to us, and the time the node last requested something fom us ([1211](https://github.com/lbryio/lbry/pull/1211))
-  * refactored dht iterativeFind
-  * sort dht contacts returned by `findCloseNodes` in the routing table
-  * `reactor` and `callLater`, `listenUDP`, and `resolve` functions to be configurable (to allow easier testing)
-  * calls to get the current time to use `reactor.seconds` (to control callLater and LoopingCall timing in tests)
-  * temporarily disabled data price negotiation, treat all data as free
-  * disabled Cryptonator price feed
-  * use `treq` instead of `txrequests` ([1191](https://github.com/lbryio/lbry/pull/1191))
-  * updated `cryptography` version to 2.2.2
-  * removed `pycrypto` dependency, replacing all calls to `cryptography`
+  *
+  *
 
 ### Added
-  * `peer_ping` command
-  * `--sort` option in `file_list` ([1174](https://github.com/lbryio/lbry/pull/1174))
-  * `port` field to contacts returned by `routing_table_get`
-  * configurable `concurrent_announcers` and `s3_headers_depth` settings
-  * virtual kademlia network and mock udp transport for dht integration tests
-  * functional tests for bootstrapping the dht, announcing and expiring hashes, finding and pinging nodes, protocol version 0/1 backwards/forwards compatibility, and rejoining the network
-  * linux distro and desktop name added to analytics ([1218](https://github.com/lbryio/lbry/pull/1218))
-  * certifi module for Twisted SSL verification on Windows ([1213](https://github.com/lbryio/lbry/pull/1213))
-  * protocol version to dht requests and to the response from `findValue`
+  *
+  *
 
 ### Removed
-  * `announce_all` argument from `blob_announce`
-  * old `blob_announce_all` command
-  * unused `--wallet` argument to `lbrynet-daemon`, which used to be to support `PTCWallet`.
-  * `AuthJSONRPCServer.auth_required` decorator ([1161](https://github.com/lbryio/lbry/pull/1161))
-  * `OptimizedTreeRoutingTable` class used by the dht node for the time being
-  
+  *
+  *
+
+
+## [0.20.0] - 2018-06-13
+### Fixed
+ * fix payment rate manager typo ([1236](https://github.com/lbryio/lbry/pull/1236))
+ * handling error from dht clients with old `ping` method
+ * blobs not being re-announced if no peers successfully stored, now failed announcements are re-queued
+ * issue where an `AuthAPIClient` (used by `lbrynet-cli`) would fail to update its session secret and keep making new auth sessions, with every other request failing
+ * `use_auth_http` in a config file being overridden by the default command line argument to `lbrynet-daemon`, now the command line value will only override the config file value if it is provided
+ * `lbrynet-cli` not automatically switching to the authenticated client if the server is detected to be using authentication. This resulted in `lbrynet-cli` failing to run when `lbrynet-daemon` was run with the `--http-auth` flag
+ * fixed error when using `claim_show` with `txid` and `nout` arguments
+ * fixed error when saving server list to conf file ([1209](https://github.com/lbryio/lbry/pull/1209))
+
+### Changed
+ * if the `use_authentication` setting is configured, use authentication for all api methods instead of only those with the `auth_required` decorator
+ * regenerate api keys on startup if the using authentication
+ * support both positional and keyword args for api calls
+ * `blob_announce` to queue the blob announcement but not block on it
+ * `peer_list` to return a list of dictionaries instead of a list of lists, added peer node ids to the results
+ * predictable result sorting for `claim_list` and `claim_list_mine` ([1216](https://github.com/lbryio/lbry/pull/1216) and [1208](https://github.com/lbryio/lbry/pull/1208))
+ * increase the default `auto_re_reflect_interval` setting to a day and the default `concurrent_announcers` setting to 10
+ * download blockchain headers from s3 before starting the wallet when the local height is more than `s3_headers_depth` (a config setting) blocks behind ([1177](https://github.com/lbryio/lbry/pull/1177))
+ * check headers file integrity on startup, removing/truncating the file to force re-download when necessary
+ * support partial headers file download from S3 ([1189](https://github.com/lbryio/lbry/pull/1189))
+ * refactor `add_completed_blobs` on storage.py, simplifying into less queries ([1226](https://github.com/lbryio/lbry/pull/1226))
+ * full verification of streams only during database migration instead of every startup ([1195](https://github.com/lbryio/lbry/pull/1195))
+ * database batching functions for starting up the file manager
+ * added `single_announce` and `last_announced_time` columns to the `blob` table in sqlite
+ * track successful reflector uploads in sqlite to minimize how many streams are attempted by auto re-reflect ([1194](https://github.com/lbryio/lbry/pull/1194))
+ * pass the sd hash to reflector ClientFactory instead of looking it up from the database
+ * dht logging to be more verbose with errors and warnings
+ * `store` kademlia rpc method to block on the call finishing and to return storing peer information
+ * kademlia protocol to minimally delay writes to the UDP socket
+ * several internal dht functions to use inlineCallbacks
+ * `DHTHashAnnouncer` and `Node` manage functions to use `LoopingCall`s instead of scheduling with `callLater`.
+ * refactored `DHTHashAnnouncer` to no longer use locks, use a `DeferredSemaphore` to limit concurrent announcers
+ * decoupled `DiskBlobManager` from `DHTHashAnnouncer`, get blob hashes to announce from `SQLiteStorage`. The blob manager no longer announces blobs after they are completed, the hash announcer takes care of this now.
+ * changed the bucket splitting condition in the dht routing table to be more aggressive
+ * ping dht nodes who have stored to us periodically to determine whether we should include them as an active peer for the hash when we are queried. Nodes that are known to be not reachable by the node storing the record are no longer returned as peers by the storing node.
+ * changed dht bootstrap join process to better populate the routing table initially
+ * cache dht node tokens used during announcement to minimize the number of requests that are needed
+ * implement BEP0005 dht rules to classify nodes as good, bad, or unknown and for when to add them to the routing table (http://www.bittorrent.org/beps/bep_0005.html)
+ * refactored internal dht contact class to track failure counts/times, the time the contact last replied to us, and the time the node last requested something fom us ([1211](https://github.com/lbryio/lbry/pull/1211))
+ * refactored dht iterativeFind
+ * sort dht contacts returned by `findCloseNodes` in the routing table
+ * `reactor` and `callLater`, `listenUDP`, and `resolve` functions to be configurable (to allow easier testing)
+ * calls to get the current time to use `reactor.seconds` (to control callLater and LoopingCall timing in tests)
+ * temporarily disabled data price negotiation, treat all data as free
+ * disabled Cryptonator price feed
+ * use `treq` instead of `txrequests` ([1191](https://github.com/lbryio/lbry/pull/1191))
+ * updated `cryptography` version to 2.2.2
+ * removed `pycrypto` dependency, replacing all calls to `cryptography`
+
+### Added
+ * `peer_ping` command
+ * `--sort` option in `file_list` ([1174](https://github.com/lbryio/lbry/pull/1174))
+ * `port` field to contacts returned by `routing_table_get`
+ * configurable `concurrent_announcers` and `s3_headers_depth` settings
+ * virtual kademlia network and mock udp transport for dht integration tests
+ * functional tests for bootstrapping the dht, announcing and expiring hashes, finding and pinging nodes, protocol version 0/1 backwards/forwards compatibility, and rejoining the network
+ * linux distro and desktop name added to analytics ([1218](https://github.com/lbryio/lbry/pull/1218))
+ * certifi module for Twisted SSL verification on Windows ([1213](https://github.com/lbryio/lbry/pull/1213))
+ * protocol version to dht requests and to the response from `findValue`
+
+### Removed
+ * `announce_all` argument from `blob_announce`
+ * old `blob_announce_all` command
+ * unused `--wallet` argument to `lbrynet-daemon`, which used to be to support `PTCWallet`.
+ * `AuthJSONRPCServer.auth_required` decorator ([1161](https://github.com/lbryio/lbry/pull/1161))
+ * `OptimizedTreeRoutingTable` class used by the dht node for the time being
+
+
 ## [0.19.3] - 2018-05-04
 ### Changed
  * download blockchain headers from s3 before starting the wallet when the local height is more than s3_headers_depth (a config setting) blocks behind (https://github.com/lbryio/lbry/pull/1177)
