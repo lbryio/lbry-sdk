@@ -21,6 +21,7 @@ at anytime.
   * `lbrynet-cli` not automatically switching to the authenticated client if the server is detected to be using authentication. This resulted in `lbrynet-cli` failing to run when `lbrynet-daemon` was run with the `--http-auth` flag
   * fixed error when using `claim_show` with `txid` and `nout` arguments
   * fixed error when saving server list to conf file (issue #1109)
+  * fixed skipping of test(for android) in `test_misc.py`
 
 ### Deprecated
   *
