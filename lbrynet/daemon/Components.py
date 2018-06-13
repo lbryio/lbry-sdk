@@ -90,7 +90,7 @@ class DatabaseComponent(Component):
             db_revision.write(str(version_num))
 
     @defer.inlineCallbacks
-    def setup(self):
+    def start(self):
         # check directories exist, create them if they don't
         log.info("Loading databases")
 
@@ -111,7 +111,6 @@ class DatabaseComponent(Component):
             self._write_db_revision_file(self.get_current_db_revision())
 
         # check the db migration and run any needed migrations
-        migrated = False
         with open(self.get_revision_filename(), "r") as revision_read_handle:
             old_revision = int(revision_read_handle.read().strip())
 
@@ -127,12 +126,10 @@ class DatabaseComponent(Component):
             )
             self._write_db_revision_file(self.get_current_db_revision())
             log.info("Finished upgrading the databases.")
-            migrated = True
 
         # start SQLiteStorage
         self.storage = SQLiteStorage(GCS('data_dir'))
         yield self.storage.setup()
-        defer.returnValue(migrated)
 
     @defer.inlineCallbacks
     def stop(self):
@@ -153,7 +150,7 @@ class WalletComponent(Component):
         return self.wallet
 
     @defer.inlineCallbacks
-    def setup(self):
+    def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         wallet_type = GCS('wallet')
 
@@ -200,7 +197,7 @@ class SessionComponent(Component):
         return self.session
 
     @defer.inlineCallbacks
-    def setup(self):
+    def start(self):
         self.session = Session(
             GCS('data_rate'),
             db_dir=GCS('data_dir'),
@@ -229,7 +226,6 @@ class DHTComponent(Component):
     depends_on = [UPNP_COMPONENT]
 
     def __init__(self, component_manager):
-        log.info("Made DHT")
         Component.__init__(self, component_manager)
         self.dht_node = None
         self.upnp_component = None
@@ -240,7 +236,7 @@ class DHTComponent(Component):
         return self.dht_node
 
     @defer.inlineCallbacks
-    def setup(self):
+    def start(self):
         self.upnp_component = self.component_manager.get_component(UPNP_COMPONENT)
         self.udp_port, self.peer_port = self.upnp_component.get_redirects()
         node_id = CS.get_node_id()
@@ -274,7 +270,7 @@ class HashAnnouncer(Component):
         return self.hash_announcer
 
     @defer.inlineCallbacks
-    def setup(self):
+    def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         dht_node = self.component_manager.get_component(DHT_COMPONENT)
         self.hash_announcer = hashannouncer.DHTHashAnnouncer(dht_node, storage)
@@ -298,7 +294,7 @@ class StreamIdentifier(Component):
         return self.sd_identifier
 
     @defer.inlineCallbacks
-    def setup(self):
+    def start(self):
         session = self.component_manager.get_component(SESSION_COMPONENT)
         add_lbry_file_to_sd_identifier(self.sd_identifier)
         file_saver_factory = EncryptedFileSaverFactory(
@@ -328,7 +324,7 @@ class FileManager(Component):
         return self.file_manager
 
     @defer.inlineCallbacks
-    def setup(self):
+    def start(self):
         session = self.component_manager.get_component(SESSION_COMPONENT)
         sd_identifier = self.component_manager.get_component(STREAM_IDENTIFIER_COMPONENT)
         log.info('Starting the file manager')
@@ -354,7 +350,7 @@ class PeerProtocolServer(Component):
         return self.lbry_server_port
 
     @defer.inlineCallbacks
-    def setup(self):
+    def start(self):
         query_handlers = {}
         peer_port = GCS('peer_port')
         session = self.component_manager.get_component(SESSION_COMPONENT)
@@ -408,7 +404,7 @@ class ReflectorComponent(Component):
         return self
 
     @defer.inlineCallbacks
-    def setup(self):
+    def start(self):
         session = self.component_manager.get_component(SESSION_COMPONENT)
         file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
 
@@ -434,7 +430,6 @@ class UPnPComponent(Component):
     component_name = UPNP_COMPONENT
 
     def __init__(self, component_manager):
-        log.info("Made UPnP")
         Component.__init__(self, component_manager)
         self.peer_port = GCS('peer_port')
         self.dht_node_port = GCS('dht_node_port')
@@ -449,7 +444,7 @@ class UPnPComponent(Component):
     def get_redirects(self):
         return self.peer_port, self.dht_node_port
 
-    def setup(self):
+    def start(self):
         log.debug("In _try_upnp")
 
         def get_free_port(upnp, port, protocol):

@@ -7,7 +7,8 @@ log = logging.getLogger(__name__)
 class ComponentManager(object):
     default_component_classes = {}
 
-    def __init__(self, analytics_manager=None, **override_components):
+    def __init__(self, reactor=None, analytics_manager=None, skip_components=[], **override_components):
+        self.reactor = reactor
         self.component_classes = {}
         self.components = set()
         self.analytics_manager = analytics_manager
@@ -15,7 +16,8 @@ class ComponentManager(object):
         for component_name, component_class in self.default_component_classes.iteritems():
             if component_name in override_components:
                 component_class = override_components.pop(component_name)
-            self.component_classes[component_name] = component_class
+            if component_name not in skip_components:
+                self.component_classes[component_name] = component_class
 
         if override_components:
             raise SyntaxError("unexpected components: %s" % override_components)
@@ -113,17 +115,16 @@ class ComponentManager(object):
                 return False
         return True
 
-    def comp(self):
+    def get_components_status(self):
         """
         List status of all the components, whether they are running or not
 
         :return: (dict) {(str) component_name: (bool) True is running else False}
         """
-        status = dict()
-        for component in self.components:
-            status[component.component_name] = component.running
-
-        return status
+        return {
+            component.component_name: component.running
+            for component in self.components
+        }
 
     def get_component(self, component_name):
         for component in self.components:
