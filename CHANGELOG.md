@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * `publish` to accept bid as a decimal string
   *
 
 ### Added

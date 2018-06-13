@@ -8,7 +8,9 @@ import urllib
 import json
 import textwrap
 import signal
+import six
 from copy import deepcopy
+from decimal import Decimal, InvalidOperation
 from twisted.web import server
 from twisted.internet import defer, threads, error, reactor
 from twisted.internet.task import LoopingCall
@@ -457,7 +459,7 @@ class Daemon(AuthJSONRPCServer):
                 if isinstance(settings[key], setting_type):
                     conf.settings.update({key: settings[key]},
                                          data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-                elif setting_type is dict and isinstance(settings[key], (unicode, str)):
+                elif setting_type is dict and isinstance(settings[key], six.string_types):
                     decoded = json.loads(str(settings[key]))
                     conf.settings.update({key: decoded},
                                          data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
@@ -1986,7 +1988,7 @@ class Daemon(AuthJSONRPCServer):
 
         Options:
             --name=<name>                  : (str) name of the content
-            --bid=<bid>                    : (float) amount to back the claim
+            --bid=<bid>                    : (decimal) amount to back the claim
             --metadata=<metadata>          : (dict) ClaimDict to associate with the claim.
             --file_path=<file_path>        : (str) path to file to be associated with name. If provided,
                                              a lbry stream of this file will be used in 'sources'.
@@ -1996,7 +1998,7 @@ class Daemon(AuthJSONRPCServer):
             --fee=<fee>                    : (dict) Dictionary representing key fee to download content:
                                               {
                                                 'currency': currency_symbol,
-                                                'amount': float,
+                                                'amount': decimal,
                                                 'address': str, optional
                                               }
                                               supported currencies: LBC, USD, BTC
@@ -2026,7 +2028,7 @@ class Daemon(AuthJSONRPCServer):
                 'tx' : (str) hex encoded transaction
                 'txid' : (str) txid of resulting claim
                 'nout' : (int) nout of the resulting claim
-                'fee' : (float) fee paid for the claim transaction
+                'fee' : (decimal) fee paid for the claim transaction
                 'claim_id' : (str) claim ID of the resulting claim
             }
         """
@@ -2036,8 +2038,15 @@ class Daemon(AuthJSONRPCServer):
         except (TypeError, URIParseError):
             raise Exception("Invalid name given to publish")
 
-        if not isinstance(bid, (float, int)):
-            raise TypeError("Bid must be a float or an integer.")
+        if isinstance(bid, (float, int)):
+            bid = Decimal(bid)
+        elif isinstance(bid, six.string_types):
+            try:
+                bid = Decimal(bid)
+            except InvalidOperation:
+                raise TypeError("Bid does not represent a valid decimal.")
+        else:
+            raise TypeError("Bid must be a decimal number represented by a string.")
 
         if bid <= 0.0:
             raise ValueError("Bid value must be greater than 0.0")
@@ -2083,7 +2092,7 @@ class Daemon(AuthJSONRPCServer):
         # add address, version to fee if unspecified
         if 'fee' in metadata:
             if len(metadata['fee'].keys()) == 1 and isinstance(metadata['fee'].values()[0], dict):
-                raise Exception('Old format for fee no longer supported. ' \
+                raise Exception('Old format for fee no longer supported. '
                                 'Fee must be specified as {"currency":,"address":,"amount":}')
 
             if 'amount' in metadata['fee'] and 'currency' in metadata['fee']:

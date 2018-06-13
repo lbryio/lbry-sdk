@@ -29,7 +29,8 @@ requires = [
     'txJSON-RPC',
     'zope.interface',
     'treq',
-    'docopt'
+    'docopt',
+    'six'
 ]
 
 console_scripts = [
