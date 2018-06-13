@@ -63,6 +63,7 @@ class BTCLBCFeed(ERM.MarketFeed):
             0.0
         )
 
+
 class USDBTCFeed(ERM.MarketFeed):
     def __init__(self):
         ERM.MarketFeed.__init__(
@@ -73,6 +74,7 @@ class USDBTCFeed(ERM.MarketFeed):
             None,
             0.0
         )
+
 
 class ExchangeRateManager(ERM.ExchangeRateManager):
     def __init__(self, market_feeds, rates):
@@ -359,6 +361,83 @@ class BlobAvailabilityTracker(BlobAvailability.BlobAvailabilityTracker):
     def stop(self):
         pass
 
+
+# The components below viz. FakeWallet, FakeSession, FakeFileManager are just for testing Component Manager's
+# startup and stop
+class FakeComponent(object):
+    depends_on = []
+    component_name = None
+
+    def __init__(self, component_manager):
+        self.component_manager = component_manager
+        self._running = False
+
+    @property
+    def running(self):
+        return self._running
+
+    def start(self):
+        raise NotImplementedError  # Override
+
+    def stop(self):
+        return defer.succeed(None)
+
+    @property
+    def component(self):
+        return self
+
+    @defer.inlineCallbacks
+    def _setup(self):
+        result = yield defer.maybeDeferred(self.start)
+        self._running = True
+        defer.returnValue(result)
+
+    @defer.inlineCallbacks
+    def _stop(self):
+        result = yield defer.maybeDeferred(self.stop)
+        self._running = False
+        defer.returnValue(result)
+
+
+class FakeWallet(FakeComponent):
+    component_name = "wallet"
+    depends_on = []
+
+    def start(self):
+        return defer.succeed(True)
+
+    def stop(self):
+        d = defer.Deferred()
+        self.component_manager.reactor.callLater(1, d.callback, True)
+        return d
+
+
+class FakeSession(FakeComponent):
+    component_name = "session"
+    depends_on = [FakeWallet.component_name]
+
+    def start(self):
+        d = defer.Deferred()
+        self.component_manager.reactor.callLater(1, d.callback, True)
+        return d
+
+    def stop(self):
+        d = defer.Deferred()
+        self.component_manager.reactor.callLater(1, d.callback, True)
+        return d
+
+
+class FakeFileManager(FakeComponent):
+    component_name = "file_manager"
+    depends_on = [FakeSession.component_name]
+
+    def start(self):
+        d = defer.Deferred()
+        self.component_manager.reactor.callLater(1, d.callback, True)
+        return d
+
+    def stop(self):
+        return defer.succeed(True)
 
 
 create_stream_sd_file = {

@@ -33,7 +33,7 @@ class Component(object):
     def running(self):
         return self._running
 
-    def setup(self):
+    def start(self):
         raise NotImplementedError()  # override
 
     def stop(self):
@@ -45,7 +45,7 @@ class Component(object):
     @defer.inlineCallbacks
     def _setup(self):
         try:
-            result = yield defer.maybeDeferred(self.setup)
+            result = yield defer.maybeDeferred(self.start)
             self._running = True
             defer.returnValue(result)
         except Exception as err:
