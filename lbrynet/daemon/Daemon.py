@@ -192,9 +192,7 @@ class Daemon(AuthJSONRPCServer):
             Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
         }
         self.looping_call_manager = LoopingCallManager(calls)
-        log.info("printed")
         self.component_manager = component_manager or ComponentManager(self.analytics_manager)
-        log.info("printed 2")
 
     @defer.inlineCallbacks
     def setup(self):
@@ -777,7 +775,7 @@ class Daemon(AuthJSONRPCServer):
             'installation_id': conf.settings.installation_id,
             'is_running': self.announced_startup,
             'is_first_run': self.wallet.is_first_run if has_wallet else None,
-            'startup_status': self.component_manager.comp(),
+            'startup_status': self.component_manager.get_components_status(),
             'connection_status': {
                 'code': self.connection_status_code,
                 'message': (
