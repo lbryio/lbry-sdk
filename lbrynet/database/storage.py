@@ -226,12 +226,9 @@ class SQLiteStorage(object):
 
     @defer.inlineCallbacks
     def add_known_blob(self, blob_hash, length):
-        status = yield self.get_blob_status(blob_hash)
-        if status is None:
-            status = "pending"
-            yield self.db.runOperation("insert into blob values (?, ?, ?, ?, ?, ?, ?)",
-                                       (blob_hash, length, 0, 0, status, 0, 0))
-        defer.returnValue(status)
+        yield self.db.runOperation(
+            "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)", (blob_hash, length, 0, 0, "pending", 0, 0)
+        )
 
     def should_announce(self, blob_hash):
         return self.run_and_return_one_or_none(
