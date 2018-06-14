@@ -8,8 +8,6 @@ from torba.constants import COIN
 from torba.coinselection import CoinSelector
 from torba.manager import WalletManager as BaseWalletManager
 
-from .transaction import Transaction, Output, Input
-
 
 class BackwardsCompatibleNetwork:
     def __init__(self, manager):

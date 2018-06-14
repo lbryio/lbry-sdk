@@ -7,8 +7,8 @@ from torba.baseheader import BaseHeaders, _ArithUint256
 from torba.util import int_to_hex, rev_hex, hash_encode
 
 from .network import Network
-from .transaction import Transaction
 from .database import WalletDatabase
+from .transaction import Transaction
 
 
 class Headers(BaseHeaders):
@@ -83,26 +83,38 @@ class Headers(BaseHeaders):
         return bnNew.GetCompact(), bnNew._value
 
 
-class Ledger(BaseLedger):
+class MainNetLedger(BaseLedger):
     name = 'LBRY Credits'
     symbol = 'LBC'
+    network_name = 'mainnet'
 
     database_class = WalletDatabase
     headers_class = Headers
     network_class = Network
     transaction_class = Transaction
 
+    secret_prefix = int2byte(0x1c)
+    pubkey_address_prefix = int2byte(0x55)
+    script_address_prefix = int2byte(0x7a)
+    extended_public_key_prefix = unhexlify('019c354f')
+    extended_private_key_prefix = unhexlify('019c3118')
+
+    max_target = 0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+    genesis_hash = '9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463'
+    genesis_bits = 0x1f00ffff
+    target_timespan = 150
+
     default_fee_per_byte = 50
     default_fee_per_name_char = 200000
 
     def __init__(self, *args, **kwargs):
-        super(Ledger, self).__init__(*args, **kwargs)
+        super(MainNetLedger, self).__init__(*args, **kwargs)
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
 
     def get_transaction_base_fee(self, tx):
         """ Fee for the transaction header and all outputs; without inputs. """
         return max(
-            super(Ledger, self).get_transaction_base_fee(tx),
+            super(MainNetLedger, self).get_transaction_base_fee(tx),
             self.get_transaction_claim_name_fee(tx)
         )
 
@@ -117,21 +129,7 @@ class Ledger(BaseLedger):
         return self.network.get_values_for_uris(*uris)
 
 
-class MainNetLedger(Ledger):
-    network_name = 'mainnet'
-    secret_prefix = int2byte(0x1c)
-    pubkey_address_prefix = int2byte(0x55)
-    script_address_prefix = int2byte(0x7a)
-    extended_public_key_prefix = unhexlify('019c354f')
-    extended_private_key_prefix = unhexlify('019c3118')
-
-    max_target = 0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-    genesis_hash = '9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463'
-    genesis_bits = 0x1f00ffff
-    target_timespan = 150
-
-
-class TestNetLedger(Ledger):
+class TestNetLedger(MainNetLedger):
     network_name = 'testnet'
     pubkey_address_prefix = int2byte(111)
     script_address_prefix = int2byte(196)
@@ -143,7 +141,7 @@ class UnverifiedHeaders(Headers):
     verify_bits_to_target = False
 
 
-class RegTestLedger(Ledger):
+class RegTestLedger(MainNetLedger):
     network_name = 'regtest'
     headers_class = UnverifiedHeaders
     pubkey_address_prefix = int2byte(111)
