@@ -8,6 +8,7 @@ install:
   - pip install tox-travis coverage
   - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch packages && popd
   - pushd .. && git clone https://github.com/lbryio/orchstr8.git --branch wip && popd
+  - pushd ../orchstr8 && pip install -e . && LEDGER=torba.coin.bitcoinsegwit orchstr8 download && popd
 
 script: tox
 
