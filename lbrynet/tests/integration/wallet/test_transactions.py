@@ -1,9 +1,9 @@
 import asyncio
-from binascii import hexlify, unhexlify
+from binascii import hexlify
 from orchstr8.testcase import IntegrationTestCase
 from lbryschema.claim import ClaimDict
 from torba.constants import COIN
-from lbrynet.wallet.manager import LbryWalletManager
+from lbrynet.wallet.transaction import Transaction
 
 
 example_claim_dict = {
@@ -36,7 +36,6 @@ example_claim_dict = {
 class ClaimTransactionTests(IntegrationTestCase):
 
     VERBOSE = True
-    WALLET_MANAGER = LbryWalletManager
 
     async def test_creating_updating_and_abandoning_claim(self):
 
@@ -51,13 +50,14 @@ class ClaimTransactionTests(IntegrationTestCase):
         self.assertEqual(round(await self.get_balance(self.account)/COIN, 1), 10.0)
 
         claim = ClaimDict.load_dict(example_claim_dict)
-        tx = self.manager.claim_name(b'foo', 1*COIN, hexlify(claim.serialized))
+        tx = await Transaction.claim(b'foo', claim, 1*COIN, address, [self.account], self.account).asFuture(asyncio.get_event_loop())
         await self.broadcast(tx)
         await self.on_transaction(tx.hex_id.decode())  #mempool
         await self.blockchain.generate(1)
         await self.on_transaction(tx.hex_id.decode())  #confirmed
+        await asyncio.sleep(5)
 
-        self.assertAlmostEqual(self.manager.get_balance(), 9, places=2)
+        self.assertEqual(round(await self.get_balance(self.account)/COIN, 1), 10.0)
 
         response = await self.resolve('lbry://foo')
         print(response)
