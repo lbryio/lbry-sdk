@@ -2,30 +2,8 @@ import asyncio
 from binascii import hexlify, unhexlify
 from orchstr8.testcase import IntegrationTestCase
 from lbryschema.claim import ClaimDict
-
-
-class BasicTransactionTests(IntegrationTestCase):
-
-    VERBOSE = True
-
-    async def test_sending_and_recieving(self):
-
-        self.assertEqual(await self.get_balance(), 0.0)
-
-        address = self.account.get_least_used_receiving_address()
-        sendtxid = await self.blockchain.send_to_address(address.decode(), 5.5)
-        await self.blockchain.generate(1)
-        await self.on_transaction(sendtxid)
-
-        self.assertAlmostEqual(await self.get_balance(), 5.5, places=2)
-
-        lbrycrd_address = await self.blockchain.get_raw_change_address()
-        tx = self.manager.send_amount_to_address(5, lbrycrd_address)
-        await self.broadcast(tx)
-        await self.on_transaction(tx.id.decode())
-        await self.blockchain.generate(1)
-
-        self.assertAlmostEqual(await self.get_balance(), 0.5, places=2)
+from torba.constants import COIN
+from lbrynet.wallet.manager import LbryWalletManager
 
 
 example_claim_dict = {
@@ -58,27 +36,28 @@ example_claim_dict = {
 class ClaimTransactionTests(IntegrationTestCase):
 
     VERBOSE = True
+    WALLET_MANAGER = LbryWalletManager
 
     async def test_creating_updating_and_abandoning_claim(self):
 
-        address = self.account.get_least_used_receiving_address()
-        sendtxid = await self.lbrycrd.send_to_address(address.decode(), 9.0)
-        await self.lbrycrd.generate(1)
-        await self.on_transaction(sendtxid)
+        await self.account.ensure_address_gap().asFuture(asyncio.get_event_loop())
 
-        self.assertAlmostEqual(self.manager.get_balance(), 9, places=2)
+        address = await self.account.receiving.get_or_create_usable_address().asFuture(asyncio.get_event_loop())
+        sendtxid = await self.blockchain.send_to_address(address.decode(), 10)
+        await self.on_transaction(sendtxid)  #mempool
+        await self.blockchain.generate(1)
+        await self.on_transaction(sendtxid)  #confirmed
+
+        self.assertEqual(round(await self.get_balance(self.account)/COIN, 1), 10.0)
 
         claim = ClaimDict.load_dict(example_claim_dict)
-        tx = self.manager.claim_name(b'foo', 5, hexlify(claim.serialized))
+        tx = self.manager.claim_name(b'foo', 1*COIN, hexlify(claim.serialized))
         await self.broadcast(tx)
-        await self.on_transaction(tx.id.decode())
-        await self.lbrycrd.generate(1)
-
-        await asyncio.sleep(2)
+        await self.on_transaction(tx.hex_id.decode())  #mempool
+        await self.blockchain.generate(1)
+        await self.on_transaction(tx.hex_id.decode())  #confirmed
 
         self.assertAlmostEqual(self.manager.get_balance(), 9, places=2)
-
-        await asyncio.sleep(2)
 
         response = await self.resolve('lbry://foo')
         print(response)
