@@ -1,12 +1,12 @@
 import os
 from twisted.internet import defer
 
-from lbrynet.database.storage import SQLiteStorage
-
 from torba.basetransaction import NULL_HASH
 from torba.constants import COIN
 from torba.coinselection import CoinSelector
 from torba.manager import WalletManager as BaseWalletManager
+
+from lbrynet.wallet.database import WalletDatabase
 
 
 class BackwardsCompatibleNetwork:
@@ -21,15 +21,6 @@ class BackwardsCompatibleNetwork:
 
 
 class LbryWalletManager(BaseWalletManager):
-
-    def __init__(self, db, **kwargs):
-        super(LbryWalletManager, self).__init__(**kwargs)
-        self.db = db  # type: SQLiteStorage
-
-    def create_ledger(self, ledger_class, *args, **kwargs):
-        if issubclass(ledger_class.database_class, self.db.__class__):
-            return ledger_class(*args, db=self.db, **kwargs)
-        return super(LbryWalletManager, self).create_ledger(ledger_class, *args, **kwargs)
 
     @property
     def wallet(self):
