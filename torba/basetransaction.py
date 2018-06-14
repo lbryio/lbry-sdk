@@ -300,7 +300,7 @@ class BaseTransaction:
     @classmethod
     @defer.inlineCallbacks
     def pay(cls, outputs, funding_accounts, change_account):
-        # type: (List[BaseOutput], List[torba.baseaccount.BaseAccount], torba.baseaccount.BaseAccount) -> BaseTransaction
+        # type: (List[BaseOutput], List[torba.baseaccount.BaseAccount], torba.baseaccount.BaseAccount) -> defer.Deferred
         """ Efficiently spend utxos from funding_accounts to cover the new outputs. """
 
         tx = cls().add_outputs(outputs)

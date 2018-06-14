@@ -33,7 +33,7 @@ class MockNetwork:
 class TestSynchronization(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = MainNetLedger(db=':memory:')
+        self.ledger = MainNetLedger(db=MainNetLedger.database_class(':memory:'))
         return self.ledger.db.start()
 
     @defer.inlineCallbacks

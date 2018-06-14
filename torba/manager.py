@@ -1,23 +1,20 @@
-import functools
 from typing import List, Dict, Type
 from twisted.internet import defer
 
 from torba.baseledger import BaseLedger, LedgerRegistry
-from torba.basetransaction import BaseTransaction, NULL_HASH
-from torba.coinselection import CoinSelector
-from torba.constants import COIN
 from torba.wallet import Wallet, WalletStorage
 
 
 class WalletManager(object):
 
     def __init__(self, wallets=None, ledgers=None):
-        self.wallets = wallets or []  # type: List[Wallet]
-        self.ledgers = ledgers or {}  # type: Dict[Type[BaseLedger],BaseLedger]
+        # type: (List[Wallet], Dict[Type[BaseLedger],BaseLedger]) -> None
+        self.wallets = wallets or []
+        self.ledgers = ledgers or {}
         self.running = False
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config):  # type: (Dict) -> WalletManager
         wallets = []
         manager = cls(wallets)
         for coin_id, ledger_config in config.get('ledgers', {}).items():
@@ -32,20 +29,23 @@ class WalletManager(object):
         ledger_class = LedgerRegistry.get_ledger_class(ledger_id)
         ledger = self.ledgers.get(ledger_class)
         if ledger is None:
-            ledger = self.create_ledger(ledger_class, ledger_config or {})
+            ledger = ledger_class(ledger_config or {})
             self.ledgers[ledger_class] = ledger
         return ledger
 
-    def create_ledger(self, ledger_class, config):
-        return ledger_class(config)
+    def create_wallet(self, path):
+        storage = WalletStorage(path)
+        wallet = Wallet.from_storage(storage, self)
+        self.wallets.append(wallet)
+        return wallet
 
     @defer.inlineCallbacks
     def get_balance(self):
         balances = {}
-        for ledger in self.ledgers:
-            for account in self.get_accounts(ledger.coin_class):
-                balances.setdefault(ledger.coin_class.name, 0)
-                balances[ledger.coin_class.name] += yield account.get_balance()
+        for ledger in self.ledgers.values():
+            for account in ledger.accounts:
+                balances.setdefault(ledger.get_id(), 0)
+                balances[ledger.get_id()] += yield account.get_balance()
         defer.returnValue(balances)
 
     @property
@@ -64,22 +64,6 @@ class WalletManager(object):
                 if account.coin.__class__ is coin_class:
                     yield account
 
-    def get_accounts_view(self, coin_class):
-        return AccountsView(
-            functools.partial(self.get_accounts, coin_class)
-        )
-
-    def create_wallet(self, path, coin_class):
-        storage = WalletStorage(path)
-        wallet = Wallet.from_storage(storage, self)
-        self.wallets.append(wallet)
-        self.create_account(wallet, coin_class)
-        return wallet
-
-    def create_account(self, wallet, coin_class):
-        ledger = self.get_or_create_ledger(coin_class.get_id())
-        return wallet.generate_account(ledger)
-
     @defer.inlineCallbacks
     def start(self):
         self.running = True
@@ -93,42 +77,3 @@ class WalletManager(object):
             l.stop() for l in self.ledgers.values()
         ])
         self.running = False
-
-    def send_amount_to_address(self, amount, address):
-        amount = int(amount * COIN)
-
-        account = self.default_account
-        ledger = account.ledger
-        tx_class = ledger.transaction_class  # type: BaseTransaction
-        in_class, out_class = tx_class.input_class, tx_class.output_class
-
-        estimators = [
-            txo.get_estimator(ledger) for txo in account.get_unspent_utxos()
-        ]
-        tx_class.create()
-
-        cost_of_output = ledger.get_input_output_fee(
-            out_class.pay_pubkey_hash(COIN, NULL_HASH)
-        )
-
-        selector = CoinSelector(estimators, amount, cost_of_output)
-        spendables = selector.select()
-        if not spendables:
-            raise ValueError('Not enough funds to cover this transaction.')
-
-        outputs = [
-            out_class.pay_pubkey_hash(amount, coin.address_to_hash160(address))
-        ]
-
-        spent_sum = sum(s.effective_amount for s in spendables)
-        if spent_sum > amount:
-            change_address = account.get_least_used_change_address()
-            change_hash160 = coin.address_to_hash160(change_address)
-            outputs.append(out_class.pay_pubkey_hash(spent_sum - amount, change_hash160))
-
-        tx = tx_class() \
-            .add_inputs([s.txi for s in spendables]) \
-            .add_outputs(outputs) \
-            .sign(account)
-
-        return tx

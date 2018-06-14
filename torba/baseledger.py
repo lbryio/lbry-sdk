@@ -55,9 +55,9 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
     def __init__(self, config=None, db=None, network=None):
         self.config = config or {}
-        self.db = self.database_class(
-            db or os.path.join(self.path, "blockchain.db")
-        )  # type: basedatabase.BaseSQLiteWalletStorage
+        self.db = db or self.database_class(
+            os.path.join(self.path, "blockchain.db")
+        )  # type: basedatabase.BaseDatabase
         self.network = network or self.network_class(self)
         self.network.on_header.listen(self.process_header)
         self.network.on_status.listen(self.process_status)

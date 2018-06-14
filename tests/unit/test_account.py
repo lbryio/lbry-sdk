@@ -8,7 +8,7 @@ from torba.coin.bitcoinsegwit import MainNetLedger
 class TestKeyChain(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = MainNetLedger(db=':memory:')
+        self.ledger = MainNetLedger(db=MainNetLedger.database_class(':memory:'))
         return self.ledger.db.start()
 
     @defer.inlineCallbacks
@@ -68,7 +68,7 @@ class TestKeyChain(unittest.TestCase):
 class TestAccount(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = MainNetLedger(db=':memory:')
+        self.ledger = MainNetLedger(db=MainNetLedger.database_class(':memory:'))
         return self.ledger.db.start()
 
     @defer.inlineCallbacks

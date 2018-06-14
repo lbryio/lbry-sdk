@@ -4,8 +4,6 @@ from twisted.internet import defer
 
 from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.constants import CENT, COIN
-from torba.manager import WalletManager
-from torba.wallet import Wallet
 
 
 NULL_HASH = b'\x00'*32
@@ -32,7 +30,7 @@ def get_transaction(txo=None):
 class TestSizeAndFeeEstimation(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = ledger_class(db=':memory:')
+        self.ledger = ledger_class(db=ledger_class.database_class(':memory:'))
         return self.ledger.db.start()
 
     def io_fee(self, io):
@@ -145,7 +143,7 @@ class TestTransactionSerialization(unittest.TestCase):
 class TestTransactionSigning(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = ledger_class(db=':memory:')
+        self.ledger = ledger_class(db=ledger_class.database_class(':memory:'))
         return self.ledger.db.start()
 
     @defer.inlineCallbacks
