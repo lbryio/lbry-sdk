@@ -7,7 +7,7 @@ class BasicTransactionTests(IntegrationTestCase):
 
     VERBOSE = True
 
-    async def test_sending_and_recieving(self):
+    async def test_sending_and_receiving(self):
         account1, account2 = self.account, self.wallet.generate_account(self.ledger)
 
         await account1.ensure_address_gap().asFuture(asyncio.get_event_loop())
