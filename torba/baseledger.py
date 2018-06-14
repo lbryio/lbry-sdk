@@ -76,9 +76,6 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         raw_address = self.pubkey_address_prefix + h160
         return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
 
-    def account_created(self, account):  # type: (baseaccount.BaseAccount) -> None
-        self.accounts.add(account)
-
     @staticmethod
     def address_to_hash160(address):
         bytes = Base58.decode(address)
@@ -108,9 +105,15 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
     def add_transaction(self, address, transaction, height):
         # type: (bytes, basetransaction.BaseTransaction, int) -> None
         yield self.db.add_transaction(
-            address, self.address_to_hash160(address), transaction, height, False, False
+            address, self.address_to_hash160(address), transaction, height, False
         )
         self._on_transaction_controller.add(transaction)
+
+    @defer.inlineCallbacks
+    def add_account(self, account):  # type: (baseaccount.BaseAccount) -> None
+        self.accounts.add(account)
+        if self.network.is_connected:
+            yield self.update_account(account)
 
     @defer.inlineCallbacks
     def get_private_key_for_address(self, address):
@@ -123,19 +126,6 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
     def get_unspent_outputs(self, account):
         return self.db.get_utxos(account, self.transaction_class.output_class)
 
-#    def get_unspent_outputs(self, account):
-#        inputs, outputs, utxos = set(), set(), set()
-#        for address in self.addresses.values():
-#            for tx in address:
-#                for txi in tx.inputs:
-#                    inputs.add((hexlify(txi.output_txid), txi.output_index))
-#                for txo in tx.outputs:
-#                    if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == address.pubkey_hash:
-#                        outputs.add((txo, txo.transaction.id, txo.index))
-#        for output in outputs:
-#            if output[1:] not in inputs:
-#                yield output[0]
-
     @defer.inlineCallbacks
     def get_local_status(self, address):
         address_details = yield self.db.get_address(address)
@@ -146,6 +136,8 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
     def get_local_history(self, address):
         address_details = yield self.db.get_address(address)
         history = address_details['history'] or b''
+        if six.PY2:
+            history = str(history)
         parts = history.split(b':')[:-1]
         defer.returnValue(list(zip(parts[0::2], map(int, parts[1::2]))))
 

@@ -59,9 +59,9 @@ class KeyChain:
     def get_or_create_usable_address(self):
         addresses = yield self.get_usable_addresses(1)
         if addresses:
-            return addresses[0]
+            defer.returnValue(addresses[0])
         addresses = yield self.ensure_address_gap()
-        return addresses[0]
+        defer.returnValue(addresses[0])
 
 
 class BaseAccount:
@@ -83,7 +83,7 @@ class BaseAccount:
             KeyChain(self, public_key, 0, receiving_gap, receiving_maximum_use_per_address),
             KeyChain(self, public_key, 1, change_gap, change_maximum_use_per_address)
         )
-        ledger.account_created(self)
+        ledger.add_account(self)
 
     @classmethod
     def generate(cls, ledger, password):  # type: (torba.baseledger.BaseLedger, str) -> BaseAccount

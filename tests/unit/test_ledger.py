@@ -1,3 +1,4 @@
+import six
 from binascii import hexlify
 from twisted.trial import unittest
 from twisted.internet import defer
@@ -5,6 +6,9 @@ from twisted.internet import defer
 from torba.coin.bitcoinsegwit import MainNetLedger
 
 from .test_transaction import get_transaction
+
+if six.PY3:
+    buffer = memoryview
 
 
 class MockNetwork:
@@ -53,7 +57,7 @@ class TestSynchronization(unittest.TestCase):
         self.assertEqual(self.ledger.network.get_transaction_called, [b'abc', b'def', b'ghi'])
 
         address_details = yield self.ledger.db.get_address(address)
-        self.assertEqual(address_details['history'], b'abc:1:def:2:ghi:3:')
+        self.assertEqual(address_details['history'], buffer(b'abc:1:def:2:ghi:3:'))
 
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
@@ -69,4 +73,4 @@ class TestSynchronization(unittest.TestCase):
         self.assertEqual(self.ledger.network.get_history_called, [address])
         self.assertEqual(self.ledger.network.get_transaction_called, [b'jkl'])
         address_details = yield self.ledger.db.get_address(address)
-        self.assertEqual(address_details['history'], b'abc:1:def:2:ghi:3:jkl:4:')
+        self.assertEqual(address_details['history'], buffer(b'abc:1:def:2:ghi:3:jkl:4:'))

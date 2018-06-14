@@ -4,6 +4,7 @@ __node_bin__ = 'bitcoin-0.16.0/bin'
 __node_url__ = (
     'https://bitcoin.org/bin/bitcoin-core-0.16.0/bitcoin-0.16.0-x86_64-linux-gnu.tar.gz'
 )
+__electrumx__ = 'electrumx.lib.coins.BitcoinSegwitRegtest'
 
 from six import int2byte
 from binascii import unhexlify

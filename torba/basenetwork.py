@@ -95,7 +95,7 @@ class StratumClientProtocol(LineOnlyReceiver):
             try:
                 d = self.lookup_table.pop(message['id'])
                 if message.get('error'):
-                    d.errback(RuntimeError(*message['error']))
+                    d.errback(RuntimeError(message['error']))
                 else:
                     d.callback(message.get('result'))
             except KeyError:

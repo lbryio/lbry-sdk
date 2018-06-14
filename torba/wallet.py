@@ -1,17 +1,10 @@
 import stat
 import json
 import os
-from typing import List, Dict
+from typing import List
 
-from torba.baseaccount import BaseAccount
-from torba.baseledger import LedgerRegistry, BaseLedger
-
-
-def inflate_ledger(manager, ledger_id, ledger_dict):
-    # type: ('WalletManager', str, Dict) -> BaseLedger
-    ledger_class = LedgerRegistry.get_ledger_class(ledger_id)
-    ledger = manager.get_or_create_ledger(ledger_id)
-    return ledger_class(ledger, **ledger_dict)
+import torba.baseaccount
+import torba.baseledger
 
 
 class Wallet:
@@ -21,13 +14,14 @@ class Wallet:
         by physical files on the filesystem.
     """
 
-    def __init__(self, name='Wallet', ledgers=None, accounts=None, storage=None):
+    def __init__(self, name='Wallet', accounts=None, storage=None):
+        # type: (str, List[torba.baseaccount.BaseAccount], WalletStorage) -> None
         self.name = name
-        self.ledgers = ledgers or []  # type: List[BaseLedger]
-        self.accounts = accounts or []  # type: List[BaseAccount]
+        self.accounts = accounts or []
         self.storage = storage or WalletStorage()
 
-    def generate_account(self, ledger):  # type: (BaseLedger) -> Account
+    def generate_account(self, ledger):
+        # type: (torba.baseledger.BaseLedger) -> torba.baseaccount.BaseAccount
         account = ledger.account_class.generate(ledger, u'torba')
         self.accounts.append(account)
         return account
@@ -36,22 +30,14 @@ class Wallet:
     def from_storage(cls, storage, manager):  # type: (WalletStorage, 'WalletManager') -> Wallet
         json_dict = storage.read()
 
-        ledgers = {}
-        for ledger_id, ledger_dict in json_dict.get('ledgers', {}).items():
-            ledgers[ledger_id] = inflate_ledger(manager, ledger_id, ledger_dict)
-
         accounts = []
         for account_dict in json_dict.get('accounts', []):
-            ledger_id = account_dict['ledger']
-            ledger = ledgers.get(ledger_id)
-            if ledger is None:
-                ledger = ledgers[ledger_id] = inflate_ledger(manager, ledger_id, {})
+            ledger = manager.get_or_create_ledger(account_dict['ledger'])
             account = ledger.account_class.from_dict(ledger, account_dict)
             accounts.append(account)
 
         return cls(
             name=json_dict.get('name', 'Wallet'),
-            ledgers=list(ledgers.values()),
             accounts=accounts,
             storage=storage
         )
@@ -59,7 +45,6 @@ class Wallet:
     def to_dict(self):
         return {
             'name': self.name,
-            'ledgers': {c.get_id(): {} for c in self.ledgers},
             'accounts': [a.to_dict() for a in self.accounts]
         }
 
@@ -70,12 +55,6 @@ class Wallet:
     def default_account(self):
         for account in self.accounts:
             return account
-
-    def get_account_private_key_for_address(self, address):
-        for account in self.accounts:
-            private_key = account.get_private_key_for_address(address)
-            if private_key is not None:
-                return account, private_key
 
 
 class WalletStorage:

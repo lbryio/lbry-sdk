@@ -120,6 +120,9 @@ class Base58(object):
     @classmethod
     def decode(cls, txt):
         """ Decodes txt into a big-endian bytearray. """
+        if six.PY2 and isinstance(txt, buffer):
+            txt = str(txt)
+
         if isinstance(txt, six.binary_type):
             txt = txt.decode()
 

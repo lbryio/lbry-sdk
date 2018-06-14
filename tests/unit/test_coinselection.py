@@ -1,11 +1,11 @@
-import unittest
+from twisted.trial import unittest
+from types import GeneratorType
 
 from torba.coin.bitcoinsegwit import MainNetLedger
 from torba.coinselection import CoinSelector, MAXIMUM_TRIES
 from torba.constants import CENT
-from torba.manager import WalletManager
 
-from .test_transaction import Output, get_output as utxo
+from .test_transaction import get_output as utxo
 
 
 NULL_HASH = b'\x00'*32
@@ -13,7 +13,7 @@ NULL_HASH = b'\x00'*32
 
 def search(*args, **kwargs):
     selection = CoinSelector(*args, **kwargs).branch_and_bound()
-    return [o.output.amount for o in selection] if selection else selection
+    return [o.txo.amount for o in selection] if selection else selection
 
 
 class BaseSelectionTestCase(unittest.TestCase):
@@ -23,7 +23,7 @@ class BaseSelectionTestCase(unittest.TestCase):
         return self.ledger.db.start()
 
     def estimates(self, *args):
-        txos = args if isinstance(args[0], Output) else args[0]
+        txos = args[0] if isinstance(args[0], (GeneratorType, list)) else args
         return [txo.get_estimator(self.ledger) for txo in txos]
 
 
@@ -44,7 +44,7 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
         self.assertEqual(selector.tries, 201)
 
     def test_exact_match(self):
-        fee = utxo(CENT).get_estimator(self.coin).fee
+        fee = utxo(CENT).get_estimator(self.ledger).fee
         utxo_pool = self.estimates(
             utxo(CENT + fee),
             utxo(CENT),
@@ -52,7 +52,7 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
         )
         selector = CoinSelector(utxo_pool, CENT, 0)
         match = selector.select()
-        self.assertEqual([CENT + fee], [c.output.amount for c in match])
+        self.assertEqual([CENT + fee], [c.txo.amount for c in match])
         self.assertTrue(selector.exact_match)
 
     def test_random_draw(self):
@@ -63,7 +63,7 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
         )
         selector = CoinSelector(utxo_pool, CENT, 0, '\x00')
         match = selector.select()
-        self.assertEqual([2 * CENT], [c.output.amount for c in match])
+        self.assertEqual([2 * CENT], [c.txo.amount for c in match])
         self.assertFalse(selector.exact_match)
 
 
@@ -78,10 +78,6 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
     #       Branch and Bound coin selection white paper:
     #       https://murch.one/wp-content/uploads/2016/11/erhardt2016coinselection.pdf
 
-    def setUp(self):
-        ledger = WalletManager().get_or_create_ledger(BTC.get_id())
-        self.coin = BTC(ledger, 0)
-
     def make_hard_case(self, utxos):
         target = 0
         utxo_pool = []
@@ -93,6 +89,8 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
         return self.estimates(utxo_pool), target
 
     def test_branch_and_bound_coin_selection(self):
+        self.ledger.fee_per_byte = 0
+
         utxo_pool = self.estimates(
             utxo(1 * CENT),
             utxo(2 * CENT),

@@ -4,7 +4,11 @@ python:
   - "2.7"
   - "3.6"
 
-install: pip install tox-travis coverage
+install:
+  - pip install tox-travis coverage
+  - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch packages && popd
+  - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
+
 script: tox
 
 after_success:

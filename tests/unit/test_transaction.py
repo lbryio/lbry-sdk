@@ -1,8 +1,8 @@
 from binascii import hexlify, unhexlify
 from twisted.trial import unittest
+from twisted.internet import defer
 
-from torba.basetransaction import BaseTransaction, BaseInput, BaseOutput
-from torba.coin.bitcoinsegwit import MainNetLedger
+from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
 from torba.constants import CENT, COIN
 from torba.manager import WalletManager
 from torba.wallet import Wallet
@@ -14,30 +14,26 @@ FEE_PER_CHAR = 200000
 
 
 def get_output(amount=CENT, pubkey_hash=NULL_HASH):
-    return BaseTransaction() \
-        .add_outputs([BaseTransaction.output_class.pay_pubkey_hash(amount, pubkey_hash)]) \
+    return ledger_class.transaction_class() \
+        .add_outputs([ledger_class.transaction_class.output_class.pay_pubkey_hash(amount, pubkey_hash)]) \
         .outputs[0]
 
 
 def get_input():
-    return BaseInput.spend(get_output())
+    return ledger_class.transaction_class.input_class.spend(get_output())
 
 
 def get_transaction(txo=None):
-    return BaseTransaction() \
+    return ledger_class.transaction_class() \
         .add_inputs([get_input()]) \
-        .add_outputs([txo or BaseOutput.pay_pubkey_hash(CENT, NULL_HASH)])
-
-
-def get_wallet_and_ledger():
-    ledger = WalletManager().get_or_create_ledger(MainNetLedger.get_id())
-    return Wallet('Main', [ledger], [ledger.account_class.generate(ledger, u'torba')]), ledger
+        .add_outputs([txo or ledger_class.transaction_class.output_class.pay_pubkey_hash(CENT, NULL_HASH)])
 
 
 class TestSizeAndFeeEstimation(unittest.TestCase):
 
     def setUp(self):
-        self.wallet, self.ledger = get_wallet_and_ledger()
+        self.ledger = ledger_class(db=':memory:')
+        return self.ledger.db.start()
 
     def io_fee(self, io):
         return self.ledger.get_input_output_fee(io)
@@ -70,20 +66,20 @@ class TestTransactionSerialization(unittest.TestCase):
             '000000434104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4c'
             'ef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000'
         )
-        tx = BaseTransaction(raw)
+        tx = ledger_class.transaction_class(raw)
         self.assertEqual(tx.version, 1)
         self.assertEqual(tx.locktime, 0)
         self.assertEqual(len(tx.inputs), 1)
         self.assertEqual(len(tx.outputs), 1)
 
-        ledgerbase = tx.inputs[0]
-        self.assertEqual(ledgerbase.output_txid, NULL_HASH)
-        self.assertEqual(ledgerbase.output_index, 0xFFFFFFFF)
-        self.assertEqual(ledgerbase.sequence, 4294967295)
-        self.assertTrue(ledgerbase.is_ledgerbase)
-        self.assertEqual(ledgerbase.script, None)
+        coinbase = tx.inputs[0]
+        self.assertEqual(coinbase.output_txhash, NULL_HASH)
+        self.assertEqual(coinbase.output_index, 0xFFFFFFFF)
+        self.assertEqual(coinbase.sequence, 4294967295)
+        self.assertTrue(coinbase.is_coinbase)
+        self.assertEqual(coinbase.script, None)
         self.assertEqual(
-            ledgerbase.ledgerbase[8:],
+            coinbase.coinbase[8:],
             b'The Times 03/Jan/2009 Chancellor on brink of second bailout for banks'
         )
 
@@ -97,7 +93,7 @@ class TestTransactionSerialization(unittest.TestCase):
         tx._reset()
         self.assertEqual(tx.raw, raw)
 
-    def test_ledgerbase_transaction(self):
+    def test_coinbase_transaction(self):
         raw = unhexlify(
             '01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4e03'
             '1f5a070473319e592f4254432e434f4d2f4e59412ffabe6d6dcceb2a9d0444c51cabc4ee97a1a000036ca0'
@@ -105,20 +101,20 @@ class TestTransactionSerialization(unittest.TestCase):
             '0000000017a914e083685a1097ce1ea9e91987ab9e94eae33d8a13870000000000000000266a24aa21a9ed'
             'e6c99265a6b9e1d36c962fda0516b35709c49dc3b8176fa7e5d5f1f6197884b400000000'
         )
-        tx = BaseTransaction(raw)
+        tx = ledger_class.transaction_class(raw)
         self.assertEqual(tx.version, 1)
         self.assertEqual(tx.locktime, 0)
         self.assertEqual(len(tx.inputs), 1)
         self.assertEqual(len(tx.outputs), 2)
 
-        ledgerbase = tx.inputs[0]
-        self.assertEqual(ledgerbase.output_txid, NULL_HASH)
-        self.assertEqual(ledgerbase.output_index, 0xFFFFFFFF)
-        self.assertEqual(ledgerbase.sequence, 4294967295)
-        self.assertTrue(ledgerbase.is_ledgerbase)
-        self.assertEqual(ledgerbase.script, None)
+        coinbase = tx.inputs[0]
+        self.assertEqual(coinbase.output_txhash, NULL_HASH)
+        self.assertEqual(coinbase.output_index, 0xFFFFFFFF)
+        self.assertEqual(coinbase.sequence, 4294967295)
+        self.assertTrue(coinbase.is_coinbase)
+        self.assertEqual(coinbase.script, None)
         self.assertEqual(
-            ledgerbase.ledgerbase[9:22],
+            coinbase.coinbase[9:22],
             b'/BTC.COM/NYA/'
         )
 
@@ -148,26 +144,32 @@ class TestTransactionSerialization(unittest.TestCase):
 
 class TestTransactionSigning(unittest.TestCase):
 
+    def setUp(self):
+        self.ledger = ledger_class(db=':memory:')
+        return self.ledger.db.start()
+
+    @defer.inlineCallbacks
     def test_sign(self):
-        ledger = WalletManager().get_or_create_ledger(BTC.get_id())
-        ledger = BTC(ledger)
-        wallet = Wallet('Main', [ledger], [Account.from_seed(
-            ledger, u'carbon smart garage balance margin twelve chest sword toast envelope bottom stom'
-                  u'ach absent', u'torba'
-        )])
-        account = wallet.default_account
+        account = self.ledger.account_class.from_seed(
+            self.ledger,
+            u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
+            u"sent", u"torba"
+        )
 
-        address1 = account.receiving_keys.generate_next_address()
-        address2 = account.receiving_keys.generate_next_address()
-        pubkey_hash1 = account.ledger.address_to_hash160(address1)
-        pubkey_hash2 = account.ledger.address_to_hash160(address2)
+        yield account.ensure_address_gap()
+        address1 = (yield account.receiving.get_addresses())[0]
+        address2 = (yield account.receiving.get_addresses())[0]
+        pubkey_hash1 = self.ledger.address_to_hash160(address1)
+        pubkey_hash2 = self.ledger.address_to_hash160(address2)
 
-        tx = Transaction() \
-            .add_inputs([Input.spend(get_output(2*COIN, pubkey_hash1))]) \
-            .add_outputs([Output.pay_pubkey_hash(int(1.9*COIN), pubkey_hash2)]) \
-            .sign(account)
+        tx = ledger_class.transaction_class() \
+            .add_inputs([ledger_class.transaction_class.input_class.spend(get_output(2*COIN, pubkey_hash1))]) \
+            .add_outputs([ledger_class.transaction_class.output_class.pay_pubkey_hash(int(1.9*COIN), pubkey_hash2)]) \
+
+        yield tx.sign([account])
 
         self.assertEqual(
             hexlify(tx.inputs[0].script.values['signature']),
-            b'304402203d463519290d06891e461ea5256c56097ccdad53379b1bb4e51ec5abc6e9fd02022034ed15b9d7c678716c4aa7c0fd26c688e8f9db8075838f2839ab55d551b62c0a01'
+            b'3044022064cd6b95c9e0084253c10dd56bcec2bfd816c29aad05fbea490511d79540462b02201aa9d6f73'
+            b'48bb0c76b28d1ad87cf4ffd51cf4de0b299af8bf0ecad70e3369ef201'
         )

@@ -5,12 +5,13 @@ from binascii import hexlify
 
 from twisted.internet import defer
 
+import torba.baseaccount
+import torba.baseledger
 from torba.basescript import BaseInputScript, BaseOutputScript
 from torba.coinselection import CoinSelector
 from torba.constants import COIN
 from torba.bcd_data_stream import BCDataStream
 from torba.hash import sha256
-from torba.baseaccount import BaseAccount
 from torba.util import ReadOnlyList
 
 
@@ -22,16 +23,16 @@ NULL_HASH = b'\x00'*32
 
 class InputOutput(object):
 
-    def __init__(self, txid, index=None):
-        self._txid = txid  # type: bytes
+    def __init__(self, txhash, index=None):
+        self._txhash = txhash  # type: bytes
         self.transaction = None  # type: BaseTransaction
         self.index = index  # type: int
 
     @property
-    def txid(self):
-        if self._txid is None:
-            self._txid = self.transaction.id
-        return self._txid
+    def txhash(self):
+        if self._txhash is None:
+            self._txhash = self.transaction.hash
+        return self._txhash
 
     @property
     def size(self):
@@ -51,25 +52,19 @@ class BaseInput(InputOutput):
     NULL_SIGNATURE = b'\x00'*72
     NULL_PUBLIC_KEY = b'\x00'*33
 
-    def __init__(self, output_or_txid_index, script, sequence=0xFFFFFFFF, txid=None):
-        super(BaseInput, self).__init__(txid)
-        if isinstance(output_or_txid_index, BaseOutput):
-            self.output = output_or_txid_index  # type: BaseOutput
-            self.output_txid = self.output.txid
+    def __init__(self, output_or_txhash_index, script, sequence=0xFFFFFFFF, txhash=None):
+        super(BaseInput, self).__init__(txhash)
+        if isinstance(output_or_txhash_index, BaseOutput):
+            self.output = output_or_txhash_index  # type: BaseOutput
+            self.output_txhash = self.output.txhash
             self.output_index = self.output.index
         else:
             self.output = None  # type: BaseOutput
-            self.output_txid, self.output_index = output_or_txid_index
+            self.output_txhash, self.output_index = output_or_txhash_index
         self.sequence = sequence
-        self.is_coinbase = self.output_txid == NULL_HASH
+        self.is_coinbase = self.output_txhash == NULL_HASH
         self.coinbase = script if self.is_coinbase else None
         self.script = script if not self.is_coinbase else None  # type: BaseInputScript
-
-    def link_output(self, output):
-        assert self.output is None
-        assert self.output_txid == output.transaction.id
-        assert self.output_index == output.index
-        self.output = output
 
     @classmethod
     def spend(cls, output):
@@ -87,18 +82,18 @@ class BaseInput(InputOutput):
 
     @classmethod
     def deserialize_from(cls, stream):
-        txid = stream.read(32)
+        txhash = stream.read(32)
         index = stream.read_uint32()
         script = stream.read_string()
         sequence = stream.read_uint32()
         return cls(
-            (txid, index),
-            cls.script_class(script) if not txid == NULL_HASH else script,
+            (txhash, index),
+            cls.script_class(script) if not txhash == NULL_HASH else script,
             sequence
         )
 
     def serialize_to(self, stream, alternate_script=None):
-        stream.write(self.output_txid)
+        stream.write(self.output_txhash)
         stream.write_uint32(self.output_index)
         if alternate_script is not None:
             stream.write_string(alternate_script)
@@ -114,7 +109,7 @@ class BaseOutputEffectiveAmountEstimator(object):
 
     __slots__ = 'coin', 'txi', 'txo', 'fee', 'effective_amount'
 
-    def __init__(self, ledger, txo):  # type: (BaseLedger, BaseOutput) -> None
+    def __init__(self, ledger, txo):  # type: (torba.baseledger.BaseLedger, BaseOutput) -> None
         self.txo = txo
         self.txi = ledger.transaction_class.input_class.spend(txo)
         self.fee = ledger.get_input_output_fee(self.txi)
@@ -129,8 +124,8 @@ class BaseOutput(InputOutput):
     script_class = BaseOutputScript
     estimator_class = BaseOutputEffectiveAmountEstimator
 
-    def __init__(self, amount, script, txid=None, index=None):
-        super(BaseOutput, self).__init__(txid, index)
+    def __init__(self, amount, script, txhash=None, index=None):
+        super(BaseOutput, self).__init__(txhash, index)
         self.amount = amount  # type: int
         self.script = script  # type: BaseOutputScript
 
@@ -259,7 +254,7 @@ class BaseTransaction:
         for txout in self._outputs:
             txout.serialize_to(stream)
         stream.write_uint32(self.locktime)
-        stream.write_uint32(1)  # signature hash type: SIGHASH_ALL
+        stream.write_uint32(self.signature_hash_type(1))  # signature hash type: SIGHASH_ALL
         return stream.get_bytes()
 
     def _deserialize(self):
@@ -279,7 +274,7 @@ class BaseTransaction:
     @classmethod
     @defer.inlineCallbacks
     def get_effective_amount_estimators(cls, funding_accounts):
-        # type: (Iterable[BaseAccount]) -> Generator[BaseOutputEffectiveAmountEstimator]
+        # type: (Iterable[torba.baseaccount.BaseAccount]) -> Generator[BaseOutputEffectiveAmountEstimator]
         estimators = []
         for account in funding_accounts:
             utxos = yield account.ledger.get_unspent_outputs(account)
@@ -289,7 +284,7 @@ class BaseTransaction:
 
     @classmethod
     def ensure_all_have_same_ledger(cls, funding_accounts, change_account=None):
-        # type: (Iterable[BaseAccount], BaseAccount) -> baseledger.BaseLedger
+        # type: (Iterable[torba.baseaccount.BaseAccount], torba.baseaccount.BaseAccount) -> torba.baseledger.BaseLedger
         ledger = None
         for account in funding_accounts:
             if ledger is None:
@@ -305,12 +300,12 @@ class BaseTransaction:
     @classmethod
     @defer.inlineCallbacks
     def pay(cls, outputs, funding_accounts, change_account):
-        # type: (List[BaseOutput], List[BaseAccount], BaseAccount) -> BaseTransaction
+        # type: (List[BaseOutput], List[torba.baseaccount.BaseAccount], torba.baseaccount.BaseAccount) -> BaseTransaction
         """ Efficiently spend utxos from funding_accounts to cover the new outputs. """
 
         tx = cls().add_outputs(outputs)
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
-        amount = ledger.get_transaction_base_fee(tx)
+        amount = tx.output_sum + ledger.get_transaction_base_fee(tx)
         txos = yield cls.get_effective_amount_estimators(funding_accounts)
         selector = CoinSelector(
             txos, amount,
@@ -325,34 +320,38 @@ class BaseTransaction:
 
         spent_sum = sum(s.effective_amount for s in spendables)
         if spent_sum > amount:
-            change_address = change_account.change.get_or_create_usable_address()
+            change_address = yield change_account.change.get_or_create_usable_address()
             change_hash160 = change_account.ledger.address_to_hash160(change_address)
             change_amount = spent_sum - amount
             tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
 
         tx.add_inputs([s.txi for s in spendables])
-        tx.sign(funding_accounts)
+        yield tx.sign(funding_accounts)
         defer.returnValue(tx)
 
     @classmethod
     def liquidate(cls, assets, funding_accounts, change_account):
         """ Spend assets (utxos) supplementing with funding_accounts if fee is higher than asset value. """
 
-    def sign(self, funding_accounts):  # type: (Iterable[BaseAccount]) -> BaseTransaction
+    def signature_hash_type(self, hash_type):
+        return hash_type
+
+    @defer.inlineCallbacks
+    def sign(self, funding_accounts):  # type: (Iterable[torba.baseaccount.BaseAccount]) -> BaseTransaction
         ledger = self.ensure_all_have_same_ledger(funding_accounts)
         for i, txi in enumerate(self._inputs):
             txo_script = txi.output.script
             if txo_script.is_pay_pubkey_hash:
                 address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
-                private_key = ledger.get_private_key_for_address(address)
+                private_key = yield ledger.get_private_key_for_address(address)
                 tx = self._serialize_for_signature(i)
-                txi.script.values['signature'] = private_key.sign(tx)+six.int2byte(1)
+                txi.script.values['signature'] = \
+                    private_key.sign(tx) + six.int2byte(self.signature_hash_type(1))
                 txi.script.values['pubkey'] = private_key.public_key.pubkey_bytes
                 txi.script.generate()
             else:
                 raise NotImplementedError("Don't know how to spend this output.")
         self._reset()
-        return self
 
     def sort(self):
         # See https://github.com/kristovatlas/rfc/blob/master/bips/bip-li01.mediawiki
@@ -361,8 +360,8 @@ class BaseTransaction:
 
     @property
     def input_sum(self):
-        return sum(i.amount for i in self._inputs)
+        return sum(i.amount for i in self.inputs)
 
     @property
     def output_sum(self):
-        return sum(o.amount for o in self._outputs)
+        return sum(o.amount for o in self.outputs)
