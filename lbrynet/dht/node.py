@@ -351,7 +351,7 @@ class Node(MockKademliaHelper):
     def verify_token(self, token, compact_ip):
         h = hashlib.new('sha384')
         h.update(self.token_secret + compact_ip)
-        if not token == h.digest():
+        if self.old_token_secret and not token == h.digest(): # TODO: why should we be accepting the previous token?
             h = hashlib.new('sha384')
             h.update(self.old_token_secret + compact_ip)
             if not token == h.digest():
