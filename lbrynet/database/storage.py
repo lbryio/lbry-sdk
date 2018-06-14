@@ -11,7 +11,7 @@ from lbryschema.decode import smart_decode
 from lbrynet import conf
 from lbrynet.cryptstream.CryptBlob import CryptBlobInfo
 from lbrynet.dht.constants import dataExpireTimeout
-from lbrynet.wallet.database import SQLiteWalletStorage
+from lbrynet.wallet.database import WalletDatabase
 from torba.constants import COIN
 
 log = logging.getLogger(__name__)
@@ -95,7 +95,7 @@ class SqliteConnection(adbapi.ConnectionPool):
         cls.reactor = reactor
 
 
-class SQLiteStorage(SQLiteWalletStorage):
+class SQLiteStorage(WalletDatabase):
 
     CREATE_TABLES_QUERY = """
             pragma foreign_keys=on;
@@ -166,7 +166,7 @@ class SQLiteStorage(SQLiteWalletStorage):
                 timestamp integer,
                 primary key (sd_hash, reflector_address)
             );
-    """ + SQLiteWalletStorage.CREATE_TABLES_QUERY
+    """ + WalletDatabase.CREATE_TABLES_QUERY
 
     def __init__(self, db_dir, reactor=None):
         if not reactor:
