@@ -1,5 +1,6 @@
 import base64
 import io
+import mock
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -10,6 +11,7 @@ from twisted.python.failure import Failure
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import RequestCanceledError
 from lbrynet.core import BlobAvailability
+from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.dht.node import Node as RealNode
 from lbrynet.daemon import ExchangeRateManager as ERM
 from lbrynet import conf
@@ -399,7 +401,7 @@ class FakeComponent(object):
         defer.returnValue(result)
 
 
-class FakeWallet(FakeComponent):
+class FakeDelayedWallet(FakeComponent):
     component_name = "wallet"
     depends_on = []
 
@@ -412,9 +414,9 @@ class FakeWallet(FakeComponent):
         return d
 
 
-class FakeSession(FakeComponent):
+class FakeDelayedSession(FakeComponent):
     component_name = "session"
-    depends_on = [FakeWallet.component_name]
+    depends_on = [FakeDelayedWallet.component_name]
 
     def start(self):
         d = defer.Deferred()
@@ -427,9 +429,9 @@ class FakeSession(FakeComponent):
         return d
 
 
-class FakeFileManager(FakeComponent):
+class FakeDelayedFileManager(FakeComponent):
     component_name = "file_manager"
-    depends_on = [FakeSession.component_name]
+    depends_on = [FakeDelayedSession.component_name]
 
     def start(self):
         d = defer.Deferred()
@@ -439,6 +441,19 @@ class FakeFileManager(FakeComponent):
     def stop(self):
         return defer.succeed(True)
 
+class FakeFileManager(FakeComponent):
+    component_name = "fileManager"
+    depends_on = []
+
+    @property
+    def component(self):
+        return mock.Mock(spec=EncryptedFileManager)
+
+    def start(self):
+        return defer.succeed(True)
+
+    def stop(self):
+        pass
 
 create_stream_sd_file = {
     'stream_name': '746573745f66696c65',
