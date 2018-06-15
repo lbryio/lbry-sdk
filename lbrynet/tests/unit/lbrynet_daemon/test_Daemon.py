@@ -13,12 +13,12 @@ from lbryum.wallet import NewWallet
 from lbrynet import conf
 from lbrynet.core import Session, PaymentRateManager, Wallet
 from lbrynet.database.storage import SQLiteStorage
+from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
-from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 
 from lbrynet.tests import util
-from lbrynet.tests.mocks import mock_conf_settings, FakeNetwork
+from lbrynet.tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
 from lbrynet.tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from lbrynet.tests.mocks import BTCLBCFeed, USDBTCFeed
@@ -142,8 +142,15 @@ class TestFileListSorting(unittest.TestCase):
         self.faker = Faker('en_US')
         self.faker.seed(66410)
         self.test_daemon = get_test_daemon()
-        self.test_daemon.lbry_file_manager = mock.Mock(spec=EncryptedFileManager)
-        self.test_daemon.lbry_file_manager.lbry_files = self._get_fake_lbry_files()
+        component_manager = ComponentManager(
+            skip_components=["database", "dht", "wallet", "session", "hashAnnouncer", "streamIdentifier",
+                             "peerProtocolServer", "reflector", "upnp"],
+            fileManager=FakeFileManager
+        )
+        component_manager.setup()
+        self.test_daemon.component_manager = component_manager
+        self.test_daemon.file_manager = component_manager.get_component("fileManager")
+        self.test_daemon.file_manager.lbry_files = self._get_fake_lbry_files()
 
         # Pre-sorted lists of prices and file names in ascending order produced by
         # faker with seed 66410. This seed was chosen becacuse it produces 3 results
