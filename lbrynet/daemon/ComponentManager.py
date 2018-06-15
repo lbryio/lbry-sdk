@@ -7,7 +7,9 @@ log = logging.getLogger(__name__)
 class ComponentManager(object):
     default_component_classes = {}
 
-    def __init__(self, reactor=None, analytics_manager=None, skip_components=[], **override_components):
+    def __init__(self, reactor=None, analytics_manager=None, skip_components=None, **override_components):
+        self.skip_components = skip_components or []
+
         self.reactor = reactor
         self.component_classes = {}
         self.components = set()
@@ -16,7 +18,7 @@ class ComponentManager(object):
         for component_name, component_class in self.default_component_classes.iteritems():
             if component_name in override_components:
                 component_class = override_components.pop(component_name)
-            if component_name not in skip_components:
+            if component_name not in self.skip_components:
                 self.component_classes[component_name] = component_class
 
         if override_components:
