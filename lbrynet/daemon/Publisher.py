@@ -59,8 +59,10 @@ class Publisher(object):
     def publish_stream(self, name, bid, claim_dict, stream_hash, claim_address=None, change_address=None):
         """Make a claim without creating a lbry file"""
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
-        yield self.session.storage.save_content_claim(stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout']))
-        self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
+        if stream_hash:  # the stream_hash returned from the db will be None if this isn't a stream we have
+            yield self.session.storage.save_content_claim(stream_hash, "%s:%i" % (claim_out['txid'],
+                                                                                  claim_out['nout']))
+            self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
