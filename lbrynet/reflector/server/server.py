@@ -252,7 +252,7 @@ class ReflectorServer(Protocol):
             sd_info = yield BlobStreamDescriptorReader(sd_blob).get_info()
             yield save_sd_info(self.blob_manager, sd_blob.blob_hash, sd_info)
             yield self.storage.verify_will_announce_head_and_sd_blobs(sd_info['stream_hash'])
-            response = yield self.request_needed_blobs({SEND_SD_BLOB: False}, sd_blob)
+            response = yield self.request_needed_blobs({SEND_SD_BLOB: False}, sd_info['stream_hash'])
         else:
             self.incoming_blob = sd_blob
             self.receiving_blob = True
@@ -261,8 +261,8 @@ class ReflectorServer(Protocol):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    def request_needed_blobs(self, response, sd_blob):
-        needed_blobs = yield self.storage.get_pending_blobs_for_stream(sd_blob.blob_hash)
+    def request_needed_blobs(self, response, stream_hash):
+        needed_blobs = yield self.storage.get_pending_blobs_for_stream(stream_hash)
         response.update({NEEDED_BLOBS: needed_blobs})
         defer.returnValue(response)
 

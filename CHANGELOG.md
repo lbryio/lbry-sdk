@@ -15,6 +15,7 @@ at anytime.
 ### Fixed
   * fixed token validation error when the dht node has just been started (https://github.com/lbryio/lbry/issues/1248)
   * fixed a race condition when inserting a blob into the database (https://github.com/lbryio/lbry/issues/1129)
+  * reflector server incorrectly responding as if it has all the blobs for a stream that was only partially uploaded to it
 
 ### Deprecated
   *
