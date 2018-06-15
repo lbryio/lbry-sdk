@@ -1,5 +1,4 @@
 from twisted.internet.task import Clock
-from twisted.internet import defer
 from twisted.trial import unittest
 
 from lbrynet.daemon.ComponentManager import ComponentManager
@@ -85,16 +84,16 @@ class TestComponentManagerProperStart(unittest.TestCase):
             skip_components=["database", "dht", "hashAnnouncer", "streamIdentifier",
                              "peerProtocolServer", "reflector", "upnp"],
             reactor=self.reactor,
-            wallet=mocks.FakeWallet,
-            session=mocks.FakeSession,
-            fileManager=mocks.FakeFileManager
+            wallet=mocks.FakeDelayedWallet,
+            session=mocks.FakeDelayedSession,
+            fileManager=mocks.FakeDelayedFileManager
         )
 
     def tearDown(self):
         pass
 
     def test_proper_starting_of_components(self):
-        d = self.component_manager.setup()
+        self.component_manager.setup()
         self.assertTrue(self.component_manager.get_component('wallet').running)
         self.assertFalse(self.component_manager.get_component('session').running)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
@@ -110,7 +109,7 @@ class TestComponentManagerProperStart(unittest.TestCase):
         self.assertTrue(self.component_manager.get_component('file_manager').running)
 
     def test_proper_stopping_of_components(self):
-        d = self.component_manager.setup()
+        self.component_manager.setup()
         self.reactor.advance(1)
         self.reactor.advance(1)
         self.component_manager.stop()

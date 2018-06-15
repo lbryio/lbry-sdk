@@ -1,5 +1,5 @@
 import logging
-from twisted.internet import threads, defer
+from twisted.internet import defer
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
