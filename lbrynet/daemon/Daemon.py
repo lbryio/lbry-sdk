@@ -30,6 +30,8 @@ from lbrynet import conf
 from lbrynet.reflector import reupload
 from lbrynet.core.log_support import configure_loggly_handler
 from lbrynet.daemon.Component import ComponentManager
+from lbrynet.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, SESSION_COMPONENT, DHT_COMPONENT
+from lbrynet.daemon.Components import STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT
 from lbrynet.daemon.Downloader import GetStream
 from lbrynet.daemon.Publisher import Publisher
 from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
@@ -207,14 +209,14 @@ class Daemon(AuthJSONRPCServer):
 
         yield self._initial_setup()
         yield self.component_manager.setup()
-        self.storage = self.component_manager.get_component("database")
-        self.session = self.component_manager.get_component("session")
-        self.wallet = self.component_manager.get_component("wallet")
-        self.dht_node = self.component_manager.get_component("dht")
+        self.storage = self.component_manager.get_component(DATABASE_COMPONENT)
+        self.session = self.component_manager.get_component(SESSION_COMPONENT)
+        self.wallet = self.component_manager.get_component(WALLET_COMPONENT)
+        self.dht_node = self.component_manager.get_component(DHT_COMPONENT)
         # yield self._check_wallet_locked()
         yield self._start_analytics()
-        self.sd_identifier = self.component_manager.get_component("streamIdentifier")
-        self.file_manager = self.component_manager.get_component("fileManager")
+        self.sd_identifier = self.component_manager.get_component(STREAM_IDENTIFIER_COMPONENT)
+        self.file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
         log.info("Starting balance: " + str(self.wallet.get_balance()))
         self.announced_startup = True
         log.info("Started lbrynet-daemon")
