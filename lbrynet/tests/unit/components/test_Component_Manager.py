@@ -2,6 +2,9 @@ from twisted.internet.task import Clock
 from twisted.trial import unittest
 
 from lbrynet.daemon.ComponentManager import ComponentManager
+from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, STREAM_IDENTIFIER_COMPONENT
+from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT
+from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT
 from lbrynet.daemon import Components
 from lbrynet.tests import mocks
 
@@ -81,8 +84,8 @@ class TestComponentManagerProperStart(unittest.TestCase):
         self.reactor = Clock()
         mocks.mock_conf_settings(self)
         self.component_manager = ComponentManager(
-            skip_components=["database", "dht", "hashAnnouncer", "streamIdentifier",
-                             "peerProtocolServer", "reflector", "upnp"],
+            skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, STREAM_IDENTIFIER_COMPONENT,
+                             PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT],
             reactor=self.reactor,
             wallet=mocks.FakeDelayedWallet,
             session=mocks.FakeDelayedSession,
