@@ -227,7 +227,7 @@ class RequestHelper(object):
 
     def _request_failed(self, reason, request_type):
         if reason.check(DownloadCanceledError, RequestCanceledError, ConnectionAborted,
-                        ConnectionClosedBeforeResponseError):
+                        ConnectionClosedBeforeResponseError, ValueError):
             return
         if reason.check(NoResponseError):
             self.requestor._incompatible_peers.append(self.peer)
@@ -238,8 +238,6 @@ class RequestHelper(object):
             self.peer.update_score(-10.0)
         else:
             self.peer.update_score(-2.0)
-        if reason.check(ConnectionClosedBeforeResponseError):
-            return
         return reason
 
     def get_rate(self):
@@ -289,7 +287,8 @@ def _handle_incoming_blob(response_dict, peer, request):
 
 
 def _handle_download_error(err, peer, blob_to_download):
-    if not err.check(DownloadCanceledError, PriceDisagreementError, RequestCanceledError):
+    if not err.check(DownloadCanceledError, PriceDisagreementError, RequestCanceledError,
+                     ConnectionClosedBeforeResponseError):
         log.warning("An error occurred while downloading %s from %s. Error: %s",
                     blob_to_download.blob_hash, str(peer), err.getTraceback())
     if err.check(PriceDisagreementError):

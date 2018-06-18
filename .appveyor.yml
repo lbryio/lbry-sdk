@@ -1,5 +1,9 @@
 version: 1.0.{build}
 
+branches:
+  only:
+    master
+
 environment:
   GH_TOKEN:
     secure: LiI5jyuHUw6XbH4kC3gP1HX4P/v4rwD/gCNtaFhQu2AvJz1/1wALkp5ECnIxRySN
