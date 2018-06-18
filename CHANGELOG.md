@@ -36,6 +36,8 @@ at anytime.
   * script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
   * additional information to the balance error message when editing a claim (https://github.com/lbryio/lbry/pull/1309)
   * `address` and `port` arguments to `peer_ping` (https://github.com/lbryio/lbry/issues/1313)
+  * ability to download from HTTP mirrors by setting `download_mirrors`
+  *
 
 ### Removed
   * most of the internal attributes from `Daemon`
