@@ -105,7 +105,7 @@ class ClientProtocol(Protocol, TimeoutMixin):
                                                         self._handle_response_error)
             return d
         else:
-            raise ValueError("There is already a blob download request active")
+            return defer.fail(ValueError("There is already a blob download request active"))
 
     def cancel_requests(self):
         self.connection_closing = True
@@ -125,9 +125,8 @@ class ClientProtocol(Protocol, TimeoutMixin):
     ######### Internal request handling #########
 
     def _handle_request_error(self, err):
-        log.error(
-            "An unexpected error occurred creating or sending a request to %s. Error message: %s",
-            self.peer, err.getTraceback())
+        log.error("An unexpected error occurred creating or sending a request to %s. %s: %s",
+                  self.peer, err.type, err.message)
         self.transport.loseConnection()
 
     def _ask_for_request(self):
@@ -176,7 +175,8 @@ class ClientProtocol(Protocol, TimeoutMixin):
 
     def _handle_response_error(self, err):
         # If an error gets to this point, log it and kill the connection.
-        if err.check(DownloadCanceledError, RequestCanceledError, error.ConnectionAborted):
+        if err.check(DownloadCanceledError, RequestCanceledError, error.ConnectionAborted,
+                     ConnectionClosedBeforeResponseError):
             # TODO: (wish-list) it seems silly to close the connection over this, and it shouldn't
             # TODO: always be this way. it's done this way now because the client has no other way
             # TODO: of telling the server it wants the download to stop. It would be great if the
@@ -184,14 +184,15 @@ class ClientProtocol(Protocol, TimeoutMixin):
             log.info("Closing the connection to %s because the download of blob %s was canceled",
                      self.peer, self._blob_download_request.blob)
             result = None
-        elif not err.check(MisbehavingPeerError, ConnectionClosedBeforeResponseError):
+        elif err.check(MisbehavingPeerError):
             log.warning("The connection to %s is closing due to: %s", self.peer, err)
             result = err
         else:
             log.error("The connection to %s is closing due to an unexpected error: %s",
                       self.peer, err)
             result = err
-
+        self._blob_download_request = None
+        self._downloading_blob = False
         self.transport.loseConnection()
         return result
 
