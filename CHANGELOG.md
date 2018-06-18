@@ -19,6 +19,7 @@ at anytime.
   * `publish` raising a database error when updating a claim that we don't have a file for (https://github.com/lbryio/lbry/issues/1165)
   * approximations of bid when cast from float to Decimal during publish
   * blob client protocol not tearing itself down properly after a failure (https://github.com/lbryio/lbry/issues/950)
+  * lockup in wallet startup when one or more lbryumx servers are unavailable (https://github.com/lbryio/lbry/issues/1245)
 
 ### Deprecated
   *

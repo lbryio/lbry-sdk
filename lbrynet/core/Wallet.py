@@ -132,6 +132,7 @@ class Wallet(object):
     @defer.inlineCallbacks
     def get_remote_height(self, server, port):
         connected = defer.Deferred()
+        connected.addTimeout(3, reactor, lambda *_: None)
         client = StratumClient(connected)
         reactor.connectTCP(server, port, client)
         yield connected
