@@ -136,11 +136,11 @@ class TestAccount(unittest.TestCase):
                 "h absent",
             'encrypted': False,
             'private_key':
-                b'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-                b'6yz3jMbycrLrRMpeAJxR8qDg8',
+                'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
+                '6yz3jMbycrLrRMpeAJxR8qDg8',
             'public_key':
-                b'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-                b'iW44g14WF52fYC5J483wqQ5ZP',
+                'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
+                'iW44g14WF52fYC5J483wqQ5ZP',
             'receiving_gap': 10,
             'receiving_maximum_use_per_address': 2,
             'change_gap': 10,
