@@ -2038,15 +2038,10 @@ class Daemon(AuthJSONRPCServer):
         except (TypeError, URIParseError):
             raise Exception("Invalid name given to publish")
 
-        if isinstance(bid, (float, int)):
-            bid = Decimal(bid)
-        elif isinstance(bid, six.string_types):
-            try:
-                bid = Decimal(bid)
-            except InvalidOperation:
-                raise TypeError("Bid does not represent a valid decimal.")
-        else:
-            raise TypeError("Bid must be a decimal number represented by a string.")
+        try:
+            bid = Decimal(str(bid))
+        except InvalidOperation:
+            raise TypeError("Bid does not represent a valid decimal.")
 
         if bid <= 0.0:
             raise ValueError("Bid value must be greater than 0.0")
@@ -2058,11 +2053,11 @@ class Daemon(AuthJSONRPCServer):
             if balance <= MAX_UPDATE_FEE_ESTIMATE:
                 raise InsufficientFundsError(
                     "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
-                    .format(MAX_UPDATE_FEE_ESTIMATE - balance))
+                        .format(MAX_UPDATE_FEE_ESTIMATE - balance))
             elif bid > max_bid_amount:
                 raise InsufficientFundsError(
                     "Please lower the bid value, the maximum amount you can specify for this claim is {}."
-                    .format(max_bid_amount))
+                        .format(max_bid_amount))
 
         metadata = metadata or {}
         if fee is not None:
