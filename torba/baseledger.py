@@ -2,7 +2,7 @@ import os
 import six
 import hashlib
 from binascii import hexlify, unhexlify
-from typing import Dict, Type
+from typing import Dict, Type, Iterable, Generator
 from operator import itemgetter
 
 from twisted.internet import defer
@@ -125,6 +125,16 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
     def get_unspent_outputs(self, account):
         return self.db.get_utxos(account, self.transaction_class.output_class)
+
+    @defer.inlineCallbacks
+    def get_effective_amount_estimators(self, funding_accounts):
+        # type: (Iterable[baseaccount.BaseAccount]) -> defer.Deferred
+        estimators = []
+        for account in funding_accounts:
+            utxos = yield self.get_unspent_outputs(account)
+            for utxo in utxos:
+                estimators.append(utxo.get_estimator(self))
+        defer.returnValue(estimators)
 
     @defer.inlineCallbacks
     def get_local_status(self, address):

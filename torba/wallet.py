@@ -17,7 +17,7 @@ class Wallet:
     def __init__(self, name='Wallet', accounts=None, storage=None):
         # type: (str, List[torba.baseaccount.BaseAccount], WalletStorage) -> None
         self.name = name
-        self.accounts = accounts or []
+        self.accounts = accounts or []  # type: List[torba.baseaccount.BaseAccount]
         self.storage = storage or WalletStorage()
 
     def generate_account(self, ledger):

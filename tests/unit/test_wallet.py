@@ -1,3 +1,4 @@
+import tempfile
 from twisted.trial import unittest
 
 from torba.coin.bitcoinsegwit import MainNetLedger as BTCLedger
@@ -36,11 +37,11 @@ class TestWalletCreation(unittest.TestCase):
                         "h absent",
                     'encrypted': False,
                     'private_key':
-                        b'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-                        b'6yz3jMbycrLrRMpeAJxR8qDg8',
+                        'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
+                        '6yz3jMbycrLrRMpeAJxR8qDg8',
                     'public_key':
-                        b'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-                        b'iW44g14WF52fYC5J483wqQ5ZP',
+                        'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
+                        'iW44g14WF52fYC5J483wqQ5ZP',
                     'receiving_gap': 10,
                     'receiving_maximum_use_per_address': 2,
                     'change_gap': 10,
@@ -57,3 +58,24 @@ class TestWalletCreation(unittest.TestCase):
         self.assertIsInstance(account, BTCLedger.account_class)
         self.maxDiff = None
         self.assertDictEqual(wallet_dict, wallet.to_dict())
+
+    def test_read_write(self):
+        manager = WalletManager()
+        config = {'wallet_path': '/tmp/wallet'}
+        ledger = manager.get_or_create_ledger(BTCLedger.get_id(), config)
+
+        with tempfile.NamedTemporaryFile(suffix='.json') as wallet_file:
+            wallet_file.write(b'{}')
+            wallet_file.seek(0)
+
+            # create and write wallet to a file
+            wallet_storage = WalletStorage(wallet_file.name)
+            wallet = Wallet.from_storage(wallet_storage, manager)
+            account = wallet.generate_account(ledger)
+            wallet.save()
+
+            # read wallet from file
+            wallet_storage = WalletStorage(wallet_file.name)
+            wallet = Wallet.from_storage(wallet_storage, manager)
+
+            self.assertEqual(account.public_key.address, wallet.default_account.public_key.address)

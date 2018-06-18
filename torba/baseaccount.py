@@ -133,8 +133,8 @@ class BaseAccount:
             'seed': self.seed,
             'encrypted': self.encrypted,
             'private_key': self.private_key if self.encrypted else
-                           self.private_key.extended_key_string(),
-            'public_key': self.public_key.extended_key_string(),
+                           self.private_key.extended_key_string().decode(),
+            'public_key': self.public_key.extended_key_string().decode(),
             'receiving_gap': self.receiving.gap,
             'change_gap': self.change.gap,
             'receiving_maximum_use_per_address': self.receiving.maximum_use_per_address,

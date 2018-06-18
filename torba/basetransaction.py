@@ -1,6 +1,6 @@
 import six
 import logging
-from typing import List, Iterable, Generator
+from typing import List, Iterable
 from binascii import hexlify
 
 from twisted.internet import defer
@@ -272,17 +272,6 @@ class BaseTransaction:
             self.locktime = stream.read_uint32()
 
     @classmethod
-    @defer.inlineCallbacks
-    def get_effective_amount_estimators(cls, funding_accounts):
-        # type: (Iterable[torba.baseaccount.BaseAccount]) -> Generator[BaseOutputEffectiveAmountEstimator]
-        estimators = []
-        for account in funding_accounts:
-            utxos = yield account.ledger.get_unspent_outputs(account)
-            for utxo in utxos:
-                estimators.append(utxo.get_estimator(account.ledger))
-        defer.returnValue(estimators)
-
-    @classmethod
     def ensure_all_have_same_ledger(cls, funding_accounts, change_account=None):
         # type: (Iterable[torba.baseaccount.BaseAccount], torba.baseaccount.BaseAccount) -> torba.baseledger.BaseLedger
         ledger = None
@@ -306,7 +295,7 @@ class BaseTransaction:
         tx = cls().add_outputs(outputs)
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         amount = tx.output_sum + ledger.get_transaction_base_fee(tx)
-        txos = yield cls.get_effective_amount_estimators(funding_accounts)
+        txos = yield ledger.get_effective_amount_estimators(funding_accounts)
         selector = CoinSelector(
             txos, amount,
             ledger.get_input_output_fee(
