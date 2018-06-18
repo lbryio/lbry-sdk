@@ -17,6 +17,7 @@ at anytime.
   * fixed a race condition when inserting a blob into the database (https://github.com/lbryio/lbry/issues/1129)
   * reflector server incorrectly responding as if it has all the blobs for a stream that was only partially uploaded to it
   * `publish` raising a database error when updating a claim that we don't have a file for (https://github.com/lbryio/lbry/issues/1165)
+  * approximations of bid when cast from float to Decimal during publish
 
 ### Deprecated
   *
