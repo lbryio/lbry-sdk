@@ -26,6 +26,7 @@ class HTTPBlobDownloader(object):
     def start(self):
         if not self.running and self.blob_hashes and self.servers:
             return self.looping_call.start(self.interval, now=True)
+        defer.succeed(None)
 
     def stop(self):
         if self.running:
@@ -36,27 +37,24 @@ class HTTPBlobDownloader(object):
     def _download_next_blob_hash_for_file(self):
         for blob_hash in self.blob_hashes:
             blob = yield self.blob_manager.get_blob(blob_hash)
-            if not blob.get_is_verified():
+            if not blob.verified:
                 self.download_blob(blob)
-                defer.returnValue(None)
+                return
         self.stop()
 
+    @defer.inlineCallbacks
     def download_blob(self, blob):
-        d = self._download_blob(blob)
-        d.addCallback(self._on_completed_blob)
-        d.addErrback(self._on_failed)
-
-    def _on_completed_blob(self, blob_hash):
-        if blob_hash:
-            log.debug('Mirror completed download for %s', blob_hash)
-        self.failures = 0
-
-    def _on_failed(self, err):
-        self.failures += 1
-        log.error('Mirror failed downloading: %s', err)
-        if self.failures >= self.max_failures:
-            self.stop()
+        try:
+            blob_hash = yield self._download_blob(blob)
+            if blob_hash:
+                log.debug('Mirror completed download for %s', blob_hash)
             self.failures = 0
+        except Exception as exception:
+            self.failures += 1
+            log.error('Mirror failed downloading: %s', exception)
+            if self.failures >= self.max_failures:
+                self.stop()
+                self.failures = 0
 
     @defer.inlineCallbacks
     def _download_blob(self, blob):
