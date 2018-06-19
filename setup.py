@@ -22,7 +22,7 @@ requires = [
     'envparse',
     'jsonrpc',
     'lbryschema==0.0.16rc2',
-    'lbryum==3.2.2rc2',
+    'lbryum==3.2.2rc3',
     'miniupnpc',
     'pyyaml',
     'requests',
