@@ -702,7 +702,7 @@ class Daemon(AuthJSONRPCServer):
                     log.warning('Failed to get %s (%s)', name, err)
                 else:
                     log.error('Failed to get %s (%s)', name, err)
-                if self.streams[sd_hash].downloader:
+                if self.streams[sd_hash].downloader and self.streams[sd_hash].code != 'running':
                     yield self.streams[sd_hash].downloader.stop(err)
                 result = {'error': err.message}
             finally:
