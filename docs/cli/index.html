@@ -499,6 +499,13 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#report_bug" title="report_bug" class="md-nav__link">
+    report_bug
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#resolve" title="resolve" class="md-nav__link">
     resolve
   </a>
@@ -910,6 +917,13 @@
         <li class="md-nav__item">
   <a href="#publish" title="publish" class="md-nav__link">
     publish
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#report_bug" title="report_bug" class="md-nav__link">
+    report_bug
   </a>
   
 </li>
@@ -1642,7 +1656,7 @@ Usage:
     file_list [--sd_hash=&lt;sd_hash&gt;] [--file_name=&lt;file_name&gt;] [--stream_hash=&lt;stream_hash&gt;]
               [--rowid=&lt;rowid&gt;] [--claim_id=&lt;claim_id&gt;] [--outpoint=&lt;outpoint&gt;] [--txid=&lt;txid&gt;] [--nout=&lt;nout&gt;]
               [--channel_claim_id=&lt;channel_claim_id&gt;] [--channel_name=&lt;channel_name&gt;]
-              [--claim_name=&lt;claim_name&gt;] [--full_status]
+              [--claim_name=&lt;claim_name&gt;] [--full_status] [--sort=&lt;sort_method&gt;...]
 
 
 Options:
@@ -1660,6 +1674,9 @@ Options:
     --claim_name=&lt;claim_name&gt;              :  (str)   get file with matching claim name
     --full_status                          :  (bool)  full status, populate the
                                                       'message' and 'size' fields
+    --sort=&lt;sort_method&gt;                   :  (str)   sort by any property, like 'file_name'
+                                                      or 'metadata.author'; to specify direction
+                                                      append ',asc' or ',desc'
 
 Returns:
     (list) List of files
@@ -1851,40 +1868,40 @@ Usage:
 
 
 Options:
-    --name=&lt;name&gt;                    :  (str)    name of the content
-    --bid=&lt;bid&gt;                      :  (float)  amount to back the claim
-    --metadata=&lt;metadata&gt;            :  (dict)   ClaimDict to associate with the claim.
-    --file_path=&lt;file_path&gt;          :  (str)    path to file to be associated with name. If provided,
-                                                 a lbry stream of this file will be used in 'sources'.
-                                                 If no path is given but a sources dict is provided,
-                                                 it will be used. If neither are provided, an
-                                                 error is raised.
-    --fee=&lt;fee&gt;                      :  (dict)   Dictionary representing key fee to download content:
-                                                 {
-                                                 'currency': currency_symbol,
-                                                 'amount': float,
-                                                 'address': str, optional
-                                                 }
-                                                 supported currencies: LBC, USD, BTC
-                                                 If an address is not provided a new one will be
-                                                 automatically generated. Default fee is zero.
-    --title=&lt;title&gt;                  :  (str)    title of the publication
-    --description=&lt;description&gt;      :  (str)    description of the publication
-    --author=&lt;author&gt;                :  (str)    author of the publication
-    --language=&lt;language&gt;            :  (str)    language of the publication
-    --license=&lt;license&gt;              :  (str)    publication license
-    --license_url=&lt;license_url&gt;      :  (str)    publication license url
-    --thumbnail=&lt;thumbnail&gt;          :  (str)    thumbnail url
-    --preview=&lt;preview&gt;              :  (str)    preview url
-    --nsfw=&lt;nsfw&gt;                    :  (bool)   title of the publication
-    --sources=&lt;sources&gt;              :  (str)    {'lbry_sd_hash': sd_hash} specifies sd hash of file
-    --channel_name=&lt;channel_name&gt;    :  (str)    name of the publisher channel name in the wallet
-    --channel_id=&lt;channel_id&gt;        :  (str)    claim id of the publisher channel, does not check
-                                                 for channel claim being in the wallet. This allows
-                                                 publishing to a channel where only the certificate
-                                                 private key is in the wallet.
-    --claim_address=&lt;claim_address&gt;  :  (str)    address where the claim is sent to, if not specified
-                                                 new address wil automatically be created
+    --name=&lt;name&gt;                    :  (str)      name of the content
+    --bid=&lt;bid&gt;                      :  (decimal)  amount to back the claim
+    --metadata=&lt;metadata&gt;            :  (dict)     ClaimDict to associate with the claim.
+    --file_path=&lt;file_path&gt;          :  (str)      path to file to be associated with name. If provided,
+                                                   a lbry stream of this file will be used in 'sources'.
+                                                   If no path is given but a sources dict is provided,
+                                                   it will be used. If neither are provided, an
+                                                   error is raised.
+    --fee=&lt;fee&gt;                      :  (dict)     Dictionary representing key fee to download content:
+                                                   {
+                                                   'currency': currency_symbol,
+                                                   'amount': decimal,
+                                                   'address': str, optional
+                                                   }
+                                                   supported currencies: LBC, USD, BTC
+                                                   If an address is not provided a new one will be
+                                                   automatically generated. Default fee is zero.
+    --title=&lt;title&gt;                  :  (str)      title of the publication
+    --description=&lt;description&gt;      :  (str)      description of the publication
+    --author=&lt;author&gt;                :  (str)      author of the publication
+    --language=&lt;language&gt;            :  (str)      language of the publication
+    --license=&lt;license&gt;              :  (str)      publication license
+    --license_url=&lt;license_url&gt;      :  (str)      publication license url
+    --thumbnail=&lt;thumbnail&gt;          :  (str)      thumbnail url
+    --preview=&lt;preview&gt;              :  (str)      preview url
+    --nsfw=&lt;nsfw&gt;                    :  (bool)     title of the publication
+    --sources=&lt;sources&gt;              :  (str)      {'lbry_sd_hash': sd_hash} specifies sd hash of file
+    --channel_name=&lt;channel_name&gt;    :  (str)      name of the publisher channel name in the wallet
+    --channel_id=&lt;channel_id&gt;        :  (str)      claim id of the publisher channel, does not check
+                                                   for channel claim being in the wallet. This allows
+                                                   publishing to a channel where only the certificate
+                                                   private key is in the wallet.
+    --claim_address=&lt;claim_address&gt;  :  (str)      address where the claim is sent to, if not specified
+                                                   new address wil automatically be created
 
 Returns:
     (dict) Dictionary containing result of the claim
@@ -1892,9 +1909,23 @@ Returns:
         'tx' : (str) hex encoded transaction
         'txid' : (str) txid of resulting claim
         'nout' : (int) nout of the resulting claim
-        'fee' : (float) fee paid for the claim transaction
+        'fee' : (decimal) fee paid for the claim transaction
         'claim_id' : (str) claim ID of the resulting claim
     }
+</code></pre>
+
+<h2 id="report_bug">report_bug</h2>
+<pre><code class="text">Report a bug to slack
+
+Usage:
+    report_bug (&lt;message&gt; | --message=&lt;message&gt;)
+
+
+Options:
+    --message=&lt;message&gt;  :  (str)  Description of the bug
+
+Returns:
+    (bool) true if successful
 </code></pre>
 
 <h2 id="resolve">resolve</h2>
@@ -1998,6 +2029,7 @@ Returns:
             &lt;bucket index&gt;: [
                 {
                     &quot;address&quot;: (str) peer address,
+                    &quot;port&quot;: (int) peer udp port
                     &quot;node_id&quot;: (str) peer node id,
                     &quot;blobs&quot;: (list) blob hashes announced by peer
                 }
