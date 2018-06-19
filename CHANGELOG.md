@@ -13,20 +13,15 @@ at anytime.
   *
 
 ### Fixed
-  * fixed token validation error when the dht node has just been started (https://github.com/lbryio/lbry/issues/1248)
-  * fixed a race condition when inserting a blob into the database (https://github.com/lbryio/lbry/issues/1129)
-  * reflector server incorrectly responding as if it has all the blobs for a stream that was only partially uploaded to it
-  * `publish` raising a database error when updating a claim that we don't have a file for (https://github.com/lbryio/lbry/issues/1165)
-  * blob client protocol not tearing itself down properly after a failure (https://github.com/lbryio/lbry/issues/950)
-  * lockup in wallet startup when one or more lbryumx servers are unavailable (https://github.com/lbryio/lbry/issues/1245)
-  * download being stopped if the sd blob downloaded and data did not start within the timeout (https://github.com/lbryio/lbry/issues/1172)
+  *
+  *
 
 ### Deprecated
   *
   *
 
 ### Changed
-  * `publish` to accept bid as a decimal string
+  *
   *
 
 ### Added
@@ -36,6 +31,21 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.20.1] - 2018-06-19
+### Fixed
+ * fixed token validation error when the dht node has just been started (https://github.com/lbryio/lbry/issues/1248)
+ * fixed a race condition when inserting a blob into the database (https://github.com/lbryio/lbry/issues/1129)
+ * reflector server incorrectly responding as if it has all the blobs for a stream that was only partially uploaded to it
+ * `publish` raising a database error when updating a claim that we don't have a file for (https://github.com/lbryio/lbry/issues/1165)
+ * blob client protocol not tearing itself down properly after a failure (https://github.com/lbryio/lbry/issues/950)
+ * lockup in wallet startup when one or more lbryumx servers are unavailable (https://github.com/lbryio/lbry/issues/1245)
+ * download being stopped if the sd blob downloaded and data did not start within the timeout (https://github.com/lbryio/lbry/issues/1172)
+
+### Changed
+ * Bumped `lbryum` requirement to 3.2.2 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#322---2018-06-19)
+ * `publish` to accept bid as a decimal string
 
 
 ## [0.20.0] - 2018-06-13
