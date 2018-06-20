@@ -67,6 +67,7 @@ fake_claim_info = {
 }
 
 
+
 class FakeAnnouncer(object):
     def __init__(self):
         self._queue_size = 0
@@ -309,7 +310,7 @@ class ContentClaimStorageTests(StorageTest):
         yield manager.session.storage.save_published_file(
             stream_hash, file_name, download_directory, blob_data_rate
         )
-        yield self.storage.save_claim(fake_claim_info)
+        yield self.storage.save_claims([fake_claim_info])
         yield self.storage.save_content_claim(stream_hash, fake_outpoint)
         stored_content_claim = yield self.storage.get_content_claim(stream_hash)
         self.assertDictEqual(stored_content_claim, fake_claim_info)
@@ -332,7 +333,7 @@ class ContentClaimStorageTests(StorageTest):
         update_info['txid'] = "beef0000" * 12
         update_info['nout'] = 0
         second_outpoint = "%s:%i" % (update_info['txid'], update_info['nout'])
-        yield self.storage.save_claim(update_info)
+        yield self.storage.save_claims([update_info])
         yield self.storage.save_content_claim(stream_hash, second_outpoint)
         update_info_result = yield self.storage.get_content_claim(stream_hash)
         self.assertDictEqual(update_info_result, update_info)
@@ -343,8 +344,8 @@ class ContentClaimStorageTests(StorageTest):
         invalid_update_info['nout'] = 0
         invalid_update_info['claim_id'] = "beef0002" * 5
         invalid_update_outpoint = "%s:%i" % (invalid_update_info['txid'], invalid_update_info['nout'])
-        yield self.storage.save_claim(invalid_update_info)
         try:
+            yield self.storage.save_claims([invalid_update_info])
             yield self.storage.save_content_claim(stream_hash, invalid_update_outpoint)
             raise Exception("test failed")
         except Exception as err:

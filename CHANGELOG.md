@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  *
+  * save claims to sqlite in batches to speed up `resolve` queries for many uris
   *
 
 ### Added

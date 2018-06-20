@@ -513,14 +513,30 @@ class Wallet(object):
 
     @defer.inlineCallbacks
     def save_claim(self, claim_info):
+        claims = []
         if 'value' in claim_info:
             if claim_info['value']:
-                yield self.storage.save_claim(claim_info)
+                claims.append(claim_info)
         else:
             if 'certificate' in claim_info and claim_info['certificate']['value']:
-                yield self.storage.save_claim(claim_info['certificate'])
+                claims.append(claim_info['certificate'])
             if 'claim' in claim_info and claim_info['claim']['value']:
-                yield self.storage.save_claim(claim_info['claim'])
+                claims.append(claim_info['claim'])
+        yield self.storage.save_claims(claims)
+
+    @defer.inlineCallbacks
+    def save_claims(self, claim_infos):
+        to_save = []
+        for info in claim_infos:
+            if 'value' in info:
+                if info['value']:
+                    to_save.append(info)
+            else:
+                if 'certificate' in info and info['certificate']['value']:
+                    to_save.append(info['certificate'])
+                if 'claim' in info and info['claim']['value']:
+                    to_save.append(info['claim'])
+        yield self.storage.save_claims(to_save)
 
     @defer.inlineCallbacks
     def resolve(self, *uris, **kwargs):
@@ -528,16 +544,15 @@ class Wallet(object):
         page_size = kwargs.get('page_size', 10)
 
         result = {}
-
         batch_results = yield self._get_values_for_uris(page, page_size, *uris)
-
+        to_save = []
         for uri, resolve_results in batch_results.iteritems():
             try:
                 result[uri] = self._handle_claim_result(resolve_results)
-                yield self.save_claim(result[uri])
+                to_save.append(result[uri])
             except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
                 result[uri] = {'error': err.message}
-
+        yield self.save_claims(to_save)
         defer.returnValue(result)
 
     @defer.inlineCallbacks
@@ -668,7 +683,7 @@ class Wallet(object):
             log.error(msg)
             raise Exception(msg)
         claim = self._process_claim_out(claim)
-        yield self.storage.save_claim(self._get_temp_claim_info(claim, name, bid), smart_decode(claim['value']))
+        yield self.storage.save_claims([self._get_temp_claim_info(claim, name, bid)])
         defer.returnValue(claim)
 
     @defer.inlineCallbacks
