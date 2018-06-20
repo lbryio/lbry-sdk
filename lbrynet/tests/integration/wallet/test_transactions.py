@@ -59,7 +59,8 @@ class ClaimTransactionTests(IntegrationTestCase):
 
         self.assertEqual(round(await self.get_balance(self.account)/COIN, 1), 10.0)
 
-        response = await self.resolve('lbry://foo')
+        header = self.ledger.headers[len(self.ledger.headers)-1]
+        response = await self.resolve(self.ledger.headers._hash_header(header), 'lbry://foo')
         print(response)
 
 
