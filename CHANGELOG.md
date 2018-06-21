@@ -25,7 +25,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * added blockchain_headers download progress percentage to daemon status call
   *
 
 ### Removed
