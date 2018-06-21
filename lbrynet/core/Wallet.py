@@ -214,6 +214,7 @@ class Wallet(object):
             try:
                 yield self.fetch_headers_from_s3()
             except Exception as err:
+                self.headers_download = False
                 log.error("failed to fetch headers from s3: %s", err)
         log.info("Starting wallet.")
         yield self._start()
