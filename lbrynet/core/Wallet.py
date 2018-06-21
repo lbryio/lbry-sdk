@@ -116,11 +116,10 @@ class Wallet(object):
 
                 def collector(data, h_file):
                     h_file.write(data)
-                    local_size = float(self.local_header_file_size())
+                    local_size = float(h_file.tell())
                     final_size = float(final_size_after_download)
                     self.headers_progress_percent = math.ceil(local_size / final_size * 100)
-                    if self.headers_progress_percent == 100:
-                        self.headers_download = False
+                    self.headers_download = self.headers_progress_percent < 100
 
                 if local_header_size:
                     log.info("Resuming download of %i bytes from s3", response.length)
