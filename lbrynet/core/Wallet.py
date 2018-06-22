@@ -2,7 +2,6 @@ import os
 from collections import defaultdict, deque
 import datetime
 import logging
-import math
 from decimal import Decimal
 
 import treq
@@ -87,10 +86,6 @@ class Wallet(object):
         self.max_expected_payment_time = datetime.timedelta(minutes=3)
         self.stopped = True
 
-        # blockchain_headers progress
-        self.headers_download = False
-        self.headers_progress_percent = 0
-
         self.manage_running = False
         self._manage_count = 0
         self._balance_refresh_time = 3
@@ -110,24 +105,14 @@ class Wallet(object):
         elif final_size_after_download and not final_size_after_download % HEADER_SIZE:
             s3_height = (final_size_after_download / HEADER_SIZE) - 1
             local_height = self.local_header_file_height()
-
             if s3_height > local_height:
-                self.headers_download = True
-
-                def collector(data, h_file):
-                    h_file.write(data)
-                    local_size = float(h_file.tell())
-                    final_size = float(final_size_after_download)
-                    self.headers_progress_percent = math.ceil(local_size / final_size * 100)
-                    self.headers_download = self.headers_progress_percent < 100
-
                 if local_header_size:
                     log.info("Resuming download of %i bytes from s3", response.length)
                     with open(os.path.join(self.config.path, "blockchain_headers"), "a+b") as headers_file:
-                        yield treq.collect(response, lambda d: collector(d, headers_file))
+                        yield treq.collect(response, headers_file.write)
                 else:
                     with open(os.path.join(self.config.path, "blockchain_headers"), "wb") as headers_file:
-                        yield treq.collect(response, lambda d: collector(d, headers_file))
+                        yield treq.collect(response, headers_file.write)
                 log.info("fetched headers from s3 (s3 height: %i), now verifying integrity after download.", s3_height)
                 self._check_header_file_integrity()
             else:
@@ -143,12 +128,6 @@ class Wallet(object):
         if os.path.isfile(headers_path):
             return os.stat(headers_path).st_size
         return 0
-
-    def is_downloading_headers(self):
-        return self.headers_download
-
-    def get_headers_progress_percent(self):
-        return self.headers_progress_percent if (self.headers_download or self.headers_progress_percent > 0) else 0
 
     @defer.inlineCallbacks
     def get_remote_height(self, server, port):
@@ -213,7 +192,6 @@ class Wallet(object):
             try:
                 yield self.fetch_headers_from_s3()
             except Exception as err:
-                self.headers_download = False
                 log.error("failed to fetch headers from s3: %s", err)
         log.info("Starting wallet.")
         yield self._start()
