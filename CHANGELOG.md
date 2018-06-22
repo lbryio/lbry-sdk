@@ -22,6 +22,7 @@ at anytime.
 
 ### Changed
   * save claims to sqlite in batches to speed up `resolve` queries for many uris
+  * fix the wallet instance checks to prevent attribute errors in the `jsonrpc_status` daemon method
   *
 
 ### Added
