@@ -112,30 +112,26 @@ def _api_table_options(_options_docstr, method, reqd_matches, opt_matches):
 
             if match[0] not in reqd_matches:
                 parts[0] = match[0]
-                required = ""
             else:
-                parts[0] = match[0]
-                required = "required"
+                parts[0] = match[0] + " *required*"
 
-            # separates command type(in brackets) and description
-            new_parts = parts[1].lstrip().split(" ", 1)
         else:
             parts = [line]
 
         # len will be 2 when there's cmd name and description
         if len(parts) == 2:
-            _option_list.append([parts[0], new_parts[0], required, new_parts[1]])
+            _option_list.append([parts[0], parts[1]])
         # len will be 1 when there's continuation of multiline description in the next line
         # check `blob_announce`'s `stream_hash` command
         elif len(parts) == 1:
             if(len(_option_list) > 0):
-                _option_list[-1][3] += parts[0].lstrip()
+                _option_list[-1][1] += parts[0].lstrip()
         else:
             print "Error: Ill formatted doc string for {}".format(method)
             print "Error causing line: {}".format(line)
 
     # tabulate to make the options look pretty
-    _options_docstr = tabulate(_option_list, headers=["Parameter","Type","Required","Description"], missingval="", tablefmt="presto")
+    _options_docstr = tabulate(_option_list, headers=["Parameter","Description"], missingval="", tablefmt="pipe")
 
     return _options_docstr + "\n"
 
@@ -192,12 +188,12 @@ def _api_doc(obj):
         print "--command_name=<command_name> : (type) desc"
         print e.message
 
-    docstr = _desc + \
-        "### Args:\n\n" + \
-        _options_docstr + \
-        "\n> Returns:\n\n```" + \
+    docstr = "> Returns:\n\n```" + \
         _returns_docstr + \
-        "\n```\n"
+        "\n```\n\n" + \
+        _desc + \
+        "### Arguments\n\n" + \
+        _options_docstr
 
     return docstr
 
