@@ -1071,14 +1071,14 @@ class Daemon(AuthJSONRPCServer):
 
         # on startup, the wallet or network won't be available but we still need this call to work
         has_wallet = self.session and self.session.wallet
-        downloading_headers = self.session.wallet.is_downloading_headers() if has_wallet else False
         has_wallet_with_network = has_wallet and self.session.wallet.network
-        local_height = self.session.wallet.network.get_local_height() if has_wallet_with_network else 0
-        remote_height = self.session.wallet.network.get_server_height() if has_wallet_with_network else 0
-        best_hash = (yield self.session.wallet.get_best_blockhash()) if has_wallet_with_network else None
+        downloading_headers = False if not has_wallet else self.session.wallet.is_downloading_headers()
+        local_height = 0 if not has_wallet_with_network else self.session.wallet.network.get_local_height()
+        remote_height = 0 if not has_wallet_with_network else self.session.wallet.network.get_server_height()
+        best_hash = None if not has_wallet_with_network else (yield self.session.wallet.get_best_blockhash())
         wallet_is_encrypted = has_wallet_with_network and self.session.wallet.wallet and \
                               self.session.wallet.wallet.use_encryption
-        headers_progress_percent = self.session.wallet.get_headers_progress_percent() if has_wallet else 0
+        headers_progress_percent = 0 if not has_wallet else self.session.wallet.get_headers_progress_percent()
         headers_download_progress = headers_progress_percent \
             if downloading_headers or headers_progress_percent == 100 \
             else math.ceil((local_height / float(remote_height)) * 100) if remote_height else 0
