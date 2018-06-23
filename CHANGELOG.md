@@ -21,7 +21,7 @@ at anytime.
   *
 
 ### Changed
-  * save claims to sqlite in batches to speed up `resolve` queries for many uris
+  *
   *
 
 ### Added
@@ -31,6 +31,13 @@ at anytime.
 ### Removed
   *
   *
+
+
+## [0.20.2] - 2018-06-23
+### Changed
+ * Bumped `lbryschema` requirement to 0.0.16 [see changelog](https://github.com/lbryio/lbryschema/blob/master/CHANGELOG.md#0016---2018-06-23)
+ * Bumped `lbryum` requirement to 3.2.3 [see changelog](https://github.com/lbryio/lbryum/blob/master/CHANGELOG.md#323---2018-06-23)
+ * save claims to sqlite in batches to speed up `resolve` queries for many uris
 
 
 ## [0.20.1] - 2018-06-19
