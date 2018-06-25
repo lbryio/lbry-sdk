@@ -9,7 +9,6 @@ import urllib
 import json
 import textwrap
 import signal
-import six
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 from twisted.web import server
