@@ -34,13 +34,13 @@ class Component(object):
         return self._running
 
     def start(self):
-        raise NotImplementedError()  # override
+        raise NotImplementedError()
 
     def stop(self):
-        raise NotImplementedError()  # override
+        raise NotImplementedError()
 
     def component(self):
-        raise NotImplementedError()  # override
+        raise NotImplementedError()
 
     @defer.inlineCallbacks
     def _setup(self):

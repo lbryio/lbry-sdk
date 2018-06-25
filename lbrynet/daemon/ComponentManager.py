@@ -1,6 +1,9 @@
 import logging
 from twisted.internet import defer
 
+from lbrynet import conf
+from lbrynet.core.Error import ComponentStartConditionNotMet
+
 log = logging.getLogger(__name__)
 
 
@@ -9,6 +12,7 @@ class ComponentManager(object):
 
     def __init__(self, reactor=None, analytics_manager=None, skip_components=None, **override_components):
         self.skip_components = skip_components or []
+        self.skip_components.extend(conf.settings['components_to_skip'])
 
         self.reactor = reactor
         self.component_classes = {}
@@ -62,7 +66,7 @@ class ComponentManager(object):
                 staged.update(to_stage)
                 steps.append(step)
             elif components:
-                raise SyntaxError("components cannot be started: %s" % components)
+                raise ComponentStartConditionNotMet("Unresolved dependencies for: %s" % components)
         if reverse:
             steps.reverse()
         return steps
