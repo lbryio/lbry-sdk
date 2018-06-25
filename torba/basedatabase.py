@@ -44,8 +44,20 @@ class SQLiteMixin(object):
         for column, value in data.items():
             columns.append(column)
             values.append(value)
-        sql = "REPLACE INTO {} ({}) VALUES ({})".format(
+        sql = "INSERT INTO {} ({}) VALUES ({})".format(
             table, ', '.join(columns), ', '.join(['?'] * len(values))
+        )
+        return sql, values
+
+    def _update_sql(self, table, data, where, constraints):
+        # type: (str, dict) -> tuple[str, List]
+        columns, values = [], []
+        for column, value in data.items():
+            columns.append("{} = ?".format(column))
+            values.append(value)
+        values.extend(constraints)
+        sql = "UPDATE {} SET {} WHERE {}".format(
+            table, ', '.join(columns), where
         )
         return sql, values
 
@@ -143,21 +155,21 @@ class BaseDatabase(SQLiteMixin):
         CREATE_TXI_TABLE
     )
 
-    def add_transaction(self, address, hash, tx, height, is_verified):
+    def save_transaction_io(self, save_tx, tx, height, is_verified, address, hash, history):
+
         def _steps(t):
-            current_height = t.execute("SELECT height FROM tx WHERE txhash=?", (sqlite3.Binary(tx.hash),)).fetchone()
-            if current_height is None:
+            if save_tx == 'insert':
                 t.execute(*self._insert_sql('tx', {
                     'txhash': sqlite3.Binary(tx.hash),
                     'raw': sqlite3.Binary(tx.raw),
                     'height': height,
                     'is_verified': is_verified
                 }))
-            elif current_height[0] != height:
-                t.execute("UPDATE tx SET height = :height WHERE txhash = :txhash", {
-                    'txhash': sqlite3.Binary(tx.hash),
-                    'height': height,
-                })
+            elif save_tx == 'update':
+                t.execute(*self._update_sql("tx", {
+                        'height': height, 'is_verified': is_verified
+                    }, 'WHERE txhash = ?', (sqlite3.Binary(tx.hash),)
+                ))
 
             existing_txos = list(map(itemgetter(0), t.execute(
                 "SELECT position FROM txo WHERE txhash = ?",
@@ -177,7 +189,7 @@ class BaseDatabase(SQLiteMixin):
                     }))
                 elif txo.script.is_pay_script_hash:
                     # TODO: implement script hash payments
-                    print('Database.add_transaction pay script hash is not implemented!')
+                    print('Database.save_transaction_io: pay script hash is not implemented!')
 
             existing_txis = [txi[0] for txi in t.execute(
                 "SELECT txoid FROM txi WHERE txhash = ? AND address = ?",
@@ -195,7 +207,22 @@ class BaseDatabase(SQLiteMixin):
                         'txoid': txoid[0],
                     }))
 
+            t.execute(
+                "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
+                (sqlite3.Binary(history), history.count(b':')//2, sqlite3.Binary(address))
+            )
+
         return self.db.runInteraction(_steps)
+
+    @defer.inlineCallbacks
+    def get_transaction(self, txhash):
+        result = yield self.db.runQuery(
+            "SELECT raw, height, is_verified FROM tx WHERE txhash = ?", (sqlite3.Binary(txhash),)
+        )
+        if result:
+            defer.returnValue(*result[0])
+        else:
+            defer.returnValue((None, None, False))
 
     @defer.inlineCallbacks
     def get_balance_for_account(self, account):
@@ -295,10 +322,4 @@ class BaseDatabase(SQLiteMixin):
             "SELECT {} FROM pubkey_address WHERE address= :address",
             ('address', 'account', 'chain', 'position', 'pubkey', 'history', 'used_times'),
             {'address': sqlite3.Binary(address)}
-        )
-
-    def set_address_history(self, address, history):
-        return self.db.runOperation(
-            "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
-            (sqlite3.Binary(history), history.count(b':')//2, sqlite3.Binary(address))
         )

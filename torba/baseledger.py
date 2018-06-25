@@ -68,6 +68,8 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         self._on_transaction_controller = StreamController()
         self.on_transaction = self._on_transaction_controller.stream
 
+        self._transaction_processing_locks = {}
+
     @classmethod
     def get_id(cls):
         return '{}_{}'.format(cls.symbol.lower(), cls.network_name.lower())
@@ -102,14 +104,6 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         return self.fee_per_byte * tx.base_size
 
     @defer.inlineCallbacks
-    def add_transaction(self, address, transaction, height):
-        # type: (bytes, basetransaction.BaseTransaction, int) -> None
-        yield self.db.add_transaction(
-            address, self.address_to_hash160(address), transaction, height, False
-        )
-        self._on_transaction_controller.add(transaction)
-
-    @defer.inlineCallbacks
     def add_account(self, account):  # type: (baseaccount.BaseAccount) -> None
         self.accounts.add(account)
         if self.network.is_connected:
@@ -139,7 +133,10 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
     @defer.inlineCallbacks
     def get_local_status(self, address):
         address_details = yield self.db.get_address(address)
-        hash = hashlib.sha256(address_details['history']).digest()
+        history = address_details['history'] or b''
+        if six.PY2:
+            history = str(history)
+        hash = hashlib.sha256(history).digest()
         defer.returnValue(hexlify(hash))
 
     @defer.inlineCallbacks
@@ -150,6 +147,26 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
             history = str(history)
         parts = history.split(b':')[:-1]
         defer.returnValue(list(zip(parts[0::2], map(int, parts[1::2]))))
+
+    @staticmethod
+    def get_root_of_merkle_tree(branches, branch_positions, working_branch):
+        for i, branch in enumerate(branches):
+            other_branch = unhexlify(branch)[::-1]
+            other_branch_on_left = bool((branch_positions >> i) & 1)
+            if other_branch_on_left:
+                combined = other_branch + working_branch
+            else:
+                combined = working_branch + other_branch
+            working_branch = double_sha256(combined)
+        return hexlify(working_branch[::-1])
+
+    @defer.inlineCallbacks
+    def is_valid_transaction(self, tx, height):
+        len(self.headers) < height or defer.returnValue(False)
+        merkle = yield self.network.get_merkle(tx.hex_id.decode(), height)
+        merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
+        header = self.headers[height]
+        defer.returnValue(merkle_root == header['merkle_root'])
 
     @defer.inlineCallbacks
     def start(self):
@@ -173,8 +190,6 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         while True:
             height_sought = len(self.headers)
             headers = yield self.network.get_headers(height_sought)
-            print("received {} headers starting at {} height".format(headers['count'], height_sought))
-            #log.info("received {} headers starting at {} height".format(headers['count'], height_sought))
             if headers['count'] <= 0:
                 break
             yield self.headers.connect(height_sought, unhexlify(headers['hex']))
@@ -221,20 +236,48 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
     @defer.inlineCallbacks
     def update_history(self, address):
         remote_history = yield self.network.get_history(address)
-        local = yield self.get_local_history(address)
+        local_history = yield self.get_local_history(address)
 
-        history_parts = []
-        for i, (hash, height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
-            history_parts.append('{}:{}:'.format(hash.decode(), height))
-            if i < len(local) and local[i] == (hash, height):
+        synced_history = []
+        for i, (hash, remote_height) in enumerate(map(itemgetter('tx_hash', 'height'), remote_history)):
+
+            synced_history.append((hash, remote_height))
+
+            if i < len(local_history) and local_history[i] == (hash, remote_height):
                 continue
-            raw = yield self.network.get_transaction(hash)
-            transaction = self.transaction_class(unhexlify(raw))
-            yield self.add_transaction(address, transaction, height)
 
-        yield self.db.set_address_history(
-            address, ''.join(history_parts).encode()
-        )
+            lock = self._transaction_processing_locks.setdefault(hash, defer.DeferredLock())
+
+            yield lock.acquire()
+
+            try:
+                # see if we have a local copy of transaction, otherwise fetch it from server
+                raw, local_height, is_verified = yield self.db.get_transaction(unhexlify(hash))
+                save_tx = None
+                if raw is None:
+                    _raw = yield self.network.get_transaction(hash)
+                    tx = self.transaction_class(unhexlify(_raw))
+                    save_tx = 'insert'
+                else:
+                    tx = self.transaction_class(unhexlify(raw))
+
+                if remote_height > 0 and not is_verified:
+                    is_verified = yield self.is_valid_transaction(tx, remote_height)
+                    if save_tx is None:
+                        save_tx = 'update'
+
+                yield self.db.save_transaction_io(
+                    save_tx, tx, remote_height, is_verified, address, self.address_to_hash160(address),
+                    ''.join('{}:{}:'.format(hash.decode(), height) for hash, height in synced_history).encode()
+                )
+
+                if save_tx is not None:
+                    self._on_transaction_controller.add(tx)
+
+            finally:
+                lock.release()
+                if not lock.locked:
+                    del self._transaction_processing_locks[hash]
 
     @defer.inlineCallbacks
     def subscribe_history(self, address):
