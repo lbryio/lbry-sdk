@@ -1054,7 +1054,7 @@ class LBRYumWallet(Wallet):
             wallet.create_main_account()
             wallet.synchronize()
         self.wallet = wallet
-        self.is_wallet_unlocked = True if not self.wallet.use_encryption else False
+        self.is_wallet_unlocked = not self.wallet.use_encryption
         self._check_large_wallet()
         return defer.succeed(True)
 
