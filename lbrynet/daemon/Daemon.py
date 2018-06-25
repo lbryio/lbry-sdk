@@ -3034,8 +3034,10 @@ class Daemon(AuthJSONRPCServer):
                 sd_hash = yield self.session.storage.get_sd_blob_hash_for_stream(stream_hash)
             if stream_hash:
                 crypt_blobs = yield self.session.storage.get_blobs_for_stream(stream_hash)
-                blobs = [self.session.blob_manager.blobs[crypt_blob.blob_hash] for crypt_blob in crypt_blobs
-                         if crypt_blob.blob_hash is not None]
+                blobs = yield defer.gatherResults([
+                    self.session.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
+                    for crypt_blob in crypt_blobs if crypt_blob.blob_hash is not None
+                ])
             else:
                 blobs = []
             # get_blobs_for_stream does not include the sd blob, so we'll add it manually
