@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * Fixed a scenario where stopping downloads raises `NoneType object has no attribute finished_deferred`.
   *
 
 ### Deprecated

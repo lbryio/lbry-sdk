@@ -116,8 +116,8 @@ class ClientProtocol(Protocol, TimeoutMixin):
             d.errback(err)
             ds.append(d)
         if self._blob_download_request is not None:
-            self._blob_download_request.cancel(err)
             ds.append(self._blob_download_request.finished_deferred)
+            self._blob_download_request.cancel(err)
             self._blob_download_request = None
         self._downloading_blob = False
         return defer.DeferredList(ds)
