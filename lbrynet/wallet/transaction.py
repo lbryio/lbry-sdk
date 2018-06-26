@@ -36,7 +36,7 @@ class Transaction(BaseTransaction):
 
     def get_claim_id(self, output_index):
         output = self.outputs[output_index]  # type: Output
-        assert output.script.is_claim_name(), 'Not a name claim.'
+        assert output.script.is_claim_name, 'Not a name claim.'
         return claim_id_hash(self.hash, output_index)
 
     @classmethod
