@@ -29,7 +29,7 @@ at anytime.
   *
 
 ### Removed
-  *
+  * `jsonrpclib` as a requirement for the project
   *
 
 
