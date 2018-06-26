@@ -1,9 +1,14 @@
 import asyncio
 from binascii import hexlify
-from orchstr8.testcase import IntegrationTestCase
+
+from orchstr8.testcase import IntegrationTestCase, d2f
 from lbryschema.claim import ClaimDict
 from torba.constants import COIN
 from lbrynet.wallet.transaction import Transaction
+from lbrynet.wallet.account import generate_certificate
+
+import lbryschema
+lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 
 
 example_claim_dict = {
@@ -33,35 +38,48 @@ example_claim_dict = {
 }
 
 
-class ClaimTransactionTests(IntegrationTestCase):
+class BasicTransactionTests(IntegrationTestCase):
 
     VERBOSE = True
 
-    async def test_creating_updating_and_abandoning_claim(self):
+    async def test_creating_updating_and_abandoning_claim_with_channel(self):
 
-        await self.account.ensure_address_gap().asFuture(asyncio.get_event_loop())
+        await d2f(self.account.ensure_address_gap())
 
-        address = await self.account.receiving.get_or_create_usable_address().asFuture(asyncio.get_event_loop())
-        sendtxid = await self.blockchain.send_to_address(address.decode(), 10)
-        await self.on_transaction(sendtxid)  #mempool
+        address1, address2 = await d2f(self.account.receiving.get_usable_addresses(2))
+        sendtxid1 = await self.blockchain.send_to_address(address1.decode(), 5)
+        sendtxid2 = await self.blockchain.send_to_address(address2.decode(), 5)
         await self.blockchain.generate(1)
-        await self.on_transaction(sendtxid)  #confirmed
+        await asyncio.wait([
+            self.on_transaction_id(sendtxid1),
+            self.on_transaction_id(sendtxid2),
+        ])
 
         self.assertEqual(round(await self.get_balance(self.account)/COIN, 1), 10.0)
 
+        cert, key = generate_certificate()
+        cert_tx = await d2f(Transaction.claim(b'@bar', cert, 1*COIN, address1, [self.account], self.account))
         claim = ClaimDict.load_dict(example_claim_dict)
-        tx = await Transaction.claim(b'foo', claim, 1*COIN, address, [self.account], self.account).asFuture(asyncio.get_event_loop())
+        claim = claim.sign(key, address1, hexlify(cert_tx.get_claim_id(0)))
+        tx = await d2f(Transaction.claim(b'foo', claim, 1*COIN, address1, [self.account], self.account))
+
+        await self.broadcast(cert_tx)
         await self.broadcast(tx)
-        await self.on_transaction(tx.hex_id.decode())  #mempool
+        await asyncio.wait([  # mempool
+            self.on_transaction(tx),
+            self.on_transaction(cert_tx),
+        ])
         await self.blockchain.generate(1)
-        await self.on_transaction(tx.hex_id.decode())  #confirmed
-        await asyncio.sleep(5)
+        await asyncio.wait([  # confirmed
+            self.on_transaction(tx),
+            self.on_transaction(cert_tx),
+        ])
 
         self.assertEqual(round(await self.get_balance(self.account)/COIN, 1), 10.0)
 
         header = self.ledger.headers[len(self.ledger.headers)-1]
-        response = await self.resolve(self.ledger.headers._hash_header(header), 'lbry://foo')
-        print(response)
+        response = await d2f(self.ledger.resolve(self.ledger.headers._hash_header(header), 'lbry://@bar/foo'))
+        self.assertIn('lbry://@bar/foo', response)
 
 
 #class AbandonClaimLookup(IntegrationTestCase):
