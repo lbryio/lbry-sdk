@@ -41,13 +41,13 @@ class TestKeyChain(unittest.TestCase):
 
         # case #2: only one new addressed needed
         keys = yield account.receiving.get_addresses(None, True)
-        yield self.ledger.db.set_address_history(keys[19]['address'], b'a:1:')
+        yield self.ledger.db.set_address_history(keys[19]['address'], 'a:1:')
         new_keys = yield account.receiving.ensure_address_gap()
         self.assertEqual(len(new_keys), 1)
 
         # case #3: 20 addresses needed
         keys = yield account.receiving.get_addresses(None, True)
-        yield self.ledger.db.set_address_history(keys[0]['address'], b'a:1:')
+        yield self.ledger.db.set_address_history(keys[0]['address'], 'a:1:')
         new_keys = yield account.receiving.ensure_address_gap()
         self.assertEqual(len(new_keys), 20)
 

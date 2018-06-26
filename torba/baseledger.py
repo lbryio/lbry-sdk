@@ -61,7 +61,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
     default_fee_per_byte = 10
 
-    def __init__(self, config=None, db=None, network=None):
+    def __init__(self, config=None, db=None, network=None, headers_class=None):
         self.config = config or {}
         self.db = db or self.database_class(
             os.path.join(self.path, "blockchain.db")
@@ -70,7 +70,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         self.network.on_header.listen(self.process_header)
         self.network.on_status.listen(self.process_status)
         self.accounts = set()
-        self.headers = self.headers_class(self)
+        self.headers = (headers_class or self.headers_class)(self)
         self.fee_per_byte = self.config.get('fee_per_byte', self.default_fee_per_byte)
 
         self._on_transaction_controller = StreamController()
@@ -257,7 +257,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
             synced_history.append((hex_id, remote_height))
 
-            if i < len(local_history) and local_history[i] == (hex_id, remote_height):
+            if i < len(local_history) and local_history[i] == (hex_id.decode(), remote_height):
                 continue
 
             lock = self._transaction_processing_locks.setdefault(hex_id, defer.DeferredLock())

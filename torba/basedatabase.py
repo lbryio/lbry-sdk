@@ -208,10 +208,7 @@ class BaseDatabase(SQLiteMixin):
                         'txoid': txoid[0],
                     }))
 
-            t.execute(
-                "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
-                (history, history.count(':')//2, sqlite3.Binary(address))
-            )
+            self._set_address_history(t, address, history)
 
         return self.db.runInteraction(_steps)
 
@@ -317,6 +314,16 @@ class BaseDatabase(SQLiteMixin):
         if limit is not None:
             sql.append('LIMIT {}'.format(limit))
         return ' '.join(sql), params
+
+    @staticmethod
+    def _set_address_history(t, address, history):
+        t.execute(
+            "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
+            (history, history.count(':')//2, sqlite3.Binary(address))
+        )
+
+    def set_address_history(self, address, history):
+        return self.db.runInteraction(lambda t: self._set_address_history(t, address, history))
 
     def get_unused_addresses(self, account, chain):
         # type: (torba.baseaccount.BaseAccount, int) -> defer.Deferred[List[str]]
