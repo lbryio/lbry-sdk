@@ -1,13 +1,17 @@
 from binascii import unhexlify, hexlify
 from collections import Sequence
+from typing import TypeVar, Generic
 
 
-class ReadOnlyList(Sequence):
+T = TypeVar('T')
+
+
+class ReadOnlyList(Sequence, Generic[T]):
 
     def __init__(self, lst):
         self.lst = lst
 
-    def __getitem__(self, key):
+    def __getitem__(self, key):  # type: (int) -> T
         return self.lst[key]
 
     def __len__(self):

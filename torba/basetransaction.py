@@ -124,10 +124,11 @@ class BaseOutput(InputOutput):
     script_class = BaseOutputScript
     estimator_class = BaseOutputEffectiveAmountEstimator
 
-    def __init__(self, amount, script, txhash=None, index=None):
+    def __init__(self, amount, script, txhash=None, index=None, txoid=None):
         super(BaseOutput, self).__init__(txhash, index)
         self.amount = amount  # type: int
         self.script = script  # type: BaseOutputScript
+        self.txoid = txoid
 
     def get_estimator(self, ledger):
         return self.estimator_class(ledger, self)
@@ -288,7 +289,7 @@ class BaseTransaction:
 
     @classmethod
     @defer.inlineCallbacks
-    def pay(cls, outputs, funding_accounts, change_account):
+    def pay(cls, outputs, funding_accounts, change_account, reserve_outputs=True):
         # type: (List[BaseOutput], List[torba.baseaccount.BaseAccount], torba.baseaccount.BaseAccount) -> defer.Deferred
         """ Efficiently spend utxos from funding_accounts to cover the new outputs. """
 
@@ -307,15 +308,26 @@ class BaseTransaction:
         if not spendables:
             raise ValueError('Not enough funds to cover this transaction.')
 
-        spent_sum = sum(s.effective_amount for s in spendables)
-        if spent_sum > amount:
-            change_address = yield change_account.change.get_or_create_usable_address()
-            change_hash160 = change_account.ledger.address_to_hash160(change_address)
-            change_amount = spent_sum - amount
-            tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
+        reserved_outputs = [s.txo.txoid for s in spendables]
+        if reserve_outputs:
+            yield ledger.db.reserve_spent_outputs(reserved_outputs)
 
-        tx.add_inputs([s.txi for s in spendables])
-        yield tx.sign(funding_accounts)
+        try:
+            spent_sum = sum(s.effective_amount for s in spendables)
+            if spent_sum > amount:
+                change_address = yield change_account.change.get_or_create_usable_address()
+                change_hash160 = change_account.ledger.address_to_hash160(change_address)
+                change_amount = spent_sum - amount
+                tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
+
+            tx.add_inputs([s.txi for s in spendables])
+            yield tx.sign(funding_accounts)
+
+        except Exception:
+            if reserve_outputs:
+                yield ledger.db.release_reserved_outputs(reserved_outputs)
+            raise
+
         defer.returnValue(tx)
 
     @classmethod
@@ -354,3 +366,13 @@ class BaseTransaction:
     @property
     def output_sum(self):
         return sum(o.amount for o in self.outputs)
+
+    @defer.inlineCallbacks
+    def get_my_addresses(self, ledger):
+        addresses = set()
+        for txo in self.outputs:
+            address = ledger.hash160_to_address(txo.script.values['pubkey_hash'])
+            record = yield ledger.db.get_address(address)
+            if record is not None:
+                addresses.add(address)
+        defer.returnValue(list(addresses))

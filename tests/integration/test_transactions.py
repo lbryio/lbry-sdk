@@ -17,30 +17,35 @@ class BasicTransactionTests(IntegrationTestCase):
 
         address = await account1.receiving.get_or_create_usable_address().asFuture(asyncio.get_event_loop())
         sendtxid = await self.blockchain.send_to_address(address.decode(), 5.5)
-        await self.on_transaction(sendtxid)  #mempool
+        await self.on_transaction_id(sendtxid)  #mempool
         await self.blockchain.generate(1)
-        await self.on_transaction(sendtxid)  #confirmed
+        await self.on_transaction_id(sendtxid)  #confirmed
 
         self.assertEqual(await self.get_balance(account1), int(5.5*COIN))
         self.assertEqual(await self.get_balance(account2), 0)
 
         address = await account2.receiving.get_or_create_usable_address().asFuture(asyncio.get_event_loop())
+        hash1 = self.ledger.address_to_hash160(address)
         tx = await self.ledger.transaction_class.pay(
-            [self.ledger.transaction_class.output_class.pay_pubkey_hash(2*COIN, self.ledger.address_to_hash160(address))],
+            [self.ledger.transaction_class.output_class.pay_pubkey_hash(2*COIN, hash1)],
             [account1], account1
         ).asFuture(asyncio.get_event_loop())
         await self.broadcast(tx)
-        await self.on_transaction(tx.hex_id.decode())  #mempool
+        await self.on_transaction(tx)  #mempool
 
         tx2 = await self.ledger.transaction_class.pay(
-            [self.ledger.transaction_class.output_class.pay_pubkey_hash(1*COIN, self.ledger.address_to_hash160(address))],
+            [self.ledger.transaction_class.output_class.pay_pubkey_hash(1*COIN, hash1)],
             [account1], account1
         ).asFuture(asyncio.get_event_loop())
         await self.broadcast(tx2)
-        await self.on_transaction(tx2.hex_id.decode())  #mempool
+        await self.on_transaction(tx2)  #mempool
 
         await self.blockchain.generate(1)
-        await self.on_transaction(tx.hex_id.decode())  #confirmed
+        await asyncio.wait([
+            self.on_header(202),
+            self.on_transaction(tx),
+            self.on_transaction(tx2),
+        ])
 
         #self.assertEqual(round(await self.get_balance(account1)/COIN, 1), 3.5)
         #self.assertEqual(round(await self.get_balance(account2)/COIN, 1), 2.0)

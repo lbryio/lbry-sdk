@@ -1,13 +1,15 @@
 import os
 import struct
+import logging
 from binascii import unhexlify
 
 from twisted.internet import threads, defer
 
-import torba
 from torba.stream import StreamController, execute_serially
 from torba.util import int_to_hex, rev_hex, hash_encode
 from torba.hash import double_sha256, pow_hash
+
+log = logging.getLogger(__name__)
 
 
 class BaseHeaders:
@@ -32,7 +34,7 @@ class BaseHeaders:
 
     @property
     def height(self):
-        return len(self) - 1
+        return len(self)
 
     def sync_read_length(self):
         return os.path.getsize(self.path) // self.header_size
@@ -76,7 +78,9 @@ class BaseHeaders:
         _old_size = self._size
         self._size = self.sync_read_length()
         change = self._size - _old_size
-        #log.info('saved {} header blocks'.format(change))
+        log.info('{}: added {} header blocks, final height {}'.format(
+            self.ledger.get_id(), change, self.height)
+        )
         self._on_change_controller.add(change)
 
     def _iterate_headers(self, height, headers):
