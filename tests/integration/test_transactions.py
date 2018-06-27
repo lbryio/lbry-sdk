@@ -1,4 +1,3 @@
-import asyncio
 from orchstr8.testcase import IntegrationTestCase, d2f
 from torba.constants import COIN
 

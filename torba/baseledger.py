@@ -193,8 +193,10 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         yield self.network.subscribe_headers()
         yield self.update_accounts()
 
+    @defer.inlineCallbacks
     def stop(self):
-        return self.network.stop()
+        yield self.network.stop()
+        yield self.db.stop()
 
     @execute_serially
     @defer.inlineCallbacks
