@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 
 
 class DiskBlobManager(object):
-    def __init__(self, blob_dir, storage):
+    def __init__(self, blob_dir, storage, node_datastore=None):
         """
         This class stores blobs on the hard disk
 
@@ -19,6 +19,7 @@ class DiskBlobManager(object):
         """
         self.storage = storage
         self.blob_dir = blob_dir
+        self._node_datastore = node_datastore
         self.blob_creator_type = BlobFileCreator
         # TODO: consider using an LRU for blobs as there could potentially
         #       be thousands of blobs loaded up, many stale
@@ -29,10 +30,14 @@ class DiskBlobManager(object):
         if conf.settings['run_reflector_server']: # TODO: move this looping call to SQLiteStorage
             self.check_should_announce_lc = task.LoopingCall(self.storage.verify_will_announce_all_head_and_sd_blobs)
 
+    @defer.inlineCallbacks
     def setup(self):
         if self.check_should_announce_lc and not self.check_should_announce_lc.running:
             self.check_should_announce_lc.start(600)
-        return defer.succeed(True)
+        if self._node_datastore is not None:
+            raw_blob_hashes = yield self.storage.get_all_finished_blobs()
+            self._node_datastore.completed_blobs.update(raw_blob_hashes)
+        defer.returnValue(True)
 
     def stop(self):
         if self.check_should_announce_lc and self.check_should_announce_lc.running:
@@ -63,6 +68,8 @@ class DiskBlobManager(object):
         yield self.storage.add_completed_blob(
             blob.blob_hash, blob.length, next_announce_time, should_announce
         )
+        if self._node_datastore is not None:
+            self._node_datastore.completed_blobs.add(blob.blob_hash.decode('hex'))
 
     def completed_blobs(self, blobhashes_to_check):
         return self._completed_blobs(blobhashes_to_check)
@@ -98,6 +105,11 @@ class DiskBlobManager(object):
     def delete_blobs(self, blob_hashes):
         bh_to_delete_from_db = []
         for blob_hash in blob_hashes:
+            if self._node_datastore is not None:
+                try:
+                    self._node_datastore.completed_blobs.remove(blob_hash.decode('hex'))
+                except KeyError:
+                    pass
             try:
                 blob = yield self.get_blob(blob_hash)
                 yield blob.delete()

@@ -245,6 +245,13 @@ class SQLiteStorage(object):
             "select blob_hash from blob where should_announce=1 and status='finished'"
         )
 
+    @defer.inlineCallbacks
+    def get_all_finished_blobs(self):
+        blob_hashes = yield self.run_and_return_list(
+            "select blob_hash from blob where status='finished'"
+        )
+        defer.returnValue([blob_hash.decode('hex') for blob_hash in blob_hashes])
+
     def update_last_announced_blob(self, blob_hash, last_announced):
         return self.db.runOperation(
                     "update blob set next_announce_time=?, last_announced_time=?, single_announce=0 where blob_hash=?",
