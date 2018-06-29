@@ -518,7 +518,9 @@ class Node(MockKademliaHelper):
         if originalPublisherID is None:
             originalPublisherID = rpc_contact.id
         compact_ip = rpc_contact.compact_ip()
-        if not self.verify_token(token, compact_ip):
+        if self.clock.seconds() - self._protocol.started_listening_time < constants.tokenSecretChangeInterval:
+            pass
+        elif not self.verify_token(token, compact_ip):
             raise ValueError("Invalid token")
         if 0 <= port <= 65536:
             compact_port = str(struct.pack('>H', port))
