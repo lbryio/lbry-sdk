@@ -13,8 +13,8 @@ at anytime.
   *
 
 ### Fixed
-  * Fixed a scenario where stopping downloads raises `NoneType object has no attribute finished_deferred`.
-  *
+  * `blob_list` raising an error when blobs in a stream haven't yet been created
+  * stopping a download from raising `NoneType object has no attribute finished_deferred`
 
 ### Deprecated
   *
