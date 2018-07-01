@@ -96,8 +96,8 @@ class MainNetLedger(BaseLedger):
     secret_prefix = int2byte(0x1c)
     pubkey_address_prefix = int2byte(0x55)
     script_address_prefix = int2byte(0x7a)
-    extended_public_key_prefix = unhexlify('019c354f')
-    extended_private_key_prefix = unhexlify('019c3118')
+    extended_public_key_prefix = unhexlify('0488b21e')
+    extended_private_key_prefix = unhexlify('0488ade4')
 
     max_target = 0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
     genesis_hash = '9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463'
@@ -126,7 +126,9 @@ class MainNetLedger(BaseLedger):
         return fee
 
     def resolve(self, *uris):
-        return self.network.get_values_for_uris(*uris)
+        return self.network.get_values_for_uris(
+            self.headers.hash(), *uris
+        )
 
 
 class TestNetLedger(MainNetLedger):

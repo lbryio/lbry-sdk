@@ -217,7 +217,8 @@ class Daemon(AuthJSONRPCServer):
         yield self._start_analytics()
         self.sd_identifier = self.component_manager.get_component(STREAM_IDENTIFIER_COMPONENT)
         self.file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
-        log.info("Starting balance: " + str(self.wallet.get_balance()))
+        balance = yield self.wallet.get_balance()
+        log.info("Starting balance: " + str(balance))
         self.announced_startup = True
         log.info("Started lbrynet-daemon")
 
@@ -1035,10 +1036,9 @@ class Daemon(AuthJSONRPCServer):
             (float) amount of lbry credits in wallet
         """
         if address is None:
-            return self._render_response(float(self.wallet.get_balance()))
+            return self.wallet.default_account.get_balance()
         else:
-            return self._render_response(float(
-                self.wallet.get_address_balance(address, include_unconfirmed)))
+            return self.wallet.get_address_balance(address, include_unconfirmed)
 
     @AuthJSONRPCServer.requires("wallet")
     @defer.inlineCallbacks

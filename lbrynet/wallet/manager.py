@@ -6,7 +6,8 @@ from torba.constants import COIN
 from torba.coinselection import CoinSelector
 from torba.manager import WalletManager as BaseWalletManager
 
-from lbrynet.wallet.database import WalletDatabase
+
+from .ledger import MainNetLedger
 
 
 class BackwardsCompatibleNetwork:
@@ -44,19 +45,24 @@ class LbryWalletManager(BaseWalletManager):
 
     @classmethod
     def from_old_config(cls, settings):
-        coin_id = 'lbc_{}'.format(settings['blockchain_name'][-7:])
-        wallet_manager = cls.from_config({
-            'ledgers': {coin_id: {
-                'default_servers': settings['lbryum_servers'],
-                'wallet_path': settings['lbryum_wallet_dir']
-            }}
+
+        ledger_id = {
+            'lbrycrd_main':    'lbc_mainnet',
+            'lbrycrd_testnet': 'lbc_testnet',
+            'lbrycrd_regtest': 'lbc_regtest'
+        }[settings['blockchain_name']]
+
+        ledger_config = {
+            'auto_connect': True,
+            'default_servers': settings['lbryum_servers'],
+            'wallet_path': settings['lbryum_wallet_dir'],
+            'use_keyring': settings['use_keyring']
+        }
+
+        return cls.from_config({
+            'ledgers': {ledger_id: ledger_config},
+            'wallets': [os.path.join(settings['lbryum_wallet_dir'], 'default_wallet')]
         })
-        ledger = wallet_manager.ledgers.values()[0]
-        wallet_manager.create_wallet(
-            os.path.join(settings['lbryum_wallet_dir'], 'default_torba_wallet'),
-            ledger.coin_class
-        )
-        return wallet_manager
 
     def get_best_blockhash(self):
         return defer.succeed('')
@@ -81,9 +87,9 @@ class LbryWalletManager(BaseWalletManager):
     def get_info_exchanger(self):
         return LBRYcrdAddressRequester(self)
 
-    def resolve(self, *uris):
-        ledger = self.default_account.coin.ledger  # type: LBCLedger
-        return ledger.resolve(uris)
+    def resolve(self, *uris, **kwargs):
+        ledger = self.default_account.ledger  # type: MainNetLedger
+        return ledger.resolve(*uris)
 
     def get_name_claims(self):
         return defer.succeed([])
