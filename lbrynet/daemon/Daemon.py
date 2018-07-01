@@ -977,10 +977,9 @@ class Daemon(AuthJSONRPCServer):
             (float) amount of lbry credits in wallet
         """
         if address is None:
-            return self._render_response(float(self.wallet.get_balance()))
+            return self.wallet.default_account.get_balance()
         else:
-            return self._render_response(float(
-                self.wallet.get_address_balance(address, include_unconfirmed)))
+            return self.wallet.get_address_balance(address, include_unconfirmed)
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
