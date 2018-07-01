@@ -15,14 +15,13 @@ class WalletManager(object):
 
     @classmethod
     def from_config(cls, config):  # type: (Dict) -> WalletManager
-        wallets = []
-        manager = cls(wallets)
-        for coin_id, ledger_config in config.get('ledgers', {}).items():
-            manager.get_or_create_ledger(coin_id, ledger_config)
+        manager = cls()
+        for ledger_id, ledger_config in config.get('ledgers', {}).items():
+            manager.get_or_create_ledger(ledger_id, ledger_config)
         for wallet_path in config.get('wallets', []):
             wallet_storage = WalletStorage(wallet_path)
             wallet = Wallet.from_storage(wallet_storage, manager)
-            wallets.append(wallet)
+            manager.wallets.append(wallet)
         return manager
 
     def get_or_create_ledger(self, ledger_id, ledger_config=None):

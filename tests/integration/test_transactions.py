@@ -1,3 +1,4 @@
+import asyncio
 from orchstr8.testcase import IntegrationTestCase, d2f
 from torba.constants import COIN
 
@@ -12,13 +13,18 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertEqual(await self.get_balance(account1), 0)
         self.assertEqual(await self.get_balance(account2), 0)
 
-        address1 = await d2f(account1.receiving.get_or_create_usable_address())
-        sendtxid = await self.blockchain.send_to_address(address1.decode(), 5.5)
-        await self.on_transaction_id(sendtxid)  # mempool
+        sendtxids = []
+        for i in range(9):
+            address1 = await d2f(account1.receiving.get_or_create_usable_address())
+            sendtxid = await self.blockchain.send_to_address(address1.decode(), 1.1)
+            sendtxids.append(sendtxid)
+            await self.on_transaction_id(sendtxid)  # mempool
         await self.blockchain.generate(1)
-        await self.on_transaction_id(sendtxid)  # confirmed
+        await asyncio.wait([  # confirmed
+            self.on_transaction_id(txid) for txid in sendtxids
+        ])
 
-        self.assertEqual(round(await self.get_balance(account1)/COIN, 1), 5.5)
+        self.assertEqual(round(await self.get_balance(account1)/COIN, 1), 9.9)
         self.assertEqual(round(await self.get_balance(account2)/COIN, 1), 0)
 
         address2 = await d2f(account2.receiving.get_or_create_usable_address())
@@ -32,7 +38,5 @@ class BasicTransactionTests(IntegrationTestCase):
         await self.blockchain.generate(1)
         await self.on_transaction(tx)  # confirmed
 
-        self.assertTrue(await d2f(self.ledger.is_valid_transaction(tx, 202)))
-
-        self.assertEqual(round(await self.get_balance(account1)/COIN, 1), 3.5)
+        self.assertEqual(round(await self.get_balance(account1)/COIN, 1), 7.9)
         self.assertEqual(round(await self.get_balance(account2)/COIN, 1), 2.0)

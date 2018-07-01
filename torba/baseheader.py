@@ -34,7 +34,13 @@ class BaseHeaders:
 
     @property
     def height(self):
-        return len(self)
+        return len(self)-1
+
+    def hash(self, height=None):
+        if height is None:
+            height = self.height
+        header = self[height]
+        return self._hash_header(header)
 
     def sync_read_length(self):
         return os.path.getsize(self.path) // self.header_size

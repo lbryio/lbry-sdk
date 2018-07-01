@@ -11,7 +11,10 @@ from twisted.protocols.basic import LineOnlyReceiver
 from torba import __version__
 from torba.stream import StreamController
 
-log = logging.getLogger()
+log = logging.getLogger(__name__)
+
+if six.PY3:
+    buffer = memoryview
 
 
 def unicode2bytes(string):
@@ -23,6 +26,8 @@ def unicode2bytes(string):
 
 
 def bytes2unicode(maybe_bytes):
+    if isinstance(maybe_bytes, buffer):
+        maybe_bytes = str(maybe_bytes)
     if isinstance(maybe_bytes, bytes):
         return maybe_bytes.decode()
     elif isinstance(maybe_bytes, (list, tuple)):
@@ -32,7 +37,7 @@ def bytes2unicode(maybe_bytes):
 
 class StratumClientProtocol(LineOnlyReceiver):
     delimiter = b'\n'
-    MAX_LENGTH = 100000
+    MAX_LENGTH = 2000000
 
     def __init__(self):
         self.request_id = 0
@@ -78,6 +83,7 @@ class StratumClientProtocol(LineOnlyReceiver):
         self.on_disconnected_controller.add(True)
 
     def lineReceived(self, line):
+        log.debug('received: {}'.format(line))
 
         try:
             # `line` comes in as a byte string but `json.loads` automatically converts everything to
@@ -114,6 +120,7 @@ class StratumClientProtocol(LineOnlyReceiver):
             'method': method,
             'params': [bytes2unicode(arg) for arg in args]
         })
+        log.debug('sent: {}'.format(message))
         self.sendLine(message.encode('latin-1'))
         d = self.lookup_table[message_id] = defer.Deferred()
         return d
@@ -161,17 +168,19 @@ class BaseNetwork:
     def start(self):
         for server in cycle(self.config['default_servers']):
             endpoint = clientFromString(reactor, 'tcp:{}:{}'.format(*server))
+            log.debug("Attempting connection to SPV wallet server: {}:{}".format(*server))
             self.service = ClientService(endpoint, StratumClientFactory(self))
             self.service.startService()
             try:
                 self.client = yield self.service.whenConnected(failAfterFailures=2)
                 yield self.ensure_server_version()
+                log.info("Successfully connected to SPV wallet server: {}:{}".format(*server))
                 self._on_connected_controller.add(True)
                 yield self.client.on_disconnected.first
             except CancelledError:
                 return
-            except Exception as e:
-                pass
+            except Exception:
+                log.exception("Connecting to {}:{} raised an exception:".format(*server))
             finally:
                 self.client = None
             if not self.running:

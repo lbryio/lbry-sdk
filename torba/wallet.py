@@ -59,12 +59,11 @@ class Wallet:
 
 class WalletStorage:
 
-    LATEST_VERSION = 2
+    LATEST_VERSION = 1
 
     DEFAULT = {
         'version': LATEST_VERSION,
         'name': 'Wallet',
-        'coins': {},
         'accounts': []
     }
 
@@ -100,10 +99,25 @@ class WalletStorage:
 
         version = json_dict.pop('version', -1)
 
-        if version == 1:  # upgrade from version 1 to version 2
-            _rename_property('addr_history', 'history')
-            _rename_property('use_encryption', 'encrypted')
-            _rename_property('gap_limit', 'gap_limit_for_receiving')
+        if version == -1:  # upgrading from electrum wallet
+            json_dict = {
+                'accounts': [{
+                    'ledger': 'lbc_mainnet',
+                    'encrypted': json_dict['use_encryption'],
+                    'seed': json_dict['seed'],
+                    'seed_version': json_dict['seed_version'],
+                    'private_key': json_dict['master_private_keys']['x/'],
+                    'public_key': json_dict['master_public_keys']['x/'],
+                    'certificates': json_dict['claim_certificates'],
+                    'receiving_gap': 20,
+                    'change_gap': 6,
+                    'receiving_maximum_use_per_address': 2,
+                    'change_maximum_use_per_address': 2
+                }]
+            }
+
+        elif version == 1:  # upgrade from version 1 to version 2
+            pass
 
         upgraded = cls.DEFAULT
         upgraded.update(json_dict)
