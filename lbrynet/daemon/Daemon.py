@@ -259,7 +259,8 @@ class Daemon(AuthJSONRPCServer):
         yield self._setup_lbry_file_manager()
         yield self._setup_query_handlers()
         yield self._setup_server()
-        log.info("Starting balance: " + str(self.session.wallet.get_balance()))
+        balance = yield self.session.wallet.get_balance()
+        log.info("Starting balance: " + str(balance))
         self.announced_startup = True
         self.startup_status = STARTUP_STAGES[5]
         log.info("Started lbrynet-daemon")
@@ -536,58 +537,25 @@ class Daemon(AuthJSONRPCServer):
             self.analytics_manager.start()
 
     def _get_session(self):
-        def get_wallet():
-            if self.wallet_type == TORBA_WALLET:
-                log.info("Using torba wallet")
-                wallet = LbryWalletManager.from_old_config(conf.settings)
-                lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
-                return defer.succeed(wallet)
-            elif self.wallet_type == LBRYCRD_WALLET:
-                raise ValueError('LBRYcrd Wallet is no longer supported')
-            elif self.wallet_type == LBRYUM_WALLET:
-
-                log.info("Using lbryum wallet")
-
-                lbryum_servers = {address: {'t': str(port)}
-                                  for address, port in conf.settings['lbryum_servers']}
-
-                config = {
-                    'auto_connect': True,
-                    'chain': conf.settings['blockchain_name'],
-                    'default_servers': lbryum_servers
-                }
-
-                if 'use_keyring' in conf.settings:
-                    config['use_keyring'] = conf.settings['use_keyring']
-                if conf.settings['lbryum_wallet_dir']:
-                    config['lbryum_path'] = conf.settings['lbryum_wallet_dir']
-                wallet = LBRYumWallet(self.storage, config)
-                return defer.succeed(wallet)
-            else:
-                raise ValueError('Wallet Type {} is not valid'.format(self.wallet_type))
-
-        d = get_wallet()
-
-        def create_session(wallet):
-            self.session = Session(
-                conf.settings['data_rate'],
-                db_dir=self.db_dir,
-                node_id=self.node_id,
-                blob_dir=self.blobfile_dir,
-                dht_node_port=self.dht_node_port,
-                known_dht_nodes=conf.settings['known_dht_nodes'],
-                peer_port=self.peer_port,
-                use_upnp=self.use_upnp,
-                wallet=wallet,
-                is_generous=conf.settings['is_generous_host'],
-                external_ip=self.platform['ip'],
-                storage=self.storage
-            )
-            self.startup_status = STARTUP_STAGES[2]
-
-        d.addCallback(create_session)
-        d.addCallback(lambda _: self.session.setup())
-        return d
+        log.info("Using torba wallet")
+        lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
+        wallet = LbryWalletManager.from_old_config(conf.settings)
+        self.session = Session(
+            conf.settings['data_rate'],
+            db_dir=self.db_dir,
+            node_id=self.node_id,
+            blob_dir=self.blobfile_dir,
+            dht_node_port=self.dht_node_port,
+            known_dht_nodes=conf.settings['known_dht_nodes'],
+            peer_port=self.peer_port,
+            use_upnp=self.use_upnp,
+            wallet=wallet,
+            is_generous=conf.settings['is_generous_host'],
+            external_ip=self.platform['ip'],
+            storage=self.storage
+        )
+        self.startup_status = STARTUP_STAGES[2]
+        return self.session.setup()
 
     @defer.inlineCallbacks
     def _check_wallet_locked(self):
@@ -1307,10 +1275,9 @@ class Daemon(AuthJSONRPCServer):
             (float) amount of lbry credits in wallet
         """
         if address is None:
-            return self._render_response(float(self.session.wallet.get_balance()))
+            return self.session.wallet.default_account.get_balance()
         else:
-            return self._render_response(float(
-                self.session.wallet.get_address_balance(address, include_unconfirmed)))
+            return self.session.wallet.get_address_balance(address, include_unconfirmed)
 
     @defer.inlineCallbacks
     def jsonrpc_wallet_unlock(self, password):
