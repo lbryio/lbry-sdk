@@ -45,7 +45,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         # Now add it...
         yield self.routingTable.addContact(contact)
         # ...and request the closest nodes to it (will retrieve it)
-        closestNodes = self.routingTable.findCloseNodes(contactID, constants.k)
+        closestNodes = self.routingTable.findCloseNodes(contactID)
         self.failUnlessEqual(len(closestNodes), 1, 'Wrong amount of contacts returned; expected 1,'
                                                    ' got %d' % len(closestNodes))
         self.failUnless(contact in closestNodes, 'Added contact not found by issueing '

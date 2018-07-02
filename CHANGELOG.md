@@ -16,6 +16,7 @@ at anytime.
   * `blob_list` raising an error when blobs in a stream haven't yet been created
   * stopping a download from raising `NoneType object has no attribute finished_deferred`
   * file manager startup locking up when there are many files for some channels
+  * improper sorting when getting the closest peers to a hash
 
 ### Deprecated
   *

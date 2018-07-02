@@ -550,7 +550,7 @@ class Node(MockKademliaHelper):
         if len(key) != constants.key_bits / 8:
             raise ValueError("invalid contact id length: %i" % len(key))
 
-        contacts = self._routingTable.findCloseNodes(key, constants.k, rpc_contact.id)
+        contacts = self._routingTable.findCloseNodes(key, sender_node_id=rpc_contact.id)
         contact_triples = []
         for contact in contacts:
             contact_triples.append((contact.id, contact.address, contact.port))
@@ -644,7 +644,7 @@ class Node(MockKademliaHelper):
             raise ValueError("invalid key length: %i" % len(key))
 
         if startupShortlist is None:
-            shortlist = self._routingTable.findCloseNodes(key, constants.k)
+            shortlist = self._routingTable.findCloseNodes(key)
             # if key != self.node_id:
             #     # Update the "last accessed" timestamp for the appropriate k-bucket
             #     self._routingTable.touchKBucket(key)
