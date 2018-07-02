@@ -99,7 +99,7 @@ class TestStoreExpiration(TestKademliaBase):
         self.nodes.remove(announcing_node)
         yield self.run_reactor(31, [announcing_node.stop()])
         # run the network for an hour, which should expire the removed node and turn the announced value stale
-        self.pump_clock(constants.checkRefreshInterval * 4, constants.checkRefreshInterval/2)
+        self.pump_clock(constants.checkRefreshInterval * 5, constants.checkRefreshInterval/2)
         self.verify_all_nodes_are_routable()
 
         # make sure the contact isn't returned as a peer for the blob, but that we still have the entry in the

@@ -141,13 +141,13 @@ class TreeRoutingTable(object):
             self.touchKBucketByIndex(bucketIndex)
             return defer.succeed(None)
 
-    def findCloseNodes(self, key, count, sender_node_id=None):
+    def findCloseNodes(self, key, count=None, sender_node_id=None):
         """ Finds a number of known nodes closest to the node/value with the
         specified key.
 
         @param key: the n-bit key (i.e. the node or value ID) to search for
         @type key: str
-        @param count: the amount of contacts to return
+        @param count: the amount of contacts to return, default of k (8)
         @type count: int
         @param sender_node_id: Used during RPC, this is be the sender's Node ID
                                Whatever ID is passed in the paramater will get
@@ -161,45 +161,14 @@ class TreeRoutingTable(object):
                  node is returning all of the contacts that it knows of.
         @rtype: list
         """
-        bucketIndex = self._kbucketIndex(key)
 
-        if bucketIndex < len(self._buckets):
-            # sort these
-            closestNodes = self._buckets[bucketIndex].getContacts(count, sender_node_id, sort_distance_to=key)
-        else:
-            closestNodes = []
-        # This method must return k contacts (even if we have the node
-        # with the specified key as node ID), unless there is less
-        # than k remote nodes in the routing table
-        i = 1
-        canGoLower = bucketIndex - i >= 0
-        canGoHigher = bucketIndex + i < len(self._buckets)
-
-        def get_remain(closest):
-            return min(count, constants.k) - len(closest)
-
+        count = count or constants.k
+        sender_node_id = sender_node_id or self._parentNodeID
         distance = Distance(key)
-
-        while len(closestNodes) < min(count, constants.k) and (canGoLower or canGoHigher):
-            iteration_contacts = []
-            # get contacts from lower and/or higher buckets without sorting them
-            if canGoLower and len(closestNodes) < min(count, constants.k):
-                lower_bucket = self._buckets[bucketIndex - i]
-                contacts = lower_bucket.getContacts(get_remain(closestNodes), sender_node_id, sort_distance_to=False)
-                iteration_contacts.extend(contacts)
-                canGoLower = bucketIndex - (i + 1) >= 0
-
-            if canGoHigher and len(closestNodes) < min(count, constants.k):
-                higher_bucket = self._buckets[bucketIndex + i]
-                contacts = higher_bucket.getContacts(get_remain(closestNodes), sender_node_id, sort_distance_to=False)
-                iteration_contacts.extend(contacts)
-                canGoHigher = bucketIndex + (i + 1) < len(self._buckets)
-            i += 1
-            # sort the combined contacts and add as many as possible/needed to the combined contact list
-            iteration_contacts.sort(key=lambda c: distance(c.id), reverse=True)
-            while len(iteration_contacts) and len(closestNodes) < min(count, constants.k):
-                closestNodes.append(iteration_contacts.pop())
-        return closestNodes
+        contacts = self.get_contacts()
+        contacts = [c for c in contacts if c.id != sender_node_id]
+        contacts.sort(key=lambda c: distance(c.id))
+        return contacts[:min(count, len(contacts))]
 
     def getContact(self, contactID):
         """ Returns the (known) contact with the specified node ID
