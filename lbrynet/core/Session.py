@@ -242,7 +242,7 @@ class Session(object):
                 raise Exception(
                     "TempBlobManager is no longer supported, specify BlobManager or db_dir")
             else:
-                self.blob_manager = DiskBlobManager(self.blob_dir, self.storage)
+                self.blob_manager = DiskBlobManager(self.blob_dir, self.storage, self.dht_node._dataStore)
 
         # if self.blob_tracker is None:
         #     self.blob_tracker = self.blob_tracker_class(

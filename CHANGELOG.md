@@ -22,8 +22,8 @@ at anytime.
   *
 
 ### Changed
-  *
-  *
+  * include all of our own blobs in the local dht datastore (as if we had announced them to ourselves)
+  * ignore dht `store` token validation errors for the first expiration-time after startup (fixes failed `store` requests after a restart)
 
 ### Added
   *

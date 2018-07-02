@@ -518,7 +518,9 @@ class Node(MockKademliaHelper):
         if originalPublisherID is None:
             originalPublisherID = rpc_contact.id
         compact_ip = rpc_contact.compact_ip()
-        if not self.verify_token(token, compact_ip):
+        if self.clock.seconds() - self._protocol.started_listening_time < constants.tokenSecretChangeInterval:
+            pass
+        elif not self.verify_token(token, compact_ip):
             raise ValueError("Invalid token")
         if 0 <= port <= 65536:
             compact_port = str(struct.pack('>H', port))
@@ -577,8 +579,23 @@ class Node(MockKademliaHelper):
         if self._protocol._protocolVersion:
             response['protocolVersion'] = self._protocol._protocolVersion
 
-        if self._dataStore.hasPeersForBlob(key):
-            response[key] = self._dataStore.getPeersForBlob(key)
+        # get peers we have stored for this blob
+        has_other_peers = self._dataStore.hasPeersForBlob(key)
+        peers = []
+        if has_other_peers:
+            peers.extend(self._dataStore.getPeersForBlob(key))
+
+        # if we don't have k storing peers to return and we have this hash locally, include our contact information
+        if len(peers) < constants.k and key in self._dataStore.completed_blobs:
+            compact_ip = str(
+                reduce(lambda buff, x: buff + bytearray([int(x)]), self.externalIP.split('.'), bytearray())
+            )
+            compact_port = str(struct.pack('>H', self.peerPort))
+            compact_address = compact_ip + compact_port + self.node_id
+            peers.append(compact_address)
+
+        if peers:
+            response[key] = peers
         else:
             response['contacts'] = self.findNode(rpc_contact, key)
         return response

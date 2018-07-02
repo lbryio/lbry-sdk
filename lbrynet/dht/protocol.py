@@ -103,6 +103,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         self._listening = defer.Deferred(None)
         self._ping_queue = PingQueue(self._node)
         self._protocolVersion = constants.protocolVersion
+        self.started_listening_time = 0
 
     def _migrate_incoming_rpc_args(self, contact, method, *args):
         if method == 'store' and contact.protocolVersion == 0:
@@ -202,6 +203,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         if self._listening.called:
             self._listening = defer.Deferred()
         self._listening.callback(True)
+        self.started_listening_time = self._node.clock.seconds()
         return self._ping_queue.start()
 
     def datagramReceived(self, datagram, address):
