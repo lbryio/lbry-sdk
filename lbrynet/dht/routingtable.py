@@ -161,12 +161,15 @@ class TreeRoutingTable(object):
                  node is returning all of the contacts that it knows of.
         @rtype: list
         """
-
+        exclude = [self._parentNodeID]
+        if sender_node_id:
+            exclude.append(sender_node_id)
+        if key in exclude:
+            exclude.remove(key)
         count = count or constants.k
-        sender_node_id = sender_node_id or self._parentNodeID
         distance = Distance(key)
         contacts = self.get_contacts()
-        contacts = [c for c in contacts if c.id != sender_node_id]
+        contacts = [c for c in contacts if c.id not in exclude]
         contacts.sort(key=lambda c: distance(c.id))
         return contacts[:min(count, len(contacts))]
 
