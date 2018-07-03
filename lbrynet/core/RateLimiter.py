@@ -49,7 +49,7 @@ class DummyRateLimiter(object):
 class RateLimiter(object):
     """This class ensures that upload and download rates don't exceed specified maximums"""
 
-    implements(IRateLimiter)
+    #implements(IRateLimiter)
 
     #called by main application
 
