@@ -24,7 +24,7 @@ class ServerProtocol(Protocol):
     10) Pause/resume production when told by the rate limiter
     """
 
-    implements(interfaces.IConsumer)
+    #implements(interfaces.IConsumer)
 
     #Protocol stuff
 

@@ -3,7 +3,8 @@ import json
 import subprocess
 import os
 
-from urllib2 import urlopen, URLError
+from six.moves.urllib.request import urlopen
+from six.moves.urllib.error import URLError
 from lbryschema import __version__ as lbryschema_version
 from lbrynet import build_type, __version__ as lbrynet_version
 from lbrynet.conf import ROOT_DIR
@@ -19,7 +20,7 @@ def get_lbrynet_version():
                     stderr=devnull
                 ).strip().lstrip('v')
         except (subprocess.CalledProcessError, OSError):
-            print "failed to get version from git"
+            print("failed to get version from git")
     return lbrynet_version
 
 

@@ -1,9 +1,9 @@
 import logging
-from twisted.internet import defer
-from distance import Distance
-from error import TimeoutError
-import constants
 import struct
+from twisted.internet import defer
+from .distance import Distance
+from .error import TimeoutError
+from . import constants
 
 log = logging.getLogger(__name__)
 

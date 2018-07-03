@@ -1,12 +1,10 @@
-import UserDict
-import constants
-from interface import IDataStore
-from zope.interface import implements
+from collections import UserDict
+from . import constants
 
 
-class DictDataStore(UserDict.DictMixin):
+class DictDataStore(UserDict):
     """ A datastore using an in-memory Python dictionary """
-    implements(IDataStore)
+    #implements(IDataStore)
 
     def __init__(self, getTime=None):
         # Dictionary format:

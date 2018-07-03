@@ -13,7 +13,7 @@ class ServerRequestHandler(object):
     return request for information about more blobs that are
     associated with streams.
     """
-    implements(interfaces.IPushProducer, interfaces.IConsumer, IRequestHandler)
+    #implements(interfaces.IPushProducer, interfaces.IConsumer, IRequestHandler)
 
     def __init__(self, consumer):
         self.consumer = consumer

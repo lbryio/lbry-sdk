@@ -40,7 +40,7 @@ def cache(fn):
 
 
 class BlobRequester(object):
-    implements(IRequestCreator)
+    #implements(IRequestCreator)
 
     def __init__(self, blob_manager, peer_finder, payment_rate_manager, wallet, download_manager):
         self.blob_manager = blob_manager
