@@ -1,4 +1,4 @@
-from error import DecodeError
+from .error import DecodeError
 
 
 class Encoding(object):
@@ -68,7 +68,7 @@ class Bencode(Encoding):
                 encodedDictItems += self.encode(data[key])
             return 'd%se' % encodedDictItems
         else:
-            print data
+            print(data)
             raise TypeError("Cannot bencode '%s' object" % type(data))
 
     def decode(self, data):
@@ -126,8 +126,8 @@ class Bencode(Encoding):
             splitPos = data[startIndex:].find(':') + startIndex
             try:
                 length = int(data[startIndex:splitPos])
-            except ValueError, e:
-                raise DecodeError, e
+            except ValueError:
+                raise DecodeError()
             startIndex = splitPos + 1
             endPos = startIndex + length
             bytes = data[startIndex:endPos]

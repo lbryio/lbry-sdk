@@ -4,12 +4,12 @@ import errno
 from collections import deque
 
 from twisted.internet import protocol, defer
-from error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
+from .error import BUILTIN_EXCEPTIONS, UnknownRemoteException, TimeoutError, TransportNotConnected
 
-import constants
-import encoding
-import msgtypes
-import msgformat
+from . import constants
+from . import encoding
+from . import msgtypes
+from . import msgformat
 
 log = logging.getLogger(__name__)
 
@@ -434,7 +434,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
                     result = func(senderContact, *a)
                 else:
                     result = func()
-            except Exception, e:
+            except Exception as e:
                 log.exception("error handling request for %s:%i %s", senderContact.address, senderContact.port, method)
                 df.errback(e)
             else:
