@@ -8,11 +8,11 @@
 import random
 from zope.interface import implements
 from twisted.internet import defer
-import constants
-import kbucket
-from error import TimeoutError
-from distance import Distance
-from interface import IRoutingTable
+from . import constants
+from . import kbucket
+from .error import TimeoutError
+from .distance import Distance
+from .interface import IRoutingTable
 import logging
 
 log = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class TreeRoutingTable(object):
     C{PING} RPC-based k-bucket eviction algorithm described in section 2.2 of
     that paper.
     """
-    implements(IRoutingTable)
+    #implements(IRoutingTable)
 
     def __init__(self, parentNodeID, getTime=None):
         """

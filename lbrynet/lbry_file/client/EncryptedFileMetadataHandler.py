@@ -8,7 +8,7 @@ log = logging.getLogger(__name__)
 
 
 class EncryptedFileMetadataHandler(object):
-    implements(IMetadataHandler)
+    #implements(IMetadataHandler)
 
     def __init__(self, stream_hash, storage, download_manager):
         self.stream_hash = stream_hash
