@@ -48,6 +48,7 @@ class DHTPeerFinder(DummyPeerFinder):
         try:
             peer_list = yield finished_deferred
         except defer.TimeoutError:
+            log.warning("DHT timed out while looking peers for blob {}".format(blob_hash))
             peer_list = []
 
         peers = set(peer_list)
