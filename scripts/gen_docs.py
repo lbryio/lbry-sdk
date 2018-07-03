@@ -188,12 +188,14 @@ def _api_doc(obj):
         print "--command_name=<command_name> : (type) desc"
         print e.message
 
-    docstr = "> Returns:\n\n```" + \
+    docstr = _desc + \
+        ":::\n\n" + \
+        "::: api__content__example\n\n> Returns:\n\n```" + \
         _returns_docstr + \
         "\n```\n\n" + \
-        _desc + \
-        "### Arguments\n\n" + \
-        _options_docstr
+        "Arguments\n\n" + \
+        _options_docstr + \
+        "\n:::\n\n"
 
     return docstr
 
@@ -210,10 +212,10 @@ def main():
     _cli_docs = ''
     for method_name in sorted(Daemon.callable_methods.keys()):
         method = Daemon.callable_methods[method_name]
-        _api_docs += '## ' + method_name + "\n\n" + _api_doc(method) + "\n\n"
+        _api_docs += '::: api__content__body\n## ' + method_name + "\n\n" + _api_doc(method) + "\n\n"
         _cli_docs += '## ' + method_name + "\n\n" + _cli_doc(method) + "\n\n"
 
-    _api_docs = "# LBRY JSON-RPC API Documentation\n\n" + _api_docs
+    _api_docs = "::: api__content__body\n# API Reference\n:::\n\n::: api__content__example\n```\nThis is a work-in-progress!\n```\n:::\n\n" + _api_docs
     with open(api_doc_path, 'w+') as f:
         f.write(_api_docs)
 
