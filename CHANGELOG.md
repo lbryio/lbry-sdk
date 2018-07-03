@@ -13,27 +13,27 @@ at anytime.
   *
 
 ### Fixed
-  * `blob_list` raising an error when blobs in a stream haven't yet been created
-  * stopping a download from raising `NoneType object has no attribute finished_deferred`
-  * file manager startup locking up when there are many files for some channels
-  * improper sorting when getting the closest peers to a hash
+  * `blob_list` raising an error when blobs in a stream haven't yet been created (8a0d0b44ddf9cbeb2a9074eed39d6064ce21df64)
+  * stopping a download potentially raising an attribute error (https://github.com/lbryio/lbry/pull/1269)
+  * file manager startup locking up when there are many files for some channels (https://github.com/lbryio/lbry/pull/1281)
+  * improper sorting when getting the closest peers to a hash (https://github.com/lbryio/lbry/pull/1282)
 
 ### Deprecated
   *
   *
 
 ### Changed
-  * default for `peer_search_timeout` raised from 3 to 30 and being logged on console
-  * change iterative find stop condition on find value to allow it to continue until a value is found (or it times out)
-  * include all of our own blobs in the local dht datastore (as if we had announced them to ourselves)
-  * ignore dht `store` token validation errors for the first expiration-time after startup (fixes failed `store` requests after a restart)
+  * raised the default `peer_search_timeout` setting from 3 to 30 and added logging for when it happens (https://github.com/lbryio/lbry/pull/1283)
+  * change iterative find stop condition on find value to allow it to continue until a value is found or it times out (https://github.com/lbryio/lbry/pull/1283)
+  * include all of our own blobs in the local dht datastore (as if we had announced them to ourselves) (https://github.com/lbryio/lbry/pull/1280)
+  * ignore dht `store` token validation errors for the first expiration-time after startup (fixes failed `store` requests after a restart) (https://github.com/lbryio/lbry/pull/1280)
 
 ### Added
   *
   *
 
 ### Removed
-  * `jsonrpclib` as a requirement for the project
+  * `jsonrpclib` as a requirement for the project (https://github.com/lbryio/lbry/pull/1274)
   *
 
 
