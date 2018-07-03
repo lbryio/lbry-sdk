@@ -18,7 +18,7 @@ class DummyPeerFinder(object):
 
 class DHTPeerFinder(DummyPeerFinder):
     """This class finds peers which have announced to the DHT that they have certain blobs"""
-    implements(IPeerFinder)
+    #implements(IPeerFinder)
 
     def __init__(self, dht_node, peer_manager):
         """

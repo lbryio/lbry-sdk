@@ -15,14 +15,14 @@ from twisted.internet import defer, error, task
 from lbrynet.core.utils import generate_id, DeferredDict
 from lbrynet.core.call_later_manager import CallLaterManager
 from lbrynet.core.PeerManager import PeerManager
-from error import TimeoutError
-import constants
-import routingtable
-import datastore
-import protocol
-from peerfinder import DHTPeerFinder
-from contact import ContactManager
-from iterativefind import iterativeFind
+from .error import TimeoutError
+from . import constants
+from . import routingtable
+from . import datastore
+from . import protocol
+from .peerfinder import DHTPeerFinder
+from .contact import ContactManager
+from .iterativefind import iterativeFind
 
 
 log = logging.getLogger(__name__)

@@ -1,10 +1,10 @@
 import binascii
-import exceptions
+#import exceptions
 
 # this is a dict of {"exceptions.<exception class name>": exception class} items used to raise
 # remote built-in exceptions locally
 BUILTIN_EXCEPTIONS = {
-    "exceptions.%s" % e: getattr(exceptions, e) for e in dir(exceptions) if not e.startswith("_")
+#    "exceptions.%s" % e: getattr(exceptions, e) for e in dir(exceptions) if not e.startswith("_")
 }
 
 
