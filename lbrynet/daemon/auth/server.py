@@ -1,5 +1,5 @@
 import logging
-import urlparse
+from six.moves.urllib import parse as urlparse
 import json
 import inspect
 import signal
@@ -20,9 +20,8 @@ from lbrynet.core import utils
 from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
 from lbrynet.core.looping_call_manager import LoopingCallManager
 from lbrynet.daemon.ComponentManager import ComponentManager
+from lbrynet.daemon.auth.util import APIKey, get_auth_message, LBRY_SECRET
 from lbrynet.undecorated import undecorated
-from .util import APIKey, get_auth_message
-from .client import LBRY_SECRET
 from .factory import AuthJSONRPCResource
 log = logging.getLogger(__name__)
 
@@ -189,7 +188,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         the server will randomize the shared secret and return the new value under the LBRY_SECRET header, which the
         client uses to generate the token for their next request.
     """
-    implements(resource.IResource)
+    #implements(resource.IResource)
 
     isLeaf = True
     allowed_during_startup = []
