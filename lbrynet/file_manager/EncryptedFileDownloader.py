@@ -153,7 +153,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
 
 
 class ManagedEncryptedFileDownloaderFactory(object):
-    implements(IStreamDownloaderFactory)
+    #implements(IStreamDownloaderFactory)
 
     def __init__(self, lbry_file_manager):
         self.lbry_file_manager = lbry_file_manager

@@ -1,7 +1,7 @@
 import logging
-import constants
-from distance import Distance
-from error import BucketFull
+from . import constants
+from .distance import Distance
+from .error import BucketFull
 
 log = logging.getLogger(__name__)
 
