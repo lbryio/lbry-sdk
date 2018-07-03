@@ -134,6 +134,9 @@ class _IterativeFind(object):
             defer.returnValue(contact.id)
 
     def should_stop(self):
+        if self.is_find_value_request:
+            # search stops when it finds a value, let it run
+            return False
         if self.prev_closest_node and self.closest_node and self.distance.is_closer(self.prev_closest_node.id,
                                                                                     self.closest_node.id):
             # we're getting further away

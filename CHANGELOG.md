@@ -23,6 +23,8 @@ at anytime.
   *
 
 ### Changed
+  * default for `peer_search_timeout` raised from 3 to 30 and being logged on console
+  * change iterative find stop condition on find value to allow it to continue until a value is found (or it times out)
   * include all of our own blobs in the local dht datastore (as if we had announced them to ourselves)
   * ignore dht `store` token validation errors for the first expiration-time after startup (fixes failed `store` requests after a restart)
 
