@@ -24,7 +24,7 @@ def encode_decimal(obj):
 
 
 class ClientProtocol(Protocol, TimeoutMixin):
-    implements(IRequestSender, IRateLimited)
+    #implements(IRequestSender, IRateLimited)
     ######### Protocol #########
     PROTOCOL_TIMEOUT = 30
 

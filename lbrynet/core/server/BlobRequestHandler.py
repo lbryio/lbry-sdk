@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 
 class BlobRequestHandlerFactory(object):
-    implements(IQueryHandlerFactory)
+    #implements(IQueryHandlerFactory)
 
     def __init__(self, blob_manager, wallet, payment_rate_manager, analytics_manager):
         self.blob_manager = blob_manager
@@ -36,7 +36,7 @@ class BlobRequestHandlerFactory(object):
 
 
 class BlobRequestHandler(object):
-    implements(IQueryHandler, IBlobSender)
+    #implements(IQueryHandler, IBlobSender)
     PAYMENT_RATE_QUERY = 'blob_data_payment_rate'
     BLOB_QUERY = 'requested_blob'
     AVAILABILITY_QUERY = 'requested_blobs'
