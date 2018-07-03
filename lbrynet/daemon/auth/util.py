@@ -9,6 +9,7 @@ import logging
 log = logging.getLogger(__name__)
 
 API_KEY_NAME = "api"
+LBRY_SECRET = "LBRY_SECRET"
 
 
 def sha(x):
