@@ -2012,7 +2012,7 @@ class Daemon(AuthJSONRPCServer):
             --license_url=<license_url>    : (str) publication license url
             --thumbnail=<thumbnail>        : (str) thumbnail url
             --preview=<preview>            : (str) preview url
-            --nsfw=<nsfw>                  : (bool) title of the publication
+            --nsfw=<nsfw>                  : (bool) whether the content is nsfw
             --sources=<sources>            : (str) {'lbry_sd_hash': sd_hash} specifies sd hash of file
             --channel_name=<channel_name>  : (str) name of the publisher channel name in the wallet
             --channel_id=<channel_id>      : (str) claim id of the publisher channel, does not check
@@ -2325,7 +2325,7 @@ class Daemon(AuthJSONRPCServer):
                     'is_spent': (bool) true if claim is abandoned, false otherwise
                     'name': (str) name of the claim
                     'permanent_url': (str) permanent url of the claim,
-                    'txid': (str) txid of the cliam
+                    'txid': (str) txid of the claim
                     'nout': (int) nout of the claim
                     'value': (str) value of the claim
                 },
