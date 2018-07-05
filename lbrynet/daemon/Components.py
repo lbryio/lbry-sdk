@@ -3,10 +3,11 @@ import logging
 import miniupnpc
 from twisted.internet import defer, threads, reactor, error
 
+import lbryschema
 from lbrynet import conf
 from lbrynet.core.Session import Session
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
-from lbrynet.core.Wallet import LBRYumWallet
+from lbrynet.wallet.manager import LbryWalletManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.daemon.Component import Component
@@ -150,32 +151,11 @@ class WalletComponent(Component):
 
     @defer.inlineCallbacks
     def start(self):
+        log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
-        wallet_type = GCS('wallet')
-
-        if wallet_type == conf.LBRYCRD_WALLET:
-            raise ValueError('LBRYcrd Wallet is no longer supported')
-        elif wallet_type == conf.LBRYUM_WALLET:
-
-            log.info("Using lbryum wallet")
-
-            lbryum_servers = {address: {'t': str(port)}
-                              for address, port in GCS('lbryum_servers')}
-
-            config = {
-                'auto_connect': True,
-                'chain': GCS('blockchain_name'),
-                'default_servers': lbryum_servers
-            }
-
-            if 'use_keyring' in conf.settings:
-                config['use_keyring'] = GCS('use_keyring')
-            if conf.settings['lbryum_wallet_dir']:
-                config['lbryum_path'] = GCS('lbryum_wallet_dir')
-            self.wallet = LBRYumWallet(storage, config)
-            yield self.wallet.start()
-        else:
-            raise ValueError('Wallet Type {} is not valid'.format(wallet_type))
+        lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
+        self.wallet = LbryWalletManager.from_old_config(conf.settings)
+        yield self.wallet.start()
 
     @defer.inlineCallbacks
     def stop(self):
