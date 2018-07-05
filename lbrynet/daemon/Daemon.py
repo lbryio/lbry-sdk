@@ -7,7 +7,6 @@ import urllib
 import json
 import textwrap
 import signal
-import six
 from binascii import hexlify, unhexlify, b2a_hex
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
@@ -18,7 +17,6 @@ from twisted.python.failure import Failure
 
 from torba.constants import COIN
 
-import lbryschema
 from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError, DecodeError
@@ -1063,7 +1061,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         # the check_locked() in the if statement is needed because that is what sets
-        # the wallet_unlocked_d deferred ¯\_(ツ)_/¯
+        # the wallet_unlocked_d deferred
         if not self.wallet.check_locked:
             d = self.wallet.wallet_unlocked_d
             d.callback(password)
