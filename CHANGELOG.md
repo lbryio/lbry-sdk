@@ -13,7 +13,7 @@ at anytime.
   *
 
 ### Fixed
-  *
+  * daemon cli spelling fixes
   *
 
 ### Deprecated
