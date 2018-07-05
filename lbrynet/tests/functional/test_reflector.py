@@ -60,7 +60,6 @@ class TestReflector(unittest.TestCase):
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
             external_ip="127.0.0.1",
-            dht_node=mocks.Node(),
             hash_announcer=mocks.Announcer(),
         )
 
@@ -81,7 +80,6 @@ class TestReflector(unittest.TestCase):
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
             external_ip="127.0.0.1",
-            dht_node=mocks.Node(),
             hash_announcer=mocks.Announcer(),
         )
 
