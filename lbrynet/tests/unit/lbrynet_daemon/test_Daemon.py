@@ -9,7 +9,6 @@ from twisted.trial import unittest
 from faker import Faker
 
 from lbryschema.decode import smart_decode
-from lbryum.wallet import NewWallet
 from lbrynet import conf
 from lbrynet.core import Session, PaymentRateManager, Wallet
 from lbrynet.database.storage import SQLiteStorage
@@ -43,7 +42,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     daemon = LBRYDaemon(None)
     daemon.session = mock.Mock(spec=Session.Session)
     daemon.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
-    daemon.wallet.wallet = mock.Mock(spec=NewWallet)
+    daemon.wallet.wallet = mock.Mock(spec=Wallet)
     daemon.wallet.wallet.use_encryption = False
     daemon.wallet.network = FakeNetwork()
     daemon.session.storage = mock.Mock(spec=SQLiteStorage)
