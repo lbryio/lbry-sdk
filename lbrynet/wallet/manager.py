@@ -6,8 +6,12 @@ from torba.constants import COIN
 from torba.coinselection import CoinSelector
 from torba.manager import WalletManager as BaseWalletManager
 
+from lbryschema.uri import parse_lbry_uri
+from lbryschema.error import URIParseError
 
 from .ledger import MainNetLedger
+from .account import generate_certificate
+from .transaction import Transaction
 
 
 class BackwardsCompatibleNetwork:
@@ -101,44 +105,28 @@ class LbryWalletManager(BaseWalletManager):
         return defer.succeed([])
 
     def claim_name(self, name, amount, claim):
-        amount = int(amount * COIN)
+        pass
 
+    @defer.inlineCallbacks
+    def claim_new_channel(self, channel_name, amount):
+        try:
+            parsed = parse_lbry_uri(channel_name)
+            if not parsed.is_channel:
+                raise Exception("Cannot make a new channel for a non channel name")
+            if parsed.path:
+                raise Exception("Invalid channel uri")
+        except (TypeError, URIParseError):
+            raise Exception("Invalid channel name")
+        if amount <= 0:
+            raise Exception("Invalid amount")
         account = self.default_account
-        coin = account.coin
-        ledger = coin.ledger
-
-        estimators = [
-            txo.get_estimator(coin) for txo in ledger.get_unspent_outputs()
-        ]
-
-        cost_of_output = coin.get_input_output_fee(
-            Output.pay_pubkey_hash(COIN, NULL_HASH)
-        )
-
-        selector = CoinSelector(estimators, amount, cost_of_output)
-        spendables = selector.select()
-        if not spendables:
-            raise ValueError('Not enough funds to cover this transaction.')
-
-        claim_address = account.get_least_used_receiving_address()
-        outputs = [
-            Output.pay_claim_name_pubkey_hash(
-                amount, name, claim, coin.address_to_hash160(claim_address)
-            )
-        ]
-
-        spent_sum = sum(s.effective_amount for s in spendables)
-        if spent_sum > amount:
-            change_address = account.get_least_used_change_address()
-            change_hash160 = coin.address_to_hash160(change_address)
-            outputs.append(Output.pay_pubkey_hash(spent_sum - amount, change_hash160))
-
-        tx = Transaction() \
-            .add_inputs([s.txi for s in spendables]) \
-            .add_outputs(outputs) \
-            .sign(account)
-
-        return tx
+        address = yield account.receiving.get_or_create_usable_address()
+        cert, key = generate_certificate()
+        tx = yield Transaction.claim(channel_name.encode(), cert, amount, address, [account], account)
+        yield account.ledger.broadcast(tx)
+        account.add_certificate(tx.get_claim_id(0), key)
+        # TODO: release reserved tx outputs in case anything fails by this point
+        defer.returnValue(tx)
 
 
 class ReservedPoints:
