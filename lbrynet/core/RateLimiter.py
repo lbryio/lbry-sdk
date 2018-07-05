@@ -1,7 +1,5 @@
 import logging
 
-from zope.interface import implements
-from lbrynet.interfaces import IRateLimiter
 from twisted.internet import task
 
 

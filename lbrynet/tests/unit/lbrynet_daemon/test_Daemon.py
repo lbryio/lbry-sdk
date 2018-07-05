@@ -9,9 +9,7 @@ from twisted.trial import unittest
 from faker import Faker
 
 from lbryschema.decode import smart_decode
-from lbryum.wallet import NewWallet
 from lbrynet import conf
-from lbrynet.core import Wallet
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, STREAM_IDENTIFIER_COMPONENT
@@ -20,6 +18,9 @@ from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_R
 from lbrynet.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, FILE_MANAGER_COMPONENT
 from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.wallet.manager import LbryWalletManager
+from torba.wallet import Wallet
+
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.tests import util
 from lbrynet.tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager

@@ -1,14 +1,14 @@
 import struct
 from binascii import hexlify
-from typing import List
+from typing import List  # pylint: disable=unused-import
 
-from twisted.internet import defer
+from twisted.internet import defer  # pylint: disable=unused-import
 
-from torba.baseaccount import BaseAccount
+from torba.baseaccount import BaseAccount  # pylint: disable=unused-import
 from torba.basetransaction import BaseTransaction, BaseInput, BaseOutput
 from torba.hash import hash160
 
-from lbryschema.claim import ClaimDict
+from lbryschema.claim import ClaimDict  # pylint: disable=unused-import
 from .script import InputScript, OutputScript
 
 

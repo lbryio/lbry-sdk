@@ -1,4 +1,4 @@
-from collections import UserDict
+from six.moves import UserDict
 from . import constants
 
 
