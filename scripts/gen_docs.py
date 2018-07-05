@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Generate docs: python gen_api_docs.py
-# See docs: pip install mkdocs; mkdocs serve
-# Push docs: mkdocs build
+# Generate docs: python gen_docs.py
 
 import re
 import inspect
@@ -11,14 +9,6 @@ import subprocess
 import os
 import sys
 from lbrynet.daemon.Daemon import Daemon
-
-import pip
-installed_packages = [package.project_name for package in pip.get_installed_distributions()]
-
-for package in ["mkdocs", "mkdocs-material"]:
-    if package not in installed_packages:
-        print "'" + package + "' is not installed"
-        sys.exit(1)
 
 try:
     from tabulate import tabulate
@@ -29,7 +19,7 @@ INDENT = "    "
 REQD_CMD_REGEX = r"\(.*?=<(?P<reqd>.*?)>\)"
 OPT_CMD_REGEX = r"\[.*?=<(?P<opt>.*?)>\]"
 CMD_REGEX = r"--.*?(?P<cmd>.*?)[=,\s,<]"
-DOCS_BUILD_DIR = "docs_build"  # must match mkdocs.yml
+DOCS_BUILD_DIR = ""
 
 
 def _cli_tabulate_options(_options_docstr, method):
@@ -108,6 +98,42 @@ def _api_tabulate_options(_options_docstr, method, reqd_matches, opt_matches):
 
     return _options_docstr
 
+def _api_table_options(_options_docstr, method, reqd_matches, opt_matches):
+    _option_list = []
+    for line in _options_docstr.splitlines():
+        if (line.strip().startswith("--")):
+            # separates command name and description
+            parts = line.split(":", 1)
+
+            # checks whether the command is optional or required
+            # and remove the cli type formatting and convert to
+            # api style formatitng
+            match = re.findall(CMD_REGEX, parts[0])
+
+            if match[0] not in reqd_matches:
+                parts[0] = match[0]
+            else:
+                parts[0] = match[0] + " *required*"
+
+        else:
+            parts = [line]
+
+        # len will be 2 when there's cmd name and description
+        if len(parts) == 2:
+            _option_list.append([parts[0], parts[1]])
+        # len will be 1 when there's continuation of multiline description in the next line
+        # check `blob_announce`'s `stream_hash` command
+        elif len(parts) == 1:
+            if(len(_option_list) > 0):
+                _option_list[-1][1] += parts[0].lstrip()
+        else:
+            print "Error: Ill formatted doc string for {}".format(method)
+            print "Error causing line: {}".format(line)
+
+    # tabulate to make the options look pretty
+    _options_docstr = tabulate(_option_list, headers=["Parameter","Description"], missingval="", tablefmt="pipe")
+
+    return _options_docstr + "\n"
 
 def _cli_doc(obj):
     docstr = (inspect.getdoc(obj) or '').strip()
@@ -155,7 +181,7 @@ def _api_doc(obj):
     reqd_matches = re.findall(REQD_CMD_REGEX, _usage_docstr)
 
     try:
-        _options_docstr = _api_tabulate_options(_options_docstr.strip(), obj, reqd_matches, opt_matches)
+        _options_docstr = _api_table_options(_options_docstr.strip(), obj, reqd_matches, opt_matches)
     except Exception as e:
         print "Please make sure that the individual options are properly formatted"
         print "It should be strictly of the format:"
@@ -163,10 +189,13 @@ def _api_doc(obj):
         print e.message
 
     docstr = _desc + \
-        "Args:\n" + \
+        ":::\n\n" + \
+        "::: api__content__example\n\n> Returns:\n\n```" + \
+        _returns_docstr + \
+        "\n```\n\n" + \
+        "Arguments\n\n" + \
         _options_docstr + \
-        "\nReturns:" + \
-        _returns_docstr
+        "\n:::\n\n"
 
     return docstr
 
@@ -176,29 +205,23 @@ def main():
     build_dir = os.path.realpath(os.path.join(root_dir, DOCS_BUILD_DIR))
     if not os.path.exists(build_dir):
         os.makedirs(build_dir)
-    api_doc_path = os.path.join(build_dir, 'index.md')
+    api_doc_path = os.path.join(build_dir, 'api.md')
     cli_doc_path = os.path.join(build_dir, 'cli.md')
 
     _api_docs = ''
     _cli_docs = ''
     for method_name in sorted(Daemon.callable_methods.keys()):
         method = Daemon.callable_methods[method_name]
-        _api_docs += '## ' + method_name + "\n\n```text\n" + _api_doc(method) + "\n```\n\n"
-        _cli_docs += '## ' + method_name + "\n\n```text\n" + _cli_doc(method) + "\n```\n\n"
+        _api_docs += '::: api__content__body\n## ' + method_name + "\n\n" + _api_doc(method) + "\n\n"
+        _cli_docs += '## ' + method_name + "\n\n" + _cli_doc(method) + "\n\n"
 
-    _api_docs = "# LBRY JSON-RPC API Documentation\n\n" + _api_docs
+    _api_docs = "::: api__content__body\n# API Reference\n:::\n\n::: api__content__example\n```\nThis is a work-in-progress!\n```\n:::\n\n" + _api_docs
     with open(api_doc_path, 'w+') as f:
         f.write(_api_docs)
 
     _cli_docs = "# LBRY JSON-RPC API Documentation\n\n" + _cli_docs
     with open(cli_doc_path, 'w+') as f:
         f.write(_cli_docs)
-
-    try:
-        subprocess.check_output("exec mkdocs build", cwd=root_dir, shell=True)
-    except subprocess.CalledProcessError as e:
-        print e.output
-        return 1
 
     return 0
 
