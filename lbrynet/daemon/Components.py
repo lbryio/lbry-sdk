@@ -14,7 +14,7 @@ from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core.RateLimiter import RateLimiter
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
-from lbrynet.core.Wallet import LBRYumWallet
+from lbrynet.wallet.manager import LbryWalletManager
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
 from lbrynet.core.server.ServerProtocol import ServerProtocolFactory
 from lbrynet.daemon.Component import Component
@@ -328,8 +328,8 @@ class WalletComponent(Component):
     @defer.inlineCallbacks
     def start(self):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
-        config = get_wallet_config()
-        self.wallet = LBRYumWallet(storage, config)
+        lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
+        self.wallet = LbryWalletManager.from_old_config(conf.settings)
         yield self.wallet.start()
 
     @defer.inlineCallbacks
