@@ -40,3 +40,7 @@ class BasicTransactionTests(IntegrationTestCase):
 
         self.assertEqual(round(await self.get_balance(account1)/COIN, 1), 7.9)
         self.assertEqual(round(await self.get_balance(account2)/COIN, 1), 2.0)
+
+        all_balances = await d2f(self.manager.get_balance())
+        self.assertIn(self.ledger.get_id(), all_balances)
+        self.assertEqual(round(all_balances[self.ledger.get_id()]/COIN, 1), 9.9)
