@@ -32,7 +32,7 @@ class WalletManager(object):
             self.ledgers[ledger_class] = ledger
         return ledger
 
-    def create_wallet(self, path):
+    def import_wallet(self, path):
         storage = WalletStorage(path)
         wallet = Wallet.from_storage(storage, self)
         self.wallets.append(wallet)
@@ -56,12 +56,6 @@ class WalletManager(object):
     def default_account(self):
         for wallet in self.wallets:
             return wallet.default_account
-
-    def get_accounts(self, coin_class):
-        for wallet in self.wallets:
-            for account in wallet.accounts:
-                if account.coin.__class__ is coin_class:
-                    yield account
 
     @defer.inlineCallbacks
     def start(self):

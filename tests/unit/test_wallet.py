@@ -70,8 +70,7 @@ class TestWalletCreation(unittest.TestCase):
             wallet_file.seek(0)
 
             # create and write wallet to a file
-            wallet_storage = WalletStorage(wallet_file.name)
-            wallet = Wallet.from_storage(wallet_storage, manager)
+            wallet = manager.import_wallet(wallet_file.name)
             account = wallet.generate_account(ledger)
             wallet.save()
 
