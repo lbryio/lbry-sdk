@@ -16,6 +16,7 @@ class DictDataStore(UserDict.DictMixin):
             from twisted.internet import reactor
             getTime = reactor.seconds
         self._getTime = getTime
+        self.completed_blobs = set()
 
     def keys(self):
         """ Return a list of the keys in this data store """

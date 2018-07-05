@@ -80,6 +80,7 @@ To install:
  python --version # Python 3 is not supported. Make sure you're on Python 2.7
  
  pip install -U -r requirements.txt
+ pip install -U -r requirements_testing.txt
  pip install --editable .
  ```
 

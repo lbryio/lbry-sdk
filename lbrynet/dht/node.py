@@ -518,7 +518,9 @@ class Node(MockKademliaHelper):
         if originalPublisherID is None:
             originalPublisherID = rpc_contact.id
         compact_ip = rpc_contact.compact_ip()
-        if not self.verify_token(token, compact_ip):
+        if self.clock.seconds() - self._protocol.started_listening_time < constants.tokenSecretChangeInterval:
+            pass
+        elif not self.verify_token(token, compact_ip):
             raise ValueError("Invalid token")
         if 0 <= port <= 65536:
             compact_port = str(struct.pack('>H', port))
@@ -548,7 +550,7 @@ class Node(MockKademliaHelper):
         if len(key) != constants.key_bits / 8:
             raise ValueError("invalid contact id length: %i" % len(key))
 
-        contacts = self._routingTable.findCloseNodes(key, constants.k, rpc_contact.id)
+        contacts = self._routingTable.findCloseNodes(key, sender_node_id=rpc_contact.id)
         contact_triples = []
         for contact in contacts:
             contact_triples.append((contact.id, contact.address, contact.port))
@@ -577,8 +579,23 @@ class Node(MockKademliaHelper):
         if self._protocol._protocolVersion:
             response['protocolVersion'] = self._protocol._protocolVersion
 
-        if self._dataStore.hasPeersForBlob(key):
-            response[key] = self._dataStore.getPeersForBlob(key)
+        # get peers we have stored for this blob
+        has_other_peers = self._dataStore.hasPeersForBlob(key)
+        peers = []
+        if has_other_peers:
+            peers.extend(self._dataStore.getPeersForBlob(key))
+
+        # if we don't have k storing peers to return and we have this hash locally, include our contact information
+        if len(peers) < constants.k and key in self._dataStore.completed_blobs:
+            compact_ip = str(
+                reduce(lambda buff, x: buff + bytearray([int(x)]), self.externalIP.split('.'), bytearray())
+            )
+            compact_port = str(struct.pack('>H', self.peerPort))
+            compact_address = compact_ip + compact_port + self.node_id
+            peers.append(compact_address)
+
+        if peers:
+            response[key] = peers
         else:
             response['contacts'] = self.findNode(rpc_contact, key)
         return response
@@ -627,7 +644,7 @@ class Node(MockKademliaHelper):
             raise ValueError("invalid key length: %i" % len(key))
 
         if startupShortlist is None:
-            shortlist = self._routingTable.findCloseNodes(key, constants.k)
+            shortlist = self._routingTable.findCloseNodes(key)
             # if key != self.node_id:
             #     # Update the "last accessed" timestamp for the appropriate k-bucket
             #     self._routingTable.touchKBucket(key)

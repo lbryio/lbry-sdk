@@ -1764,7 +1764,7 @@ class Daemon(AuthJSONRPCServer):
             --license_url=<license_url>    : (str) publication license url
             --thumbnail=<thumbnail>        : (str) thumbnail url
             --preview=<preview>            : (str) preview url
-            --nsfw=<nsfw>                  : (bool) title of the publication
+            --nsfw=<nsfw>                  : (bool) whether the content is nsfw
             --sources=<sources>            : (str) {'lbry_sd_hash': sd_hash} specifies sd hash of file
             --channel_name=<channel_name>  : (str) name of the publisher channel name in the wallet
             --channel_id=<channel_id>      : (str) claim id of the publisher channel, does not check
@@ -2082,7 +2082,7 @@ class Daemon(AuthJSONRPCServer):
                     'is_spent': (bool) true if claim is abandoned, false otherwise
                     'name': (str) name of the claim
                     'permanent_url': (str) permanent url of the claim,
-                    'txid': (str) txid of the cliam
+                    'txid': (str) txid of the claim
                     'nout': (int) nout of the claim
                     'value': (str) value of the claim
                 },
@@ -2811,8 +2811,10 @@ class Daemon(AuthJSONRPCServer):
                 sd_hash = yield self.storage.get_sd_blob_hash_for_stream(stream_hash)
             if stream_hash:
                 crypt_blobs = yield self.storage.get_blobs_for_stream(stream_hash)
-                blobs = [self.session.blob_manager.blobs[crypt_blob.blob_hash] for crypt_blob in crypt_blobs
-                         if crypt_blob.blob_hash is not None]
+                blobs = yield defer.gatherResults([
+                    self.session.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
+                    for crypt_blob in crypt_blobs if crypt_blob.blob_hash is not None
+                ])
             else:
                 blobs = []
             # get_blobs_for_stream does not include the sd blob, so we'll add it manually

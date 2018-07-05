@@ -4,6 +4,7 @@ import logging
 from zope.interface import implements
 from twisted.internet import defer
 from lbrynet.interfaces import IPeerFinder
+from lbrynet import conf
 
 
 log = logging.getLogger(__name__)
@@ -43,11 +44,14 @@ class DHTPeerFinder(DummyPeerFinder):
         """
         bin_hash = binascii.unhexlify(blob_hash)
         finished_deferred = self.dht_node.iterativeFindValue(bin_hash)
+        timeout = timeout or conf.settings['peer_search_timeout']
         if timeout:
             finished_deferred.addTimeout(timeout, self.dht_node.clock)
         try:
             peer_list = yield finished_deferred
         except defer.TimeoutError:
+            log.warning("DHT timed out while looking peers for blob"
+                        " %s after %s seconds.", blob_hash, timeout)
             peer_list = []
 
         peers = set(peer_list)
