@@ -1,5 +1,3 @@
-# coding=utf-8
-import binascii
 import logging.handlers
 import mimetypes
 import os
@@ -7,12 +5,17 @@ import requests
 import urllib
 import json
 import textwrap
+import signal
+import six
+from binascii import hexlify, unhexlify, b2a_hex
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 from twisted.web import server
 from twisted.internet import defer, reactor
 from twisted.internet.task import LoopingCall
 from twisted.python.failure import Failure
+
+from torba.constants import COIN
 
 import lbryschema
 from lbryschema.claim import ClaimDict
@@ -230,6 +233,10 @@ class Daemon(AuthJSONRPCServer):
 
         # TODO: delete this
         self.streams = {}
+
+    @property
+    def ledger(self):
+        return self.session.wallet.default_account.ledger
 
     @defer.inlineCallbacks
     def setup(self):
@@ -511,7 +518,7 @@ class Daemon(AuthJSONRPCServer):
 
     @defer.inlineCallbacks
     def _get_lbry_file_dict(self, lbry_file, full_status=False):
-        key = binascii.b2a_hex(lbry_file.key) if lbry_file.key else None
+        key = b2a_hex(lbry_file.key) if lbry_file.key else None
         full_path = os.path.join(lbry_file.download_directory, lbry_file.file_name)
         mime_type = mimetypes.guess_type(full_path)[0]
         if os.path.isfile(full_path):
@@ -1531,38 +1538,21 @@ class Daemon(AuthJSONRPCServer):
                 'claim_id' : (str) claim ID of the resulting claim
             }
         """
-
-        try:
-            parsed = parse_lbry_uri(channel_name)
-            if not parsed.is_channel:
-                raise Exception("Cannot make a new channel for a non channel name")
-            if parsed.path:
-                raise Exception("Invalid channel uri")
-        except (TypeError, URIParseError):
-            raise Exception("Invalid channel name")
-        if amount <= 0:
-            raise Exception("Invalid amount")
-
-        yield self.wallet.update_balance()
-        if amount >= self.wallet.get_balance():
-            balance = yield self.wallet.get_max_usable_balance_for_claim(channel_name)
-            max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
-            if balance <= MAX_UPDATE_FEE_ESTIMATE:
-                raise InsufficientFundsError(
-                    "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
-                        .format(MAX_UPDATE_FEE_ESTIMATE - balance))
-            elif amount > max_bid_amount:
-                raise InsufficientFundsError(
-                    "Please wait for any pending bids to resolve or lower the bid value. "
-                    "Currently the maximum amount you can specify for this channel is {}"
-                    .format(max_bid_amount)
-                )
-
-        result = yield self.wallet.claim_new_channel(channel_name, amount)
+        tx = yield self.wallet.claim_new_channel(channel_name, amount)
+        script = tx.outputs[0].script
+        result = {
+            "success": True,
+            "txid": tx.hex_id.decode(),
+            "nout": 0,
+            "tx": hexlify(tx.raw),
+            "fee": str(Decimal(tx.fee) / COIN),
+            "claim_id": tx.get_claim_id(0),
+            "value": hexlify(script.values['claim']),
+            "claim_address": self.ledger.hash160_to_address(script.values['pubkey_hash'])
+        }
         self.analytics_manager.send_new_channel()
         log.info("Claimed a new channel! Result: %s", result)
-        response = yield self._render_response(result)
-        defer.returnValue(response)
+        defer.returnValue(result)
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -2621,7 +2611,7 @@ class Daemon(AuthJSONRPCServer):
         if not utils.is_valid_blobhash(blob_hash):
             raise Exception("invalid blob hash")
 
-        finished_deferred = self.dht_node.iterativeFindValue(binascii.unhexlify(blob_hash))
+        finished_deferred = self.dht_node.iterativeFindValue(unhexlify(blob_hash))
 
         def trap_timeout(err):
             err.trap(defer.TimeoutError)

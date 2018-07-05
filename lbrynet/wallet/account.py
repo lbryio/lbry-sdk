@@ -13,5 +13,12 @@ def generate_certificate():
 class Account(BaseAccount):
 
     def __init__(self, *args, **kwargs):
-        super(BaseAccount, self).__init__(*args, **kwargs)
+        super(Account, self).__init__(*args, **kwargs)
         self.certificates = {}
+
+    def add_certificate(self, claim_id, key):
+        assert claim_id not in self.certificates, 'Trying to add a duplicate certificate.'
+        self.certificates[claim_id] = key
+
+    def get_certificate(self, claim_id):
+        return self.certificates[claim_id]

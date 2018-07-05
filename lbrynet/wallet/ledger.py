@@ -6,6 +6,7 @@ from torba.baseledger import BaseLedger
 from torba.baseheader import BaseHeaders, _ArithUint256
 from torba.util import int_to_hex, rev_hex, hash_encode
 
+from .account import Account
 from .network import Network
 from .database import WalletDatabase
 from .transaction import Transaction
@@ -88,6 +89,7 @@ class MainNetLedger(BaseLedger):
     symbol = 'LBC'
     network_name = 'mainnet'
 
+    account_class = Account
     database_class = WalletDatabase
     headers_class = Headers
     network_class = Network
