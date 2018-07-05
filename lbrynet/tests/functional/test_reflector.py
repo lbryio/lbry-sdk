@@ -53,6 +53,7 @@ class TestReflector(unittest.TestCase):
             db_dir=self.db_dir,
             node_id="abcd",
             peer_finder=peer_finder,
+            peer_manager=peer_manager,
             blob_dir=self.blob_dir,
             peer_port=5553,
             dht_node_port=4444,
@@ -60,8 +61,8 @@ class TestReflector(unittest.TestCase):
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
             external_ip="127.0.0.1",
-            dht_node_class=mocks.Node,
-            hash_announcer=mocks.Announcer()
+            dht_node=mocks.Node,
+            hash_announcer=mocks.Announcer(),
         )
 
         self.lbry_file_manager = EncryptedFileManager.EncryptedFileManager(self.session,
@@ -74,6 +75,7 @@ class TestReflector(unittest.TestCase):
             db_dir=self.server_db_dir,
             node_id="abcd",
             peer_finder=peer_finder,
+            peer_manager=peer_manager,
             blob_dir=self.server_blob_dir,
             peer_port=5554,
             dht_node_port=4443,
@@ -81,8 +83,8 @@ class TestReflector(unittest.TestCase):
             wallet=wallet,
             blob_tracker_class=mocks.BlobAvailabilityTracker,
             external_ip="127.0.0.1",
-            dht_node_class=mocks.Node,
-            hash_announcer=mocks.Announcer()
+            dht_node=mocks.Node,
+            hash_announcer=mocks.Announcer(),
         )
 
         self.server_blob_manager = BlobManager.DiskBlobManager(self.server_blob_dir,
