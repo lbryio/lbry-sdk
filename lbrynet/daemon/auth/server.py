@@ -6,8 +6,7 @@ import signal
 
 from decimal import Decimal
 from functools import wraps
-from zope.interface import implements
-from twisted.web import server, resource
+from twisted.web import server
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.internet.error import ConnectionDone, ConnectionLost

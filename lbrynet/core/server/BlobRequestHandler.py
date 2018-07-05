@@ -3,11 +3,9 @@ import logging
 from twisted.internet import defer
 from twisted.protocols.basic import FileSender
 from twisted.python.failure import Failure
-from zope.interface import implements
 
 from lbrynet import analytics
 from lbrynet.core.Offer import Offer
-from lbrynet.interfaces import IQueryHandlerFactory, IQueryHandler, IBlobSender
 
 log = logging.getLogger(__name__)
 

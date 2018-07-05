@@ -1,7 +1,5 @@
 import binascii
 import logging
-from zope.interface import implements
-from lbrynet.interfaces import IStreamDownloader
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.ConnectionManager import ConnectionManager
 from lbrynet.core.client.DownloadManager import DownloadManager

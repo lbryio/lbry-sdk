@@ -1,4 +1,3 @@
-from binascii import hexlify
 from lbryschema.claim import ClaimDict
 from lbryschema.signer import SECP256k1, get_signer
 
