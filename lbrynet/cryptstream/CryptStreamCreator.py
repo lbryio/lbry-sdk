@@ -5,8 +5,7 @@ import os
 import logging
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
-from twisted.internet import interfaces, defer
-from zope.interface import implements
+from twisted.internet import defer
 from lbrynet.cryptstream.CryptBlob import CryptStreamBlobMaker
 
 

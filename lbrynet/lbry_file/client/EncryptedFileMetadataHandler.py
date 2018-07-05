@@ -1,14 +1,11 @@
 import logging
-from zope.interface import implements
 from twisted.internet import defer
-from lbrynet.interfaces import IMetadataHandler
 
 
 log = logging.getLogger(__name__)
 
 
 class EncryptedFileMetadataHandler(object):
-    #implements(IMetadataHandler)
 
     def __init__(self, stream_hash, storage, download_manager):
         self.stream_hash = stream_hash

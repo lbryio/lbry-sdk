@@ -1,8 +1,7 @@
 import logging
-from twisted.internet import interfaces, error
+from twisted.internet import error
 from twisted.internet.protocol import Protocol, ServerFactory
 from twisted.python import failure
-from zope.interface import implements
 from lbrynet.core.server.ServerRequestHandler import ServerRequestHandler
 
 

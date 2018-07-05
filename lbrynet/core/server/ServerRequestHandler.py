@@ -1,8 +1,6 @@
 import json
 import logging
-from twisted.internet import interfaces, defer
-from zope.interface import implements
-from lbrynet.interfaces import IRequestHandler
+from twisted.internet import defer
 
 
 log = logging.getLogger(__name__)

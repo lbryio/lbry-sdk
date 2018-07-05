@@ -1,20 +1,17 @@
 import os
 from twisted.internet import defer
 
-from torba.basetransaction import NULL_HASH
-from torba.constants import COIN
-from torba.coinselection import CoinSelector
 from torba.manager import WalletManager as BaseWalletManager
 
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError
 
-from .ledger import MainNetLedger
+from .ledger import MainNetLedger  # pylint: disable=unused-import
 from .account import generate_certificate
 from .transaction import Transaction
 
 
-class BackwardsCompatibleNetwork:
+class BackwardsCompatibleNetwork(object):
     def __init__(self, manager):
         self.manager = manager
 
@@ -129,19 +126,19 @@ class LbryWalletManager(BaseWalletManager):
         defer.returnValue(tx)
 
 
-class ReservedPoints:
+class ReservedPoints(object):
     def __init__(self, identifier, amount):
         self.identifier = identifier
         self.amount = amount
 
 
-class ClientRequest:
+class ClientRequest(object):
     def __init__(self, request_dict, response_identifier=None):
         self.request_dict = request_dict
         self.response_identifier = response_identifier
 
 
-class LBRYcrdAddressRequester:
+class LBRYcrdAddressRequester(object):
 
     def __init__(self, wallet):
         self.wallet = wallet
@@ -167,11 +164,14 @@ class LBRYcrdAddressRequester:
         self.wallet.update_peer_address(peer, address)
 
     def _request_failed(self, error, peer):
-        raise Exception("A peer failed to send a valid public key response. Error: %s, peer: %s",
-                        error.getErrorMessage(), str(peer))
+        raise Exception(
+            "A peer failed to send a valid public key response. Error: {}, peer: {}".format(
+                error.getErrorMessage(), str(peer)
+            )
+        )
 
 
-class LBRYcrdAddressQueryHandlerFactory:
+class LBRYcrdAddressQueryHandlerFactory(object):
 
     def __init__(self, wallet):
         self.wallet = wallet
@@ -187,7 +187,7 @@ class LBRYcrdAddressQueryHandlerFactory:
         return "LBRYcrd Address - an address for receiving payments via LBRYcrd"
 
 
-class LBRYcrdAddressQueryHandler:
+class LBRYcrdAddressQueryHandler(object):
 
     def __init__(self, wallet):
         self.wallet = wallet

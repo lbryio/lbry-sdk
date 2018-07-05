@@ -1,6 +1,4 @@
 import logging
-from zope.interface import implements
-from lbrynet import interfaces
 from lbrynet.core.BlobInfo import BlobInfo
 from lbrynet.core.client.BlobRequester import BlobRequester
 from lbrynet.core.client.ConnectionManager import ConnectionManager

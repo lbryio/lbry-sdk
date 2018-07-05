@@ -7,7 +7,6 @@ import logging
 from twisted.internet import defer, task, reactor
 from twisted.python.failure import Failure
 from lbrynet.reflector.reupload import reflect_file
-# from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloaderFactory
 from lbrynet.core.StreamDescriptor import EncryptedFileStreamType, get_sd_info
