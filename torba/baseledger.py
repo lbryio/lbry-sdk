@@ -109,7 +109,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
     @property
     def path(self):
-        return os.path.join(self.config['wallet_path'], self.get_id())
+        return os.path.join(self.config['data_path'], self.get_id())
 
     def get_input_output_fee(self, io):
         """ Fee based on size of the input / output. """

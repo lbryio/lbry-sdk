@@ -64,7 +64,7 @@ class KeyChain:
         defer.returnValue(addresses[0])
 
 
-class BaseAccount:
+class BaseAccount(object):
 
     mnemonic_class = Mnemonic
     private_key_class = PrivateKey

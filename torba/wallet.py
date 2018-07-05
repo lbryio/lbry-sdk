@@ -44,6 +44,7 @@ class Wallet:
 
     def to_dict(self):
         return {
+            'version': WalletStorage.LATEST_VERSION,
             'name': self.name,
             'accounts': [a.to_dict() for a in self.accounts]
         }

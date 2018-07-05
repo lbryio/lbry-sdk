@@ -18,7 +18,6 @@ setup(
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Operating System :: OS Independent',
         'Topic :: Internet',

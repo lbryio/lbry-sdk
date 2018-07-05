@@ -11,7 +11,7 @@ class TestWalletCreation(unittest.TestCase):
 
     def setUp(self):
         self.manager = WalletManager()
-        config = {'wallet_path': '/tmp/wallet'}
+        config = {'data_path': '/tmp/wallet'}
         self.btc_ledger = self.manager.get_or_create_ledger(BTCLedger.get_id(), config)
         self.bch_ledger = self.manager.get_or_create_ledger(BCHLedger.get_id(), config)
 
@@ -28,6 +28,7 @@ class TestWalletCreation(unittest.TestCase):
 
     def test_load_and_save_wallet(self):
         wallet_dict = {
+            'version': 1,
             'name': 'Main Wallet',
             'accounts': [
                 {
@@ -61,11 +62,11 @@ class TestWalletCreation(unittest.TestCase):
 
     def test_read_write(self):
         manager = WalletManager()
-        config = {'wallet_path': '/tmp/wallet'}
+        config = {'data_path': '/tmp/wallet'}
         ledger = manager.get_or_create_ledger(BTCLedger.get_id(), config)
 
         with tempfile.NamedTemporaryFile(suffix='.json') as wallet_file:
-            wallet_file.write(b'{}')
+            wallet_file.write(b'{"version": 1}')
             wallet_file.seek(0)
 
             # create and write wallet to a file
