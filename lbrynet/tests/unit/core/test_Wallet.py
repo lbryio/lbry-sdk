@@ -2,7 +2,6 @@
 import os
 import shutil
 import tempfile
-import lbryum.wallet
 
 from decimal import Decimal
 from collections import defaultdict
@@ -11,9 +10,9 @@ from twisted.internet import threads, defer
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.tests.mocks import FakeNetwork
 from lbrynet.core.Error import InsufficientFundsError
-from lbrynet.core.Wallet import LBRYumWallet, ReservedPoints
-from lbryum.commands import Commands
-from lbryum.simple_config import SimpleConfig
+#from lbrynet.core.Wallet import LBRYumWallet, ReservedPoints
+#from lbryum.commands import Commands
+#from lbryum.simple_config import SimpleConfig
 from lbryschema.claim import ClaimDict
 
 test_metadata = {
@@ -37,50 +36,53 @@ test_claim_dict = {
                }}
 
 
-class MocLbryumWallet(LBRYumWallet):
-    def __init__(self, db_dir, max_usable_balance=3):
-        LBRYumWallet.__init__(self, SQLiteStorage(db_dir), SimpleConfig(
-            {"lbryum_path": db_dir, "wallet_path": os.path.join(db_dir, "testwallet")}
-        ))
-        self.db_dir = db_dir
-        self.wallet_balance = Decimal(10.0)
-        self.total_reserved_points = Decimal(0.0)
-        self.queued_payments = defaultdict(Decimal)
-        self.network = FakeNetwork()
-        self._mock_max_usable_balance = max_usable_balance
-        assert self.config.get_wallet_path() == os.path.join(self.db_dir, "testwallet")
+#class MocLbryumWallet(LBRYumWallet):
+#    def __init__(self, db_dir, max_usable_balance=3):
+#        LBRYumWallet.__init__(self, SQLiteStorage(db_dir), SimpleConfig(
+#            {"lbryum_path": db_dir, "wallet_path": os.path.join(db_dir, "testwallet")}
+#        ))
+#        self.db_dir = db_dir
+#        self.wallet_balance = Decimal(10.0)
+#        self.total_reserved_points = Decimal(0.0)
+#        self.queued_payments = defaultdict(Decimal)
+#        self.network = FakeNetwork()
+#        self._mock_max_usable_balance = max_usable_balance
+#        assert self.config.get_wallet_path() == os.path.join(self.db_dir, "testwallet")
+#
+#    @defer.inlineCallbacks
+#    def setup(self, password=None, seed=None):
+#        yield self.storage.setup()
+#        seed = seed or "travel nowhere air position hill peace suffer parent beautiful rise " \
+#                       "blood power home crumble teach"
+#        storage = lbryum.wallet.WalletStorage(self.config.get_wallet_path())
+#        self.wallet = lbryum.wallet.NewWallet(storage)
+#        self.wallet.add_seed(seed, password)
+#        self.wallet.create_master_keys(password)
+#        self.wallet.create_main_account()
+#
+#    @defer.inlineCallbacks
+#    def stop(self):
+#        yield self.storage.stop()
+#        yield threads.deferToThread(shutil.rmtree, self.db_dir)
+#
+#    def get_least_used_address(self, account=None, for_change=False, max_count=100):
+#        return defer.succeed(None)
+#
+#    def get_name_claims(self):
+#        return threads.deferToThread(lambda: [])
+#
+#    def _save_name_metadata(self, name, claim_outpoint, sd_hash):
+#        return defer.succeed(True)
+#
+#    def get_max_usable_balance_for_claim(self, name):
+#        # The amount is returned on the basis of test_point_reservation_and_claim unittest
+#        # Also affects test_successful_send_name_claim
+#        return defer.succeed(self._mock_max_usable_balance)
 
-    @defer.inlineCallbacks
-    def setup(self, password=None, seed=None):
-        yield self.storage.setup()
-        seed = seed or "travel nowhere air position hill peace suffer parent beautiful rise " \
-                       "blood power home crumble teach"
-        storage = lbryum.wallet.WalletStorage(self.config.get_wallet_path())
-        self.wallet = lbryum.wallet.NewWallet(storage)
-        self.wallet.add_seed(seed, password)
-        self.wallet.create_master_keys(password)
-        self.wallet.create_main_account()
-
-    @defer.inlineCallbacks
-    def stop(self):
-        yield self.storage.stop()
-        yield threads.deferToThread(shutil.rmtree, self.db_dir)
-
-    def get_least_used_address(self, account=None, for_change=False, max_count=100):
-        return defer.succeed(None)
-
-    def get_name_claims(self):
-        return threads.deferToThread(lambda: [])
-
-    def _save_name_metadata(self, name, claim_outpoint, sd_hash):
-        return defer.succeed(True)
-
-    def get_max_usable_balance_for_claim(self, name):
-        # The amount is returned on the basis of test_point_reservation_and_claim unittest
-        # Also affects test_successful_send_name_claim
-        return defer.succeed(self._mock_max_usable_balance)
 
 class WalletTest(unittest.TestCase):
+    skip = "Needs to be ported to the new wallet."
+
     @defer.inlineCallbacks
     def setUp(self):
         user_dir = tempfile.mkdtemp()
@@ -247,6 +249,8 @@ class WalletTest(unittest.TestCase):
 
 
 class WalletEncryptionTests(unittest.TestCase):
+    skip = "Needs to be ported to the new wallet."
+
     def setUp(self):
         user_dir = tempfile.mkdtemp()
         self.wallet = MocLbryumWallet(user_dir)
