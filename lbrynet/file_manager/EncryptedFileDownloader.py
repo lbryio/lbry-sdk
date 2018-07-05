@@ -4,7 +4,6 @@ Download LBRY Files from LBRYnet and save them to disk.
 import logging
 import binascii
 
-from zope.interface import implements
 from twisted.internet import defer
 
 from lbrynet.core.client.StreamProgressManager import FullStreamProgressManager
@@ -12,7 +11,6 @@ from lbrynet.core.utils import short_hash
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileSaver
 from lbrynet.lbry_file.client.EncryptedFileDownloader import EncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusReport
-from lbrynet.interfaces import IStreamDownloaderFactory
 from lbrynet.core.StreamDescriptor import save_sd_info
 
 log = logging.getLogger(__name__)

@@ -1,9 +1,7 @@
 import binascii
 import logging
 
-from zope.interface import implements
 from twisted.internet import defer
-from lbrynet.interfaces import IPeerFinder
 from lbrynet import conf
 
 

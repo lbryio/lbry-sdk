@@ -1,3 +1,4 @@
+# pylint: skip-file
 import os
 from collections import defaultdict, deque
 import datetime
@@ -24,7 +25,6 @@ from lbryschema.claim import ClaimDict
 from lbryschema.error import DecodeError
 from lbryschema.decode import smart_decode
 
-from lbrynet.txlbryum.factory import StratumClient
 from lbrynet.interfaces import IRequestCreator, IQueryHandlerFactory, IQueryHandler, IWallet
 from lbrynet.core.utils import DeferredDict
 from lbrynet.core.client.ClientRequest import ClientRequest

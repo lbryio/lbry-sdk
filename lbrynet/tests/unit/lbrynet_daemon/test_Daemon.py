@@ -9,9 +9,8 @@ from twisted.trial import unittest
 from faker import Faker
 
 from lbryschema.decode import smart_decode
-from lbryum.wallet import NewWallet
 from lbrynet import conf
-from lbrynet.core import Session, PaymentRateManager, Wallet
+from lbrynet.core import Session, PaymentRateManager
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, STREAM_IDENTIFIER_COMPONENT
@@ -19,6 +18,8 @@ from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPON
 from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
+from lbrynet.wallet.manager import LbryWalletManager
+from torba.wallet import Wallet
 
 from lbrynet.tests import util
 from lbrynet.tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
@@ -42,8 +43,8 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     }
     daemon = LBRYDaemon(None)
     daemon.session = mock.Mock(spec=Session.Session)
-    daemon.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
-    daemon.wallet.wallet = mock.Mock(spec=NewWallet)
+    daemon.wallet = mock.Mock(spec=LbryWalletManager)
+    daemon.wallet.wallet = mock.Mock(spec=Wallet)
     daemon.wallet.wallet.use_encryption = False
     daemon.wallet.network = FakeNetwork()
     daemon.session.storage = mock.Mock(spec=SQLiteStorage)

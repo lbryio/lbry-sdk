@@ -3,7 +3,9 @@ import mock
 from twisted.trial import unittest
 from twisted.internet import defer, task
 
-from lbrynet.core import Session, PaymentRateManager, Wallet
+from lbrynet.wallet.manager import LbryWalletManager
+
+from lbrynet.core import Session, PaymentRateManager
 from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.daemon import Downloader
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
@@ -67,7 +69,7 @@ class GetStreamTests(unittest.TestCase):
 
         sd_identifier = mock.Mock(spec=StreamDescriptorIdentifier)
         session = mock.Mock(spec=Session.Session)
-        session.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
+        session.wallet = mock.Mock(spec=LbryWalletManager)
         prm = mock.Mock(spec=PaymentRateManager.NegotiatedPaymentRateManager)
         session.payment_rate_manager = prm
         market_feeds = []

@@ -10,8 +10,6 @@ from lbrynet.core import utils
 from lbrynet.core.Error import ConnectionClosedBeforeResponseError, NoResponseError
 from lbrynet.core.Error import DownloadCanceledError, MisbehavingPeerError
 from lbrynet.core.Error import RequestCanceledError
-from lbrynet.interfaces import IRequestSender, IRateLimited
-from zope.interface import implements
 
 
 log = logging.getLogger(__name__)

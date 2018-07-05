@@ -6,7 +6,6 @@ import urllib
 import json
 import textwrap
 import signal
-import six
 from binascii import hexlify, unhexlify, b2a_hex
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
@@ -17,7 +16,6 @@ from twisted.python.failure import Failure
 
 from torba.constants import COIN
 
-import lbryschema
 from lbryschema.claim import ClaimDict
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError, DecodeError
