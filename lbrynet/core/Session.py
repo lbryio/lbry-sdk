@@ -1,8 +1,11 @@
 import logging
-from twisted.internet import defer
+import miniupnpc
+from twisted.internet import threads, defer
 from lbrynet.core.BlobManager import DiskBlobManager
+from lbrynet.dht import node, hashannouncer
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.RateLimiter import RateLimiter
+from lbrynet.core.utils import generate_id
 from lbrynet.core.PaymentRateManager import BasePaymentRateManager, OnlyFreePaymentsManager
 
 log = logging.getLogger(__name__)
@@ -29,11 +32,11 @@ class Session(object):
     peers can connect to this peer.
     """
 
-    def __init__(self, blob_data_payment_rate, db_dir=None, node_id=None, dht_node_port=None,
+    def __init__(self, blob_data_payment_rate, db_dir=None, node_id=None, peer_manager=None, dht_node_port=None,
                  known_dht_nodes=None, peer_finder=None, hash_announcer=None, blob_dir=None, blob_manager=None,
-                 peer_port=None, use_upnp=True, rate_limiter=None, wallet=None, blob_tracker_class=None,
-                 payment_rate_manager_class=None, is_generous=True, external_ip=None, storage=None,
-                 dht_node=None, peer_manager=None):
+                 peer_port=None, use_upnp=True, rate_limiter=None, wallet=None, dht_node_class=node.Node,
+                 blob_tracker_class=None, payment_rate_manager_class=None, is_generous=True, external_ip=None,
+                 storage=None):
         """@param blob_data_payment_rate: The default payment rate for blob data
 
         @param db_dir: The directory in which levelDB files should be stored
@@ -108,7 +111,8 @@ class Session(object):
         self.external_ip = external_ip
         self.upnp_redirects = []
         self.wallet = wallet
-        self.dht_node = dht_node
+        self.dht_node_class = dht_node_class
+        self.dht_node = None
         self.base_payment_rate_manager = BasePaymentRateManager(blob_data_payment_rate)
         self.payment_rate_manager = OnlyFreePaymentsManager()
         # self.payment_rate_manager_class = payment_rate_manager_class or NegotiatedPaymentRateManager
@@ -120,14 +124,15 @@ class Session(object):
 
         log.debug("Starting session.")
 
-        if self.dht_node is not None:
-            if self.peer_manager is None:
-                self.peer_manager = self.dht_node.peer_manager
+        if self.node_id is None:
+            self.node_id = generate_id()
 
-            if self.peer_finder is None:
-                self.peer_finder = self.dht_node.peer_finder
-
-        d = self.storage.setup()
+        if self.use_upnp is True:
+            d = self._try_upnp()
+        else:
+            d = defer.succeed(True)
+        d.addCallback(lambda _: self.storage.setup())
+        d.addCallback(lambda _: self._setup_dht())
         d.addCallback(lambda _: self._setup_other_components())
         return d
 
@@ -135,15 +140,96 @@ class Session(object):
         """Stop all services"""
         log.info('Stopping session.')
         ds = []
+        if self.hash_announcer:
+            self.hash_announcer.stop()
         # if self.blob_tracker is not None:
         #     ds.append(defer.maybeDeferred(self.blob_tracker.stop))
+        if self.dht_node is not None:
+            ds.append(defer.maybeDeferred(self.dht_node.stop))
         if self.rate_limiter is not None:
             ds.append(defer.maybeDeferred(self.rate_limiter.stop))
+        if self.wallet is not None:
+            ds.append(defer.maybeDeferred(self.wallet.stop))
         if self.blob_manager is not None:
             ds.append(defer.maybeDeferred(self.blob_manager.stop))
-        # if self.use_upnp is True:
-        #     ds.append(defer.maybeDeferred(self._unset_upnp))
+        if self.use_upnp is True:
+            ds.append(defer.maybeDeferred(self._unset_upnp))
         return defer.DeferredList(ds)
+
+    def _try_upnp(self):
+
+        log.debug("In _try_upnp")
+
+        def get_free_port(upnp, port, protocol):
+            # returns an existing mapping if it exists
+            mapping = upnp.getspecificportmapping(port, protocol)
+            if not mapping:
+                return port
+            if upnp.lanaddr == mapping[0]:
+                return mapping[1]
+            return get_free_port(upnp, port + 1, protocol)
+
+        def get_port_mapping(upnp, port, protocol, description):
+            # try to map to the requested port, if there is already a mapping use the next external
+            # port available
+            if protocol not in ['UDP', 'TCP']:
+                raise Exception("invalid protocol")
+            port = get_free_port(upnp, port, protocol)
+            if isinstance(port, tuple):
+                log.info("Found existing UPnP redirect %s:%i (%s) to %s:%i, using it",
+                         self.external_ip, port, protocol, upnp.lanaddr, port)
+                return port
+            upnp.addportmapping(port, protocol, upnp.lanaddr, port,
+                                description, '')
+            log.info("Set UPnP redirect %s:%i (%s) to %s:%i", self.external_ip, port,
+                     protocol, upnp.lanaddr, port)
+            return port
+
+        def threaded_try_upnp():
+            if self.use_upnp is False:
+                log.debug("Not using upnp")
+                return False
+            u = miniupnpc.UPnP()
+            num_devices_found = u.discover()
+            if num_devices_found > 0:
+                u.selectigd()
+                external_ip = u.externalipaddress()
+                if external_ip != '0.0.0.0' and not self.external_ip:
+                    # best not to rely on this external ip, the router can be behind layers of NATs
+                    self.external_ip = external_ip
+                if self.peer_port:
+                    self.peer_port = get_port_mapping(u, self.peer_port, 'TCP', 'LBRY peer port')
+                    self.upnp_redirects.append((self.peer_port, 'TCP'))
+                if self.dht_node_port:
+                    self.dht_node_port = get_port_mapping(u, self.dht_node_port, 'UDP', 'LBRY DHT port')
+                    self.upnp_redirects.append((self.dht_node_port, 'UDP'))
+                return True
+            return False
+
+        def upnp_failed(err):
+            log.warning("UPnP failed. Reason: %s", err.getErrorMessage())
+            return False
+
+        d = threads.deferToThread(threaded_try_upnp)
+        d.addErrback(upnp_failed)
+        return d
+
+    def _setup_dht(self):  # does not block startup, the dht will re-attempt if necessary
+        self.dht_node = self.dht_node_class(
+            node_id=self.node_id,
+            udpPort=self.dht_node_port,
+            externalIP=self.external_ip,
+            peerPort=self.peer_port,
+            peer_manager=self.peer_manager,
+            peer_finder=self.peer_finder,
+        )
+        if not self.hash_announcer:
+            self.hash_announcer = hashannouncer.DHTHashAnnouncer(self.dht_node, self.storage)
+        self.peer_manager = self.dht_node.peer_manager
+        self.peer_finder = self.dht_node.peer_finder
+        d = self.dht_node.start(self.known_dht_nodes)
+        d.addCallback(lambda _: log.info("Joined the dht"))
+        d.addCallback(lambda _: self.hash_announcer.start())
 
     def _setup_other_components(self):
         log.debug("Setting up the rest of the components")
@@ -169,4 +255,28 @@ class Session(object):
 
         self.rate_limiter.start()
         d = self.blob_manager.setup()
+        d.addCallback(lambda _: self.wallet.start())
+        # d.addCallback(lambda _: self.blob_tracker.start())
+        return d
+
+    def _unset_upnp(self):
+        log.info("Unsetting upnp for session")
+
+        def threaded_unset_upnp():
+            u = miniupnpc.UPnP()
+            num_devices_found = u.discover()
+            if num_devices_found > 0:
+                u.selectigd()
+                for port, protocol in self.upnp_redirects:
+                    if u.getspecificportmapping(port, protocol) is None:
+                        log.warning(
+                            "UPnP redirect for %s %d was removed by something else.",
+                            protocol, port)
+                    else:
+                        u.deleteportmapping(port, protocol)
+                        log.info("Removed UPnP redirect for %s %d.", protocol, port)
+                self.upnp_redirects = []
+
+        d = threads.deferToThread(threaded_unset_upnp)
+        d.addErrback(lambda err: str(err))
         return d

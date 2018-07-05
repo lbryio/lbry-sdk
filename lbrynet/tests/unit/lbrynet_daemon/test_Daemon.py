@@ -1,10 +1,11 @@
 import mock
 import json
+import unittest
 import random
 from os import path
 
 from twisted.internet import defer
-from twisted.trial import unittest
+from twisted import trial
 
 from faker import Faker
 
@@ -13,15 +14,12 @@ from lbryum.wallet import NewWallet
 from lbrynet import conf
 from lbrynet.core import Session, PaymentRateManager, Wallet
 from lbrynet.database.storage import SQLiteStorage
-from lbrynet.daemon.ComponentManager import ComponentManager
-from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, STREAM_IDENTIFIER_COMPONENT
-from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT, SESSION_COMPONENT
-from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT
 from lbrynet.daemon.Daemon import Daemon as LBRYDaemon
+from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 
 from lbrynet.tests import util
-from lbrynet.tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
+from lbrynet.tests.mocks import mock_conf_settings, FakeNetwork
 from lbrynet.tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
 from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from lbrynet.tests.mocks import BTCLBCFeed, USDBTCFeed
@@ -42,10 +40,10 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     }
     daemon = LBRYDaemon(None)
     daemon.session = mock.Mock(spec=Session.Session)
-    daemon.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
-    daemon.wallet.wallet = mock.Mock(spec=NewWallet)
-    daemon.wallet.wallet.use_encryption = False
-    daemon.wallet.network = FakeNetwork()
+    daemon.session.wallet = mock.Mock(spec=Wallet.LBRYumWallet)
+    daemon.session.wallet.wallet = mock.Mock(spec=NewWallet)
+    daemon.session.wallet.wallet.use_encryption = False
+    daemon.session.wallet.network = FakeNetwork()
     daemon.session.storage = mock.Mock(spec=SQLiteStorage)
     market_feeds = [BTCLBCFeed(), USDBTCFeed()]
     daemon.exchange_rate_manager = DummyExchangeRateManager(market_feeds, rates)
@@ -75,12 +73,12 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
             {"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
     daemon._resolve_name = lambda _: defer.succeed(metadata)
     migrated = smart_decode(json.dumps(metadata))
-    daemon.wallet.resolve = lambda *_: defer.succeed(
+    daemon.session.wallet.resolve = lambda *_: defer.succeed(
         {"test": {'claim': {'value': migrated.claim_dict}}})
     return daemon
 
 
-class TestCostEst(unittest.TestCase):
+class TestCostEst(trial.unittest.TestCase):
     def setUp(self):
         mock_conf_settings(self)
         util.resetTime(self)
@@ -113,8 +111,7 @@ class TestCostEst(unittest.TestCase):
         self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
 
 
-class TestJsonRpc(unittest.TestCase):
-
+class TestJsonRpc(trial.unittest.TestCase):
     def setUp(self):
         def noop():
             return None
@@ -122,39 +119,30 @@ class TestJsonRpc(unittest.TestCase):
         mock_conf_settings(self)
         util.resetTime(self)
         self.test_daemon = get_test_daemon()
-        self.test_daemon.wallet.is_first_run = False
-        self.test_daemon.wallet.get_best_blockhash = noop
+        self.test_daemon.session.wallet.is_first_run = False
+        self.test_daemon.session.wallet.get_best_blockhash = noop
 
     def test_status(self):
         d = defer.maybeDeferred(self.test_daemon.jsonrpc_status)
         d.addCallback(lambda status: self.assertDictContainsSubset({'is_running': False}, status))
 
+    @unittest.skipIf(is_android(),
+                     'Test cannot pass on Android because PYTHONOPTIMIZE removes the docstrings.')
     def test_help(self):
         d = defer.maybeDeferred(self.test_daemon.jsonrpc_help, command='status')
         d.addCallback(lambda result: self.assertSubstring('daemon status', result['help']))
         # self.assertSubstring('daemon status', d.result)
 
-    if is_android():
-        test_help.skip = "Test cannot pass on Android because PYTHONOPTIMIZE removes the docstrings."
 
-
-class TestFileListSorting(unittest.TestCase):
+class TestFileListSorting(trial.unittest.TestCase):
     def setUp(self):
         mock_conf_settings(self)
         util.resetTime(self)
         self.faker = Faker('en_US')
         self.faker.seed(66410)
         self.test_daemon = get_test_daemon()
-        component_manager = ComponentManager(
-            skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, SESSION_COMPONENT, UPNP_COMPONENT,
-                             PEER_PROTOCOL_SERVER_COMPONENT, REFLECTOR_COMPONENT, HASH_ANNOUNCER_COMPONENT,
-                             STREAM_IDENTIFIER_COMPONENT],
-            fileManager=FakeFileManager
-        )
-        component_manager.setup()
-        self.test_daemon.component_manager = component_manager
-        self.test_daemon.file_manager = component_manager.get_component("fileManager")
-        self.test_daemon.file_manager.lbry_files = self._get_fake_lbry_files()
+        self.test_daemon.lbry_file_manager = mock.Mock(spec=EncryptedFileManager)
+        self.test_daemon.lbry_file_manager.lbry_files = self._get_fake_lbry_files()
 
         # Pre-sorted lists of prices and file names in ascending order produced by
         # faker with seed 66410. This seed was chosen becacuse it produces 3 results

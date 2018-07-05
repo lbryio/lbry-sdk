@@ -23,19 +23,14 @@ at anytime.
 ### Changed
   *
   *
-  * `publish` to accept bid as a decimal string
-  * all JSONRPC API commands are now registered asynchronously and are available to be called as soon as they are ready
 
 ### Added
-  * Component Manager for managing the dependencies, startup and stopping of components 
-  * `requires` decorator to register the components required by a `jsonrpc_` command, to facilitate commands registering asynchronously
-  * added unittests for Component Manager
+  *
   *
 
 ### Removed
-  * `STARTUP_STAGES` from `status` API and CLI call, it instead returns a dictionary of components along with their running status(this is a **potentially breaking change** if `STARTUP_STAGES` is relied upon)
-  * all component startup code from `Daemon.py`
-  * wallet, upnp and dht startup code from `session.py`, the code now resides in `Components.py`
+  *
+  *
 
 
 ## [0.20.3] - 2018-07-03
