@@ -6,13 +6,11 @@
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
 import random
-from zope.interface import implements
 from twisted.internet import defer
 from . import constants
 from . import kbucket
 from .error import TimeoutError
 from .distance import Distance
-from .interface import IRoutingTable
 import logging
 
 log = logging.getLogger(__name__)

@@ -1,7 +1,5 @@
 import logging
-from lbrynet.interfaces import IProgressManager
 from twisted.internet import defer
-from zope.interface import implements
 
 
 log = logging.getLogger(__name__)
