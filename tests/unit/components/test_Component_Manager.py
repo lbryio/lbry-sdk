@@ -7,7 +7,7 @@ from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPON
 from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbrynet.daemon.Components import RATE_LIMITER_COMPONENT, HEADERS_COMPONENT, PAYMENT_RATE_COMPONENT
 from lbrynet.daemon import Components
-from lbrynet.tests import mocks
+from tests import mocks
 
 
 class TestComponentManager(unittest.TestCase):

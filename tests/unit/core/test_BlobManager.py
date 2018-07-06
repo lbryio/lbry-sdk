@@ -6,7 +6,7 @@ import string
 from twisted.trial import unittest
 from twisted.internet import defer, threads
 
-from lbrynet.tests.util import random_lbry_hash
+from tests.util import random_lbry_hash
 from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.Peer import Peer

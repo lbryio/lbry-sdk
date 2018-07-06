@@ -5,7 +5,7 @@ from twisted.internet import defer, task
 
 from lbrynet.wallet.manager import LbryWalletManager
 
-from lbrynet.core import PaymentRateManager, Wallet
+from lbrynet.core import PaymentRateManager
 from lbrynet.core.Error import DownloadDataTimeout, DownloadSDTimeout
 from lbrynet.daemon import Downloader
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
@@ -17,6 +17,7 @@ from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusRe
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
 
+from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
 from lbrynet.tests.mocks import mock_conf_settings
 
 
@@ -65,8 +66,10 @@ def moc_pay_key_fee(self, key_fee, name):
 
 
 class GetStreamTests(unittest.TestCase):
+
     def init_getstream_with_mocs(self):
         mock_conf_settings(self)
+
         sd_identifier = mock.Mock(spec=StreamDescriptorIdentifier)
         wallet = mock.Mock(spec=LbryWalletmanager)
         prm = mock.Mock(spec=PaymentRateManager.NegotiatedPaymentRateManager)
