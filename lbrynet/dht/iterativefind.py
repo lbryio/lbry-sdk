@@ -3,6 +3,7 @@ from twisted.internet import defer
 from distance import Distance
 from error import TimeoutError
 import constants
+import struct
 
 log = logging.getLogger(__name__)
 
@@ -14,10 +15,18 @@ def get_contact(contact_list, node_id, address, port):
     raise IndexError(node_id)
 
 
+def expand_peer(compact_peer_info):
+    host = ".".join([str(ord(d)) for d in compact_peer_info[:4]])
+    port, = struct.unpack('>H', compact_peer_info[4:6])
+    peer_node_id = compact_peer_info[6:]
+    return (peer_node_id, host, port)
+
+
 class _IterativeFind(object):
     # TODO: use polymorphism to search for a value or node
     #       instead of using a find_value flag
-    def __init__(self, node, shortlist, key, rpc):
+    def __init__(self, node, shortlist, key, rpc, exclude=None):
+        self.exclude = set(exclude or [])
         self.node = node
         self.finished_deferred = defer.Deferred()
         # all distance operations in this class only care about the distance
@@ -93,8 +102,12 @@ class _IterativeFind(object):
         # we are looking for before treating it as a list of contact triples
         if self.is_find_value_request and self.key in result:
             # We have found the value
-            self.find_value_result[self.key] = result[self.key]
-            self.finished_deferred.callback(self.find_value_result)
+            for peer in result[self.key]:
+                _, host, port = expand_peer(peer)
+                if (host, port) not in self.exclude:
+                    self.find_value_result.setdefault(self.key, []).append(peer)
+            if self.find_value_result:
+                self.finished_deferred.callback(self.find_value_result)
         else:
             if self.is_find_value_request:
                 # We are looking for a value, and the remote node didn't have it
@@ -188,8 +201,11 @@ class _IterativeFind(object):
 
         elif not self.finished_deferred.called and not self.active_probes or self.should_stop():
             # If no probes were sent, there will not be any improvement, so we're done
-            self.sortByDistance(self.active_contacts)
-            self.finished_deferred.callback(self.active_contacts[:min(constants.k, len(self.active_contacts))])
+            if self.is_find_value_request:
+                self.finished_deferred.callback(self.find_value_result)
+            else:
+                self.sortByDistance(self.active_contacts)
+                self.finished_deferred.callback(self.active_contacts[:min(constants.k, len(self.active_contacts))])
         elif not self.finished_deferred.called:
             # Force the next iteration
             self.searchIteration()
@@ -206,7 +222,7 @@ class _IterativeFind(object):
         self.pending_iteration_calls.append(cancel)
 
 
-def iterativeFind(node, shortlist, key, rpc):
-    helper = _IterativeFind(node, shortlist, key, rpc)
+def iterativeFind(node, shortlist, key, rpc, exclude=None):
+    helper = _IterativeFind(node, shortlist, key, rpc, exclude)
     helper.searchIteration(0)
     return helper.finished_deferred

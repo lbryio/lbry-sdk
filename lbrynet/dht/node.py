@@ -375,7 +375,7 @@ class Node(MockKademliaHelper):
         return self._iterativeFind(key)
 
     @defer.inlineCallbacks
-    def iterativeFindValue(self, key):
+    def iterativeFindValue(self, key, exclude=None):
         """ The Kademlia search operation (deterministic)
 
         Call this to retrieve data from the DHT.
@@ -400,7 +400,7 @@ class Node(MockKademliaHelper):
             raise ValueError("invalid key length!")
 
         # Execute the search
-        find_result = yield self._iterativeFind(key, rpc='findValue')
+        find_result = yield self._iterativeFind(key, rpc='findValue', exclude=exclude)
         if isinstance(find_result, dict):
             # We have found the value; now see who was the closest contact without it...
             # ...and store the key/value pair
@@ -611,7 +611,7 @@ class Node(MockKademliaHelper):
     # from lbrynet.core.utils import profile_deferred
     # @profile_deferred()
     @defer.inlineCallbacks
-    def _iterativeFind(self, key, startupShortlist=None, rpc='findNode'):
+    def _iterativeFind(self, key, startupShortlist=None, rpc='findNode', exclude=None):
         """ The basic Kademlia iterative lookup operation (for nodes/values)
 
         This builds a list of k "closest" contacts through iterative use of
@@ -659,7 +659,7 @@ class Node(MockKademliaHelper):
             # This is used during the bootstrap process
             shortlist = startupShortlist
 
-        result = yield iterativeFind(self, shortlist, key, rpc)
+        result = yield iterativeFind(self, shortlist, key, rpc, exclude=exclude)
         defer.returnValue(result)
 
     @defer.inlineCallbacks
