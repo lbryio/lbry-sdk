@@ -43,7 +43,7 @@ class ComponentManager(object):
         self.components = set()
         self.analytics_manager = analytics_manager
 
-        for component_name, component_class in self.default_component_classes.iteritems():
+        for component_name, component_class in self.default_component_classes.items():
             if component_name in override_components:
                 component_class = override_components.pop(component_name)
             if component_name not in self.skip_components:
@@ -52,7 +52,7 @@ class ComponentManager(object):
         if override_components:
             raise SyntaxError("unexpected components: %s" % override_components)
 
-        for component_class in self.component_classes.itervalues():
+        for component_class in self.component_classes.values():
             self.components.add(component_class(self))
 
     @defer.inlineCallbacks
@@ -117,7 +117,7 @@ class ComponentManager(object):
         :return: (defer.Deferred)
         """
 
-        for component_name, cb in callbacks.iteritems():
+        for component_name, cb in callbacks.items():
             if component_name not in self.component_classes:
                 raise NameError("unknown component: %s" % component_name)
             if not callable(cb):
