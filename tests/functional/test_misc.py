@@ -16,8 +16,9 @@ from lbrynet.database.storage import SQLiteStorage
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.lbry_file.client.EncryptedFileOptions import add_lbry_file_to_sd_identifier
-from lbrynet.tests import mocks
-from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
+
+from tests import mocks
+from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 FakeNode = mocks.Node
 FakeWallet = mocks.Wallet

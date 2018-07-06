@@ -13,7 +13,7 @@ from lbrynet.database.storage import SQLiteStorage
 from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.tests import mocks
+from tests import mocks
 
 
 FakeNode = mocks.Node
