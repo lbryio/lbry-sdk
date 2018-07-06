@@ -231,7 +231,7 @@ class Daemon(AuthJSONRPCServer):
 
     @property
     def ledger(self):
-        return self.session.wallet.default_account.ledger
+        return self.wallet.default_account.ledger
 
     @defer.inlineCallbacks
     def setup(self):

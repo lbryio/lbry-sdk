@@ -165,7 +165,7 @@ class ServerRequestHandler(object):
             return True
 
         ds = []
-        for query_handler, query_identifiers in self.query_handlers.iteritems():
+        for query_handler, query_identifiers in self.query_handlers.items():
             queries = {q_i: msg[q_i] for q_i in query_identifiers if q_i in msg}
             d = query_handler.handle_queries(queries)
             d.addErrback(log_errors)

@@ -166,7 +166,7 @@ def DeferredDict(d, consumeErrors=False):
     keys = []
     dl = []
     response = {}
-    for k, v in d.iteritems():
+    for k, v in d.items():
         keys.append(k)
         dl.append(v)
     results = yield defer.DeferredList(dl, consumeErrors=consumeErrors)
