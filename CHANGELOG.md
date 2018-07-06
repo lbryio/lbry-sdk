@@ -25,7 +25,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * greedy search with exclude filtering on peer finder calls to iterative find value
   *
 
 ### Removed
