@@ -481,7 +481,7 @@ class Config(object):
             self._data[data_type][name] = value
 
     def update(self, updated_settings, data_types=(TYPE_RUNTIME,)):
-        for k, v in updated_settings.iteritems():
+        for k, v in updated_settings.items():
             try:
                 self.set(k, v, data_types=data_types)
             except (KeyError, AssertionError):

@@ -16,7 +16,7 @@ from lbrynet.core.StreamDescriptor import get_sd_info
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.RateLimiter import DummyRateLimiter
 
-from lbrynet.tests import mocks
+from tests import mocks
 
 
 FakeNode = mocks.Node
