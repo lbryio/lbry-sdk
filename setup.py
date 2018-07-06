@@ -21,7 +21,9 @@ requires = [
     'base58',
     'envparse',
     'jsonrpc',
+    'cryptography==2.2.2',
     'lbryschema==0.0.16',
+    'torba',
     'miniupnpc',
     'pyyaml',
     'requests',
@@ -29,7 +31,8 @@ requires = [
     'zope.interface',
     'treq',
     'docopt',
-    'six'
+    'colorama==0.3.7',
+    'six',
 ]
 
 console_scripts = [
@@ -65,4 +68,10 @@ setup(
     install_requires=requires,
     entry_points={'console_scripts': console_scripts},
     zip_safe=False,
+    extras_require={
+        'test': (
+            'mock>=2.0,<3.0',
+            'faker>=0.8,<1.0'
+        )
+    }
 )
