@@ -5,7 +5,7 @@ import mock
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
 from lbrynet.core.Strategy import BasicAvailabilityWeightedStrategy
 from lbrynet.core.Offer import Offer
-from lbrynet.tests.mocks\
+from tests.mocks\
     import BlobAvailabilityTracker as DummyBlobAvailabilityTracker, mock_conf_settings
 
 MAX_NEGOTIATION_TURNS = 10

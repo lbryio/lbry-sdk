@@ -1,8 +1,9 @@
 import mock
 from twisted.trial import unittest
 from lbrynet import conf
-from lbrynet.tests.mocks import mock_conf_settings
 from lbrynet.daemon.auth import server
+
+from tests.mocks import mock_conf_settings
 
 
 class AuthJSONRPCServerTest(unittest.TestCase):
