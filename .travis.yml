@@ -12,14 +12,14 @@ addons:
     - libffi-dev
 
 install:
-  - pip install tox-travis coverage pylint
+  - pip install tox-travis coverage
   - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch packages && popd
   - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
+  - pushd .. && git clone https://github.com/lbryio/lbryschema.git && popd
   - pushd .. && git clone https://github.com/lbryio/lbryumx.git && popd
   - pushd .. && git clone https://github.com/lbryio/torba.git && popd
 
 script:
-  - pylint lbrynet
   - tox
   - rvm install ruby-2.3.1
   - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
