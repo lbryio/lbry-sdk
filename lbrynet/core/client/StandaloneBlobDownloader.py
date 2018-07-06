@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 
 class SingleBlobMetadataHandler(object):
-    implements(interfaces.IMetadataHandler)
+    #implements(interfaces.IMetadataHandler)
 
     def __init__(self, blob_hash, download_manager):
         self.blob_hash = blob_hash

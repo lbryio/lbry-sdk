@@ -193,7 +193,7 @@ class Manager(object):
                 'build': platform['build'],
                 'wallet': {
                     'name': wallet,
-                    'version': platform['lbryum_version'] if wallet == conf.LBRYUM_WALLET else None
+                    'version': platform['lbrynet_version']
                 },
             },
             # TODO: expand os info to give linux/osx specific info

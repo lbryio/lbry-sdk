@@ -3,9 +3,9 @@ import json
 import subprocess
 import os
 
-from urllib2 import urlopen, URLError
+from six.moves.urllib.request import urlopen
+from six.moves.urllib.error import URLError
 from lbryschema import __version__ as lbryschema_version
-from lbryum import __version__ as LBRYUM_VERSION
 from lbrynet import build_type, __version__ as lbrynet_version
 from lbrynet.conf import ROOT_DIR
 
@@ -20,7 +20,7 @@ def get_lbrynet_version():
                     stderr=devnull
                 ).strip().lstrip('v')
         except (subprocess.CalledProcessError, OSError):
-            print "failed to get version from git"
+            print("failed to get version from git")
     return lbrynet_version
 
 
@@ -32,7 +32,6 @@ def get_platform(get_ip=True):
         "os_release": platform.release(),
         "os_system": platform.system(),
         "lbrynet_version": get_lbrynet_version(),
-        "lbryum_version": LBRYUM_VERSION,
         "lbryschema_version": lbryschema_version,
         "build": build_type.BUILD,  # CI server sets this during build step
     }

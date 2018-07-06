@@ -91,7 +91,7 @@ class EncryptedFileDownloader(CryptStreamDownloader):
 
 
 class EncryptedFileDownloaderFactory(object):
-    implements(IStreamDownloaderFactory)
+    #implements(IStreamDownloaderFactory)
 
     def __init__(self, peer_finder, rate_limiter, blob_manager, storage, wallet):
         self.peer_finder = peer_finder

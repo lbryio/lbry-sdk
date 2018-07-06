@@ -36,7 +36,7 @@ class CurrentlyStartingError(Exception):
 
 class CryptStreamDownloader(object):
 
-    implements(IStreamDownloader)
+    #implements(IStreamDownloader)
 
     def __init__(self, peer_finder, rate_limiter, blob_manager, payment_rate_manager, wallet,
                  key, stream_name):

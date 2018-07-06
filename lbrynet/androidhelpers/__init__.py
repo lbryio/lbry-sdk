@@ -1,1 +1,1 @@
-import paths
+from . import paths

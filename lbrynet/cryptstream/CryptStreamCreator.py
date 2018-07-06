@@ -22,7 +22,7 @@ class CryptStreamCreator(object):
     the blob is associated with the stream.
     """
 
-    implements(interfaces.IConsumer)
+    #implements(interfaces.IConsumer)
 
     def __init__(self, blob_manager, name=None, key=None, iv_generator=None):
         """@param blob_manager: Object that stores and provides access to blobs.
