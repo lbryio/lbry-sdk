@@ -1,5 +1,6 @@
 import types
 
+from twisted.internet import defer
 from orchstr8.testcase import IntegrationTestCase, d2f
 from torba.constants import COIN
 
@@ -9,6 +10,7 @@ lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 from lbrynet import conf as lbry_conf
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.wallet.manager import LbryWalletManager
+from lbrynet.daemon.Components import WalletComponent
 
 
 class FakeAnalytics:
@@ -41,16 +43,30 @@ class CommandTestCase(IntegrationTestCase):
         await self.blockchain.generate(1)
         await self.on_transaction_id(sendtxid)
         self.daemon = Daemon(FakeAnalytics())
-        self.daemon.session = types.SimpleNamespace()
-        self.daemon.session.wallet = self.manager
+        self.daemon.wallet = self.manager
+        wallet_component = WalletComponent(self.daemon.component_manager)
+        wallet_component.wallet = self.manager
+        wallet_component._running = True
+        self.daemon.component_manager.components.add(wallet_component)
 
 
 class DaemonCommandsTests(CommandTestCase):
 
     VERBOSE = True
 
-    async def test_new_channel(self):
-        result = await d2f(self.daemon.jsonrpc_channel_new('@bar', 1*COIN))
+    @defer.inlineCallbacks
+    def test_new_channel(self):
+        result = yield self.daemon.jsonrpc_channel_new('@bar', 1*COIN)
         self.assertIn('txid', result)
-        await self.on_transaction_id(result['txid'])
+        yield self.ledger.on_transaction.deferred_where(
+            lambda e: e.tx.hex_id.decode() == result['txid']
+        )
 
+    @defer.inlineCallbacks
+    def test_wallet_balance(self):
+        result = yield self.daemon.jsonrpc_wallet_balance()
+        self.assertEqual(result, 10*COIN)
+
+    @defer.inlineCallbacks
+    def test_publish(self):
+        result = yield self.daemon.jsonrpc_publish('foo', 1*COIN)
