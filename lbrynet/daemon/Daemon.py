@@ -3360,12 +3360,12 @@ class Daemon(AuthJSONRPCServer):
                              [--pos_arg3=<pos_arg3>]
 
         Options:
-            --a_arg                            : a arg
-            --b_arg                            : b arg
-            --pos_arg=<pos_arg>                : pos arg
-            --pos_args=<pos_args>              : pos args
-            --pos_arg2=<pos_arg2>              : pos arg 2
-            --pos_arg3=<pos_arg3>              : pos arg 3
+            --a_arg                            : (bool) a arg
+            --b_arg                            : (bool) b arg
+            --pos_arg=<pos_arg>                : (int) pos arg
+            --pos_args=<pos_args>              : (int) pos args
+            --pos_arg2=<pos_arg2>              : (int) pos arg 2
+            --pos_arg3=<pos_arg3>              : (int) pos arg 3
         Returns:
             pos args
         """
