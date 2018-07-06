@@ -17,6 +17,7 @@
 /docs_build
 /lbry-venv
 
+.tox/
 .idea/
 .coverage
 .DS_Store
