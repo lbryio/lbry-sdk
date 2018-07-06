@@ -1,7 +1,7 @@
 import logging
 from twisted.internet import defer
 from twisted._threads import AlreadyQuit
-from ComponentManager import ComponentManager
+from .ComponentManager import ComponentManager
 
 log = logging.getLogger(__name__)
 
