@@ -10,8 +10,8 @@ from lbrynet.core import BlobManager
 from lbrynet.core import Session
 from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager import EncryptedFileManager
-from lbrynet.tests import mocks
-from lbrynet.tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
+from tests import mocks
+from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
 MB = 2**20
 
@@ -56,8 +56,8 @@ class CreateEncryptedFileTest(unittest.TestCase):
     def test_can_create_file(self):
         expected_stream_hash = "41e6b247d923d191b154fb6f1b8529d6ddd6a73d65c35" \
                                "7b1acb742dd83151fb66393a7709e9f346260a4f4db6de10c25"
-        expected_sd_hash = "db043b44384c149126685990f6bb6563aa565ae331303d522" \
-                           "c8728fe0534dd06fbcacae92b0891787ad9b68ffc8d20c1"
+        expected_sd_hash = "40c485432daec586c1a2d247e6c08d137640a5af6e81f3f652" \
+                           "3e62e81a2e8945b0db7c94f1852e70e371d917b994352c"
         filename = 'test.file'
         lbry_file = yield self.create_file(filename)
         sd_hash = yield self.session.storage.get_sd_blob_hash_for_stream(lbry_file.stream_hash)

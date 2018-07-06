@@ -10,7 +10,7 @@ from lbrynet.database.storage import SQLiteStorage, open_file_for_writing
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
-from lbrynet.tests.util import random_lbry_hash
+from tests.util import random_lbry_hash
 
 log = logging.getLogger()
 

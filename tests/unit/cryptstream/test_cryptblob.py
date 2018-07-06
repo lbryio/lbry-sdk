@@ -3,7 +3,7 @@ from twisted.internet import defer
 from lbrynet.cryptstream import CryptBlob
 from lbrynet.blob.blob_file import MAX_BLOB_SIZE
 
-from lbrynet.tests.mocks import mock_conf_settings
+from tests.mocks import mock_conf_settings
 
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 import random

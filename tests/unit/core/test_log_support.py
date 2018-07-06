@@ -7,7 +7,7 @@ from twisted.internet import defer
 from twisted import trial
 
 from lbrynet.core import log_support
-from lbrynet.tests.util import is_android
+from tests.util import is_android
 
 
 class TestLogger(trial.unittest.TestCase):

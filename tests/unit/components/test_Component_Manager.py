@@ -6,7 +6,7 @@ from lbrynet.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT, STREAM_
 from lbrynet.daemon.Components import HASH_ANNOUNCER_COMPONENT, REFLECTOR_COMPONENT, UPNP_COMPONENT
 from lbrynet.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbrynet.daemon import Components
-from lbrynet.tests import mocks
+from tests import mocks
 
 
 class TestComponentManager(unittest.TestCase):

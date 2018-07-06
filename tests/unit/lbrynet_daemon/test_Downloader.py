@@ -14,8 +14,8 @@ from lbrynet.file_manager.EncryptedFileStatusReport import EncryptedFileStatusRe
 from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDownloader
 from lbrynet.daemon.ExchangeRateManager import ExchangeRateManager
 
-from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
-from lbrynet.tests.mocks import mock_conf_settings
+from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
+from tests.mocks import mock_conf_settings
 
 
 class MocDownloader(object):

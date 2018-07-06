@@ -21,12 +21,12 @@ from lbrynet.file_manager.EncryptedFileDownloader import ManagedEncryptedFileDow
 from lbrynet.wallet.manager import LbryWalletManager
 from torba.wallet import Wallet
 
-from lbrynet.tests import util
-from lbrynet.tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
-from lbrynet.tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
-from lbrynet.tests.mocks import ExchangeRateManager as DummyExchangeRateManager
-from lbrynet.tests.mocks import BTCLBCFeed, USDBTCFeed
-from lbrynet.tests.util import is_android
+from tests import util
+from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager
+from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker
+from tests.mocks import ExchangeRateManager as DummyExchangeRateManager
+from tests.mocks import BTCLBCFeed, USDBTCFeed
+from tests.util import is_android
 
 
 import logging
