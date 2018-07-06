@@ -1,42 +1,35 @@
-os: linux
-dist: trusty
 language: python
-python: 2.7
+python:
+  - "2.7"
+  - "3.6"
 
-branches:
-  except:
-    - gh-pages
+addons:
+  apt:
+    packages:
+    - libgmp3-dev
+    - build-essential
+    - libssl-dev
+    - libffi-dev
+
+install:
+  - pip install tox-travis coverage pylint
+  - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch packages && popd
+  - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
+  - pushd .. && git clone https://github.com/lbryio/lbryumx.git && popd
+  - pushd .. && git clone https://github.com/lbryio/torba.git && popd
+
+script:
+  - pylint lbrynet
+  - tox
+  - rvm install ruby-2.3.1
+  - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
+
+after_success:
+  - coverage combine tests/
+  - bash <(curl -s https://codecov.io/bash)
 
 cache:
   directories:
     - $HOME/.cache/pip
     - $HOME/Library/Caches/pip
-    - $TRAVIS_BUILD_DIR/cache/wheel
-
-addons:
-  #srcclr:
-  #  debug: true
-  apt:
-    packages:
-    - libgmp3-dev
-    - build-essential
-    - git
-    - libssl-dev
-    - libffi-dev
-
-before_install:
-  - virtualenv venv
-  - source venv/bin/activate
-
-install:
-  - pip install -U pip==9.0.3
-  - pip install -r requirements.txt
-  - pip install -r requirements_testing.txt
-  - pip install .
-
-script:
-  - pip install mock pylint
-  - pylint lbrynet
-  - PYTHONPATH=. trial lbrynet.tests
-  - rvm install ruby-2.3.1
-  - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
+    - $TRAVIS_BUILD_DIR/.tox
