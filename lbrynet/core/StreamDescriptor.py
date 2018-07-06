@@ -73,7 +73,7 @@ class StreamDescriptorWriter(object):
         pass
 
     def create_descriptor(self, sd_info):
-        return self._write_stream_descriptor(json.dumps(sd_info))
+        return self._write_stream_descriptor(json.dumps(sd_info, sort_keys=True))
 
     def _write_stream_descriptor(self, raw_data):
         """This method must be overridden by subclasses to write raw data to
