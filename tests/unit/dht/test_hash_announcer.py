@@ -3,7 +3,7 @@ from twisted.internet import defer, task
 from lbrynet import conf
 from lbrynet.core import utils
 from lbrynet.dht.hashannouncer import DHTHashAnnouncer
-from lbrynet.tests.util import random_lbry_hash
+from tests.util import random_lbry_hash
 
 
 class MocDHTNode(object):
