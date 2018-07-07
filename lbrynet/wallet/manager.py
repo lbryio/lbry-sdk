@@ -56,7 +56,7 @@ class LbryWalletManager(BaseWalletManager):
         ledger_config = {
             'auto_connect': True,
             'default_servers': settings['lbryum_servers'],
-            'wallet_path': settings['lbryum_wallet_dir'],
+            'data_path': settings['lbryum_wallet_dir'],
             'use_keyring': settings['use_keyring']
         }
 
