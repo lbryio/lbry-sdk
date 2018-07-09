@@ -47,3 +47,8 @@ class Transaction(BaseTransaction):
             amount, name, hexlify(meta.serialized), ledger.address_to_hash160(holding_address)
         )
         return cls.pay([claim_output], funding_accounts, change_account)
+
+    @classmethod
+    def abandon(cls, utxo, funding_accounts, change_account):
+        # type: (Output, List[BaseAccount], BaseAccount) -> defer.Deferred
+        return cls.liquidate([utxo], funding_accounts, change_account)
