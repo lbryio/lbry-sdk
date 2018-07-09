@@ -38,7 +38,7 @@ example_claim_dict = {
 }
 
 
-class BasicTransactionTests(IntegrationTestCase):
+class BasicTransactionTest(IntegrationTestCase):
 
     VERBOSE = True
 
@@ -61,49 +61,33 @@ class BasicTransactionTests(IntegrationTestCase):
         cert_tx = await d2f(Transaction.claim(b'@bar', cert, 1*COIN, address1, [self.account], self.account))
         claim = ClaimDict.load_dict(example_claim_dict)
         claim = claim.sign(key, address1, hexlify(cert_tx.get_claim_id(0)))
-        tx = await d2f(Transaction.claim(b'foo', claim, 1*COIN, address1, [self.account], self.account))
+        claim_tx = await d2f(Transaction.claim(b'foo', claim, 1*COIN, address1, [self.account], self.account))
 
         await self.broadcast(cert_tx)
-        await self.broadcast(tx)
+        await self.broadcast(claim_tx)
         await asyncio.wait([  # mempool
-            self.on_transaction(tx),
+            self.on_transaction(claim_tx),
             self.on_transaction(cert_tx),
         ])
         await self.blockchain.generate(1)
         await asyncio.wait([  # confirmed
-            self.on_transaction(tx),
+            self.on_transaction(claim_tx),
             self.on_transaction(cert_tx),
         ])
 
-        self.assertEqual(round(await self.get_balance(self.account)/COIN, 1), 10.0)
+        self.assertEqual(round(await d2f(self.account.get_balance())/COIN, 1), 8.0)
+        self.assertEqual(round(await d2f(self.account.get_balance(True))/COIN, 1), 10.0)
 
-        header = self.ledger.headers[len(self.ledger.headers)-1]
-        response = await d2f(self.ledger.resolve(self.ledger.headers._hash_header(header), 'lbry://@bar/foo'))
+        response = await d2f(self.ledger.resolve('lbry://@bar/foo'))
         self.assertIn('lbry://@bar/foo', response)
 
+        claim_txo = claim_tx.outputs[0]
+        claim_txo.txoid = await d2f(self.ledger.db.get_txoid_for_txo(claim_txo))
+        abandon_tx = await d2f(Transaction.abandon(claim_txo, [self.account], self.account))
+        await self.broadcast(abandon_tx)
+        await self.on_transaction(abandon_tx)
+        await self.blockchain.generate(1)
+        await self.on_transaction(abandon_tx)
 
-#class AbandonClaimLookup(IntegrationTestCase):
-#
-#    async def skip_test_abandon_claim(self):
-#        address = yield self.lbry.wallet.get_least_used_address()
-#        yield self.lbrycrd.sendtoaddress(address, 0.0003 - 0.0000355)
-#        yield self.lbrycrd.generate(1)
-#        yield self.lbry.wallet.update_balance()
-#        yield threads.deferToThread(time.sleep, 5)
-#        print(self.lbry.wallet.get_balance())
-#        claim = yield self.lbry.wallet.claim_new_channel('@test', 0.000096)
-#        yield self.lbrycrd.generate(1)
-#        print('='*10 + 'CLAIM' + '='*10)
-#        print(claim)
-#        yield self.lbrycrd.decoderawtransaction(claim['tx'])
-#        abandon = yield self.lbry.wallet.abandon_claim(claim['claim_id'], claim['txid'], claim['nout'])
-#        print('='*10 + 'ABANDON' + '='*10)
-#        print(abandon)
-#        yield self.lbrycrd.decoderawtransaction(abandon['tx'])
-#        yield self.lbrycrd.generate(1)
-#        yield self.lbrycrd.getrawtransaction(abandon['txid'])
-#
-#        yield self.lbry.wallet.update_balance()
-#        yield threads.deferToThread(time.sleep, 5)
-#        print('='*10 + 'FINAL BALANCE' + '='*10)
-#        print(self.lbry.wallet.get_balance())
+        response = await d2f(self.ledger.resolve('lbry://@bar/foo'))
+        self.assertIn('lbry://@bar/foo', response)

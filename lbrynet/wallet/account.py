@@ -29,3 +29,11 @@ class Account(BaseAccount):
             return super(Account, self).get_balance(
                 is_claim=0, is_update=0, is_support=0
             )
+
+    def get_unspent_outputs(self, include_claims=False):
+        if include_claims:
+            return super(Account, self).get_unspent_outputs()
+        else:
+            return super(Account, self).get_unspent_outputs(
+                is_claim=0, is_update=0, is_support=0
+            )
