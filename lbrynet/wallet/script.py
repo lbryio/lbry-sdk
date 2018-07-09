@@ -68,12 +68,12 @@ class OutputScript(BaseOutputScript):
         return self.template.name.startswith('claim_name+')
 
     @property
-    def is_support_claim(self):
-        return self.template.name.startswith('support_claim+')
-
-    @property
     def is_update_claim(self):
         return self.template.name.startswith('update_claim+')
+
+    @property
+    def is_support_claim(self):
+        return self.template.name.startswith('support_claim+')
 
     @property
     def is_claim_involved(self):

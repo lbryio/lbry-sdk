@@ -21,3 +21,11 @@ class Account(BaseAccount):
 
     def get_certificate(self, claim_id):
         return self.certificates[claim_id]
+
+    def get_balance(self, include_claims=False):
+        if include_claims:
+            return super(Account, self).get_balance()
+        else:
+            return super(Account, self).get_balance(
+                is_claim=0, is_update=0, is_support=0
+            )
