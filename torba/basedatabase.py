@@ -156,6 +156,15 @@ class BaseDatabase(SQLiteMixin):
         CREATE_TXI_TABLE
     )
 
+    def txo_to_row(self, tx, address, txo):
+        return {
+            'txhash': sqlite3.Binary(tx.hash),
+            'address': sqlite3.Binary(address),
+            'position': txo.index,
+            'amount': txo.amount,
+            'script': sqlite3.Binary(txo.script.source)
+        }
+
     def save_transaction_io(self, save_tx, tx, height, is_verified, address, hash, history):
 
         def _steps(t):
@@ -181,13 +190,7 @@ class BaseDatabase(SQLiteMixin):
                 if txo.index in existing_txos:
                     continue
                 if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == hash:
-                    t.execute(*self._insert_sql("txo", {
-                        'txhash': sqlite3.Binary(tx.hash),
-                        'address': sqlite3.Binary(address),
-                        'position': txo.index,
-                        'amount': txo.amount,
-                        'script': sqlite3.Binary(txo.script.source)
-                    }))
+                    t.execute(*self._insert_sql("txo", self.txo_to_row(tx, address, txo)))
                 elif txo.script.is_pay_script_hash:
                     # TODO: implement script hash payments
                     print('Database.save_transaction_io: pay script hash is not implemented!')
@@ -233,15 +236,21 @@ class BaseDatabase(SQLiteMixin):
             defer.returnValue((None, None, False))
 
     @defer.inlineCallbacks
-    def get_balance_for_account(self, account):
+    def get_balance_for_account(self, account, **constraints):
+        extra_sql = ""
+        if constraints:
+            extra_sql = ' AND ' + ' AND '.join(
+                '{} = :{}'.format(c, c) for c in constraints.keys()
+            )
+        values = {'account': sqlite3.Binary(account.public_key.address)}
+        values.update(constraints)
         result = yield self.db.runQuery(
             """
             SELECT SUM(amount) FROM txo
             JOIN pubkey_address ON pubkey_address.address=txo.address
             WHERE account=:account AND
             txoid NOT IN (SELECT txoid FROM txi)
-            """,
-            {'account': sqlite3.Binary(account.public_key.address)}
+            """+extra_sql, values
         )
         if result:
             defer.returnValue(result[0][0] or 0)

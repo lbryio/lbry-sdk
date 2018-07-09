@@ -173,5 +173,5 @@ class BaseAccount(object):
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
         return self.private_key.child(chain).child(index)
 
-    def get_balance(self):
-        return self.ledger.db.get_balance_for_account(self)
+    def get_balance(self, **constraints):
+        return self.ledger.db.get_balance_for_account(self, **constraints)
