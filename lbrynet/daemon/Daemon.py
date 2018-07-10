@@ -386,19 +386,34 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(claim_out)
 
     @defer.inlineCallbacks
-    def _resolve_name(self, name, force_refresh=False):
-        """Resolves a name. Checks the cache first before going out to the blockchain.
+    def _resolve(self, *uris, **kwargs):
+        """Resolves a URI. Can check the cache first before going out to the blockchain and stores the result.
 
         Args:
             name: the lbry://<name> to resolve
             force_refresh: if True, always go out to the blockchain to resolve.
         """
 
-        parsed = parse_lbry_uri(name)
-        resolution = yield self.wallet.resolve(parsed.name, check_cache=not force_refresh)
-        if parsed.name in resolution:
-            result = resolution[parsed.name]
-            defer.returnValue(result)
+        page = kwargs.get('page', 0)
+        page_size = kwargs.get('page_size', 10)
+        check_cache = kwargs.get('check_cache', False) # TODO: put caching back (was force_refresh parameter)
+        results = yield self.wallet.resolve(*uris, page=page, page_size=page_size)
+        self.save_claims((value for value in results.values() if 'error' not in value))
+        yield defer.returnValue(results)
+
+    @defer.inlineCallbacks
+    def save_claims(self, claim_infos):
+        to_save = []
+        for info in claim_infos:
+            if 'value' in info:
+                if info['value']:
+                    to_save.append(info)
+            else:
+                if 'certificate' in info and info['certificate']['value']:
+                    to_save.append(info['certificate'])
+                if 'claim' in info and info['claim']['value']:
+                    to_save.append(info['claim'])
+        yield self.session.storage.save_claims(to_save)
 
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
@@ -443,7 +458,7 @@ class Daemon(AuthJSONRPCServer):
 
         cost = self._get_est_cost_from_stream_size(size)
 
-        resolved = yield self.wallet.resolve(uri)
+        resolved = (yield self._resolve(uri))[uri]
 
         if uri in resolved and 'claim' in resolved[uri]:
             claim = ClaimDict.load_dict(resolved[uri]['claim']['value'])
@@ -490,7 +505,7 @@ class Daemon(AuthJSONRPCServer):
         Resolve a name and return the estimated stream cost
         """
 
-        resolved = yield self.wallet.resolve(uri)
+        resolved = (yield self._resolve(uri))[uri]
         if resolved:
             claim_response = resolved[uri]
         else:
@@ -1154,7 +1169,10 @@ class Daemon(AuthJSONRPCServer):
         """
 
         try:
-            metadata = yield self._resolve_name(name, force_refresh=force)
+            name = parse_lbry_uri(name).name
+            metadata = yield self._resolve(name, check_cache=not force)
+            if name in metadata:
+                metadata = metadata[name]
         except UnknownNameError:
             log.info('Name %s is not known', name)
             defer.returnValue(None)
@@ -1291,7 +1309,7 @@ class Daemon(AuthJSONRPCServer):
             except URIParseError:
                 results[u] = {"error": "%s is not a valid uri" % u}
 
-        resolved = yield self.wallet.resolve(*valid_uris, check_cache=not force)
+        resolved = yield self._resolve(*valid_uris, check_cache=not force)
 
         for resolved_uri in resolved:
             results[resolved_uri] = resolved[resolved_uri]
@@ -1352,7 +1370,7 @@ class Daemon(AuthJSONRPCServer):
         if parsed_uri.is_channel and not parsed_uri.path:
             raise Exception("cannot download a channel claim, specify a /path")
 
-        resolved_result = yield self.wallet.resolve(uri)
+        resolved_result = yield self._resolve(uri)
         if resolved_result and uri in resolved_result:
             resolved = resolved_result[uri]
         else:
@@ -2132,8 +2150,7 @@ class Daemon(AuthJSONRPCServer):
             except URIParseError:
                 results[chan_uri] = {"error": "%s is not a valid uri" % chan_uri}
 
-        resolved = yield self.wallet.resolve(*valid_uris, check_cache=False, page=page,
-                                             page_size=page_size)
+        resolved = yield self._resolve(*valid_uris, page=page, page_size=page_size)
         for u in resolved:
             if 'error' in resolved[u]:
                 results[u] = resolved[u]
@@ -2726,7 +2743,7 @@ class Daemon(AuthJSONRPCServer):
         """
         if uri or stream_hash or sd_hash:
             if uri:
-                metadata = yield self._resolve_name(uri)
+                metadata = (yield self._resolve(uri))[uri]
                 sd_hash = utils.get_sd_hash(metadata)
                 stream_hash = yield self.storage.get_stream_hash_for_sd_hash(sd_hash)
             elif stream_hash:
@@ -3017,7 +3034,7 @@ class Daemon(AuthJSONRPCServer):
         }
 
         try:
-            resolved_result = yield self.wallet.resolve(uri)
+            resolved_result = (yield self._resolve(uri))[uri]
             response['did_resolve'] = True
         except UnknownNameError:
             response['error'] = "Failed to resolve name"
