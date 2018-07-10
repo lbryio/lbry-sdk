@@ -74,7 +74,7 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     if with_fee:
         metadata.update(
             {"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
-    daemon._resolve_name = lambda _: defer.succeed(metadata)
+    daemon._resolve = lambda _: defer.succeed(metadata)
     migrated = smart_decode(json.dumps(metadata))
     daemon.wallet.resolve = lambda *_: defer.succeed(
         {"test": {'claim': {'value': migrated.claim_dict}}})
