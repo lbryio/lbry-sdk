@@ -40,7 +40,7 @@ example_claim_dict = {
 
 class BasicTransactionTest(IntegrationTestCase):
 
-    VERBOSE = True
+    VERBOSE = False
 
     async def test_creating_updating_and_abandoning_claim_with_channel(self):
 
