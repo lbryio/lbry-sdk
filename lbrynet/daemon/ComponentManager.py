@@ -105,7 +105,7 @@ class ComponentManager(object):
         """
         stages = self.sort_components(reverse=True)
         for stage in stages:
-            yield defer.DeferredList([component._stop() for component in stage])
+            yield defer.DeferredList([component._stop() for component in stage if component.running])
 
     def all_components_running(self, *component_names):
         """
