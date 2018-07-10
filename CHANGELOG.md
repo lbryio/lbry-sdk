@@ -21,9 +21,6 @@ at anytime.
   *
 
 ### Changed
-  *
-  *
-  * `publish` to accept bid as a decimal string
   * all JSONRPC API commands are now registered asynchronously and are available to be called as soon as they are ready
 
 ### Added
