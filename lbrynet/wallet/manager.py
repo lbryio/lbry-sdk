@@ -124,8 +124,10 @@ class LbryWalletManager(BaseWalletManager):
         return LBRYcrdAddressRequester(self)
 
     def resolve(self, *uris, **kwargs):
+        page = kwargs.get('page', 0)
+        page_size = kwargs.get('page_size', 10)
         ledger = self.default_account.ledger  # type: MainNetLedger
-        return ledger.resolve(*uris)
+        return ledger.resolve(page, page_size, *uris)
 
     def get_name_claims(self):
         return defer.succeed([])
@@ -171,6 +173,21 @@ class LbryWalletManager(BaseWalletManager):
         # TODO: release reserved tx outputs in case anything fails by this point
         defer.returnValue(tx)
 
+    def update_peer_address(self, peer, address):
+        pass  # TODO: Data payments is disabled
+
+    def get_unused_address_for_peer(self, peer):
+        # TODO: Data payments is disabled
+        return self.get_unused_address()
+
+    def add_expected_payment(self, peer, amount):
+        pass  # TODO: Data payments is disabled
+
+    def send_points(self, reserved_points, amount):
+        defer.succeed(True)  # TODO: Data payments is disabled
+
+    def cancel_point_reservation(self, reserved_points):
+        pass # fixme: disabled for now.
 
 class ReservedPoints(object):
     def __init__(self, identifier, amount):
