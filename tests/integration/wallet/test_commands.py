@@ -10,7 +10,7 @@ lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 from lbrynet import conf as lbry_conf
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.wallet.manager import LbryWalletManager
-from lbrynet.daemon.Components import WalletComponent
+from lbrynet.daemon.Components import WalletComponent, FileManager
 
 
 class FakeAnalytics:
@@ -50,9 +50,9 @@ class CommandTestCase(IntegrationTestCase):
         self.daemon.component_manager.components.add(wallet_component)
 
 
-class DaemonCommandsTests(CommandTestCase):
+class ChannelNewCommandTests(CommandTestCase):
 
-    VERBOSE = True
+    VERBOSE = False
 
     @defer.inlineCallbacks
     def test_new_channel(self):
@@ -62,11 +62,22 @@ class DaemonCommandsTests(CommandTestCase):
             lambda e: e.tx.hex_id.decode() == result['txid']
         )
 
+
+class WalletBalanceCommandTests(CommandTestCase):
+
+    VERBOSE = True
+
     @defer.inlineCallbacks
     def test_wallet_balance(self):
         result = yield self.daemon.jsonrpc_wallet_balance()
         self.assertEqual(result, 10*COIN)
 
+
+class PublishCommandTests(CommandTestCase):
+
+    VERBOSE = True
+
     @defer.inlineCallbacks
     def test_publish(self):
         result = yield self.daemon.jsonrpc_publish('foo', 1*COIN)
+        print(result)
