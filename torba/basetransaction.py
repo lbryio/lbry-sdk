@@ -331,8 +331,39 @@ class BaseTransaction:
         defer.returnValue(tx)
 
     @classmethod
-    def liquidate(cls, assets, funding_accounts, change_account):
+    @defer.inlineCallbacks
+    def liquidate(cls, assets, funding_accounts, change_account, reserve_outputs=True):
         """ Spend assets (utxos) supplementing with funding_accounts if fee is higher than asset value. """
+
+        tx = cls().add_inputs([
+            cls.input_class.spend(utxo) for utxo in assets
+        ])
+        ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
+
+        reserved_outputs = [utxo.txoid for utxo in assets]
+        if reserve_outputs:
+            yield ledger.db.reserve_spent_outputs(reserved_outputs)
+
+        try:
+            cost_of_change = (
+                ledger.get_transaction_base_fee(tx) +
+                ledger.get_input_output_fee(cls.output_class.pay_pubkey_hash(COIN, NULL_HASH))
+            )
+            liquidated_total = sum(utxo.amount for utxo in assets)
+            if liquidated_total > cost_of_change:
+                change_address = yield change_account.change.get_or_create_usable_address()
+                change_hash160 = change_account.ledger.address_to_hash160(change_address)
+                change_amount = liquidated_total - cost_of_change
+                tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
+
+            yield tx.sign(funding_accounts)
+
+        except Exception:
+            if reserve_outputs:
+                yield ledger.db.release_reserved_outputs(reserved_outputs)
+            raise
+
+        defer.returnValue(tx)
 
     def signature_hash_type(self, hash_type):
         return hash_type

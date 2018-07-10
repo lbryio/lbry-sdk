@@ -225,6 +225,12 @@ class BaseDatabase(SQLiteMixin):
     def release_reserved_outputs(self, txoids):
         return self.reserve_spent_outputs(txoids, is_reserved=False)
 
+    def get_txoid_for_txo(self, txo):
+        return self.query_one_value(
+            "SELECT txoid FROM txo WHERE txhash = ? AND position = ?",
+            (sqlite3.Binary(txo.transaction.hash), txo.index)
+        )
+
     @defer.inlineCallbacks
     def get_transaction(self, txhash):
         result = yield self.db.runQuery(
@@ -258,15 +264,22 @@ class BaseDatabase(SQLiteMixin):
             defer.returnValue(0)
 
     @defer.inlineCallbacks
-    def get_utxos(self, account, output_class):
+    def get_utxos_for_account(self, account, **constraints):
+        extra_sql = ""
+        if constraints:
+            extra_sql = ' AND ' + ' AND '.join(
+                '{} = :{}'.format(c, c) for c in constraints.keys()
+            )
+        values = {'account': sqlite3.Binary(account.public_key.address)}
+        values.update(constraints)
         utxos = yield self.db.runQuery(
             """
             SELECT amount, script, txhash, txo.position, txoid
             FROM txo JOIN pubkey_address ON pubkey_address.address=txo.address
             WHERE account=:account AND txo.is_reserved=0 AND txoid NOT IN (SELECT txoid FROM txi)
-            """,
-            {'account': sqlite3.Binary(account.public_key.address)}
+            """+extra_sql, values
         )
+        output_class = account.ledger.transaction_class.output_class
         defer.returnValue([
             output_class(
                 values[0],
@@ -335,7 +348,7 @@ class BaseDatabase(SQLiteMixin):
         return self.db.runInteraction(lambda t: self._set_address_history(t, address, history))
 
     def get_unused_addresses(self, account, chain):
-        # type: (torba.baseaccount.BaseAccount, int) -> defer.Deferred[List[str]]
+        # type: (torba.baseaccount.BaseAccount, Union[int,None]) -> defer.Deferred[List[str]]
         return self.query_one_value_list(*self._used_address_sql(
             account, chain, '=', 0
         ))

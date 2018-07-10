@@ -133,15 +133,12 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
                 if bytes(match['account']) == account.public_key.address:
                     defer.returnValue(account.get_private_key(match['chain'], match['position']))
 
-    def get_unspent_outputs(self, account):
-        return self.db.get_utxos(account, self.transaction_class.output_class)
-
     @defer.inlineCallbacks
     def get_effective_amount_estimators(self, funding_accounts):
         # type: (Iterable[baseaccount.BaseAccount]) -> defer.Deferred
         estimators = []
         for account in funding_accounts:
-            utxos = yield self.get_unspent_outputs(account)
+            utxos = yield account.get_unspent_outputs()
             for utxo in utxos:
                 estimators.append(utxo.get_estimator(self))
         defer.returnValue(estimators)
@@ -266,41 +263,41 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
             yield lock.acquire()
 
-            #try:
-            # see if we have a local copy of transaction, otherwise fetch it from server
-            raw, local_height, is_verified = yield self.db.get_transaction(unhexlify(hex_id)[::-1])
-            save_tx = None
-            if raw is None:
-                _raw = yield self.network.get_transaction(hex_id)
-                tx = self.transaction_class(unhexlify(_raw))
-                save_tx = 'insert'
-            else:
-                tx = self.transaction_class(raw)
+            try:
+                # see if we have a local copy of transaction, otherwise fetch it from server
+                raw, local_height, is_verified = yield self.db.get_transaction(unhexlify(hex_id)[::-1])
+                save_tx = None
+                if raw is None:
+                    _raw = yield self.network.get_transaction(hex_id)
+                    tx = self.transaction_class(unhexlify(_raw))
+                    save_tx = 'insert'
+                else:
+                    tx = self.transaction_class(raw)
 
-            if remote_height > 0 and not is_verified:
-                is_verified = yield self.is_valid_transaction(tx, remote_height)
-                is_verified = 1 if is_verified else 0
-                if save_tx is None:
-                    save_tx = 'update'
+                if remote_height > 0 and not is_verified:
+                    is_verified = yield self.is_valid_transaction(tx, remote_height)
+                    is_verified = 1 if is_verified else 0
+                    if save_tx is None:
+                        save_tx = 'update'
 
-            yield self.db.save_transaction_io(
-                save_tx, tx, remote_height, is_verified, address, self.address_to_hash160(address),
-                ''.join('{}:{}:'.format(tx_id.decode(), tx_height) for tx_id, tx_height in synced_history)
-            )
+                yield self.db.save_transaction_io(
+                    save_tx, tx, remote_height, is_verified, address, self.address_to_hash160(address),
+                    ''.join('{}:{}:'.format(tx_id.decode(), tx_height) for tx_id, tx_height in synced_history)
+                )
 
-            log.debug("{}: sync'ed tx {} for address: {}, height: {}, verified: {}".format(
-                self.get_id(), hex_id, address, remote_height, is_verified
-            ))
-            self._on_transaction_controller.add(TransactionEvent(address, tx, remote_height, is_verified))
+                log.debug("{}: sync'ed tx {} for address: {}, height: {}, verified: {}".format(
+                    self.get_id(), hex_id, address, remote_height, is_verified
+                ))
+                self._on_transaction_controller.add(TransactionEvent(address, tx, remote_height, is_verified))
 
-#            except:
-#                log.exception('Failed to synchronize transaction:')
-#                raise
-#
-#            finally:
-            lock.release()
-            if not lock.locked:
-                del self._transaction_processing_locks[hex_id]
+            except:
+                log.exception('Failed to synchronize transaction:')
+                raise
+
+            finally:
+                lock.release()
+                if not lock.locked:
+                    del self._transaction_processing_locks[hex_id]
 
     @defer.inlineCallbacks
     def subscribe_history(self, address):

@@ -97,11 +97,11 @@ class PubKey(_KeyBase):
             raise TypeError('pubkey must be raw bytes')
         if len(pubkey) != 33:
             raise ValueError('pubkey must be 33 bytes')
-        if byte2int(pubkey[0]) not in (2, 3):
+        if indexbytes(pubkey, 0) not in (2, 3):
             raise ValueError('invalid pubkey prefix byte')
         curve = cls.CURVE.curve
 
-        is_odd = byte2int(pubkey[0]) == 3
+        is_odd = indexbytes(pubkey, 0) == 3
         x = bytes_to_int(pubkey[1:])
 
         # p is the finite field order

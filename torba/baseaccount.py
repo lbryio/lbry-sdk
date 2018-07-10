@@ -175,3 +175,6 @@ class BaseAccount(object):
 
     def get_balance(self, **constraints):
         return self.ledger.db.get_balance_for_account(self, **constraints)
+
+    def get_unspent_outputs(self, **constraints):
+        return self.ledger.db.get_utxos_for_account(self, **constraints)
