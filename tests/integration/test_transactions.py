@@ -44,3 +44,12 @@ class BasicTransactionTests(IntegrationTestCase):
         all_balances = await d2f(self.manager.get_balance())
         self.assertIn(self.ledger.get_id(), all_balances)
         self.assertEqual(round(all_balances[self.ledger.get_id()]/COIN, 1), 9.9)
+
+        utxos = await d2f(self.account.get_unspent_outputs())
+        tx = await d2f(self.ledger.transaction_class.liquidate(
+            [utxos[0]], [account1], account1
+        ))
+        await self.broadcast(tx)
+        await self.on_transaction(tx)  # mempool
+        await self.blockchain.generate(1)
+        await self.on_transaction(tx)  # confirmed
