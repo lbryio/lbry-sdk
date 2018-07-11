@@ -5,7 +5,7 @@ from torba.constants import COIN
 
 class BasicTransactionTests(IntegrationTestCase):
 
-    VERBOSE = True
+    VERBOSE = False
 
     async def test_sending_and_receiving(self):
         account1, account2 = self.account, self.wallet.generate_account(self.ledger)
