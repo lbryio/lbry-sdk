@@ -332,6 +332,7 @@ class WalletComponent(Component):
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
         self.wallet = LbryWalletManager.from_old_config(conf.settings)
+        self.wallet.old_db = storage
         yield self.wallet.start()
 
     @defer.inlineCallbacks
