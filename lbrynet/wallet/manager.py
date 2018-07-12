@@ -1,7 +1,9 @@
 import os
+import json
 from twisted.internet import defer
 
 from torba.manager import WalletManager as BaseWalletManager
+from torba.wallet import WalletStorage
 
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError
@@ -45,7 +47,7 @@ class LbryWalletManager(BaseWalletManager):
         return defer.succeed(False)
 
     @classmethod
-    def from_old_config(cls, settings):
+    def from_lbrynet_config(cls, settings, db):
 
         ledger_id = {
             'lbrycrd_main':    'lbc_mainnet',
@@ -57,12 +59,45 @@ class LbryWalletManager(BaseWalletManager):
             'auto_connect': True,
             'default_servers': settings['lbryum_servers'],
             'data_path': settings['lbryum_wallet_dir'],
-            'use_keyring': settings['use_keyring']
+            'use_keyring': settings['use_keyring'],
+            'db': db
         }
+
+        wallet_file_path = os.path.join(settings['lbryum_wallet_dir'], 'default_wallet')
+        if os.path.exists(wallet_file_path):
+            with open(wallet_file_path, 'r') as f:
+                json_data = f.read()
+                json_dict = json.loads(json_data)
+            # TODO: After several public releases of new torba based wallet, we can delete
+            #       this lbryum->torba conversion code and require that users who still
+            #       have old structured wallets install one of the earlier releases that
+            #       still has the below conversion code.
+            if 'master_public_keys' in json_dict:
+                json_data = json.dumps({
+                    'version': 1,
+                    'name': 'My Wallet',
+                    'accounts': [{
+                        'version': 1,
+                        'name': 'Main Account',
+                        'ledger': 'lbc_mainnet',
+                        'encrypted': json_dict['use_encryption'],
+                        'seed': json_dict['seed'],
+                        'seed_version': json_dict['seed_version'],
+                        'private_key': json_dict['master_private_keys']['x/'],
+                        'public_key': json_dict['master_public_keys']['x/'],
+                        'certificates': json_dict['claim_certificates'],
+                        'receiving_gap': 20,
+                        'change_gap': 6,
+                        'receiving_maximum_use_per_address': 2,
+                        'change_maximum_use_per_address': 2
+                    }]
+                }, indent=4, sort_keys=True)
+                with open(wallet_file_path, 'w') as f:
+                    f.write(json_data)
 
         return cls.from_config({
             'ledgers': {ledger_id: ledger_config},
-            'wallets': [os.path.join(settings['lbryum_wallet_dir'], 'default_wallet')]
+            'wallets': [wallet_file_path]
         })
 
     def get_best_blockhash(self):
@@ -101,8 +136,19 @@ class LbryWalletManager(BaseWalletManager):
     def get_history(self):
         return defer.succeed([])
 
-    def claim_name(self, name, amount, claim):
-        pass
+    @defer.inlineCallbacks
+    def claim_name(self, name, amount, claim, certificate=None, claim_address=None):
+        account = self.default_account
+        if not claim_address:
+            claim_address = yield account.receiving.get_or_create_usable_address()
+        if certificate:
+            claim = claim.sign(
+                certificate['private_key'], claim_address, certificate['claim_id']
+            )
+        tx = yield Transaction.claim(name.encode(), claim, amount, claim_address, [account], account)
+        yield account.ledger.broadcast(tx)
+        # TODO: release reserved tx outputs in case anything fails by this point
+        defer.returnValue(tx)
 
     @defer.inlineCallbacks
     def claim_new_channel(self, channel_name, amount):
@@ -121,7 +167,7 @@ class LbryWalletManager(BaseWalletManager):
         cert, key = generate_certificate()
         tx = yield Transaction.claim(channel_name.encode(), cert, amount, address, [account], account)
         yield account.ledger.broadcast(tx)
-        account.add_certificate(tx.get_claim_id(0), key)
+        account.add_certificate(tx, 0, tx.get_claim_id(0), channel_name, key)
         # TODO: release reserved tx outputs in case anything fails by this point
         defer.returnValue(tx)
 
