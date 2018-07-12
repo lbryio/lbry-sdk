@@ -128,6 +128,8 @@ class CryptStreamBlobMaker(object):
         max bytes are written. num_bytes_to_write is the number
         of bytes that will be written from data in this call
         """
+        if not isinstance(data, bytes):
+            data = data.encode()
         max_bytes_to_write = MAX_BLOB_SIZE - self.length - 1
         done = False
         if max_bytes_to_write <= len(data):
