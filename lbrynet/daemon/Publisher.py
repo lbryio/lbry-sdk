@@ -49,7 +49,7 @@ class Publisher(object):
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)
         old_stream_hashes = yield self.storage.get_old_stream_hashes_for_claim_id(
-            tx.get_claim_id(0).decode(), self.lbry_file.stream_hash
+            tx.get_claim_id(0), self.lbry_file.stream_hash.decode()
         )
         if old_stream_hashes:
             for lbry_file in filter(lambda l: l.stream_hash in old_stream_hashes,
@@ -58,7 +58,7 @@ class Publisher(object):
                 log.info("Removed old stream for claim update: %s", lbry_file.stream_hash)
 
         yield self.storage.save_content_claim(
-            self.lbry_file.stream_hash, get_certificate_lookup(tx, 0).decode()
+            self.lbry_file.stream_hash.decode(), get_certificate_lookup(tx, 0)
         )
         defer.returnValue(tx)
 
@@ -70,7 +70,7 @@ class Publisher(object):
         )
         if stream_hash:  # the stream_hash returned from the db will be None if this isn't a stream we have
             yield self.storage.save_content_claim(
-                stream_hash, get_certificate_lookup(tx, 0).decode()
+                stream_hash.decode(), get_certificate_lookup(tx, 0)
             )
             self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
         defer.returnValue(tx)
