@@ -126,6 +126,12 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
             yield self.update_account(account)
 
     @defer.inlineCallbacks
+    def get_transaction(self, txhash):
+        raw, height, is_verified = yield self.db.get_transaction(txhash)
+        if raw is not None:
+            defer.returnValue(self.transaction_class(raw))
+
+    @defer.inlineCallbacks
     def get_private_key_for_address(self, address):
         match = yield self.db.get_address(address)
         if match:
