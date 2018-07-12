@@ -67,10 +67,9 @@ class Publisher(object):
 
     @defer.inlineCallbacks
     def make_claim(self, name, bid, claim_dict, claim_address=None, change_address=None):
-        claim_out = yield self.wallet.claim_name(name, bid, claim_dict,
-                                                 certificate=self.certificate,
-                                                 claim_address=claim_address,
-                                                 change_address=change_address)
+        claim_out = yield self.wallet.claim_name(
+            name, bid, claim_dict, certificate=self.certificate, claim_address=claim_address
+        )
         defer.returnValue(claim_out)
 
 
