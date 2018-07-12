@@ -152,7 +152,7 @@ class MainNetLedger(BaseLedger):
         resolutions = yield self.network.get_values_for_uris(self.headers.hash(), *uris)
         resolver = Resolver(self.headers.claim_trie_root, self.headers.height, self.transaction_class,
                             hash160_to_address=lambda x: self.hash160_to_address(x), network=self.network)
-        defer.returnValue(resolver._handle_resolutions(resolutions, uris, page, page_size))
+        defer.returnValue((yield resolver._handle_resolutions(resolutions, uris, page, page_size)))
 
     @defer.inlineCallbacks
     def start(self):

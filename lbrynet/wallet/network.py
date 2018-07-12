@@ -7,4 +7,4 @@ class Network(BaseNetwork):
         return self.rpc('blockchain.claimtrie.getvaluesforuris', block_hash, *uris)
 
     def get_claims_by_ids(self, *claim_ids):
-        return self.rpc("blockchain.claimtrie.getclaimsbyids", *claim_ids)
+        return self.rpc('blockchain.claimtrie.getclaimsbyids', *claim_ids)
