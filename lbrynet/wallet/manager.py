@@ -1,5 +1,6 @@
 import os
 import json
+from binascii import hexlify
 from twisted.internet import defer
 
 from torba.manager import WalletManager as BaseWalletManager
@@ -160,8 +161,24 @@ class LbryWalletManager(BaseWalletManager):
             )
         tx = yield Transaction.claim(name.encode(), claim, amount, claim_address, [account], account)
         yield account.ledger.broadcast(tx)
+        yield self.old_db.save_claims([self._old_get_temp_claim_info(
+            tx, tx.outputs[0], claim_address, claim_dict, name, amount
+        )])
         # TODO: release reserved tx outputs in case anything fails by this point
         defer.returnValue(tx)
+
+    def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
+        return {
+            "claim_id": hexlify(tx.get_claim_id(txo.index)).decode(),
+            "name": name,
+            "amount": bid,
+            "address": address.decode(),
+            "txid": tx.hex_id.decode(),
+            "nout": txo.index,
+            "value": claim_dict,
+            "height": -1,
+            "claim_sequence": -1,
+        }
 
     @defer.inlineCallbacks
     def claim_new_channel(self, channel_name, amount):

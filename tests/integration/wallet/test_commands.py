@@ -1,4 +1,7 @@
+import six
 import tempfile
+from types import SimpleNamespace
+from binascii import hexlify
 
 from twisted.internet import defer
 from orchstr8.testcase import IntegrationTestCase, d2f
@@ -25,14 +28,49 @@ class FakeAnalytics:
         pass
 
 
+class FakeBlob:
+    def __init__(self):
+        self.data = []
+        self.blob_hash = 'abc'
+        self.length = 3
+
+    def write(self, data):
+        self.data.append(data)
+
+    def close(self):
+        if self.data:
+            return defer.succeed(hexlify(b'a'*48))
+        return defer.succeed(None)
+
+    def get_is_verified(self):
+        return True
+
+    def open_for_reading(self):
+        return six.StringIO('foo')
+
+
 class FakeBlobManager:
     def get_blob_creator(self):
-        return None
+        return FakeBlob()
+
+    def creator_finished(self, blob_info, should_announce):
+        pass
+
+    def get_blob(self, sd_hash):
+        return FakeBlob()
 
 
 class FakeSession:
-    storage = None
     blob_manager = FakeBlobManager()
+    peer_finder = None
+    rate_limiter = None
+
+
+    @property
+    def payment_rate_manager(self):
+        obj = SimpleNamespace()
+        obj.min_blob_data_payment_rate = 1
+        return obj
 
 
 class CommandTestCase(IntegrationTestCase):
@@ -68,21 +106,26 @@ class CommandTestCase(IntegrationTestCase):
         self.daemon.wallet = self.manager
         self.daemon.component_manager.components.add(wallet_component)
 
+        storage_component = DatabaseComponent(self.daemon.component_manager)
+        await d2f(storage_component.start())
+        self.daemon.storage = storage_component.storage
+        self.daemon.wallet.old_db = self.daemon.storage
+        self.daemon.component_manager.components.add(storage_component)
+
         session_component = SessionComponent(self.daemon.component_manager)
         session_component.session = FakeSession()
         session_component._running = True
         self.daemon.session = session_component.session
+        self.daemon.session.storage = self.daemon.storage
+        self.daemon.session.wallet = self.daemon.wallet
+        self.daemon.session.blob_manager.storage = self.daemon.storage
         self.daemon.component_manager.components.add(session_component)
 
         file_manager = FileManager(self.daemon.component_manager)
         file_manager.file_manager = EncryptedFileManager(session_component.session, True)
         file_manager._running = True
+        self.daemon.file_manager = file_manager.file_manager
         self.daemon.component_manager.components.add(file_manager)
-
-        storage_component = DatabaseComponent(self.daemon.component_manager)
-        await d2f(storage_component.start())
-        self.daemon.storage = storage_component.storage
-        self.daemon.component_manager.components.add(storage_component)
 
 
 class ChannelNewCommandTests(CommandTestCase):

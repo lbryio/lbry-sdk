@@ -2,6 +2,7 @@ import logging
 import os
 import sqlite3
 import traceback
+from binascii import hexlify, unhexlify
 from decimal import Decimal
 from twisted.internet import defer, task, threads
 from twisted.enterprise import adbapi
@@ -599,7 +600,7 @@ class SQLiteStorage(WalletDatabase):
                         source_hash = None
                 except AttributeError:
                     source_hash = None
-                serialized = claim_info.get('hex') or smart_decode(claim_info['value']).serialized.encode('hex')
+                serialized = claim_info.get('hex') or hexlify(smart_decode(claim_info['value']).serialized)
                 transaction.execute(
                     "insert or replace into claim values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (outpoint, claim_id, name, amount, height, serialized, certificate_id, address, sequence)
@@ -657,11 +658,14 @@ class SQLiteStorage(WalletDatabase):
         ).fetchone()
         if not claim_info:
             raise Exception("claim not found")
-        new_claim_id, claim = claim_info[0], ClaimDict.deserialize(claim_info[1].decode('hex'))
+        new_claim_id, claim = claim_info[0], ClaimDict.deserialize(unhexlify(claim_info[1]))
 
         # certificate claims should not be in the content_claim table
         if not claim.is_stream:
             raise Exception("claim does not contain a stream")
+
+        if not isinstance(stream_hash, bytes):
+            stream_hash = stream_hash.encode()
 
         # get the known sd hash for this stream
         known_sd_hash = transaction.execute(
