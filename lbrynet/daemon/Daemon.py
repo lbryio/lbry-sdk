@@ -242,7 +242,7 @@ class Daemon(AuthJSONRPCServer):
 
     def _stop_streams(self):
         """stop pending GetStream downloads"""
-        for sd_hash, stream in self.streams.iteritems():
+        for sd_hash, stream in self.streams.items():
             stream.cancel(reason="daemon shutdown")
 
     def _shutdown(self):
@@ -356,11 +356,11 @@ class Daemon(AuthJSONRPCServer):
             defer.returnValue(result)
 
     @defer.inlineCallbacks
-    def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate_id=None,
+    def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate=None,
                         claim_address=None, change_address=None):
 
         publisher = Publisher(self.session, self.file_manager, self.wallet,
-                              certificate_id)
+                              certificate)
         parse_lbry_uri(name)
         if not file_path:
             stream_hash = yield self.storage.get_stream_hash_for_sd_hash(
@@ -1730,18 +1730,23 @@ class Daemon(AuthJSONRPCServer):
         if bid <= 0.0:
             raise ValueError("Bid value must be greater than 0.0")
 
-        yield self.wallet.update_balance()
-        if bid >= self.wallet.get_balance():
-            balance = yield self.wallet.get_max_usable_balance_for_claim(name)
-            max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
-            if balance <= MAX_UPDATE_FEE_ESTIMATE:
-                raise InsufficientFundsError(
-                    "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
-                        .format(MAX_UPDATE_FEE_ESTIMATE - balance))
-            elif bid > max_bid_amount:
-                raise InsufficientFundsError(
-                    "Please lower the bid value, the maximum amount you can specify for this claim is {}."
-                        .format(max_bid_amount))
+        bid = int(bid * COIN)
+
+        available = yield self.wallet.default_account.get_balance()
+        if bid >= available:
+            # TODO: add check for existing claim balance
+            #balance = yield self.wallet.get_max_usable_balance_for_claim(name)
+            #max_bid_amount = balance - MAX_UPDATE_FEE_ESTIMATE
+            #if balance <= MAX_UPDATE_FEE_ESTIMATE:
+            raise InsufficientFundsError(
+                "Insufficient funds, please deposit additional LBC. Minimum additional LBC needed {}"
+                .format(round((bid - available)/COIN + 0.01, 2))
+            )
+            #       .format(MAX_UPDATE_FEE_ESTIMATE - balance))
+            #elif bid > max_bid_amount:
+            #    raise InsufficientFundsError(
+            #        "Please lower the bid value, the maximum amount you can specify for this claim is {}."
+            #            .format(max_bid_amount))
 
         metadata = metadata or {}
         if fee is not None:
@@ -1779,7 +1784,7 @@ class Daemon(AuthJSONRPCServer):
                     log.warning("Stripping empty fee from published metadata")
                     del metadata['fee']
                 elif 'address' not in metadata['fee']:
-                    address = yield self.wallet.get_least_used_address()
+                    address = yield self.wallet.default_account.receiving.get_or_create_usable_address()
                     metadata['fee']['address'] = address
             if 'fee' in metadata and 'version' not in metadata['fee']:
                 metadata['fee']['version'] = '_0_0_1'
@@ -1832,20 +1837,15 @@ class Daemon(AuthJSONRPCServer):
         })
 
         if channel_id:
-            certificate_id = channel_id
+            certificate = self.wallet.default_account.get_certificate(by_claim_id=channel_id)
         elif channel_name:
-            certificate_id = None
-            my_certificates = yield self.wallet.channel_list()
-            for certificate in my_certificates:
-                if channel_name == certificate['name']:
-                    certificate_id = certificate['claim_id']
-                    break
-            if not certificate_id:
+            certificate = self.wallet.default_account.get_certificate(by_name=channel_name)
+            if not certificate:
                 raise Exception("Cannot publish using channel %s" % channel_name)
         else:
-            certificate_id = None
+            certificate = None
 
-        result = yield self._publish_stream(name, bid, claim_dict, file_path, certificate_id,
+        result = yield self._publish_stream(name, bid, claim_dict, file_path, certificate,
                                             claim_address, change_address)
         response = yield self._render_response(result)
         defer.returnValue(response)

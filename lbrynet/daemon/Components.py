@@ -154,9 +154,9 @@ class WalletComponent(Component):
     @defer.inlineCallbacks
     def start(self):
         log.info("Starting torba wallet")
-        storage = self.component_manager.get_component(DATABASE_COMPONENT)
+        db = self.component_manager.get_component(DATABASE_COMPONENT)
         lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
-        self.wallet = LbryWalletManager.from_old_config(conf.settings)
+        self.wallet = LbryWalletManager.from_lbrynet_config(conf.settings, db)
         yield self.wallet.start()
 
     @defer.inlineCallbacks

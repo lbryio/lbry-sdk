@@ -2,6 +2,8 @@ import struct
 from six import int2byte
 from binascii import unhexlify
 
+from twisted.internet import defer
+
 from torba.baseledger import BaseLedger
 from torba.baseheader import BaseHeaders, _ArithUint256
 from torba.util import int_to_hex, rev_hex, hash_encode
@@ -131,6 +133,13 @@ class MainNetLedger(BaseLedger):
         return self.network.get_values_for_uris(
             self.headers.hash(), *uris
         )
+
+    @defer.inlineCallbacks
+    def start(self):
+        yield super(MainNetLedger, self).start()
+        yield defer.DeferredList([
+            a.maybe_migrate_certificates() for a in self.accounts
+        ])
 
 
 class TestNetLedger(MainNetLedger):
