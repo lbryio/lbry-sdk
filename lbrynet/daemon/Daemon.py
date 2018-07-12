@@ -2354,6 +2354,7 @@ class Daemon(AuthJSONRPCServer):
         """
 
         def _disp(address):
+            address = str(address)
             log.info("Got unused wallet address: " + address)
             return defer.succeed(address)
 
