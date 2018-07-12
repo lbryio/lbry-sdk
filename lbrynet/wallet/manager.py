@@ -11,6 +11,7 @@ from lbryschema.error import URIParseError
 from .ledger import MainNetLedger  # pylint: disable=unused-import
 from .account import generate_certificate
 from .transaction import Transaction
+from .database import WalletDatabase  # pylint: disable=unused-import
 
 
 class BackwardsCompatibleNetwork(object):
@@ -25,6 +26,14 @@ class BackwardsCompatibleNetwork(object):
 
 
 class LbryWalletManager(BaseWalletManager):
+
+    @property
+    def ledger(self):  # type: () -> MainNetLedger
+        return self.default_account.ledger
+
+    @property
+    def db(self):  # type: () -> WalletDatabase
+        return self.ledger.db
 
     @property
     def wallet(self):
@@ -145,7 +154,7 @@ class LbryWalletManager(BaseWalletManager):
             claim_address = yield account.receiving.get_or_create_usable_address()
         if certificate:
             claim = claim.sign(
-                certificate['private_key'], claim_address, certificate['claim_id']
+                certificate.private_key, claim_address, certificate.claim_id
             )
         tx = yield Transaction.claim(name.encode(), claim, amount, claim_address, [account], account)
         yield account.ledger.broadcast(tx)
@@ -173,6 +182,9 @@ class LbryWalletManager(BaseWalletManager):
         # TODO: release reserved tx outputs in case anything fails by this point
         defer.returnValue(tx)
 
+    def get_certificates(self, name):
+        return self.db.get_certificates(name, [self.default_account], exclude_without_key=True)
+
     def update_peer_address(self, peer, address):
         pass  # TODO: Data payments is disabled
 
@@ -188,6 +200,7 @@ class LbryWalletManager(BaseWalletManager):
 
     def cancel_point_reservation(self, reserved_points):
         pass # fixme: disabled for now.
+
 
 class ReservedPoints(object):
     def __init__(self, identifier, amount):
