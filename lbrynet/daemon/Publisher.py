@@ -44,7 +44,7 @@ class Publisher(object):
         )
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)
-        old_stream_hashes = yield self.session.storage.get_old_stream_hashes_for_claim_id(tx.get_claim_id(0),
+        old_stream_hashes = yield self.session.storage.get_old_stream_hashes_for_claim_id(tx.get_claim_id(0).decode(),
                                                                                           self.lbry_file.stream_hash)
         if old_stream_hashes:
             for lbry_file in filter(lambda l: l.stream_hash in old_stream_hashes,
