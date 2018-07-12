@@ -37,10 +37,14 @@ class Account(BaseAccount):
 
     @defer.inlineCallbacks
     def maybe_migrate_certificates(self):
-        for lookup_key in self.certificates.keys():
-            if ':' not in lookup_key:
-                claim = yield self.ledger.network.get_claims_by_ids(lookup_key)
-                print(claim)
+        for maybe_claim_id in self.certificates.keys():
+            if ':' not in maybe_claim_id:
+                claims = yield self.ledger.network.get_claims_by_ids(maybe_claim_id)
+                # assert claim['address'] is one of our addresses, otherwise move cert to new Account
+                print(claims[maybe_claim_id])
+                tx_nout = '{txid}:{nout}'.format(**claims[maybe_claim_id])
+                self.certificates[tx_nout] = self.certificates[maybe_claim_id]
+                del self.certificates[maybe_claim_id]
                 break
 
     def get_balance(self, include_claims=False):
@@ -58,3 +62,14 @@ class Account(BaseAccount):
             return super(Account, self).get_unspent_outputs(
                 is_claim=0, is_update=0, is_support=0
             )
+
+    @classmethod
+    def from_dict(cls, ledger, d):  # type: (torba.baseledger.BaseLedger, Dict) -> BaseAccount
+        account = super(Account, cls).from_dict(ledger, d)
+        account.certificates = d['certificates']
+        return account
+
+    def to_dict(self):
+        d = super(Account, self).to_dict()
+        d['certificates'] = self.certificates
+        return d
