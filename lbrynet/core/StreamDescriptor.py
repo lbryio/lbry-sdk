@@ -1,3 +1,4 @@
+import six
 import binascii
 from collections import defaultdict
 import json
@@ -66,6 +67,16 @@ class BlobStreamDescriptorReader(StreamDescriptorReader):
         return threads.deferToThread(get_data)
 
 
+def bytes2unicode(value):
+    if isinstance(value, bytes):
+        return value.decode()
+    elif isinstance(value, (list, tuple)):
+        return [bytes2unicode(v) for v in value]
+    elif isinstance(value, dict):
+        return {key: bytes2unicode(v) for key, v in value.items()}
+    return value
+
+
 class StreamDescriptorWriter(object):
     """Classes which derive from this class write fields from a dictionary
        of fields to a stream descriptor"""
@@ -73,7 +84,7 @@ class StreamDescriptorWriter(object):
         pass
 
     def create_descriptor(self, sd_info):
-        return self._write_stream_descriptor(json.dumps(sd_info, sort_keys=True))
+        return self._write_stream_descriptor(json.dumps(bytes2unicode(sd_info), sort_keys=True))
 
     def _write_stream_descriptor(self, raw_data):
         """This method must be overridden by subclasses to write raw data to
@@ -345,9 +356,9 @@ def get_blob_hashsum(b):
     blob_hashsum = get_lbry_hash_obj()
     if length != 0:
         blob_hashsum.update(blob_hash)
-    blob_hashsum.update(str(blob_num))
+    blob_hashsum.update(str(blob_num).encode())
     blob_hashsum.update(iv)
-    blob_hashsum.update(str(length))
+    blob_hashsum.update(str(length).encode())
     return blob_hashsum.digest()
 
 
@@ -365,7 +376,7 @@ def get_stream_hash(hex_stream_name, key, hex_suggested_file_name, blob_infos):
 
 def verify_hex(text, field_name):
     for c in text:
-        if c not in '0123456789abcdef':
+        if c not in b'0123456789abcdef':
             raise InvalidStreamDescriptorError("%s is not a hex-encoded string" % field_name)
 
 
@@ -391,7 +402,7 @@ def validate_descriptor(stream_info):
 
     calculated_stream_hash = get_stream_hash(
         hex_stream_name, key, hex_suggested_file_name, blobs
-    )
+    ).encode()
     if calculated_stream_hash != stream_hash:
         raise InvalidStreamDescriptorError("Stream hash does not match stream metadata")
     return True
