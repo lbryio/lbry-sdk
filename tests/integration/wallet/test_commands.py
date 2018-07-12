@@ -10,12 +10,20 @@ lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 from lbrynet import conf as lbry_conf
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.wallet.manager import LbryWalletManager
-from lbrynet.daemon.Components import WalletComponent, FileManager
+from lbrynet.daemon.Components import WalletComponent, FileManager, SessionComponent
+from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 
 
 class FakeAnalytics:
     def send_new_channel(self):
         pass
+
+    def shutdown(self):
+        pass
+
+
+class FakeSession:
+    storage = None
 
 
 class CommandTestCase(IntegrationTestCase):
@@ -48,11 +56,19 @@ class CommandTestCase(IntegrationTestCase):
         wallet_component.wallet = self.manager
         wallet_component._running = True
         self.daemon.component_manager.components.add(wallet_component)
+        session_component = SessionComponent(self.daemon.component_manager)
+        session_component.session = FakeSession()
+        session_component._running = True
+        self.daemon.component_manager.components.add(session_component)
+        file_manager = FileManager(self.daemon.component_manager)
+        file_manager.file_manager = EncryptedFileManager(session_component.session, True)
+        file_manager._running = True
+        self.daemon.component_manager.components.add(file_manager)
 
 
 class ChannelNewCommandTests(CommandTestCase):
 
-    VERBOSE = False
+    VERBOSE = True
 
     @defer.inlineCallbacks
     def test_new_channel(self):

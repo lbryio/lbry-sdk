@@ -11,13 +11,13 @@ log = logging.getLogger(__name__)
 
 
 class Publisher(object):
-    def __init__(self, blob_manager, payment_rate_manager, storage, lbry_file_manager, wallet, certificate_id):
+    def __init__(self, blob_manager, payment_rate_manager, storage, lbry_file_manager, wallet, certificate):
         self.blob_manager = blob_manager
         self.payment_rate_manager = payment_rate_manager
         self.storage = storage
         self.lbry_file_manager = lbry_file_manager
         self.wallet = wallet
-        self.certificate_id = certificate_id
+        self.certificate = certificate
         self.lbry_file = None
 
     @defer.inlineCallbacks
@@ -74,7 +74,7 @@ class Publisher(object):
     @defer.inlineCallbacks
     def make_claim(self, name, bid, claim_dict, claim_address=None, change_address=None):
         claim_out = yield self.wallet.claim_name(name, bid, claim_dict,
-                                                 certificate_id=self.certificate_id,
+                                                 certificate=self.certificate,
                                                  claim_address=claim_address,
                                                  change_address=change_address)
         defer.returnValue(claim_out)
