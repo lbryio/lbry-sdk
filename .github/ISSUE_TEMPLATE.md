@@ -4,7 +4,7 @@ Thanks for reporting an issue to LBRY and helping us improve!
 To make it possible for us to help you, please fill out below information carefully.
 
 Before reporting any issues, please make sure that you're using the latest version.
-- App: https://github.com/lbryio/lbry-app/releases
+- App: https://github.com/lbryio/lbry-desktop/releases
 - Daemon: https://github.com/lbryio/lbry/releases
 
 We are also available on Discord at https://chat.lbry.io
