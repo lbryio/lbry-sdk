@@ -8,9 +8,268 @@ from lbryschema.address import is_address
 from lbryschema.claim import ClaimDict
 from lbryschema.decode import smart_decode
 from lbryschema.error import DecodeError
+from lbryschema.uri import parse_lbry_uri
 
 from .claim_proofs import verify_proof, InvalidProofError
 log = logging.getLogger(__name__)
+
+
+class Resolver:
+
+    def __init__(self, claim_trie_root, height, transaction_class, hash160_to_address, network):
+        self.claim_trie_root = claim_trie_root
+        self.height = height
+        self.transaction_class = transaction_class
+        self.hash160_to_address = hash160_to_address
+        self.network = network
+
+    def _handle_resolutions(self, resolutions, requested_uris, page, page_size):
+        results = {}
+        for uri in requested_uris:
+            resolution = (resolutions or {}).get(uri, {})
+            if resolution:
+                try:
+                    results[uri] = _handle_claim_result(
+                        self._handle_resolve_uri_response(uri, resolution, page, page_size)
+                    )
+                except (UnknownNameError, UnknownClaimID, UnknownURI) as err:
+                    results[uri] = {'error': err.message}
+        return results
+
+    def _handle_resolve_uri_response(self, uri, resolution, page=0, page_size=10, raw=False):
+        result = {}
+        claim_trie_root = self.claim_trie_root
+        parsed_uri = parse_lbry_uri(uri)
+        certificate = None
+        # parse an included certificate
+        if 'certificate' in resolution:
+            certificate_response = resolution['certificate']['result']
+            certificate_resolution_type = resolution['certificate']['resolution_type']
+            if certificate_resolution_type == "winning" and certificate_response:
+                if 'height' in certificate_response:
+                    height = certificate_response['height']
+                    depth = self.height - height
+                    certificate_result = _verify_proof(parsed_uri.name,
+                                                       claim_trie_root,
+                                                       certificate_response,
+                                                       height, depth,
+                                                       transaction_class=self.transaction_class,
+                                                       hash160_to_address=self.hash160_to_address)
+                    result['certificate'] = self.parse_and_validate_claim_result(certificate_result,
+                                                                                 raw=raw)
+            elif certificate_resolution_type == "claim_id":
+                result['certificate'] = self.parse_and_validate_claim_result(certificate_response,
+                                                                             raw=raw)
+            elif certificate_resolution_type == "sequence":
+                result['certificate'] = self.parse_and_validate_claim_result(certificate_response,
+                                                                             raw=raw)
+            else:
+                log.error("unknown response type: %s", certificate_resolution_type)
+
+            if 'certificate' in result:
+                certificate = result['certificate']
+                if 'unverified_claims_in_channel' in resolution:
+                    max_results = len(resolution['unverified_claims_in_channel'])
+                    result['claims_in_channel'] = max_results
+                else:
+                    result['claims_in_channel'] = 0
+            else:
+                result['error'] = "claim not found"
+                result['success'] = False
+                result['uri'] = str(parsed_uri)
+
+        else:
+            certificate = None
+
+        # if this was a resolution for a name, parse the result
+        if 'claim' in resolution:
+            claim_response = resolution['claim']['result']
+            claim_resolution_type = resolution['claim']['resolution_type']
+            if claim_resolution_type == "winning" and claim_response:
+                if 'height' in claim_response:
+                    height = claim_response['height']
+                    depth = self.height - height
+                    claim_result = _verify_proof(parsed_uri.name,
+                                                 claim_trie_root,
+                                                 claim_response,
+                                                 height, depth,
+                                                 transaction_class=self.transaction_class,
+                                                 hash160_to_address=self.hash160_to_address)
+                    result['claim'] = self.parse_and_validate_claim_result(claim_result,
+                                                                           certificate,
+                                                                           raw)
+            elif claim_resolution_type == "claim_id":
+                result['claim'] = self.parse_and_validate_claim_result(claim_response,
+                                                                       certificate,
+                                                                       raw)
+            elif claim_resolution_type == "sequence":
+                result['claim'] = self.parse_and_validate_claim_result(claim_response,
+                                                                       certificate,
+                                                                       raw)
+            else:
+                log.error("unknown response type: %s", claim_resolution_type)
+
+        # if this was a resolution for a name in a channel make sure there is only one valid
+        # match
+        elif 'unverified_claims_for_name' in resolution and 'certificate' in result:
+            unverified_claims_for_name = resolution['unverified_claims_for_name']
+
+            channel_info = self.get_channel_claims_page(unverified_claims_for_name,
+                                                        result['certificate'], page=1)
+            claims_in_channel, upper_bound = channel_info
+
+            if len(claims_in_channel) > 1:
+                log.error("Multiple signed claims for the same name")
+            elif not claims_in_channel:
+                log.error("No valid claims for this name for this channel")
+            else:
+                result['claim'] = claims_in_channel[0]
+
+        # parse and validate claims in a channel iteratively into pages of results
+        elif 'unverified_claims_in_channel' in resolution and 'certificate' in result:
+            ids_to_check = resolution['unverified_claims_in_channel']
+            channel_info = self.get_channel_claims_page(ids_to_check, result['certificate'],
+                                                        page=page, page_size=page_size)
+            claims_in_channel, upper_bound = channel_info
+
+            if claims_in_channel:
+                result['claims_in_channel'] = claims_in_channel
+        elif 'error' not in result:
+            result['error'] = "claim not found"
+            result['success'] = False
+            result['uri'] = str(parsed_uri)
+
+        return result
+
+    def parse_and_validate_claim_result(self, claim_result, certificate=None, raw=False):
+        if not claim_result or 'value' not in claim_result:
+            return claim_result
+
+        claim_result['decoded_claim'] = False
+        decoded = None
+
+        if not raw:
+            claim_value = claim_result['value']
+            try:
+                decoded = smart_decode(claim_value)
+                claim_result['value'] = decoded.claim_dict
+                claim_result['decoded_claim'] = True
+            except DecodeError:
+                pass
+
+        if decoded:
+            claim_result['has_signature'] = False
+            if decoded.has_signature:
+                if certificate is None:
+                    log.info("fetching certificate to check claim signature")
+                    certificate = self.network.get_claims_by_ids(decoded.certificate_id)
+                    if not certificate:
+                        log.warning('Certificate %s not found', decoded.certificate_id)
+                claim_result['has_signature'] = True
+                claim_result['signature_is_valid'] = False
+                validated, channel_name = validate_claim_signature_and_get_channel_name(
+                    decoded, certificate, claim_result['address'])
+                claim_result['channel_name'] = channel_name
+                if validated:
+                    claim_result['signature_is_valid'] = True
+
+        if 'height' in claim_result and claim_result['height'] is None:
+            claim_result['height'] = -1
+
+        if 'amount' in claim_result and not isinstance(claim_result['amount'], float):
+            claim_result = format_amount_value(claim_result)
+
+        claim_result['permanent_url'] = _get_permanent_url(claim_result)
+
+        return claim_result
+
+    @staticmethod
+    def prepare_claim_queries(start_position, query_size, channel_claim_infos):
+        queries = [tuple()]
+        names = {}
+        # a table of index counts for the sorted claim ids, including ignored claims
+        absolute_position_index = {}
+
+        block_sorted_infos = sorted(channel_claim_infos.iteritems(), key=lambda x: int(x[1][1]))
+        per_block_infos = {}
+        for claim_id, (name, height) in block_sorted_infos:
+            claims = per_block_infos.get(height, [])
+            claims.append((claim_id, name))
+            per_block_infos[height] = sorted(claims, key=lambda x: int(x[0], 16))
+
+        abs_position = 0
+
+        for height in sorted(per_block_infos.keys(), reverse=True):
+            for claim_id, name in per_block_infos[height]:
+                names[claim_id] = name
+                absolute_position_index[claim_id] = abs_position
+                if abs_position >= start_position:
+                    if len(queries[-1]) >= query_size:
+                        queries.append(tuple())
+                    queries[-1] += (claim_id,)
+                abs_position += 1
+        return queries, names, absolute_position_index
+
+    def iter_channel_claims_pages(self, queries, claim_positions, claim_names, certificate,
+                                  page_size=10):
+        # lbryum server returns a dict of {claim_id: (name, claim_height)}
+        # first, sort the claims by block height (and by claim id int value within a block).
+
+        # map the sorted claims into getclaimsbyids queries of query_size claim ids each
+
+        # send the batched queries to lbryum server and iteratively validate and parse
+        # the results, yield a page of results at a time.
+
+        # these results can include those where `signature_is_valid` is False. if they are skipped,
+        # page indexing becomes tricky, as the number of results isn't known until after having
+        # processed them.
+        # TODO: fix ^ in lbryschema
+
+        def iter_validate_channel_claims():
+            for claim_ids in queries:
+                log.info(claim_ids)
+                batch_result = yield self.network.get_claims_by_ids(*claim_ids)
+                for claim_id in claim_ids:
+                    claim = batch_result[claim_id]
+                    if claim['name'] == claim_names[claim_id]:
+                        formatted_claim = self.parse_and_validate_claim_result(claim, certificate)
+                        formatted_claim['absolute_channel_position'] = claim_positions[
+                            claim['claim_id']]
+                        yield formatted_claim
+                    else:
+                        log.warning("ignoring claim with name mismatch %s %s", claim['name'],
+                                    claim['claim_id'])
+
+        yielded_page = False
+        results = []
+        for claim in iter_validate_channel_claims():
+            results.append(claim)
+
+            # if there is a full page of results, yield it
+            if len(results) and len(results) % page_size == 0:
+                yield results[-page_size:]
+                yielded_page = True
+
+        # if we didn't get a full page of results, yield what results we did get
+        if not yielded_page:
+            yield results
+
+    def get_channel_claims_page(self, channel_claim_infos, certificate, page, page_size=10):
+        page = page or 0
+        page_size = max(page_size, 1)
+        if page_size > 500:
+            raise Exception("page size above maximum allowed")
+        start_position = (page - 1) * page_size
+        queries, names, claim_positions = self.prepare_claim_queries(start_position, page_size,
+                                                                     channel_claim_infos)
+        page_generator = self.iter_channel_claims_pages(queries, claim_positions, names,
+                                                        certificate, page_size=page_size)
+        upper_bound = len(claim_positions)
+        if not page:
+            return None, upper_bound
+        if start_position > upper_bound:
+            raise IndexError("claim %i greater than max %i" % (start_position, upper_bound))
+        return next(page_generator), upper_bound
 
 
 # Format amount to be decimal encoded string
@@ -47,7 +306,7 @@ def _get_permanent_url(claim_result):
         )
 
 
-def _verify_proof(ledger, name, claim_trie_root, result, height, depth, transaction_class):
+def _verify_proof(name, claim_trie_root, result, height, depth, transaction_class, hash160_to_address):
     """
     Verify proof for name claim
     """
@@ -81,7 +340,7 @@ def _verify_proof(ledger, name, claim_trie_root, result, height, depth, transact
                     if 0 <= nOut < len(tx.outputs):
                         claim_output = tx.outputs[nOut]
                         effective_amount = claim_output.amount + support_amount
-                        claim_address = ledger.hash160_to_address(claim_output.script.values['pubkey_hash'])
+                        claim_address = hash160_to_address(claim_output.script.values['pubkey_hash'])
                         claim_id = result['claim_id']
                         claim_sequence = result['claim_sequence']
                         claim_script = claim_output.script
