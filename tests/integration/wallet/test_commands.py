@@ -10,7 +10,7 @@ lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 from lbrynet import conf as lbry_conf
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.wallet.manager import LbryWalletManager
-from lbrynet.daemon.Components import WalletComponent, FileManager, SessionComponent
+from lbrynet.daemon.Components import WalletComponent, FileManager, SessionComponent, DatabaseComponent
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 
 
@@ -19,6 +19,9 @@ class FakeAnalytics:
         pass
 
     def shutdown(self):
+        pass
+
+    def send_claim_action(self, action):
         pass
 
 
@@ -64,6 +67,10 @@ class CommandTestCase(IntegrationTestCase):
         file_manager.file_manager = EncryptedFileManager(session_component.session, True)
         file_manager._running = True
         self.daemon.component_manager.components.add(file_manager)
+        storage_component = DatabaseComponent(self.daemon.component_manager)
+        await d2f(storage_component.start())
+        self.daemon.component_manager.components.add(storage_component)
+        self.daemon.storage = storage_component.storage
 
 
 class ChannelNewCommandTests(CommandTestCase):
@@ -95,5 +102,10 @@ class PublishCommandTests(CommandTestCase):
 
     @defer.inlineCallbacks
     def test_publish(self):
-        result = yield self.daemon.jsonrpc_publish('foo', 1)
+        result = yield self.daemon.jsonrpc_publish('foo', 1, sources={
+                'version': '_0_0_1',
+                'sourceType': 'lbry_sd_hash',
+                'source': '0' * 96,
+                'contentType': ''
+            })
         print(result)

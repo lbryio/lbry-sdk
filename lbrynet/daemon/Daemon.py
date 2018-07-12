@@ -365,19 +365,29 @@ class Daemon(AuthJSONRPCServer):
         if not file_path:
             stream_hash = yield self.storage.get_stream_hash_for_sd_hash(
                 claim_dict['stream']['source']['source'])
-            claim_out = yield publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address,
+            tx = yield publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address,
                                                        change_address)
         else:
-            claim_out = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path,
+            tx = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path,
                                                                   claim_address, change_address)
             if conf.settings['reflect_uploads']:
                 d = reupload.reflect_file(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
                                log.exception)
         self.analytics_manager.send_claim_action('publish')
-        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, claim_out['txid'],
-                 claim_out['nout'])
-        defer.returnValue(claim_out)
+        nout = 0
+        script = tx.outputs[nout].script
+        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.hex_id.decode(), nout)
+        defer.returnValue({
+            "success": True,
+            "txid": tx.hex_id.decode(),
+            "nout": nout,
+            "tx": hexlify(tx.raw),
+            "fee": str(Decimal(tx.fee) / COIN),
+            "claim_id": tx.get_claim_id(0),
+            "value": hexlify(script.values['claim']),
+            "claim_address": self.ledger.hash160_to_address(script.values['pubkey_hash'])
+        })
 
     @defer.inlineCallbacks
     def _resolve(self, *uris, **kwargs):
