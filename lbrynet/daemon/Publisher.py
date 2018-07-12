@@ -20,8 +20,7 @@ class Publisher(object):
         self.lbry_file = None
 
     @defer.inlineCallbacks
-    def create_and_publish_stream(self, name, bid, claim_dict, file_path, claim_address=None,
-                                  change_address=None):
+    def create_and_publish_stream(self, name, bid, claim_dict, file_path, holding_address=None):
         """Create lbry file and make claim"""
         log.info('Starting publish for %s', name)
         if not os.path.isfile(file_path):
@@ -40,7 +39,9 @@ class Publisher(object):
         claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
         claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
-        tx = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
+        tx = yield self.wallet.claim_name(
+            name, bid, claim_dict, self.certificate, holding_address
+        )
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)
         old_stream_hashes = yield self.session.storage.get_old_stream_hashes_for_claim_id(tx.get_claim_id(0),
@@ -52,26 +53,20 @@ class Publisher(object):
                 log.info("Removed old stream for claim update: %s", lbry_file.stream_hash)
 
         yield self.session.storage.save_content_claim(
-            self.lbry_file.stream_hash, get_certificate_lookup(tx, 0)
+            self.lbry_file.stream_hash, get_certificate_lookup(tx, 0).decode()
         )
         defer.returnValue(tx)
 
     @defer.inlineCallbacks
-    def publish_stream(self, name, bid, claim_dict, stream_hash, claim_address=None, change_address=None):
+    def publish_stream(self, name, bid, claim_dict, stream_hash, holding_address=None):
         """Make a claim without creating a lbry file"""
-        claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
-        if stream_hash:  # the stream_hash returned from the db will be None if this isn't a stream we have
-            yield self.session.storage.save_content_claim(stream_hash, "%s:%i" % (claim_out['txid'],
-                                                                                  claim_out['nout']))
-            self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
-        defer.returnValue(claim_out)
-
-    @defer.inlineCallbacks
-    def make_claim(self, name, bid, claim_dict, claim_address=None, change_address=None):
-        claim_out = yield self.wallet.claim_name(
-            name, bid, claim_dict, certificate=self.certificate, claim_address=claim_address
+        tx = yield self.wallet.claim_name(
+            name, bid, claim_dict, self.certificate, holding_address
         )
-        defer.returnValue(claim_out)
+        if stream_hash:  # the stream_hash returned from the db will be None if this isn't a stream we have
+            yield self.session.storage.save_content_claim(stream_hash, get_certificate_lookup(tx, 0).decode())
+            self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
+        defer.returnValue(tx)
 
 
 def get_content_type(filename):
