@@ -1,4 +1,4 @@
-import types
+import tempfile
 
 from twisted.internet import defer
 from orchstr8.testcase import IntegrationTestCase, d2f
@@ -25,8 +25,14 @@ class FakeAnalytics:
         pass
 
 
+class FakeBlobManager:
+    def get_blob_creator(self):
+        return None
+
+
 class FakeSession:
     storage = None
+    blob_manager = FakeBlobManager()
 
 
 class CommandTestCase(IntegrationTestCase):
@@ -53,24 +59,30 @@ class CommandTestCase(IntegrationTestCase):
         await self.on_transaction_id(sendtxid)
         await self.blockchain.generate(1)
         await self.on_transaction_id(sendtxid)
+
         self.daemon = Daemon(FakeAnalytics())
-        self.daemon.wallet = self.manager
+
         wallet_component = WalletComponent(self.daemon.component_manager)
         wallet_component.wallet = self.manager
         wallet_component._running = True
+        self.daemon.wallet = self.manager
         self.daemon.component_manager.components.add(wallet_component)
+
         session_component = SessionComponent(self.daemon.component_manager)
         session_component.session = FakeSession()
         session_component._running = True
+        self.daemon.session = session_component.session
         self.daemon.component_manager.components.add(session_component)
+
         file_manager = FileManager(self.daemon.component_manager)
         file_manager.file_manager = EncryptedFileManager(session_component.session, True)
         file_manager._running = True
         self.daemon.component_manager.components.add(file_manager)
+
         storage_component = DatabaseComponent(self.daemon.component_manager)
         await d2f(storage_component.start())
-        self.daemon.component_manager.components.add(storage_component)
         self.daemon.storage = storage_component.storage
+        self.daemon.component_manager.components.add(storage_component)
 
 
 class ChannelNewCommandTests(CommandTestCase):
@@ -102,10 +114,8 @@ class PublishCommandTests(CommandTestCase):
 
     @defer.inlineCallbacks
     def test_publish(self):
-        result = yield self.daemon.jsonrpc_publish('foo', 1, sources={
-                'version': '_0_0_1',
-                'sourceType': 'lbry_sd_hash',
-                'source': '0' * 96,
-                'contentType': ''
-            })
-        print(result)
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hello world!')
+            file.flush()
+            result = yield self.daemon.jsonrpc_publish('foo', 1, file_path=file.name)
+            print(result)
