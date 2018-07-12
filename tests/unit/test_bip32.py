@@ -40,7 +40,7 @@ class BIP32Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'private key must be 32 bytes'):
             PrivateKey(None, b'abcd', b'abcd'*8, 0, 255)
         private_key = PrivateKey(
-            MainNetLedger(db=True),
+            MainNetLedger({'db': True}),
             unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
             b'abcd'*8, 0, 1
         )
@@ -57,7 +57,7 @@ class BIP32Tests(unittest.TestCase):
         self.assertIsInstance(private_key.child(PrivateKey.HARDENED), PrivateKey)
 
     def test_from_extended_keys(self):
-        ledger = MainNetLedger(db=True)
+        ledger = MainNetLedger({'db': True})
         self.assertIsInstance(
             from_extended_key_string(
                 ledger,

@@ -30,7 +30,7 @@ def get_transaction(txo=None):
 class TestSizeAndFeeEstimation(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = ledger_class(db=ledger_class.database_class(':memory:'))
+        self.ledger = ledger_class({'db': ledger_class.database_class(':memory:')})
         return self.ledger.db.start()
 
     def io_fee(self, io):
@@ -143,7 +143,7 @@ class TestTransactionSerialization(unittest.TestCase):
 class TestTransactionSigning(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = ledger_class(db=ledger_class.database_class(':memory:'))
+        self.ledger = ledger_class({'db': ledger_class.database_class(':memory:')})
         return self.ledger.db.start()
 
     @defer.inlineCallbacks
