@@ -178,7 +178,7 @@ class LbryWalletManager(BaseWalletManager):
         cert, key = generate_certificate()
         tx = yield Transaction.claim(channel_name.encode(), cert, amount, address, [account], account)
         yield account.ledger.broadcast(tx)
-        account.add_certificate(tx, 0, tx.get_claim_id(0), channel_name, key)
+        account.add_certificate_private_key(tx, 0, key.decode())
         # TODO: release reserved tx outputs in case anything fails by this point
         defer.returnValue(tx)
 
