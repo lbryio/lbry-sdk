@@ -19,7 +19,7 @@ def search(*args, **kwargs):
 class BaseSelectionTestCase(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = MainNetLedger(db=MainNetLedger.database_class(':memory:'))
+        self.ledger = MainNetLedger({'db': MainNetLedger.database_class(':memory:')})
         return self.ledger.db.start()
 
     def estimates(self, *args):
