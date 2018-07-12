@@ -201,6 +201,10 @@ class LbryWalletManager(BaseWalletManager):
     def cancel_point_reservation(self, reserved_points):
         pass # fixme: disabled for now.
 
+    def save(self):
+        for wallet in self.wallets:
+            wallet.save()
+
 
 class ReservedPoints(object):
     def __init__(self, identifier, amount):
