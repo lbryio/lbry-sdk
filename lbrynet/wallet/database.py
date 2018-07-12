@@ -40,6 +40,10 @@ class WalletDatabase(BaseDatabase):
         })
         if txo.script.is_claim_involved:
             row['claim_name'] = txo.script.values['claim_name']
+        if txo.script.is_update_claim or txo.script.is_support_claim:
+            row['claim_id'] = sqlite3.Binary(txo.script.values['claim_id'])
+        else:
+            row['claim_id'] = sqlite3.Binary(tx.get_claim_id(txo.index))
         return row
 
     @defer.inlineCallbacks

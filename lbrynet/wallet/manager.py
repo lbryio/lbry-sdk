@@ -60,7 +60,7 @@ class LbryWalletManager(BaseWalletManager):
             'default_servers': settings['lbryum_servers'],
             'data_path': settings['lbryum_wallet_dir'],
             'use_keyring': settings['use_keyring'],
-            'db': db
+            #'db': db
         }
 
         wallet_file_path = os.path.join(settings['lbryum_wallet_dir'], 'default_wallet')
