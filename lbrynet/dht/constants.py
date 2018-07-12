@@ -29,6 +29,8 @@ rpcTimeout = 5
 
 # number of rpc attempts to make before a timeout results in the node being removed as a contact
 rpcAttempts = 5
+# time window to count failures (in seconds)
+rpcAttemptsPruningTimeWindow = 600
 
 # Delay between iterations of iterative node lookups (for loose parallelism)  (in seconds)
 iterativeLookupDelay = rpcTimeout / 2
