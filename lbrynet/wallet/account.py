@@ -1,4 +1,6 @@
-from binascii import hexlify
+import logging
+from binascii import hexlify, unhexlify
+
 from twisted.internet import defer
 
 from torba.baseaccount import BaseAccount
@@ -7,6 +9,8 @@ from lbryschema.claim import ClaimDict
 from lbryschema.signer import SECP256k1, get_signer
 
 from .transaction import Transaction
+
+log = logging.getLogger(__name__)
 
 
 def generate_certificate():
@@ -27,8 +31,8 @@ class Account(BaseAccount):
         super(Account, self).__init__(*args, **kwargs)
         self.certificates = {}
 
-    def add_certificate(self, tx, nout, private_key):
-        lookup_key = '{}:{}'.format(tx.hex_id.decode(), nout)
+    def add_certificate_private_key(self, tx_or_hash, nout, private_key):
+        lookup_key = get_certificate_lookup(tx_or_hash, nout)
         assert lookup_key not in self.certificates, 'Trying to add a duplicate certificate.'
         self.certificates[lookup_key] = private_key
 
@@ -37,15 +41,34 @@ class Account(BaseAccount):
 
     @defer.inlineCallbacks
     def maybe_migrate_certificates(self):
+        failed, succeded, total = 0, 0, 0
         for maybe_claim_id in self.certificates.keys():
+            total += 1
             if ':' not in maybe_claim_id:
                 claims = yield self.ledger.network.get_claims_by_ids(maybe_claim_id)
-                # assert claim['address'] is one of our addresses, otherwise move cert to new Account
-                print(claims[maybe_claim_id])
-                tx_nout = '{txid}:{nout}'.format(**claims[maybe_claim_id])
-                self.certificates[tx_nout] = self.certificates[maybe_claim_id]
-                del self.certificates[maybe_claim_id]
-                break
+                claim = claims[maybe_claim_id]
+                txhash = unhexlify(claim['txid'])[::-1]
+                tx = yield self.ledger.get_transaction(txhash)
+                if tx is not None:
+                    txo = tx.outputs[claim['nout']]
+                    assert txo.script.is_claim_involved,\
+                        "Certificate with claim_id {} doesn't point to a valid transaction."\
+                        .format(maybe_claim_id)
+                    tx_nout = '{txid}:{nout}'.format(**claim)
+                    self.certificates[tx_nout] = self.certificates[maybe_claim_id]
+                    del self.certificates[maybe_claim_id]
+                    log.info(
+                        "Migrated certificate with claim_id '{}' ('{}') to a new look up key {}."
+                        .format(maybe_claim_id, txo.script.values['claim_name'], tx_nout)
+                    )
+                    succeded += 1
+                else:
+                    log.warning(
+                        "Failed to migrate claim '{}', it's not associated with any of your addresses."
+                        .format(maybe_claim_id)
+                    )
+                    failed += 1
+        log.info('Checked: {}, Converted: {}, Failed: {}'.format(total, succeded, failed))
 
     def get_balance(self, include_claims=False):
         if include_claims:
