@@ -371,11 +371,9 @@ class Daemon(AuthJSONRPCServer):
         if not file_path:
             stream_hash = yield self.storage.get_stream_hash_for_sd_hash(
                 claim_dict['stream']['source']['source'])
-            tx = yield publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address,
-                                                       change_address)
+            tx = yield publisher.publish_stream(name, bid, claim_dict, stream_hash, claim_address)
         else:
-            tx = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path,
-                                                                  claim_address, change_address)
+            tx = yield publisher.create_and_publish_stream(name, bid, claim_dict, file_path, claim_address)
             if conf.settings['reflect_uploads']:
                 d = reupload.reflect_file(publisher.lbry_file)
                 d.addCallbacks(lambda _: log.info("Reflected new publication to lbry://%s", name),
