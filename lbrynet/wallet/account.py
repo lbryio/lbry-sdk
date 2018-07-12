@@ -39,7 +39,10 @@ class Account(BaseAccount):
     def maybe_migrate_certificates(self):
         for lookup_key in self.certificates.keys():
             if ':' not in lookup_key:
-                claim = self.ledger.
+                claim = yield self.ledger.network.get_claims_by_ids(lookup_key)
+                print(claim)
+                break
+
     def get_balance(self, include_claims=False):
         if include_claims:
             return super(Account, self).get_balance()
