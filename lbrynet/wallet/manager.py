@@ -7,6 +7,7 @@ from torba.wallet import WalletStorage
 
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError
+from lbryschema.claim import ClaimDict
 
 from .ledger import MainNetLedger  # pylint: disable=unused-import
 from .account import generate_certificate
@@ -148,8 +149,9 @@ class LbryWalletManager(BaseWalletManager):
         return defer.succeed([])
 
     @defer.inlineCallbacks
-    def claim_name(self, name, amount, claim, certificate=None, claim_address=None):
+    def claim_name(self, name, amount, claim_dict, certificate=None, claim_address=None):
         account = self.default_account
+        claim = ClaimDict.load_dict(claim_dict)
         if not claim_address:
             claim_address = yield account.receiving.get_or_create_usable_address()
         if certificate:
