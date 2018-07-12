@@ -6,6 +6,7 @@ from twisted.internet import defer
 
 from lbrynet.core import file_utils
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
+from lbrynet.wallet.account import get_certificate_lookup
 
 log = logging.getLogger(__name__)
 
@@ -39,10 +40,10 @@ class Publisher(object):
         claim_dict['stream']['source']['sourceType'] = 'lbry_sd_hash'
         claim_dict['stream']['source']['contentType'] = get_content_type(file_path)
         claim_dict['stream']['source']['version'] = "_0_0_1"  # need current version here
-        claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
+        tx = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)
-        old_stream_hashes = yield self.session.storage.get_old_stream_hashes_for_claim_id(claim_out['claim_id'],
+        old_stream_hashes = yield self.session.storage.get_old_stream_hashes_for_claim_id(tx.get_claim_id(0),
                                                                                           self.lbry_file.stream_hash)
         if old_stream_hashes:
             for lbry_file in filter(lambda l: l.stream_hash in old_stream_hashes,
@@ -51,9 +52,9 @@ class Publisher(object):
                 log.info("Removed old stream for claim update: %s", lbry_file.stream_hash)
 
         yield self.session.storage.save_content_claim(
-            self.lbry_file.stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout'])
+            self.lbry_file.stream_hash, get_certificate_lookup(tx, 0)
         )
-        defer.returnValue(claim_out)
+        defer.returnValue(tx)
 
     @defer.inlineCallbacks
     def publish_stream(self, name, bid, claim_dict, stream_hash, claim_address=None, change_address=None):
