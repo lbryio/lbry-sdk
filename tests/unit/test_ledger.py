@@ -45,10 +45,20 @@ class MockHeaders:
         return {'merkle_root': 'abcd04'}
 
 
+class MainNetTestLedger(MainNetLedger):
+    headers_class = MockHeaders
+    network_name = 'unittest'
+
+    def __init__(self):
+        super(MainNetLedger, self).__init__({
+            'db': MainNetLedger.database_class(':memory:')
+        })
+
+
 class TestSynchronization(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = MainNetLedger(db=MainNetLedger.database_class(':memory:'), headers_class=MockHeaders)
+        self.ledger = MainNetTestLedger()
         return self.ledger.db.start()
 
     @defer.inlineCallbacks

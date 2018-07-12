@@ -61,16 +61,16 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
     default_fee_per_byte = 10
 
-    def __init__(self, config=None, db=None, network=None, headers_class=None):
+    def __init__(self, config=None):
         self.config = config or {}
-        self.db = db or self.database_class(
+        self.db = self.config.get('db') or self.database_class(
             os.path.join(self.path, "blockchain.db")
         )  # type: basedatabase.BaseDatabase
-        self.network = network or self.network_class(self)
+        self.network = self.config.get('network') or self.network_class(self)
         self.network.on_header.listen(self.process_header)
         self.network.on_status.listen(self.process_status)
         self.accounts = set()
-        self.headers = (headers_class or self.headers_class)(self)
+        self.headers = self.config.get('headers') or self.headers_class(self)
         self.fee_per_byte = self.config.get('fee_per_byte', self.default_fee_per_byte)
 
         self._on_transaction_controller = StreamController()
@@ -263,41 +263,41 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
             yield lock.acquire()
 
-            try:
-                # see if we have a local copy of transaction, otherwise fetch it from server
-                raw, local_height, is_verified = yield self.db.get_transaction(unhexlify(hex_id)[::-1])
-                save_tx = None
-                if raw is None:
-                    _raw = yield self.network.get_transaction(hex_id)
-                    tx = self.transaction_class(unhexlify(_raw))
-                    save_tx = 'insert'
-                else:
-                    tx = self.transaction_class(raw)
+            #try:
+            # see if we have a local copy of transaction, otherwise fetch it from server
+            raw, local_height, is_verified = yield self.db.get_transaction(unhexlify(hex_id)[::-1])
+            save_tx = None
+            if raw is None:
+                _raw = yield self.network.get_transaction(hex_id)
+                tx = self.transaction_class(unhexlify(_raw))
+                save_tx = 'insert'
+            else:
+                tx = self.transaction_class(raw)
 
-                if remote_height > 0 and not is_verified:
-                    is_verified = yield self.is_valid_transaction(tx, remote_height)
-                    is_verified = 1 if is_verified else 0
-                    if save_tx is None:
-                        save_tx = 'update'
+            if remote_height > 0 and not is_verified:
+                is_verified = yield self.is_valid_transaction(tx, remote_height)
+                is_verified = 1 if is_verified else 0
+                if save_tx is None:
+                    save_tx = 'update'
 
-                yield self.db.save_transaction_io(
-                    save_tx, tx, remote_height, is_verified, address, self.address_to_hash160(address),
-                    ''.join('{}:{}:'.format(tx_id.decode(), tx_height) for tx_id, tx_height in synced_history)
-                )
+            yield self.db.save_transaction_io(
+                save_tx, tx, remote_height, is_verified, address, self.address_to_hash160(address),
+                ''.join('{}:{}:'.format(tx_id.decode(), tx_height) for tx_id, tx_height in synced_history)
+            )
 
-                log.debug("{}: sync'ed tx {} for address: {}, height: {}, verified: {}".format(
-                    self.get_id(), hex_id, address, remote_height, is_verified
-                ))
-                self._on_transaction_controller.add(TransactionEvent(address, tx, remote_height, is_verified))
+            log.debug("{}: sync'ed tx {} for address: {}, height: {}, verified: {}".format(
+                self.get_id(), hex_id, address, remote_height, is_verified
+            ))
+            self._on_transaction_controller.add(TransactionEvent(address, tx, remote_height, is_verified))
 
-            except:
-                log.exception('Failed to synchronize transaction:')
-                raise
+            #except:
+            #    log.exception('Failed to synchronize transaction:')
+            #    raise
 
-            finally:
-                lock.release()
-                if not lock.locked:
-                    del self._transaction_processing_locks[hex_id]
+            #finally:
+            lock.release()
+            if not lock.locked:
+                del self._transaction_processing_locks[hex_id]
 
     @defer.inlineCallbacks
     def subscribe_history(self, address):

@@ -62,23 +62,17 @@ class WalletStorage:
 
     LATEST_VERSION = 1
 
-    DEFAULT = {
-        'version': LATEST_VERSION,
-        'name': 'Wallet',
-        'accounts': []
-    }
-
     def __init__(self, path=None, default=None):
         self.path = path
-        self._default = default or self.DEFAULT.copy()
-
-    @property
-    def default(self):
-        return self._default.copy()
+        self._default = default or {
+            'version': self.LATEST_VERSION,
+            'name': 'My Wallet',
+            'accounts': []
+        }
 
     def read(self):
         if self.path and os.path.exists(self.path):
-            with open(self.path, "r") as f:
+            with open(self.path, 'r') as f:
                 json_data = f.read()
                 json_dict = json.loads(json_data)
                 if json_dict.get('version') == self.LATEST_VERSION and \
@@ -87,40 +81,14 @@ class WalletStorage:
                 else:
                     return self.upgrade(json_dict)
         else:
-            return self.default
+            return self._default.copy()
 
-    @classmethod
-    def upgrade(cls, json_dict):
+    def upgrade(self, json_dict):
         json_dict = json_dict.copy()
-
-        def _rename_property(old, new):
-            if old in json_dict:
-                json_dict[new] = json_dict[old]
-                del json_dict[old]
-
         version = json_dict.pop('version', -1)
-
-        if version == -1:  # upgrading from electrum wallet
-            json_dict = {
-                'accounts': [{
-                    'ledger': 'lbc_mainnet',
-                    'encrypted': json_dict['use_encryption'],
-                    'seed': json_dict['seed'],
-                    'seed_version': json_dict['seed_version'],
-                    'private_key': json_dict['master_private_keys']['x/'],
-                    'public_key': json_dict['master_public_keys']['x/'],
-                    'certificates': json_dict['claim_certificates'],
-                    'receiving_gap': 20,
-                    'change_gap': 6,
-                    'receiving_maximum_use_per_address': 2,
-                    'change_maximum_use_per_address': 2
-                }]
-            }
-
-        elif version == 1:  # upgrade from version 1 to version 2
+        if version == -1:
             pass
-
-        upgraded = cls.DEFAULT
+        upgraded = self._default.copy()
         upgraded.update(json_dict)
         return json_dict
 
