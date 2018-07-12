@@ -113,7 +113,7 @@ class LbryWalletManager(BaseWalletManager):
         return defer.succeed('')
 
     def get_unused_address(self):
-        return defer.succeed(self.default_account.get_least_used_receiving_address())
+        return self.default_account.receiving.get_or_create_usable_address()
 
     def get_new_address(self):
         return self.get_unused_address()
