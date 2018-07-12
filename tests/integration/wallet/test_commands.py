@@ -95,5 +95,5 @@ class PublishCommandTests(CommandTestCase):
 
     @defer.inlineCallbacks
     def test_publish(self):
-        result = yield self.daemon.jsonrpc_publish('foo', 1*COIN)
+        result = yield self.daemon.jsonrpc_publish('foo', 1)
         print(result)
