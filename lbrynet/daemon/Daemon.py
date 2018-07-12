@@ -1849,14 +1849,15 @@ class Daemon(AuthJSONRPCServer):
             'channel_name': channel_name
         })
 
-        if channel_id:
-            certificate = self.wallet.default_account.get_certificate(by_claim_id=channel_id)
-        elif channel_name:
-            certificate = self.wallet.default_account.get_certificate(by_name=channel_name)
-            if not certificate:
+        certificate = None
+        if channel_name:
+            certificates = yield self.wallet.get_certificates(channel_name)
+            for cert in certificates:
+                if cert.claim_id == channel_id:
+                    certificate = cert
+                    break
+            if certificate is None:
                 raise Exception("Cannot publish using channel %s" % channel_name)
-        else:
-            certificate = None
 
         result = yield self._publish_stream(name, bid, claim_dict, file_path, certificate,
                                             claim_address, change_address)
