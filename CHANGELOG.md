@@ -21,8 +21,8 @@ at anytime.
   *
 
 ### Changed
-  *
-  *
+  * keep track of failures for DHT peers for up to ten minutes instead of indefinitely
+  * skip ignored peers from iterative lookups instead of blocking the peer who returned them to us too
 
 ### Added
   *

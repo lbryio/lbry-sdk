@@ -110,7 +110,7 @@ class _IterativeFind(object):
                 if (contactTriple[1], contactTriple[2]) in ((c.address, c.port) for c in self.already_contacted):
                     continue
                 elif self.node.contact_manager.is_ignored((contactTriple[1], contactTriple[2])):
-                    raise ValueError("contact is ignored")
+                    continue
                 else:
                     found_contact = self.node.contact_manager.make_contact(contactTriple[0], contactTriple[1],
                                                                            contactTriple[2], self.node._protocol)
