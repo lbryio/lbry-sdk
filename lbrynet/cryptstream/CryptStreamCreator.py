@@ -121,7 +121,7 @@ class CryptStreamCreator(object):
 
         yield defer.DeferredList(self.finished_deferreds)
         self.blob_count += 1
-        iv = next(self.iv_generator)
+        iv = next(self.iv_generator).encode()
         final_blob = self._get_blob_maker(iv, self.blob_manager.get_blob_creator())
         stream_terminator = yield final_blob.close()
         terminator_info = yield self._blob_finished(stream_terminator)
@@ -132,7 +132,7 @@ class CryptStreamCreator(object):
             if self.current_blob is None:
                 self.next_blob_creator = self.blob_manager.get_blob_creator()
                 self.blob_count += 1
-                iv = next(self.iv_generator)
+                iv = next(self.iv_generator).encode()
                 self.current_blob = self._get_blob_maker(iv, self.next_blob_creator)
             done, num_bytes_written = self.current_blob.write(data)
             data = data[num_bytes_written:]

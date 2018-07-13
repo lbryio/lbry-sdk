@@ -268,7 +268,7 @@ class GenFile(io.RawIOBase):
     def __init__(self, size, pattern):
         io.RawIOBase.__init__(self)
         self.size = size
-        self.pattern = pattern
+        self.pattern = pattern.encode()
         self.read_so_far = 0
         self.buff = b''
         self.last_offset = 0
@@ -301,7 +301,7 @@ class GenFile(io.RawIOBase):
     def _generate_chunk(self, size=KB):
         output = self.pattern[self.last_offset:self.last_offset + size]
         n_left = size - len(output)
-        whole_patterns = n_left / len(self.pattern)
+        whole_patterns = n_left // len(self.pattern)
         output += self.pattern * whole_patterns
         self.last_offset = size - len(output)
         output += self.pattern[:self.last_offset]

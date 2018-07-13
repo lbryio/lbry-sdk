@@ -1,4 +1,4 @@
-import StringIO
+from io import StringIO
 
 import mock
 from twisted.internet import defer
@@ -119,7 +119,7 @@ class TestBlobRequestHandlerSender(unittest.TestCase):
     def test_file_is_sent_to_consumer(self):
         # TODO: also check that the expected payment values are set
         consumer = proto_helpers.StringTransport()
-        test_file = StringIO.StringIO('test')
+        test_file = StringIO('test')
         handler = BlobRequestHandler.BlobRequestHandler(None, None, None, None)
         handler.peer = mock.create_autospec(Peer.Peer)
         handler.currently_uploading = mock.Mock()

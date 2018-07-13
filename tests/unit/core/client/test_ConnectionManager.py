@@ -6,7 +6,7 @@ from lbrynet.core.Peer import Peer
 from lbrynet.core.PeerManager import PeerManager
 from lbrynet.core.Error import NoResponseError
 
-from twisted.trial import unittest
+from twisted.trial.unittest import TestCase
 from twisted.internet import defer, reactor, task
 from twisted.internet.task import deferLater
 from twisted.internet.protocol import ServerFactory
@@ -24,7 +24,7 @@ class MocDownloader(object):
         pass
 
 class MocRequestCreator(object):
-    implements(IRequestCreator)
+    #implements(IRequestCreator)
     def __init__(self, peers_to_return, peers_to_return_head_blob=[]):
         self.peers_to_return = peers_to_return
         self.peers_to_return_head_blob = peers_to_return_head_blob
@@ -56,7 +56,7 @@ class MocRequestCreator(object):
         return self.peers_to_return_head_blob
 
 class MocFunctionalQueryHandler(object):
-    implements(IQueryHandler)
+    #implements(IQueryHandler)
 
     def __init__(self, clock, is_good=True, is_delayed=False):
         self.query_identifiers = ['moc_request']
@@ -83,7 +83,7 @@ class MocFunctionalQueryHandler(object):
 
 
 class MocQueryHandlerFactory(object):
-    implements(IQueryHandlerFactory)
+    #implements(IQueryHandlerFactory)
     # is is_good, the query handler works as expectd,
     # is is_delayed, the query handler will delay its resposne
     def __init__(self, clock, is_good=True, is_delayed=False):
@@ -113,7 +113,8 @@ class MocServerProtocolFactory(ServerFactory):
             self.query_handler_factories = {}
         self.peer_manager = PeerManager()
 
-class TestIntegrationConnectionManager(unittest.TestCase):
+
+class TestIntegrationConnectionManager(TestCase):
     def setUp(self):
 
         conf.initialize_settings(False)
