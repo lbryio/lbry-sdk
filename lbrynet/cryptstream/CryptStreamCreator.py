@@ -102,6 +102,12 @@ class CryptStreamCreator(object):
         while 1:
             yield os.urandom(AES.block_size // 8)
 
+    def get_next_iv(self):
+        iv = next(self.iv_generator)
+        if not isinstance(iv, bytes):
+            return iv.encode()
+        return iv
+
     def setup(self):
         """Create the symmetric key if it wasn't provided"""
 
@@ -121,7 +127,7 @@ class CryptStreamCreator(object):
 
         yield defer.DeferredList(self.finished_deferreds)
         self.blob_count += 1
-        iv = next(self.iv_generator).encode()
+        iv = self.get_next_iv()
         final_blob = self._get_blob_maker(iv, self.blob_manager.get_blob_creator())
         stream_terminator = yield final_blob.close()
         terminator_info = yield self._blob_finished(stream_terminator)
@@ -132,7 +138,7 @@ class CryptStreamCreator(object):
             if self.current_blob is None:
                 self.next_blob_creator = self.blob_manager.get_blob_creator()
                 self.blob_count += 1
-                iv = next(self.iv_generator).encode()
+                iv = self.get_next_iv()
                 self.current_blob = self._get_blob_maker(iv, self.next_blob_creator)
             done, num_bytes_written = self.current_blob.write(data)
             data = data[num_bytes_written:]
