@@ -354,6 +354,10 @@ class AvailabilityRequest(RequestHelper):
         log.debug("Received a response to the availability request")
         # save available blobs
         blob_hashes = response_dict['available_blobs']
+        if not blob_hashes:
+            # should not send any more requests as it doesnt have any blob we need
+            self.peer.update_score(-10.0)
+            return True
         for blob_hash in blob_hashes:
             if blob_hash in request.request_dict['requested_blobs']:
                 self.process_available_blob_hash(blob_hash, request)
