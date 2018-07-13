@@ -46,6 +46,8 @@ class BlobFileCreator(object):
     def write(self, data):
         if not self._is_open:
             raise IOError
+        if not isinstance(data, bytes):
+            data = data.encode()
         self._hashsum.update(data)
         self.len_so_far += len(data)
         self.buffer.write(data)

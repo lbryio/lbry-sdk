@@ -1,12 +1,12 @@
 from binascii import hexlify, unhexlify
 from twisted.trial import unittest
 
-from torba.baseaccount import Account
 from torba.constants import CENT, COIN
 from torba.wallet import Wallet
 from torba.basetransaction import NULL_HASH
 
-from lbrynet.wallet.coin import LBC
+from lbrynet.wallet.account import Account
+from lbrynet.wallet.ledger import MainNetLedger
 from lbrynet.wallet.transaction import Transaction, Output, Input
 from lbrynet.wallet.manager import LbryWalletManager
 
