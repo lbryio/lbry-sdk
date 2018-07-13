@@ -283,9 +283,9 @@ def format_blobs(crypt_blob_infos):
     for blob_info in crypt_blob_infos:
         blob = {}
         if blob_info.length != 0:
-            blob['blob_hash'] = str(blob_info.blob_hash)
+            blob['blob_hash'] = blob_info.blob_hash
         blob['blob_num'] = blob_info.blob_num
-        blob['iv'] = str(blob_info.iv)
+        blob['iv'] = blob_info.iv
         blob['length'] = blob_info.length
         formatted_blobs.append(blob)
     return formatted_blobs
@@ -355,7 +355,7 @@ def get_blob_hashsum(b):
     iv = b['iv']
     blob_hashsum = get_lbry_hash_obj()
     if length != 0:
-        blob_hashsum.update(blob_hash)
+        blob_hashsum.update(blob_hash.encode())
     blob_hashsum.update(str(blob_num).encode())
     blob_hashsum.update(iv)
     blob_hashsum.update(str(length).encode())

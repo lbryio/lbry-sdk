@@ -148,7 +148,7 @@ class CryptStreamBlobMaker(object):
     def close(self):
         log.debug("closing blob %s with plaintext len %s", str(self.blob_num), str(self.length))
         if self.length != 0:
-            self.length += (AES.block_size / 8) - (self.length % (AES.block_size / 8))
+            self.length += (AES.block_size // 8) - (self.length % (AES.block_size // 8))
             padded_data = self.padder.finalize()
             encrypted_data = self.cipher.update(padded_data) + self.cipher.finalize()
             self.blob.write(encrypted_data)
