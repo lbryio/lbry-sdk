@@ -126,12 +126,12 @@ class StorageTest(unittest.TestCase):
 
         yield self.store_fake_blob(sd_hash)
 
-        for blob in blobs.itervalues():
+        for blob in blobs.values():
             yield self.store_fake_blob(blob)
 
         yield self.store_fake_stream(stream_hash, sd_hash)
 
-        for pos, blob in sorted(blobs.iteritems(), key=lambda x: x[0]):
+        for pos, blob in sorted(blobs.items(), key=lambda x: x[0]):
             yield self.store_fake_stream_blob(stream_hash, blob, pos)
 
 
@@ -166,8 +166,8 @@ class BlobStorageTests(StorageTest):
 class SupportsStorageTests(StorageTest):
     @defer.inlineCallbacks
     def test_supports_storage(self):
-        claim_ids = [random_lbry_hash() for _ in range(10)]
-        random_supports = [{"txid": random_lbry_hash(), "nout":i, "address": "addr{}".format(i), "amount": i}
+        claim_ids = [random_lbry_hash().decode() for _ in range(10)]
+        random_supports = [{"txid": random_lbry_hash().decode(), "nout":i, "address": "addr{}".format(i), "amount": i}
                     for i in range(20)]
         expected_supports = {}
         for idx, claim_id in enumerate(claim_ids):
@@ -322,11 +322,8 @@ class ContentClaimStorageTests(StorageTest):
         # test that we can't associate a claim update with a new stream to the file
         second_stream_hash, second_sd_hash = random_lbry_hash(), random_lbry_hash()
         yield self.make_and_store_fake_stream(blob_count=2, stream_hash=second_stream_hash, sd_hash=second_sd_hash)
-        try:
+        with self.assertRaisesRegex(Exception, "stream mismatch"):
             yield self.storage.save_content_claim(second_stream_hash, fake_outpoint)
-            raise Exception("test failed")
-        except Exception as err:
-            self.assertTrue(err.message == "stream mismatch")
 
         # test that we can associate a new claim update containing the same stream to the file
         update_info = deepcopy(fake_claim_info)
@@ -344,12 +341,9 @@ class ContentClaimStorageTests(StorageTest):
         invalid_update_info['nout'] = 0
         invalid_update_info['claim_id'] = "beef0002" * 5
         invalid_update_outpoint = "%s:%i" % (invalid_update_info['txid'], invalid_update_info['nout'])
-        try:
+        with self.assertRaisesRegex(Exception, "invalid stream update"):
             yield self.storage.save_claims([invalid_update_info])
             yield self.storage.save_content_claim(stream_hash, invalid_update_outpoint)
-            raise Exception("test failed")
-        except Exception as err:
-            self.assertTrue(err.message == "invalid stream update")
         current_claim_info = yield self.storage.get_content_claim(stream_hash)
         # this should still be the previous update
         self.assertDictEqual(current_claim_info, update_info)

@@ -673,8 +673,11 @@ class SQLiteStorage(WalletDatabase):
         ).fetchone()
         if not known_sd_hash:
             raise Exception("stream not found")
+        known_sd_hash = known_sd_hash[0]
+        if not isinstance(known_sd_hash, bytes):
+            known_sd_hash = known_sd_hash.encode()
         # check the claim contains the same sd hash
-        if known_sd_hash[0] != claim.source_hash:
+        if known_sd_hash != claim.source_hash:
             raise Exception("stream mismatch")
 
         # if there is a current claim associated to the file, check that the new claim is an update to it
@@ -858,7 +861,7 @@ def _format_claim_response(outpoint, claim_id, name, amount, height, serialized,
         "claim_id": claim_id,
         "address": address,
         "claim_sequence": claim_sequence,
-        "value": ClaimDict.deserialize(serialized.decode('hex')).claim_dict,
+        "value": ClaimDict.deserialize(unhexlify(serialized)).claim_dict,
         "height": height,
         "amount": float(Decimal(amount) / Decimal(COIN)),
         "nout": int(outpoint.split(":")[1]),

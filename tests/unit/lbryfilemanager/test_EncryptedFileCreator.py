@@ -10,6 +10,7 @@ from lbrynet.core import BlobManager
 from lbrynet.core import Session
 from lbrynet.file_manager import EncryptedFileCreator
 from lbrynet.file_manager import EncryptedFileManager
+from lbrynet.core.StreamDescriptor import bytes2unicode
 from tests import mocks
 from tests.util import mk_db_and_blob_dir, rm_db_and_blob_dir
 
@@ -18,7 +19,7 @@ MB = 2**20
 
 def iv_generator():
     while True:
-        yield '3' * (AES.block_size / 8)
+        yield '3' * (AES.block_size // 8)
 
 
 class CreateEncryptedFileTest(unittest.TestCase):
@@ -47,15 +48,15 @@ class CreateEncryptedFileTest(unittest.TestCase):
     @defer.inlineCallbacks
     def create_file(self, filename):
         handle = mocks.GenFile(3*MB, '1')
-        key = '2' * (AES.block_size / 8)
+        key = b'2' * (AES.block_size // 8)
         out = yield EncryptedFileCreator.create_lbry_file(self.session, self.file_manager, filename, handle,
                                                           key, iv_generator())
         defer.returnValue(out)
 
     @defer.inlineCallbacks
     def test_can_create_file(self):
-        expected_stream_hash = "41e6b247d923d191b154fb6f1b8529d6ddd6a73d65c35" \
-                               "7b1acb742dd83151fb66393a7709e9f346260a4f4db6de10c25"
+        expected_stream_hash = b"41e6b247d923d191b154fb6f1b8529d6ddd6a73d65c35" \
+                               b"7b1acb742dd83151fb66393a7709e9f346260a4f4db6de10c25"
         expected_sd_hash = "40c485432daec586c1a2d247e6c08d137640a5af6e81f3f652" \
                            "3e62e81a2e8945b0db7c94f1852e70e371d917b994352c"
         filename = 'test.file'
@@ -69,8 +70,8 @@ class CreateEncryptedFileTest(unittest.TestCase):
 
         # this comes from the database, the blobs returned are sorted
         sd_info = yield get_sd_info(self.session.storage, lbry_file.stream_hash, include_blobs=True)
-        self.assertDictEqual(sd_info, sd_file_info)
-        self.assertListEqual(sd_info['blobs'], sd_file_info['blobs'])
+        self.maxDiff = None
+        self.assertDictEqual(bytes2unicode(sd_info), sd_file_info)
         self.assertEqual(sd_info['stream_hash'], expected_stream_hash)
         self.assertEqual(len(sd_info['blobs']), 3)
         self.assertNotEqual(sd_info['blobs'][0]['length'], 0)
@@ -86,8 +87,8 @@ class CreateEncryptedFileTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_can_create_file_with_unicode_filename(self):
-        expected_stream_hash = ('d1da4258f3ce12edb91d7e8e160d091d3ab1432c2e55a6352dce0'
-                                '2fd5adb86fe144e93e110075b5865fff8617776c6c0')
+        expected_stream_hash = (b'd1da4258f3ce12edb91d7e8e160d091d3ab1432c2e55a6352dce0'
+                                b'2fd5adb86fe144e93e110075b5865fff8617776c6c0')
         filename = u'☃.file'
         lbry_file = yield self.create_file(filename)
         self.assertEqual(expected_stream_hash, lbry_file.stream_hash)
