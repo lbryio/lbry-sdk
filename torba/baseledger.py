@@ -238,7 +238,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         # need to update anyways. Continue to get history and create more addresses until
         # all missing addresses are created and history for them is fully restored.
         yield account.ensure_address_gap()
-        addresses = yield account.get_unused_addresses()
+        addresses = yield account.get_addresses(max_used_times=0)
         while addresses:
             yield defer.DeferredList([
                 self.update_history(a) for a in addresses
