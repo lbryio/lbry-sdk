@@ -1598,11 +1598,11 @@ class Daemon(AuthJSONRPCServer):
         script = tx.outputs[0].script
         result = {
             "success": True,
-            "txid": tx.hex_id.decode(),
+            "txid": tx.id,
             "nout": 0,
             "tx": hexlify(tx.raw),
             "fee": str(Decimal(tx.fee) / COIN),
-            "claim_id": tx.get_claim_id(0),
+            "claim_id": hexlify(tx.get_claim_id(0)),
             "value": hexlify(script.values['claim']),
             "claim_address": self.ledger.hash160_to_address(script.values['pubkey_hash'])
         }

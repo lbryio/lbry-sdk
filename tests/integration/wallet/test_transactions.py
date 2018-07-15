@@ -87,5 +87,13 @@ class BasicTransactionTest(IntegrationTestCase):
         await self.blockchain.generate(1)
         await self.on_transaction(abandon_tx)
 
-        response = await d2f(self.ledger.resolve(0, 5, 'lbry://@bar/foo'))
+        await self.blockchain.generate(1)
+        await self.blockchain.generate(1)
+        await self.blockchain.generate(1)
+        await self.blockchain.generate(1)
+        await self.blockchain.generate(1)
+
+        await asyncio.sleep(5)
+
+        response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
         self.assertNotIn('lbry://@bar/foo', response)
