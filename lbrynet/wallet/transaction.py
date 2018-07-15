@@ -44,7 +44,7 @@ class Transaction(BaseTransaction):
         # type: (bytes, ClaimDict, int, bytes, List[BaseAccount], BaseAccount) -> defer.Deferred
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
-            amount, name, hexlify(meta.serialized), ledger.address_to_hash160(holding_address)
+            amount, name, meta.serialized, ledger.address_to_hash160(holding_address)
         )
         return cls.pay([claim_output], funding_accounts, change_account)
 
