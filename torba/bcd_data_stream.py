@@ -7,10 +7,6 @@ class BCDataStream:
     def __init__(self, data=None):
         self.data = BytesIO(data)
 
-    @property
-    def is_at_beginning(self):
-        return self.data.tell() == 0
-
     def reset(self):
         self.data.seek(0)
 
