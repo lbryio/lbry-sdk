@@ -1,4 +1,3 @@
-import six
 import binascii
 from collections import defaultdict
 import json

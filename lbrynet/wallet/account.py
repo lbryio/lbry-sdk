@@ -20,7 +20,7 @@ def generate_certificate():
 
 def get_certificate_lookup(tx_or_hash, nout):
     if isinstance(tx_or_hash, Transaction):
-        return '{}:{}'.format(tx_or_hash.hex_id.decode(), nout)
+        return '{}:{}'.format(tx_or_hash.id, nout)
     else:
         return '{}:{}'.format(hexlify(tx_or_hash[::-1]).decode(), nout)
 
@@ -58,17 +58,17 @@ class Account(BaseAccount):
                     self.certificates[tx_nout] = self.certificates[maybe_claim_id]
                     del self.certificates[maybe_claim_id]
                     log.info(
-                        "Migrated certificate with claim_id '{}' ('{}') to a new look up key {}."
-                        .format(maybe_claim_id, txo.script.values['claim_name'], tx_nout)
+                        "Migrated certificate with claim_id '%s' ('%s') to a new look up key %s.",
+                        maybe_claim_id, txo.script.values['claim_name'], tx_nout
                     )
                     succeded += 1
                 else:
                     log.warning(
-                        "Failed to migrate claim '{}', it's not associated with any of your addresses."
-                        .format(maybe_claim_id)
+                        "Failed to migrate claim '%s', it's not associated with any of your addresses.",
+                        maybe_claim_id
                     )
                     failed += 1
-        log.info('Checked: {}, Converted: {}, Failed: {}'.format(total, succeded, failed))
+        log.info('Checked: %s, Converted: %s, Failed: %s', total, succeded, failed)
 
     def get_balance(self, confirmations=6, include_claims=False):
         if include_claims:
