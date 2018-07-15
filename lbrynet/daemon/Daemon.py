@@ -1022,10 +1022,10 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (float) amount of lbry credits in wallet
         """
-        if address is None:
-            return self.wallet.default_account.get_balance()
-        else:
-            return self.wallet.get_address_balance(address, include_unconfirmed)
+        assert address is None, "Limiting by address needs to be re-implemented in new wallet."
+        return self.wallet.default_account.get_balance(
+            0 if include_unconfirmed else 6
+        )
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
