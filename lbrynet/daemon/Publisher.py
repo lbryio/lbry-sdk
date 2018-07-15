@@ -1,6 +1,7 @@
 import logging
 import mimetypes
 import os
+from binascii import hexlify
 
 from twisted.internet import defer
 
@@ -45,7 +46,7 @@ class Publisher(object):
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)
         old_stream_hashes = yield self.session.storage.get_old_stream_hashes_for_claim_id(
-            tx.get_claim_id(0), self.lbry_file.stream_hash.decode()
+            hexlify(tx.get_claim_id(0)[::-1]), self.lbry_file.stream_hash
         )
         if old_stream_hashes:
             for lbry_file in filter(lambda l: l.stream_hash in old_stream_hashes,
@@ -54,7 +55,7 @@ class Publisher(object):
                 log.info("Removed old stream for claim update: %s", lbry_file.stream_hash)
 
         yield self.session.storage.save_content_claim(
-            self.lbry_file.stream_hash.decode(), get_certificate_lookup(tx, 0)
+            self.lbry_file.stream_hash, get_certificate_lookup(tx, 0)
         )
         defer.returnValue(tx)
 

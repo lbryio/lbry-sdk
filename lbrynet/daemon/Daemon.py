@@ -375,14 +375,14 @@ class Daemon(AuthJSONRPCServer):
         self.analytics_manager.send_claim_action('publish')
         nout = 0
         script = tx.outputs[nout].script
-        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.hex_id.decode(), nout)
+        log.info("Success! Published to lbry://%s txid: %s nout: %d", name, tx.id, nout)
         defer.returnValue({
             "success": True,
-            "txid": tx.hex_id.decode(),
+            "txid": tx.id,
             "nout": nout,
             "tx": hexlify(tx.raw),
             "fee": str(Decimal(tx.fee) / COIN),
-            "claim_id": hexlify(tx.get_claim_id(0)),
+            "claim_id": hexlify(tx.get_claim_id(0)[::-1]),
             "value": hexlify(script.values['claim']),
             "claim_address": self.ledger.hash160_to_address(script.values['pubkey_hash'])
         })
