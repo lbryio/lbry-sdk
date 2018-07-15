@@ -17,7 +17,7 @@ def height_to_vch(n):
     # need to reset each value mod 256 because for values like 67784
     # 67784 >> 8 = 264, which is obviously larger then the maximum
     # value input into chr()
-    return ''.join([chr(x % 256) for x in r])
+    return b''.join([six.int2byte(x % 256) for x in r])
 
 
 def get_hash_for_outpoint(txhash, nOut, nHeightOfLastTakeover):
@@ -31,7 +31,7 @@ def get_hash_for_outpoint(txhash, nOut, nHeightOfLastTakeover):
 # noinspection PyPep8
 def verify_proof(proof, rootHash, name):
     previous_computed_hash = None
-    reverse_computed_name = b''
+    reverse_computed_name = ''
     verified_value = False
     for i, node in enumerate(proof['nodes'][::-1]):
         found_child_in_chain = False
@@ -55,7 +55,7 @@ def verify_proof(proof, rootHash, name):
                 if found_child_in_chain is True:
                     raise InvalidProofError("already found the next child in the chain")
                 found_child_in_chain = True
-                reverse_computed_name += six.int2byte(child['character'])
+                reverse_computed_name += chr(child['character'])
                 to_hash += previous_computed_hash
 
         if not found_child_in_chain:
