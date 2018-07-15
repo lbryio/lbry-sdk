@@ -979,6 +979,35 @@ class Daemon(AuthJSONRPCServer):
         return self._render_response(sorted([command for command in self.callable_methods.keys()]))
 
     @requires(WALLET_COMPONENT)
+    @defer.inlineCallbacks
+    def jsonrpc_account_balance(self, account_name=None, confirmations=6):
+        """
+        Return the balance of an individual account or all of the accounts.
+
+        Usage:
+            account_balance [<account_name> | --account=<account_name>] [--confirmations=<confirmations>]
+
+        Options:
+            --account=<account_name>        : (str) If provided only the balance for this
+                                                    account will be given
+            --confirmations=<confirmations> : (int) required confirmations (default: 6)
+
+        Returns:
+            (map) amount of lbry credits in wallet
+        """
+        balances = yield self.wallet.get_balances(confirmations)
+        lbc_accounts = balances[self.ledger.get_id()]
+        if account_name is not None:
+            for account in lbc_accounts:
+                if account['account'] == account_name:
+                    defer.returnValue(account)
+            raise Exception(
+                "No account found with name '{}', available accounts: {}."
+                .format(account_name, str([a['account'] for a in lbc_accounts]))
+            )
+        defer.returnValue(lbc_accounts)
+
+    @AuthJSONRPCServer.requires("wallet")
     def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
         """
         Return the balance of the wallet
