@@ -90,8 +90,9 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
     def get_id(cls):
         return '{}_{}'.format(cls.symbol.lower(), cls.network_name.lower())
 
-    def hash160_to_address(self, h160):
-        raw_address = self.pubkey_address_prefix + h160
+    @classmethod
+    def hash160_to_address(cls, h160):
+        raw_address = cls.pubkey_address_prefix + h160
         return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
 
     @staticmethod
@@ -100,8 +101,9 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         prefix, pubkey_bytes, addr_checksum = bytes[0], bytes[1:21], bytes[21:]
         return pubkey_bytes
 
-    def public_key_to_address(self, public_key):
-        return self.hash160_to_address(hash160(public_key))
+    @classmethod
+    def public_key_to_address(cls, public_key):
+        return cls.hash160_to_address(hash160(public_key))
 
     @staticmethod
     def private_key_to_wif(private_key):
@@ -303,7 +305,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
             finally:
                 lock.release()
-                if not lock.locked:
+                if not lock.locked and hex_id in self._transaction_processing_locks:
                     del self._transaction_processing_locks[hex_id]
 
     @defer.inlineCallbacks

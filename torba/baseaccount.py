@@ -1,7 +1,6 @@
 from typing import Dict
 from twisted.internet import defer
 
-import torba.baseledger
 from torba.mnemonic import Mnemonic
 from torba.bip32 import PrivateKey, PubKey, from_extended_key_string
 from torba.hash import double_sha256, aes_encrypt, aes_decrypt

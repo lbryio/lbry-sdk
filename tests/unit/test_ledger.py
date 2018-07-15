@@ -55,11 +55,17 @@ class MainNetTestLedger(MainNetLedger):
         })
 
 
-class TestSynchronization(unittest.TestCase):
+class LedgerTestCase(unittest.TestCase):
 
     def setUp(self):
         self.ledger = MainNetTestLedger()
         return self.ledger.db.start()
+
+    def tearDown(self):
+        return self.ledger.db.stop()
+
+
+class TestSynchronization(LedgerTestCase):
 
     @defer.inlineCallbacks
     def test_update_history(self):
