@@ -78,7 +78,7 @@ class BasicTransactionTest(IntegrationTestCase):
         self.assertEqual(round(await d2f(self.account.get_balance(0))/COIN, 1), 8.0)
         self.assertEqual(round(await d2f(self.account.get_balance(0, True))/COIN, 1), 10.0)
 
-        response = await d2f(self.ledger.resolve(0, 5, 'lbry://@bar/foo'))
+        response = await d2f(self.ledger.resolve(0, 10, 'lbry://@bar/foo'))
         self.assertIn('lbry://@bar/foo', response)
 
         abandon_tx = await d2f(Transaction.abandon(claim_tx.outputs[0], [self.account], self.account))

@@ -1,7 +1,7 @@
 import logging
 
 from ecdsa import BadSignatureError
-from binascii import unhexlify
+from binascii import unhexlify, hexlify
 
 from twisted.internet import defer
 
@@ -287,7 +287,7 @@ class Resolver(object):
 def format_amount_value(obj):
     COIN = 100000000
     if isinstance(obj, dict):
-        for k, v in obj.iteritems():
+        for k, v in obj.items():
             if k == 'amount' or k == 'effective_amount':
                 if not isinstance(obj[k], float):
                     obj[k] = float(obj[k]) / float(COIN)
@@ -324,7 +324,7 @@ def _verify_proof(name, claim_trie_root, result, height, depth, transaction_clas
                         claim_sequence, claim_address, supports):
         r = {
             'name': name,
-            'value': value.encode('hex'),
+            'value': hexlify(value),
             'claim_id': claim_id,
             'txid': txid,
             'nout': n,
@@ -353,7 +353,7 @@ def _verify_proof(name, claim_trie_root, result, height, depth, transaction_clas
                         claim_id = result['claim_id']
                         claim_sequence = result['claim_sequence']
                         claim_script = claim_output.script
-                        decoded_name, decoded_value = claim_script.values['claim_name'], claim_script.values['claim']
+                        decoded_name, decoded_value = claim_script.values['claim_name'].decode(), claim_script.values['claim']
                         if decoded_name == name:
                             return _build_response(name, decoded_value, claim_id,
                                                    tx.id, nOut, claim_output.amount,
