@@ -345,7 +345,7 @@ def _verify_proof(name, claim_trie_root, result, height, depth, transaction_clas
             if 'transaction' in result:
                 tx = transaction_class(raw=unhexlify(result['transaction']))
                 nOut = result['proof']['nOut']
-                if result['proof']['txhash'] == tx.hex_id:
+                if result['proof']['txhash'] == tx.id:
                     if 0 <= nOut < len(tx.outputs):
                         claim_output = tx.outputs[nOut]
                         effective_amount = claim_output.amount + support_amount
@@ -356,14 +356,14 @@ def _verify_proof(name, claim_trie_root, result, height, depth, transaction_clas
                         decoded_name, decoded_value = claim_script.values['claim_name'], claim_script.values['claim']
                         if decoded_name == name:
                             return _build_response(name, decoded_value, claim_id,
-                                                   tx.hex_id, nOut, claim_output.amount,
+                                                   tx.id, nOut, claim_output.amount,
                                                    effective_amount, claim_sequence,
                                                    claim_address, supports)
                         return {'error': 'name in proof did not match requested name'}
                     outputs = len(tx['outputs'])
                     return {'error': 'invalid nOut: %d (let(outputs): %d' % (nOut, outputs)}
                 return {'error': "computed txid did not match given transaction: %s vs %s" %
-                                 (tx.hex_id, result['proof']['txhash'])
+                                 (tx.id, result['proof']['txhash'])
                         }
             return {'error': "didn't receive a transaction with the proof"}
         return {'error': 'name is not claimed'}
