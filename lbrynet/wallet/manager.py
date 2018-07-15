@@ -5,7 +5,6 @@ from binascii import hexlify
 from twisted.internet import defer
 
 from torba.manager import WalletManager as BaseWalletManager
-from torba.wallet import WalletStorage
 
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError

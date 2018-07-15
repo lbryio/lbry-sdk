@@ -4,7 +4,8 @@ import binascii
 from lbryschema.hashing import sha256
 
 
-class InvalidProofError(Exception): pass
+class InvalidProofError(Exception):
+    pass
 
 
 def height_to_vch(n):
