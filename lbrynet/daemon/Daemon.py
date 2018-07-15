@@ -1610,7 +1610,7 @@ class Daemon(AuthJSONRPCServer):
             "nout": 0,
             "tx": hexlify(tx.raw),
             "fee": str(Decimal(tx.fee) / COIN),
-            "claim_id": hexlify(tx.get_claim_id(0)),
+            "claim_id": hexlify(tx.get_claim_id(0)[::-1]),
             "value": hexlify(script.values['claim']),
             "claim_address": self.ledger.hash160_to_address(script.values['pubkey_hash'])
         }
