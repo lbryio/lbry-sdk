@@ -1,4 +1,5 @@
 import sqlite3
+from binascii import hexlify
 from twisted.internet import defer
 from torba.basedatabase import BaseDatabase
 from .certificate import Certificate
@@ -41,9 +42,9 @@ class WalletDatabase(BaseDatabase):
         if txo.script.is_claim_involved:
             row['claim_name'] = txo.script.values['claim_name']
         if txo.script.is_update_claim or txo.script.is_support_claim:
-            row['claim_id'] = txo.script.values['claim_id']
+            row['claim_id'] = hexlify(txo.script.values['claim_id'][::-1])
         elif txo.script.is_claim_name:
-            row['claim_id'] = tx.get_claim_id(txo.position)
+            row['claim_id'] = hexlify(tx.get_claim_id(txo.position)[::-1])
         return row
 
     @defer.inlineCallbacks
