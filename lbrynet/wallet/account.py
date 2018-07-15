@@ -70,12 +70,12 @@ class Account(BaseAccount):
                     failed += 1
         log.info('Checked: {}, Converted: {}, Failed: {}'.format(total, succeded, failed))
 
-    def get_balance(self, include_claims=False):
+    def get_balance(self, confirmations=6, include_claims=False):
         if include_claims:
-            return super(Account, self).get_balance()
+            return super(Account, self).get_balance(confirmations)
         else:
             return super(Account, self).get_balance(
-                is_claim=0, is_update=0, is_support=0
+                confirmations, is_claim=0, is_update=0, is_support=0
             )
 
     def get_unspent_outputs(self, include_claims=False):

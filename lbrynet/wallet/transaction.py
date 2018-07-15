@@ -12,8 +12,8 @@ from lbryschema.claim import ClaimDict  # pylint: disable=unused-import
 from .script import InputScript, OutputScript
 
 
-def claim_id_hash(txid, n):
-    return hash160(txid + struct.pack('>I', n))
+def claim_id_hash(tx_hash, n):
+    return hash160(tx_hash + struct.pack('>I', n))
 
 
 class Input(BaseInput):
