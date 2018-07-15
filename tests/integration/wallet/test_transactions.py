@@ -40,22 +40,22 @@ example_claim_dict = {
 
 class BasicTransactionTest(IntegrationTestCase):
 
-    VERBOSE = False
+    VERBOSE = True
 
     async def test_creating_updating_and_abandoning_claim_with_channel(self):
 
         await d2f(self.account.ensure_address_gap())
 
-        address1, address2 = await d2f(self.account.receiving.get_usable_addresses(2))
-        sendtxid1 = await self.blockchain.send_to_address(address1.decode(), 5)
-        sendtxid2 = await self.blockchain.send_to_address(address2.decode(), 5)
+        address1, address2 = await d2f(self.account.receiving.get_addresses(2, only_usable=True))
+        sendtxid1 = await self.blockchain.send_to_address(address1, 5)
+        sendtxid2 = await self.blockchain.send_to_address(address2, 5)
         await self.blockchain.generate(1)
         await asyncio.wait([
             self.on_transaction_id(sendtxid1),
             self.on_transaction_id(sendtxid2),
         ])
 
-        self.assertEqual(round(await self.get_balance(self.account)/COIN, 1), 10.0)
+        self.assertEqual(round(await d2f(self.account.get_balance(0))/COIN, 1), 10.0)
 
         cert, key = generate_certificate()
         cert_tx = await d2f(Transaction.claim(b'@bar', cert, 1*COIN, address1, [self.account], self.account))
@@ -75,19 +75,17 @@ class BasicTransactionTest(IntegrationTestCase):
             self.on_transaction(cert_tx),
         ])
 
-        self.assertEqual(round(await d2f(self.account.get_balance())/COIN, 1), 8.0)
-        self.assertEqual(round(await d2f(self.account.get_balance(True))/COIN, 1), 10.0)
+        self.assertEqual(round(await d2f(self.account.get_balance(0))/COIN, 1), 8.0)
+        self.assertEqual(round(await d2f(self.account.get_balance(0, True))/COIN, 1), 10.0)
 
-        response = await d2f(self.ledger.resolve('lbry://@bar/foo'))
+        response = await d2f(self.ledger.resolve(0, 5, 'lbry://@bar/foo'))
         self.assertIn('lbry://@bar/foo', response)
 
-        claim_txo = claim_tx.outputs[0]
-        claim_txo.txoid = await d2f(self.ledger.db.get_txoid_for_txo(claim_txo))
-        abandon_tx = await d2f(Transaction.abandon(claim_txo, [self.account], self.account))
+        abandon_tx = await d2f(Transaction.abandon(claim_tx.outputs[0], [self.account], self.account))
         await self.broadcast(abandon_tx)
         await self.on_transaction(abandon_tx)
         await self.blockchain.generate(1)
         await self.on_transaction(abandon_tx)
 
-        response = await d2f(self.ledger.resolve('lbry://@bar/foo'))
-        self.assertIn('lbry://@bar/foo', response)
+        response = await d2f(self.ledger.resolve(0, 5, 'lbry://@bar/foo'))
+        self.assertNotIn('lbry://@bar/foo', response)
