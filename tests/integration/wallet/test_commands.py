@@ -92,8 +92,8 @@ class CommandTestCase(IntegrationTestCase):
         lbry_conf.settings.node_id = None
 
         await d2f(self.account.ensure_address_gap())
-        address = (await d2f(self.account.receiving.get_usable_addresses(1)))[0]
-        sendtxid = await self.blockchain.send_to_address(address.decode(), 10)
+        address = (await d2f(self.account.receiving.get_addresses(1, only_usable=True)))[0]
+        sendtxid = await self.blockchain.send_to_address(address, 10)
         await self.on_transaction_id(sendtxid)
         await self.blockchain.generate(1)
         await self.on_transaction_id(sendtxid)
@@ -135,9 +135,9 @@ class ChannelNewCommandTests(CommandTestCase):
     @defer.inlineCallbacks
     def test_new_channel(self):
         result = yield self.daemon.jsonrpc_channel_new('@bar', 1*COIN)
-        self.assertIn('txid', result)
+        self.assertTrue(result['success'])
         yield self.ledger.on_transaction.deferred_where(
-            lambda e: e.tx.hex_id.decode() == result['txid']
+            lambda e: e.tx.id == result['txid']
         )
 
 
