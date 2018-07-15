@@ -74,44 +74,52 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     if with_fee:
         metadata.update(
             {"fee": {"USD": {"address": "bQ6BGboPV2SpTMEP7wLNiAcnsZiH8ye6eA", "amount": 0.75}}})
-    daemon._resolve = lambda _: defer.succeed(metadata)
     migrated = smart_decode(json.dumps(metadata))
-    daemon.wallet.resolve = lambda *_: defer.succeed(
+    daemon._resolve = daemon.wallet.resolve = lambda *_: defer.succeed(
         {"test": {'claim': {'value': migrated.claim_dict}}})
     return daemon
 
 
 class TestCostEst(unittest.TestCase):
+
     def setUp(self):
         mock_conf_settings(self)
         util.resetTime(self)
 
+    @defer.inlineCallbacks
     def test_fee_and_generous_data(self):
         size = 10000000
         correct_result = 4.5
         daemon = get_test_daemon(generous=True, with_fee=True)
-        self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
+        result = yield daemon.get_est_cost("test", size)
+        self.assertEquals(result, correct_result)
 
+    @defer.inlineCallbacks
     def test_fee_and_ungenerous_data(self):
         size = 10000000
         fake_fee_amount = 4.5
         data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
         correct_result = size / 10 ** 6 * data_rate + fake_fee_amount
         daemon = get_test_daemon(generous=False, with_fee=True)
-        self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
+        result = yield daemon.get_est_cost("test", size)
+        self.assertEquals(result, correct_result)
 
+    @defer.inlineCallbacks
     def test_generous_data_and_no_fee(self):
         size = 10000000
         correct_result = 0.0
         daemon = get_test_daemon(generous=True)
-        self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
+        result = yield daemon.get_est_cost("test", size)
+        self.assertEquals(result, correct_result)
 
+    @defer.inlineCallbacks
     def test_ungenerous_data_and_no_fee(self):
         size = 10000000
         data_rate = conf.ADJUSTABLE_SETTINGS['data_rate'][1]
         correct_result = size / 10 ** 6 * data_rate
         daemon = get_test_daemon(generous=False)
-        self.assertEquals(daemon.get_est_cost("test", size).result, correct_result)
+        result = yield daemon.get_est_cost("test", size)
+        self.assertEquals(result, correct_result)
 
 
 class TestJsonRpc(unittest.TestCase):
