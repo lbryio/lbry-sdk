@@ -20,11 +20,73 @@ from cryptography.hazmat.primitives.padding import PKCS7
 from cryptography.hazmat.backends import default_backend
 
 from torba.util import bytes_to_int, int_to_bytes
+from torba.constants import NULL_HASH32
 
 _sha256 = hashlib.sha256
 _sha512 = hashlib.sha512
 _new_hash = hashlib.new
 _new_hmac = hmac.new
+
+
+class TXRef(object):
+
+    __slots__ = '_id', '_hash'
+
+    def __init__(self):
+        self._id = None
+        self._hash = None
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def hash(self):
+        return self._hash
+
+    @property
+    def is_null(self):
+        return self.hash == NULL_HASH32
+
+
+class TXRefImmutable(TXRef):
+
+    __slots__ = ()
+
+    @classmethod
+    def from_hash(cls, tx_hash):  # type: (bytes) -> TXRefImmutable
+        ref = cls()
+        ref._hash = tx_hash
+        ref._id = hexlify(tx_hash[::-1]).decode()
+        return ref
+
+    @classmethod
+    def from_id(cls, tx_id):  # type: (str) -> TXRefImmutable
+        ref = cls()
+        ref._id = tx_id
+        ref._hash = unhexlify(tx_id)[::-1]
+        return ref
+
+
+class TXORef(object):
+
+    __slots__ = 'tx_ref', 'position'
+
+    def __init__(self, tx_ref, position):  # type: (TXRef, int) -> None
+        self.tx_ref = tx_ref
+        self.position = position
+
+    @property
+    def id(self):
+        return '{}:{}'.format(self.tx_ref.id, self.position)
+
+    @property
+    def is_null(self):
+        return self.tx_ref.is_null
+
+    @property
+    def txo(self):
+        return None
 
 
 def sha256(x):
@@ -164,7 +226,7 @@ class Base58(object):
                 break
             txt += u'1'
 
-        return txt[::-1].encode()
+        return txt[::-1]
 
     @classmethod
     def decode_check(cls, txt, hash_fn=double_sha256):

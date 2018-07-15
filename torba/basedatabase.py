@@ -6,7 +6,7 @@ import sqlite3
 from twisted.internet import defer
 from twisted.enterprise import adbapi
 
-import torba.baseaccount
+from torba.hash import TXRefImmutable
 
 log = logging.getLogger(__name__)
 
@@ -131,8 +131,8 @@ class BaseDatabase(SQLiteMixin):
 
     CREATE_TXO_TABLE = """
         create table if not exists txo (
-            txoid text primary key,
             txid text references tx,
+            txoid text primary key,
             address text references pubkey_address,
             position integer not null,
             amount integer not null,
@@ -158,8 +158,9 @@ class BaseDatabase(SQLiteMixin):
 
     def txo_to_row(self, tx, address, txo):
         return {
-            'txid': sqlite3.Binary(tx.hash),
-            'address': sqlite3.Binary(address),
+            'txid': tx.id,
+            'txoid': txo.id,
+            'address': address,
             'position': txo.position,
             'amount': txo.amount,
             'script': sqlite3.Binary(txo.script.source)
@@ -170,7 +171,7 @@ class BaseDatabase(SQLiteMixin):
         def _steps(t):
             if save_tx == 'insert':
                 t.execute(*self._insert_sql('tx', {
-                    'txhash': sqlite3.Binary(tx.hash),
+                    'txid': tx.id,
                     'raw': sqlite3.Binary(tx.raw),
                     'height': height,
                     'is_verified': is_verified
@@ -178,16 +179,15 @@ class BaseDatabase(SQLiteMixin):
             elif save_tx == 'update':
                 t.execute(*self._update_sql("tx", {
                         'height': height, 'is_verified': is_verified
-                    }, 'txhash = ?', (sqlite3.Binary(tx.hash),)
+                    }, 'txid = ?', (tx.id,)
                 ))
 
             existing_txos = list(map(itemgetter(0), t.execute(
-                "SELECT position FROM txo WHERE txhash = ?",
-                (sqlite3.Binary(tx.hash),)
+                "SELECT position FROM txo WHERE txid = ?", (tx.id,)
             ).fetchall()))
 
             for txo in tx.outputs:
-                if txo.index in existing_txos:
+                if txo.position in existing_txos:
                     continue
                 if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == hash:
                     t.execute(*self._insert_sql("txo", self.txo_to_row(tx, address, txo)))
@@ -195,20 +195,17 @@ class BaseDatabase(SQLiteMixin):
                     # TODO: implement script hash payments
                     print('Database.save_transaction_io: pay script hash is not implemented!')
 
-            existing_txis = [txi[0] for txi in t.execute(
-                "SELECT txoid FROM txi WHERE txhash = ? AND address = ?",
-                (sqlite3.Binary(tx.hash), sqlite3.Binary(address))).fetchall()]
+            spent_txoids = [txi[0] for txi in t.execute(
+                "SELECT txoid FROM txi WHERE txid = ? AND address = ?", (tx.id, address)
+            ).fetchall()]
 
             for txi in tx.inputs:
-                txoid = t.execute(
-                    "SELECT txoid FROM txo WHERE txhash = ? AND position = ?",
-                    (sqlite3.Binary(txi.output_txhash), txi.output_index)
-                ).fetchone()
-                if txoid is not None and txoid[0] not in existing_txis:
+                txoid = txi.txo_ref.id
+                if txoid not in spent_txoids:
                     t.execute(*self._insert_sql("txi", {
-                        'txhash': sqlite3.Binary(tx.hash),
-                        'address': sqlite3.Binary(address),
-                        'txoid': txoid[0],
+                        'txid': tx.id,
+                        'txoid': txoid,
+                        'address': address,
                     }))
 
             self._set_address_history(t, address, history)
@@ -225,16 +222,10 @@ class BaseDatabase(SQLiteMixin):
     def release_reserved_outputs(self, txoids):
         return self.reserve_spent_outputs(txoids, is_reserved=False)
 
-    def get_txoid_for_txo(self, txo):
-        return self.query_one_value(
-            "SELECT txoid FROM txo WHERE txhash = ? AND position = ?",
-            (sqlite3.Binary(txo.transaction.hash), txo.index)
-        )
-
     @defer.inlineCallbacks
-    def get_transaction(self, txhash):
+    def get_transaction(self, txid):
         result = yield self.db.runQuery(
-            "SELECT raw, height, is_verified FROM tx WHERE txhash = ?", (sqlite3.Binary(txhash),)
+            "SELECT raw, height, is_verified FROM tx WHERE txid = ?", (txid,)
         )
         if result:
             defer.returnValue(result[0])
@@ -254,13 +245,13 @@ class BaseDatabase(SQLiteMixin):
                     col, op = key[:-len('__lte')], '<='
                 extras.append('{} {} :{}'.format(col, op, key))
             extra_sql = ' AND ' + ' AND '.join(extras)
-        values = {'account': sqlite3.Binary(account.public_key.address)}
+        values = {'account': account.public_key.address}
         values.update(constraints)
         result = yield self.db.runQuery(
             """
             SELECT SUM(amount)
             FROM txo
-                JOIN tx ON tx.txhash=txo.txhash
+                JOIN tx ON tx.txid=txo.txid
                 JOIN pubkey_address ON pubkey_address.address=txo.address
             WHERE
               pubkey_address.account=:account AND
@@ -279,11 +270,11 @@ class BaseDatabase(SQLiteMixin):
             extra_sql = ' AND ' + ' AND '.join(
                 '{} = :{}'.format(c, c) for c in constraints.keys()
             )
-        values = {'account': sqlite3.Binary(account.public_key.address)}
+        values = {'account': account.public_key.address}
         values.update(constraints)
         utxos = yield self.db.runQuery(
             """
-            SELECT amount, script, txhash, txo.position, txoid
+            SELECT amount, script, txid, txo.position
             FROM txo JOIN pubkey_address ON pubkey_address.address=txo.address
             WHERE account=:account AND txo.is_reserved=0 AND txoid NOT IN (SELECT txoid FROM txi)
             """+extra_sql, values
@@ -293,9 +284,8 @@ class BaseDatabase(SQLiteMixin):
             output_class(
                 values[0],
                 output_class.script_class(values[1]),
-                values[2],
-                index=values[3],
-                txoid=values[4]
+                TXRefImmutable.from_id(values[2]),
+                position=values[3]
             ) for values in utxos
         ])
 
@@ -307,18 +297,18 @@ class BaseDatabase(SQLiteMixin):
         ) + ', '.join(['(?, ?, ?, ?, ?)'] * len(keys))
         values = []
         for position, pubkey in keys:
-            values.append(sqlite3.Binary(pubkey.address))
-            values.append(sqlite3.Binary(account.public_key.address))
+            values.append(pubkey.address)
+            values.append(account.public_key.address)
             values.append(chain)
             values.append(position)
-            values.append(sqlite3.Binary(pubkey.pubkey_bytes))
+            values.append(pubkey.pubkey_bytes)
         return self.db.runOperation(sql, values)
 
     @staticmethod
     def _set_address_history(t, address, history):
         t.execute(
             "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
-            (history, history.count(':')//2, sqlite3.Binary(address))
+            (history, history.count(':')//2, address)
         )
 
     def set_address_history(self, address, history):

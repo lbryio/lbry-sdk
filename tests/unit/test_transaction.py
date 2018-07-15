@@ -71,11 +71,11 @@ class TestTransactionSerialization(unittest.TestCase):
         self.assertEqual(len(tx.outputs), 1)
 
         coinbase = tx.inputs[0]
-        self.assertEqual(coinbase.output_txhash, NULL_HASH)
-        self.assertEqual(coinbase.output_index, 0xFFFFFFFF)
+        self.assertTrue(coinbase.txo_ref.is_null, NULL_HASH)
+        self.assertEqual(coinbase.txo_ref.position, 0xFFFFFFFF)
         self.assertEqual(coinbase.sequence, 4294967295)
-        self.assertTrue(coinbase.is_coinbase)
-        self.assertEqual(coinbase.script, None)
+        self.assertIsNotNone(coinbase.coinbase)
+        self.assertIsNone(coinbase.script)
         self.assertEqual(
             coinbase.coinbase[8:],
             b'The Times 03/Jan/2009 Chancellor on brink of second bailout for banks'
@@ -83,7 +83,7 @@ class TestTransactionSerialization(unittest.TestCase):
 
         out = tx.outputs[0]
         self.assertEqual(out.amount, 5000000000)
-        self.assertEqual(out.index, 0)
+        self.assertEqual(out.position, 0)
         self.assertTrue(out.script.is_pay_pubkey)
         self.assertFalse(out.script.is_pay_pubkey_hash)
         self.assertFalse(out.script.is_pay_script_hash)
@@ -106,19 +106,16 @@ class TestTransactionSerialization(unittest.TestCase):
         self.assertEqual(len(tx.outputs), 2)
 
         coinbase = tx.inputs[0]
-        self.assertEqual(coinbase.output_txhash, NULL_HASH)
-        self.assertEqual(coinbase.output_index, 0xFFFFFFFF)
+        self.assertTrue(coinbase.txo_ref.is_null)
+        self.assertEqual(coinbase.txo_ref.position, 0xFFFFFFFF)
         self.assertEqual(coinbase.sequence, 4294967295)
-        self.assertTrue(coinbase.is_coinbase)
-        self.assertEqual(coinbase.script, None)
-        self.assertEqual(
-            coinbase.coinbase[9:22],
-            b'/BTC.COM/NYA/'
-        )
+        self.assertIsNotNone(coinbase.coinbase)
+        self.assertIsNone(coinbase.script)
+        self.assertEqual(coinbase.coinbase[9:22], b'/BTC.COM/NYA/')
 
         out = tx.outputs[0]
         self.assertEqual(out.amount, 1561039505)
-        self.assertEqual(out.index, 0)
+        self.assertEqual(out.position, 0)
         self.assertFalse(out.script.is_pay_pubkey)
         self.assertFalse(out.script.is_pay_pubkey_hash)
         self.assertTrue(out.script.is_pay_script_hash)
@@ -126,7 +123,7 @@ class TestTransactionSerialization(unittest.TestCase):
 
         out1 = tx.outputs[1]
         self.assertEqual(out1.amount, 0)
-        self.assertEqual(out1.index, 1)
+        self.assertEqual(out1.position, 1)
         self.assertEqual(
             hexlify(out1.script.values['data']),
             b'aa21a9ede6c99265a6b9e1d36c962fda0516b35709c49dc3b8176fa7e5d5f1f6197884b4'
@@ -155,19 +152,20 @@ class TestTransactionSigning(unittest.TestCase):
         )
 
         yield account.ensure_address_gap()
-        address1 = (yield account.receiving.get_addresses())[0]
-        address2 = (yield account.receiving.get_addresses())[0]
+        address1, address2 = yield account.receiving.get_addresses(2)
         pubkey_hash1 = self.ledger.address_to_hash160(address1)
         pubkey_hash2 = self.ledger.address_to_hash160(address2)
 
-        tx = ledger_class.transaction_class() \
-            .add_inputs([ledger_class.transaction_class.input_class.spend(get_output(2*COIN, pubkey_hash1))]) \
-            .add_outputs([ledger_class.transaction_class.output_class.pay_pubkey_hash(int(1.9*COIN), pubkey_hash2)]) \
+        tx_class = ledger_class.transaction_class
+
+        tx = tx_class() \
+            .add_inputs([tx_class.input_class.spend(get_output(2*COIN, pubkey_hash1))]) \
+            .add_outputs([tx_class.output_class.pay_pubkey_hash(int(1.9*COIN), pubkey_hash2)]) \
 
         yield tx.sign([account])
 
         self.assertEqual(
             hexlify(tx.inputs[0].script.values['signature']),
-            b'3044022064cd6b95c9e0084253c10dd56bcec2bfd816c29aad05fbea490511d79540462b02201aa9d6f73'
-            b'48bb0c76b28d1ad87cf4ffd51cf4de0b299af8bf0ecad70e3369ef201'
+            b'304402203d463519290d06891e461ea5256c56097ccdad53379b1bb4e51ec5abc6e9fd02022034ed15b9'
+            b'd7c678716c4aa7c0fd26c688e8f9db8075838f2839ab55d551b62c0a01'
         )

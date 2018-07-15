@@ -32,6 +32,7 @@ class TestWalletCreation(unittest.TestCase):
             'name': 'Main Wallet',
             'accounts': [
                 {
+                    'name': 'An Account',
                     'ledger': 'btc_mainnet',
                     'seed':
                         "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
@@ -43,10 +44,11 @@ class TestWalletCreation(unittest.TestCase):
                     'public_key':
                         'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
                         'iW44g14WF52fYC5J483wqQ5ZP',
+                    'is_hd': True,
                     'receiving_gap': 10,
-                    'receiving_maximum_use_per_address': 2,
+                    'receiving_maximum_uses_per_address': 2,
                     'change_gap': 10,
-                    'change_maximum_use_per_address': 2,
+                    'change_maximum_uses_per_address': 2,
                 }
             ]
         }

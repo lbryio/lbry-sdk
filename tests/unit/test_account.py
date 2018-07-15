@@ -94,31 +94,30 @@ class TestKeyChainAccount(unittest.TestCase):
     def test_generate_account_from_seed(self):
         account = self.ledger.account_class.from_seed(
             self.ledger,
-            u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            u"sent",
-            u"torba", receiving_gap=3, change_gap=2
+            "carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
+            "sent", "torba", receiving_gap=3, change_gap=2
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
-            b'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-            b'6yz3jMbycrLrRMpeAJxR8qDg8'
+            'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
+            '6yz3jMbycrLrRMpeAJxR8qDg8'
         )
         self.assertEqual(
             account.public_key.extended_key_string(),
-            b'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-            b'iW44g14WF52fYC5J483wqQ5ZP'
+            'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
+            'iW44g14WF52fYC5J483wqQ5ZP'
         )
         address = yield account.receiving.ensure_address_gap()
-        self.assertEqual(address[0], b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
+        self.assertEqual(address[0], '1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
 
-        private_key = yield self.ledger.get_private_key_for_address(b'1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
+        private_key = yield self.ledger.get_private_key_for_address('1PmX9T3sCiDysNtWszJa44SkKcpGc2NaXP')
         self.assertEqual(
             private_key.extended_key_string(),
-            b'xprv9xNEfQ296VTRaEUDZ8oKq74xw2U6kpj486vFUB4K1wT9U25GX4UwuzFgJN1YuRrqkQ5TTwCpkYnjNpSoH'
-            b'SBaEigNHPkoeYbuPMRo6mRUjxg'
+            'xprv9xNEfQ296VTRaEUDZ8oKq74xw2U6kpj486vFUB4K1wT9U25GX4UwuzFgJN1YuRrqkQ5TTwCpkYnjNpSoH'
+            'SBaEigNHPkoeYbuPMRo6mRUjxg'
         )
 
-        invalid_key = yield self.ledger.get_private_key_for_address(b'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
+        invalid_key = yield self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
         self.assertIsNone(invalid_key)
 
         self.assertEqual(
@@ -247,20 +246,18 @@ class TestSingleKeyAccount(unittest.TestCase):
     def test_generate_account_from_seed(self):
         account = self.ledger.account_class.from_seed(
             self.ledger,
-            u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            u"sent",
-            u"torba",
-            is_hd=False
+            "carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
+            "sent", "torba", is_hd=False
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
-            b'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-            b'6yz3jMbycrLrRMpeAJxR8qDg8'
+            'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
+            '6yz3jMbycrLrRMpeAJxR8qDg8'
         )
         self.assertEqual(
             account.public_key.extended_key_string(),
-            b'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
-            b'iW44g14WF52fYC5J483wqQ5ZP'
+            'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
+            'iW44g14WF52fYC5J483wqQ5ZP'
         )
         address = yield account.receiving.ensure_address_gap()
         self.assertEqual(address[0], account.public_key.address)
@@ -268,11 +265,11 @@ class TestSingleKeyAccount(unittest.TestCase):
         private_key = yield self.ledger.get_private_key_for_address(address[0])
         self.assertEqual(
             private_key.extended_key_string(),
-            b'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
-            b'6yz3jMbycrLrRMpeAJxR8qDg8'
+            'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
+            '6yz3jMbycrLrRMpeAJxR8qDg8'
         )
 
-        invalid_key = yield self.ledger.get_private_key_for_address(b'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
+        invalid_key = yield self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
         self.assertIsNone(invalid_key)
 
         self.assertEqual(

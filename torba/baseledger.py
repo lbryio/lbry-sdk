@@ -77,7 +77,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         self.on_transaction = self._on_transaction_controller.stream
         self.on_transaction.listen(
             lambda e: log.info('({}) on_transaction: address={}, height={}, is_verified={}, tx.id={}'.format(
-                self.get_id(), e.address, e.height, e.is_verified, e.tx.hex_id)
+                self.get_id(), e.address, e.height, e.is_verified, e.tx.id)
             )
         )
 
@@ -136,7 +136,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         match = yield self.db.get_address(address)
         if match:
             for account in self.accounts:
-                if bytes(match['account']) == account.public_key.address:
+                if match['account'] == account.public_key.address:
                     defer.returnValue(account.get_private_key(match['chain'], match['position']))
 
     @defer.inlineCallbacks
@@ -178,7 +178,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
     @defer.inlineCallbacks
     def is_valid_transaction(self, tx, height):
         height <= len(self.headers) or defer.returnValue(False)
-        merkle = yield self.network.get_merkle(tx.hex_id.decode(), height)
+        merkle = yield self.network.get_merkle(tx.id, height)
         merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
         header = self.headers[height]
         defer.returnValue(merkle_root == header['merkle_root'])
@@ -262,7 +262,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
             synced_history.append((hex_id, remote_height))
 
-            if i < len(local_history) and local_history[i] == (hex_id.decode(), remote_height):
+            if i < len(local_history) and local_history[i] == (hex_id, remote_height):
                 continue
 
             lock = self._transaction_processing_locks.setdefault(hex_id, defer.DeferredLock())
@@ -271,7 +271,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
             #try:
             # see if we have a local copy of transaction, otherwise fetch it from server
-            raw, local_height, is_verified = yield self.db.get_transaction(unhexlify(hex_id)[::-1])
+            raw, local_height, is_verified = yield self.db.get_transaction(hex_id)
             save_tx = None
             if raw is None:
                 _raw = yield self.network.get_transaction(hex_id)
@@ -288,7 +288,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
             yield self.db.save_transaction_io(
                 save_tx, tx, remote_height, is_verified, address, self.address_to_hash160(address),
-                ''.join('{}:{}:'.format(tx_id.decode(), tx_height) for tx_id, tx_height in synced_history)
+                ''.join('{}:{}:'.format(tx_id, tx_height) for tx_id, tx_height in synced_history)
             )
 
             log.debug("{}: sync'ed tx {} for address: {}, height: {}, verified: {}".format(
@@ -320,4 +320,4 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
             yield self.update_history(address)
 
     def broadcast(self, tx):
-        return self.network.broadcast(hexlify(tx.raw))
+        return self.network.broadcast(hexlify(tx.raw).decode())

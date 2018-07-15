@@ -51,7 +51,7 @@ class BIP32Tests(unittest.TestCase):
         self.assertEqual(
             ec_point.y(), 86198965946979720220333266272536217633917099472454294641561154971209433250106
         )
-        self.assertEqual(private_key.address(), b'1GVM5dEhThbiyCZ9gqBZBv6p9whga7MTXo' )
+        self.assertEqual(private_key.address(), '1GVM5dEhThbiyCZ9gqBZBv6p9whga7MTXo' )
         with self.assertRaisesRegex(ValueError, 'invalid BIP32 private key child number'):
             private_key.child(-1)
         self.assertIsInstance(private_key.child(PrivateKey.HARDENED), PrivateKey)

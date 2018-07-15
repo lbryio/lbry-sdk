@@ -9,30 +9,60 @@ import torba.baseaccount
 import torba.baseledger
 from torba.basescript import BaseInputScript, BaseOutputScript
 from torba.coinselection import CoinSelector
-from torba.constants import COIN
+from torba.constants import COIN, NULL_HASH32
 from torba.bcd_data_stream import BCDataStream
-from torba.hash import sha256
+from torba.hash import sha256, TXRef, TXRefImmutable, TXORef
 from torba.util import ReadOnlyList
 
 
 log = logging.getLogger()
 
 
-NULL_HASH = b'\x00'*32
+class TXRefMutable(TXRef):
+
+    __slots__ = 'tx',
+
+    def __init__(self, tx):
+        super(TXRefMutable, self).__init__()
+        self.tx = tx
+
+    @property
+    def id(self):
+        if self._id is None:
+            self._id = hexlify(self.hash[::-1]).decode()
+        return self._id
+
+    @property
+    def hash(self):
+        if self._hash is None:
+            self._hash = sha256(sha256(self.tx.raw))
+        return self._hash
+
+    def reset(self):
+        self._id = None
+        self._hash = None
+
+
+class TXORefResolvable(TXORef):
+
+    __slots__ = '_txo',
+
+    def __init__(self, txo):
+        super(TXORefResolvable, self).__init__(txo.tx_ref, txo.position)
+        self._txo = txo
+
+    @property
+    def txo(self):
+        return self._txo
 
 
 class InputOutput(object):
 
-    def __init__(self, txhash, index=None):
-        self._txhash = txhash  # type: bytes
-        self.transaction = None  # type: BaseTransaction
-        self.index = index  # type: int
+    __slots__ = 'tx_ref', 'position'
 
-    @property
-    def txhash(self):
-        if self._txhash is None:
-            self._txhash = self.transaction.hash
-        return self._txhash
+    def __init__(self, tx_ref=None, position=None):
+        self.tx_ref = tx_ref  # type: TXRef
+        self.position = position  # type: int
 
     @property
     def size(self):
@@ -52,49 +82,49 @@ class BaseInput(InputOutput):
     NULL_SIGNATURE = b'\x00'*72
     NULL_PUBLIC_KEY = b'\x00'*33
 
-    def __init__(self, output_or_txhash_index, script, sequence=0xFFFFFFFF, txhash=None):
-        super(BaseInput, self).__init__(txhash)
-        if isinstance(output_or_txhash_index, BaseOutput):
-            self.output = output_or_txhash_index  # type: BaseOutput
-            self.output_txhash = self.output.txhash
-            self.output_index = self.output.index
-        else:
-            self.output = None  # type: BaseOutput
-            self.output_txhash, self.output_index = output_or_txhash_index
+    __slots__ = 'txo_ref', 'sequence', 'coinbase', 'script'
+
+    def __init__(self, txo_ref, script, sequence=0xFFFFFFFF, tx_ref=None, position=None):
+        # type: (TXORef, BaseInputScript, int, TXRef, int) -> None
+        super(BaseInput, self).__init__(tx_ref, position)
+        self.txo_ref = txo_ref
         self.sequence = sequence
-        self.is_coinbase = self.output_txhash == NULL_HASH
-        self.coinbase = script if self.is_coinbase else None
-        self.script = script if not self.is_coinbase else None  # type: BaseInputScript
+        self.coinbase = script if txo_ref.is_null else None
+        self.script = script if not txo_ref.is_null else None  # type: BaseInputScript
+
+    @property
+    def is_coinbase(self):
+        return self.coinbase is not None
 
     @classmethod
-    def spend(cls, output):
+    def spend(cls, txo):  # type: (BaseOutput) -> BaseInput
         """ Create an input to spend the output."""
-        assert output.script.is_pay_pubkey_hash, 'Attempting to spend unsupported output.'
+        assert txo.script.is_pay_pubkey_hash, 'Attempting to spend unsupported output.'
         script = cls.script_class.redeem_pubkey_hash(cls.NULL_SIGNATURE, cls.NULL_PUBLIC_KEY)
-        return cls(output, script)
+        return cls(txo.ref, script)
 
     @property
     def amount(self):
         """ Amount this input adds to the transaction. """
-        if self.output is None:
-            raise ValueError('Cannot get input value without referenced output.')
-        return self.output.amount
+        if self.txo_ref.txo is None:
+            raise ValueError('Cannot resolve output to get amount.')
+        return self.txo_ref.txo.amount
 
     @classmethod
     def deserialize_from(cls, stream):
-        txhash = stream.read(32)
-        index = stream.read_uint32()
+        tx_ref = TXRefImmutable.from_hash(stream.read(32))
+        position = stream.read_uint32()
         script = stream.read_string()
         sequence = stream.read_uint32()
         return cls(
-            (txhash, index),
-            cls.script_class(script) if not txhash == NULL_HASH else script,
+            TXORef(tx_ref, position),
+            cls.script_class(script) if not tx_ref.is_null else script,
             sequence
         )
 
     def serialize_to(self, stream, alternate_script=None):
-        stream.write(self.output_txhash)
-        stream.write_uint32(self.output_index)
+        stream.write(self.txo_ref.tx_ref.hash)
+        stream.write_uint32(self.txo_ref.position)
         if alternate_script is not None:
             stream.write_string(alternate_script)
         else:
@@ -107,7 +137,7 @@ class BaseInput(InputOutput):
 
 class BaseOutputEffectiveAmountEstimator(object):
 
-    __slots__ = 'coin', 'txi', 'txo', 'fee', 'effective_amount'
+    __slots__ = 'txo', 'txi', 'fee', 'effective_amount'
 
     def __init__(self, ledger, txo):  # type: (torba.baseledger.BaseLedger, BaseOutput) -> None
         self.txo = txo
@@ -124,11 +154,21 @@ class BaseOutput(InputOutput):
     script_class = BaseOutputScript
     estimator_class = BaseOutputEffectiveAmountEstimator
 
-    def __init__(self, amount, script, txhash=None, index=None, txoid=None):
-        super(BaseOutput, self).__init__(txhash, index)
-        self.amount = amount  # type: int
-        self.script = script  # type: BaseOutputScript
-        self.txoid = txoid
+    __slots__ = 'amount', 'script'
+
+    def __init__(self, amount, script, tx_ref=None, position=None):
+        # type: (int, BaseOutputScript, TXRef, int) -> None
+        super(BaseOutput, self).__init__(tx_ref, position)
+        self.amount = amount
+        self.script = script
+
+    @property
+    def ref(self):
+        return TXORefResolvable(self)
+
+    @property
+    def id(self):
+        return self.ref.id
 
     def get_estimator(self, ledger):
         return self.estimator_class(ledger, self)
@@ -156,8 +196,7 @@ class BaseTransaction:
 
     def __init__(self, raw=None, version=1, locktime=0):
         self._raw = raw
-        self._hash = None
-        self._id = None
+        self.ref = TXRefMutable(self)
         self.version = version  # type: int
         self.locktime = locktime  # type: int
         self._inputs = []  # type: List[BaseInput]
@@ -166,20 +205,12 @@ class BaseTransaction:
             self._deserialize()
 
     @property
-    def hex_id(self):
-        return hexlify(self.id)
-
-    @property
     def id(self):
-        if self._id is None:
-            self._id = self.hash[::-1]
-        return self._id
+        return self.ref.id
 
     @property
     def hash(self):
-        if self._hash is None:
-            self._hash = sha256(sha256(self.raw))
-        return self._hash
+        return self.ref.hash
 
     @property
     def raw(self):
@@ -188,9 +219,8 @@ class BaseTransaction:
         return self._raw
 
     def _reset(self):
-        self._id = None
-        self._hash = None
         self._raw = None
+        self.ref.reset()
 
     @property
     def inputs(self):  # type: () -> ReadOnlyList[BaseInput]
@@ -201,35 +231,36 @@ class BaseTransaction:
         return ReadOnlyList(self._outputs)
 
     def _add(self, new_ios, existing_ios):
+        # type: (List[InputOutput], List[InputOutput]) -> BaseTransaction
         for txio in new_ios:
-            txio.transaction = self
-            txio.index = len(existing_ios)
+            txio.tx_ref = self.ref
+            txio.position = len(existing_ios)
             existing_ios.append(txio)
         self._reset()
         return self
 
-    def add_inputs(self, inputs):
+    def add_inputs(self, inputs):  # type: (List[BaseInput]) -> BaseTransaction
         return self._add(inputs, self._inputs)
 
-    def add_outputs(self, outputs):
+    def add_outputs(self, outputs):  # type: (List[BaseOutput]) -> BaseTransaction
         return self._add(outputs, self._outputs)
 
     @property
-    def fee(self):
+    def fee(self):  # type: () -> int
         """ Fee that will actually be paid."""
         return self.input_sum - self.output_sum
 
     @property
-    def size(self):
+    def size(self):  # type: () -> int
         """ Size in bytes of the entire transaction. """
         return len(self.raw)
 
     @property
-    def base_size(self):
+    def base_size(self):  # type: () -> int
         """ Size in bytes of transaction meta data and all outputs; without inputs. """
         return len(self._serialize(with_inputs=False))
 
-    def _serialize(self, with_inputs=True):
+    def _serialize(self, with_inputs=True):  # type: (bool) -> bytes
         stream = BCDataStream()
         stream.write_uint32(self.version)
         if with_inputs:
@@ -242,13 +273,13 @@ class BaseTransaction:
         stream.write_uint32(self.locktime)
         return stream.get_bytes()
 
-    def _serialize_for_signature(self, signing_input):
+    def _serialize_for_signature(self, signing_input):  # type: (int) -> bytes
         stream = BCDataStream()
         stream.write_uint32(self.version)
         stream.write_compact_size(len(self._inputs))
         for i, txin in enumerate(self._inputs):
             if signing_input == i:
-                txin.serialize_to(stream, txin.output.script.source)
+                txin.serialize_to(stream, txin.txo_ref.txo.script.source)
             else:
                 txin.serialize_to(stream, b'')
         stream.write_compact_size(len(self._outputs))
@@ -300,7 +331,7 @@ class BaseTransaction:
         selector = CoinSelector(
             txos, amount,
             ledger.get_input_output_fee(
-                cls.output_class.pay_pubkey_hash(COIN, NULL_HASH)
+                cls.output_class.pay_pubkey_hash(COIN, NULL_HASH32)
             )
         )
 
@@ -308,7 +339,7 @@ class BaseTransaction:
         if not spendables:
             raise ValueError('Not enough funds to cover this transaction.')
 
-        reserved_outputs = [s.txo.txoid for s in spendables]
+        reserved_outputs = [s.txo.id for s in spendables]
         if reserve_outputs:
             yield ledger.db.reserve_spent_outputs(reserved_outputs)
 
@@ -340,14 +371,14 @@ class BaseTransaction:
         ])
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
 
-        reserved_outputs = [utxo.txoid for utxo in assets]
+        reserved_outputs = [utxo.id for utxo in assets]
         if reserve_outputs:
             yield ledger.db.reserve_spent_outputs(reserved_outputs)
 
         try:
             cost_of_change = (
                 ledger.get_transaction_base_fee(tx) +
-                ledger.get_input_output_fee(cls.output_class.pay_pubkey_hash(COIN, NULL_HASH))
+                ledger.get_input_output_fee(cls.output_class.pay_pubkey_hash(COIN, NULL_HASH32))
             )
             liquidated_total = sum(utxo.amount for utxo in assets)
             if liquidated_total > cost_of_change:
@@ -372,7 +403,7 @@ class BaseTransaction:
     def sign(self, funding_accounts):  # type: (Iterable[torba.baseaccount.BaseAccount]) -> BaseTransaction
         ledger = self.ensure_all_have_same_ledger(funding_accounts)
         for i, txi in enumerate(self._inputs):
-            txo_script = txi.output.script
+            txo_script = txi.txo_ref.txo.script
             if txo_script.is_pay_pubkey_hash:
                 address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
                 private_key = yield ledger.get_private_key_for_address(address)

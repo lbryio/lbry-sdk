@@ -200,7 +200,7 @@ class BaseAccount(object):
     def to_dict(self):
         private_key = self.private_key
         if not self.encrypted and self.private_key:
-            private_key = self.private_key.extended_key_string().decode()
+            private_key = self.private_key.extended_key_string()
 
         d = {
             'ledger': self.ledger.get_id(),
@@ -208,7 +208,7 @@ class BaseAccount(object):
             'seed': self.seed,
             'encrypted': self.encrypted,
             'private_key': private_key,
-            'public_key': self.public_key.extended_key_string().decode(),
+            'public_key': self.public_key.extended_key_string(),
             'is_hd': False
         }
 
@@ -260,7 +260,7 @@ class BaseAccount(object):
         else:
             return self.private_key.child(chain).child(index)
 
-    def get_balance(self, confirmations, **constraints):
+    def get_balance(self, confirmations=6, **constraints):
         if confirmations == 0:
             return self.ledger.db.get_balance_for_account(self, **constraints)
         else:

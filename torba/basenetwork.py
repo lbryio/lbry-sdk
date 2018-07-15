@@ -1,4 +1,3 @@
-import six
 import json
 import socket
 import logging
@@ -12,27 +11,6 @@ from torba import __version__
 from torba.stream import StreamController
 
 log = logging.getLogger(__name__)
-
-if six.PY3:
-    buffer = memoryview
-
-
-def unicode2bytes(string):
-    if isinstance(string, six.text_type):
-        return string.encode('iso-8859-1')
-    elif isinstance(string, list):
-        return [unicode2bytes(s) for s in string]
-    return string
-
-
-def bytes2unicode(maybe_bytes):
-    if isinstance(maybe_bytes, buffer):
-        maybe_bytes = str(maybe_bytes)
-    if isinstance(maybe_bytes, bytes):
-        return maybe_bytes.decode()
-    elif isinstance(maybe_bytes, (list, tuple)):
-        return [bytes2unicode(b) for b in maybe_bytes]
-    return maybe_bytes
 
 
 class StratumClientProtocol(LineOnlyReceiver):
@@ -86,14 +64,7 @@ class StratumClientProtocol(LineOnlyReceiver):
         log.debug('received: {}'.format(line))
 
         try:
-            # `line` comes in as a byte string but `json.loads` automatically converts everything to
-            # unicode. For keys it's not a big deal but for values there is an expectation
-            # everywhere else in wallet code that most values are byte strings.
-            message = json.loads(
-                line, object_hook=lambda obj: {
-                    k: unicode2bytes(v) for k, v in obj.items()
-                }
-            )
+            message = json.loads(line)
         except (ValueError, TypeError):
             raise ValueError("Cannot decode message '{}'".format(line.strip()))
 
@@ -118,7 +89,7 @@ class StratumClientProtocol(LineOnlyReceiver):
         message = json.dumps({
             'id': message_id,
             'method': method,
-            'params': [bytes2unicode(arg) for arg in args]
+            'params': args
         })
         log.debug('sent: {}'.format(message))
         self.sendLine(message.encode('latin-1'))
@@ -160,8 +131,8 @@ class BaseNetwork:
         self.on_status = self._on_status_controller.stream
 
         self.subscription_controllers = {
-            b'blockchain.headers.subscribe': self._on_header_controller,
-            b'blockchain.address.subscribe': self._on_status_controller,
+            'blockchain.headers.subscribe': self._on_header_controller,
+            'blockchain.address.subscribe': self._on_status_controller,
         }
 
     @defer.inlineCallbacks

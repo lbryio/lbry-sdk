@@ -30,7 +30,7 @@ class MockNetwork:
 
     def get_transaction(self, tx_hash):
         self.get_transaction_called.append(tx_hash)
-        return defer.succeed(self.transaction[tx_hash.decode()])
+        return defer.succeed(self.transaction[tx_hash])
 
 
 class MockHeaders:
@@ -70,9 +70,9 @@ class TestSynchronization(unittest.TestCase):
 
         self.ledger.headers.height = 3
         self.ledger.network = MockNetwork([
-            {'tx_hash': b'abcd01', 'height': 1},
-            {'tx_hash': b'abcd02', 'height': 2},
-            {'tx_hash': b'abcd03', 'height': 3},
+            {'tx_hash': 'abcd01', 'height': 1},
+            {'tx_hash': 'abcd02', 'height': 2},
+            {'tx_hash': 'abcd03', 'height': 3},
         ], {
             'abcd01': hexlify(get_transaction(get_output(1)).raw),
             'abcd02': hexlify(get_transaction(get_output(2)).raw),
@@ -80,7 +80,7 @@ class TestSynchronization(unittest.TestCase):
         })
         yield self.ledger.update_history(address)
         self.assertEqual(self.ledger.network.get_history_called, [address])
-        self.assertEqual(self.ledger.network.get_transaction_called, [b'abcd01', b'abcd02', b'abcd03'])
+        self.assertEqual(self.ledger.network.get_transaction_called, ['abcd01', 'abcd02', 'abcd03'])
 
         address_details = yield self.ledger.db.get_address(address)
         self.assertEqual(address_details['history'], 'abcd01:1:abcd02:2:abcd03:3:')
@@ -91,12 +91,12 @@ class TestSynchronization(unittest.TestCase):
         self.assertEqual(self.ledger.network.get_history_called, [address])
         self.assertEqual(self.ledger.network.get_transaction_called, [])
 
-        self.ledger.network.history.append({'tx_hash': b'abcd04', 'height': 4})
+        self.ledger.network.history.append({'tx_hash': 'abcd04', 'height': 4})
         self.ledger.network.transaction['abcd04'] = hexlify(get_transaction(get_output(4)).raw)
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
         yield self.ledger.update_history(address)
         self.assertEqual(self.ledger.network.get_history_called, [address])
-        self.assertEqual(self.ledger.network.get_transaction_called, [b'abcd04'])
+        self.assertEqual(self.ledger.network.get_transaction_called, ['abcd04'])
         address_details = yield self.ledger.db.get_address(address)
         self.assertEqual(address_details['history'], 'abcd01:1:abcd02:2:abcd03:3:abcd04:4:')

@@ -1,8 +1,10 @@
+from decimal import Decimal
 from typing import List, Dict, Type
 from twisted.internet import defer
 
 from torba.baseledger import BaseLedger, LedgerRegistry
 from torba.wallet import Wallet, WalletStorage
+from torba.constants import COIN
 
 
 class WalletManager(object):
@@ -39,12 +41,18 @@ class WalletManager(object):
         return wallet
 
     @defer.inlineCallbacks
-    def get_balance(self):
+    def get_balances(self, confirmations=6):
         balances = {}
-        for ledger in self.ledgers.values():
-            for account in ledger.accounts:
-                balances.setdefault(ledger.get_id(), 0)
-                balances[ledger.get_id()] += yield account.get_balance()
+        for i, ledger in enumerate(self.ledgers.values()):
+            ledger_balances = balances[ledger.get_id()] = []
+            for j, account in enumerate(ledger.accounts):
+                satoshis = yield account.get_balance(confirmations)
+                ledger_balances.append({
+                    'account': account.name,
+                    'coins': round(Decimal(satoshis) / COIN, 2),
+                    'satoshis': satoshis,
+                    'is_default_account': i == 0 and j == 0
+                })
         defer.returnValue(balances)
 
     @property

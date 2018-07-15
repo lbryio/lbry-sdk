@@ -21,14 +21,14 @@ class CoinSelector:
         if six.PY3 and seed is not None:
             self.random.seed(seed, version=1)
 
-    def select(self):
+    def select(self):  # type: () -> List[torba.basetransaction.BaseOutputAmountEstimator]
         if not self.txos:
             return
         if self.target > self.available:
             return
         return self.branch_and_bound() or self.single_random_draw()
 
-    def branch_and_bound(self):
+    def branch_and_bound(self):  # type: () -> List[torba.basetransaction.BaseOutputAmountEstimator]
         # see bitcoin implementation for more info:
         # https://github.com/bitcoin/bitcoin/blob/master/src/wallet/coinselection.cpp
 
@@ -84,7 +84,7 @@ class CoinSelector:
                 self.txos[i] for i, include in enumerate(best_selection) if include
             ]
 
-    def single_random_draw(self):
+    def single_random_draw(self):  # type: () -> List[torba.basetransaction.BaseOutputAmountEstimator]
         self.random.shuffle(self.txos, self.random.random)
         selection = []
         amount = 0
