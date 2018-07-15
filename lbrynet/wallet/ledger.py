@@ -149,7 +149,7 @@ class MainNetLedger(BaseLedger):
                 parse_lbry_uri(uri)
             except URIParseError as err:
                 defer.returnValue({'error': err.message})
-        resolutions = yield self.network.get_values_for_uris(self.headers.hash(), *uris)
+        resolutions = yield self.network.get_values_for_uris(self.headers.hash().decode(), *uris)
         resolver = Resolver(self.headers.claim_trie_root, self.headers.height, self.transaction_class,
                             hash160_to_address=lambda x: self.hash160_to_address(x), network=self.network)
         defer.returnValue((yield resolver._handle_resolutions(resolutions, uris, page, page_size)))
