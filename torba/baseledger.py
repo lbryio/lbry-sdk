@@ -299,9 +299,9 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
                 ))
                 self._on_transaction_controller.add(TransactionEvent(address, tx, remote_height, is_verified))
 
-            except:
+            except Exception as e:
                 log.exception('Failed to synchronize transaction:')
-                raise
+                raise e
 
             finally:
                 lock.release()
