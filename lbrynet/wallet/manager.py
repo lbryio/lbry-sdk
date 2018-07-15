@@ -176,12 +176,12 @@ class LbryWalletManager(BaseWalletManager):
         if isinstance(address, buffer):
             address = str(address)
         return {
-            "claim_id": hexlify(tx.get_claim_id(txo.index)).decode(),
+            "claim_id": hexlify(tx.get_claim_id(txo.position)).decode(),
             "name": name,
             "amount": bid,
             "address": address.decode(),
-            "txid": tx.hex_id.decode(),
-            "nout": txo.index,
+            "txid": tx.id.decode(),
+            "nout": txo.position,
             "value": claim_dict,
             "height": -1,
             "claim_sequence": -1,
