@@ -104,8 +104,9 @@ class LbryWalletManager(BaseWalletManager):
                         'certificates': json_dict['claim_certificates'],
                         'receiving_gap': 20,
                         'change_gap': 6,
-                        'receiving_maximum_use_per_address': 2,
-                        'change_maximum_use_per_address': 2
+                        'receiving_maximum_uses_per_address': 2,
+                        'change_maximum_uses_per_address': 2,
+                        'is_hd': True
                     }]
                 }, indent=4, sort_keys=True)
                 with open(wallet_file_path, 'w') as f:
