@@ -16,7 +16,7 @@ from .claim_proofs import verify_proof, InvalidProofError
 log = logging.getLogger(__name__)
 
 
-class Resolver:
+class Resolver(object):
 
     def __init__(self, claim_trie_root, height, transaction_class, hash160_to_address, network):
         self.claim_trie_root = claim_trie_root
