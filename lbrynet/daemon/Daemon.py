@@ -466,7 +466,7 @@ class Daemon(AuthJSONRPCServer):
 
         cost = self._get_est_cost_from_stream_size(size)
 
-        resolved = (yield self._resolve(uri))[uri]
+        resolved = yield self._resolve(uri)
 
         if uri in resolved and 'claim' in resolved[uri]:
             claim = ClaimDict.load_dict(resolved[uri]['claim']['value'])
