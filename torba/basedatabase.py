@@ -88,7 +88,7 @@ class BaseDatabase(SQLiteMixin):
             account text not null,
             chain integer not null,
             position integer not null,
-            pubkey text not null,
+            pubkey blob not null,
             history text,
             used_times integer not null default 0
         );
@@ -270,7 +270,7 @@ class BaseDatabase(SQLiteMixin):
             values.append(account.public_key.address)
             values.append(chain)
             values.append(position)
-            values.append(pubkey.pubkey_bytes)
+            values.append(sqlite3.Binary(pubkey.pubkey_bytes))
         return self.db.runOperation(sql, values)
 
     @staticmethod
