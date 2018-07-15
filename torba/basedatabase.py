@@ -32,12 +32,6 @@ class SQLiteMixin(object):
         self.db.close()
         return defer.succeed(True)
 
-    def _debug_sql(self, sql):
-        """ For use during debugging to execute arbitrary SQL queries without waiting on reactor. """
-        conn = self.db.connectionFactory(self.db)
-        trans = self.db.transactionFactory(self, conn)
-        return trans.execute(sql).fetchall()
-
     def _insert_sql(self, table, data):
         # type: (str, dict) -> tuple[str, List]
         columns, values = [], []
@@ -62,19 +56,10 @@ class SQLiteMixin(object):
         return sql, values
 
     @defer.inlineCallbacks
-    def query_one_value_list(self, query, params):
-        # type: (str, Union[dict,tuple]) -> defer.Deferred[List]
-        result = yield self.db.runQuery(query, params)
-        if result:
-            defer.returnValue([i[0] for i in result])
-        else:
-            defer.returnValue([])
-
-    @defer.inlineCallbacks
     def query_one_value(self, query, params=None, default=None):
         result = yield self.db.runQuery(query, params)
         if result:
-            defer.returnValue(result[0][0])
+            defer.returnValue(result[0][0] or default)
         else:
             defer.returnValue(default)
 
@@ -93,17 +78,6 @@ class SQLiteMixin(object):
             defer.returnValue(result[0])
         else:
             defer.returnValue(default)
-
-    def query_count(self, sql, params):
-        return self.query_one_value(
-            "SELECT count(*) FROM ({})".format(sql), params
-        )
-
-    def insert_and_return_id(self, table, data):
-        def do_insert(t):
-            t.execute(*self._insert_sql(table, data))
-            return t.lastrowid
-        return self.db.runInteraction(do_insert)
 
 
 class BaseDatabase(SQLiteMixin):
@@ -232,7 +206,6 @@ class BaseDatabase(SQLiteMixin):
         else:
             defer.returnValue((None, None, False))
 
-    @defer.inlineCallbacks
     def get_balance_for_account(self, account, **constraints):
         extra_sql = ""
         if constraints:
@@ -247,7 +220,7 @@ class BaseDatabase(SQLiteMixin):
             extra_sql = ' AND ' + ' AND '.join(extras)
         values = {'account': account.public_key.address}
         values.update(constraints)
-        result = yield self.db.runQuery(
+        return self.query_one_value(
             """
             SELECT SUM(amount)
             FROM txo
@@ -256,12 +229,8 @@ class BaseDatabase(SQLiteMixin):
             WHERE
               pubkey_address.account=:account AND
               txoid NOT IN (SELECT txoid FROM txi)
-            """+extra_sql, values
+            """+extra_sql, values, 0
         )
-        if result:
-            defer.returnValue(result[0][0] or 0)
-        else:
-            defer.returnValue(0)
 
     @defer.inlineCallbacks
     def get_utxos_for_account(self, account, **constraints):
