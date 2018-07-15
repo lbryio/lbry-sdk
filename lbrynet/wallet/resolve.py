@@ -194,7 +194,7 @@ class Resolver:
         # a table of index counts for the sorted claim ids, including ignored claims
         absolute_position_index = {}
 
-        block_sorted_infos = sorted(channel_claim_infos.iteritems(), key=lambda x: int(x[1][1]))
+        block_sorted_infos = sorted(channel_claim_infos.items(), key=lambda x: int(x[1][1]))
         per_block_infos = {}
         for claim_id, (name, height) in block_sorted_infos:
             claims = per_block_infos.get(height, [])

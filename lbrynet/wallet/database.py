@@ -8,15 +8,15 @@ class WalletDatabase(BaseDatabase):
 
     CREATE_TXO_TABLE = """
         create table if not exists txo (
-            txoid integer primary key,
-            txhash blob references tx,
-            address blob references pubkey_address,
+            txid text references tx,
+            txoid text primary key,
+            address text references pubkey_address,
             position integer not null,
             amount integer not null,
             script blob not null,
             is_reserved boolean not null default 0,
 
-            claim_id blob,
+            claim_id text,
             claim_name text,
             is_claim boolean not null default 0,
             is_update boolean not null default 0,
@@ -41,9 +41,9 @@ class WalletDatabase(BaseDatabase):
         if txo.script.is_claim_involved:
             row['claim_name'] = txo.script.values['claim_name']
         if txo.script.is_update_claim or txo.script.is_support_claim:
-            row['claim_id'] = sqlite3.Binary(txo.script.values['claim_id'])
+            row['claim_id'] = txo.script.values['claim_id']
         elif txo.script.is_claim_name:
-            row['claim_id'] = sqlite3.Binary(tx.get_claim_id(txo.index))
+            row['claim_id'] = tx.get_claim_id(txo.position)
         return row
 
     @defer.inlineCallbacks

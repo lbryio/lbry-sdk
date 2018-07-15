@@ -1,3 +1,4 @@
+import six
 import binascii
 
 from lbryschema.hashing import sha256
@@ -29,11 +30,11 @@ def get_hash_for_outpoint(txhash, nOut, nHeightOfLastTakeover):
 # noinspection PyPep8
 def verify_proof(proof, rootHash, name):
     previous_computed_hash = None
-    reverse_computed_name = ''
+    reverse_computed_name = b''
     verified_value = False
     for i, node in enumerate(proof['nodes'][::-1]):
         found_child_in_chain = False
-        to_hash = ''
+        to_hash = b''
         previous_child_character = None
         for child in node['children']:
             if child['character'] < 0 or child['character'] > 255:
@@ -42,7 +43,7 @@ def verify_proof(proof, rootHash, name):
                 if previous_child_character >= child['character']:
                     raise InvalidProofError("children not in increasing order")
             previous_child_character = child['character']
-            to_hash += chr(child['character'])
+            to_hash += six.int2byte(child['character'])
             if 'nodeHash' in child:
                 if len(child['nodeHash']) != 64:
                     raise InvalidProofError("invalid child nodeHash")
@@ -53,7 +54,7 @@ def verify_proof(proof, rootHash, name):
                 if found_child_in_chain is True:
                     raise InvalidProofError("already found the next child in the chain")
                 found_child_in_chain = True
-                reverse_computed_name += chr(child['character'])
+                reverse_computed_name += six.int2byte(child['character'])
                 to_hash += previous_computed_hash
 
         if not found_child_in_chain:
@@ -62,9 +63,9 @@ def verify_proof(proof, rootHash, name):
         if i == 0 and 'txhash' in proof and 'nOut' in proof and 'last takeover height' in proof:
             if len(proof['txhash']) != 64:
                 raise InvalidProofError("txhash was invalid: {}".format(proof['txhash']))
-            if not isinstance(proof['nOut'], (long, int)):
+            if not isinstance(proof['nOut'], six.integer_types):
                 raise InvalidProofError("nOut was invalid: {}".format(proof['nOut']))
-            if not isinstance(proof['last takeover height'], (long, int)):
+            if not isinstance(proof['last takeover height'], six.integer_types):
                 raise InvalidProofError(
                     'last takeover height was invalid: {}'.format(proof['last takeover height']))
             to_hash += get_hash_for_outpoint(
@@ -93,6 +94,6 @@ def verify_proof(proof, rootHash, name):
     return True
 
 def Hash(x):
-    if type(x) is unicode:
+    if isinstance(x, six.text_type):
         x = x.encode('utf-8')
     return sha256(sha256(x))
