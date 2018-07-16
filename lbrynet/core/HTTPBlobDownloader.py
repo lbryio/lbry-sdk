@@ -45,9 +45,7 @@ class HTTPBlobDownloader(object):
     @defer.inlineCallbacks
     def download_blob(self, blob):
         try:
-            blob_hash = yield self._download_blob(blob)
-            if blob_hash:
-                log.debug('Mirror completed download for %s', blob_hash)
+            yield self._download_blob(blob)
             self.failures = 0
         except Exception as exception:
             self.failures += 1
@@ -61,15 +59,17 @@ class HTTPBlobDownloader(object):
         if not blob.get_is_verified() and not blob.is_downloading() and 'mirror' not in blob.writers:
             response = yield self.client.get(url_for(choice(self.servers), blob.blob_hash))
             if response.code != 200:
-                log.error('[Mirror] Missing a blob: %s', blob.blob_hash)
-                self.blob_hashes.remove(blob.blob_hash)
+                log.debug('[Mirror] Missing a blob: %s', blob.blob_hash)
+                if blob.blob_hash in self.blob_hashes:
+                    self.blob_hashes.remove(blob.blob_hash)
                 defer.returnValue(blob.blob_hash)
             log.debug('[Mirror] Download started: %s', blob.blob_hash)
             blob.set_length(response.length)
             writer, finished_deferred = blob.open_for_writing('mirror')
             try:
                 yield self.client.collect(response, writer.write)
-            except Exception, e:
+                log.info('Mirror completed download for %s', blob.blob_hash)
+            except Exception as e:
                 writer.close(e)
             yield finished_deferred
             defer.returnValue(blob.blob_hash)
