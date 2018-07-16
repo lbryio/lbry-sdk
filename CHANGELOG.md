@@ -23,6 +23,7 @@ at anytime.
 ### Changed
   * keep track of failures for DHT peers for up to ten minutes instead of indefinitely
   * skip ignored peers from iterative lookups instead of blocking the peer who returned them to us too
+  * if a node becomes ignored during an iterative find cycle remove it from the shortlist so that we can't return it as a result nor try to probe it anyway
 
 ### Added
   *
