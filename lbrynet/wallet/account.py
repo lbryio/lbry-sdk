@@ -22,7 +22,7 @@ def get_certificate_lookup(tx_or_hash, nout):
     if isinstance(tx_or_hash, Transaction):
         return '{}:{}'.format(tx_or_hash.id, nout)
     else:
-        return '{}:{}'.format(hexlify(tx_or_hash[::-1]).decode(), nout)
+        return '{}:{}'.format(tx_or_hash, nout)
 
 
 class Account(BaseAccount):
