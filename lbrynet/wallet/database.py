@@ -50,34 +50,22 @@ class WalletDatabase(BaseDatabase):
     def get_certificates(self, name, private_key_accounts=None, exclude_without_key=False):
         txos = yield self.db.runQuery(
             """
-            SELECT tx.hash, txo.position, txo.claim_id
-            FROM txo JOIN tx ON tx.txhash=txo.txhash
-            WHERE claim_name=:claim AND (is_claim=1 OR is_update=1)
-            ORDER BY tx.height DESC
-            GROUP BY txo.claim_id
-            """, {'name': name}
+            SELECT tx.txid, txo.position, txo.claim_id
+            FROM txo JOIN tx ON tx.txid=txo.txid
+            WHERE claim_name=? AND (is_claim OR is_update)
+            GROUP BY txo.claim_id ORDER BY tx.height DESC;
+            """, (name,)
         )
 
-        certificates = [
-            Certificate(
-                values[0],
-                values[1],
-                values[2],
-                name,
-                None
-            ) for values in txos
-        ]
-
+        certificates = []
         # Lookup private keys for each certificate.
         if private_key_accounts is not None:
-            for cert in certificates:
+            for txhash, nout, claim_id in txos:
                 for account in private_key_accounts:
                     private_key = account.get_certificate_private_key(
-                        cert.txhash, cert.nout
+                        txhash, nout
                     )
-                    if private_key is not None:
-                        cert.private_key = private_key
-                        break
+                    certificates.append(Certificate(txhash, nout, claim_id, name, private_key))
 
         if exclude_without_key:
             defer.returnValue([
