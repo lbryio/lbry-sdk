@@ -354,7 +354,7 @@ def get_blob_hashsum(b):
     iv = b['iv']
     blob_hashsum = get_lbry_hash_obj()
     if length != 0:
-        blob_hashsum.update(blob_hash.encode())
+        blob_hashsum.update(blob_hash)
     blob_hashsum.update(str(blob_num).encode())
     blob_hashsum.update(iv)
     blob_hashsum.update(str(length).encode())

@@ -43,6 +43,7 @@ from lbrynet.dht.error import TimeoutError
 from lbrynet.core.Peer import Peer
 from lbrynet.core.SinglePeerDownloader import SinglePeerDownloader
 from lbrynet.core.client.StandaloneBlobDownloader import StandaloneBlobDownloader
+from lbrynet.wallet.account import Account as LBRYAccount
 
 log = logging.getLogger(__name__)
 requires = AuthJSONRPCServer.requires
@@ -980,34 +981,6 @@ class Daemon(AuthJSONRPCServer):
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
-    def jsonrpc_account_balance(self, account_name=None, confirmations=6):
-        """
-        Return the balance of an individual account or all of the accounts.
-
-        Usage:
-            account_balance [<account_name> | --account=<account_name>] [--confirmations=<confirmations>]
-
-        Options:
-            --account=<account_name>        : (str) If provided only the balance for this
-                                                    account will be given
-            --confirmations=<confirmations> : (int) required confirmations (default: 6)
-
-        Returns:
-            (map) amount of lbry credits in wallet
-        """
-        balances = yield self.wallet.get_balances(confirmations)
-        lbc_accounts = balances[self.ledger.get_id()]
-        if account_name is not None:
-            for account in lbc_accounts:
-                if account['account'] == account_name:
-                    defer.returnValue(account)
-            raise Exception(
-                "No account found with name '{}', available accounts: {}."
-                .format(account_name, str([a['account'] for a in lbc_accounts]))
-            )
-        defer.returnValue(lbc_accounts)
-
-    @AuthJSONRPCServer.requires("wallet")
     def jsonrpc_wallet_balance(self, address=None, include_unconfirmed=False):
         """
         Return the balance of the wallet
@@ -1024,9 +997,10 @@ class Daemon(AuthJSONRPCServer):
             (float) amount of lbry credits in wallet
         """
         assert address is None, "Limiting by address needs to be re-implemented in new wallet."
-        return self.wallet.default_account.get_balance(
+        dewies = yield self.wallet.default_account.get_balance(
             0 if include_unconfirmed else 6
         )
+        defer.returnValue(round(dewies / COIN, 3))
 
     @requires(WALLET_COMPONENT)
     @defer.inlineCallbacks
@@ -3155,6 +3129,49 @@ class Daemon(AuthJSONRPCServer):
         out = (pos_arg, pos_args, pos_arg2, pos_arg3, a_arg, b_arg)
         response = yield self._render_response(out)
         defer.returnValue(response)
+
+    @AuthJSONRPCServer.requires("wallet")
+    def jsonrpc_account_balance(self, account_name=None, confirmations=6,
+                                include_reserved=False, include_claims=False):
+        """
+        Return the balance of an individual account or all of the accounts.
+
+        Usage:
+            account_balance [<account_name>] [--confirmations=<confirmations>]
+                            [--include-reserved] [--include-claims]
+
+        Options:
+            --account=<account_name>        : (str) If provided only the balance for this
+                                                    account will be given
+            --confirmations=<confirmations> : (int) required confirmations (default: 6)
+            --include-reserved              : (bool) include reserved UTXOs (default: false)
+            --include-claims                : (bool) include claims, requires than a
+                                                     LBC account is specified (default: false)
+
+        Returns:
+            (map) balance of account(s)
+        """
+        if account_name:
+            for account in self.wallet.accounts:
+                if account.name == account_name:
+                    if include_claims and not isinstance(account, LBRYAccount):
+                        raise Exception(
+                            "'--include-claims' requires specifying an LBC ledger account. "
+                            "Found '{}', but it's an {} ledger account."
+                            .format(account_name, account.ledger.symbol)
+                        )
+                    args = {
+                        'confirmations': confirmations,
+                        'include_reserved': include_reserved
+                    }
+                    if include_claims:
+                        args['include_claims'] = True
+                    return account.get_balance(**args)
+            raise Exception("Couldn't find an account named: '{}'.".format(account_name))
+        else:
+            if include_claims:
+                raise Exception("'--include-claims' requires specifying an LBC account.")
+            return self.wallet.get_balances(confirmations)
 
 
 def loggly_time_string(dt):

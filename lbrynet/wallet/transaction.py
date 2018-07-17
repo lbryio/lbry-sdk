@@ -1,5 +1,4 @@
 import struct
-from binascii import hexlify
 from typing import List  # pylint: disable=unused-import
 
 from twisted.internet import defer  # pylint: disable=unused-import
