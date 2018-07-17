@@ -128,37 +128,32 @@ class CommandTestCase(IntegrationTestCase):
         self.daemon.component_manager.components.add(file_manager)
 
 
-class ChannelNewCommandTests(CommandTestCase):
+class CommonWorkflowTests(CommandTestCase):
 
-    VERBOSE = True
+    VERBOSE = False
 
-    @defer.inlineCallbacks
-    def test_new_channel(self):
-        result = yield self.daemon.jsonrpc_channel_new('@bar', 1*COIN)
-        self.assertTrue(result['success'])
-        yield self.ledger.on_transaction.deferred_where(
-            lambda e: e.tx.id == result['txid']
-        )
+    async def test_user_creating_channel_and_publishing_file(self):
 
+        # User checks their balance.
+        result = await d2f(self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True))
+        self.assertEqual(result, 10)
 
-class WalletBalanceCommandTests(CommandTestCase):
+        # Decides to get a cool new channel.
+        channel = await d2f(self.daemon.jsonrpc_channel_new('@spam', 1))
+        self.assertTrue(channel['success'])
+        await self.on_transaction_id(channel['txid'])
+        await self.blockchain.generate(1)
+        await self.on_transaction_id(channel['txid'])
 
-    VERBOSE = True
+        # Check balance again.
+        result = await d2f(self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True))
+        self.assertEqual(result, 8.99)
 
-    @defer.inlineCallbacks
-    def test_wallet_balance(self):
-        result = yield self.daemon.jsonrpc_wallet_balance()
-        self.assertEqual(result, 10*COIN)
-
-
-class PublishCommandTests(CommandTestCase):
-
-    VERBOSE = True
-
-    @defer.inlineCallbacks
-    def test_publish(self):
+        # Now lets publish a hello world file to the channel.
         with tempfile.NamedTemporaryFile() as file:
             file.write(b'hello world!')
             file.flush()
-            result = yield self.daemon.jsonrpc_publish('foo', 1, file_path=file.name)
+            result = await d2f(self.daemon.jsonrpc_publish(
+                'foo', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
+            ))
             print(result)
