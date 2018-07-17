@@ -48,7 +48,7 @@ def package_files(directory):
             yield os.path.join('..', path, filename)
 
 
-package_name = "lbrynet"
+package_name = "lbry"
 base_dir = os.path.abspath(os.path.dirname(__file__))
 # Get the long description from the README file
 with open(os.path.join(base_dir, 'README.md'), 'rb') as f:
@@ -64,7 +64,7 @@ setup(
     long_description=long_description,
     keywords="lbry protocol media",
     license='MIT',
-    packages=find_packages(base_dir),
+    packages=find_packages(exclude=('tests',)),
     install_requires=requires,
     entry_points={'console_scripts': console_scripts},
     zip_safe=False,

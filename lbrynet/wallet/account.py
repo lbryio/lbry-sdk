@@ -1,5 +1,5 @@
 import logging
-from binascii import hexlify, unhexlify
+from binascii import unhexlify
 
 from twisted.internet import defer
 
@@ -70,21 +70,15 @@ class Account(BaseAccount):
                     failed += 1
         log.info('Checked: %s, Converted: %s, Failed: %s', total, succeded, failed)
 
-    def get_balance(self, confirmations=6, include_claims=False):
-        if include_claims:
-            return super(Account, self).get_balance(confirmations)
-        else:
-            return super(Account, self).get_balance(
-                confirmations, is_claim=0, is_update=0, is_support=0
-            )
+    def get_balance(self, confirmations=6, include_claims=False, **constraints):
+        if not include_claims:
+            constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
+        return super(Account, self).get_balance(confirmations, **constraints)
 
-    def get_unspent_outputs(self, include_claims=False):
-        if include_claims:
-            return super(Account, self).get_unspent_outputs()
-        else:
-            return super(Account, self).get_unspent_outputs(
-                is_claim=0, is_update=0, is_support=0
-            )
+    def get_unspent_outputs(self, include_claims=False, **constraints):
+        if not include_claims:
+            constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
+        return super(Account, self).get_unspent_outputs(**constraints)
 
     @classmethod
     def from_dict(cls, ledger, d):  # type: (torba.baseledger.BaseLedger, Dict) -> BaseAccount
