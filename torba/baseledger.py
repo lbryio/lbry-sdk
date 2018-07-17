@@ -3,11 +3,11 @@ import six
 import hashlib
 import logging
 from binascii import hexlify, unhexlify
-from typing import Dict, Type, Iterable, Generator
+from typing import Dict, Type, Iterable
 from operator import itemgetter
 from collections import namedtuple
 
-from twisted.internet import defer, reactor
+from twisted.internet import defer
 
 from torba import baseaccount
 from torba import basedatabase
@@ -298,10 +298,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
                     self.get_id(), hex_id, address, remote_height, is_verified
                 ))
 
-                reactor.callLater(
-                    0.01, self._on_transaction_controller.add,
-                    TransactionEvent(address, tx, remote_height, is_verified)
-                )
+                self._on_transaction_controller.add(TransactionEvent(address, tx, remote_height, is_verified))
 
             except Exception as e:
                 log.exception('Failed to synchronize transaction:')
