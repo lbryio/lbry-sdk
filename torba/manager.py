@@ -65,6 +65,12 @@ class WalletManager(object):
         for wallet in self.wallets:
             return wallet.default_account
 
+    @property
+    def accounts(self):
+        for wallet in self.wallets:
+            for account in wallet.accounts:
+                yield account
+
     @defer.inlineCallbacks
     def start(self):
         self.running = True

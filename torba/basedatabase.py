@@ -57,7 +57,7 @@ class SQLiteMixin(object):
 
     @defer.inlineCallbacks
     def query_one_value(self, query, params=None, default=None):
-        result = yield self.db.runQuery(query, params)
+        result = yield self.run_query(query, params)
         if result:
             defer.returnValue(result[0][0] or default)
         else:
@@ -65,7 +65,7 @@ class SQLiteMixin(object):
 
     @defer.inlineCallbacks
     def query_dict_value_list(self, query, fields, params=None):
-        result = yield self.db.runQuery(query.format(', '.join(fields)), params)
+        result = yield self.run_query(query.format(', '.join(fields)), params)
         if result:
             defer.returnValue([dict(zip(fields, r)) for r in result])
         else:
@@ -78,6 +78,22 @@ class SQLiteMixin(object):
             defer.returnValue(result[0])
         else:
             defer.returnValue(default)
+
+    @staticmethod
+    def execute(t, sql, values):
+        log.debug(sql)
+        log.debug(values)
+        return t.execute(sql, values)
+
+    def run_operation(self, sql, values):
+        log.debug(sql)
+        log.debug(values)
+        return self.db.runOperation(sql, values)
+
+    def run_query(self, sql, values):
+        log.debug(sql)
+        log.debug(values)
+        return self.db.runQuery(sql, values)
 
 
 class BaseDatabase(SQLiteMixin):
@@ -144,39 +160,39 @@ class BaseDatabase(SQLiteMixin):
 
         def _steps(t):
             if save_tx == 'insert':
-                t.execute(*self._insert_sql('tx', {
+                self.execute(t, *self._insert_sql('tx', {
                     'txid': tx.id,
                     'raw': sqlite3.Binary(tx.raw),
                     'height': height,
                     'is_verified': is_verified
                 }))
             elif save_tx == 'update':
-                t.execute(*self._update_sql("tx", {
+                self.execute(t, *self._update_sql("tx", {
                         'height': height, 'is_verified': is_verified
                     }, 'txid = ?', (tx.id,)
                 ))
 
-            existing_txos = list(map(itemgetter(0), t.execute(
-                "SELECT position FROM txo WHERE txid = ?", (tx.id,)
+            existing_txos = list(map(itemgetter(0), self.execute(
+                t, "SELECT position FROM txo WHERE txid = ?", (tx.id,)
             ).fetchall()))
 
             for txo in tx.outputs:
                 if txo.position in existing_txos:
                     continue
                 if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == hash:
-                    t.execute(*self._insert_sql("txo", self.txo_to_row(tx, address, txo)))
+                    self.execute(t, *self._insert_sql("txo", self.txo_to_row(tx, address, txo)))
                 elif txo.script.is_pay_script_hash:
                     # TODO: implement script hash payments
                     print('Database.save_transaction_io: pay script hash is not implemented!')
 
-            spent_txoids = [txi[0] for txi in t.execute(
-                "SELECT txoid FROM txi WHERE txid = ? AND address = ?", (tx.id, address)
+            spent_txoids = [txi[0] for txi in self.execute(
+                t, "SELECT txoid FROM txi WHERE txid = ? AND address = ?", (tx.id, address)
             ).fetchall()]
 
             for txi in tx.inputs:
                 txoid = txi.txo_ref.id
                 if txoid not in spent_txoids:
-                    t.execute(*self._insert_sql("txi", {
+                    self.execute(t, *self._insert_sql("txi", {
                         'txid': tx.id,
                         'txoid': txoid,
                         'address': address,
@@ -187,7 +203,7 @@ class BaseDatabase(SQLiteMixin):
         return self.db.runInteraction(_steps)
 
     def reserve_spent_outputs(self, txoids, is_reserved=True):
-        return self.db.runOperation(
+        return self.run_operation(
             "UPDATE txo SET is_reserved = ? WHERE txoid IN ({})".format(
                 ', '.join(['?']*len(txoids))
             ), [is_reserved]+txoids
@@ -198,7 +214,7 @@ class BaseDatabase(SQLiteMixin):
 
     @defer.inlineCallbacks
     def get_transaction(self, txid):
-        result = yield self.db.runQuery(
+        result = yield self.run_query(
             "SELECT raw, height, is_verified FROM tx WHERE txid = ?", (txid,)
         )
         if result:
@@ -206,7 +222,7 @@ class BaseDatabase(SQLiteMixin):
         else:
             defer.returnValue((None, None, False))
 
-    def get_balance_for_account(self, account, **constraints):
+    def get_balance_for_account(self, account, include_reserved=False, **constraints):
         extra_sql = ""
         if constraints:
             extras = []
@@ -218,6 +234,8 @@ class BaseDatabase(SQLiteMixin):
                     col, op = key[:-len('__lte')], '<='
                 extras.append('{} {} :{}'.format(col, op, key))
             extra_sql = ' AND ' + ' AND '.join(extras)
+        if not include_reserved:
+            extra_sql += ' AND is_reserved=0'
         values = {'account': account.public_key.address}
         values.update(constraints)
         return self.query_one_value(
@@ -241,7 +259,7 @@ class BaseDatabase(SQLiteMixin):
             )
         values = {'account': account.public_key.address}
         values.update(constraints)
-        utxos = yield self.db.runQuery(
+        utxos = yield self.run_query(
             """
             SELECT amount, script, txid, txo.position
             FROM txo JOIN pubkey_address ON pubkey_address.address=txo.address
@@ -271,12 +289,12 @@ class BaseDatabase(SQLiteMixin):
             values.append(chain)
             values.append(position)
             values.append(sqlite3.Binary(pubkey.pubkey_bytes))
-        return self.db.runOperation(sql, values)
+        return self.run_operation(sql, values)
 
-    @staticmethod
-    def _set_address_history(t, address, history):
-        t.execute(
-            "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
+    @classmethod
+    def _set_address_history(cls, t, address, history):
+        cls.execute(
+            t, "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
             (history, history.count(':')//2, address)
         )
 

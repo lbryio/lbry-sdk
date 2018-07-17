@@ -260,13 +260,10 @@ class BaseAccount(object):
             return self.private_key.child(chain).child(index)
 
     def get_balance(self, confirmations=6, **constraints):
-        if confirmations == 0:
-            return self.ledger.db.get_balance_for_account(self, **constraints)
-        else:
+        if confirmations > 0:
             height = self.ledger.headers.height - (confirmations-1)
-            return self.ledger.db.get_balance_for_account(
-                self, height__lte=height, height__not=-1, **constraints
-            )
+            constraints.update({'height__lte': height, 'height__not': -1})
+        return self.ledger.db.get_balance_for_account(self, **constraints)
 
     def get_unspent_outputs(self, **constraints):
         return self.ledger.db.get_utxos_for_account(self, **constraints)

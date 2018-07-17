@@ -7,7 +7,7 @@ from typing import Dict, Type, Iterable, Generator
 from operator import itemgetter
 from collections import namedtuple
 
-from twisted.internet import defer
+from twisted.internet import defer, reactor
 
 from torba import baseaccount
 from torba import basedatabase
@@ -69,7 +69,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         self.network = self.config.get('network') or self.network_class(self)
         self.network.on_header.listen(self.process_header)
         self.network.on_status.listen(self.process_status)
-        self.accounts = set()
+        self.accounts = []
         self.headers = self.config.get('headers') or self.headers_class(self)
         self.fee_per_byte = self.config.get('fee_per_byte', self.default_fee_per_byte)
 
@@ -123,7 +123,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
     @defer.inlineCallbacks
     def add_account(self, account):  # type: (baseaccount.BaseAccount) -> None
-        self.accounts.add(account)
+        self.accounts.append(account)
         if self.network.is_connected:
             yield self.update_account(account)
 
@@ -297,7 +297,11 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
                 log.debug("{}: sync'ed tx {} for address: {}, height: {}, verified: {}".format(
                     self.get_id(), hex_id, address, remote_height, is_verified
                 ))
-                self._on_transaction_controller.add(TransactionEvent(address, tx, remote_height, is_verified))
+
+                reactor.callLater(
+                    0.01, self._on_transaction_controller.add,
+                    TransactionEvent(address, tx, remote_height, is_verified)
+                )
 
             except Exception as e:
                 log.exception('Failed to synchronize transaction:')
