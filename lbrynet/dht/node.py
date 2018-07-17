@@ -99,7 +99,7 @@ class Node(MockKademliaHelper):
                  routingTableClass=None, networkProtocol=None,
                  externalIP=None, peerPort=3333, listenUDP=None,
                  callLater=None, resolve=None, clock=None, peer_finder=None,
-                 peer_manager=None):
+                 peer_manager=None, interface=''):
         """
         @param dataStore: The data store to use. This must be class inheriting
                           from the C{DataStore} interface (or providing the
@@ -128,6 +128,7 @@ class Node(MockKademliaHelper):
         MockKademliaHelper.__init__(self, clock, callLater, resolve, listenUDP)
         self.node_id = node_id or self._generateID()
         self.port = udpPort
+        self._listen_interface = interface
         self._change_token_lc = self.get_looping_call(self.change_token)
         self._refresh_node_lc = self.get_looping_call(self._refreshNode)
         self._refresh_contacts_lc = self.get_looping_call(self._refreshContacts)
@@ -171,7 +172,7 @@ class Node(MockKademliaHelper):
     def start_listening(self):
         if not self._listeningPort:
             try:
-                self._listeningPort = self.reactor_listenUDP(self.port, self._protocol)
+                self._listeningPort = self.reactor_listenUDP(self.port, self._protocol, interface=self._listen_interface)
             except error.CannotListenError as e:
                 import traceback
                 log.error("Couldn't bind to port %d. %s", self.port, traceback.format_exc())
