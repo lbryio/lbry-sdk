@@ -13,17 +13,17 @@ at anytime.
   *
 
 ### Fixed
-  * daemon cli spelling fixes
-  * high CPU usage when a stream is incomplete and the peers we're requesting from have no more blobs to send us
+  * spelling errors in messages printed by `lbrynet-cli`
+  * high CPU usage when a stream is incomplete and the peers we're requesting from have no more blobs to send us (https://github.com/lbryio/lbry/pull/1301)
 
 ### Deprecated
   *
   *
 
 ### Changed
-  * keep track of failures for DHT peers for up to ten minutes instead of indefinitely
-  * skip ignored peers from iterative lookups instead of blocking the peer who returned them to us too
-  * if a node becomes ignored during an iterative find cycle remove it from the shortlist so that we can't return it as a result nor try to probe it anyway
+  * keep track of failures for DHT peers for up to ten minutes instead of indefinitely (https://github.com/lbryio/lbry/pull/1300)
+  * skip ignored peers from iterative lookups instead of blocking the peer who returned them to us too (https://github.com/lbryio/lbry/pull/1300)
+  * if a node becomes ignored during an iterative find cycle remove it from the shortlist so that we can't return it as a result nor try to probe it anyway (https://github.com/lbryio/lbry/pull/1303)
 
 ### Added
   *
