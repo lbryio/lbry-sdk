@@ -14,7 +14,7 @@ at anytime.
 
 ### Fixed
   * daemon cli spelling fixes
-  *
+  * high CPU usage when a stream is incomplete and the peers we're requesting from have no more blobs to send us
 
 ### Deprecated
   *
