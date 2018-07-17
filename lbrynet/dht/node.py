@@ -172,7 +172,8 @@ class Node(MockKademliaHelper):
     def start_listening(self):
         if not self._listeningPort:
             try:
-                self._listeningPort = self.reactor_listenUDP(self.port, self._protocol, interface=self._listen_interface)
+                self._listeningPort = self.reactor_listenUDP(self.port, self._protocol,
+                                                             interface=self._listen_interface)
             except error.CannotListenError as e:
                 import traceback
                 log.error("Couldn't bind to port %d. %s", self.port, traceback.format_exc())
