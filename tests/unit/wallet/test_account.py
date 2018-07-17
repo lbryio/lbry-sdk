@@ -1,14 +1,14 @@
 from twisted.trial import unittest
 from twisted.internet import defer
 
-from lbrynet.wallet.ledger import MainNetLedger
+from lbrynet.wallet.ledger import MainNetLedger, WalletDatabase
 from lbrynet.wallet.account import Account
 
 
 class TestAccount(unittest.TestCase):
 
     def setUp(self):
-        self.ledger = MainNetLedger(db=MainNetLedger.database_class(':memory:'))
+        self.ledger = MainNetLedger({'db': WalletDatabase(':memory:')})
         return self.ledger.db.start()
 
     @defer.inlineCallbacks
@@ -44,28 +44,29 @@ class TestAccount(unittest.TestCase):
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
-            b'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7DRNLEoB8'
-            b'HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe'
+            'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7DRNLEoB8'
+            'HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe'
         )
         self.assertEqual(
             account.public_key.extended_key_string(),
-            b'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EMmDgp66FxH'
-            b'uDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9'
+            'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EMmDgp66FxH'
+            'uDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9'
         )
         address = yield account.receiving.ensure_address_gap()
-        self.assertEqual(address[0], b'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
+        self.assertEqual(address[0], 'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
 
-        private_key = yield self.ledger.get_private_key_for_address(b'bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
+        private_key = yield self.ledger.get_private_key_for_address('bCqJrLHdoiRqEZ1whFZ3WHNb33bP34SuGx')
         self.assertEqual(
             private_key.extended_key_string(),
-            b'xprv9vwXVierUTT4hmoe3dtTeBfbNv1ph2mm8RWXARU6HsZjBaAoFaS2FRQu4fptR'
-            b'AyJWhJW42dmsEaC1nKnVKKTMhq3TVEHsNj1ca3ciZMKktT'
+            'xprv9vwXVierUTT4hmoe3dtTeBfbNv1ph2mm8RWXARU6HsZjBaAoFaS2FRQu4fptR'
+            'AyJWhJW42dmsEaC1nKnVKKTMhq3TVEHsNj1ca3ciZMKktT'
         )
-        private_key = yield self.ledger.get_private_key_for_address(b'BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
+        private_key = yield self.ledger.get_private_key_for_address('BcQjRlhDOIrQez1WHfz3whnB33Bp34sUgX')
         self.assertIsNone(private_key)
 
     def test_load_and_save_account(self):
         account_data = {
+            'name': 'Main Account',
             'seed':
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",
@@ -76,10 +77,12 @@ class TestAccount(unittest.TestCase):
             'public_key':
                 'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EMmDgp66FxH'
                 'uDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9',
+            'certificates': {},
             'receiving_gap': 10,
-            'receiving_maximum_use_per_address': 2,
+            'receiving_maximum_uses_per_address': 2,
             'change_gap': 10,
-            'change_maximum_use_per_address': 2,
+            'change_maximum_uses_per_address': 2,
+            'is_hd': True
         }
 
         account = Account.from_dict(self.ledger, account_data)
