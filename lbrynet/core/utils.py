@@ -1,4 +1,5 @@
 import base64
+import codecs
 import datetime
 import random
 import socket
@@ -88,12 +89,16 @@ def version_is_greater_than(a, b):
     return pkg_resources.parse_version(a) > pkg_resources.parse_version(b)
 
 
+def rot13(some_str):
+    return codecs.encode(some_str, 'rot_13')
+
+
 def deobfuscate(obfustacated):
-    return base64.b64decode(obfustacated.decode('rot13'))
+    return base64.b64decode(rot13(obfustacated))
 
 
 def obfuscate(plain):
-    return base64.b64encode(plain).encode('rot13')
+    return rot13(base64.b64encode(plain))
 
 
 def check_connection(server="lbry.io", port=80, timeout=2):

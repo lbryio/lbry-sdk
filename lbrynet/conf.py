@@ -312,7 +312,7 @@ class Config(object):
                  environment=None, cli_settings=None):
 
         self._installation_id = None
-        self._session_id = base58.b58encode(utils.generate_id())
+        self._session_id = base58.b58encode(utils.generate_id()).decode()
         self._node_id = None
 
         self._fixed_defaults = fixed_defaults
@@ -516,7 +516,7 @@ class Config(object):
     @staticmethod
     def _convert_conf_file_lists_reverse(converted):
         rev = {}
-        for k in converted.iterkeys():
+        for k in converted.keys():
             if k in ADJUSTABLE_SETTINGS and len(ADJUSTABLE_SETTINGS[k]) == 4:
                 rev[k] = ADJUSTABLE_SETTINGS[k][3](converted[k])
             else:
@@ -526,7 +526,7 @@ class Config(object):
     @staticmethod
     def _convert_conf_file_lists(decoded):
         converted = {}
-        for k, v in decoded.iteritems():
+        for k, v in decoded.items():
             if k in ADJUSTABLE_SETTINGS and len(ADJUSTABLE_SETTINGS[k]) >= 3:
                 converted[k] = ADJUSTABLE_SETTINGS[k][2](v)
             else:
