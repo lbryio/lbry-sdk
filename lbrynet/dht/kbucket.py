@@ -140,6 +140,8 @@ class KBucket(object):
                  if not.
         @rtype: bool
         """
+        if isinstance(key, str):
+            key = long(hexlify(key.encode()), 16)
         if isinstance(key, bytes):
             key = long(hexlify(key), 16)
         return self.rangeMin <= key < self.rangeMax

@@ -1,10 +1,15 @@
 import hashlib
+from binascii import hexlify, unhexlify
+
 from twisted.trial import unittest
 from twisted.internet import defer
 from lbrynet.dht import constants
 from lbrynet.dht.routingtable import TreeRoutingTable
 from lbrynet.dht.contact import ContactManager
 from lbrynet.dht.distance import Distance
+import sys
+if sys.version_info > (3,):
+    long = int
 
 
 class FakeRPCProtocol(object):
@@ -17,7 +22,7 @@ class TreeRoutingTableTest(unittest.TestCase):
     """ Test case for the RoutingTable class """
     def setUp(self):
         h = hashlib.sha384()
-        h.update('node1')
+        h.update(b'node1')
         self.contact_manager = ContactManager()
         self.nodeID = h.digest()
         self.protocol = FakeRPCProtocol()
@@ -27,7 +32,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         """ Test to see if distance method returns correct result"""
 
         # testList holds a couple 3-tuple (variable1, variable2, result)
-        basicTestList = [(chr(170) * 48, chr(85) * 48, long((chr(255) * 48).encode('hex'), 16))]
+        basicTestList = [(bytes([170] * 48), bytes([85] * 48), long(hexlify(bytes([255] * 48)), 16))]
 
         for test in basicTestList:
             result = Distance(test[0])(test[1])
@@ -39,7 +44,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         """ Tests if a contact can be added and retrieved correctly """
         # Create the contact
         h = hashlib.sha384()
-        h.update('node2')
+        h.update(b'node2')
         contactID = h.digest()
         contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.protocol)
         # Now add it...
@@ -55,7 +60,7 @@ class TreeRoutingTableTest(unittest.TestCase):
     def testGetContact(self):
         """ Tests if a specific existing contact can be retrieved correctly """
         h = hashlib.sha384()
-        h.update('node2')
+        h.update(b'node2')
         contactID = h.digest()
         contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.protocol)
         # Now add it...
@@ -83,7 +88,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         """ Tests contact removal """
         # Create the contact
         h = hashlib.sha384()
-        h.update('node2')
+        h.update(b'node2')
         contactID = h.digest()
         contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.protocol)
         # Now add it...
@@ -102,7 +107,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         # Add k contacts
         for i in range(constants.k):
             h = hashlib.sha384()
-            h.update('remote node %d' % i)
+            h.update(b'remote node %d' % i)
             nodeID = h.digest()
             contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
             yield self.routingTable.addContact(contact)
@@ -111,7 +116,7 @@ class TreeRoutingTableTest(unittest.TestCase):
                              'be full, but should not yet be split')
         # Now add 1 more contact
         h = hashlib.sha384()
-        h.update('yet another remote node')
+        h.update(b'yet another remote node')
         nodeID = h.digest()
         contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
         yield self.routingTable.addContact(contact)
@@ -134,33 +139,33 @@ class TreeRoutingTableTest(unittest.TestCase):
         Test that a bucket is not split if it is full, but the new contact is not closer than the kth closest contact
         """
 
-        self.routingTable._parentNodeID = 48 * chr(255)
+        self.routingTable._parentNodeID = bytes(48 * [255])
 
         node_ids = [
-            "100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-            "200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-            "300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-            "400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-            "500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-            "600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-            "700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-            "800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-            "ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-            "010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            b"100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            b"200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            b"300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            b"400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            b"500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            b"600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            b"700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            b"800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            b"ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            b"010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
         ]
 
         # Add k contacts
         for nodeID in node_ids:
             # self.assertEquals(nodeID, node_ids[i].decode('hex'))
-            contact = self.contact_manager.make_contact(nodeID.decode('hex'), '127.0.0.1', 9182, self.protocol)
+            contact = self.contact_manager.make_contact(unhexlify(nodeID), '127.0.0.1', 9182, self.protocol)
             yield self.routingTable.addContact(contact)
         self.failUnlessEqual(len(self.routingTable._buckets), 2)
         self.failUnlessEqual(len(self.routingTable._buckets[0]._contacts), 8)
         self.failUnlessEqual(len(self.routingTable._buckets[1]._contacts), 2)
 
         #  try adding a contact who is further from us than the k'th known contact
-        nodeID = '020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-        nodeID = nodeID.decode('hex')
+        nodeID = b'020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+        nodeID = unhexlify(nodeID)
         contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
         self.assertFalse(self.routingTable._shouldSplit(self.routingTable._kbucketIndex(contact.id), contact.id))
         yield self.routingTable.addContact(contact)
