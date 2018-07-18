@@ -14,7 +14,7 @@ from lbrynet.dht import constants
 
 def address_generator(address=(10, 42, 42, 1)):
     def increment(addr):
-        value = struct.unpack("I", "".join([chr(x) for x in list(addr)[::-1]]))[0] + 1
+        value = struct.unpack("I", "".join([chr(x) for x in list(addr)[::-1]]).encode())[0] + 1
         new_addr = []
         for i in range(4):
             new_addr.append(value % 256)
