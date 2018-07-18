@@ -154,10 +154,10 @@ class Node(MockKademliaHelper):
         self.peer_finder = peer_finder or DHTPeerFinder(self, self.peer_manager)
         self._join_deferred = None
 
-    def __del__(self):
-        log.warning("unclean shutdown of the dht node")
-        if hasattr(self, "_listeningPort") and self._listeningPort is not None:
-            self._listeningPort.stopListening()
+    #def __del__(self):
+    #    log.warning("unclean shutdown of the dht node")
+    #    if hasattr(self, "_listeningPort") and self._listeningPort is not None:
+    #        self._listeningPort.stopListening()
 
     @defer.inlineCallbacks
     def stop(self):
@@ -202,7 +202,7 @@ class Node(MockKademliaHelper):
         if not known_node_resolution:
             known_node_resolution = yield _resolve_seeds()
             # we are one of the seed nodes, don't add ourselves
-            if (self.externalIP, self.port) in known_node_resolution.itervalues():
+            if (self.externalIP, self.port) in known_node_resolution.values():
                 del known_node_resolution[(self.externalIP, self.port)]
                 known_node_addresses.remove((self.externalIP, self.port))
 
@@ -215,7 +215,7 @@ class Node(MockKademliaHelper):
         def _initialize_routing():
             bootstrap_contacts = []
             contact_addresses = {(c.address, c.port): c for c in self.contacts}
-            for (host, port), ip_address in known_node_resolution.iteritems():
+            for (host, port), ip_address in known_node_resolution.items():
                 if (host, port) not in contact_addresses:
                     # Create temporary contact information for the list of addresses of known nodes
                     # The contact node id will be set with the responding node id when we initialize it to None

@@ -13,17 +13,17 @@ class BencodeTest(unittest.TestCase):
     def setUp(self):
         self.encoding = lbrynet.dht.encoding.Bencode()
         # Thanks goes to wikipedia for the initial test cases ;-)
-        self.cases = ((42, 'i42e'),
-                      ('spam', '4:spam'),
-                      (['spam', 42], 'l4:spami42ee'),
-                      ({'foo': 42, 'bar': 'spam'}, 'd3:bar4:spam3:fooi42ee'),
+        self.cases = ((42, b'i42e'),
+                      (b'spam', b'4:spam'),
+                      ([b'spam', 42], b'l4:spami42ee'),
+                      ({b'foo': 42, b'bar': b'spam'}, b'd3:bar4:spam3:fooi42ee'),
                       # ...and now the "real life" tests
-                      ([['abc', '127.0.0.1', 1919], ['def', '127.0.0.1', 1921]],
-                       'll3:abc9:127.0.0.1i1919eel3:def9:127.0.0.1i1921eee'))
+                      ([[b'abc', b'127.0.0.1', 1919], [b'def', b'127.0.0.1', 1921]],
+                       b'll3:abc9:127.0.0.1i1919eel3:def9:127.0.0.1i1921eee'))
         # The following test cases are "bad"; i.e. sending rubbish into the decoder to test
         # what exceptions get thrown
-        self.badDecoderCases = ('abcdefghijklmnopqrstuvwxyz',
-                                '')
+        self.badDecoderCases = (b'abcdefghijklmnopqrstuvwxyz',
+                                b'')
 
     def testEncoder(self):
         """ Tests the bencode encoder """

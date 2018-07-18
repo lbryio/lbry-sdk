@@ -54,23 +54,24 @@ class Bencode(Encoding):
         @rtype: str
         """
         if isinstance(data, (int, long)):
-            return 'i%de' % data
+            return b'i%de' % data
         elif isinstance(data, str):
-            return '%d:%s' % (len(data), data)
+            return b'%d:%s' % (len(data), data.encode())
+        elif isinstance(data, bytes):
+            return b'%d:%s' % (len(data), data)
         elif isinstance(data, (list, tuple)):
-            encodedListItems = ''
+            encodedListItems = b''
             for item in data:
                 encodedListItems += self.encode(item)
-            return 'l%se' % encodedListItems
+            return b'l%se' % encodedListItems
         elif isinstance(data, dict):
-            encodedDictItems = ''
+            encodedDictItems = b''
             keys = data.keys()
             for key in sorted(keys):
                 encodedDictItems += self.encode(key)  # TODO: keys should always be bytestrings
                 encodedDictItems += self.encode(data[key])
-            return 'd%se' % encodedDictItems
+            return b'd%se' % encodedDictItems
         else:
-            print(data)
             raise TypeError("Cannot bencode '%s' object" % type(data))
 
     def decode(self, data):
@@ -85,6 +86,7 @@ class Bencode(Encoding):
         @return: The decoded data, as a native Python type
         @rtype:  int, list, dict or str
         """
+        assert type(data) == bytes
         if len(data) == 0:
             raise DecodeError('Cannot decode empty string')
         try:
@@ -98,34 +100,34 @@ class Bencode(Encoding):
 
         Do not call this; use C{decode()} instead
         """
-        if data[startIndex] == 'i':
-            endPos = data[startIndex:].find('e') + startIndex
+        if data[startIndex] == ord('i'):
+            endPos = data[startIndex:].find(b'e') + startIndex
             return int(data[startIndex + 1:endPos]), endPos + 1
-        elif data[startIndex] == 'l':
+        elif data[startIndex] == ord('l'):
             startIndex += 1
             decodedList = []
-            while data[startIndex] != 'e':
+            while data[startIndex] != ord('e'):
                 listData, startIndex = Bencode._decodeRecursive(data, startIndex)
                 decodedList.append(listData)
             return decodedList, startIndex + 1
-        elif data[startIndex] == 'd':
+        elif data[startIndex] == ord('d'):
             startIndex += 1
             decodedDict = {}
-            while data[startIndex] != 'e':
+            while data[startIndex] != ord('e'):
                 key, startIndex = Bencode._decodeRecursive(data, startIndex)
                 value, startIndex = Bencode._decodeRecursive(data, startIndex)
                 decodedDict[key] = value
             return decodedDict, startIndex
-        elif data[startIndex] == 'f':
+        elif data[startIndex] == ord('f'):
             # This (float data type) is a non-standard extension to the original Bencode algorithm
-            endPos = data[startIndex:].find('e') + startIndex
+            endPos = data[startIndex:].find(ord('e')) + startIndex
             return float(data[startIndex + 1:endPos]), endPos + 1
-        elif data[startIndex] == 'n':
+        elif data[startIndex] == ord('n'):
             # This (None/NULL data type) is a non-standard extension
             # to the original Bencode algorithm
             return None, startIndex + 1
         else:
-            splitPos = data[startIndex:].find(':') + startIndex
+            splitPos = data[startIndex:].find(ord(':')) + startIndex
             try:
                 length = int(data[startIndex:splitPos])
             except ValueError:
