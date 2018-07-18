@@ -1,10 +1,13 @@
 import ipaddress
+from binascii import hexlify
+from functools import reduce
+
 from lbrynet.dht import constants
 
 
 def is_valid_ipv4(address):
     try:
-        ip = ipaddress.ip_address(address.decode())  # this needs to be unicode, thus the decode()
+        ip = ipaddress.ip_address(address.encode().decode())  # this needs to be unicode, thus re-encode-able
         return ip.version == 4
     except ipaddress.AddressValueError:
         return False
@@ -20,7 +23,7 @@ class _Contact(object):
     def __init__(self, contactManager, id, ipAddress, udpPort, networkProtocol, firstComm):
         if id is not None:
             if not len(id) == constants.key_bits / 8:
-                raise ValueError("invalid node id: %s" % id.encode('hex'))
+                raise ValueError("invalid node id: %s" % hexlify(id.encode()))
         if not 0 <= udpPort <= 65536:
             raise ValueError("invalid port")
         if not is_valid_ipv4(ipAddress):
@@ -113,7 +116,7 @@ class _Contact(object):
     def compact_ip(self):
         compact_ip = reduce(
             lambda buff, x: buff + bytearray([int(x)]), self.address.split('.'), bytearray())
-        return str(compact_ip)
+        return compact_ip
 
     def set_id(self, id):
         if not self._id:
@@ -171,7 +174,7 @@ class ContactManager(object):
         self._rpc_failures = {}
 
     def get_contact(self, id, address, port):
-        for contact in self._contacts.itervalues():
+        for contact in self._contacts.values():
             if contact.id == id and contact.address == address and contact.port == port:
                 return contact
 

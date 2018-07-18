@@ -52,8 +52,8 @@ class ContactOperatorsTest(unittest.TestCase):
                 msg.format('ne', type(item).__name__))
 
     def testCompactIP(self):
-        self.assertEqual(self.firstContact.compact_ip(), '\x7f\x00\x00\x01')
-        self.assertEqual(self.secondContact.compact_ip(), '\xc0\xa8\x00\x01')
+        self.assertEqual(self.firstContact.compact_ip(), b'\x7f\x00\x00\x01')
+        self.assertEqual(self.secondContact.compact_ip(), b'\xc0\xa8\x00\x01')
 
 
 class TestContactLastReplied(unittest.TestCase):
