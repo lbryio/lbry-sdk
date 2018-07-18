@@ -129,8 +129,7 @@ class JSONRPCServerType(type):
         return klass
 
 
-class AuthorizedBase(object):
-    __metaclass__ = JSONRPCServerType
+class AuthorizedBase(object, metaclass=JSONRPCServerType):
 
     @staticmethod
     def deprecated(new_command=None):
