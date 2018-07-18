@@ -34,6 +34,8 @@ requires = [
     'docopt',
     'colorama==0.3.7',
     'six',
+    'pyopenssl',
+    'service-identity'
 ]
 
 console_scripts = [
