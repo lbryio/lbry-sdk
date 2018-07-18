@@ -1,7 +1,12 @@
 import logging
+from binascii import hexlify
+
 from . import constants
 from .distance import Distance
 from .error import BucketFull
+import sys
+if sys.version_info > (3,):
+    long = int
 
 log = logging.getLogger(__name__)
 
@@ -135,8 +140,8 @@ class KBucket(object):
                  if not.
         @rtype: bool
         """
-        if isinstance(key, str):
-            key = long(key.encode('hex'), 16)
+        if isinstance(key, bytes):
+            key = long(hexlify(key), 16)
         return self.rangeMin <= key < self.rangeMax
 
     def __len__(self):

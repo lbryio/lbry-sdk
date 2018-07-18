@@ -45,7 +45,7 @@ class DictDataStore(UserDict):
                 self._dict[key] = unexpired_peers
 
     def hasPeersForBlob(self, key):
-        return True if key in self._dict and len(self.filter_bad_and_expired_peers(key)) else False
+        return True if key in self._dict and len(tuple(self.filter_bad_and_expired_peers(key))) else False
 
     def addPeerToBlob(self, contact, key, compact_address, lastPublished, originallyPublished, originalPublisherID):
         if key in self._dict:
