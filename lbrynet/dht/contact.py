@@ -113,6 +113,9 @@ class _Contact(object):
         else:
             return True
 
+    def __hash__(self):
+        return self.id.__hash__()
+
     def compact_ip(self):
         compact_ip = reduce(
             lambda buff, x: buff + bytearray([int(x)]), self.address.split('.'), bytearray())

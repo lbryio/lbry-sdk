@@ -6,6 +6,9 @@ from lbrynet.dht.encoding import Bencode
 from lbrynet.dht.error import DecodeError
 from lbrynet.dht.msgformat import DefaultFormat
 from lbrynet.dht.msgtypes import ResponseMessage, RequestMessage, ErrorMessage
+import sys
+if sys.version_info > (3,):
+    unicode = str
 
 _encode = Bencode()
 _datagram_formatter = DefaultFormat()
@@ -13,9 +16,9 @@ _datagram_formatter = DefaultFormat()
 log = logging.getLogger()
 
 MOCK_DHT_NODES = [
-    "cc8db9d0dd9b65b103594b5f992adf09f18b310958fa451d61ce8d06f3ee97a91461777c2b7dea1a89d02d2f23eb0e4f",
-    "83a3a398eead3f162fbbe1afb3d63482bb5b6d3cdd8f9b0825c1dfa58dffd3f6f6026d6e64d6d4ae4c3dfe2262e734ba",
-    "b6928ff25778a7bbb5d258d3b3a06e26db1654f3d2efce8c26681d43f7237cdf2e359a4d309c4473d5d89ec99fb4f573",
+    b"cc8db9d0dd9b65b103594b5f992adf09f18b310958fa451d61ce8d06f3ee97a91461777c2b7dea1a89d02d2f23eb0e4f",
+    b"83a3a398eead3f162fbbe1afb3d63482bb5b6d3cdd8f9b0825c1dfa58dffd3f6f6026d6e64d6d4ae4c3dfe2262e734ba",
+    b"b6928ff25778a7bbb5d258d3b3a06e26db1654f3d2efce8c26681d43f7237cdf2e359a4d309c4473d5d89ec99fb4f573",
 ]
 
 MOCK_DHT_SEED_DNS = {  # these map to mock nodes 0, 1, and 2
@@ -100,7 +103,7 @@ def listenUDP(port, protocol, interface='', maxPacketSize=8192):
 
 def address_generator(address=(10, 42, 42, 1)):
     def increment(addr):
-        value = struct.unpack("I", "".join([chr(x) for x in list(addr)[::-1]]))[0] + 1
+        value = struct.unpack("I", "".join([chr(x) for x in list(addr)[::-1]]).encode())[0] + 1
         new_addr = []
         for i in range(4):
             new_addr.append(value % 256)
@@ -122,8 +125,8 @@ def mock_node_generator(count=None, mock_node_ids=MOCK_DHT_NODES):
             break
         if num >= len(mock_node_ids):
             h = hashlib.sha384()
-            h.update("node %i" % num)
-            node_id = h.hexdigest()
+            h.update(b"node %i" % num)
+            node_id = h.digest()
         else:
             node_id = mock_node_ids[num]
         yield (node_id, node_ip)
