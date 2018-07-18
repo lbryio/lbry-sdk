@@ -20,7 +20,7 @@ def get_lbrynet_version():
                 return subprocess.check_output(
                     ['git', '--git-dir='+git_dir, 'describe', '--dirty', '--always'],
                     stderr=devnull
-                ).strip().lstrip('v')
+                ).decode().strip().lstrip('v')
         except (subprocess.CalledProcessError, OSError):
             print("failed to get version from git")
     return lbrynet_version
