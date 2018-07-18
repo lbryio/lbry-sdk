@@ -1,9 +1,11 @@
 import logging
+from binascii import hexlify
+
 from twisted.trial import unittest
 from twisted.internet import defer, task
 from lbrynet.dht import constants
 from lbrynet.dht.node import Node
-from mock_transport import resolve, listenUDP, MOCK_DHT_SEED_DNS, mock_node_generator
+from .mock_transport import resolve, listenUDP, MOCK_DHT_SEED_DNS, mock_node_generator
 
 
 log = logging.getLogger(__name__)
@@ -16,8 +18,8 @@ class TestKademliaBase(unittest.TestCase):
     seed_dns = MOCK_DHT_SEED_DNS
 
     def _add_next_node(self):
-        node_id, node_ip = self.mock_node_generator.next()
-        node = Node(node_id=node_id.decode('hex'), udpPort=4444, peerPort=3333, externalIP=node_ip,
+        node_id, node_ip = next(self.mock_node_generator)
+        node = Node(node_id=node_id, udpPort=4444, peerPort=3333, externalIP=node_ip,
                     resolve=resolve, listenUDP=listenUDP, callLater=self.clock.callLater, clock=self.clock)
         self.nodes.append(node)
         return node
@@ -141,6 +143,7 @@ class TestKademliaBase(unittest.TestCase):
         for node in self.nodes:
             contact_addresses = {contact.address for contact in node.contacts}
             routable.update(contact_addresses)
+        print(routable, node_addresses)
         self.assertSetEqual(routable, node_addresses)
 
     @defer.inlineCallbacks

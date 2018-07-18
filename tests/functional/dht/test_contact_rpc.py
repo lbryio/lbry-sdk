@@ -7,7 +7,7 @@ import lbrynet.dht.protocol
 import lbrynet.dht.contact
 from lbrynet.dht.error import TimeoutError
 from lbrynet.dht.node import Node, rpcmethod
-from mock_transport import listenUDP, resolve
+from .mock_transport import listenUDP, resolve
 
 log = logging.getLogger()
 
