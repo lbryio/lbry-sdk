@@ -1,5 +1,6 @@
 from twisted.trial import unittest
-from dht_test_environment import TestKademliaBase
+
+from tests.functional.dht.dht_test_environment import TestKademliaBase
 
 
 class TestKademliaBootstrap(TestKademliaBase):
