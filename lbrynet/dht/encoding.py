@@ -1,6 +1,8 @@
 from __future__ import print_function
 from .error import DecodeError
-
+import sys
+if sys.version_info > (3,):
+    long = int
 
 class Encoding(object):
     """ Interface for RPC message encoders/decoders
@@ -63,8 +65,7 @@ class Bencode(Encoding):
         elif isinstance(data, dict):
             encodedDictItems = ''
             keys = data.keys()
-            keys.sort()
-            for key in keys:
+            for key in sorted(keys):
                 encodedDictItems += self.encode(key)  # TODO: keys should always be bytestrings
                 encodedDictItems += self.encode(data[key])
             return 'd%se' % encodedDictItems
