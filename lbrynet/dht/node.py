@@ -527,7 +527,7 @@ class Node(MockKademliaHelper):
         elif not self.verify_token(token, compact_ip):
             raise ValueError("Invalid token")
         if 0 <= port <= 65536:
-            compact_port = str(struct.pack('>H', port))
+            compact_port = struct.pack('>H', port)
         else:
             raise TypeError('Invalid port')
         compact_address = compact_ip + compact_port + rpc_contact.id

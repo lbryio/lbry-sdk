@@ -20,7 +20,7 @@ class NodeIDTest(unittest.TestCase):
 
     def testAutoCreatedID(self):
         """ Tests if a new node has a valid node ID """
-        self.failUnlessEqual(type(self.node.node_id), str, 'Node does not have a valid ID')
+        self.failUnlessEqual(type(self.node.node_id), bytes, 'Node does not have a valid ID')
         self.failUnlessEqual(len(self.node.node_id), 48, 'Node ID length is incorrect! '
                                                         'Expected 384 bits, got %d bits.' %
                              (len(self.node.node_id) * 8))
@@ -48,13 +48,13 @@ class NodeDataTest(unittest.TestCase):
     """ Test case for the Node class's data-related functions """
     def setUp(self):
         h = hashlib.sha384()
-        h.update('test')
+        h.update(b'test')
         self.node = Node()
         self.contact = self.node.contact_manager.make_contact(h.digest(), '127.0.0.1', 12345, self.node._protocol)
         self.token = self.node.make_token(self.contact.compact_ip())
         self.cases = []
-        for i in xrange(5):
-            h.update(str(i))
+        for i in range(5):
+            h.update(str(i).encode())
             self.cases.append((h.digest(), 5000+2*i))
             self.cases.append((h.digest(), 5001+2*i))
 
@@ -66,7 +66,7 @@ class NodeDataTest(unittest.TestCase):
                 self.contact, key, self.token, port, self.contact.id, 0
             )
         for key, value in self.cases:
-            expected_result = self.contact.compact_ip() + str(struct.pack('>H', value)) + \
+            expected_result = self.contact.compact_ip() + struct.pack('>H', value) + \
                               self.contact.id
             self.failUnless(self.node._dataStore.hasPeersForBlob(key),
                             'Stored key not found in node\'s DataStore: "%s"' % key)
@@ -85,7 +85,7 @@ class NodeContactTest(unittest.TestCase):
         """ Tests if a contact can be added and retrieved correctly """
         # Create the contact
         h = hashlib.sha384()
-        h.update('node1')
+        h.update(b'node1')
         contactID = h.digest()
         contact = self.node.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.node._protocol)
         # Now add it...
