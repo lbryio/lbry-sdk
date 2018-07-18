@@ -1,4 +1,9 @@
+from binascii import hexlify
+
 from lbrynet.dht import constants
+import sys
+if sys.version_info > (3,):
+    long = int
 
 
 class Distance(object):
@@ -12,10 +17,10 @@ class Distance(object):
         if len(key) != constants.key_bits / 8:
             raise ValueError("invalid key length: %i" % len(key))
         self.key = key
-        self.val_key_one = long(key.encode('hex'), 16)
+        self.val_key_one = long(hexlify(key), 16)
 
     def __call__(self, key_two):
-        val_key_two = long(key_two.encode('hex'), 16)
+        val_key_two = long(hexlify(key_two), 16)
         return self.val_key_one ^ val_key_two
 
     def is_closer(self, a, b):
