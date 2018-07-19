@@ -1873,7 +1873,7 @@ class Daemon(AuthJSONRPCServer):
                 .   format(MAX_UPDATE_FEE_ESTIMATE - balance))
             elif amount > max_bid_amount:
                 raise InsufficientFundsError(
-                    "Please lower the bid value, the maximum amount you can specify for this channel is {}"
+                    "Please wait for any pending bids to resolve or lower the bid value. Currently the maximum amount you can specify for this channel is {}"
                     .format(max_bid_amount))
 
         result = yield self.session.wallet.claim_new_channel(channel_name, amount)
