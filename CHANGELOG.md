@@ -32,6 +32,10 @@ at anytime.
   *
   *
 
+## [0.20.3] - 2018-07-18
+### Changed
+ * Additional information added to the balance error message when editing a claim.
+(https://github.com/lbryio/lbry/pull/1309)
 
 ## [0.20.4] - 2018-07-18
 ### Fixed
