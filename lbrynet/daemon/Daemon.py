@@ -161,7 +161,6 @@ class Daemon(AuthJSONRPCServer):
         self.disable_max_key_fee = conf.settings['disable_max_key_fee']
         self.download_timeout = conf.settings['download_timeout']
         self.delete_blobs_on_remove = conf.settings['delete_blobs_on_remove']
-        self.auto_renew_claim_height_delta = conf.settings['auto_renew_claim_height_delta']
 
         self.connected_to_internet = True
         self.connection_status_code = None
@@ -222,8 +221,6 @@ class Daemon(AuthJSONRPCServer):
         self.announced_startup = True
         log.info("Started lbrynet-daemon")
 
-        self._auto_renew()
-
     def _get_platform(self):
         if self.platform is None:
             self.platform = system_info.get_platform()
@@ -245,26 +242,6 @@ class Daemon(AuthJSONRPCServer):
 
         if not self.connected_to_internet:
             self.connection_status_code = CONNECTION_STATUS_NETWORK
-
-    @defer.inlineCallbacks
-    def _auto_renew(self):
-        # automatically renew claims
-        # auto renew is turned off if 0 or some negative number
-        if self.auto_renew_claim_height_delta < 1:
-            defer.returnValue(None)
-        if not self.wallet.network.get_remote_height():
-            log.warning("Failed to get remote height, aborting auto renew")
-            defer.returnValue(None)
-        log.debug("Renewing claim")
-        h = self.wallet.network.get_remote_height() + self.auto_renew_claim_height_delta
-        results = yield self.wallet.claim_renew_all_before_expiration(h)
-        for outpoint, result in results.iteritems():
-            if result['success']:
-                log.info("Renewed claim at outpoint:%s claim ID:%s, paid fee:%s",
-                         outpoint, result['claim_id'], result['fee'])
-            else:
-                log.info("Failed to renew claim at outpoint:%s, reason:%s",
-                         outpoint, result['reason'])
 
     @staticmethod
     def _already_shutting_down(sig_num, frame):
