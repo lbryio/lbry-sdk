@@ -654,8 +654,7 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) lbrynet-daemon status
             {
-                'lbry_id': lbry peer id, base58,
-                'installation_id': installation id, base58,
+                'installation_id': installation id - base58,
                 'is_running': bool,
                 'is_first_run': bool,
                 'startup_status': {
@@ -670,8 +669,11 @@ class Daemon(AuthJSONRPCServer):
                     'blocks_behind': remote_height - local_height,
                     'best_blockhash': block hash of most recent block,
                 },
+                'dht_node_status': {
+                    'node_id': (str) lbry dht node id - hex encoded,
+                    'peers_in_routing_table': (int) the number of peers in the routing table,
+                },
                 'wallet_is_encrypted': bool,
-
                 If given the session status option:
                     'session_status': {
                         'managed_blobs': count of blobs in the blob manager,
@@ -692,7 +694,6 @@ class Daemon(AuthJSONRPCServer):
 
         connection_code = CONNECTION_STATUS_CONNECTED if utils.check_connection() else CONNECTION_STATUS_NETWORK
         response = {
-            'lbry_id': base58.b58encode(self.node_id),
             'installation_id': conf.settings.installation_id,
             'is_running': all(self.component_manager.get_components_status().values()),
             'is_first_run': self.wallet.is_first_run if has_wallet else None,
@@ -707,6 +708,11 @@ class Daemon(AuthJSONRPCServer):
                 'blocks': local_height,
                 'blocks_behind': remote_height - local_height,
                 'best_blockhash': best_hash,
+            },
+            'dht_node_status': {
+                'node_id': conf.settings.node_id.encode('hex'),
+                'peers_in_routing_table': 0 if not self.component_manager.all_components_running("dht") else
+                                          len(self.dht_node.contacts)
             }
         }
         if session_status:
