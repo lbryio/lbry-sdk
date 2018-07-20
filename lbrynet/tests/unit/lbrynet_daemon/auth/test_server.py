@@ -11,7 +11,7 @@ class AuthJSONRPCServerTest(unittest.TestCase):
     # onto it.
     def setUp(self):
         conf.initialize_settings(False)
-        self.server = server.AuthJSONRPCServer(use_authentication=False)
+        self.server = server.AuthJSONRPCServer(True, use_authentication=False)
 
     def test_get_server_port(self):
         self.assertSequenceEqual(

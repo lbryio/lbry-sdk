@@ -13,14 +13,14 @@ from twisted.internet.error import ConnectionDone, ConnectionLost
 from txjsonrpc import jsonrpclib
 from traceback import format_exc
 
-from lbrynet import conf
+from lbrynet import conf, analytics
 from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
 from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
-from lbrynet.daemon.auth.util import APIKey, get_auth_message
-from lbrynet.daemon.auth.client import LBRY_SECRET
 from lbrynet.undecorated import undecorated
-
+from .util import APIKey, get_auth_message
+from .client import LBRY_SECRET
+from .factory import AuthJSONRPCResource
 log = logging.getLogger(__name__)
 
 EMPTY_PARAMS = [{}]
@@ -90,10 +90,6 @@ def default_decimal(obj):
 
 
 class UnknownAPIMethodError(Exception):
-    pass
-
-
-class NotAllowedDuringStartupError(Exception):
     pass
 
 
@@ -197,13 +193,37 @@ class AuthJSONRPCServer(AuthorizedBase):
     isLeaf = True
     allowed_during_startup = []
 
-    def __init__(self, use_authentication=None):
+    def __init__(self, analytics_manager, use_authentication=None):
+        self.analytics_manager = analytics_manager or analytics.Manager.new_instance()
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
         self.announced_startup = False
         self.sessions = {}
 
+    @defer.inlineCallbacks
+    def start_listening(self):
+        from twisted.internet import reactor, error as tx_error
+
+        try:
+            reactor.listenTCP(
+                conf.settings['api_port'], self.get_server_factory(), interface=conf.settings['api_host']
+            )
+            log.info("lbrynet API listening on TCP %s:%i", conf.settings['api_host'], conf.settings['api_port'])
+            yield self.setup()
+            self.analytics_manager.send_server_startup_success()
+        except tx_error.CannotListenError:
+            log.error('lbrynet API failed to bind TCP %s:%i for listening', conf.settings['api_host'],
+                      conf.settings['api_port'])
+            reactor.fireSystemEvent("shutdown")
+        except Exception as err:
+            self.analytics_manager.send_server_startup_error(str(err))
+            log.exception('Failed to start lbrynet-daemon')
+            reactor.fireSystemEvent("shutdown")
+
     def setup(self):
-        return NotImplementedError()
+        raise NotImplementedError()
+
+    def get_server_factory(self):
+        return AuthJSONRPCResource(self).getServerFactory()
 
     def _set_headers(self, request, data, update_secret=False):
         if conf.settings['allowed_origin']:
@@ -233,8 +253,9 @@ class AuthJSONRPCServer(AuthorizedBase):
         else:
             # last resort, just cast it as a string
             error = JSONRPCError(str(failure))
-        log.warning("error processing api request: %s\ntraceback: %s", error.message,
-                    "\n".join(error.traceback))
+        if not failure.check(ComponentsNotStarted, ComponentStartConditionNotMet):
+            log.warning("error processing api request: %s\ntraceback: %s", error.message,
+                        "\n".join(error.traceback))
         response_content = jsonrpc_dumps_pretty(error, id=id_)
         self._set_headers(request, response_content)
         request.setResponseCode(200)
@@ -327,14 +348,6 @@ class AuthJSONRPCServer(AuthorizedBase):
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
                 JSONRPCError(None, JSONRPCError.CODE_METHOD_NOT_FOUND),
-                request, request_id
-            )
-            return server.NOT_DONE_YET
-        except NotAllowedDuringStartupError:
-            log.warning('Function not allowed during startup: %s', function_name)
-            self._render_error(
-                JSONRPCError("This method is unavailable until the daemon is fully started",
-                             code=JSONRPCError.CODE_INVALID_REQUEST),
                 request, request_id
             )
             return server.NOT_DONE_YET

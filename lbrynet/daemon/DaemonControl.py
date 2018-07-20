@@ -12,13 +12,12 @@ from lbrynet.core import log_support
 import argparse
 import logging.handlers
 
-from twisted.internet import defer, reactor
+from twisted.internet import reactor
 from jsonrpc.proxy import JSONRPCProxy
 
-from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils, system_info
-from lbrynet.daemon.DaemonServer import DaemonServer
+from lbrynet.daemon.Daemon import Daemon
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +70,7 @@ def start():
 
     lbrynet_log = conf.settings.get_log_filename()
     log_support.configure_logging(lbrynet_log, not args.quiet, args.verbose)
+    log_support.configure_loggly_handler()
     log.debug('Final Settings: %s', conf.settings.get_current_settings_dict())
 
     try:
@@ -84,8 +84,8 @@ def start():
     log.info("Starting lbrynet-daemon from command line")
 
     if test_internet_connection():
-        analytics_manager = analytics.Manager.new_instance()
-        start_server_and_listen(analytics_manager)
+        daemon = Daemon()
+        daemon.start_listening()
         reactor.run()
     else:
         log.info("Not connected to internet, unable to start")
@@ -99,25 +99,6 @@ def update_settings_from_args(args):
         conf.settings.update({
             'use_auth_http': args.useauth,
         }, data_types=(conf.TYPE_CLI,))
-
-
-
-@defer.inlineCallbacks
-def start_server_and_listen(analytics_manager):
-    """
-    Args:
-        use_auth: set to true to enable http authentication
-        analytics_manager: to send analytics
-    """
-    analytics_manager.send_server_startup()
-    daemon_server = DaemonServer(analytics_manager)
-    try:
-        yield daemon_server.start(conf.settings['use_auth_http'])
-        analytics_manager.send_server_startup_success()
-    except Exception as e:
-        log.exception('Failed to start lbrynet-daemon')
-        analytics_manager.send_server_startup_error(str(e))
-        daemon_server.stop()
 
 
 if __name__ == "__main__":

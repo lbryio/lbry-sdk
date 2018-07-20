@@ -3,7 +3,6 @@ import binascii
 import logging.handlers
 import mimetypes
 import os
-import base58
 import requests
 import urllib
 import json
@@ -27,7 +26,6 @@ from lbryschema.decode import smart_decode
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet import conf
 from lbrynet.reflector import reupload
-from lbrynet.core.log_support import configure_loggly_handler
 from lbrynet.daemon.Component import ComponentManager
 from lbrynet.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, SESSION_COMPONENT, DHT_COMPONENT
 from lbrynet.daemon.Components import STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT
@@ -77,6 +75,7 @@ MAX_UPDATE_FEE_ESTIMATE = 0.3
 DIRECTION_ASCENDING = 'asc'
 DIRECTION_DESCENDING = 'desc'
 DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
+
 
 class IterableContainer(object):
     def __iter__(self):
@@ -153,12 +152,10 @@ class Daemon(AuthJSONRPCServer):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
-    def __init__(self, analytics_manager, component_manager=None):
-        AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
-        self.analytics_manager = analytics_manager
+    def __init__(self, analytics_manager=None, component_manager=None):
+        AuthJSONRPCServer.__init__(self, analytics_manager, conf.settings['use_auth_http'])
         self.looping_call_manager = LoopingCallManager({
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
-            Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
         })
         self.component_manager = component_manager or ComponentManager(
             analytics_manager=self.analytics_manager,
@@ -185,11 +182,9 @@ class Daemon(AuthJSONRPCServer):
     @defer.inlineCallbacks
     def setup(self):
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
-        configure_loggly_handler()
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
         self.looping_call_manager.start(Checker.INTERNET_CONNECTION, 3600)
-        self.looping_call_manager.start(Checker.CONNECTION_STATUS, 30)
 
         components = {
             EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
@@ -205,17 +200,7 @@ class Daemon(AuthJSONRPCServer):
         log.info("Platform: %s", json.dumps(system_info.get_platform()))
         yield self.component_manager.setup(**{n: lambda _, c: setattr(self, components[c.component_name], c.component)
                                               for n in components.keys()})
-
         log.info("Started lbrynet-daemon")
-
-    def _check_network_connection(self):
-        self.connected_to_internet = utils.check_connection()
-
-    def _update_connection_status(self):
-        self.connection_status_code = CONNECTION_STATUS_CONNECTED
-
-        if not self.connected_to_internet:
-            self.connection_status_code = CONNECTION_STATUS_NETWORK
 
     @staticmethod
     def _already_shutting_down(sig_num, frame):
@@ -603,7 +588,6 @@ class Daemon(AuthJSONRPCServer):
             direction = pieces[0]
         return field, direction
 
-
     def _get_single_peer_downloader(self):
         downloader = SinglePeerDownloader()
         downloader.setup(self.wallet)
@@ -706,19 +690,16 @@ class Daemon(AuthJSONRPCServer):
         wallet_is_encrypted = has_wallet and self.wallet.wallet and \
                               self.wallet.wallet.use_encryption
 
+        connection_code = CONNECTION_STATUS_CONNECTED if utils.check_connection() else CONNECTION_STATUS_NETWORK
         response = {
             'lbry_id': base58.b58encode(self.node_id),
             'installation_id': conf.settings.installation_id,
-            'is_running': self.announced_startup,
+            'is_running': all(self.component_manager.get_components_status().values()),
             'is_first_run': self.wallet.is_first_run if has_wallet else None,
             'startup_status': self.component_manager.get_components_status(),
             'connection_status': {
-                'code': self.connection_status_code,
-                'message': (
-                    CONNECTION_MESSAGES[self.connection_status_code]
-                    if self.connection_status_code is not None
-                    else ''
-                ),
+                'code': connection_code,
+                'message': CONNECTION_MESSAGES[connection_code],
             },
             'wallet_is_encrypted': wallet_is_encrypted,
             'blocks_behind': remote_height - local_height,  # deprecated. remove from UI, then here
