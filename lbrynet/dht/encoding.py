@@ -3,6 +3,9 @@ from .error import DecodeError
 import sys
 if sys.version_info > (3,):
     long = int
+    raw = ord
+else:
+    raw = lambda x: x
 
 class Encoding(object):
     """ Interface for RPC message encoders/decoders
@@ -86,7 +89,7 @@ class Bencode(Encoding):
         @return: The decoded data, as a native Python type
         @rtype:  int, list, dict or str
         """
-        assert type(data) == bytes
+        assert type(data) == bytes  # fixme: _maybe_ remove this after porting
         if len(data) == 0:
             raise DecodeError('Cannot decode empty string')
         try:
@@ -100,34 +103,34 @@ class Bencode(Encoding):
 
         Do not call this; use C{decode()} instead
         """
-        if data[startIndex] == ord('i'):
+        if data[startIndex] == raw('i'):
             endPos = data[startIndex:].find(b'e') + startIndex
             return int(data[startIndex + 1:endPos]), endPos + 1
-        elif data[startIndex] == ord('l'):
+        elif data[startIndex] == raw('l'):
             startIndex += 1
             decodedList = []
-            while data[startIndex] != ord('e'):
+            while data[startIndex] != raw('e'):
                 listData, startIndex = Bencode._decodeRecursive(data, startIndex)
                 decodedList.append(listData)
             return decodedList, startIndex + 1
-        elif data[startIndex] == ord('d'):
+        elif data[startIndex] == raw('d'):
             startIndex += 1
             decodedDict = {}
-            while data[startIndex] != ord('e'):
+            while data[startIndex] != raw('e'):
                 key, startIndex = Bencode._decodeRecursive(data, startIndex)
                 value, startIndex = Bencode._decodeRecursive(data, startIndex)
                 decodedDict[key] = value
             return decodedDict, startIndex
-        elif data[startIndex] == ord('f'):
+        elif data[startIndex] == raw('f'):
             # This (float data type) is a non-standard extension to the original Bencode algorithm
-            endPos = data[startIndex:].find(ord('e')) + startIndex
+            endPos = data[startIndex:].find(b'e') + startIndex
             return float(data[startIndex + 1:endPos]), endPos + 1
-        elif data[startIndex] == ord('n'):
+        elif data[startIndex] == raw('n'):
             # This (None/NULL data type) is a non-standard extension
             # to the original Bencode algorithm
             return None, startIndex + 1
         else:
-            splitPos = data[startIndex:].find(ord(':')) + startIndex
+            splitPos = data[startIndex:].find(b':') + startIndex
             try:
                 length = int(data[startIndex:splitPos])
             except ValueError:
