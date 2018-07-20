@@ -58,8 +58,6 @@ class Bencode(Encoding):
         """
         if isinstance(data, (int, long)):
             return b'i%de' % data
-        elif isinstance(data, str):
-            return b'%d:%s' % (len(data), data.encode())
         elif isinstance(data, bytes):
             return b'%d:%s' % (len(data), data)
         elif isinstance(data, (list, tuple)):

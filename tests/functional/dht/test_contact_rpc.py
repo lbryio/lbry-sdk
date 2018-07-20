@@ -1,3 +1,5 @@
+from binascii import unhexlify
+
 import time
 from twisted.trial import unittest
 import logging
@@ -19,12 +21,12 @@ class KademliaProtocolTest(unittest.TestCase):
 
     def setUp(self):
         self._reactor = Clock()
-        self.node = Node(node_id='1' * 48, udpPort=self.udpPort, externalIP="127.0.0.1", listenUDP=listenUDP,
+        self.node = Node(node_id=b'1' * 48, udpPort=self.udpPort, externalIP="127.0.0.1", listenUDP=listenUDP,
                          resolve=resolve, clock=self._reactor, callLater=self._reactor.callLater)
-        self.remote_node = Node(node_id='2' * 48, udpPort=self.udpPort, externalIP="127.0.0.2", listenUDP=listenUDP,
+        self.remote_node = Node(node_id=b'2' * 48, udpPort=self.udpPort, externalIP="127.0.0.2", listenUDP=listenUDP,
                                 resolve=resolve, clock=self._reactor, callLater=self._reactor.callLater)
-        self.remote_contact = self.node.contact_manager.make_contact('2' * 48, '127.0.0.2', 9182, self.node._protocol)
-        self.us_from_them = self.remote_node.contact_manager.make_contact('1' * 48, '127.0.0.1', 9182,
+        self.remote_contact = self.node.contact_manager.make_contact(b'2' * 48, '127.0.0.2', 9182, self.node._protocol)
+        self.us_from_them = self.remote_node.contact_manager.make_contact(b'1' * 48, '127.0.0.1', 9182,
                                                                           self.remote_node._protocol)
         self.node.start_listening()
         self.remote_node.start_listening()
@@ -105,7 +107,7 @@ class KademliaProtocolTest(unittest.TestCase):
             self.error = 'An RPC error occurred: %s' % f.getErrorMessage()
 
         def handleResult(result):
-            expectedResult = 'pong'
+            expectedResult = b'pong'
             if result != expectedResult:
                 self.error = 'Result from RPC is incorrect; expected "%s", got "%s"' \
                              % (expectedResult, result)
@@ -142,7 +144,7 @@ class KademliaProtocolTest(unittest.TestCase):
             self.error = 'An RPC error occurred: %s' % f.getErrorMessage()
 
         def handleResult(result):
-            expectedResult = 'pong'
+            expectedResult = b'pong'
             if result != expectedResult:
                 self.error = 'Result from RPC is incorrect; expected "%s", got "%s"' % \
                              (expectedResult, result)
@@ -163,12 +165,12 @@ class KademliaProtocolTest(unittest.TestCase):
     @defer.inlineCallbacks
     def testDetectProtocolVersion(self):
         original_findvalue = self.remote_node.findValue
-        fake_blob = str("AB" * 48).decode('hex')
+        fake_blob = unhexlify("AB" * 48)
 
         @rpcmethod
         def findValue(contact, key):
             result = original_findvalue(contact, key)
-            result.pop('protocolVersion')
+            result.pop(b'protocolVersion')
             return result
 
         self.remote_node.findValue = findValue
@@ -205,35 +207,35 @@ class KademliaProtocolTest(unittest.TestCase):
         @rpcmethod
         def findValue(contact, key):
             result = original_findvalue(contact, key)
-            if 'protocolVersion' in result:
-                result.pop('protocolVersion')
+            if b'protocolVersion' in result:
+                result.pop(b'protocolVersion')
             return result
 
         @rpcmethod
         def store(contact, key, value, originalPublisherID=None, self_store=False, **kwargs):
             self.assertTrue(len(key) == 48)
-            self.assertSetEqual(set(value.keys()), {'token', 'lbryid', 'port'})
+            self.assertSetEqual(set(value.keys()), {b'token', b'lbryid', b'port'})
             self.assertFalse(self_store)
             self.assertDictEqual(kwargs, {})
             return original_store(   # pylint: disable=too-many-function-args
-                contact, key, value['token'], value['port'], originalPublisherID, 0
+                contact, key, value[b'token'], value[b'port'], originalPublisherID, 0
             )
 
         self.remote_node.findValue = findValue
         self.remote_node.store = store
 
-        fake_blob = str("AB" * 48).decode('hex')
+        fake_blob = unhexlify("AB" * 48)
 
         d = self.remote_contact.findValue(fake_blob)
         self._reactor.advance(3)
         find_value_response = yield d
         self.assertEqual(self.remote_contact.protocolVersion, 0)
-        self.assertTrue('protocolVersion' not in find_value_response)
-        token = find_value_response['token']
+        self.assertTrue(b'protocolVersion' not in find_value_response)
+        token = find_value_response[b'token']
         d = self.remote_contact.store(fake_blob, token, 3333, self.node.node_id, 0)
         self._reactor.advance(3)
         response = yield d
-        self.assertEqual(response, "OK")
+        self.assertEqual(response, b'OK')
         self.assertEqual(self.remote_contact.protocolVersion, 0)
         self.assertTrue(self.remote_node._dataStore.hasPeersForBlob(fake_blob))
         self.assertEqual(len(self.remote_node._dataStore.getStoringContacts()), 1)
@@ -245,24 +247,24 @@ class KademliaProtocolTest(unittest.TestCase):
 
         self.remote_node._protocol._migrate_outgoing_rpc_args = _dont_migrate
 
-        us_from_them = self.remote_node.contact_manager.make_contact('1' * 48, '127.0.0.1', self.udpPort,
+        us_from_them = self.remote_node.contact_manager.make_contact(b'1' * 48, '127.0.0.1', self.udpPort,
                                                                 self.remote_node._protocol)
 
-        fake_blob = str("AB" * 48).decode('hex')
+        fake_blob = unhexlify("AB" * 48)
 
         d = us_from_them.findValue(fake_blob)
         self._reactor.advance(3)
         find_value_response = yield d
         self.assertEqual(self.remote_contact.protocolVersion, 0)
-        self.assertTrue('protocolVersion' not in find_value_response)
-        token = find_value_response['token']
+        self.assertTrue(b'protocolVersion' not in find_value_response)
+        token = find_value_response[b'token']
         us_from_them.update_protocol_version(0)
         d = self.remote_node._protocol.sendRPC(
-            us_from_them, "store", (fake_blob, {'lbryid': self.remote_node.node_id, 'token': token, 'port': 3333})
+            us_from_them, b"store", (fake_blob, {b'lbryid': self.remote_node.node_id, b'token': token, b'port': 3333})
         )
         self._reactor.advance(3)
         response = yield d
-        self.assertEqual(response, "OK")
+        self.assertEqual(response, b'OK')
         self.assertEqual(self.remote_contact.protocolVersion, 0)
         self.assertTrue(self.node._dataStore.hasPeersForBlob(fake_blob))
         self.assertEqual(len(self.node._dataStore.getStoringContacts()), 1)
