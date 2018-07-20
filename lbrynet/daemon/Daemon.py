@@ -153,38 +153,24 @@ class Daemon(AuthJSONRPCServer):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
-    component_attributes = {
-        EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
-        DATABASE_COMPONENT: "storage",
-        SESSION_COMPONENT: "session",
-        WALLET_COMPONENT: "wallet",
-        DHT_COMPONENT: "dht_node",
-        STREAM_IDENTIFIER_COMPONENT: "sd_identifier",
-        FILE_MANAGER_COMPONENT: "file_manager",
-    }
-
     def __init__(self, analytics_manager, component_manager=None):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
-        self.download_directory = conf.settings['download_directory']
-        self.data_rate = conf.settings['data_rate']
-        self.max_key_fee = conf.settings['max_key_fee']
-        self.disable_max_key_fee = conf.settings['disable_max_key_fee']
-        self.download_timeout = conf.settings['download_timeout']
-        self.delete_blobs_on_remove = conf.settings['delete_blobs_on_remove']
+        self.analytics_manager = analytics_manager
+        self.looping_call_manager = LoopingCallManager({
+            Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
+            Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
+        })
+        self.component_manager = component_manager or ComponentManager(
+            analytics_manager=self.analytics_manager,
+            skip_components=conf.settings['components_to_skip']
+        )
 
+        # TODO: move this to a component
         self.connected_to_internet = True
         self.connection_status_code = None
-        self.platform = None
-        self.db_revision_file = conf.settings.get_db_revision_filename()
-        self._session_id = conf.settings.get_session_id()
-        # TODO: this should probably be passed into the daemon, or
-        # possibly have the entire log upload functionality taken out
-        # of the daemon, but I don't want to deal with that now
-
-        self.analytics_manager = analytics_manager
-        self.node_id = conf.settings.node_id
 
         # components
+        # TODO: delete these, get the components where needed
         self.storage = None
         self.dht_node = None
         self.wallet = None
@@ -193,57 +179,34 @@ class Daemon(AuthJSONRPCServer):
         self.file_manager = None
         self.exchange_rate_manager = None
 
-        self.wallet_user = None
-        self.wallet_password = None
-        self.waiting_on = {}
+        # TODO: delete this
         self.streams = {}
-        calls = {
-            Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
-            Checker.CONNECTION_STATUS: LoopingCall(self._update_connection_status),
-        }
-        self.looping_call_manager = LoopingCallManager(calls)
-        self.component_manager = component_manager or ComponentManager(
-            analytics_manager=self.analytics_manager,
-            skip_components=conf.settings['components_to_skip']
-        )
 
     @defer.inlineCallbacks
     def setup(self):
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
         configure_loggly_handler()
-
-        log.info("Starting lbrynet-daemon")
-
+        if not self.analytics_manager.is_started:
+            self.analytics_manager.start()
         self.looping_call_manager.start(Checker.INTERNET_CONNECTION, 3600)
         self.looping_call_manager.start(Checker.CONNECTION_STATUS, 30)
 
-        yield self._initial_setup()
-        yield self._start_analytics()
-
-        def update_attr(component_setup_result, component):
-            setattr(self, self.component_attributes[component.component_name], component.component)
-
-        setup_callbacks = {
-            component_name: update_attr for component_name in self.component_attributes.keys()
+        components = {
+            EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
+            DATABASE_COMPONENT: "storage",
+            SESSION_COMPONENT: "session",
+            WALLET_COMPONENT: "wallet",
+            DHT_COMPONENT: "dht_node",
+            STREAM_IDENTIFIER_COMPONENT: "sd_identifier",
+            FILE_MANAGER_COMPONENT: "file_manager",
         }
 
-        yield self.component_manager.setup(**setup_callbacks)
-        log.info("Starting balance: " + str(self.wallet.get_balance()))
-        self.announced_startup = True
+        log.info("Starting lbrynet-daemon")
+        log.info("Platform: %s", json.dumps(system_info.get_platform()))
+        yield self.component_manager.setup(**{n: lambda _, c: setattr(self, components[c.component_name], c.component)
+                                              for n in components.keys()})
+
         log.info("Started lbrynet-daemon")
-
-    def _get_platform(self):
-        if self.platform is None:
-            self.platform = system_info.get_platform()
-        return self.platform
-
-    def _initial_setup(self):
-        def _log_platform():
-            log.info("Platform: %s", json.dumps(self._get_platform()))
-            return defer.succeed(None)
-
-        d = _log_platform()
-        return d
 
     def _check_network_connection(self):
         self.connected_to_internet = utils.check_connection()
@@ -279,10 +242,6 @@ class Daemon(AuthJSONRPCServer):
             d = self.component_manager.stop()
             d.addErrback(log.fail(), 'Failure while shutting down')
         return d
-
-    def _start_analytics(self):
-        if not self.analytics_manager.is_started:
-            self.analytics_manager.start()
 
     def _download_blob(self, blob_hash, rate_manager=None, timeout=None):
         """
@@ -365,8 +324,8 @@ class Daemon(AuthJSONRPCServer):
             self.analytics_manager.send_download_started(download_id, name, claim_dict)
 
             self.streams[sd_hash] = GetStream(self.sd_identifier, self.session,
-                                              self.exchange_rate_manager, self.max_key_fee,
-                                              self.disable_max_key_fee,
+                                              self.exchange_rate_manager, conf.settings['max_key_fee'],
+                                              conf.settings['disable_max_key_fee'],
                                               conf.settings['data_rate'], timeout)
             try:
                 lbry_file, finished_deferred = yield self.streams[sd_hash].start(
@@ -432,17 +391,9 @@ class Daemon(AuthJSONRPCServer):
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
             return self.session.blob_manager.get_blob(blob[0])
-
-        def _check_est(downloader):
-            if downloader.result is not None:
-                downloader.cancel()
-
-        d = defer.succeed(None)
-        reactor.callLater(conf.settings['search_timeout'], _check_est, d)
-        d.addCallback(
-            lambda _: download_sd_blob(
-                self.session, sd_hash, self.session.payment_rate_manager))
-        return d
+        return download_sd_blob(
+            self.session, sd_hash, self.session.payment_rate_manager, conf.settings['search_timeout']
+        )
 
     def get_or_download_sd_blob(self, sd_hash):
         """Return previously downloaded sd blob if already in the blob
@@ -815,7 +766,7 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        platform_info = self._get_platform()
+        platform_info = system_info.get_platform()
         log.info("Get version info: " + json.dumps(platform_info))
         return self._render_response(platform_info)
 
@@ -834,7 +785,7 @@ class Daemon(AuthJSONRPCServer):
             (bool) true if successful
         """
 
-        platform_name = self._get_platform()['platform']
+        platform_name = system_info.get_platform()['platform']
         report_bug_to_slack(
             message,
             conf.settings.installation_id,
@@ -944,13 +895,6 @@ class Daemon(AuthJSONRPCServer):
                     conf.settings.update({key: converted},
                                          data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
         conf.settings.save_conf_file_settings()
-
-        self.data_rate = conf.settings['data_rate']
-        self.max_key_fee = conf.settings['max_key_fee']
-        self.disable_max_key_fee = conf.settings['disable_max_key_fee']
-        self.download_directory = conf.settings['download_directory']
-        self.download_timeout = conf.settings['download_timeout']
-
         return self._render_response(conf.settings.get_adjustable_settings_dict())
 
     def jsonrpc_help(self, command=None):
@@ -1392,7 +1336,7 @@ class Daemon(AuthJSONRPCServer):
             }
         """
 
-        timeout = timeout if timeout is not None else self.download_timeout
+        timeout = timeout if timeout is not None else conf.settings['download_timeout']
 
         parsed_uri = parse_lbry_uri(uri)
         if parsed_uri.is_channel and not parsed_uri.path:
