@@ -32,7 +32,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         """ Test to see if distance method returns correct result"""
 
         # testList holds a couple 3-tuple (variable1, variable2, result)
-        basicTestList = [(bytes([170] * 48), bytes([85] * 48), long(hexlify(bytes([255] * 48)), 16))]
+        basicTestList = [(bytes(b'\xaa' * 48), bytes(b'\x55' * 48), long(hexlify(bytes(b'\xff' * 48)), 16))]
 
         for test in basicTestList:
             result = Distance(test[0])(test[1])
@@ -139,7 +139,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         Test that a bucket is not split if it is full, but the new contact is not closer than the kth closest contact
         """
 
-        self.routingTable._parentNodeID = bytes(48 * [255])
+        self.routingTable._parentNodeID = bytes(48 * b'\xff')
 
         node_ids = [
             b"100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
