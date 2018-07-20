@@ -10,6 +10,8 @@ import binascii
 import hashlib
 import struct
 import logging
+from functools import reduce
+
 from twisted.internet import defer, error, task
 
 from lbrynet.core.utils import generate_id, DeferredDict
@@ -493,7 +495,7 @@ class Node(MockKademliaHelper):
 
         @rtype: str
         """
-        return 'pong'
+        return b'pong'
 
     @rpcmethod
     def store(self, rpc_contact, blob_hash, token, port, originalPublisherID, age):
@@ -530,13 +532,13 @@ class Node(MockKademliaHelper):
         if 0 <= port <= 65536:
             compact_port = struct.pack('>H', port)
         else:
-            raise TypeError('Invalid port')
+            raise TypeError('Invalid port: {}'.format(port))
         compact_address = compact_ip + compact_port + rpc_contact.id
         now = int(self.clock.seconds())
         originallyPublished = now - age
         self._dataStore.addPeerToBlob(rpc_contact, blob_hash, compact_address, now, originallyPublished,
                                       originalPublisherID)
-        return 'OK'
+        return b'OK'
 
     @rpcmethod
     def findNode(self, rpc_contact, key):
@@ -578,11 +580,11 @@ class Node(MockKademliaHelper):
             raise ValueError("invalid blob hash length: %i" % len(key))
 
         response = {
-            'token': self.make_token(rpc_contact.compact_ip()),
+            b'token': self.make_token(rpc_contact.compact_ip()),
         }
 
         if self._protocol._protocolVersion:
-            response['protocolVersion'] = self._protocol._protocolVersion
+            response[b'protocolVersion'] = self._protocol._protocolVersion
 
         # get peers we have stored for this blob
         has_other_peers = self._dataStore.hasPeersForBlob(key)
@@ -592,17 +594,15 @@ class Node(MockKademliaHelper):
 
         # if we don't have k storing peers to return and we have this hash locally, include our contact information
         if len(peers) < constants.k and key in self._dataStore.completed_blobs:
-            compact_ip = str(
-                reduce(lambda buff, x: buff + bytearray([int(x)]), self.externalIP.split('.'), bytearray())
-            )
-            compact_port = str(struct.pack('>H', self.peerPort))
+            compact_ip = reduce(lambda buff, x: buff + bytearray([int(x)]), self.externalIP.split('.'), bytearray())
+            compact_port = struct.pack('>H', self.peerPort)
             compact_address = compact_ip + compact_port + self.node_id
             peers.append(compact_address)
 
         if peers:
             response[key] = peers
         else:
-            response['contacts'] = self.findNode(rpc_contact, key)
+            response[b'contacts'] = self.findNode(rpc_contact, key)
         return response
 
     def _generateID(self):
