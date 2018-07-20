@@ -153,6 +153,16 @@ class Daemon(AuthJSONRPCServer):
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
 
+    component_attributes = {
+        EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
+        DATABASE_COMPONENT: "storage",
+        SESSION_COMPONENT: "session",
+        WALLET_COMPONENT: "wallet",
+        DHT_COMPONENT: "dht_node",
+        STREAM_IDENTIFIER_COMPONENT: "sd_identifier",
+        FILE_MANAGER_COMPONENT: "file_manager",
+    }
+
     def __init__(self, analytics_manager, component_manager=None):
         AuthJSONRPCServer.__init__(self, conf.settings['use_auth_http'])
         self.download_directory = conf.settings['download_directory']
@@ -208,15 +218,16 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager.start(Checker.CONNECTION_STATUS, 30)
 
         yield self._initial_setup()
-        yield self.component_manager.setup()
-        self.exchange_rate_manager = self.component_manager.get_component(EXCHANGE_RATE_MANAGER_COMPONENT)
-        self.storage = self.component_manager.get_component(DATABASE_COMPONENT)
-        self.session = self.component_manager.get_component(SESSION_COMPONENT)
-        self.wallet = self.component_manager.get_component(WALLET_COMPONENT)
-        self.dht_node = self.component_manager.get_component(DHT_COMPONENT)
         yield self._start_analytics()
-        self.sd_identifier = self.component_manager.get_component(STREAM_IDENTIFIER_COMPONENT)
-        self.file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
+
+        def update_attr(component_setup_result, component):
+            setattr(self, self.component_attributes[component.component_name], component.component)
+
+        setup_callbacks = {
+            component_name: update_attr for component_name in self.component_attributes.keys()
+        }
+
+        yield self.component_manager.setup(**setup_callbacks)
         log.info("Starting balance: " + str(self.wallet.get_balance()))
         self.announced_startup = True
         log.info("Started lbrynet-daemon")

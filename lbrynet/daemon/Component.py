@@ -42,6 +42,7 @@ class Component(object):
     def stop(self):
         raise NotImplementedError()
 
+    @property
     def component(self):
         raise NotImplementedError()
 

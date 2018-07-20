@@ -88,7 +88,7 @@ class ComponentManager(object):
         def _setup(component):
             if component.component_name in callbacks:
                 d = component._setup()
-                d.addCallback(callbacks[component.component_name])
+                d.addCallback(callbacks[component.component_name], component)
                 return d
             return component._setup()
 

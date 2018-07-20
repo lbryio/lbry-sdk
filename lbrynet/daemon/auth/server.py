@@ -164,7 +164,7 @@ class AuthorizedBase(object):
                     result = yield fn(*args, **kwargs)
                     defer.returnValue(result)
                 else:
-                    raise ComponentsNotStarted("Not all required components are set up:", components)
+                    raise ComponentsNotStarted("Not all required components are set up: %s" % json.dumps(components))
             return _inner
         return _wrap
 
