@@ -59,7 +59,7 @@ class _Contact(object):
     def log_id(self, short=True):
         if not self.id:
             return "not initialized"
-        id_hex = self.id.encode('hex')
+        id_hex = hexlify(self.id)
         return id_hex if not short else id_hex[:8]
 
     @property
@@ -162,7 +162,7 @@ class _Contact(object):
             raise AttributeError("unknown command: %s" % name)
 
         def _sendRPC(*args, **kwargs):
-            return self._networkProtocol.sendRPC(self, name, args)
+            return self._networkProtocol.sendRPC(self, name.encode(), args)
 
         return _sendRPC
 
