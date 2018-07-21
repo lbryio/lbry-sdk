@@ -1,7 +1,7 @@
 from lbrynet.core.Peer import Peer
 
 
-class PeerManager(object):
+class PeerManager:
     def __init__(self):
         self.peers = []
 

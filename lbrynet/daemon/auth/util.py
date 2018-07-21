@@ -24,7 +24,7 @@ def generate_key(x=None):
         return sha(x)
 
 
-class APIKey(object):
+class APIKey:
     def __init__(self, secret, name, expiration=None):
         self.secret = secret
         self.name = name

@@ -20,7 +20,7 @@ if six.PY3:
     buffer = memoryview
 
 
-class BackwardsCompatibleNetwork(object):
+class BackwardsCompatibleNetwork:
     def __init__(self, manager):
         self.manager = manager
 
@@ -232,19 +232,19 @@ class LbryWalletManager(BaseWalletManager):
             wallet.save()
 
 
-class ReservedPoints(object):
+class ReservedPoints:
     def __init__(self, identifier, amount):
         self.identifier = identifier
         self.amount = amount
 
 
-class ClientRequest(object):
+class ClientRequest:
     def __init__(self, request_dict, response_identifier=None):
         self.request_dict = request_dict
         self.response_identifier = response_identifier
 
 
-class LBRYcrdAddressRequester(object):
+class LBRYcrdAddressRequester:
 
     def __init__(self, wallet):
         self.wallet = wallet
@@ -277,7 +277,7 @@ class LBRYcrdAddressRequester(object):
         )
 
 
-class LBRYcrdAddressQueryHandlerFactory(object):
+class LBRYcrdAddressQueryHandlerFactory:
 
     def __init__(self, wallet):
         self.wallet = wallet
@@ -293,7 +293,7 @@ class LBRYcrdAddressQueryHandlerFactory(object):
         return "LBRYcrd Address - an address for receiving payments via LBRYcrd"
 
 
-class LBRYcrdAddressQueryHandler(object):
+class LBRYcrdAddressQueryHandler:
 
     def __init__(self, wallet):
         self.wallet = wallet

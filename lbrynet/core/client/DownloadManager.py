@@ -5,7 +5,7 @@ from twisted.internet import defer
 log = logging.getLogger(__name__)
 
 
-class DownloadManager(object):
+class DownloadManager:
     #implements(interfaces.IDownloadManager)
 
     def __init__(self, blob_manager):

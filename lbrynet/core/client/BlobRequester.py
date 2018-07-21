@@ -37,7 +37,7 @@ def cache(fn):
     return helper
 
 
-class BlobRequester(object):
+class BlobRequester:
     #implements(IRequestCreator)
 
     def __init__(self, blob_manager, peer_finder, payment_rate_manager, wallet, download_manager):
@@ -193,7 +193,7 @@ class BlobRequester(object):
         self._peers[peer] += amount
 
 
-class RequestHelper(object):
+class RequestHelper:
     def __init__(self, requestor, peer, protocol, payment_rate_manager):
         self.requestor = requestor
         self.peer = peer
@@ -427,7 +427,7 @@ class PriceRequest(RequestHelper):
 class DownloadRequest(RequestHelper):
     """Choose a blob and download it from a peer and also pay the peer for the data."""
     def __init__(self, requester, peer, protocol, payment_rate_manager, wallet, head_blob_hash):
-        RequestHelper.__init__(self, requester, peer, protocol, payment_rate_manager)
+        super().__init__(requester, peer, protocol, payment_rate_manager)
         self.wallet = wallet
         self.head_blob_hash = head_blob_hash
 
@@ -576,7 +576,7 @@ class DownloadRequest(RequestHelper):
         return reason
 
 
-class BlobDownloadDetails(object):
+class BlobDownloadDetails:
     """Contains the information needed to make a ClientBlobRequest from an open blob"""
     def __init__(self, blob, deferred, write_func, cancel_func, peer):
         self.blob = blob

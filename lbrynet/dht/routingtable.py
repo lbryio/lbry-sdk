@@ -16,7 +16,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-class TreeRoutingTable(object):
+class TreeRoutingTable:
     """ This class implements a routing table used by a Node class.
 
     The Kademlia routing table is a binary tree whFose leaves are k-buckets,

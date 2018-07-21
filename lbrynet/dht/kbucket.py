@@ -11,7 +11,7 @@ if sys.version_info > (3,):
 log = logging.getLogger(__name__)
 
 
-class KBucket(object):
+class KBucket:
     """ Description - later
     """
 

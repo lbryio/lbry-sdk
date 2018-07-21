@@ -3,7 +3,7 @@ from twisted.internet import defer
 from lbrynet.cryptstream.CryptBlob import StreamBlobDecryptor
 
 
-class CryptBlobHandler(object):
+class CryptBlobHandler:
     #implements(IBlobHandler)
 
     def __init__(self, key, write_func):

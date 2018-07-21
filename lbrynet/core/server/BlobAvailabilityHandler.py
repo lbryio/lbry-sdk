@@ -7,7 +7,7 @@ from lbrynet.interfaces import IQueryHandlerFactory, IQueryHandler
 log = logging.getLogger(__name__)
 
 
-class BlobAvailabilityHandlerFactory(object):
+class BlobAvailabilityHandlerFactory:
     implements(IQueryHandlerFactory)
 
     def __init__(self, blob_manager):
@@ -26,7 +26,7 @@ class BlobAvailabilityHandlerFactory(object):
         return "Blob Availability - blobs that are available to be uploaded"
 
 
-class BlobAvailabilityHandler(object):
+class BlobAvailabilityHandler:
     implements(IQueryHandler)
 
     def __init__(self, blob_manager):

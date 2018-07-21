@@ -7,7 +7,7 @@ from lbrynet.core.cryptoutils import get_lbry_hash_obj
 log = logging.getLogger(__name__)
 
 
-class HashBlobWriter(object):
+class HashBlobWriter:
     def __init__(self, length_getter, finished_cb):
         self.write_handle = BytesIO()
         self.length_getter = length_getter

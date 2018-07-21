@@ -164,11 +164,11 @@ class Env(envparse.Env):
             self._convert_key(key): self._convert_value(value)
             for key, value in schema.items()
             }
-        envparse.Env.__init__(self, **my_schema)
+        super().__init__(**my_schema)
 
     def __call__(self, key, *args, **kwargs):
         my_key = self._convert_key(key)
-        return super(Env, self).__call__(my_key, *args, **kwargs)
+        return super().__call__(my_key, *args, **kwargs)
 
     @staticmethod
     def _convert_key(key):
@@ -288,7 +288,7 @@ ADJUSTABLE_SETTINGS = {
 }
 
 
-class Config(object):
+class Config:
     def __init__(self, fixed_defaults, adjustable_defaults, persisted_settings=None,
                  environment=None, cli_settings=None):
 

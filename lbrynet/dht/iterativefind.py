@@ -14,7 +14,7 @@ def get_contact(contact_list, node_id, address, port):
     raise IndexError(node_id)
 
 
-class _IterativeFind(object):
+class _IterativeFind:
     # TODO: use polymorphism to search for a value or node
     #       instead of using a find_value flag
     def __init__(self, node, shortlist, key, rpc):

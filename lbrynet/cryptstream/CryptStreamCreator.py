@@ -12,7 +12,7 @@ from lbrynet.cryptstream.CryptBlob import CryptStreamBlobMaker
 log = logging.getLogger(__name__)
 
 
-class CryptStreamCreator(object):
+class CryptStreamCreator:
     """
     Create a new stream with blobs encrypted by a symmetric cipher.
 

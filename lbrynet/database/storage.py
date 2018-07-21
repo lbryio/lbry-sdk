@@ -85,11 +85,11 @@ def rerun_if_locked(f):
 
 class SqliteConnection(adbapi.ConnectionPool):
     def __init__(self, db_path):
-        adbapi.ConnectionPool.__init__(self, 'sqlite3', db_path, check_same_thread=False)
+        super().__init__('sqlite3', db_path, check_same_thread=False)
 
     @rerun_if_locked
     def runInteraction(self, interaction, *args, **kw):
-        return adbapi.ConnectionPool.runInteraction(self, interaction, *args, **kw)
+        return super().runInteraction(interaction, *args, **kw)
 
     @classmethod
     def set_reactor(cls, reactor):

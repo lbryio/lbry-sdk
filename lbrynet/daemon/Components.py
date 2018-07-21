@@ -38,7 +38,7 @@ UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
 
 
-class ConfigSettings(object):
+class ConfigSettings:
     @staticmethod
     def get_conf_setting(setting_name):
         return conf.settings[setting_name]
@@ -71,7 +71,7 @@ class DatabaseComponent(Component):
     component_name = DATABASE_COMPONENT
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.storage = None
 
     @property
@@ -144,7 +144,7 @@ class WalletComponent(Component):
     depends_on = [DATABASE_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.wallet = None
 
     @property
@@ -171,7 +171,7 @@ class SessionComponent(Component):
     depends_on = [DATABASE_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.session = None
 
     @property
@@ -206,7 +206,7 @@ class DHTComponent(Component):
     depends_on = [UPNP_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.dht_node = None
         self.upnp_component = None
         self.udp_port, self.peer_port = None, None
@@ -247,7 +247,7 @@ class HashAnnouncerComponent(Component):
     depends_on = [DHT_COMPONENT, DATABASE_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.hash_announcer = None
 
     @property
@@ -271,7 +271,7 @@ class StreamIdentifierComponent(Component):
     depends_on = [SESSION_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.sd_identifier = StreamDescriptorIdentifier()
 
     @property
@@ -301,7 +301,7 @@ class FileManagerComponent(Component):
     depends_on = [SESSION_COMPONENT, STREAM_IDENTIFIER_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.file_manager = None
 
     @property
@@ -327,7 +327,7 @@ class PeerProtocolServerComponent(Component):
     depends_on = [SESSION_COMPONENT, UPNP_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.lbry_server_port = None
 
     @property
@@ -381,7 +381,7 @@ class ReflectorComponent(Component):
     depends_on = [SESSION_COMPONENT, FILE_MANAGER_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.reflector_server_port = GCS('reflector_port')
         self.reflector_server = None
 
@@ -416,7 +416,7 @@ class UPnPComponent(Component):
     component_name = UPNP_COMPONENT
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.peer_port = GCS('peer_port')
         self.dht_node_port = GCS('dht_node_port')
         self.use_upnp = GCS('use_upnp')

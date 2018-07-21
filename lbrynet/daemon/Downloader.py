@@ -29,7 +29,7 @@ STREAM_STAGES = [
 log = logging.getLogger(__name__)
 
 
-class GetStream(object):
+class GetStream:
     def __init__(self, sd_identifier, session, exchange_rate_manager,
                  max_key_fee, disable_max_key_fee, data_rate=None, timeout=None):
 

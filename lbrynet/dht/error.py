@@ -37,7 +37,7 @@ class TimeoutError(Exception):
             msg = 'Timeout connecting to {}'.format(binascii.hexlify(remote_contact_id))
         else:
             msg = 'Timeout connecting to uninitialized node'
-        Exception.__init__(self, msg)
+        super().__init__(msg)
         self.remote_contact_id = remote_contact_id
 
 

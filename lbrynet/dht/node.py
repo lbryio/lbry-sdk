@@ -47,7 +47,7 @@ def rpcmethod(func):
     return func
 
 
-class MockKademliaHelper(object):
+class MockKademliaHelper:
     def __init__(self, clock=None, callLater=None, resolve=None, listenUDP=None):
         if not listenUDP or not resolve or not callLater or not clock:
             from twisted.internet import reactor
@@ -127,7 +127,7 @@ class Node(MockKademliaHelper):
         @param peerPort: the port at which this node announces it has a blob for
         """
 
-        MockKademliaHelper.__init__(self, clock, callLater, resolve, listenUDP)
+        super().__init__(clock, callLater, resolve, listenUDP)
         self.node_id = node_id or self._generateID()
         self.port = udpPort
         self._listen_interface = interface

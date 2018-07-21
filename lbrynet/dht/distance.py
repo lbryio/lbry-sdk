@@ -6,7 +6,7 @@ if sys.version_info > (3,):
     long = int
 
 
-class Distance(object):
+class Distance:
     """Calculate the XOR result between two string variables.
 
     Frequently we re-use one of the points so as an optimization

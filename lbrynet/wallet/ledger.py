@@ -125,13 +125,13 @@ class MainNetLedger(BaseLedger):
     default_fee_per_name_char = 200000
 
     def __init__(self, *args, **kwargs):
-        super(MainNetLedger, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
 
     def get_transaction_base_fee(self, tx):
         """ Fee for the transaction header and all outputs; without inputs. """
         return max(
-            super(MainNetLedger, self).get_transaction_base_fee(tx),
+            super().get_transaction_base_fee(tx),
             self.get_transaction_claim_name_fee(tx)
         )
 
@@ -156,7 +156,7 @@ class MainNetLedger(BaseLedger):
 
     @defer.inlineCallbacks
     def start(self):
-        yield super(MainNetLedger, self).start()
+        yield super().start()
         yield defer.DeferredList([
             a.maybe_migrate_certificates() for a in self.accounts
         ])

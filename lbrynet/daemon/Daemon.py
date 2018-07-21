@@ -78,8 +78,7 @@ DIRECTION_ASCENDING = 'asc'
 DIRECTION_DESCENDING = 'desc'
 DIRECTIONS = DIRECTION_ASCENDING, DIRECTION_DESCENDING
 
-
-class IterableContainer(object):
+class IterableContainer:
     def __iter__(self):
         for attr in dir(self):
             if not attr.startswith("_"):
@@ -92,7 +91,7 @@ class IterableContainer(object):
         return False
 
 
-class Checker(object):
+class Checker:
     """The looping calls the daemon runs"""
     INTERNET_CONNECTION = 'internet_connection_checker', 3600
     # CONNECTION_STATUS = 'connection_status_checker'
@@ -124,7 +123,7 @@ class NoValidSearch(Exception):
     pass
 
 
-class CheckInternetConnection(object):
+class CheckInternetConnection:
     def __init__(self, daemon):
         self.daemon = daemon
 
@@ -132,7 +131,7 @@ class CheckInternetConnection(object):
         self.daemon.connected_to_internet = utils.check_connection()
 
 
-class AlwaysSend(object):
+class AlwaysSend:
     def __init__(self, value_generator, *args, **kwargs):
         self.value_generator = value_generator
         self.args = args

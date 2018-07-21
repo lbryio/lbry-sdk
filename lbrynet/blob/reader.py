@@ -3,7 +3,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-class HashBlobReader(object):
+class HashBlobReader:
     """
     This is a file like reader class that supports
     read(size) and close()

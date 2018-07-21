@@ -12,7 +12,7 @@ from lbrynet.wallet.account import get_certificate_lookup
 log = logging.getLogger(__name__)
 
 
-class Publisher(object):
+class Publisher:
     def __init__(self, session, lbry_file_manager, wallet, certificate):
         self.session = session
         self.lbry_file_manager = lbry_file_manager

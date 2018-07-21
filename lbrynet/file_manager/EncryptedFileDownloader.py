@@ -36,8 +36,8 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
     def __init__(self, rowid, stream_hash, peer_finder, rate_limiter, blob_manager, storage, lbry_file_manager,
                  payment_rate_manager, wallet, download_directory, file_name, stream_name, sd_hash, key,
                  suggested_file_name):
-        EncryptedFileSaver.__init__(
-            self, stream_hash, peer_finder, rate_limiter, blob_manager, storage, payment_rate_manager, wallet,
+        super().__init__(
+            stream_hash, peer_finder, rate_limiter, blob_manager, storage, payment_rate_manager, wallet,
             download_directory, key, stream_name, file_name
         )
         self.sd_hash = sd_hash
@@ -150,7 +150,7 @@ class ManagedEncryptedFileDownloader(EncryptedFileSaver):
                                          self.blob_manager, download_manager)
 
 
-class ManagedEncryptedFileDownloaderFactory(object):
+class ManagedEncryptedFileDownloaderFactory:
     #implements(IStreamDownloaderFactory)
 
     def __init__(self, lbry_file_manager):

@@ -14,7 +14,7 @@ class ComponentType(type):
         return klass
 
 
-class Component(object, metaclass=ComponentType):
+class Component(metaclass=ComponentType):
     """
     lbrynet-daemon component helper
 

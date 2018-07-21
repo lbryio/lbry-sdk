@@ -12,7 +12,7 @@ from lbrynet.core.Error import UnknownStreamTypeError, InvalidStreamDescriptorEr
 log = logging.getLogger(__name__)
 
 
-class StreamDescriptorReader(object):
+class StreamDescriptorReader:
     """Classes which derive from this class read a stream descriptor file return
        a dictionary containing the fields in the file"""
     def __init__(self):
@@ -33,7 +33,7 @@ class StreamDescriptorReader(object):
 class PlainStreamDescriptorReader(StreamDescriptorReader):
     """Read a stream descriptor file which is not a blob but a regular file"""
     def __init__(self, stream_descriptor_filename):
-        StreamDescriptorReader.__init__(self)
+        super().__init__()
         self.stream_descriptor_filename = stream_descriptor_filename
 
     def _get_raw_data(self):
@@ -49,7 +49,7 @@ class PlainStreamDescriptorReader(StreamDescriptorReader):
 class BlobStreamDescriptorReader(StreamDescriptorReader):
     """Read a stream descriptor file which is a blob"""
     def __init__(self, blob):
-        StreamDescriptorReader.__init__(self)
+        super().__init__()
         self.blob = blob
 
     def _get_raw_data(self):
@@ -76,7 +76,7 @@ def bytes2unicode(value):
     return value
 
 
-class StreamDescriptorWriter(object):
+class StreamDescriptorWriter:
     """Classes which derive from this class write fields from a dictionary
        of fields to a stream descriptor"""
     def __init__(self):
@@ -94,7 +94,7 @@ class StreamDescriptorWriter(object):
 
 class PlainStreamDescriptorWriter(StreamDescriptorWriter):
     def __init__(self, sd_file_name):
-        StreamDescriptorWriter.__init__(self)
+        super().__init__()
         self.sd_file_name = sd_file_name
 
     def _write_stream_descriptor(self, raw_data):
@@ -110,7 +110,7 @@ class PlainStreamDescriptorWriter(StreamDescriptorWriter):
 
 class BlobStreamDescriptorWriter(StreamDescriptorWriter):
     def __init__(self, blob_manager):
-        StreamDescriptorWriter.__init__(self)
+        super().__init__()
         self.blob_manager = blob_manager
 
     @defer.inlineCallbacks
@@ -124,7 +124,7 @@ class BlobStreamDescriptorWriter(StreamDescriptorWriter):
         defer.returnValue(sd_hash)
 
 
-class StreamMetadata(object):
+class StreamMetadata:
     FROM_BLOB = 1
     FROM_PLAIN = 2
 
@@ -137,7 +137,7 @@ class StreamMetadata(object):
         self.source_file = None
 
 
-class StreamDescriptorIdentifier(object):
+class StreamDescriptorIdentifier:
     """Tries to determine the type of stream described by the stream descriptor using the
        'stream_type' field. Keeps a list of StreamDescriptorValidators and StreamDownloaderFactorys
        and returns the appropriate ones based on the type of the stream descriptor given
@@ -407,7 +407,7 @@ def validate_descriptor(stream_info):
     return True
 
 
-class EncryptedFileStreamDescriptorValidator(object):
+class EncryptedFileStreamDescriptorValidator:
     def __init__(self, raw_info):
         self.raw_info = raw_info
 

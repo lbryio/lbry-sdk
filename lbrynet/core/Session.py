@@ -8,7 +8,7 @@ from lbrynet.core.PaymentRateManager import BasePaymentRateManager, OnlyFreePaym
 log = logging.getLogger(__name__)
 
 
-class Session(object):
+class Session:
     """This class manages all important services common to any application that uses the network.
 
     the hash announcer, which informs other peers that this peer is

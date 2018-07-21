@@ -24,7 +24,7 @@ BLOB_BYTES_UPLOADED = 'Blob Bytes Uploaded'
 log = logging.getLogger(__name__)
 
 
-class Manager(object):
+class Manager:
     def __init__(self, analytics_api, context=None, installation_id=None, session_id=None):
         self.analytics_api = analytics_api
         self._tracked_data = collections.defaultdict(list)
@@ -219,7 +219,7 @@ class Manager(object):
             callback(maybe_deferred, *args, **kwargs)
 
 
-class Api(object):
+class Api:
     def __init__(self, cookies, url, write_key, enabled):
         self.cookies = cookies
         self.url = url

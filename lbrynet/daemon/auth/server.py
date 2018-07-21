@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 EMPTY_PARAMS = [{}]
 
 
-class JSONRPCError(object):
+class JSONRPCError:
     # http://www.jsonrpc.org/specification#error_object
     CODE_PARSE_ERROR = -32700  # Invalid JSON. Error while parsing the JSON text.
     CODE_INVALID_REQUEST = -32600  # The JSON sent is not a valid Request object.
@@ -129,7 +129,7 @@ class JSONRPCServerType(type):
         return klass
 
 
-class AuthorizedBase(object, metaclass=JSONRPCServerType):
+class AuthorizedBase(metaclass=JSONRPCServerType):
 
     @staticmethod
     def deprecated(new_command=None):
