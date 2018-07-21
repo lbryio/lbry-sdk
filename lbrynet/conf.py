@@ -1,5 +1,5 @@
 import base58
-import json
+import simplejson as json
 import logging
 import os
 import re
