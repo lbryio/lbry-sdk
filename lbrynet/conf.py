@@ -63,22 +63,6 @@ settings_encoders = {
 conf_file = None
 
 
-def _win_path_to_bytes(path):
-    """
-    Encode Windows paths to string. appdirs.user_data_dir()
-    on windows will return unicode path, unlike other platforms
-    which returns string. This will cause problems
-    because we use strings for filenames and combining them with
-    os.path.join() will result in errors.
-    """
-    for encoding in ('ASCII', 'MBCS'):
-        try:
-            return path.encode(encoding)
-        except (UnicodeEncodeError, LookupError):
-            pass
-    return path
-
-
 def _get_old_directories(platform_type):
     directories = {}
     if platform_type == WINDOWS:
@@ -143,9 +127,6 @@ elif 'win' in sys.platform:
         dirs = _get_old_directories(WINDOWS)
     else:
         dirs = _get_new_directories(WINDOWS)
-    dirs['data'] = _win_path_to_bytes(dirs['data'])
-    dirs['lbryum'] = _win_path_to_bytes(dirs['lbryum'])
-    dirs['download'] = _win_path_to_bytes(dirs['download'])
 else:
     platform = LINUX
     if os.path.isdir(_get_old_directories(LINUX)['data']) or \
@@ -619,7 +600,7 @@ class Config(object):
                 with open(install_id_filename, "r") as install_id_file:
                     self._installation_id = str(install_id_file.read()).strip()
         if not self._installation_id:
-            self._installation_id = base58.b58encode(utils.generate_id())
+            self._installation_id = base58.b58encode(utils.generate_id().decode())
             with open(install_id_filename, "w") as install_id_file:
                 install_id_file.write(self._installation_id)
         return self._installation_id
@@ -633,7 +614,7 @@ class Config(object):
         if not self._node_id:
             self._node_id = utils.generate_id()
             with open(node_id_filename, "w") as node_id_file:
-                node_id_file.write(base58.b58encode(self._node_id))
+                node_id_file.write(base58.b58encode(self._node_id).decode())
         return self._node_id
 
     def get_session_id(self):
