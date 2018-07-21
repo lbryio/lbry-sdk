@@ -430,7 +430,7 @@ class Wallet(object):
             tx_heights = yield DeferredDict({txid: self.get_height_for_txid(txid) for txid in pending_outpoints},
                                             consumeErrors=True)
             outpoint_heights = {}
-            for txid, outputs in pending_outpoints.iteritems():
+            for txid, outputs in pending_outpoints.items():
                 if txid in tx_heights:
                     for nout in outputs:
                         outpoint_heights["%s:%i" % (txid, nout)] = tx_heights[txid]
@@ -546,7 +546,7 @@ class Wallet(object):
         result = {}
         batch_results = yield self._get_values_for_uris(page, page_size, *uris)
         to_save = []
-        for uri, resolve_results in batch_results.iteritems():
+        for uri, resolve_results in batch_results.items():
             try:
                 result[uri] = self._handle_claim_result(resolve_results)
                 to_save.append(result[uri])
@@ -558,7 +558,7 @@ class Wallet(object):
     @defer.inlineCallbacks
     def get_claims_by_ids(self, *claim_ids):
         claims = yield self._get_claims_by_claimids(*claim_ids)
-        for claim in claims.itervalues():
+        for claim in claims.values():
             yield self.save_claim(claim)
         defer.returnValue(claims)
 
@@ -1233,7 +1233,7 @@ class LBRYumWallet(Wallet):
             return payto_out['txid']
 
         log.debug("Doing send many. payments to send: %s", str(payments_to_send))
-        d = self._run_cmd_as_defer_succeed('payto', payments_to_send.iteritems())
+        d = self._run_cmd_as_defer_succeed('payto', payments_to_send.items())
         d.addCallback(lambda out: handle_payto_out(out))
         return d
 

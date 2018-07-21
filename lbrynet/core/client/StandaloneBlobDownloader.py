@@ -69,7 +69,7 @@ class SingleProgressManager(object):
     def needed_blobs(self):
         blobs = self.download_manager.blobs
         assert len(blobs) == 1
-        return [b for b in blobs.itervalues() if not b.get_is_verified()]
+        return [b for b in blobs.values() if not b.get_is_verified()]
 
 
 class DummyBlobHandler(object):

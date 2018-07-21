@@ -825,7 +825,7 @@ class SQLiteStorage(WalletDatabase):
 
     def save_claim_tx_heights(self, claim_tx_heights):
         def _save_claim_heights(transaction):
-            for outpoint, height in claim_tx_heights.iteritems():
+            for outpoint, height in claim_tx_heights.items():
                 transaction.execute(
                     "update claim set height=? where claim_outpoint=? and height=-1",
                     (height, outpoint)
