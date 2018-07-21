@@ -161,7 +161,7 @@ class BlobRequester(object):
         return True
 
     def _get_bad_peers(self):
-        return [p for p in self._peers.iterkeys() if not self._should_send_request_to(p)]
+        return [p for p in self._peers.keys() if not self._should_send_request_to(p)]
 
     def _hash_available(self, blob_hash):
         for peer in self._available_blobs:
