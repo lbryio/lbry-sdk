@@ -3,7 +3,7 @@ import mimetypes
 import os
 import requests
 import urllib
-import simplejson as json
+import json
 import textwrap
 import signal
 from binascii import hexlify, unhexlify, b2a_hex

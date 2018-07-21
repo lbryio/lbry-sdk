@@ -7,7 +7,7 @@ the new blobs to the manager.
 import argparse
 import binascii
 import logging
-import simplejson as json
+import json
 import os
 import sys
 
