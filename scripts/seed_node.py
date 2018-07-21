@@ -59,7 +59,7 @@ def format_contact(contact):
 def format_datastore(node):
     datastore = deepcopy(node._dataStore._dict)
     result = {}
-    for key, values in datastore.iteritems():
+    for key, values in datastore.items():
         contacts = []
         for (contact, value, last_published, originally_published, original_publisher_id) in values:
             contact_dict = format_contact(contact)
@@ -201,7 +201,7 @@ class MultiSeedRPCServer(AuthJSONRPCServer):
         nodes = []
         for node_id in [n.node_id.encode('hex') for n in self._nodes]:
             routing_info = yield self.jsonrpc_node_routing_table(node_id=node_id)
-            for index, bucket in routing_info.iteritems():
+            for index, bucket in routing_info.items():
                 if ip_address in map(lambda c: c['address'], bucket['contacts']):
                     nodes.append(node_id)
                     break

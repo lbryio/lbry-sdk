@@ -340,7 +340,7 @@ class Config(object):
         return self.get_current_settings_dict().__repr__()
 
     def __iter__(self):
-        for k in self._data[TYPE_DEFAULT].iterkeys():
+        for k in self._data[TYPE_DEFAULT].keys():
             yield k
 
     def __getitem__(self, name):
@@ -477,7 +477,7 @@ class Config(object):
 
     def get_adjustable_settings_dict(self):
         return {
-            key: val for key, val in self.get_current_settings_dict().iteritems()
+            key: val for key, val in self.get_current_settings_dict().items()
             if key in self._adjustable_defaults
             }
 
