@@ -1,6 +1,6 @@
 import time
 import logging
-import json
+import simplejson as json
 
 import treq
 from twisted.internet import defer

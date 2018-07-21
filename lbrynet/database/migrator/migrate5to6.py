@@ -1,6 +1,6 @@
 import sqlite3
 import os
-import json
+import simplejson as json
 import logging
 from lbryschema.decode import smart_decode
 from lbrynet import conf

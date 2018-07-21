@@ -1,5 +1,5 @@
 import glob
-import json
+import simplejson as json
 import os
 import subprocess
 import sys

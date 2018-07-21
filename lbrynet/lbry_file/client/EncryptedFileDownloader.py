@@ -181,7 +181,7 @@ class EncryptedFileSaver(EncryptedFileDownloader):
 class EncryptedFileSaverFactory(EncryptedFileDownloaderFactory):
     def __init__(self, peer_finder, rate_limiter, blob_manager, storage, wallet, download_directory):
         EncryptedFileDownloaderFactory.__init__(self, peer_finder, rate_limiter, blob_manager, storage, wallet)
-        self.download_directory = binascii.hexlify(download_directory)
+        self.download_directory = binascii.hexlify(download_directory.encode())
 
     def _make_downloader(self, stream_hash, payment_rate_manager, stream_info):
         stream_name = stream_info.raw_info['stream_name']

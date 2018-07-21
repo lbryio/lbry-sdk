@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import platform
-import json
+import simplejson as json
 import subprocess
 import os
 
