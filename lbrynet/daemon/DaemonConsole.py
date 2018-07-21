@@ -122,7 +122,7 @@ def get_methods(daemon):
         _fn.__doc__ = fn.__doc__
         return {name: _fn}
 
-    for method_name, method in daemon.callable_methods.iteritems():
+    for method_name, method in daemon.callable_methods.items():
         locs.update(wrapped(method_name, method))
     return locs
 

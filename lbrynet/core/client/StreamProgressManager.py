@@ -101,15 +101,15 @@ class FullStreamProgressManager(StreamProgressManager):
         if not blobs:
             return 0
         else:
-            for i in range(max(blobs.iterkeys())):
+            for i in range(max(blobs.keys())):
                 if self._done(i, blobs):
                     return i
-            return max(blobs.iterkeys()) + 1
+            return max(blobs.keys()) + 1
 
     def needed_blobs(self):
         blobs = self.download_manager.blobs
         return [
-            b for n, b in blobs.iteritems()
+            b for n, b in blobs.items()
             if not b.get_is_verified() and not n in self.provided_blob_nums
         ]
 

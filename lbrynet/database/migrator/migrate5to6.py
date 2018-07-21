@@ -247,7 +247,7 @@ def do_migration(db_dir):
         claim_queries = {}  # <sd_hash>: claim query tuple
 
         # get the claim queries ready, only keep those with associated files
-        for outpoint, sd_hash in file_outpoints.iteritems():
+        for outpoint, sd_hash in file_outpoints.items():
             if outpoint in claim_outpoint_queries:
                 claim_queries[sd_hash] = claim_outpoint_queries[outpoint]
 
@@ -260,7 +260,7 @@ def do_migration(db_dir):
                     claim_arg_tup[7], claim_arg_tup[6], claim_arg_tup[8],
                     smart_decode(claim_arg_tup[8]).certificate_id, claim_arg_tup[5], claim_arg_tup[4]
                 )
-                for sd_hash, claim_arg_tup in claim_queries.iteritems() if claim_arg_tup
+                for sd_hash, claim_arg_tup in claim_queries.items() if claim_arg_tup
             ]     # sd_hash,  (txid, nout, claim_id, name, sequence, address, height, amount, serialized)
         )
 
@@ -268,7 +268,7 @@ def do_migration(db_dir):
 
         damaged_stream_sds = []
         # import the files and get sd hashes of streams to attempt recovering
-        for sd_hash, file_query in file_args.iteritems():
+        for sd_hash, file_query in file_args.items():
             failed_sd = _import_file(*file_query)
             if failed_sd:
                 damaged_stream_sds.append(failed_sd)
