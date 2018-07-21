@@ -29,7 +29,7 @@ class BencodeTest(unittest.TestCase):
         """ Tests the bencode encoder """
         for value, encodedValue in self.cases:
             result = self.encoding.encode(value)
-            self.failUnlessEqual(
+            self.assertEqual(
                 result, encodedValue,
                 'Value "%s" not correctly encoded! Expected "%s", got "%s"' %
                 (value, encodedValue, result))
@@ -38,10 +38,10 @@ class BencodeTest(unittest.TestCase):
         """ Tests the bencode decoder """
         for value, encodedValue in self.cases:
             result = self.encoding.decode(encodedValue)
-            self.failUnlessEqual(
+            self.assertEqual(
                 result, value,
                 'Value "%s" not correctly decoded! Expected "%s", got "%s"' %
                 (encodedValue, value, result))
         for encodedValue in self.badDecoderCases:
-            self.failUnlessRaises(
+            self.assertRaises(
                 lbrynet.dht.encoding.DecodeError, self.encoding.decode, encodedValue)
