@@ -1,8 +1,10 @@
 import struct
+from binascii import hexlify
+
 from twisted.internet import defer
 from lbrynet.dht import constants
 from lbrynet.core.utils import generate_id
-from dht_test_environment import TestKademliaBase
+from .dht_test_environment import TestKademliaBase
 import logging
 
 log = logging.getLogger()
@@ -22,7 +24,7 @@ class TestStoreExpiration(TestKademliaBase):
         all_nodes = set(self.nodes).union(set(self._seeds))
 
         # verify the nodes we think stored it did actually store it
-        storing_nodes = [node for node in all_nodes if node.node_id.encode('hex') in storing_node_ids]
+        storing_nodes = [node for node in all_nodes if hexlify(node.node_id) in storing_node_ids]
         self.assertEqual(len(storing_nodes), len(storing_node_ids))
         self.assertEqual(len(storing_nodes), constants.k)
         for node in storing_nodes:
@@ -35,7 +37,7 @@ class TestStoreExpiration(TestKademliaBase):
             self.assertEqual(len(datastore_result), 1)
             expanded_peers = []
             for peer in datastore_result:
-                host = ".".join([str(ord(d)) for d in peer[:4]])
+                host = ".".join([str(d) for d in peer[:4]])
                 port, = struct.unpack('>H', peer[4:6])
                 peer_node_id = peer[6:]
                 if (host, port, peer_node_id) not in expanded_peers:
@@ -85,7 +87,7 @@ class TestStoreExpiration(TestKademliaBase):
             self.assertEqual(len(datastore_result), 1)
             expanded_peers = []
             for peer in datastore_result:
-                host = ".".join([str(ord(d)) for d in peer[:4]])
+                host = ".".join([str(d) for d in peer[:4]])
                 port, = struct.unpack('>H', peer[4:6])
                 peer_node_id = peer[6:]
                 if (host, port, peer_node_id) not in expanded_peers:
