@@ -1,7 +1,7 @@
 """A test script that downloads blobs from a reflector server"""
 import argparse
 import itertools
-import simplejson as json
+import json
 import random
 import subprocess
 import sys

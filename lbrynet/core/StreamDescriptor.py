@@ -1,6 +1,6 @@
 import binascii
 from collections import defaultdict
-import simplejson as json
+import json
 import logging
 
 from twisted.internet import threads, defer

@@ -1,4 +1,4 @@
-import simplejson as json
+import json
 import logging
 
 from twisted.protocols.basic import FileSender

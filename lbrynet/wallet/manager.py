@@ -1,6 +1,6 @@
 import os
 import six
-import simplejson as json
+import json
 from binascii import hexlify
 from twisted.internet import defer
 

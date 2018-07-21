@@ -1,7 +1,5 @@
-from __future__ import print_function
-
 import platform
-import simplejson as json
+import json
 import subprocess
 import os
 
