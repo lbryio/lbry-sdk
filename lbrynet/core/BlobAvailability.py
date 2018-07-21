@@ -9,7 +9,7 @@ from decimal import Decimal
 log = logging.getLogger(__name__)
 
 
-class BlobAvailabilityTracker(object):
+class BlobAvailabilityTracker:
     """
     Class to track peer counts for known blobs, and to discover new popular blobs
 

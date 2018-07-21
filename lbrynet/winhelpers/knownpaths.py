@@ -14,14 +14,14 @@ class GUID(ctypes.Structure):
     ]
 
     def __init__(self, uuid_):
-        ctypes.Structure.__init__(self)
+        super().__init__()
         self.Data1, self.Data2, self.Data3, self.Data4[0], self.Data4[1], rest = uuid_.fields
         for i in range(2, 8):
             self.Data4[i] = rest>>(8 - i - 1)*8 & 0xff
 
 
 # http://msdn.microsoft.com/en-us/library/windows/desktop/dd378457.aspx
-class FOLDERID(object):
+class FOLDERID:
     # pylint: disable=bad-whitespace
     AccountPictures         = UUID('{008ca0b1-55b4-4c56-b8a8-4de4b299d3be}')
     AdminTools              = UUID('{724EF170-A42D-4FEF-9F26-B60E846FBA4F}')
@@ -120,7 +120,7 @@ class FOLDERID(object):
 
 
 # http://msdn.microsoft.com/en-us/library/windows/desktop/bb762188.aspx
-class UserHandle(object):
+class UserHandle:
     current = wintypes.HANDLE(0)
     common = wintypes.HANDLE(-1)
 

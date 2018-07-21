@@ -12,7 +12,7 @@ from lbrynet.wallet.account import get_certificate_lookup
 log = logging.getLogger(__name__)
 
 
-class Publisher(object):
+class Publisher:
     def __init__(self, blob_manager, payment_rate_manager, storage, lbry_file_manager, wallet, certificate):
         self.blob_manager = blob_manager
         self.payment_rate_manager = payment_rate_manager

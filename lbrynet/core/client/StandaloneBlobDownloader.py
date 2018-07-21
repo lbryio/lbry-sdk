@@ -12,7 +12,7 @@ from twisted.internet.task import LoopingCall
 log = logging.getLogger(__name__)
 
 
-class SingleBlobMetadataHandler(object):
+class SingleBlobMetadataHandler:
     #implements(interfaces.IMetadataHandler)
 
     def __init__(self, blob_hash, download_manager):
@@ -29,7 +29,7 @@ class SingleBlobMetadataHandler(object):
         return 0
 
 
-class SingleProgressManager(object):
+class SingleProgressManager:
     def __init__(self, download_manager, finished_callback, timeout_callback, timeout):
         self.finished_callback = finished_callback
         self.timeout_callback = timeout_callback
@@ -72,7 +72,7 @@ class SingleProgressManager(object):
         return [b for b in blobs.values() if not b.get_is_verified()]
 
 
-class DummyBlobHandler(object):
+class DummyBlobHandler:
     def __init__(self):
         pass
 
@@ -80,7 +80,7 @@ class DummyBlobHandler(object):
         pass
 
 
-class StandaloneBlobDownloader(object):
+class StandaloneBlobDownloader:
     def __init__(self, blob_hash, blob_manager, peer_finder,
                  rate_limiter, payment_rate_manager, wallet,
                  timeout=None):

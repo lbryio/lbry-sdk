@@ -1,4 +1,4 @@
-class DownloadOptionChoice(object):
+class DownloadOptionChoice:
     """A possible choice that can be picked for some option.
 
     An option can have one or more choices that can be picked from.
@@ -10,7 +10,7 @@ class DownloadOptionChoice(object):
         self.bool_options_description = bool_options_description
 
 
-class DownloadOption(object):
+class DownloadOption:
     """An option for a user to select a value from several different choices."""
     def __init__(self, option_types, long_description, short_description, default_value,
                  default_value_description):

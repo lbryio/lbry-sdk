@@ -16,7 +16,7 @@ backend = default_backend()
 
 class CryptBlobInfo(BlobInfo):
     def __init__(self, blob_hash, blob_num, length, iv):
-        BlobInfo.__init__(self, blob_hash, blob_num, length)
+        super().__init__(blob_hash, blob_num, length)
         self.iv = iv
 
     def get_dict(self):
@@ -30,7 +30,7 @@ class CryptBlobInfo(BlobInfo):
         return info
 
 
-class StreamBlobDecryptor(object):
+class StreamBlobDecryptor:
     def __init__(self, blob, key, iv, length):
         """
         This class decrypts blob
@@ -99,7 +99,7 @@ class StreamBlobDecryptor(object):
         return d
 
 
-class CryptStreamBlobMaker(object):
+class CryptStreamBlobMaker:
     def __init__(self, key, iv, blob_num, blob):
         """
         This class encrypts data and writes it to a new blob
