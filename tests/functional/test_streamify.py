@@ -89,7 +89,7 @@ class TestStreamify(TestCase):
                 yield "%016d" % iv
 
         def create_stream():
-            test_file = GenFile(5209343, b''.join([chr(i + 3) for i in xrange(0, 64, 6)]))
+            test_file = GenFile(5209343, b''.join([chr(i + 3) for i in range(0, 64, 6)]))
             d = create_lbry_file(self.session, self.lbry_file_manager, "test_file", test_file,
                                  key="0123456701234567", iv_generator=iv_generator())
             d.addCallback(lambda lbry_file: lbry_file.stream_hash)
@@ -111,7 +111,7 @@ class TestStreamify(TestCase):
 
         @defer.inlineCallbacks
         def create_stream():
-            test_file = GenFile(53209343, b''.join([chr(i + 5) for i in xrange(0, 64, 6)]))
+            test_file = GenFile(53209343, b''.join([chr(i + 5) for i in range(0, 64, 6)]))
             lbry_file = yield create_lbry_file(self.session, self.lbry_file_manager, "test_file", test_file)
             sd_hash = yield self.session.storage.get_sd_blob_hash_for_stream(lbry_file.stream_hash)
             self.assertTrue(lbry_file.sd_hash, sd_hash)

@@ -172,7 +172,7 @@ class LbryUploader(object):
 
     @defer.inlineCallbacks
     def create_stream(self):
-        test_file = GenFile(self.file_size, b''.join([chr(i) for i in xrange(0, 64, 6)]))
+        test_file = GenFile(self.file_size, b''.join([chr(i) for i in range(0, 64, 6)]))
         lbry_file = yield create_lbry_file(self.session, self.lbry_file_manager, "test_file", test_file)
         defer.returnValue(lbry_file.sd_hash)
 
