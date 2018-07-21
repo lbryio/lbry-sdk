@@ -20,8 +20,8 @@ class NodeIDTest(unittest.TestCase):
 
     def testAutoCreatedID(self):
         """ Tests if a new node has a valid node ID """
-        self.failUnlessEqual(type(self.node.node_id), bytes, 'Node does not have a valid ID')
-        self.failUnlessEqual(len(self.node.node_id), 48, 'Node ID length is incorrect! '
+        self.assertEqual(type(self.node.node_id), bytes, 'Node does not have a valid ID')
+        self.assertEqual(len(self.node.node_id), 48, 'Node ID length is incorrect! '
                                                         'Expected 384 bits, got %d bits.' %
                              (len(self.node.node_id) * 8))
 
@@ -31,7 +31,7 @@ class NodeIDTest(unittest.TestCase):
         for i in range(100):
             newID = self.node._generateID()
             # ugly uniqueness test
-            self.failIf(newID in generatedIDs, 'Generated ID #%d not unique!' % (i+1))
+            self.assertFalse(newID in generatedIDs, 'Generated ID #%d not unique!' % (i+1))
             generatedIDs.append(newID)
 
     def testKeyLength(self):
@@ -39,7 +39,7 @@ class NodeIDTest(unittest.TestCase):
         for i in range(20):
             id = self.node._generateID()
             # Key length: 20 bytes == 160 bits
-            self.failUnlessEqual(len(id), 48,
+            self.assertEqual(len(id), 48,
                                  'Length of generated ID is incorrect! Expected 384 bits, '
                                  'got %d bits.' % (len(id)*8))
 
@@ -68,9 +68,9 @@ class NodeDataTest(unittest.TestCase):
         for key, value in self.cases:
             expected_result = self.contact.compact_ip() + struct.pack('>H', value) + \
                               self.contact.id
-            self.failUnless(self.node._dataStore.hasPeersForBlob(key),
+            self.assertTrue(self.node._dataStore.hasPeersForBlob(key),
                             'Stored key not found in node\'s DataStore: "%s"' % key)
-            self.failUnless(expected_result in self.node._dataStore.getPeersForBlob(key),
+            self.assertTrue(expected_result in self.node._dataStore.getPeersForBlob(key),
                             'Stored val not found in node\'s DataStore: key:"%s" port:"%s" %s'
                             % (key, value, self.node._dataStore.getPeersForBlob(key)))
 
@@ -92,9 +92,9 @@ class NodeContactTest(unittest.TestCase):
         yield self.node.addContact(contact)
         # ...and request the closest nodes to it using FIND_NODE
         closestNodes = self.node._routingTable.findCloseNodes(contactID, constants.k)
-        self.failUnlessEqual(len(closestNodes), 1, 'Wrong amount of contacts returned; '
+        self.assertEqual(len(closestNodes), 1, 'Wrong amount of contacts returned; '
                                                    'expected 1, got %d' % len(closestNodes))
-        self.failUnless(contact in closestNodes, 'Added contact not found by issueing '
+        self.assertTrue(contact in closestNodes, 'Added contact not found by issueing '
                                                  '_findCloseNodes()')
 
     @defer.inlineCallbacks
@@ -107,7 +107,7 @@ class NodeContactTest(unittest.TestCase):
         # ...and request the closest nodes to it using FIND_NODE
         closestNodes = self.node._routingTable.findCloseNodes(self.node.node_id,
                                                               constants.k)
-        self.failIf(contact in closestNodes, 'Node added itself as a contact')
+        self.assertFalse(contact in closestNodes, 'Node added itself as a contact')
 
 
 # class FakeRPCProtocol(protocol.DatagramProtocol):

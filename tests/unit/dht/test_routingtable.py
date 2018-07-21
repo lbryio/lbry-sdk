@@ -36,7 +36,7 @@ class TreeRoutingTableTest(unittest.TestCase):
 
         for test in basicTestList:
             result = Distance(test[0])(test[1])
-            self.failIf(result != test[2], 'Result of _distance() should be %s but %s returned' %
+            self.assertFalse(result != test[2], 'Result of _distance() should be %s but %s returned' %
                         (test[2], result))
 
     @defer.inlineCallbacks
@@ -51,9 +51,9 @@ class TreeRoutingTableTest(unittest.TestCase):
         yield self.routingTable.addContact(contact)
         # ...and request the closest nodes to it (will retrieve it)
         closestNodes = self.routingTable.findCloseNodes(contactID)
-        self.failUnlessEqual(len(closestNodes), 1, 'Wrong amount of contacts returned; expected 1,'
+        self.assertEqual(len(closestNodes), 1, 'Wrong amount of contacts returned; expected 1,'
                                                    ' got %d' % len(closestNodes))
-        self.failUnless(contact in closestNodes, 'Added contact not found by issueing '
+        self.assertTrue(contact in closestNodes, 'Added contact not found by issueing '
                                                  '_findCloseNodes()')
 
     @defer.inlineCallbacks
@@ -67,7 +67,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         yield self.routingTable.addContact(contact)
         # ...and get it again
         sameContact = self.routingTable.getContact(contactID)
-        self.failUnlessEqual(contact, sameContact, 'getContact() should return the same contact')
+        self.assertEqual(contact, sameContact, 'getContact() should return the same contact')
 
     @defer.inlineCallbacks
     def testAddParentNodeAsContact(self):
@@ -81,7 +81,7 @@ class TreeRoutingTableTest(unittest.TestCase):
         yield self.routingTable.addContact(contact)
         # ...and request the closest nodes to it using FIND_NODE
         closestNodes = self.routingTable.findCloseNodes(self.nodeID, constants.k)
-        self.failIf(contact in closestNodes, 'Node added itself as a contact')
+        self.assertFalse(contact in closestNodes, 'Node added itself as a contact')
 
     @defer.inlineCallbacks
     def testRemoveContact(self):
@@ -94,15 +94,15 @@ class TreeRoutingTableTest(unittest.TestCase):
         # Now add it...
         yield self.routingTable.addContact(contact)
         # Verify addition
-        self.failUnlessEqual(len(self.routingTable._buckets[0]), 1, 'Contact not added properly')
+        self.assertEqual(len(self.routingTable._buckets[0]), 1, 'Contact not added properly')
         # Now remove it
         self.routingTable.removeContact(contact)
-        self.failUnlessEqual(len(self.routingTable._buckets[0]), 0, 'Contact not removed properly')
+        self.assertEqual(len(self.routingTable._buckets[0]), 0, 'Contact not removed properly')
 
     @defer.inlineCallbacks
     def testSplitBucket(self):
         """ Tests if the the routing table correctly dynamically splits k-buckets """
-        self.failUnlessEqual(self.routingTable._buckets[0].rangeMax, 2**384,
+        self.assertEqual(self.routingTable._buckets[0].rangeMax, 2**384,
                              'Initial k-bucket range should be 0 <= range < 2**384')
         # Add k contacts
         for i in range(constants.k):
@@ -111,7 +111,7 @@ class TreeRoutingTableTest(unittest.TestCase):
             nodeID = h.digest()
             contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
             yield self.routingTable.addContact(contact)
-        self.failUnlessEqual(len(self.routingTable._buckets), 1,
+        self.assertEqual(len(self.routingTable._buckets), 1,
                              'Only k nodes have been added; the first k-bucket should now '
                              'be full, but should not yet be split')
         # Now add 1 more contact
@@ -120,15 +120,15 @@ class TreeRoutingTableTest(unittest.TestCase):
         nodeID = h.digest()
         contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
         yield self.routingTable.addContact(contact)
-        self.failUnlessEqual(len(self.routingTable._buckets), 2,
+        self.assertEqual(len(self.routingTable._buckets), 2,
                              'k+1 nodes have been added; the first k-bucket should have been '
                              'split into two new buckets')
-        self.failIfEqual(self.routingTable._buckets[0].rangeMax, 2**384,
+        self.assertNotEqual(self.routingTable._buckets[0].rangeMax, 2**384,
                          'K-bucket was split, but its range was not properly adjusted')
-        self.failUnlessEqual(self.routingTable._buckets[1].rangeMax, 2**384,
+        self.assertEqual(self.routingTable._buckets[1].rangeMax, 2**384,
                              'K-bucket was split, but the second (new) bucket\'s '
                              'max range was not set properly')
-        self.failUnlessEqual(self.routingTable._buckets[0].rangeMax,
+        self.assertEqual(self.routingTable._buckets[0].rangeMax,
                              self.routingTable._buckets[1].rangeMin,
                              'K-bucket was split, but the min/max ranges were '
                              'not divided properly')
@@ -159,9 +159,9 @@ class TreeRoutingTableTest(unittest.TestCase):
             # self.assertEquals(nodeID, node_ids[i].decode('hex'))
             contact = self.contact_manager.make_contact(unhexlify(nodeID), '127.0.0.1', 9182, self.protocol)
             yield self.routingTable.addContact(contact)
-        self.failUnlessEqual(len(self.routingTable._buckets), 2)
-        self.failUnlessEqual(len(self.routingTable._buckets[0]._contacts), 8)
-        self.failUnlessEqual(len(self.routingTable._buckets[1]._contacts), 2)
+        self.assertEqual(len(self.routingTable._buckets), 2)
+        self.assertEqual(len(self.routingTable._buckets[0]._contacts), 8)
+        self.assertEqual(len(self.routingTable._buckets[1]._contacts), 2)
 
         #  try adding a contact who is further from us than the k'th known contact
         nodeID = b'020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
@@ -169,11 +169,11 @@ class TreeRoutingTableTest(unittest.TestCase):
         contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
         self.assertFalse(self.routingTable._shouldSplit(self.routingTable._kbucketIndex(contact.id), contact.id))
         yield self.routingTable.addContact(contact)
-        self.failUnlessEqual(len(self.routingTable._buckets), 2)
-        self.failUnlessEqual(len(self.routingTable._buckets[0]._contacts), 8)
-        self.failUnlessEqual(len(self.routingTable._buckets[1]._contacts), 2)
-        self.failIf(contact in self.routingTable._buckets[0]._contacts)
-        self.failIf(contact in self.routingTable._buckets[1]._contacts)
+        self.assertEqual(len(self.routingTable._buckets), 2)
+        self.assertEqual(len(self.routingTable._buckets[0]._contacts), 8)
+        self.assertEqual(len(self.routingTable._buckets[1]._contacts), 2)
+        self.assertFalse(contact in self.routingTable._buckets[0]._contacts)
+        self.assertFalse(contact in self.routingTable._buckets[1]._contacts)
 
 
 # class KeyErrorFixedTest(unittest.TestCase):
