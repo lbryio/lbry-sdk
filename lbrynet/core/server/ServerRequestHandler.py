@@ -6,7 +6,7 @@ from twisted.internet import defer
 log = logging.getLogger(__name__)
 
 
-class ServerRequestHandler(object):
+class ServerRequestHandler:
     """This class handles requests from clients. It can upload blobs and
     return request for information about more blobs that are
     associated with streams.

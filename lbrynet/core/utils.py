@@ -155,7 +155,7 @@ def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
 
 
-class DeferredLockContextManager(object):
+class DeferredLockContextManager:
     def __init__(self, lock):
         self._lock = lock
 
@@ -181,7 +181,7 @@ def DeferredDict(d, consumeErrors=False):
     defer.returnValue(response)
 
 
-class DeferredProfiler(object):
+class DeferredProfiler:
     def __init__(self):
         self.profile_results = {}
 

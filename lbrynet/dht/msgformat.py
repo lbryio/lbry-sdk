@@ -10,7 +10,7 @@
 from . import msgtypes
 
 
-class MessageTranslator(object):
+class MessageTranslator:
     """ Interface for RPC message translators/formatters
 
     Classes inheriting from this should provide a translation services between

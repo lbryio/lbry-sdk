@@ -32,7 +32,7 @@ class CurrentlyStartingError(Exception):
     pass
 
 
-class CryptStreamDownloader(object):
+class CryptStreamDownloader:
 
     #implements(IStreamDownloader)
 

@@ -32,7 +32,7 @@ class WalletDatabase(BaseDatabase):
     )
 
     def txo_to_row(self, tx, address, txo):
-        row = super(WalletDatabase, self).txo_to_row(tx, address, txo)
+        row = super().txo_to_row(tx, address, txo)
         row.update({
             'is_claim': txo.script.is_claim_name,
             'is_update': txo.script.is_update_claim,

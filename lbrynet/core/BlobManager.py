@@ -8,7 +8,7 @@ from lbrynet.blob.creator import BlobFileCreator
 log = logging.getLogger(__name__)
 
 
-class DiskBlobManager(object):
+class DiskBlobManager:
     def __init__(self, blob_dir, storage, node_datastore=None):
         """
         This class stores blobs on the hard disk

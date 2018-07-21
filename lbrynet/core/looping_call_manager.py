@@ -1,4 +1,4 @@
-class LoopingCallManager(object):
+class LoopingCallManager:
     def __init__(self, calls=None):
         self.calls = calls or {}
 

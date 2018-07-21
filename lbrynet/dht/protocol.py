@@ -15,7 +15,7 @@ from . import msgformat
 log = logging.getLogger(__name__)
 
 
-class PingQueue(object):
+class PingQueue:
     """
     Schedules a 15 minute delayed ping after a new node sends us a query. This is so the new node gets added to the
     routing table after having been given enough time for a pinhole to expire.

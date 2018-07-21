@@ -9,14 +9,14 @@ from lbrynet.core import utils
 log = logging.getLogger(__name__)
 
 
-class PeerConnectionHandler(object):
+class PeerConnectionHandler:
     def __init__(self, request_creators, factory):
         self.request_creators = request_creators
         self.factory = factory
         self.connection = None
 
 
-class ConnectionManager(object):
+class ConnectionManager:
     #implements(interfaces.IConnectionManager)
     MANAGE_CALL_INTERVAL_SEC = 5
     TCP_CONNECT_TIMEOUT = 15

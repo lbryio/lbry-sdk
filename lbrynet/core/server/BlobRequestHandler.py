@@ -10,7 +10,7 @@ from lbrynet.core.Offer import Offer
 log = logging.getLogger(__name__)
 
 
-class BlobRequestHandlerFactory(object):
+class BlobRequestHandlerFactory:
     #implements(IQueryHandlerFactory)
 
     def __init__(self, blob_manager, wallet, payment_rate_manager, analytics_manager):
@@ -33,7 +33,7 @@ class BlobRequestHandlerFactory(object):
         return "Blob Uploader - uploads blobs"
 
 
-class BlobRequestHandler(object):
+class BlobRequestHandler:
     #implements(IQueryHandler, IBlobSender)
     PAYMENT_RATE_QUERY = 'blob_data_payment_rate'
     BLOB_QUERY = 'requested_blob'

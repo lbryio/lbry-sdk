@@ -22,7 +22,7 @@ def expand_peer(compact_peer_info):
     return (peer_node_id, host, port)
 
 
-class _IterativeFind(object):
+class _IterativeFind:
     # TODO: use polymorphism to search for a value or node
     #       instead of using a find_value flag
     def __init__(self, node, shortlist, key, rpc, exclude=None):
