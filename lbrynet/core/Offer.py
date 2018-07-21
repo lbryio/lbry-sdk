@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 
-class Offer(object):
+class Offer:
     """A rate offer to download blobs from a host."""
 
     RATE_ACCEPTED = "RATE_ACCEPTED"

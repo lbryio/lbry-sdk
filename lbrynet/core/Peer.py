@@ -3,7 +3,7 @@ from collections import defaultdict
 from lbrynet.core import utils
 
 # Do not create this object except through PeerManager
-class Peer(object):
+class Peer:
     def __init__(self, host, port):
         self.host = host
         self.port = port

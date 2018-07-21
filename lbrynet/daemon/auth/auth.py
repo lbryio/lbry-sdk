@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 
 
 @implementer(portal.IRealm)
-class HttpPasswordRealm(object):
+class HttpPasswordRealm:
     def __init__(self, resource):
         self.resource = resource
 
@@ -21,7 +21,7 @@ class HttpPasswordRealm(object):
 
 
 @implementer(checkers.ICredentialsChecker)
-class PasswordChecker(object):
+class PasswordChecker:
     credentialInterfaces = (credentials.IUsernamePassword,)
 
     def __init__(self, passwords):

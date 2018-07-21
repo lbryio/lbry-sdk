@@ -68,7 +68,7 @@ def get_wallet_config():
     return config
 
 
-class ConfigSettings(object):
+class ConfigSettings:
     @staticmethod
     def get_conf_setting(setting_name):
         return conf.settings[setting_name]
@@ -101,7 +101,7 @@ class DatabaseComponent(Component):
     component_name = DATABASE_COMPONENT
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.storage = None
 
     @property
@@ -305,7 +305,7 @@ class WalletComponent(Component):
     depends_on = [DATABASE_COMPONENT, HEADERS_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.wallet = None
 
     @property
@@ -327,6 +327,7 @@ class WalletComponent(Component):
 
     @defer.inlineCallbacks
     def start(self):
+        log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
         self.wallet = LbryWalletManager.from_old_config(conf.settings)
@@ -344,7 +345,7 @@ class BlobComponent(Component):
     depends_on = [DATABASE_COMPONENT, DHT_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.blob_manager = None
 
     @property
@@ -375,7 +376,7 @@ class DHTComponent(Component):
     depends_on = [UPNP_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.dht_node = None
         self.upnp_component = None
         self.external_udp_port = None
@@ -425,7 +426,7 @@ class HashAnnouncerComponent(Component):
     depends_on = [DHT_COMPONENT, DATABASE_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.hash_announcer = None
 
     @property
@@ -453,7 +454,7 @@ class RateLimiterComponent(Component):
     component_name = RATE_LIMITER_COMPONENT
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.rate_limiter = RateLimiter()
 
     @property
@@ -474,7 +475,7 @@ class StreamIdentifierComponent(Component):
     depends_on = [DHT_COMPONENT, RATE_LIMITER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.sd_identifier = StreamDescriptorIdentifier()
 
     @property
@@ -508,7 +509,7 @@ class PaymentRateComponent(Component):
     component_name = PAYMENT_RATE_COMPONENT
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.payment_rate_manager = OnlyFreePaymentsManager()
 
     @property
@@ -528,7 +529,7 @@ class FileManagerComponent(Component):
                   STREAM_IDENTIFIER_COMPONENT, PAYMENT_RATE_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.file_manager = None
 
     @property
@@ -568,7 +569,7 @@ class PeerProtocolServerComponent(Component):
                   PAYMENT_RATE_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.lbry_server_port = None
 
     @property
@@ -620,7 +621,7 @@ class ReflectorComponent(Component):
     depends_on = [DHT_COMPONENT, BLOB_COMPONENT, FILE_MANAGER_COMPONENT]
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.reflector_server_port = GCS('reflector_port')
         self.reflector_server = None
 
@@ -654,7 +655,7 @@ class UPnPComponent(Component):
     component_name = UPNP_COMPONENT
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self._int_peer_port = GCS('peer_port')
         self._int_dht_node_port = GCS('dht_node_port')
         self.use_upnp = GCS('use_upnp')

@@ -30,7 +30,7 @@ from lbrynet.core.Error import DownloadCanceledError, RequestCanceledError
 log = logging.getLogger(__name__)
 
 
-class ReservedPoints(object):
+class ReservedPoints:
     def __init__(self, identifier, amount):
         self.identifier = identifier
         self.amount = amount
@@ -62,7 +62,7 @@ class ClaimOutpoint(dict):
         return not self.__eq__(compare)
 
 
-class Wallet(object):
+class Wallet:
     """This class implements the Wallet interface for the LBRYcrd payment system"""
     implements(IWallet)
 
@@ -819,7 +819,7 @@ class Wallet(object):
 
 class LBRYumWallet(Wallet):
     def __init__(self, storage, config=None):
-        Wallet.__init__(self, storage)
+        super().__init__(storage)
         self._config = config
         self.config = make_config(self._config)
         self.network = None
@@ -1228,7 +1228,7 @@ class LBRYumWallet(Wallet):
         return not self.wallet.use_encryption
 
 
-class LBRYcrdAddressRequester(object):
+class LBRYcrdAddressRequester:
     implements([IRequestCreator])
 
     def __init__(self, wallet):
@@ -1266,7 +1266,7 @@ class LBRYcrdAddressRequester(object):
             return err
 
 
-class LBRYcrdAddressQueryHandlerFactory(object):
+class LBRYcrdAddressQueryHandlerFactory:
     implements(IQueryHandlerFactory)
 
     def __init__(self, wallet):
@@ -1285,7 +1285,7 @@ class LBRYcrdAddressQueryHandlerFactory(object):
         return "LBRYcrd Address - an address for receiving payments via LBRYcrd"
 
 
-class LBRYcrdAddressQueryHandler(object):
+class LBRYcrdAddressQueryHandler:
     implements(IQueryHandler)
 
     def __init__(self, wallet):

@@ -1,4 +1,4 @@
-class BlobInfo(object):
+class BlobInfo:
     """
     This structure is used to represent the metadata of a blob.
 

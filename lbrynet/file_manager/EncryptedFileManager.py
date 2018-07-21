@@ -19,7 +19,7 @@ from lbrynet import conf
 log = logging.getLogger(__name__)
 
 
-class EncryptedFileManager(object):
+class EncryptedFileManager:
     """
     Keeps track of currently opened LBRY Files, their options, and
     their LBRY File specific metadata.

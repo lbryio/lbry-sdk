@@ -13,7 +13,7 @@ def is_valid_ipv4(address):
         return False
 
 
-class _Contact(object):
+class _Contact:
     """ Encapsulation for remote contact
 
     This class contains information on a single remote contact, and also
@@ -167,7 +167,7 @@ class _Contact(object):
         return _sendRPC
 
 
-class ContactManager(object):
+class ContactManager:
     def __init__(self, get_time=None):
         if not get_time:
             from twisted.internet import reactor

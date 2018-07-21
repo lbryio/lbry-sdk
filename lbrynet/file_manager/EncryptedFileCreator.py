@@ -24,7 +24,7 @@ class EncryptedFileStreamCreator(CryptStreamCreator):
 
     def __init__(self, blob_manager, lbry_file_manager, stream_name=None,
                  key=None, iv_generator=None):
-        CryptStreamCreator.__init__(self, blob_manager, stream_name, key, iv_generator)
+        super().__init__(blob_manager, stream_name, key, iv_generator)
         self.lbry_file_manager = lbry_file_manager
         self.stream_hash = None
         self.blob_infos = []

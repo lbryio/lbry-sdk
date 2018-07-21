@@ -23,11 +23,11 @@ def copy_cookies(cookies):
 
 class JSONRPCException(Exception):
     def __init__(self, rpc_error):
-        Exception.__init__(self)
+        super().__init__()
         self.error = rpc_error
 
 
-class AuthAPIClient(object):
+class AuthAPIClient:
     def __init__(self, key, timeout, connection, count, cookies, url, login_url):
         self.__api_key = key
         self.__service_url = login_url
@@ -130,7 +130,7 @@ class AuthAPIClient(object):
         return cls(api_key, timeout, conn, id_count, cookies, url, service_url)
 
 
-class LBRYAPIClient(object):
+class LBRYAPIClient:
     @staticmethod
     def get_client():
         if not conf.settings:

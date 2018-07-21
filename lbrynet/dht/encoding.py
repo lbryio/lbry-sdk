@@ -7,7 +7,7 @@ if sys.version_info > (3,):
 else:
     raw = lambda x: x
 
-class Encoding(object):
+class Encoding:
     """ Interface for RPC message encoders/decoders
 
     All encoding implementations used with this library should inherit and

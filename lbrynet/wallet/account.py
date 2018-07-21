@@ -28,7 +28,7 @@ def get_certificate_lookup(tx_or_hash, nout):
 class Account(BaseAccount):
 
     def __init__(self, *args, **kwargs):
-        super(Account, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.certificates = {}
 
     def add_certificate_private_key(self, tx_or_hash, nout, private_key):
@@ -73,20 +73,20 @@ class Account(BaseAccount):
     def get_balance(self, confirmations=6, include_claims=False, **constraints):
         if not include_claims:
             constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
-        return super(Account, self).get_balance(confirmations, **constraints)
+        return super().get_balance(confirmations, **constraints)
 
     def get_unspent_outputs(self, include_claims=False, **constraints):
         if not include_claims:
             constraints.update({'is_claim': 0, 'is_update': 0, 'is_support': 0})
-        return super(Account, self).get_unspent_outputs(**constraints)
+        return super().get_unspent_outputs(**constraints)
 
     @classmethod
     def from_dict(cls, ledger, d):  # type: (torba.baseledger.BaseLedger, Dict) -> BaseAccount
-        account = super(Account, cls).from_dict(ledger, d)
+        account = super().from_dict(ledger, d)
         account.certificates = d['certificates']
         return account
 
     def to_dict(self):
-        d = super(Account, self).to_dict()
+        d = super().to_dict()
         d['certificates'] = self.certificates
         return d

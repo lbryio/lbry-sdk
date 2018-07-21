@@ -8,7 +8,7 @@ DELAY_INCREMENT = 0.0001
 QUEUE_SIZE_THRESHOLD = 100
 
 
-class CallLaterManager(object):
+class CallLaterManager:
     def __init__(self, callLater):
         """
         :param callLater: (IReactorTime.callLater)
