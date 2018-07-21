@@ -42,7 +42,7 @@ class TestLogger(trial.unittest.TestCase):
         # traceback will depend on the system the test is being run on
         # but hopefully these two tests are good enough
         d = self.triggerErrback()
-        d.addCallback(lambda _: self.assertEquals(expected_first_line, output_lines()[0]))
+        d.addCallback(lambda _: self.assertEqual(expected_first_line, output_lines()[0]))
         d.addCallback(lambda _: self.assertEqual(10, len(output_lines())))
         return d
 

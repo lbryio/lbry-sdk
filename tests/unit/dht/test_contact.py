@@ -30,13 +30,13 @@ class ContactOperatorsTest(unittest.TestCase):
 
     def testBoolean(self):
         """ Test "equals" and "not equals" comparisons """
-        self.failIfEqual(
+        self.assertNotEqual(
             self.firstContact, self.secondContact,
             'Contacts with different IDs should not be equal.')
-        self.failUnlessEqual(
+        self.assertEqual(
             self.firstContact, self.firstContactDifferentValues,
             'Contacts with same IDs should be equal, even if their other values differ.')
-        self.failUnlessEqual(
+        self.assertEqual(
             self.secondContact, self.secondContactCopy,
             'Different copies of the same Contact instance should be equal')
 
@@ -44,10 +44,10 @@ class ContactOperatorsTest(unittest.TestCase):
         """ Test comparisons with non-Contact and non-str types """
         msg = '"{}" operator: Contact object should not be equal to {} type'
         for item in (123, [1, 2, 3], {'key': 'value'}):
-            self.failIfEqual(
+            self.assertNotEqual(
                 self.firstContact, item,
                 msg.format('eq', type(item).__name__))
-            self.failUnless(
+            self.assertTrue(
                 self.firstContact != item,
                 msg.format('ne', type(item).__name__))
 

@@ -40,19 +40,19 @@ class KBucketTest(unittest.TestCase):
         for i in range(constants.k):
             tmpContact = self.contact_manager.make_contact(generate_id(), next(self.address_generator), 4444, 0, None)
             self.kbucket.addContact(tmpContact)
-            self.failUnlessEqual(
+            self.assertEqual(
                 self.kbucket._contacts[i],
                 tmpContact,
                 "Contact in position %d not the same as the newly-added contact" % i)
 
         # Test if contact is not added to full list
         tmpContact = self.contact_manager.make_contact(generate_id(), next(self.address_generator), 4444, 0, None)
-        self.failUnlessRaises(kbucket.BucketFull, self.kbucket.addContact, tmpContact)
+        self.assertRaises(kbucket.BucketFull, self.kbucket.addContact, tmpContact)
 
         # Test if an existing contact is updated correctly if added again
         existingContact = self.kbucket._contacts[0]
         self.kbucket.addContact(existingContact)
-        self.failUnlessEqual(
+        self.assertEqual(
             self.kbucket._contacts.index(existingContact),
             len(self.kbucket._contacts)-1,
             'Contact not correctly updated; it should be at the end of the list of contacts')
@@ -60,7 +60,7 @@ class KBucketTest(unittest.TestCase):
     def testGetContacts(self):
         # try and get 2 contacts from empty list
         result = self.kbucket.getContacts(2)
-        self.failIf(len(result) != 0, "Returned list should be empty; returned list length: %d" %
+        self.assertFalse(len(result) != 0, "Returned list should be empty; returned list length: %d" %
                     (len(result)))
 
 
@@ -83,36 +83,36 @@ class KBucketTest(unittest.TestCase):
         # try to get too many contacts
         # requested count greater than bucket size; should return at most k contacts
         contacts = self.kbucket.getContacts(constants.k+3)
-        self.failUnless(len(contacts) <= constants.k,
+        self.assertTrue(len(contacts) <= constants.k,
                         'Returned list should not have more than k entries!')
 
         # verify returned contacts in list
         for node_id, i in zip(node_ids, range(constants.k-2)):
-            self.failIf(self.kbucket._contacts[i].id != node_id,
+            self.assertFalse(self.kbucket._contacts[i].id != node_id,
                         "Contact in position %s not same as added contact" % (str(i)))
 
         # try to get too many contacts
         # requested count one greater than number of contacts
         if constants.k >= 2:
             result = self.kbucket.getContacts(constants.k-1)
-            self.failIf(len(result) != constants.k-2,
+            self.assertFalse(len(result) != constants.k-2,
                         "Too many contacts in returned list %s - should be %s" %
                         (len(result), constants.k-2))
         else:
             result = self.kbucket.getContacts(constants.k-1)
             # if the count is <= 0, it should return all of it's contats
-            self.failIf(len(result) != constants.k,
+            self.assertFalse(len(result) != constants.k,
                         "Too many contacts in returned list %s - should be %s" %
                         (len(result), constants.k-2))
             result = self.kbucket.getContacts(constants.k-3)
-            self.failIf(len(result) != constants.k-3,
+            self.assertFalse(len(result) != constants.k-3,
                         "Too many contacts in returned list %s - should be %s" %
                         (len(result), constants.k-3))
 
     def testRemoveContact(self):
         # try remove contact from empty list
         rmContact = self.contact_manager.make_contact(generate_id(), next(self.address_generator), 4444, 0, None)
-        self.failUnlessRaises(ValueError, self.kbucket.removeContact, rmContact)
+        self.assertRaises(ValueError, self.kbucket.removeContact, rmContact)
 
         # Add couple contacts
         for i in range(constants.k-2):
@@ -122,4 +122,4 @@ class KBucketTest(unittest.TestCase):
         # try remove contact from empty list
         self.kbucket.addContact(rmContact)
         result = self.kbucket.removeContact(rmContact)
-        self.failIf(rmContact in self.kbucket._contacts, "Could not remove contact from bucket")
+        self.assertFalse(rmContact in self.kbucket._contacts, "Could not remove contact from bucket")
