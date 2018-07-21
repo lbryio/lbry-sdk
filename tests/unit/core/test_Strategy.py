@@ -82,7 +82,7 @@ class AvailabilityWeightedStrategyTests(unittest.TestCase):
 
         offer2 = strategy.make_offer(peer, blobs)
 
-        self.assertEquals(offer1.rate, 0.0)
+        self.assertEqual(offer1.rate, 0.0)
         self.assertNotEqual(offer2.rate, 0.0)
 
     def test_accept_zero_and_persist_if_accepted(self):
@@ -101,13 +101,13 @@ class AvailabilityWeightedStrategyTests(unittest.TestCase):
         response2 = host_strategy.respond_to_offer(offer, client, blobs)
         client_strategy.update_accepted_offers(host, response2)
 
-        self.assertEquals(response1.is_too_low, False)
-        self.assertEquals(response1.is_accepted, True)
-        self.assertEquals(response1.rate, 0.0)
+        self.assertEqual(response1.is_too_low, False)
+        self.assertEqual(response1.is_accepted, True)
+        self.assertEqual(response1.rate, 0.0)
 
-        self.assertEquals(response2.is_too_low, False)
-        self.assertEquals(response2.is_accepted, True)
-        self.assertEquals(response2.rate, 0.0)
+        self.assertEqual(response2.is_too_low, False)
+        self.assertEqual(response2.is_accepted, True)
+        self.assertEqual(response2.rate, 0.0)
 
     def test_how_many_turns_before_accept_with_similar_rate_settings(self):
         base_rates = [0.0001 * n for n in range(1, 10)]

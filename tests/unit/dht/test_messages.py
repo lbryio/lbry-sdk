@@ -51,7 +51,7 @@ class DefaultFormatTranslatorTest(unittest.TestCase):
                               '127.0.0.1', 1921)]})
                       )
         self.translator = DefaultFormat()
-        self.failUnless(
+        self.assertTrue(
             isinstance(self.translator, MessageTranslator),
             'Translator class must inherit from entangled.kademlia.msgformat.MessageTranslator!')
 
@@ -59,10 +59,10 @@ class DefaultFormatTranslatorTest(unittest.TestCase):
         """ Tests translation from a Message object to a primitive """
         for msg, msgPrimitive in self.cases:
             translatedObj = self.translator.toPrimitive(msg)
-            self.failUnlessEqual(len(translatedObj), len(msgPrimitive),
+            self.assertEqual(len(translatedObj), len(msgPrimitive),
                                  "Translated object does not match example object's size")
             for key in msgPrimitive:
-                self.failUnlessEqual(
+                self.assertEqual(
                     translatedObj[key], msgPrimitive[key],
                     'Message object type %s not translated correctly into primitive on '
                     'key "%s"; expected "%s", got "%s"' %
@@ -72,12 +72,12 @@ class DefaultFormatTranslatorTest(unittest.TestCase):
         """ Tests translation from a primitive to a Message object """
         for msg, msgPrimitive in self.cases:
             translatedObj = self.translator.fromPrimitive(msgPrimitive)
-            self.failUnlessEqual(
+            self.assertEqual(
                 type(translatedObj), type(msg),
                 'Message type incorrectly translated; expected "%s", got "%s"' %
                 (type(msg), type(translatedObj)))
             for key in msg.__dict__:
-                self.failUnlessEqual(
+                self.assertEqual(
                     msg.__dict__[key], translatedObj.__dict__[key],
                     'Message instance variable "%s" not translated correctly; '
                     'expected "%s", got "%s"' %

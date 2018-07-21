@@ -35,6 +35,6 @@ class TestPeerExpiration(TestKademliaBase):
         # run the network long enough for two failures to happen
         self.pump_clock(constants.checkRefreshInterval * 3)
 
-        self.assertEquals(len(get_nodes_with_stale_contacts()), 0)
+        self.assertEqual(len(get_nodes_with_stale_contacts()), 0)
         self.verify_all_nodes_are_routable()
         self.verify_all_nodes_are_pingable()

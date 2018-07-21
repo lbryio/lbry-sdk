@@ -65,7 +65,7 @@ class KademliaProtocolTest(unittest.TestCase):
 
         self.node.ping = fake_ping
         # Make sure the contact was added
-        self.failIf(self.remote_contact not in self.node.contacts,
+        self.assertFalse(self.remote_contact not in self.node.contacts,
                     'Contact not added to fake node (error in test code)')
         self.node.start_listening()
 
@@ -84,7 +84,7 @@ class KademliaProtocolTest(unittest.TestCase):
 
         # See if the contact was removed due to the timeout
         def check_removed_contact():
-            self.failIf(self.remote_contact in self.node.contacts,
+            self.assertFalse(self.remote_contact in self.node.contacts,
                         'Contact was not removed after RPC timeout; check exception types.')
 
         df.addCallback(lambda _: reset_values())
@@ -118,9 +118,9 @@ class KademliaProtocolTest(unittest.TestCase):
         self._reactor.advance(2)
         yield df
 
-        self.failIf(self.error, self.error)
+        self.assertFalse(self.error, self.error)
         # The list of sent RPC messages should be empty at this stage
-        self.failUnlessEqual(len(self.node._protocol._sentMessages), 0,
+        self.assertEqual(len(self.node._protocol._sentMessages), 0,
                              'The protocol is still waiting for a RPC result, '
                              'but the transaction is already done!')
 
@@ -154,9 +154,9 @@ class KademliaProtocolTest(unittest.TestCase):
         df.addCallback(handleResult)
         df.addErrback(handleError)
         self._reactor.pump([1 for _ in range(10)])
-        self.failIf(self.error, self.error)
+        self.assertFalse(self.error, self.error)
         # The list of sent RPC messages should be empty at this stage
-        self.failUnlessEqual(len(self.node._protocol._sentMessages), 0,
+        self.assertEqual(len(self.node._protocol._sentMessages), 0,
                              'The protocol is still waiting for a RPC result, '
                              'but the transaction is already done!')
 
@@ -175,21 +175,21 @@ class KademliaProtocolTest(unittest.TestCase):
         d = self.remote_contact.findValue(fake_blob)
         self._reactor.advance(3)
         find_value_response = yield d
-        self.assertEquals(self.remote_contact.protocolVersion, 0)
+        self.assertEqual(self.remote_contact.protocolVersion, 0)
         self.assertTrue('protocolVersion' not in find_value_response)
 
         self.remote_node.findValue = original_findvalue
         d = self.remote_contact.findValue(fake_blob)
         self._reactor.advance(3)
         find_value_response = yield d
-        self.assertEquals(self.remote_contact.protocolVersion, 1)
+        self.assertEqual(self.remote_contact.protocolVersion, 1)
         self.assertTrue('protocolVersion' not in find_value_response)
 
         self.remote_node.findValue = findValue
         d = self.remote_contact.findValue(fake_blob)
         self._reactor.advance(3)
         find_value_response = yield d
-        self.assertEquals(self.remote_contact.protocolVersion, 0)
+        self.assertEqual(self.remote_contact.protocolVersion, 0)
         self.assertTrue('protocolVersion' not in find_value_response)
 
     @defer.inlineCallbacks
@@ -227,16 +227,16 @@ class KademliaProtocolTest(unittest.TestCase):
         d = self.remote_contact.findValue(fake_blob)
         self._reactor.advance(3)
         find_value_response = yield d
-        self.assertEquals(self.remote_contact.protocolVersion, 0)
+        self.assertEqual(self.remote_contact.protocolVersion, 0)
         self.assertTrue('protocolVersion' not in find_value_response)
         token = find_value_response['token']
         d = self.remote_contact.store(fake_blob, token, 3333, self.node.node_id, 0)
         self._reactor.advance(3)
         response = yield d
-        self.assertEquals(response, "OK")
-        self.assertEquals(self.remote_contact.protocolVersion, 0)
+        self.assertEqual(response, "OK")
+        self.assertEqual(self.remote_contact.protocolVersion, 0)
         self.assertTrue(self.remote_node._dataStore.hasPeersForBlob(fake_blob))
-        self.assertEquals(len(self.remote_node._dataStore.getStoringContacts()), 1)
+        self.assertEqual(len(self.remote_node._dataStore.getStoringContacts()), 1)
 
     @defer.inlineCallbacks
     def testStoreFromPre_0_20_0_Node(self):
@@ -253,7 +253,7 @@ class KademliaProtocolTest(unittest.TestCase):
         d = us_from_them.findValue(fake_blob)
         self._reactor.advance(3)
         find_value_response = yield d
-        self.assertEquals(self.remote_contact.protocolVersion, 0)
+        self.assertEqual(self.remote_contact.protocolVersion, 0)
         self.assertTrue('protocolVersion' not in find_value_response)
         token = find_value_response['token']
         us_from_them.update_protocol_version(0)
@@ -262,8 +262,8 @@ class KademliaProtocolTest(unittest.TestCase):
         )
         self._reactor.advance(3)
         response = yield d
-        self.assertEquals(response, "OK")
-        self.assertEquals(self.remote_contact.protocolVersion, 0)
+        self.assertEqual(response, "OK")
+        self.assertEqual(self.remote_contact.protocolVersion, 0)
         self.assertTrue(self.node._dataStore.hasPeersForBlob(fake_blob))
-        self.assertEquals(len(self.node._dataStore.getStoringContacts()), 1)
+        self.assertEqual(len(self.node._dataStore.getStoringContacts()), 1)
         self.assertIs(self.node._dataStore.getStoringContacts()[0], self.remote_contact)
