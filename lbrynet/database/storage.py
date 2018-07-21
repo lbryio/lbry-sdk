@@ -259,7 +259,7 @@ class SQLiteStorage(WalletDatabase):
         blob_hashes = yield self.run_and_return_list(
             "select blob_hash from blob where status='finished'"
         )
-        defer.returnValue([bytes.fromhex(blob_hash).decode('latin-1') for blob_hash in blob_hashes])
+        defer.returnValue([unhexlify(blob_hash) for blob_hash in blob_hashes])
 
     def update_last_announced_blob(self, blob_hash, last_announced):
         return self.db.runOperation(
@@ -478,10 +478,9 @@ class SQLiteStorage(WalletDatabase):
     @defer.inlineCallbacks
     def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
         # touch the closest available file to the file name
-        file_name = yield open_file_for_writing(bytes.fromhex(download_directory).decode(),
-                                                bytes.fromhex(file_name).decode())
+        file_name = yield open_file_for_writing(unhexlify(download_directory), unhexlify(file_name))
         result = yield self.save_published_file(
-            stream_hash, file_name.encode('hex'), download_directory, data_payment_rate
+            stream_hash, hexlify(file_name), download_directory, data_payment_rate
         )
         defer.returnValue(result)
 
