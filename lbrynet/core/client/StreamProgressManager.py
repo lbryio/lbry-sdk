@@ -101,7 +101,7 @@ class FullStreamProgressManager(StreamProgressManager):
         if not blobs:
             return 0
         else:
-            for i in xrange(max(blobs.iterkeys())):
+            for i in range(max(blobs.iterkeys())):
                 if self._done(i, blobs):
                     return i
             return max(blobs.iterkeys()) + 1
