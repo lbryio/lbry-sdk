@@ -1,5 +1,5 @@
 import os
-import simplejson as json
+import json
 import urlparse
 import requests
 from requests.cookies import RequestsCookieJar

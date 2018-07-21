@@ -1,5 +1,5 @@
 import os
-import simplejson as json
+import json
 import sys
 import tempfile
 from unittest import skipIf

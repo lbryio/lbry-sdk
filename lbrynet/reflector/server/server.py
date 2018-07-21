@@ -1,5 +1,5 @@
 import logging
-import simplejson as json
+import json
 from twisted.python import failure
 from twisted.internet import error, defer
 from twisted.internet.protocol import Protocol, ServerFactory
