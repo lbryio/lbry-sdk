@@ -1,33 +1,44 @@
-dist: xenial
 sudo: true
+dist: xenial
 language: python
 python:
   - "3.7"
 
-addons:
-  apt:
-    packages:
-    - libgmp3-dev
-    - build-essential
-    - libssl-dev
-    - libffi-dev
+jobs:
+  include:
 
-install:
-  - pip install tox-travis coverage
-  - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
-  - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
-  - pushd .. && git clone https://github.com/lbryio/lbryschema.git && popd
-  - pushd .. && git clone https://github.com/lbryio/lbryumx.git && popd
-  - pushd .. && git clone https://github.com/lbryio/torba.git && popd
+    - stage: lint
+      name: "pylint lbrynet"
+      install:
+        - pip install pylint
+        - pip install git+https://github.com/lbryio/torba.git
+        - pip install git+https://github.com/lbryio/lbryschema.git
+        - pip install -e .
+      script: pylint lbrynet
 
-script:
-  - tox
-  - rvm install ruby-2.3.1
-  - rvm use 2.3.1 && gem install danger --version '~> 4.0' && danger
+    - stage: tests
+      name: "Unit Tests"
+      install:
+        - pip install coverage
+        - pip install git+https://github.com/lbryio/torba.git
+        - pip install git+https://github.com/lbryio/lbryschema.git
+        - pip install -e .[test]
+      script: coverage run --source=lbrynet -m twisted.trial tests.functional tests.unit
+      after_success:
+        - bash <(curl -s https://codecov.io/bash)
 
-after_success:
-  - coverage combine tests/
-  - bash <(curl -s https://codecov.io/bash)
+    - name: "Integration Tests"
+      install:
+        - pip install tox-travis coverage
+        - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
+        - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
+        - pushd .. && git clone https://github.com/lbryio/lbryschema.git && popd
+        - pushd .. && git clone https://github.com/lbryio/lbryumx.git && popd
+        - pushd .. && git clone https://github.com/lbryio/torba.git && popd
+      script: tox
+      after_success:
+        - coverage combine tests/
+        - bash <(curl -s https://codecov.io/bash)
 
 cache:
   directories:
