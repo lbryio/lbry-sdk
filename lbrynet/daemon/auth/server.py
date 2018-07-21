@@ -1,3 +1,4 @@
+# pylint: skip-file
 import logging
 from six.moves.urllib import parse as urlparse
 import json
@@ -57,7 +58,7 @@ class JSONRPCError:
     }
 
     def __init__(self, message, code=CODE_APPLICATION_ERROR, traceback=None, data=None):
-        assert isinstance(code, (int, long)), "'code' must be an int"
+        assert isinstance(code, int), "'code' must be an int"
         assert (data is None or isinstance(data, dict)), "'data' must be None or a dict"
         self.code = code
         if message is None:
@@ -401,7 +402,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             )
             return server.NOT_DONE_YET
 
-        if args == EMPTY_PARAMS or args == []:
+        if args in (EMPTY_PARAMS, []):
             _args, _kwargs = (), {}
         elif isinstance(args, dict):
             _args, _kwargs = (), args
