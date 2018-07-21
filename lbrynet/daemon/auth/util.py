@@ -3,7 +3,7 @@ import hmac
 import hashlib
 import yaml
 import os
-import json
+import simplejson as json
 import logging
 
 log = logging.getLogger(__name__)

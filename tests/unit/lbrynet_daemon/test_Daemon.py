@@ -1,5 +1,5 @@
 import mock
-import json
+import simplejson as json
 import random
 from os import path
 
