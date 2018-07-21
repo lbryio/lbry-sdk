@@ -143,7 +143,6 @@ class TestKademliaBase(unittest.TestCase):
         for node in self.nodes:
             contact_addresses = {contact.address for contact in node.contacts}
             routable.update(contact_addresses)
-        print(routable, node_addresses)
         self.assertSetEqual(routable, node_addresses)
 
     @defer.inlineCallbacks
