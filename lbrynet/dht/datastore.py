@@ -1,4 +1,4 @@
-from six.moves import UserDict
+from collections import UserDict
 from . import constants
 
 
@@ -9,16 +9,12 @@ class DictDataStore(UserDict):
     def __init__(self, getTime=None):
         # Dictionary format:
         # { <key>: (<contact>, <value>, <lastPublished>, <originallyPublished> <originalPublisherID>) }
-        self._dict = {}
+        super().__init__()
         if not getTime:
             from twisted.internet import reactor
             getTime = reactor.seconds
         self._getTime = getTime
         self.completed_blobs = set()
-
-    def keys(self):
-        """ Return a list of the keys in this data store """
-        return self._dict.keys()
 
     def filter_bad_and_expired_peers(self, key):
         """
@@ -27,41 +23,41 @@ class DictDataStore(UserDict):
         return filter(
             lambda peer:
             self._getTime() - peer[3] < constants.dataExpireTimeout and peer[0].contact_is_good is not False,
-            self._dict[key]
+            self[key]
         )
 
     def filter_expired_peers(self, key):
         """
         Returns only non-expired peers
         """
-        return filter(lambda peer: self._getTime() - peer[3] < constants.dataExpireTimeout, self._dict[key])
+        return filter(lambda peer: self._getTime() - peer[3] < constants.dataExpireTimeout, self[key])
 
     def removeExpiredPeers(self):
-        for key in self._dict.keys():
+        for key in self.keys():
             unexpired_peers = self.filter_expired_peers(key)
             if not unexpired_peers:
-                del self._dict[key]
+                del self[key]
             else:
-                self._dict[key] = unexpired_peers
+                self[key] = unexpired_peers
 
     def hasPeersForBlob(self, key):
-        return True if key in self._dict and len(tuple(self.filter_bad_and_expired_peers(key))) else False
+        return True if key in self and len(tuple(self.filter_bad_and_expired_peers(key))) else False
 
     def addPeerToBlob(self, contact, key, compact_address, lastPublished, originallyPublished, originalPublisherID):
-        if key in self._dict:
-            if compact_address not in map(lambda store_tuple: store_tuple[1], self._dict[key]):
-                self._dict[key].append(
+        if key in self:
+            if compact_address not in map(lambda store_tuple: store_tuple[1], self[key]):
+                self[key].append(
                     (contact, compact_address, lastPublished, originallyPublished, originalPublisherID)
                 )
         else:
-            self._dict[key] = [(contact, compact_address, lastPublished, originallyPublished, originalPublisherID)]
+            self[key] = [(contact, compact_address, lastPublished, originallyPublished, originalPublisherID)]
 
     def getPeersForBlob(self, key):
-        return [] if key not in self._dict else [val[1] for val in self.filter_bad_and_expired_peers(key)]
+        return [] if key not in self else [val[1] for val in self.filter_bad_and_expired_peers(key)]
 
     def getStoringContacts(self):
         contacts = set()
-        for key in self._dict:
-            for values in self._dict[key]:
+        for key in self:
+            for values in self[key]:
                 contacts.add(values[0])
         return list(contacts)
