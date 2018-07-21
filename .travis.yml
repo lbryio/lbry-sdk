@@ -1,4 +1,5 @@
 dist: xenial
+sudo: true
 language: python
 
 python:
