@@ -394,7 +394,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
     def _sendError(self, contact, rpcID, exceptionType, exceptionMessage):
         """ Send an RPC error message to the specified contact
         """
-        exceptionType, exceptionMessage = exceptionType.encode(), exceptionMessage.encode()
+        exceptionMessage = exceptionMessage.encode()
         msg = msgtypes.ErrorMessage(rpcID, self._node.node_id, exceptionType, exceptionMessage)
         msgPrimitive = self._translator.toPrimitive(msg)
         encodedMsg = self._encoder.encode(msgPrimitive)

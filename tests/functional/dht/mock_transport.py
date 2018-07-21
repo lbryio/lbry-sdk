@@ -1,6 +1,8 @@
 import struct
 import hashlib
 import logging
+from binascii import unhexlify, hexlify
+
 from twisted.internet import defer, error
 from lbrynet.dht.encoding import Bencode
 from lbrynet.dht.error import DecodeError
@@ -16,9 +18,9 @@ _datagram_formatter = DefaultFormat()
 log = logging.getLogger()
 
 MOCK_DHT_NODES = [
-    b"cc8db9d0dd9b65b103594b5f992adf09f18b310958fa451d61ce8d06f3ee97a91461777c2b7dea1a89d02d2f23eb0e4f",
-    b"83a3a398eead3f162fbbe1afb3d63482bb5b6d3cdd8f9b0825c1dfa58dffd3f6f6026d6e64d6d4ae4c3dfe2262e734ba",
-    b"b6928ff25778a7bbb5d258d3b3a06e26db1654f3d2efce8c26681d43f7237cdf2e359a4d309c4473d5d89ec99fb4f573",
+    unhexlify("cc8db9d0dd9b65b103594b5f992adf09f18b310958fa451d61ce8d06f3ee97a91461777c2b7dea1a89d02d2f23eb0e4f"),
+    unhexlify("83a3a398eead3f162fbbe1afb3d63482bb5b6d3cdd8f9b0825c1dfa58dffd3f6f6026d6e64d6d4ae4c3dfe2262e734ba"),
+    unhexlify("b6928ff25778a7bbb5d258d3b3a06e26db1654f3d2efce8c26681d43f7237cdf2e359a4d309c4473d5d89ec99fb4f573"),
 ]
 
 MOCK_DHT_SEED_DNS = {  # these map to mock nodes 0, 1, and 2
@@ -125,7 +127,7 @@ def mock_node_generator(count=None, mock_node_ids=MOCK_DHT_NODES):
             break
         if num >= len(mock_node_ids):
             h = hashlib.sha384()
-            h.update(b"node %i" % num)
+            h.update(("node %i" % num).encode())
             node_id = h.digest()
         else:
             node_id = mock_node_ids[num]
