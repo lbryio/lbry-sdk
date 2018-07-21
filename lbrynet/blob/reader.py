@@ -15,7 +15,7 @@ class HashBlobReader:
 
     def __del__(self):
         if self.finished_cb_d is None:
-            log.warn("Garbage collection was called, but reader for %s was not closed yet",
+            log.warning("Garbage collection was called, but reader for %s was not closed yet",
                         self.read_handle.name)
         self.close()
 
@@ -28,5 +28,3 @@ class HashBlobReader:
             return
         self.read_handle.close()
         self.finished_cb_d = self.finished_cb(self)
-
-

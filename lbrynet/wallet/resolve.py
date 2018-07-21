@@ -288,7 +288,7 @@ def format_amount_value(obj):
     COIN = 100000000
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k == 'amount' or k == 'effective_amount':
+            if k in ('amount', 'effective_amount'):
                 if not isinstance(obj[k], float):
                     obj[k] = float(obj[k]) / float(COIN)
             elif k == 'supports' and isinstance(v, list):

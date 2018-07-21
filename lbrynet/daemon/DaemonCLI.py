@@ -1,3 +1,4 @@
+# pylint: skip-file
 import json
 import os
 import sys
@@ -63,7 +64,7 @@ def main():
         return
 
     elif method in ['version', '--version']:
-        print utils.json_dumps_pretty(get_platform(get_ip=False))
+        print(utils.json_dumps_pretty(get_platform(get_ip=False)))
         return
 
     if method not in Daemon.callable_methods:
@@ -106,16 +107,16 @@ def main():
         result = api.call(method, kwargs)
         if isinstance(result, basestring):
             # printing the undumped string is prettier
-            print result
+            print(result)
         else:
-            print utils.json_dumps_pretty(result)
+            print(utils.json_dumps_pretty(result))
     except (RPCError, KeyError, JSONRPCException, HTTPError) as err:
         if isinstance(err, HTTPError):
             error_body = err.read()
             try:
                 error_data = json.loads(error_body)
             except ValueError:
-                print (
+                print(
                     "There was an error, and the response was not valid JSON.\n" +
                     "Raw JSONRPC response:\n" + error_body
                 )
@@ -124,8 +125,8 @@ def main():
             print_error(error_data['error']['message'] + "\n", suggest_help=False)
 
             if 'data' in error_data['error'] and 'traceback' in error_data['error']['data']:
-                print "Here's the traceback for the error you encountered:"
-                print "\n".join(error_data['error']['data']['traceback'])
+                print("Here's the traceback for the error you encountered:")
+                print("\n".join(error_data['error']['data']['traceback']))
 
             print_help_for_command(method)
         elif isinstance(err, RPCError):
@@ -133,7 +134,7 @@ def main():
             # print_help_for_command(method)
         else:
             print_error("Something went wrong\n", suggest_help=False)
-            print str(err)
+            print(str(err))
 
         return 1
 
@@ -160,18 +161,18 @@ def guess_type(x, key=None):
 
 
 def print_help_suggestion():
-    print "See `{} help` for more information.".format(os.path.basename(sys.argv[0]))
+    print("See `{} help` for more information.".format(os.path.basename(sys.argv[0])))
 
 
 def print_error(message, suggest_help=True):
     error_style = colorama.Style.BRIGHT + colorama.Fore.RED
-    print error_style + "ERROR: " + message + colorama.Style.RESET_ALL
+    print(error_style + "ERROR: " + message + colorama.Style.RESET_ALL)
     if suggest_help:
         print_help_suggestion()
 
 
 def print_help():
-    print "\n".join([
+    print("\n".join([
         "NAME",
         "   lbrynet-cli - LBRY command line client.",
         "",
@@ -184,13 +185,13 @@ def print_help():
         "   lbrynet-cli --conf ~/l1.conf status  # like above but using ~/l1.conf as config file",
         "   lbrynet-cli resolve_name what        # resolve a name",
         "   lbrynet-cli help resolve_name        # get help for a command",
-    ])
+    ]))
 
 
 def print_help_for_command(command):
     fn = Daemon.callable_methods.get(command)
     if fn:
-        print "Help for %s method:\n%s" % (command, fn.__doc__)
+        print("Help for %s method:\n%s" % (command, fn.__doc__))
 
 
 def wrap_list_to_term_width(l, width=None, separator=', ', prefix=''):

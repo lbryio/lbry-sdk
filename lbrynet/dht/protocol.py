@@ -125,8 +125,13 @@ class KademliaProtocol(protocol.DatagramProtocol):
         if contact.protocolVersion == 0:
             if method == b'store':
                 blob_hash, token, port, originalPublisherID, age = args
-                args = (blob_hash, {b'token': token, b'port': port, b'lbryid': originalPublisherID}, originalPublisherID,
-                        False)
+                args = (
+                    blob_hash, {
+                        b'token': token,
+                        b'port': port,
+                        b'lbryid': originalPublisherID
+                    }, originalPublisherID, False
+                )
                 return args
             return args
         if args and isinstance(args[-1], dict):

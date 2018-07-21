@@ -147,7 +147,7 @@ def get_sd_hash(stream_info):
         get('source', {}).\
         get('source')
     if not result:
-        log.warn("Unable to get sd_hash")
+        log.warning("Unable to get sd_hash")
     return result
 
 

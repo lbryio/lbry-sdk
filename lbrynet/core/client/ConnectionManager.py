@@ -224,5 +224,3 @@ class ConnectionManager:
             del self._connections_closing[peer]
             d.callback(True)
         return connection_was_made
-
-

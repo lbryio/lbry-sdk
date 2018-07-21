@@ -39,7 +39,7 @@ def migrate_blobs_db(db_dir):
         blobs_db_cursor.execute(
             "ALTER TABLE blobs ADD COLUMN should_announce integer NOT NULL DEFAULT 0")
     else:
-        log.warn("should_announce already exists somehow, proceeding anyways")
+        log.warning("should_announce already exists somehow, proceeding anyways")
 
     # if lbryfile_info.db doesn't exist, skip marking blobs as should_announce = True
     if not os.path.isfile(lbryfile_info_db):
@@ -83,4 +83,3 @@ def migrate_blobs_db(db_dir):
     blobs_db_file.commit()
     blobs_db_file.close()
     lbryfile_info_file.close()
-
