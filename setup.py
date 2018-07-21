@@ -49,14 +49,13 @@ def package_files(directory):
             yield os.path.join('..', path, filename)
 
 
-package_name = "lbry"
 base_dir = os.path.abspath(os.path.dirname(__file__))
 # Get the long description from the README file
 with open(os.path.join(base_dir, 'README.md'), 'rb') as f:
     long_description = f.read().decode('utf-8')
 
 setup(
-    name=package_name,
+    name="lbry",
     version=__version__,
     author="LBRY Inc.",
     author_email="hello@lbry.io",
@@ -65,6 +64,7 @@ setup(
     long_description=long_description,
     keywords="lbry protocol media",
     license='MIT',
+    python_requires='>=3.7',
     packages=find_packages(exclude=('tests',)),
     install_requires=requires,
     entry_points={'console_scripts': console_scripts},
