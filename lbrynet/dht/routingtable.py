@@ -178,12 +178,7 @@ class TreeRoutingTable:
                            by this node
         """
         bucketIndex = self._kbucketIndex(contactID)
-        try:
-            contact = self._buckets[bucketIndex].getContact(contactID)
-        except ValueError:
-            raise
-        else:
-            return contact
+        return self._buckets[bucketIndex].getContact(contactID)
 
     def getRefreshList(self, startIndex=0, force=False):
         """ Finds all k-buckets that need refreshing, starting at the

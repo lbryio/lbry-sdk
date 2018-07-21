@@ -18,7 +18,7 @@ class HashBlobWriter:
 
     def __del__(self):
         if self.finished_cb_d is None:
-            log.warn("Garbage collection was called, but writer was not closed yet")
+            log.warning("Garbage collection was called, but writer was not closed yet")
         self.close()
 
     @property
