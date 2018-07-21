@@ -228,7 +228,7 @@ class TreeRoutingTableTest(unittest.TestCase):
 #         #         math.log(bucket.rangeMax, 2)) + ")"
 #         #     for c in bucket.getContacts():
 #         #         print "  contact " + str(c.id)
-#         # for key, bucket in self.table._replacementCache.iteritems():
+#         # for key, bucket in self.table._replacementCache.items():
 #         #     print "Replacement Cache for Bucket " + str(key)
 #         #     for c in bucket:
 #         #         print "  contact " + str(c.id)

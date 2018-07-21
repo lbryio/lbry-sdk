@@ -915,7 +915,7 @@ class Daemon(AuthJSONRPCServer):
             'auto_renew_claim_height_delta': int
         }
 
-        for key, setting_type in setting_types.iteritems():
+        for key, setting_type in setting_types.items():
             if key in new_settings:
                 if isinstance(new_settings[key], setting_type):
                     conf.settings.update({key: new_settings[key]},
@@ -2916,7 +2916,7 @@ class Daemon(AuthJSONRPCServer):
         hosts = {}
 
         if datastore_len:
-            for k, v in data_store.iteritems():
+            for k, v in data_store.items():
                 for contact, value, lastPublished, originallyPublished, originalPublisherID in v:
                     if contact in hosts:
                         blobs = hosts[contact]

@@ -6,7 +6,7 @@ from lbrynet.daemon.Daemon import Daemon
 class DaemonDocsTests(unittest.TestCase):
     def test_can_parse_api_method_docs(self):
         failures = []
-        for name, fn in Daemon.callable_methods.iteritems():
+        for name, fn in Daemon.callable_methods.items():
             try:
                 docopt.docopt(fn.__doc__, ())
             except docopt.DocoptLanguageError as err:
