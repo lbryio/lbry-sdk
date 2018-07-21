@@ -1,6 +1,6 @@
 import os
 import six
-import json
+import simplejson as json
 from binascii import hexlify
 from twisted.internet import defer
 
@@ -100,7 +100,7 @@ class LbryWalletManager(BaseWalletManager):
                         'seed_version': json_dict['seed_version'],
                         'private_key': json_dict['master_private_keys']['x/'],
                         'public_key': json_dict['master_public_keys']['x/'],
-                        'certificates': json_dict.get('claim_certificates', []),
+                        'certificates': json_dict.get('claim_certificates', {}),
                         'receiving_gap': 20,
                         'change_gap': 6,
                         'receiving_maximum_uses_per_address': 2,
