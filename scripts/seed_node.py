@@ -1,5 +1,5 @@
 import struct
-import simplejson as json
+import json
 import logging
 import argparse
 import hashlib

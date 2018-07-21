@@ -1,4 +1,4 @@
-import simplejson as json
+import json
 import logging
 from decimal import Decimal
 from twisted.internet import error, defer

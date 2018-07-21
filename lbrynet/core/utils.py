@@ -4,7 +4,7 @@ import datetime
 import random
 import socket
 import string
-import simplejson as json
+import json
 import traceback
 import functools
 import logging
