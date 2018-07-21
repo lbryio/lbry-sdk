@@ -15,7 +15,7 @@ from setuptools import setup, find_packages
 # See https://packaging.python.org/requirements/  and
 # https://caremad.io/posts/2013/07/setup-vs-requirement/  for more details.
 requires = [
-    'Twisted',
+    'twisted[tls]',
     'appdirs',
     'distro',
     'base58',
@@ -34,9 +34,6 @@ requires = [
     'docopt',
     'colorama==0.3.7',
     'six',
-    'pyopenssl',
-    'service-identity',
-    'simplejson'
 ]
 
 console_scripts = [
