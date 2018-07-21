@@ -123,7 +123,8 @@ disable=
   inconsistent-return-statements,
   keyword-arg-before-vararg,
   assignment-from-no-return,
-  useless-return
+  useless-return,
+  assignment-from-none
 
 
 [REPORTS]

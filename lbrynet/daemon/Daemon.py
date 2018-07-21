@@ -918,7 +918,7 @@ class Daemon(AuthJSONRPCServer):
                 if isinstance(new_settings[key], setting_type):
                     conf.settings.update({key: new_settings[key]},
                                          data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-                elif setting_type is dict and isinstance(new_settings[key], (unicode, str)):
+                elif setting_type is dict and isinstance(new_settings[key], str):
                     decoded = json.loads(str(new_settings[key]))
                     conf.settings.update({key: decoded},
                                          data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
@@ -2910,10 +2910,7 @@ class Daemon(AuthJSONRPCServer):
         if datastore_len:
             for k, v in data_store.items():
                 for contact, value, lastPublished, originallyPublished, originalPublisherID in v:
-                    if contact in hosts:
-                        blobs = hosts[contact]
-                    else:
-                        blobs = []
+                    blobs = blobs.get(contact, [])
                     blobs.append(k.encode('hex'))
                     hosts[contact] = blobs
 

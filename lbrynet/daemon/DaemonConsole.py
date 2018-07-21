@@ -133,14 +133,14 @@ def run_terminal(callable_methods, started_daemon, quiet=False):
 
     def help(method_name=None):
         if not method_name:
-            print "Available api functions: "
+            print("Available api functions: ")
             for name in callable_methods:
-                print "\t%s" % name
+                print("\t%s" % name)
             return
         if method_name not in callable_methods:
-            print "\"%s\" is not a recognized api function"
+            print("\"%s\" is not a recognized api function")
             return
-        print callable_methods[method_name].__doc__
+        print(callable_methods[method_name].__doc__)
         return
 
     locs.update({'help': help})
@@ -148,7 +148,7 @@ def run_terminal(callable_methods, started_daemon, quiet=False):
     if started_daemon:
         def exit(status=None):
             if not quiet:
-                print "Stopping lbrynet-daemon..."
+                print("Stopping lbrynet-daemon...")
             callable_methods['daemon_stop']()
             return sys.exit(status)
 
@@ -158,7 +158,7 @@ def run_terminal(callable_methods, started_daemon, quiet=False):
             try:
                 reactor.callLater(0, reactor.stop)
             except Exception as err:
-                print "error stopping reactor: ", err
+                print("error stopping reactor: {}".format(err))
             return sys.exit(status)
 
         locs.update({'exit': exit})
@@ -186,19 +186,19 @@ def threaded_terminal(started_daemon, quiet):
 
 def start_lbrynet_console(quiet, use_existing_daemon, useauth):
     if not utils.check_connection():
-        print "Not connected to internet, unable to start"
+        print("Not connected to internet, unable to start")
         raise Exception("Not connected to internet, unable to start")
     if not quiet:
-        print "Starting lbrynet-console..."
+        print("Starting lbrynet-console...")
     try:
         get_client().status()
         d = defer.succeed(False)
         if not quiet:
-            print "lbrynet-daemon is already running, connecting to it..."
+            print("lbrynet-daemon is already running, connecting to it...")
     except:
         if not use_existing_daemon:
             if not quiet:
-                print "Starting lbrynet-daemon..."
+                print("Starting lbrynet-daemon...")
             analytics_manager = analytics.Manager.new_instance()
             d = start_server_and_listen(useauth, analytics_manager, quiet)
         else:
