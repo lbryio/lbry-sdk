@@ -34,7 +34,8 @@ requires = [
     'colorama==0.3.7',
     'six',
     'pyopenssl',
-    'service-identity'
+    'service-identity',
+    'simplejson'
 ]
 
 console_scripts = [

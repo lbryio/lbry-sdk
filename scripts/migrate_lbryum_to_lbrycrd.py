@@ -1,6 +1,6 @@
 import argparse
 import hashlib
-import json
+import simplejson as json
 import subprocess
 import sys
 
