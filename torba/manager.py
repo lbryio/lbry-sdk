@@ -1,4 +1,3 @@
-from decimal import Decimal
 from typing import List, Dict, Type
 from twisted.internet import defer
 
@@ -49,7 +48,7 @@ class WalletManager(object):
                 satoshis = yield account.get_balance(confirmations)
                 ledger_balances.append({
                     'account': account.name,
-                    'coins': round(Decimal(satoshis) / COIN, 2),
+                    'coins': round(satoshis/COIN, 2),
                     'satoshis': satoshis,
                     'is_default_account': i == 0 and j == 0
                 })
