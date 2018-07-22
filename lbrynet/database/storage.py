@@ -678,9 +678,6 @@ class SQLiteStorage(WalletDatabase):
         if not claim.is_stream:
             raise Exception("claim does not contain a stream")
 
-        if not isinstance(stream_hash, bytes):
-            stream_hash = stream_hash.encode()
-
         # get the known sd hash for this stream
         known_sd_hash = transaction.execute(
             "select sd_hash from stream where stream_hash=?", (stream_hash,)

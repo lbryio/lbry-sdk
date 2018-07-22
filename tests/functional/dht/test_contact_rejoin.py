@@ -1,7 +1,7 @@
 import logging
 from twisted.internet import defer
 from lbrynet.dht import constants
-from dht_test_environment import TestKademliaBase
+from .dht_test_environment import TestKademliaBase
 
 log = logging.getLogger()
 

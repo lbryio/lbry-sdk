@@ -164,7 +164,7 @@ class TestTransactionSerialization(unittest.TestCase):
             "00001976a914f521178feb733a719964e1da4a9efb09dcc39cfa88ac00000000"
         )
         tx = Transaction(raw)
-        self.assertEqual(tx.id, b'666c3d15de1d6949a4fe717126c368e274b36957dce29fd401138c1e87e92a62')
+        self.assertEqual(tx.id, '666c3d15de1d6949a4fe717126c368e274b36957dce29fd401138c1e87e92a62')
         self.assertEqual(tx.version, 1)
         self.assertEqual(tx.locktime, 0)
         self.assertEqual(len(tx.inputs), 1)

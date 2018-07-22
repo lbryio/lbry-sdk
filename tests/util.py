@@ -1,10 +1,10 @@
 import datetime
 import time
-import binascii
 import os
 import tempfile
 import shutil
 import mock
+from binascii import hexlify
 
 
 DEFAULT_TIMESTAMP = datetime.datetime(2016, 1, 1)
@@ -23,7 +23,7 @@ def rm_db_and_blob_dir(db_dir, blob_dir):
 
 
 def random_lbry_hash():
-    return binascii.b2a_hex(os.urandom(48))
+    return hexlify(os.urandom(48)).decode()
 
 
 def resetTime(test_case, timestamp=DEFAULT_TIMESTAMP):

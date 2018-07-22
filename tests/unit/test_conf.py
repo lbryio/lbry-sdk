@@ -90,7 +90,7 @@ class SettingsTest(unittest.TestCase):
         settings = conf.Config({}, adjustable_settings, environment=env)
         conf.settings = settings
         # setup tempfile
-        conf_entry = "lbryum_servers: ['localhost:50001', 'localhost:50002']\n"
+        conf_entry = b"lbryum_servers: ['localhost:50001', 'localhost:50002']\n"
         with tempfile.NamedTemporaryFile(suffix='.yml') as conf_file:
             conf_file.write(conf_entry)
             conf_file.seek(0)

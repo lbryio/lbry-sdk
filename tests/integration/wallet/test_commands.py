@@ -1,4 +1,5 @@
 import six
+import asyncio
 import tempfile
 from types import SimpleNamespace
 from binascii import hexlify
@@ -6,6 +7,7 @@ from binascii import hexlify
 from twisted.internet import defer
 from orchstr8.testcase import IntegrationTestCase, d2f
 from torba.constants import COIN
+from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 import lbryschema
 lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
@@ -14,6 +16,7 @@ from lbrynet import conf as lbry_conf
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.wallet.manager import LbryWalletManager
 from lbrynet.daemon.Components import WalletComponent, FileManager, SessionComponent, DatabaseComponent
+from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 
 
@@ -39,7 +42,9 @@ class FakeBlob:
 
     def close(self):
         if self.data:
-            return defer.succeed(hexlify(b'a'*48))
+            h = get_lbry_hash_obj()
+            h.update(b'hi')
+            return defer.succeed(h.hexdigest())
         return defer.succeed(None)
 
     def get_is_verified(self):
@@ -96,9 +101,13 @@ class CommandTestCase(IntegrationTestCase):
         sendtxid = await self.blockchain.send_to_address(address, 10)
         await self.on_transaction_id(sendtxid)
         await self.blockchain.generate(1)
+        await self.ledger.on_header.where(lambda n: n == 201)
         await self.on_transaction_id(sendtxid)
 
-        self.daemon = Daemon(FakeAnalytics())
+        analytics_manager = FakeAnalytics()
+        self.daemon = Daemon(analytics_manager, ComponentManager(analytics_manager, skip_components=[
+            'wallet', 'database', 'session', 'fileManager'
+        ]))
 
         wallet_component = WalletComponent(self.daemon.component_manager)
         wallet_component.wallet = self.manager
@@ -143,10 +152,23 @@ class CommonWorkflowTests(CommandTestCase):
         self.assertTrue(channel['success'])
         await self.on_transaction_id(channel['txid'])
         await self.blockchain.generate(1)
+        await self.ledger.on_header.where(lambda n: n == 202)
         await self.on_transaction_id(channel['txid'])
 
         # Check balance again.
         result = await d2f(self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True))
+        self.assertEqual(result, 8.99)
+
+        # Confirmed balance is 0.
+        result = await d2f(self.daemon.jsonrpc_wallet_balance())
+        self.assertEqual(result, 0)
+
+        # Add some confirmations (there is already 1 confirmation, so we add 5 to equal 6 total).
+        await self.blockchain.generate(5)
+        await self.ledger.on_header.where(lambda n: n == 207)
+
+        # Check balance again after some confirmations.
+        result = await d2f(self.daemon.jsonrpc_wallet_balance())
         self.assertEqual(result, 8.99)
 
         # Now lets publish a hello world file to the channel.
@@ -157,3 +179,5 @@ class CommonWorkflowTests(CommandTestCase):
                 'foo', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
             ))
             print(result)
+            # test fails to cleanup on travis
+            await asyncio.sleep(5)
