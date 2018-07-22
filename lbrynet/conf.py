@@ -600,7 +600,7 @@ class Config:
                 with open(install_id_filename, "r") as install_id_file:
                     self._installation_id = str(install_id_file.read()).strip()
         if not self._installation_id:
-            self._installation_id = base58.b58encode(utils.generate_id().decode())
+            self._installation_id = base58.b58encode(utils.generate_id()).decode()
             with open(install_id_filename, "w") as install_id_file:
                 install_id_file.write(self._installation_id)
         return self._installation_id

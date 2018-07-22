@@ -163,9 +163,13 @@ class BlobStorageTests(StorageTest):
 class SupportsStorageTests(StorageTest):
     @defer.inlineCallbacks
     def test_supports_storage(self):
-        claim_ids = [random_lbry_hash().decode() for _ in range(10)]
-        random_supports = [{"txid": random_lbry_hash().decode(), "nout":i, "address": "addr{}".format(i), "amount": i}
-                    for i in range(20)]
+        claim_ids = [random_lbry_hash() for _ in range(10)]
+        random_supports = [{
+            "txid": random_lbry_hash(),
+            "nout": i,
+            "address": "addr{}".format(i),
+            "amount": i
+        } for i in range(20)]
         expected_supports = {}
         for idx, claim_id in enumerate(claim_ids):
             yield self.storage.save_supports(claim_id, random_supports[idx*2:idx*2+2])
