@@ -347,7 +347,7 @@ class Node(MockKademliaHelper):
         stored_to = yield DeferredDict({contact: self.storeToContact(blob_hash, contact) for contact in contacts})
         contacted_node_ids = [binascii.hexlify(contact.id) for contact in stored_to.keys() if stored_to[contact]]
         log.debug("Stored %s to %i of %i attempted peers", binascii.hexlify(blob_hash),
-                  len(contacted_node_ids), len(contacts))
+                  len(list(contacted_node_ids)), len(contacts))
         defer.returnValue(contacted_node_ids)
 
     def change_token(self):

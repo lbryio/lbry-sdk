@@ -1,4 +1,3 @@
-# pylint: skip-file
 import logging
 from six.moves.urllib import parse as urlparse
 import json
@@ -513,7 +512,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     @staticmethod
     def _check_params(function, args_tup, args_dict):
-        argspec = inspect.getargspec(undecorated(function))
+        argspec = inspect.getfullargspec(undecorated(function))
         num_optional_params = 0 if argspec.defaults is None else len(argspec.defaults)
 
         duplicate_params = [
@@ -533,7 +532,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         if len(missing_required_params):
             return 'Missing required parameters', missing_required_params
 
-        extraneous_params = [] if argspec.keywords is not None else [
+        extraneous_params = [] if argspec.varkw is not None else [
             extra_param
             for extra_param in args_dict
             if extra_param not in argspec.args[1:]
@@ -562,7 +561,7 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     def _callback_render(self, result, request, id_, auth_required=False):
         try:
-            encoded_message = jsonrpc_dumps_pretty(result, id=id_, default=default_decimal)
+            encoded_message = jsonrpc_dumps_pretty(result, id=id_, default=default_decimal).encode()
             request.setResponseCode(200)
             self._set_headers(request, encoded_message, auth_required)
             self._render_message(request, encoded_message)
