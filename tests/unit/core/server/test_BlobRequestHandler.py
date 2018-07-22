@@ -8,7 +8,7 @@ from twisted.trial import unittest
 from lbrynet.core import Peer
 from lbrynet.core.server import BlobRequestHandler
 from lbrynet.core.PaymentRateManager import NegotiatedPaymentRateManager, BasePaymentRateManager
-from unit.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker, mock_conf_settings
+from tests.mocks import BlobAvailabilityTracker as DummyBlobAvailabilityTracker, mock_conf_settings
 
 
 class TestBlobRequestHandlerQueries(unittest.TestCase):
@@ -31,7 +31,7 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
 
     def test_error_set_when_rate_too_low(self):
         query = {
-            'blob_data_payment_rate': '-1.0',
+            'blob_data_payment_rate': -1.0,
             'requested_blob': 'blob'
         }
         deferred = self.handler.handle_queries(query)
@@ -43,7 +43,7 @@ class TestBlobRequestHandlerQueries(unittest.TestCase):
 
     def test_response_when_rate_too_low(self):
         query = {
-            'blob_data_payment_rate': '-1.0',
+            'blob_data_payment_rate': -1.0,
         }
         deferred = self.handler.handle_queries(query)
         response = {
@@ -126,4 +126,4 @@ class TestBlobRequestHandlerSender(unittest.TestCase):
         handler.send_blob_if_requested(consumer)
         while consumer.producer:
             consumer.producer.resumeProducing()
-        self.assertEqual(consumer.value(), 'test')
+        self.assertEqual(consumer.value(), b'test')

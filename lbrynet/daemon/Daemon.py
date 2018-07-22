@@ -6,7 +6,7 @@ import urllib
 import json
 import textwrap
 import signal
-from binascii import hexlify, unhexlify, b2a_hex
+from binascii import hexlify, unhexlify
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 from twisted.web import server
@@ -541,7 +541,7 @@ class Daemon(AuthJSONRPCServer):
 
     @defer.inlineCallbacks
     def _get_lbry_file_dict(self, lbry_file, full_status=False):
-        key = b2a_hex(lbry_file.key) if lbry_file.key else None
+        key = hexlify(lbry_file.key) if lbry_file.key else None
         full_path = os.path.join(lbry_file.download_directory, lbry_file.file_name)
         mime_type = mimetypes.guess_type(full_path)[0]
         if os.path.isfile(full_path):
@@ -3219,7 +3219,7 @@ def create_key_getter(field):
             try:
                 value = value[key]
             except KeyError as e:
-                errmsg = 'Failed to get "{}", key "{}" was not found.'
-                raise Exception(errmsg.format(field, e.message))
+                errmsg = "Failed to get '{}', key {} was not found."
+                raise Exception(errmsg.format(field, str(e)))
         return value
     return key_getter
