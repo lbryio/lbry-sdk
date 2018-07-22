@@ -15,6 +15,7 @@ from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 
 class BlobManagerTest(unittest.TestCase):
+
     @defer.inlineCallbacks
     def setUp(self):
         conf.initialize_settings(False)
@@ -28,17 +29,14 @@ class BlobManagerTest(unittest.TestCase):
     def tearDown(self):
         yield self.bm.stop()
         yield self.bm.storage.stop()
-        # BlobFile will try to delete itself  in _close_writer
-        # thus when calling rmtree we may get a FileNotFoundError
-        # for the blob file
-        yield threads.deferToThread(shutil.rmtree, self.blob_dir)
-        yield threads.deferToThread(shutil.rmtree, self.db_dir)
+        shutil.rmtree(self.blob_dir)
+        shutil.rmtree(self.db_dir)
 
     @defer.inlineCallbacks
     def _create_and_add_blob(self, should_announce=False):
         # create and add blob to blob manager
         data_len = random.randint(1, 1000)
-        data = ''.join(random.choice(string.lowercase) for data_len in range(data_len))
+        data = b''.join(random.choice(string.ascii_lowercase).encode() for _ in range(data_len))
 
         hashobj = get_lbry_hash_obj()
         hashobj.update(data)
@@ -46,7 +44,6 @@ class BlobManagerTest(unittest.TestCase):
         blob_hash = out
 
         # create new blob
-        yield self.bm.storage.setup()
         yield self.bm.setup()
         blob = yield self.bm.get_blob(blob_hash, len(data))
 
@@ -71,7 +68,6 @@ class BlobManagerTest(unittest.TestCase):
         blobs = yield self.bm.get_all_verified_blobs()
         self.assertEqual(10, len(blobs))
 
-
     @defer.inlineCallbacks
     def test_delete_blob(self):
         # create blob
@@ -89,13 +85,12 @@ class BlobManagerTest(unittest.TestCase):
         self.assertFalse(blob_hash in self.bm.blobs)
 
         # delete blob that was already deleted once
-        out = yield self.bm.delete_blobs([blob_hash])
+        yield self.bm.delete_blobs([blob_hash])
 
         # delete blob that does not exist, nothing will
         # happen
         blob_hash = random_lbry_hash()
-        out = yield self.bm.delete_blobs([blob_hash])
-
+        yield self.bm.delete_blobs([blob_hash])
 
     @defer.inlineCallbacks
     def test_delete_open_blob(self):
@@ -111,10 +106,10 @@ class BlobManagerTest(unittest.TestCase):
 
         # open the last blob
         blob = yield self.bm.get_blob(blob_hashes[-1])
-        writer, finished_d = yield blob.open_for_writing(self.peer)
+        yield blob.open_for_writing(self.peer)
 
         # delete the last blob and check if it still exists
-        out = yield self.bm.delete_blobs([blob_hash])
+        yield self.bm.delete_blobs([blob_hash])
         blobs = yield self.bm.get_all_verified_blobs()
         self.assertEqual(len(blobs), 10)
         self.assertTrue(blob_hashes[-1] in blobs)
@@ -130,9 +125,8 @@ class BlobManagerTest(unittest.TestCase):
         self.assertEqual(1, count)
 
         # set should annouce to False
-        out = yield self.bm.set_should_announce(blob_hash, should_announce=False)
+        yield self.bm.set_should_announce(blob_hash, should_announce=False)
         out = yield self.bm.get_should_announce(blob_hash)
         self.assertFalse(out)
         count = yield self.bm.count_should_announce_blobs()
         self.assertEqual(0, count)
-

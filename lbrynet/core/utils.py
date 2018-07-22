@@ -98,7 +98,7 @@ def deobfuscate(obfustacated):
 
 
 def obfuscate(plain):
-    return rot13(base64.b64encode(plain))
+    return rot13(base64.b64encode(plain).decode())
 
 
 def check_connection(server="lbry.io", port=80, timeout=2):

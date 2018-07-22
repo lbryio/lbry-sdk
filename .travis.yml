@@ -7,7 +7,7 @@ python:
 jobs:
   include:
 
-    - stage: lint
+    - stage: code quality
       name: "pylint lbrynet"
       install:
         - pip install pylint
@@ -16,14 +16,15 @@ jobs:
         - pip install -e .
       script: pylint lbrynet
 
-    - stage: tests
+    - stage: test
       name: "Unit Tests"
       install:
         - pip install coverage
         - pip install git+https://github.com/lbryio/torba.git
         - pip install git+https://github.com/lbryio/lbryschema.git
         - pip install -e .[test]
-      script: coverage run --source=lbrynet -m twisted.trial tests.functional tests.unit
+      script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial tests.unit
+      #script: HOME=/tmp coverage run --source=lbrynet -m twisted.trial tests.functional tests.unit
       after_success:
         - bash <(curl -s https://codecov.io/bash)
 

@@ -148,11 +148,12 @@ class TestJsonRpc(unittest.TestCase):
 
 
 class TestFileListSorting(unittest.TestCase):
+
     def setUp(self):
         mock_conf_settings(self)
         util.resetTime(self)
         self.faker = Faker('en_US')
-        self.faker.seed(66410)
+        self.faker.seed(129)  # contains 3 same points paid (5.9)
         self.test_daemon = get_test_daemon()
         component_manager = ComponentManager(
             skip_components=[DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT, SESSION_COMPONENT, UPNP_COMPONENT,
@@ -165,121 +166,115 @@ class TestFileListSorting(unittest.TestCase):
         self.test_daemon.file_manager = component_manager.get_component("file_manager")
         self.test_daemon.file_manager.lbry_files = self._get_fake_lbry_files()
 
-        # Pre-sorted lists of prices and file names in ascending order produced by
-        # faker with seed 66410. This seed was chosen becacuse it produces 3 results
-        # 'points_paid' at 6.0 and 2 results at 4.5 to test multiple sort criteria.
-        self.test_points_paid = [0.2, 2.9, 4.5, 4.5, 6.0, 6.0, 6.0, 6.8, 7.1, 9.2]
-        self.test_file_names = ['also.mp3', 'better.css', 'call.mp3', 'pay.jpg',
-                                'record.pages', 'sell.css', 'strategy.pages',
-                                'thousand.pages', 'town.mov', 'vote.ppt']
-        self.test_authors = ['angela41', 'edward70', 'fhart', 'johnrosales',
-                             'lucasfowler', 'peggytorres', 'qmitchell',
-                             'trevoranderson', 'xmitchell', 'zhangsusan']
+        self.test_points_paid = [
+            2.5, 4.8, 5.9, 5.9, 5.9, 6.1, 7.1, 8.2, 8.4, 9.1
+        ]
+        self.test_file_names = [
+            'add.mp3', 'any.mov', 'day.tiff', 'decade.odt', 'different.json', 'hotel.bmp',
+            'might.bmp', 'physical.json', 'remember.mp3', 'than.ppt'
+        ]
+        self.test_authors = [
+            'ashlee27', 'bfrederick', 'brittanyhicks', 'davidsonjeffrey', 'heidiherring',
+            'jlewis', 'kswanson', 'michelle50', 'richard64', 'xsteele'
+        ]
 
+    @defer.inlineCallbacks
     def test_sort_by_points_paid_no_direction_specified(self):
         sort_options = ['points_paid']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
         self.assertEqual(self.test_points_paid, [f['points_paid'] for f in file_list])
 
+    @defer.inlineCallbacks
     def test_sort_by_points_paid_ascending(self):
         sort_options = ['points_paid,asc']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
         self.assertEqual(self.test_points_paid, [f['points_paid'] for f in file_list])
 
+    @defer.inlineCallbacks
     def test_sort_by_points_paid_descending(self):
         sort_options = ['points_paid, desc']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
         self.assertEqual(list(reversed(self.test_points_paid)), [f['points_paid'] for f in file_list])
 
+    @defer.inlineCallbacks
     def test_sort_by_file_name_no_direction_specified(self):
         sort_options = ['file_name']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
         self.assertEqual(self.test_file_names, [f['file_name'] for f in file_list])
 
+    @defer.inlineCallbacks
     def test_sort_by_file_name_ascending(self):
         sort_options = ['file_name,\nasc']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
         self.assertEqual(self.test_file_names, [f['file_name'] for f in file_list])
 
+    @defer.inlineCallbacks
     def test_sort_by_file_name_descending(self):
         sort_options = ['\tfile_name,\n\tdesc']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
         self.assertEqual(list(reversed(self.test_file_names)), [f['file_name'] for f in file_list])
 
+    @defer.inlineCallbacks
     def test_sort_by_multiple_criteria(self):
-        expected = ['file_name=record.pages, points_paid=9.2',
-                     'file_name=vote.ppt, points_paid=7.1',
-                     'file_name=strategy.pages, points_paid=6.8',
-                     'file_name=also.mp3, points_paid=6.0',
-                     'file_name=better.css, points_paid=6.0',
-                     'file_name=town.mov, points_paid=6.0',
-                     'file_name=sell.css, points_paid=4.5',
-                     'file_name=thousand.pages, points_paid=4.5',
-                     'file_name=call.mp3, points_paid=2.9',
-                     'file_name=pay.jpg, points_paid=0.2']
+        expected = [
+            'file_name=different.json, points_paid=9.1',
+            'file_name=physical.json, points_paid=8.4',
+            'file_name=any.mov, points_paid=8.2',
+            'file_name=hotel.bmp, points_paid=7.1',
+            'file_name=add.mp3, points_paid=6.1',
+            'file_name=decade.odt, points_paid=5.9',
+            'file_name=might.bmp, points_paid=5.9',
+            'file_name=than.ppt, points_paid=5.9',
+            'file_name=remember.mp3, points_paid=4.8',
+            'file_name=day.tiff, points_paid=2.5'
+        ]
         format_result = lambda f: 'file_name={}, points_paid={}'.format(f['file_name'], f['points_paid'])
 
         sort_options = ['file_name,asc', 'points_paid,desc']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
-        self.assertEqual(expected, map(format_result, file_list))
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        self.assertEqual(expected, [format_result(r) for r in file_list])
 
         # Check that the list is not sorted as expected when sorted only by file_name.
         sort_options = ['file_name,asc']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
-        self.assertNotEqual(expected, map(format_result, file_list))
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        self.assertNotEqual(expected, [format_result(r) for r in file_list])
 
         # Check that the list is not sorted as expected when sorted only by points_paid.
         sort_options = ['points_paid,desc']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
-        self.assertNotEqual(expected, map(format_result, file_list))
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
+        self.assertNotEqual(expected, [format_result(r) for r in file_list])
 
         # Check that the list is not sorted as expected when not sorted at all.
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list)
-        file_list = self.successResultOf(deferred)
-        self.assertNotEqual(expected, map(format_result, file_list))
+        file_list = yield self.test_daemon.jsonrpc_file_list()
+        self.assertNotEqual(expected, [format_result(r) for r in file_list])
 
+    @defer.inlineCallbacks
     def test_sort_by_nested_field(self):
         extract_authors = lambda file_list: [f['metadata']['author'] for f in file_list]
 
         sort_options = ['metadata.author']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
         self.assertEqual(self.test_authors, extract_authors(file_list))
 
         # Check that the list matches the expected in reverse when sorting in descending order.
         sort_options = ['metadata.author,desc']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        file_list = self.successResultOf(deferred)
+        file_list = yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
         self.assertEqual(list(reversed(self.test_authors)), extract_authors(file_list))
 
         # Check that the list is not sorted as expected when not sorted at all.
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list)
-        file_list = self.successResultOf(deferred)
+        file_list = yield self.test_daemon.jsonrpc_file_list()
         self.assertNotEqual(self.test_authors, extract_authors(file_list))
 
+    @defer.inlineCallbacks
     def test_invalid_sort_produces_meaningful_errors(self):
         sort_options = ['meta.author']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        failure_assertion = self.assertFailure(deferred, Exception)
-        exception = self.successResultOf(failure_assertion)
-        expected_message = 'Failed to get "meta.author", key "meta" was not found.'
-        self.assertEqual(expected_message, exception.message)
-
+        expected_message = "Failed to get 'meta.author', key 'meta' was not found."
+        with self.assertRaisesRegex(Exception, expected_message):
+            yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
         sort_options = ['metadata.foo.bar']
-        deferred = defer.maybeDeferred(self.test_daemon.jsonrpc_file_list, sort=sort_options)
-        failure_assertion = self.assertFailure(deferred, Exception)
-        exception = self.successResultOf(failure_assertion)
-        expected_message = 'Failed to get "metadata.foo.bar", key "foo" was not found.'
-        self.assertEqual(expected_message, exception.message)
+        expected_message = "Failed to get 'metadata.foo.bar', key 'foo' was not found."
+        with self.assertRaisesRegex(Exception, expected_message):
+            yield self.test_daemon.jsonrpc_file_list(sort=sort_options)
 
     def _get_fake_lbry_files(self):
         return [self._get_fake_lbry_file() for _ in range(10)]
@@ -300,7 +295,7 @@ class TestFileListSorting(unittest.TestCase):
             'download_directory': path.dirname(file_path),
             'download_path': file_path,
             'file_name': path.basename(file_path),
-            'key': self.faker.md5(),
+            'key': self.faker.md5(raw_output=True),
             'metadata': {
                 'author': channel_name,
                 'nsfw': random.randint(0, 1) == 1,

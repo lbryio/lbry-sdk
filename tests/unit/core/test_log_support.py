@@ -1,16 +1,16 @@
-import StringIO
+from io import StringIO
 import logging
 
 import mock
-import unittest
+from unittest import skipIf
 from twisted.internet import defer
-from twisted import trial
+from twisted.trial import unittest
 
 from lbrynet.core import log_support
 from tests.util import is_android
 
 
-class TestLogger(trial.unittest.TestCase):
+class TestLogger(unittest.TestCase):
     def raiseError(self):
         raise Exception('terrible things happened')
 
@@ -23,14 +23,14 @@ class TestLogger(trial.unittest.TestCase):
 
     def setUp(self):
         self.log = log_support.Logger('test')
-        self.stream = StringIO.StringIO()
+        self.stream = StringIO()
         handler = logging.StreamHandler(self.stream)
         handler.setFormatter(logging.Formatter("%(filename)s:%(lineno)d - %(message)s"))
         self.log.addHandler(handler)
 
-    @unittest.skipIf(is_android(),
-                     'Test cannot pass on Android because the tests package is compiled '
-                     'which results in a different method call stack')
+    @skipIf(is_android(),
+            'Test cannot pass on Android because the tests package is compiled '
+            'which results in a different method call stack')
     def test_can_log_failure(self):
         def output_lines():
             return self.stream.getvalue().split('\n')
