@@ -33,11 +33,11 @@ def undecorated(o):
     except AttributeError:
         pass
 
-    # try:
-    #     # python3
-    #     closure = o.__closure__
-    # except AttributeError:
-    #     return
+    try:
+        # python3
+        closure = o.__closure__
+    except AttributeError:
+        return
 
     if closure:
         for cell in closure:
