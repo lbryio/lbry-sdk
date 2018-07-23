@@ -232,6 +232,8 @@ class BaseDatabase(SQLiteMixin):
                     col, op = key[:-len('__not')], '!='
                 elif key.endswith('__lte'):
                     col, op = key[:-len('__lte')], '<='
+                elif key.endswith('__gt'):
+                    col, op = key[:-len('__gt')], '>'
                 extras.append('{} {} :{}'.format(col, op, key))
             extra_sql = ' AND ' + ' AND '.join(extras)
         if not include_reserved:

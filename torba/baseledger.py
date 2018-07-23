@@ -212,7 +212,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
             if headers['count'] <= 0:
                 break
             yield self.headers.connect(height_sought, unhexlify(headers['hex']))
-            self._on_header_controller.add(height_sought)
+            self._on_header_controller.add(self.headers.height)
 
     @defer.inlineCallbacks
     def process_header(self, response):
@@ -222,7 +222,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         if header['height'] == len(self.headers):
             # New header from network directly connects after the last local header.
             yield self.headers.connect(len(self.headers), unhexlify(header['hex']))
-            self._on_header_controller.add(len(self.headers))
+            self._on_header_controller.add(self.headers.height)
         elif header['height'] > len(self.headers):
             # New header is several heights ahead of local, do download instead.
             yield self.update_headers()
