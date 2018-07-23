@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import inspect
 from textwrap import dedent
 from lbrynet.daemon.Daemon import Daemon
@@ -53,59 +54,13 @@ def get_api(obj):
 
 
 def write_api(f):
-    w = lambda s: f.write(dedent(s)+'\n')
-    w("""
-    <html>
-    <head>
-      <style type="text/css">
-      
-      </style>
-    </head>
-    <body>
-    """)
-
+    apis = []
     for method_name in sorted(Daemon.callable_methods.keys()):
-        method = get_api(Daemon.callable_methods[method_name])
-
-        w("""
-        <div class="method">
-        <h1 class="name">{name}</h1>
-        <p class="description">{description}</p>
-        <h5 class="section">Arguments</h5>
-        <ul class="arguments">
-        """.format(**method))
-
-        for arg in method['arguments']:
-            validation = ''
-            if arg['is_required']:
-                validation = ', <span class="required">required</span>'
-            w('<li class="argument">')
-            w("""
-            <h3 class="label">
-              {name}
-              <span class="validation">
-                <span class="type">{type}</span>{validation}
-              </span>
-            </h3>""".format(validation=validation, **arg))
-            w('<p class="description">{description}</p>'.format(**arg))
-            w('</li>')
-
-        w("""
-        </ul>
-        <h5 class="section">Returns</h5>
-        <pre>
-        {returns}
-        </pre>
-        </div>
-        """.format(**method))
-
-    w("""
-    </body>
-    </html>
-    """)
+        apis.append(get_api(Daemon.callable_methods[method_name]))
+    json.dump(apis, f, indent=4)
 
 
 if __name__ == '__main__':
-    html_file = os.path.join(os.path.dirname(__file__), 'api.html')
+    html_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'docs', 'api.json')
     with open(html_file, 'w+') as f:
         write_api(f)
