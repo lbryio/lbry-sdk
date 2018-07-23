@@ -214,6 +214,9 @@ class AuthJSONRPCServer(AuthorizedBase):
             log.error('lbrynet API failed to bind TCP %s:%i for listening', conf.settings['api_host'],
                       conf.settings['api_port'])
             reactor.fireSystemEvent("shutdown")
+        except defer.CancelledError:
+            log.info("shutting down before finished starting")
+            reactor.fireSystemEvent("shutdown")
         except Exception as err:
             self.analytics_manager.send_server_startup_error(str(err))
             log.exception('Failed to start lbrynet-daemon')

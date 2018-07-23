@@ -248,8 +248,13 @@ class DHTComponent(Component):
             externalIP=CS.get_external_ip(),
             peerPort=self.peer_port
         )
-        yield self.dht_node.start(GCS('known_dht_nodes'))
-        log.info("Joined the dht")
+
+        self.dht_node.start_listening()
+        yield self.dht_node._protocol._listening
+        d = self.dht_node.joinNetwork(GCS('known_dht_nodes'))
+        d.addCallback(lambda _: self.dht_node.start_looping_calls())
+        d.addCallback(lambda _: log.info("Joined the dht"))
+        log.info("Started the dht")
 
     @defer.inlineCallbacks
     def stop(self):

@@ -1,5 +1,6 @@
 import logging
 from twisted.internet import defer
+from twisted._threads import AlreadyQuit
 from ComponentManager import ComponentManager
 
 log = logging.getLogger(__name__)
@@ -52,6 +53,8 @@ class Component(object):
             result = yield defer.maybeDeferred(self.start)
             self._running = True
             defer.returnValue(result)
+        except (defer.CancelledError, AlreadyQuit):
+            pass
         except Exception as err:
             log.exception("Error setting up %s", self.component_name or self.__class__.__name__)
             raise err
@@ -62,6 +65,8 @@ class Component(object):
             result = yield defer.maybeDeferred(self.stop)
             self._running = False
             defer.returnValue(result)
+        except (defer.CancelledError, AlreadyQuit):
+            pass
         except Exception as err:
             log.exception("Error stopping %s", self.__class__.__name__)
             raise err

@@ -161,6 +161,7 @@ class Daemon(AuthJSONRPCServer):
             analytics_manager=self.analytics_manager,
             skip_components=conf.settings['components_to_skip']
         )
+        self._component_setup_deferred = None
 
         # TODO: move this to a component
         self.connected_to_internet = True
@@ -198,8 +199,9 @@ class Daemon(AuthJSONRPCServer):
 
         log.info("Starting lbrynet-daemon")
         log.info("Platform: %s", json.dumps(system_info.get_platform()))
-        yield self.component_manager.setup(**{n: lambda _, c: setattr(self, components[c.component_name], c.component)
-                                              for n in components.keys()})
+        self._component_setup_deferred = self.component_manager.setup(**{
+            n: lambda _, c: setattr(self, components[c.component_name], c.component) for n in components.keys()})
+        yield self._component_setup_deferred
         log.info("Started lbrynet-daemon")
 
     @staticmethod
@@ -222,6 +224,11 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager.shutdown()
         if self.analytics_manager:
             self.analytics_manager.shutdown()
+
+        try:
+            self._component_setup_deferred.cancel()
+        except defer.CancelledError:
+            pass
 
         if self.component_manager is not None:
             d = self.component_manager.stop()
