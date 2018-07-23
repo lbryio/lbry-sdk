@@ -147,6 +147,16 @@ def sort_claim_results(claims):
     return claims
 
 
+def is_first_run():
+    if os.path.isfile(conf.settings.get_db_revision_filename()):
+        return False
+    if os.path.isfile(os.path.join(conf.settings['data_dir'], 'lbrynet.sqlite')):
+        return False
+    if os.path.isfile(os.path.join(conf.settings['lbryum_wallet_dir'], 'blockchain_headers')):
+        return False
+    return True
+
+
 class Daemon(AuthJSONRPCServer):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
@@ -157,10 +167,14 @@ class Daemon(AuthJSONRPCServer):
         self.looping_call_manager = LoopingCallManager({
             Checker.INTERNET_CONNECTION: LoopingCall(CheckInternetConnection(self)),
         })
+        to_skip = list(conf.settings['components_to_skip'])
+        if 'reflector' not in to_skip and not conf.settings['run_reflector_server']:
+            to_skip.append('reflector')
         self.component_manager = component_manager or ComponentManager(
             analytics_manager=self.analytics_manager,
-            skip_components=conf.settings['components_to_skip']
+            skip_components=to_skip
         )
+        self.is_first_run = is_first_run()
         self._component_setup_deferred = None
 
         # TODO: move this to a component
@@ -661,32 +675,43 @@ class Daemon(AuthJSONRPCServer):
         Returns:
             (dict) lbrynet-daemon status
             {
-                'installation_id': installation id - base58,
-                'is_running': bool,
+                'installation_id': (str) installation id - base58,
+                'is_running': (bool),
                 'is_first_run': bool,
-                'startup_status': {
-                    (str) component_name: (bool) True if running else False,
+                'skipped_components': (list) [names of skipped components (str)],
+                'startup_status': { Does not include components which have been skipped
+                    'database': (bool),
+                    'wallet': (bool),
+                    'session': (bool),
+                    'dht': (bool),
+                    'hash_announcer': (bool),
+                    'stream_identifier': (bool),
+                    'file_manager': (bool),
+                    'peer_protocol_server': (bool),
+                    'reflector': (bool),
+                    'upnp': (bool),
+                    'exchange_rate_manager': (bool),
                 },
                 'connection_status': {
-                    'code': connection status code,
-                    'message': connection status message
+                    'code': (str) connection status code,
+                    'message': (str) connection status message
                 },
                 'blockchain_status': {
-                    'blocks': local blockchain height,
-                    'blocks_behind': remote_height - local_height,
-                    'best_blockhash': block hash of most recent block,
+                    'blocks': (int) local blockchain height,
+                    'blocks_behind': (int) remote_height - local_height,
+                    'best_blockhash': (str) block hash of most recent block,
                 },
                 'dht_node_status': {
                     'node_id': (str) lbry dht node id - hex encoded,
                     'peers_in_routing_table': (int) the number of peers in the routing table,
                 },
-                'wallet_is_encrypted': bool,
+                'wallet_is_encrypted': (bool),
                 If given the session status option:
                     'session_status': {
-                        'managed_blobs': count of blobs in the blob manager,
-                        'managed_streams': count of streams in the file manager
-                        'announce_queue_size': number of blobs currently queued to be announced
-                        'should_announce_blobs': number of blobs that should be announced
+                        'managed_blobs': (int) count of blobs in the blob manager,
+                        'managed_streams': (int) count of streams in the file manager,
+                        'announce_queue_size': (int) number of blobs currently queued to be announced,
+                        'should_announce_blobs': (int) number of blobs that should be announced,
                     }
             }
         """
@@ -703,7 +728,8 @@ class Daemon(AuthJSONRPCServer):
         response = {
             'installation_id': conf.settings.installation_id,
             'is_running': all(self.component_manager.get_components_status().values()),
-            'is_first_run': self.wallet.is_first_run if has_wallet else None,
+            'is_first_run': self.is_first_run,
+            'skipped_components': self.component_manager.skip_components,
             'startup_status': self.component_manager.get_components_status(),
             'connection_status': {
                 'code': connection_code,

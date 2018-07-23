@@ -285,6 +285,7 @@ ADJUSTABLE_SETTINGS = {
     'peer_port': (int, 3333),
     'pointtrader_server': (str, 'http://127.0.0.1:2424'),
     'reflector_port': (int, 5566),
+    'run_reflector_server': (bool, False),  # adds `reflector` to components_to_skip unless True
     # if reflect_uploads is True, send files to reflector after publishing (as well as a periodic check in the
     # event the initial upload failed or was disconnected part way through, provided the auto_re_reflect_interval > 0)
     'reflect_uploads': (bool, True),
@@ -302,7 +303,7 @@ ADJUSTABLE_SETTINGS = {
     'lbryum_servers': (list, [('lbryumx1.lbry.io', 50001), ('lbryumx2.lbry.io',
         50001)], server_list, server_list_reverse),
     's3_headers_depth': (int, 96 * 10),   # download headers from s3 when the local height is more than 10 chunks behind
-    'components_to_skip': (list, ['reflector'])  # components which will be skipped during start-up of daemon
+    'components_to_skip': (list, [])  # components which will be skipped during start-up of daemon
 }
 
 
