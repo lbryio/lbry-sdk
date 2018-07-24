@@ -291,47 +291,6 @@ class Daemon(AuthJSONRPCServer):
             d.addErrback(log.fail(), 'Failure while shutting down')
         return d
 
-    def _update_settings(self, settings):
-        setting_types = {
-            'download_directory': str,
-            'data_rate': float,
-            'download_timeout': int,
-            'peer_port': int,
-            'max_key_fee': dict,
-            'use_upnp': bool,
-            'run_reflector_server': bool,
-            'cache_time': int,
-            'reflect_uploads': bool,
-            'share_usage_data': bool,
-            'disable_max_key_fee': bool,
-            'peer_search_timeout': int,
-            'sd_download_timeout': int,
-            'auto_renew_claim_height_delta': int
-        }
-
-        for key, setting_type in setting_types.iteritems():
-            if key in settings:
-                if isinstance(settings[key], setting_type):
-                    conf.settings.update({key: settings[key]},
-                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-                elif setting_type is dict and isinstance(settings[key], six.string_types):
-                    decoded = json.loads(str(settings[key]))
-                    conf.settings.update({key: decoded},
-                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-                else:
-                    converted = setting_type(settings[key])
-                    conf.settings.update({key: converted},
-                                            data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
-        conf.settings.save_conf_file_settings()
-
-        self.data_rate = conf.settings['data_rate']
-        self.max_key_fee = conf.settings['max_key_fee']
-        self.disable_max_key_fee = conf.settings['disable_max_key_fee']
-        self.download_directory = conf.settings['download_directory']
-        self.download_timeout = conf.settings['download_timeout']
-
-        return defer.succeed(True)
-
     def _start_analytics(self):
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
@@ -915,7 +874,6 @@ class Daemon(AuthJSONRPCServer):
         """
         return self._render_response(conf.settings.get_adjustable_settings_dict())
 
-    @defer.inlineCallbacks
     def jsonrpc_settings_set(self, **kwargs):
         """
         Set daemon settings
@@ -967,8 +925,48 @@ class Daemon(AuthJSONRPCServer):
             (dict) Updated dictionary of daemon settings
         """
 
-        yield self._update_settings(kwargs)
-        defer.returnValue(conf.settings.get_adjustable_settings_dict())
+        # TODO: improve upon the current logic, it could be made better
+        new_settings = kwargs
+
+        setting_types = {
+            'download_directory': str,
+            'data_rate': float,
+            'download_timeout': int,
+            'peer_port': int,
+            'max_key_fee': dict,
+            'use_upnp': bool,
+            'run_reflector_server': bool,
+            'cache_time': int,
+            'reflect_uploads': bool,
+            'share_usage_data': bool,
+            'disable_max_key_fee': bool,
+            'peer_search_timeout': int,
+            'sd_download_timeout': int,
+            'auto_renew_claim_height_delta': int
+        }
+
+        for key, setting_type in setting_types.iteritems():
+            if key in new_settings:
+                if isinstance(new_settings[key], setting_type):
+                    conf.settings.update({key: new_settings[key]},
+                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
+                elif setting_type is dict and isinstance(new_settings[key], (unicode, str)):
+                    decoded = json.loads(str(new_settings[key]))
+                    conf.settings.update({key: decoded},
+                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
+                else:
+                    converted = setting_type(new_settings[key])
+                    conf.settings.update({key: converted},
+                                         data_types=(conf.TYPE_RUNTIME, conf.TYPE_PERSISTED))
+        conf.settings.save_conf_file_settings()
+
+        self.data_rate = conf.settings['data_rate']
+        self.max_key_fee = conf.settings['max_key_fee']
+        self.disable_max_key_fee = conf.settings['disable_max_key_fee']
+        self.download_directory = conf.settings['download_directory']
+        self.download_timeout = conf.settings['download_timeout']
+
+        return self._render_response(conf.settings.get_adjustable_settings_dict())
 
     def jsonrpc_help(self, command=None):
         """
