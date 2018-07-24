@@ -161,6 +161,13 @@ class Node(MockKademliaHelper):
     #    if hasattr(self, "_listeningPort") and self._listeningPort is not None:
     #        self._listeningPort.stopListening()
 
+    def __str__(self):
+        return '<%s.%s object; ID: %s, IP address: %s, UDP port: %d>' % (
+            self.__module__, self.__class__.__name__, binascii.hexlify(self.node_id), self.externalIP, self.port)
+
+    def __hash__(self):
+        return self.node_id.__hash__()
+
     @defer.inlineCallbacks
     def stop(self):
         # stop LoopingCalls:
@@ -314,10 +321,10 @@ class Node(MockKademliaHelper):
             token = contact.token
             if not token:
                 find_value_response = yield contact.findValue(blob_hash)
-                token = find_value_response['token']
+                token = find_value_response[b'token']
                 contact.update_token(token)
             res = yield contact.store(blob_hash, token, self.peerPort, self.node_id, 0)
-            if res != "OK":
+            if res != b"OK":
                 raise ValueError(res)
             defer.returnValue(True)
             log.debug("Stored %s to %s (%s)", binascii.hexlify(blob_hash), contact.log_id(), contact.address)
@@ -325,7 +332,7 @@ class Node(MockKademliaHelper):
             log.debug("Timeout while storing blob_hash %s at %s",
                       binascii.hexlify(blob_hash), contact.log_id())
         except ValueError as err:
-            log.error("Unexpected response: %s" % err.message)
+            log.error("Unexpected response: %s" % err)
         except Exception as err:
             log.error("Unexpected error while storing blob_hash %s at %s: %s",
                       binascii.hexlify(blob_hash), contact, err)
@@ -338,9 +345,7 @@ class Node(MockKademliaHelper):
         if not self.externalIP:
             raise Exception("Cannot determine external IP: %s" % self.externalIP)
         stored_to = yield DeferredDict({contact: self.storeToContact(blob_hash, contact) for contact in contacts})
-        contacted_node_ids = map(
-            lambda contact: contact.id.encode('hex'), filter(lambda contact: stored_to[contact], stored_to.keys())
-        )
+        contacted_node_ids = [binascii.hexlify(contact.id) for contact in stored_to.keys() if stored_to[contact]]
         log.debug("Stored %s to %i of %i attempted peers", binascii.hexlify(blob_hash),
                   len(contacted_node_ids), len(contacts))
         defer.returnValue(contacted_node_ids)
@@ -402,7 +407,7 @@ class Node(MockKademliaHelper):
         @rtype: twisted.internet.defer.Deferred
         """
 
-        if len(key) != constants.key_bits / 8:
+        if len(key) != constants.key_bits // 8:
             raise ValueError("invalid key length!")
 
         # Execute the search
@@ -553,7 +558,7 @@ class Node(MockKademliaHelper):
                  node is returning all of the contacts that it knows of.
         @rtype: list
         """
-        if len(key) != constants.key_bits / 8:
+        if len(key) != constants.key_bits // 8:
             raise ValueError("invalid contact id length: %i" % len(key))
 
         contacts = self._routingTable.findCloseNodes(key, sender_node_id=rpc_contact.id)
@@ -575,7 +580,7 @@ class Node(MockKademliaHelper):
         @rtype: dict or list
         """
 
-        if len(key) != constants.key_bits / 8:
+        if len(key) != constants.key_bits // 8:
             raise ValueError("invalid blob hash length: %i" % len(key))
 
         response = {
@@ -644,7 +649,7 @@ class Node(MockKademliaHelper):
         @rtype: twisted.internet.defer.Deferred
         """
 
-        if len(key) != constants.key_bits / 8:
+        if len(key) != constants.key_bits // 8:
             raise ValueError("invalid key length: %i" % len(key))
 
         if startupShortlist is None:

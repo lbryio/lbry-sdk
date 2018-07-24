@@ -38,7 +38,7 @@ class DictDataStore(UserDict):
             if not unexpired_peers:
                 del self[key]
             else:
-                self[key] = unexpired_peers
+                self[key] = list(unexpired_peers)
 
     def hasPeersForBlob(self, key):
         return True if key in self and len(tuple(self.filter_bad_and_expired_peers(key))) else False

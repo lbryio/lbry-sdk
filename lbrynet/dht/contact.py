@@ -182,7 +182,6 @@ class ContactManager:
                 return contact
 
     def make_contact(self, id, ipAddress, udpPort, networkProtocol, firstComm=0):
-        ipAddress = str(ipAddress)
         contact = self.get_contact(id, ipAddress, udpPort)
         if contact:
             return contact

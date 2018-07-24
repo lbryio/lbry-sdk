@@ -6,6 +6,8 @@
 # may be created by processing this file with epydoc: http://epydoc.sf.net
 
 import random
+from binascii import unhexlify
+
 from twisted.internet import defer
 from . import constants
 from . import kbucket
@@ -267,8 +269,8 @@ class TreeRoutingTable:
             randomID = randomID[:-1]
         if len(randomID) % 2 != 0:
             randomID = '0' + randomID
-        randomID = randomID.decode('hex')
-        randomID = (constants.key_bits / 8 - len(randomID)) * '\x00' + randomID
+        randomID = unhexlify(randomID)
+        randomID = ((constants.key_bits // 8) - len(randomID)) * b'\x00' + randomID
         return randomID
 
     def _splitBucket(self, oldBucketIndex):
