@@ -1,6 +1,6 @@
 import os
 import logging
-import miniupnpc
+#import miniupnpc
 from twisted.internet import defer, threads, reactor, error
 
 import lbryschema
@@ -462,8 +462,10 @@ class UPnPComponent(Component):
             if self.use_upnp is False:
                 log.debug("Not using upnp")
                 return False
-            u = miniupnpc.UPnP()
-            num_devices_found = u.discover()
+            #u = miniupnpc.UPnP()
+            #num_devices_found = u.discover()
+            u = object()
+            num_devices_found = 0
             if num_devices_found > 0:
                 u.selectigd()
                 external_ip = u.externalipaddress()
@@ -494,8 +496,10 @@ class UPnPComponent(Component):
             if self.use_upnp is False:
                 log.debug("Not using upnp")
                 return False
-            u = miniupnpc.UPnP()
-            num_devices_found = u.discover()
+            #u = miniupnpc.UPnP()
+            #num_devices_found = u.discover()
+            u = object()
+            num_devices_found = 0
             if num_devices_found > 0:
                 u.selectigd()
                 for port, protocol in self.upnp_redirects:

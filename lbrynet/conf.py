@@ -620,8 +620,7 @@ class Config:
         return self._session_id
 
 
-# type: Config
-settings = None
+settings = None  # type: Config
 
 
 def get_default_env():
