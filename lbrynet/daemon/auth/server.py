@@ -143,27 +143,25 @@ class AuthorizedBase(object):
         return _deprecated_wrapper
 
     @staticmethod
-    def requires(*components, **component_conditionals):
+    def requires(*components, **conditions):
+        if conditions and ["conditions"] != conditions.keys():
+            raise SyntaxError("invalid conditions argument")
+        condition_names = conditions.get("conditions", [])
+
         def _wrap(fn):
             @defer.inlineCallbacks
             @wraps(fn)
             def _inner(*args, **kwargs):
-                if component_conditionals:
-                    for component_name, condition in component_conditionals.iteritems():
-                        if not callable(condition):
-                            raise SyntaxError("The specified condition is invalid/not callable")
-                        if args[0].component_manager.all_components_running(component_name):
-                            if not (yield condition(args[0].component_manager.get_component(component_name))):
-                                raise ComponentStartConditionNotMet(
-                                    "Not all conditions required to do this operation are met")
-                        else:
-                            raise ComponentsNotStarted("%s component is not setup.\nConditional cannot be checked"
-                                                       % component_name)
-                if args[0].component_manager.all_components_running(*components):
-                    result = yield fn(*args, **kwargs)
-                    defer.returnValue(result)
-                else:
-                    raise ComponentsNotStarted("Not all required components are set up: %s" % json.dumps(components))
+                component_manager = args[0].component_manager
+                for condition_name in condition_names:
+                    condition_result, err_msg = yield component_manager.evaluate_condition(condition_name)
+                    if not condition_result:
+                        raise ComponentStartConditionNotMet(err_msg)
+                if not component_manager.all_components_running(*components):
+                    raise ComponentsNotStarted("the following required components have not yet started: "
+                                               "%s" % json.dumps(components))
+                result = yield fn(*args, **kwargs)
+                defer.returnValue(result)
             return _inner
         return _wrap
 

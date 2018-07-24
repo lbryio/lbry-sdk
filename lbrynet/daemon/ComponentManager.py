@@ -6,6 +6,32 @@ from lbrynet.core.Error import ComponentStartConditionNotMet
 log = logging.getLogger(__name__)
 
 
+class RegisteredConditions(object):
+    conditions = {}
+
+
+class RequiredConditionType(type):
+    def __new__(mcs, name, bases, newattrs):
+        klass = type.__new__(mcs, name, bases, newattrs)
+        if name != "RequiredCondition":
+            if klass.name in RegisteredConditions.conditions:
+                raise SyntaxError("already have a component registered for \"%s\"" % klass.name)
+            RegisteredConditions.conditions[klass.name] = klass
+        return klass
+
+
+class RequiredCondition(object):
+    name = ""
+    component = ""
+    message = ""
+
+    @staticmethod
+    def evaluate(component):
+        raise NotImplementedError()
+
+    __metaclass__ = RequiredConditionType
+
+
 class ComponentManager(object):
     default_component_classes = {}
 
@@ -28,6 +54,18 @@ class ComponentManager(object):
 
         for component_class in self.component_classes.itervalues():
             self.components.add(component_class(self))
+
+    @defer.inlineCallbacks
+    def evaluate_condition(self, condition_name):
+        if condition_name not in RegisteredConditions.conditions:
+            raise NameError(condition_name)
+        condition = RegisteredConditions.conditions[condition_name]
+        try:
+            component = self.get_component(condition.component)
+            result = yield defer.maybeDeferred(condition.evaluate, component)
+        except Exception as err:
+            result = False
+        defer.returnValue((result, "" if result else condition.message))
 
     def sort_components(self, reverse=False):
         """
