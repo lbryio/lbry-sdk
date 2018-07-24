@@ -60,6 +60,8 @@ class Bencode(Encoding):
             return b'i%de' % data
         elif isinstance(data, bytes):
             return b'%d:%s' % (len(data), data)
+        elif isinstance(data, str):
+            return b'%d:' % (len(data)) + data.encode()
         elif isinstance(data, (list, tuple)):
             encodedListItems = b''
             for item in data:
