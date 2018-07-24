@@ -1,3 +1,4 @@
+# coding=utf-8
 import binascii
 import logging.handlers
 import mimetypes
