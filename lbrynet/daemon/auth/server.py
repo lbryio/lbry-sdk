@@ -17,7 +17,6 @@ from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
 from lbrynet.daemon.auth.util import APIKey, get_auth_message
 from lbrynet.daemon.auth.client import LBRY_SECRET
-from lbrynet.daemon.Component import ComponentManager
 from lbrynet.undecorated import undecorated
 
 log = logging.getLogger(__name__)
@@ -133,7 +132,6 @@ class JSONRPCServerType(type):
 
 class AuthorizedBase(object):
     __metaclass__ = JSONRPCServerType
-    component_manager = ComponentManager
 
     @staticmethod
     def deprecated(new_command=None):
