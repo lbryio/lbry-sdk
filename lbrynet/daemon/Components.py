@@ -173,7 +173,7 @@ class HeadersComponent(Component):
     component_name = HEADERS_COMPONENT
 
     def __init__(self, component_manager):
-        Component.__init__(self, component_manager)
+        super().__init__(component_manager)
         self.config = SimpleConfig(get_wallet_config())
         self._downloading_headers = None
         self._headers_progress_percent = None
@@ -330,7 +330,7 @@ class WalletComponent(Component):
         log.info("Starting torba wallet")
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         lbryschema.BLOCKCHAIN_NAME = conf.settings['blockchain_name']
-        self.wallet = LbryWalletManager.from_old_config(conf.settings)
+        self.wallet = LbryWalletManager.from_lbrynet_config(conf.settings)
         self.wallet.old_db = storage
         yield self.wallet.start()
 
