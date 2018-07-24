@@ -220,17 +220,17 @@ class KademliaProtocol(protocol.DatagramProtocol):
         @note: This is automatically called by Twisted when the protocol
                receives a UDP datagram
         """
-        if datagram[0] == b'\x00' and datagram[25] == b'\x00':
-            totalPackets = (ord(datagram[1]) << 8) | ord(datagram[2])
+        if chr(datagram[0]) == '\x00' and chr(datagram[25]) == '\x00':
+            totalPackets = (datagram[1] << 8) | datagram[2]
             msgID = datagram[5:25]
-            seqNumber = (ord(datagram[3]) << 8) | ord(datagram[4])
+            seqNumber = (datagram[3] << 8) | datagram[4]
             if msgID not in self._partialMessages:
                 self._partialMessages[msgID] = {}
             self._partialMessages[msgID][seqNumber] = datagram[26:]
             if len(self._partialMessages[msgID]) == totalPackets:
                 keys = self._partialMessages[msgID].keys()
                 keys.sort()
-                data = ''
+                data = b''
                 for key in keys:
                     data += self._partialMessages[msgID][key]
                     datagram = data
@@ -350,7 +350,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
             # 1st byte is transmission type id, bytes 2 & 3 are the
             # total number of packets in this transmission, bytes 4 &
             # 5 are the sequence number for this specific packet
-            totalPackets = len(data) / self.msgSizeLimit
+            totalPackets = len(data) // self.msgSizeLimit
             if len(data) % self.msgSizeLimit > 0:
                 totalPackets += 1
             encTotalPackets = chr(totalPackets >> 8) + chr(totalPackets & 0xff)
@@ -375,7 +375,7 @@ class KademliaProtocol(protocol.DatagramProtocol):
         if self.transport:
             try:
                 self.transport.write(txData, address)
-            except socket.error as err:
+            except OSError as err:
                 if err.errno == errno.EWOULDBLOCK:
                     # i'm scared this may swallow important errors, but i get a million of these
                     # on Linux and it doesnt seem to affect anything  -grin

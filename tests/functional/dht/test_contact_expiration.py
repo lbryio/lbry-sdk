@@ -25,9 +25,9 @@ class TestPeerExpiration(TestKademliaBase):
         offline_addresses = self.get_routable_addresses().difference(self.get_online_addresses())
         self.assertSetEqual(offline_addresses, removed_addresses)
 
-        get_nodes_with_stale_contacts = lambda: filter(lambda node: any(contact.address in offline_addresses
-                                                                        for contact in node.contacts),
-                                                       self.nodes + self._seeds)
+        get_nodes_with_stale_contacts = lambda: list(filter(lambda node: any(contact.address in offline_addresses
+                                                                             for contact in node.contacts),
+                                                            self.nodes + self._seeds))
 
         self.assertRaises(AssertionError, self.verify_all_nodes_are_routable)
         self.assertTrue(len(get_nodes_with_stale_contacts()) > 1)

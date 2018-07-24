@@ -173,5 +173,5 @@ class TestKademliaBase(unittest.TestCase):
         yield self.run_reactor(2, ping_dl)
         node_addresses = {node.externalIP for node in self.nodes}.union({seed.externalIP for seed in self._seeds})
         self.assertSetEqual(node_addresses, contacted)
-        expected = {node: "pong" for node in contacted}
+        expected = {node: b"pong" for node in contacted}
         self.assertDictEqual(ping_replies, expected)

@@ -38,7 +38,7 @@ class _IterativeFind:
         # Shortlist of contact objects (the k closest known contacts to the key from the routing table)
         self.shortlist = shortlist
         # The search key
-        self.key = str(key)
+        self.key = key
         # The rpc method name (findValue or findNode)
         self.rpc = rpc
         # List of active queries; len() indicates number of active probes
@@ -74,22 +74,22 @@ class _IterativeFind:
         for contact_tup in contact_triples:
             if not isinstance(contact_tup, (list, tuple)) or len(contact_tup) != 3:
                 raise ValueError("invalid contact triple")
+            contact_tup[1] = contact_tup[1].decode()  # ips are strings
         return contact_triples
 
     def sortByDistance(self, contact_list):
         """Sort the list of contacts in order by distance from key"""
         contact_list.sort(key=lambda c: self.distance(c.id))
 
-    @defer.inlineCallbacks
     def extendShortlist(self, contact, result):
         # The "raw response" tuple contains the response message and the originating address info
         originAddress = (contact.address, contact.port)
         if self.finished_deferred.called:
-            defer.returnValue(contact.id)
+            return contact.id
         if self.node.contact_manager.is_ignored(originAddress):
             raise ValueError("contact is ignored")
         if contact.id == self.node.node_id:
-            defer.returnValue(contact.id)
+            return contact.id
 
         if contact not in self.active_contacts:
             self.active_contacts.append(contact)
@@ -134,14 +134,14 @@ class _IterativeFind:
                 self.sortByDistance(self.active_contacts)
                 self.finished_deferred.callback(self.active_contacts[:min(constants.k, len(self.active_contacts))])
 
-        defer.returnValue(contact.id)
+        return contact.id
 
     @defer.inlineCallbacks
     def probeContact(self, contact):
         fn = getattr(contact, self.rpc)
         try:
             response = yield fn(self.key)
-            result = yield self.extendShortlist(contact, response)
+            result = self.extendShortlist(contact, response)
             defer.returnValue(result)
         except (TimeoutError, defer.CancelledError, ValueError, IndexError):
             defer.returnValue(contact.id)
