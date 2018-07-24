@@ -106,7 +106,11 @@ class BlobManagerTest(unittest.TestCase):
 
         # open the last blob
         blob = yield self.bm.get_blob(blob_hashes[-1])
-        yield blob.open_for_writing(self.peer)
+        w, finished_d = yield blob.open_for_writing(self.peer)
+
+        # schedule a close, just to leave the reactor clean
+        finished_d.addBoth(lambda x:None)
+        self.addCleanup(w.close)
 
         # delete the last blob and check if it still exists
         yield self.bm.delete_blobs([blob_hash])
