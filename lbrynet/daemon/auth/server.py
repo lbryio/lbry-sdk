@@ -4,6 +4,7 @@ import json
 import inspect
 
 from decimal import Decimal
+from functools import wraps
 from zope.interface import implements
 from twisted.web import server, resource
 from twisted.internet import defer
@@ -15,6 +16,7 @@ from traceback import format_exc
 from lbrynet import conf
 from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
+from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
 from lbrynet.daemon.auth.util import APIKey, get_auth_message
 from lbrynet.daemon.auth.client import LBRY_SECRET
 from lbrynet.undecorated import undecorated
@@ -141,6 +143,31 @@ class AuthorizedBase(object):
             return f
         return _deprecated_wrapper
 
+    @staticmethod
+    def requires(*components, **component_conditionals):
+        def _wrap(fn):
+            @defer.inlineCallbacks
+            @wraps(fn)
+            def _inner(*args, **kwargs):
+                if component_conditionals:
+                    for component_name, condition in component_conditionals.iteritems():
+                        if not callable(condition):
+                            raise SyntaxError("The specified condition is invalid/not callable")
+                        if args[0].component_manager.all_components_running(component_name):
+                            if not (yield condition(args[0].component_manager.get_component(component_name))):
+                                raise ComponentStartConditionNotMet(
+                                    "Not all conditions required to do this operation are met")
+                        else:
+                            raise ComponentsNotStarted("%s component is not setup.\nConditional cannot be checked"
+                                                       % component_name)
+                if args[0].component_manager.all_components_running(*components):
+                    result = yield fn(*args, **kwargs)
+                    defer.returnValue(result)
+                else:
+                    raise ComponentsNotStarted("Not all required components are set up:", components)
+            return _inner
+        return _wrap
+
 
 class AuthJSONRPCServer(AuthorizedBase):
     """
@@ -149,7 +176,6 @@ class AuthJSONRPCServer(AuthorizedBase):
     API methods are named with a leading "jsonrpc_"
 
     Attributes:
-        allowed_during_startup (list): list of api methods that are callable before the server has finished startup
         sessions (dict): (dict): {<session id>: <lbrynet.daemon.auth.util.APIKey>}
         callable_methods (dict): {<api method name>: <api method>}
 
@@ -416,9 +442,6 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
             raise UnknownAPIMethodError(function_path)
-        if not self.announced_startup:
-            if function_path not in self.allowed_during_startup:
-                raise NotAllowedDuringStartupError(function_path)
 
     def _get_jsonrpc_method(self, function_path):
         if function_path in self.deprecated_methods:
