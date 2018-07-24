@@ -2,6 +2,7 @@ import logging
 import urlparse
 import json
 import inspect
+import signal
 
 from decimal import Decimal
 from functools import wraps
@@ -17,6 +18,8 @@ from lbrynet import conf, analytics
 from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
 from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
+from lbrynet.core.looping_call_manager import LoopingCallManager
+from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.undecorated import undecorated
 from .util import APIKey, get_auth_message
 from .client import LBRY_SECRET
@@ -192,10 +195,19 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     isLeaf = True
     allowed_during_startup = []
+    component_attributes = {}
 
-    def __init__(self, analytics_manager, use_authentication=None):
+    def __init__(self, analytics_manager=None, component_manager=None, use_authentication=None, to_skip=None,
+                 looping_calls=None):
         self.analytics_manager = analytics_manager or analytics.Manager.new_instance()
+        self.component_manager = component_manager or ComponentManager(
+            analytics_manager=self.analytics_manager,
+            skip_components=to_skip or []
+        )
+        self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).iteritems()})
+        self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).iteritems()}
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
+        self._component_setup_deferred = None
         self.announced_startup = False
         self.sessions = {}
 
@@ -223,7 +235,42 @@ class AuthJSONRPCServer(AuthorizedBase):
             reactor.fireSystemEvent("shutdown")
 
     def setup(self):
-        raise NotImplementedError()
+        from twisted.internet import reactor
+
+        reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
+        if not self.analytics_manager.is_started:
+            self.analytics_manager.start()
+        for lc_name, lc_time in self._looping_call_times.iteritems():
+            self.looping_call_manager.start(lc_name, lc_time)
+
+        def update_attribute(setup_result, component):
+            setattr(self, self.component_attributes[component.component_name], component.component)
+
+        kwargs = {component: update_attribute for component in self.component_attributes.keys()}
+        self._component_setup_deferred = self.component_manager.setup(**kwargs)
+        return self._component_setup_deferred
+
+    @staticmethod
+    def _already_shutting_down(sig_num, frame):
+        log.info("Already shutting down")
+
+    def _shutdown(self):
+        # ignore INT/TERM signals once shutdown has started
+        signal.signal(signal.SIGINT, self._already_shutting_down)
+        signal.signal(signal.SIGTERM, self._already_shutting_down)
+        self.looping_call_manager.shutdown()
+        if self.analytics_manager:
+            self.analytics_manager.shutdown()
+        try:
+            self._component_setup_deferred.cancel()
+        except (AttributeError, defer.CancelledError):
+            pass
+        if self.component_manager is not None:
+            d = self.component_manager.stop()
+            d.addErrback(log.fail(), 'Failure while shutting down')
+        else:
+            d = defer.succeed(None)
+        return d
 
     def get_server_factory(self):
         return AuthJSONRPCResource(self).getServerFactory()
