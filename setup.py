@@ -27,7 +27,7 @@ setup(
     ),
     packages=find_packages(exclude=('tests',)),
     include_package_data=True,
-    python_requires='>=3.7',
+    python_requires='>=3.6',
     install_requires=(
         'twisted',
         'ecdsa',
