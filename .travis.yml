@@ -1,4 +1,4 @@
-sudo: true
+sudo: required
 dist: xenial
 language: python
 python:
@@ -40,6 +40,17 @@ jobs:
       after_success:
         - coverage combine tests/
         - bash <(curl -s https://codecov.io/bash)
+
+    - stage: build
+      name: "Windows"
+      services:
+        - docker
+      before_install:
+        - docker pull cdrx/pyinstaller-windows:python3-32bit
+      install:
+        - docker run -v "$(pwd):/src/lbry" cdrx/pyinstaller-windows:python3-32bit lbry/scripts/wine_build.sh
+      script:
+        - find dist/
 
 cache:
   directories:
