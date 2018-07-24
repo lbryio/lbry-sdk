@@ -31,7 +31,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
   *
 
 ### Removed
