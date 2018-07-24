@@ -490,6 +490,7 @@ create_stream_sd_file = {
 
 
 def mock_conf_settings(obj, settings={}):
+    conf.settings = None
     conf.initialize_settings(False)
     original_settings = conf.settings
     conf.settings = conf.Config(conf.FIXED_SETTINGS, conf.ADJUSTABLE_SETTINGS)

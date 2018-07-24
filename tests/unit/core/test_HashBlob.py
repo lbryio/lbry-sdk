@@ -154,3 +154,8 @@ class BlobFileTest(unittest.TestCase):
         # second write should fail to save
         yield self.assertFailure(blob_file.save_verified_blob(writer_2), DownloadCanceledError)
 
+        # schedule a close, just to leave the reactor clean
+        finished_d_1.addBoth(lambda x:None)
+        finished_d_2.addBoth(lambda x:None)
+        self.addCleanup(writer_1.close)
+        self.addCleanup(writer_2.close)
