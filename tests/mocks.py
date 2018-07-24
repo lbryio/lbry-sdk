@@ -495,6 +495,7 @@ create_stream_sd_file = {
 
 
 def mock_conf_settings(obj, settings={}):
+    conf.settings = None
     settings.setdefault('download_mirrors', [])
     conf.initialize_settings(False)
     original_settings = conf.settings
