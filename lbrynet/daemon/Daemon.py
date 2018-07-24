@@ -735,8 +735,7 @@ class Daemon(AuthJSONRPCServer):
                 'is_running': bool,
                 'is_first_run': bool,
                 'startup_status': {
-                    'code': status code,
-                    'message': status message
+                    (str) component_name: (bool) True if running else False,
                 },
                 'connection_status': {
                     'code': connection status code,
@@ -760,22 +759,19 @@ class Daemon(AuthJSONRPCServer):
         """
 
         # on startup, the wallet or network won't be available but we still need this call to work
-        has_wallet = self.session and self.session.wallet and self.session.wallet.network
-        local_height = self.session.wallet.network.get_local_height() if has_wallet else 0
-        remote_height = self.session.wallet.network.get_server_height() if has_wallet else 0
-        best_hash = (yield self.session.wallet.get_best_blockhash()) if has_wallet else None
-        wallet_is_encrypted = has_wallet and self.session.wallet.wallet and \
-                              self.session.wallet.wallet.use_encryption
+        has_wallet = self.session and self.wallet and self.wallet.network
+        local_height = self.wallet.network.get_local_height() if has_wallet else 0
+        remote_height = self.wallet.network.get_server_height() if has_wallet else 0
+        best_hash = (yield self.wallet.get_best_blockhash()) if has_wallet else None
+        wallet_is_encrypted = has_wallet and self.wallet.wallet and \
+                              self.wallet.wallet.use_encryption
 
         response = {
             'lbry_id': base58.b58encode(self.node_id),
             'installation_id': conf.settings.installation_id,
             'is_running': self.announced_startup,
-            'is_first_run': self.session.wallet.is_first_run if has_wallet else None,
-            'startup_status': {
-                'code': self.startup_status[0],
-                'message': self.startup_status[1],
-            },
+            'is_first_run': self.wallet.is_first_run if has_wallet else None,
+            'startup_status': self.component_manager.get_components_status(),
             'connection_status': {
                 'code': self.connection_status_code,
                 'message': (
