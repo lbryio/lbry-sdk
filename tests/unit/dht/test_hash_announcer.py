@@ -4,6 +4,7 @@ from lbrynet import conf
 from lbrynet.core import utils
 from lbrynet.dht.hashannouncer import DHTHashAnnouncer
 from tests.util import random_lbry_hash
+from tests.mocks import mock_conf_settings
 
 
 class MocDHTNode(object):
@@ -38,7 +39,7 @@ class MocStorage(object):
 class DHTHashAnnouncerTest(unittest.TestCase):
 
     def setUp(self):
-        conf.initialize_settings(False)
+        mock_conf_settings(self)
         self.num_blobs = 10
         self.blobs_to_announce = []
         for i in range(0, self.num_blobs):
