@@ -15,7 +15,7 @@ lbryschema.BLOCKCHAIN_NAME = 'lbrycrd_regtest'
 from lbrynet import conf as lbry_conf
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.wallet.manager import LbryWalletManager
-from lbrynet.daemon.Components import WalletComponent, FileManager, SessionComponent, DatabaseComponent
+from lbrynet.daemon.Components import WalletComponent, FileManagerComponent, SessionComponent, DatabaseComponent
 from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 
@@ -106,7 +106,7 @@ class CommandTestCase(IntegrationTestCase):
 
         analytics_manager = FakeAnalytics()
         self.daemon = Daemon(analytics_manager, ComponentManager(analytics_manager, skip_components=[
-            'wallet', 'database', 'session', 'fileManager'
+            'wallet', 'database', 'session', 'file_manager'
         ]))
 
         wallet_component = WalletComponent(self.daemon.component_manager)
@@ -130,7 +130,7 @@ class CommandTestCase(IntegrationTestCase):
         self.daemon.session.blob_manager.storage = self.daemon.storage
         self.daemon.component_manager.components.add(session_component)
 
-        file_manager = FileManager(self.daemon.component_manager)
+        file_manager = FileManagerComponent(self.daemon.component_manager)
         file_manager.file_manager = EncryptedFileManager(session_component.session, True)
         file_manager._running = True
         self.daemon.file_manager = file_manager.file_manager
