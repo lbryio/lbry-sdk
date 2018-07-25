@@ -765,7 +765,7 @@ class Daemon(AuthJSONRPCServer):
                 'best_blockhash': best_hash,
             },
             'dht_node_status': {
-                'node_id': conf.settings.node_id.encode('hex'),
+                'node_id': hexlify(conf.settings.node_id),
                 'peers_in_routing_table': 0 if not self.component_manager.all_components_running(DHT_COMPONENT) else
                                           len(self.dht_node.contacts)
             }
