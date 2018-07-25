@@ -8,35 +8,36 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
-
-## [0.20.3] - 2018-07-20
-### Changed
-* Additional information added to the balance error message when editing a claim.
-(https://github.com/lbryio/lbry/pull/1309)
-
 ### Security
   *
   *
 
 ### Fixed
-  *
+  * loggly error reporting not following `share_usage_data`
   *
 
 ### Deprecated
-  *
+  * automatic claim renew, this is no longer needed
   *
 
 ### Changed
-  *
-  *
+  * api server class to use components, and for all JSONRPC API commands to be callable so long as the required components are available.
+  * return error messages when required conditions on components are not met for API calls
+  * `status` to no longer return a base58 encoded `lbry_id`, instead return this as the hex encoded `node_id` in a new `dht_node_status` field. 
+  * `startup_status` field in the response to `status` to be a dict of component names to status booleans
+  * moved wallet, upnp and dht startup code from `Session` to `Components`
 
 ### Added
+  * `skipped_components` list to the response from `status`
+  * `skipped_components` config setting, accemapts a list of names of components to not run
+  * `ComponentManager` for managing the lifecycles of dependencies
+  * `requires` decorator to register the components required by a `jsonrpc_` command, to facilitate commands registering asynchronously
+  * unittests for `ComponentManager`
   * script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
-  *
+  * additional information to the balance error message when editing a claim (https://github.com/lbryio/lbry/pull/1309)
 
 ### Removed
-  *
-  *
+  * most of the internal attributes from `Daemon`
 
 
 ## [0.20.4] - 2018-07-18

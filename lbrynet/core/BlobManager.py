@@ -27,7 +27,8 @@ class DiskBlobManager(object):
         self.blob_hashes_to_delete = {}  # {blob_hash: being_deleted (True/False)}
 
         self.check_should_announce_lc = None
-        if conf.settings['run_reflector_server']: # TODO: move this looping call to SQLiteStorage
+        # TODO: move this looping call to SQLiteStorage
+        if 'reflector' not in conf.settings['components_to_skip']:
             self.check_should_announce_lc = task.LoopingCall(self.storage.verify_will_announce_all_head_and_sd_blobs)
 
     @defer.inlineCallbacks

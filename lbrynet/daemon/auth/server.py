@@ -2,8 +2,10 @@ import logging
 import urlparse
 import json
 import inspect
+import signal
 
 from decimal import Decimal
+from functools import wraps
 from zope.interface import implements
 from twisted.web import server, resource
 from twisted.internet import defer
@@ -12,13 +14,16 @@ from twisted.internet.error import ConnectionDone, ConnectionLost
 from txjsonrpc import jsonrpclib
 from traceback import format_exc
 
-from lbrynet import conf
+from lbrynet import conf, analytics
 from lbrynet.core.Error import InvalidAuthenticationToken
 from lbrynet.core import utils
-from lbrynet.daemon.auth.util import APIKey, get_auth_message
-from lbrynet.daemon.auth.client import LBRY_SECRET
+from lbrynet.core.Error import ComponentsNotStarted, ComponentStartConditionNotMet
+from lbrynet.core.looping_call_manager import LoopingCallManager
+from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.undecorated import undecorated
-
+from .util import APIKey, get_auth_message
+from .client import LBRY_SECRET
+from .factory import AuthJSONRPCResource
 log = logging.getLogger(__name__)
 
 EMPTY_PARAMS = [{}]
@@ -91,10 +96,6 @@ class UnknownAPIMethodError(Exception):
     pass
 
 
-class NotAllowedDuringStartupError(Exception):
-    pass
-
-
 def trap(err, *to_trap):
     err.trap(*to_trap)
 
@@ -141,6 +142,29 @@ class AuthorizedBase(object):
             return f
         return _deprecated_wrapper
 
+    @staticmethod
+    def requires(*components, **conditions):
+        if conditions and ["conditions"] != conditions.keys():
+            raise SyntaxError("invalid conditions argument")
+        condition_names = conditions.get("conditions", [])
+
+        def _wrap(fn):
+            @defer.inlineCallbacks
+            @wraps(fn)
+            def _inner(*args, **kwargs):
+                component_manager = args[0].component_manager
+                for condition_name in condition_names:
+                    condition_result, err_msg = yield component_manager.evaluate_condition(condition_name)
+                    if not condition_result:
+                        raise ComponentStartConditionNotMet(err_msg)
+                if not component_manager.all_components_running(*components):
+                    raise ComponentsNotStarted("the following required components have not yet started: "
+                                               "%s" % json.dumps(components))
+                result = yield fn(*args, **kwargs)
+                defer.returnValue(result)
+            return _inner
+        return _wrap
+
 
 class AuthJSONRPCServer(AuthorizedBase):
     """
@@ -149,7 +173,6 @@ class AuthJSONRPCServer(AuthorizedBase):
     API methods are named with a leading "jsonrpc_"
 
     Attributes:
-        allowed_during_startup (list): list of api methods that are callable before the server has finished startup
         sessions (dict): (dict): {<session id>: <lbrynet.daemon.auth.util.APIKey>}
         callable_methods (dict): {<api method name>: <api method>}
 
@@ -170,14 +193,85 @@ class AuthJSONRPCServer(AuthorizedBase):
 
     isLeaf = True
     allowed_during_startup = []
+    component_attributes = {}
 
-    def __init__(self, use_authentication=None):
+    def __init__(self, analytics_manager=None, component_manager=None, use_authentication=None, to_skip=None,
+                 looping_calls=None):
+        self.analytics_manager = analytics_manager or analytics.Manager.new_instance()
+        self.component_manager = component_manager or ComponentManager(
+            analytics_manager=self.analytics_manager,
+            skip_components=to_skip or []
+        )
+        self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).iteritems()})
+        self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).iteritems()}
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
+        self._component_setup_deferred = None
         self.announced_startup = False
         self.sessions = {}
 
+    @defer.inlineCallbacks
+    def start_listening(self):
+        from twisted.internet import reactor, error as tx_error
+
+        try:
+            reactor.listenTCP(
+                conf.settings['api_port'], self.get_server_factory(), interface=conf.settings['api_host']
+            )
+            log.info("lbrynet API listening on TCP %s:%i", conf.settings['api_host'], conf.settings['api_port'])
+            yield self.setup()
+            self.analytics_manager.send_server_startup_success()
+        except tx_error.CannotListenError:
+            log.error('lbrynet API failed to bind TCP %s:%i for listening', conf.settings['api_host'],
+                      conf.settings['api_port'])
+            reactor.fireSystemEvent("shutdown")
+        except defer.CancelledError:
+            log.info("shutting down before finished starting")
+            reactor.fireSystemEvent("shutdown")
+        except Exception as err:
+            self.analytics_manager.send_server_startup_error(str(err))
+            log.exception('Failed to start lbrynet-daemon')
+            reactor.fireSystemEvent("shutdown")
+
     def setup(self):
-        return NotImplementedError()
+        from twisted.internet import reactor
+
+        reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
+        if not self.analytics_manager.is_started:
+            self.analytics_manager.start()
+        for lc_name, lc_time in self._looping_call_times.iteritems():
+            self.looping_call_manager.start(lc_name, lc_time)
+
+        def update_attribute(setup_result, component):
+            setattr(self, self.component_attributes[component.component_name], component.component)
+
+        kwargs = {component: update_attribute for component in self.component_attributes.keys()}
+        self._component_setup_deferred = self.component_manager.setup(**kwargs)
+        return self._component_setup_deferred
+
+    @staticmethod
+    def _already_shutting_down(sig_num, frame):
+        log.info("Already shutting down")
+
+    def _shutdown(self):
+        # ignore INT/TERM signals once shutdown has started
+        signal.signal(signal.SIGINT, self._already_shutting_down)
+        signal.signal(signal.SIGTERM, self._already_shutting_down)
+        self.looping_call_manager.shutdown()
+        if self.analytics_manager:
+            self.analytics_manager.shutdown()
+        try:
+            self._component_setup_deferred.cancel()
+        except (AttributeError, defer.CancelledError):
+            pass
+        if self.component_manager is not None:
+            d = self.component_manager.stop()
+            d.addErrback(log.fail(), 'Failure while shutting down')
+        else:
+            d = defer.succeed(None)
+        return d
+
+    def get_server_factory(self):
+        return AuthJSONRPCResource(self).getServerFactory()
 
     def _set_headers(self, request, data, update_secret=False):
         if conf.settings['allowed_origin']:
@@ -207,8 +301,9 @@ class AuthJSONRPCServer(AuthorizedBase):
         else:
             # last resort, just cast it as a string
             error = JSONRPCError(str(failure))
-        log.warning("error processing api request: %s\ntraceback: %s", error.message,
-                    "\n".join(error.traceback))
+        if not failure.check(ComponentsNotStarted, ComponentStartConditionNotMet):
+            log.warning("error processing api request: %s\ntraceback: %s", error.message,
+                        "\n".join(error.traceback))
         response_content = jsonrpc_dumps_pretty(error, id=id_)
         self._set_headers(request, response_content)
         request.setResponseCode(200)
@@ -301,14 +396,6 @@ class AuthJSONRPCServer(AuthorizedBase):
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
                 JSONRPCError(None, JSONRPCError.CODE_METHOD_NOT_FOUND),
-                request, request_id
-            )
-            return server.NOT_DONE_YET
-        except NotAllowedDuringStartupError:
-            log.warning('Function not allowed during startup: %s', function_name)
-            self._render_error(
-                JSONRPCError("This method is unavailable until the daemon is fully started",
-                             code=JSONRPCError.CODE_INVALID_REQUEST),
                 request, request_id
             )
             return server.NOT_DONE_YET
@@ -416,9 +503,6 @@ class AuthJSONRPCServer(AuthorizedBase):
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
             raise UnknownAPIMethodError(function_path)
-        if not self.announced_startup:
-            if function_path not in self.allowed_during_startup:
-                raise NotAllowedDuringStartupError(function_path)
 
     def _get_jsonrpc_method(self, function_path):
         if function_path in self.deprecated_methods:

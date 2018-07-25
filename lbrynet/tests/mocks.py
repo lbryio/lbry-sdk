@@ -1,5 +1,6 @@
 import base64
 import io
+import mock
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -10,6 +11,7 @@ from twisted.python.failure import Failure
 from lbrynet.core.client.ClientRequest import ClientRequest
 from lbrynet.core.Error import RequestCanceledError
 from lbrynet.core import BlobAvailability
+from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
 from lbrynet.dht.node import Node as RealNode
 from lbrynet.daemon import ExchangeRateManager as ERM
 from lbrynet import conf
@@ -63,6 +65,7 @@ class BTCLBCFeed(ERM.MarketFeed):
             0.0
         )
 
+
 class USDBTCFeed(ERM.MarketFeed):
     def __init__(self):
         ERM.MarketFeed.__init__(
@@ -73,6 +76,7 @@ class USDBTCFeed(ERM.MarketFeed):
             None,
             0.0
         )
+
 
 class ExchangeRateManager(ERM.ExchangeRateManager):
     def __init__(self, market_feeds, rates):
@@ -360,6 +364,96 @@ class BlobAvailabilityTracker(BlobAvailability.BlobAvailabilityTracker):
         pass
 
 
+# The components below viz. FakeWallet, FakeSession, FakeFileManager are just for testing Component Manager's
+# startup and stop
+class FakeComponent(object):
+    depends_on = []
+    component_name = None
+
+    def __init__(self, component_manager):
+        self.component_manager = component_manager
+        self._running = False
+
+    @property
+    def running(self):
+        return self._running
+
+    def start(self):
+        raise NotImplementedError  # Override
+
+    def stop(self):
+        return defer.succeed(None)
+
+    @property
+    def component(self):
+        return self
+
+    @defer.inlineCallbacks
+    def _setup(self):
+        result = yield defer.maybeDeferred(self.start)
+        self._running = True
+        defer.returnValue(result)
+
+    @defer.inlineCallbacks
+    def _stop(self):
+        result = yield defer.maybeDeferred(self.stop)
+        self._running = False
+        defer.returnValue(result)
+
+
+class FakeDelayedWallet(FakeComponent):
+    component_name = "wallet"
+    depends_on = []
+
+    def start(self):
+        return defer.succeed(True)
+
+    def stop(self):
+        d = defer.Deferred()
+        self.component_manager.reactor.callLater(1, d.callback, True)
+        return d
+
+
+class FakeDelayedSession(FakeComponent):
+    component_name = "session"
+    depends_on = [FakeDelayedWallet.component_name]
+
+    def start(self):
+        d = defer.Deferred()
+        self.component_manager.reactor.callLater(1, d.callback, True)
+        return d
+
+    def stop(self):
+        d = defer.Deferred()
+        self.component_manager.reactor.callLater(1, d.callback, True)
+        return d
+
+
+class FakeDelayedFileManager(FakeComponent):
+    component_name = "file_manager"
+    depends_on = [FakeDelayedSession.component_name]
+
+    def start(self):
+        d = defer.Deferred()
+        self.component_manager.reactor.callLater(1, d.callback, True)
+        return d
+
+    def stop(self):
+        return defer.succeed(True)
+
+class FakeFileManager(FakeComponent):
+    component_name = "file_manager"
+    depends_on = []
+
+    @property
+    def component(self):
+        return mock.Mock(spec=EncryptedFileManager)
+
+    def start(self):
+        return defer.succeed(True)
+
+    def stop(self):
+        pass
 
 create_stream_sd_file = {
     'stream_name': '746573745f66696c65',
