@@ -26,6 +26,7 @@ at anytime.
   * `status` to no longer return a base58 encoded `lbry_id`, instead return this as the hex encoded `node_id` in a new `dht_node_status` field. 
   * `startup_status` field in the response to `status` to be a dict of component names to status booleans
   * moved wallet, upnp and dht startup code from `Session` to `Components`
+  * attempt blob downloads from http mirror sources (by default) concurrently to p2p sources
 
 ### Added
   * `skipped_components` list to the response from `status`
@@ -36,6 +37,8 @@ at anytime.
   * script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
   * additional information to the balance error message when editing a claim (https://github.com/lbryio/lbry/pull/1309)
   * `address` and `port` arguments to `peer_ping` (https://github.com/lbryio/lbry/issues/1313)
+  * ability to download from HTTP mirrors by setting `download_mirrors`
+  *
 
 ### Removed
   * most of the internal attributes from `Daemon`

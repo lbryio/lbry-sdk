@@ -211,7 +211,8 @@ class SessionComponent(Component):
             peer_port=GCS('peer_port'),
             wallet=self.component_manager.get_component(WALLET_COMPONENT),
             external_ip=CS.get_external_ip(),
-            storage=self.component_manager.get_component(DATABASE_COMPONENT)
+            storage=self.component_manager.get_component(DATABASE_COMPONENT),
+            download_mirrors=GCS('download_mirrors')
         )
         yield self.session.setup()
 
