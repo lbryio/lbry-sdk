@@ -727,29 +727,12 @@ class Daemon(AuthJSONRPCServer):
                 'code': connection_code,
                 'message': CONNECTION_MESSAGES[connection_code],
             },
-            'wallet_is_encrypted': wallet_is_encrypted,
-            'blocks_behind': remote_height - local_height,  # deprecated. remove from UI, then here
-            'blockchain_status': {
-                'blocks': local_height,
-                'blocks_behind': remote_height - local_height,
-                'best_blockhash': best_hash,
-            },
-            'dht_node_status': {
-                'node_id': conf.settings.node_id.encode('hex'),
-                'peers_in_routing_table': 0 if not self.component_manager.all_components_running(DHT_COMPONENT) else
-                                          len(self.dht_node.contacts)
-            }
         }
-        if session_status:
-            blobs = yield self.session.blob_manager.get_all_verified_blobs()
-            announce_queue_size = self.session.hash_announcer.hash_queue_size()
-            should_announce_blobs = yield self.session.blob_manager.count_should_announce_blobs()
-            response['session_status'] = {
-                'managed_blobs': len(blobs),
-                'managed_streams': len(self.file_manager.lbry_files),
-                'announce_queue_size': announce_queue_size,
-                'should_announce_blobs': should_announce_blobs,
-            }
+        for component in self.component_manager.components:
+            status = yield defer.maybeDeferred(component.get_status)
+            if status:
+                response[component.component_name] = status
+
         defer.returnValue(response)
 
     def jsonrpc_version(self):
