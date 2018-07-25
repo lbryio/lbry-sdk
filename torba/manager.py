@@ -50,7 +50,8 @@ class WalletManager(object):
                     'account': account.name,
                     'coins': round(satoshis/COIN, 2),
                     'satoshis': satoshis,
-                    'is_default_account': i == 0 and j == 0
+                    'is_default_account': i == j == 0,
+                    'id': account.public_key.address
                 })
         defer.returnValue(balances)
 
