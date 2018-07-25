@@ -5,3 +5,5 @@ This includes classes for connecting to other peers and downloading blobs from t
 connections from peers and responding to their requests, managing locally stored blobs, sending
 and receiving payments, and locating peers in the DHT.
 """
+
+from lbrynet import custom_logger

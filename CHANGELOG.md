@@ -8,12 +8,6 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
-
-## [0.20.3] - 2018-07-20
-### Changed
-* Additional information added to the balance error message when editing a claim.
-(https://github.com/lbryio/lbry/pull/1309)
-
 ### Security
   *
   *
@@ -40,7 +34,7 @@ at anytime.
   * `requires` decorator to register the components required by a `jsonrpc_` command, to facilitate commands registering asynchronously
   * unittests for `ComponentManager`
   * script to generate docs/api.json file (https://github.com/lbryio/lbry.tech/issues/42)
-
+  * additional information to the balance error message when editing a claim (https://github.com/lbryio/lbry/pull/1309)
 
 ### Removed
   * most of the internal attributes from `Daemon`

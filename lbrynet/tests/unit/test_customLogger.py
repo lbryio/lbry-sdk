@@ -6,7 +6,7 @@ import unittest
 from twisted.internet import defer
 from twisted import trial
 
-from lbrynet import customLogger
+from lbrynet import custom_logger
 from lbrynet.tests.util import is_android
 
 
@@ -22,7 +22,7 @@ class TestLogger(trial.unittest.TestCase):
         return d
 
     def setUp(self):
-        self.log = customLogger.Logger('test')
+        self.log = custom_logger.Logger('test')
         self.stream = StringIO.StringIO()
         handler = logging.StreamHandler(self.stream)
         handler.setFormatter(logging.Formatter("%(filename)s:%(lineno)d - %(message)s"))
