@@ -26,6 +26,7 @@ at anytime.
   * `status` to no longer return a base58 encoded `lbry_id`, instead return this as the hex encoded `node_id` in a new `dht_node_status` field. 
   * `startup_status` field in the response to `status` to be a dict of component names to status booleans
   * moved wallet, upnp and dht startup code from `Session` to `Components`
+  * attempt blob downloads from http mirror sources (by default) concurrently to p2p sources
 
 ### Added
   * `skipped_components` list to the response from `status`
