@@ -2820,26 +2820,36 @@ class Daemon(AuthJSONRPCServer):
 
     @requires(DHT_COMPONENT)
     @defer.inlineCallbacks
-    def jsonrpc_peer_ping(self, node_id):
+    def jsonrpc_peer_ping(self, node_id, address=None, port=None):
         """
-        Find and ping a peer by node id
+        Send a kademlia ping to the specified peer. If address and port are provided the peer is directly pinged,
+        if not provided the peer is located first.
 
         Usage:
-            peer_ping (<node_id> | --node_id=<node_id>)
+            peer_ping (<node_id> | --node_id=<node_id>) [<address> | --address=<address>] [<port> | --port=<port>]
 
         Options:
-            None
+            --address=<address>     : (str) ip address of the peer
+            --port=<port>           : (int) udp port of the peer
+
 
         Returns:
             (str) pong, or {'error': <error message>} if an error is encountered
         """
 
         contact = None
-        try:
-            contact = yield self.dht_node.findContact(node_id.decode('hex'))
-        except TimeoutError:
-            result = {'error': 'timeout finding peer'}
-            defer.returnValue(result)
+        if node_id and address and port:
+            contact = self.dht_node.contact_manager.get_contact(node_id.decode('hex'), address, int(port))
+            if not contact:
+                contact = self.dht_node.contact_manager.make_contact(
+                    node_id.decode('hex'), address, int(port), self.dht_node._protocol
+                )
+        if not contact:
+            try:
+                contact = yield self.dht_node.findContact(node_id.decode('hex'))
+            except TimeoutError:
+                result = {'error': 'timeout finding peer'}
+                defer.returnValue(result)
         if not contact:
             defer.returnValue({'error': 'peer not found'})
         try:
