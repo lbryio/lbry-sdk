@@ -9,6 +9,13 @@ log = logging.getLogger(__name__)
 
 
 class HTTPBlobDownloader(object):
+    '''
+    A downloader that is able to get blobs from HTTP mirrors.
+    Note that when a blob gets downloaded from a mirror or from a peer, BlobManager will mark it as completed
+    and cause any other type of downloader to progress to the next missing blob. Also, BlobFile is naturally able
+    to cancel other writers when a writer finishes first. That's why there is no call to cancel/resume/stop between
+    different types of downloaders.
+    '''
     def __init__(self, blob_manager, blob_hashes=None, servers=None, client=None):
         self.blob_manager = blob_manager
         self.servers = servers or []
@@ -49,7 +56,7 @@ class HTTPBlobDownloader(object):
             self.failures = 0
         except Exception as exception:
             self.failures += 1
-            log.error('Mirror failed downloading: %s', exception)
+            log.exception('Mirror failed downloading')
             if self.failures >= self.max_failures:
                 self.stop()
                 self.failures = 0
