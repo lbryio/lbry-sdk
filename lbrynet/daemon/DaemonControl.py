@@ -12,7 +12,7 @@ from lbrynet.core import log_support
 import argparse
 import logging.handlers
 
-from twisted.internet import defer, reactor
+from twisted.internet import reactor
 #from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet import conf

@@ -6,7 +6,7 @@ from lbrynet.core.Error import ComponentStartConditionNotMet
 log = logging.getLogger(__name__)
 
 
-class RegisteredConditions(object):
+class RegisteredConditions:
     conditions = {}
 
 
@@ -30,7 +30,7 @@ class RequiredCondition(metaclass=RequiredConditionType):
         raise NotImplementedError()
 
 
-class ComponentManager(object):
+class ComponentManager:
     default_component_classes = {}
 
     def __init__(self, reactor=None, analytics_manager=None, skip_components=None, **override_components):
