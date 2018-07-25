@@ -8,8 +8,6 @@ can and probably will change functionality and break backwards compatability
 at anytime.
 
 ## [Unreleased]
-
-## [0.20.3] - 2018-07-20
 ### Changed
 * Additional information added to the balance error message when editing a claim.
 (https://github.com/lbryio/lbry/pull/1309)
@@ -31,7 +29,7 @@ at anytime.
   *
 
 ### Added
-  *
+  * blockchain_headers S3 download progress information returned with the daemon status call
   *
 
 ### Removed
