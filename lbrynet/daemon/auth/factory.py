@@ -14,8 +14,8 @@ log = logging.getLogger(__name__)
 class AuthJSONRPCResource(resource.Resource):
     def __init__(self, protocol):
         resource.Resource.__init__(self)
-        self.putChild("", protocol)
-        self.putChild(conf.settings['API_ADDRESS'], protocol)
+        self.putChild(b"", protocol)
+        self.putChild(conf.settings['API_ADDRESS'].encode(), protocol)
 
     def getChild(self, name, request):
         request.setHeader('cache-control', 'no-cache, no-store, must-revalidate')
