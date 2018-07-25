@@ -1,5 +1,4 @@
 import logging
-import socket
 import errno
 from binascii import hexlify
 from collections import deque

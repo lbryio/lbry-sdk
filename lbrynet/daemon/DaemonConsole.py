@@ -1,10 +1,7 @@
-# -*- coding: utf-8 -*-
-
 import sys
 import code
 import argparse
 import logging.handlers
-from exceptions import SystemExit
 from twisted.internet import defer, reactor, threads
 from lbrynet import analytics
 from lbrynet import conf

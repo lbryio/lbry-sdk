@@ -5,7 +5,6 @@ import requests
 import urllib
 import json
 import textwrap
-import signal
 from binascii import hexlify, unhexlify
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
