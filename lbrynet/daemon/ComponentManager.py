@@ -20,7 +20,7 @@ class RequiredConditionType(type):
         return klass
 
 
-class RequiredCondition(object):
+class RequiredCondition(metaclass=RequiredConditionType):
     name = ""
     component = ""
     message = ""
@@ -28,8 +28,6 @@ class RequiredCondition(object):
     @staticmethod
     def evaluate(component):
         raise NotImplementedError()
-
-    __metaclass__ = RequiredConditionType
 
 
 class ComponentManager(object):

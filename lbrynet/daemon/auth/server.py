@@ -141,7 +141,7 @@ class AuthorizedBase(metaclass=JSONRPCServerType):
 
     @staticmethod
     def requires(*components, **conditions):
-        if conditions and ["conditions"] != conditions.keys():
+        if conditions and ["conditions"] != list(conditions.keys()):
             raise SyntaxError("invalid conditions argument")
         condition_names = conditions.get("conditions", [])
 
@@ -199,8 +199,8 @@ class AuthJSONRPCServer(AuthorizedBase):
             analytics_manager=self.analytics_manager,
             skip_components=to_skip or []
         )
-        self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).iteritems()})
-        self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).iteritems()}
+        self.looping_call_manager = LoopingCallManager({n: lc for n, (lc, t) in (looping_calls or {}).items()})
+        self._looping_call_times = {n: t for n, (lc, t) in (looping_calls or {}).items()}
         self._use_authentication = use_authentication or conf.settings['use_auth_http']
         self._component_setup_deferred = None
         self.announced_startup = False
