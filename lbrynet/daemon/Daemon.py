@@ -177,7 +177,9 @@ class WalletIsLocked(RequiredCondition):
 
     @staticmethod
     def evaluate(component):
-        return component.check_locked()
+        d = component.check_locked()
+        d.addCallback(lambda r: not r)
+        return d
 
 
 class Daemon(AuthJSONRPCServer):
