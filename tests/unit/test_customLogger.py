@@ -1,4 +1,4 @@
-import StringIO
+from io import StringIO
 import logging
 
 import mock
@@ -7,7 +7,7 @@ from twisted.internet import defer
 from twisted import trial
 
 from lbrynet import custom_logger
-from lbrynet.tests.util import is_android
+from tests.util import is_android
 
 
 class TestLogger(trial.unittest.TestCase):
@@ -23,7 +23,7 @@ class TestLogger(trial.unittest.TestCase):
 
     def setUp(self):
         self.log = custom_logger.Logger('test')
-        self.stream = StringIO.StringIO()
+        self.stream = StringIO()
         handler = logging.StreamHandler(self.stream)
         handler.setFormatter(logging.Formatter("%(filename)s:%(lineno)d - %(message)s"))
         self.log.addHandler(handler)
