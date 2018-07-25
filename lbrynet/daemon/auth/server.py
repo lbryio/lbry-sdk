@@ -235,7 +235,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         reactor.addSystemEventTrigger('before', 'shutdown', self._shutdown)
         if not self.analytics_manager.is_started:
             self.analytics_manager.start()
-        for lc_name, lc_time in self._looping_call_times.iteritems():
+        for lc_name, lc_time in self._looping_call_times.items():
             self.looping_call_manager.start(lc_name, lc_time)
 
         def update_attribute(setup_result, component):
