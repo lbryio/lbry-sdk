@@ -11,8 +11,10 @@ log = logging.getLogger(__name__)
 
 
 class Publisher(object):
-    def __init__(self, session, lbry_file_manager, wallet, certificate_id):
-        self.session = session
+    def __init__(self, blob_manager, payment_rate_manager, storage, lbry_file_manager, wallet, certificate_id):
+        self.blob_manager = blob_manager
+        self.payment_rate_manager = payment_rate_manager
+        self.storage = storage
         self.lbry_file_manager = lbry_file_manager
         self.wallet = wallet
         self.certificate_id = certificate_id
@@ -30,8 +32,8 @@ class Publisher(object):
 
         file_name = os.path.basename(file_path)
         with file_utils.get_read_handle(file_path) as read_handle:
-            self.lbry_file = yield create_lbry_file(self.session, self.lbry_file_manager, file_name,
-                                                    read_handle)
+            self.lbry_file = yield create_lbry_file(self.blob_manager, self.storage, self.payment_rate_manager,
+                                                    self.lbry_file_manager, file_name, read_handle)
 
         if 'source' not in claim_dict['stream']:
             claim_dict['stream']['source'] = {}
@@ -42,7 +44,7 @@ class Publisher(object):
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
 
         # check if we have a file already for this claim (if this is a publish update with a new stream)
-        old_stream_hashes = yield self.session.storage.get_old_stream_hashes_for_claim_id(claim_out['claim_id'],
+        old_stream_hashes = yield self.storage.get_old_stream_hashes_for_claim_id(claim_out['claim_id'],
                                                                                           self.lbry_file.stream_hash)
         if old_stream_hashes:
             for lbry_file in filter(lambda l: l.stream_hash in old_stream_hashes,
@@ -50,7 +52,7 @@ class Publisher(object):
                 yield self.lbry_file_manager.delete_lbry_file(lbry_file, delete_file=False)
                 log.info("Removed old stream for claim update: %s", lbry_file.stream_hash)
 
-        yield self.session.storage.save_content_claim(
+        yield self.storage.save_content_claim(
             self.lbry_file.stream_hash, "%s:%i" % (claim_out['txid'], claim_out['nout'])
         )
         defer.returnValue(claim_out)
@@ -60,7 +62,7 @@ class Publisher(object):
         """Make a claim without creating a lbry file"""
         claim_out = yield self.make_claim(name, bid, claim_dict, claim_address, change_address)
         if stream_hash:  # the stream_hash returned from the db will be None if this isn't a stream we have
-            yield self.session.storage.save_content_claim(stream_hash, "%s:%i" % (claim_out['txid'],
+            yield self.storage.save_content_claim(stream_hash, "%s:%i" % (claim_out['txid'],
                                                                                   claim_out['nout']))
             self.lbry_file = [f for f in self.lbry_file_manager.lbry_files if f.stream_hash == stream_hash][0]
         defer.returnValue(claim_out)

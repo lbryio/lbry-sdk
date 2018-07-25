@@ -25,14 +25,13 @@ from lbryschema.decode import smart_decode
 from lbrynet.core.system_info import get_lbrynet_version
 from lbrynet import conf
 from lbrynet.reflector import reupload
-from lbrynet.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, SESSION_COMPONENT, DHT_COMPONENT
-from lbrynet.daemon.Components import STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT
-from lbrynet.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT
+from lbrynet.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
+from lbrynet.daemon.Components import STREAM_IDENTIFIER_COMPONENT, FILE_MANAGER_COMPONENT, RATE_LIMITER_COMPONENT
+from lbrynet.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, PAYMENT_RATE_COMPONENT, UPNP_COMPONENT
 from lbrynet.daemon.ComponentManager import RequiredCondition
 from lbrynet.daemon.Downloader import GetStream
 from lbrynet.daemon.Publisher import Publisher
 from lbrynet.daemon.auth.server import AuthJSONRPCServer
-from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
 from lbrynet.core import utils, system_info
 from lbrynet.core.StreamDescriptor import download_sd_blob
 from lbrynet.core.Error import InsufficientFundsError, UnknownNameError
@@ -186,13 +185,16 @@ class Daemon(AuthJSONRPCServer):
     """
 
     component_attributes = {
-        EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
         DATABASE_COMPONENT: "storage",
-        SESSION_COMPONENT: "session",
-        WALLET_COMPONENT: "wallet",
         DHT_COMPONENT: "dht_node",
+        WALLET_COMPONENT: "wallet",
         STREAM_IDENTIFIER_COMPONENT: "sd_identifier",
         FILE_MANAGER_COMPONENT: "file_manager",
+        EXCHANGE_RATE_MANAGER_COMPONENT: "exchange_rate_manager",
+        PAYMENT_RATE_COMPONENT: "payment_rate_manager",
+        RATE_LIMITER_COMPONENT: "rate_limiter",
+        BLOB_COMPONENT: "blob_manager",
+        UPNP_COMPONENT: "upnp"
     }
 
     def __init__(self, analytics_manager=None, component_manager=None):
@@ -218,9 +220,12 @@ class Daemon(AuthJSONRPCServer):
         self.dht_node = None
         self.wallet = None
         self.sd_identifier = None
-        self.session = None
         self.file_manager = None
         self.exchange_rate_manager = None
+        self.payment_rate_manager = None
+        self.rate_limiter = None
+        self.blob_manager = None
+        self.upnp = None
 
         # TODO: delete this
         self.streams = {}
@@ -254,10 +259,10 @@ class Daemon(AuthJSONRPCServer):
         if not blob_hash:
             raise Exception("Nothing to download")
 
-        rate_manager = rate_manager or self.session.payment_rate_manager
+        rate_manager = rate_manager or self.payment_rate_manager
         timeout = timeout or 30
         downloader = StandaloneBlobDownloader(
-            blob_hash, self.session.blob_manager, self.session.peer_finder, self.session.rate_limiter,
+            blob_hash, self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
             rate_manager, self.wallet, timeout
         )
         return downloader.download()
@@ -275,7 +280,7 @@ class Daemon(AuthJSONRPCServer):
         }
         blobs = {}
         try:
-            sd_host = yield self.session.blob_manager.get_host_downloaded_from(sd_hash)
+            sd_host = yield self.blob_manager.get_host_downloaded_from(sd_hash)
         except Exception:
             sd_host = None
         report["sd_blob"] = sd_host
@@ -320,11 +325,11 @@ class Daemon(AuthJSONRPCServer):
         else:
             download_id = utils.random_string()
             self.analytics_manager.send_download_started(download_id, name, claim_dict)
-
-            self.streams[sd_hash] = GetStream(self.sd_identifier, self.session,
-                                              self.exchange_rate_manager, conf.settings['max_key_fee'],
-                                              conf.settings['disable_max_key_fee'],
-                                              conf.settings['data_rate'], timeout)
+            self.streams[sd_hash] = GetStream(self.sd_identifier, self.wallet, self.exchange_rate_manager,
+                                              self.blob_manager, self.dht_node.peer_finder, self.rate_limiter,
+                                              self.payment_rate_manager, self.storage, conf.settings['max_key_fee'],
+                                              conf.settings['disable_max_key_fee'], conf.settings['data_rate'],
+                                              timeout)
             try:
                 lbry_file, finished_deferred = yield self.streams[sd_hash].start(
                     claim_dict, name, txid, nout, file_name
@@ -350,9 +355,8 @@ class Daemon(AuthJSONRPCServer):
     @defer.inlineCallbacks
     def _publish_stream(self, name, bid, claim_dict, file_path=None, certificate_id=None,
                         claim_address=None, change_address=None):
-
-        publisher = Publisher(self.session, self.file_manager, self.wallet,
-                              certificate_id)
+        publisher = Publisher(self.blob_manager, self.payment_rate_manager, self.storage, self.file_manager,
+                              self.wallet, certificate_id)
         parse_lbry_uri(name)
         if not file_path:
             stream_hash = yield self.storage.get_stream_hash_for_sd_hash(
@@ -388,16 +392,17 @@ class Daemon(AuthJSONRPCServer):
 
     def _get_or_download_sd_blob(self, blob, sd_hash):
         if blob:
-            return self.session.blob_manager.get_blob(blob[0])
+            return self.blob_manager.get_blob(blob[0])
         return download_sd_blob(
-            self.session, sd_hash, self.session.payment_rate_manager, conf.settings['search_timeout']
+            sd_hash, self.blob_manager, self.dht_node.peer_finder, self.rate_limiter, self.payment_rate_manager,
+            self.wallet, timeout=conf.settings['search_timeout'], download_mirrors=conf.settings['download_mirrors']
         )
 
     def get_or_download_sd_blob(self, sd_hash):
         """Return previously downloaded sd blob if already in the blob
         manager, otherwise download and return it
         """
-        d = self.session.blob_manager.completed_blobs([sd_hash])
+        d = self.blob_manager.completed_blobs([sd_hash])
         d.addCallback(self._get_or_download_sd_blob, sd_hash)
         return d
 
@@ -416,7 +421,7 @@ class Daemon(AuthJSONRPCServer):
         Calculate estimated LBC cost for a stream given its size in bytes
         """
 
-        if self.session.payment_rate_manager.generous:
+        if self.payment_rate_manager.generous:
             return 0.0
         return size / (10 ** 6) * conf.settings['data_rate']
 
@@ -693,7 +698,7 @@ class Daemon(AuthJSONRPCServer):
                     'blocks_behind': (int) remote_height - local_height,
                     'best_blockhash': (str) block hash of most recent block,
                 },
-                'dht_node_status': {
+                'dht': {
                     'node_id': (str) lbry dht node id - hex encoded,
                     'peers_in_routing_table': (int) the number of peers in the routing table,
                 },
@@ -707,14 +712,6 @@ class Daemon(AuthJSONRPCServer):
                     }
             }
         """
-
-        # on startup, the wallet or network won't be available but we still need this call to work
-        has_wallet = self.session and self.wallet and self.wallet.network
-        local_height = self.wallet.network.get_local_height() if has_wallet else 0
-        remote_height = self.wallet.network.get_server_height() if has_wallet else 0
-        best_hash = (yield self.wallet.get_best_blockhash()) if has_wallet else None
-        wallet_is_encrypted = has_wallet and self.wallet.wallet and \
-                              self.wallet.wallet.use_encryption
 
         connection_code = CONNECTION_STATUS_CONNECTED if utils.check_connection() else CONNECTION_STATUS_NETWORK
         response = {
@@ -1285,7 +1282,9 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(results)
         defer.returnValue(response)
 
-    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, SESSION_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(STREAM_IDENTIFIER_COMPONENT, WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
+              DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
+              conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
     def jsonrpc_get(self, uri, file_name=None, timeout=None):
         """
@@ -1476,7 +1475,9 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(result)
         defer.returnValue(response)
 
-    @requires(WALLET_COMPONENT, SESSION_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(STREAM_IDENTIFIER_COMPONENT, WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
+              DHT_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
+              conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
     def jsonrpc_stream_cost_estimate(self, uri, size=None):
         """
@@ -1631,7 +1632,8 @@ class Daemon(AuthJSONRPCServer):
         result = yield self.wallet.import_certificate_info(serialized_certificate_info)
         defer.returnValue(result)
 
-    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, SESSION_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, PAYMENT_RATE_COMPONENT, DATABASE_COMPONENT,
+              conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
     def jsonrpc_publish(self, name, bid, metadata=None, file_path=None, fee=None, title=None,
                         description=None, author=None, language=None, license=None,
@@ -2514,7 +2516,8 @@ class Daemon(AuthJSONRPCServer):
         d.addCallback(lambda r: self._render_response(r))
         return d
 
-    @requires(WALLET_COMPONENT, SESSION_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(WALLET_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT, RATE_LIMITER_COMPONENT, PAYMENT_RATE_COMPONENT,
+              conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
     def jsonrpc_blob_get(self, blob_hash, timeout=None, encoding=None, payment_rate_manager=None):
         """
@@ -2545,8 +2548,7 @@ class Daemon(AuthJSONRPCServer):
         }
 
         timeout = timeout or 30
-        payment_rate_manager = get_blob_payment_rate_manager(self.session, payment_rate_manager)
-        blob = yield self._download_blob(blob_hash, rate_manager=payment_rate_manager,
+        blob = yield self._download_blob(blob_hash, rate_manager=self.payment_rate_manager,
                                          timeout=timeout)
         if encoding and encoding in decoders:
             blob_file = blob.open_for_reading()
@@ -2558,7 +2560,7 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(result)
         defer.returnValue(response)
 
-    @requires(SESSION_COMPONENT)
+    @requires(BLOB_COMPONENT, DATABASE_COMPONENT)
     @defer.inlineCallbacks
     def jsonrpc_blob_delete(self, blob_hash):
         """
@@ -2574,7 +2576,7 @@ class Daemon(AuthJSONRPCServer):
             (str) Success/fail message
         """
 
-        if blob_hash not in self.session.blob_manager.blobs:
+        if blob_hash not in self.blob_manager.blobs:
             response = yield self._render_response("Don't have that blob")
             defer.returnValue(response)
         try:
@@ -2582,7 +2584,7 @@ class Daemon(AuthJSONRPCServer):
             yield self.storage.delete_stream(stream_hash)
         except Exception as err:
             pass
-        yield self.session.blob_manager.delete_blobs([blob_hash])
+        yield self.blob_manager.delete_blobs([blob_hash])
         response = yield self._render_response("Deleted %s" % blob_hash)
         defer.returnValue(response)
 
@@ -2612,7 +2614,7 @@ class Daemon(AuthJSONRPCServer):
             err.trap(defer.TimeoutError)
             return []
 
-        finished_deferred.addTimeout(timeout or conf.settings['peer_search_timeout'], self.session.dht_node.clock)
+        finished_deferred.addTimeout(timeout or conf.settings['peer_search_timeout'], self.dht_node.clock)
         finished_deferred.addErrback(trap_timeout)
         peers = yield finished_deferred
         results = [
@@ -2625,7 +2627,7 @@ class Daemon(AuthJSONRPCServer):
         ]
         defer.returnValue(results)
 
-    @requires(SESSION_COMPONENT, DHT_COMPONENT, conditions=[DHT_HAS_CONTACTS])
+    @requires(DATABASE_COMPONENT)
     @defer.inlineCallbacks
     def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None):
         """
@@ -2698,7 +2700,7 @@ class Daemon(AuthJSONRPCServer):
         results = yield reupload.reflect_file(lbry_file, reflector_server=reflector_server)
         defer.returnValue(results)
 
-    @requires(SESSION_COMPONENT, WALLET_COMPONENT)
+    @requires(BLOB_COMPONENT, WALLET_COMPONENT)
     @defer.inlineCallbacks
     def jsonrpc_blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
                           finished=None, page_size=None, page=None):
@@ -2737,16 +2739,16 @@ class Daemon(AuthJSONRPCServer):
             if stream_hash:
                 crypt_blobs = yield self.storage.get_blobs_for_stream(stream_hash)
                 blobs = yield defer.gatherResults([
-                    self.session.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
+                    self.blob_manager.get_blob(crypt_blob.blob_hash, crypt_blob.length)
                     for crypt_blob in crypt_blobs if crypt_blob.blob_hash is not None
                 ])
             else:
                 blobs = []
             # get_blobs_for_stream does not include the sd blob, so we'll add it manually
-            if sd_hash in self.session.blob_manager.blobs:
-                blobs = [self.session.blob_manager.blobs[sd_hash]] + blobs
+            if sd_hash in self.blob_manager.blobs:
+                blobs = [self.blob_manager.blobs[sd_hash]] + blobs
         else:
-            blobs = self.session.blob_manager.blobs.itervalues()
+            blobs = self.blob_manager.blobs.itervalues()
 
         if needed:
             blobs = [blob for blob in blobs if not blob.get_is_verified()]
@@ -2762,7 +2764,7 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(blob_hashes_for_return)
         defer.returnValue(response)
 
-    @requires(SESSION_COMPONENT)
+    @requires(BLOB_COMPONENT)
     def jsonrpc_blob_reflect(self, blob_hashes, reflector_server=None):
         """
         Reflects specified blobs
@@ -2777,11 +2779,11 @@ class Daemon(AuthJSONRPCServer):
             (list) reflected blob hashes
         """
 
-        d = reupload.reflect_blob_hashes(blob_hashes, self.session.blob_manager, reflector_server)
+        d = reupload.reflect_blob_hashes(blob_hashes, self.blob_manager, reflector_server)
         d.addCallback(lambda r: self._render_response(r))
         return d
 
-    @requires(SESSION_COMPONENT)
+    @requires(BLOB_COMPONENT)
     def jsonrpc_blob_reflect_all(self):
         """
         Reflects all saved blobs
@@ -2796,8 +2798,8 @@ class Daemon(AuthJSONRPCServer):
             (bool) true if successful
         """
 
-        d = self.session.blob_manager.get_all_verified_blobs()
-        d.addCallback(reupload.reflect_blob_hashes, self.session.blob_manager)
+        d = self.blob_manager.get_all_verified_blobs()
+        d.addCallback(reupload.reflect_blob_hashes, self.blob_manager)
         d.addCallback(lambda r: self._render_response(r))
         return d
 
@@ -2943,7 +2945,7 @@ class Daemon(AuthJSONRPCServer):
 
         return self._blob_availability(blob_hash, search_timeout, blob_timeout)
 
-    @requires(SESSION_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @AuthJSONRPCServer.deprecated("stream_availability")
     def jsonrpc_get_availability(self, uri, sd_timeout=None, peer_timeout=None):
         """
@@ -2964,7 +2966,7 @@ class Daemon(AuthJSONRPCServer):
 
         return self.jsonrpc_stream_availability(uri, peer_timeout, sd_timeout)
 
-    @requires(SESSION_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
+    @requires(UPNP_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, conditions=[WALLET_IS_UNLOCKED])
     @defer.inlineCallbacks
     def jsonrpc_stream_availability(self, uri, search_timeout=None, blob_timeout=None):
         """
@@ -3012,7 +3014,7 @@ class Daemon(AuthJSONRPCServer):
             'head_blob_hash': None,
             'head_blob_availability': {},
             'use_upnp': conf.settings['use_upnp'],
-            'upnp_redirect_is_set': len(self.session.upnp_redirects) > 0,
+            'upnp_redirect_is_set': len(self.upnp.get_redirects()) > 0,
             'error': None
         }
 
@@ -3042,7 +3044,7 @@ class Daemon(AuthJSONRPCServer):
         response['sd_hash'] = sd_hash
         head_blob_hash = None
         downloader = self._get_single_peer_downloader()
-        have_sd_blob = sd_hash in self.session.blob_manager.blobs
+        have_sd_blob = sd_hash in self.blob_manager.blobs
         try:
             sd_blob = yield self.jsonrpc_blob_get(sd_hash, timeout=blob_timeout,
                                                   encoding="json")
@@ -3139,17 +3141,6 @@ def iter_lbry_file_search_values(search_fields):
         value = search_fields.get(searchtype, None)
         if value is not None:
             yield searchtype, value
-
-
-def get_blob_payment_rate_manager(session, payment_rate_manager=None):
-    if payment_rate_manager:
-        rate_managers = {
-            'only-free': OnlyFreePaymentsManager()
-        }
-        if payment_rate_manager in rate_managers:
-            payment_rate_manager = rate_managers[payment_rate_manager]
-            log.info("Downloading blob with rate manager: %s", payment_rate_manager)
-    return payment_rate_manager or session.payment_rate_manager
 
 
 def create_key_getter(field):

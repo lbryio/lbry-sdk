@@ -8,7 +8,9 @@ from twisted.internet import defer, threads, reactor, error
 from lbryum.simple_config import SimpleConfig
 from lbryum.constants import HEADERS_URL, HEADER_SIZE
 from lbrynet import conf
-from lbrynet.core.Session import Session
+from lbrynet.core.PaymentRateManager import OnlyFreePaymentsManager
+from lbrynet.core.RateLimiter import RateLimiter
+from lbrynet.core.BlobManager import DiskBlobManager
 from lbrynet.core.StreamDescriptor import StreamDescriptorIdentifier, EncryptedFileStreamType
 from lbrynet.core.Wallet import LBRYumWallet
 from lbrynet.core.server.BlobRequestHandler import BlobRequestHandlerFactory
@@ -30,9 +32,9 @@ log = logging.getLogger(__name__)
 # settings must be initialized before this file is imported
 
 DATABASE_COMPONENT = "database"
+BLOB_COMPONENT = "blob_manager"
 HEADERS_COMPONENT = "blockchain_headers"
 WALLET_COMPONENT = "wallet"
-SESSION_COMPONENT = "session"
 DHT_COMPONENT = "dht"
 HASH_ANNOUNCER_COMPONENT = "hash_announcer"
 STREAM_IDENTIFIER_COMPONENT = "stream_identifier"
@@ -41,6 +43,10 @@ PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 REFLECTOR_COMPONENT = "reflector"
 UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
+RATE_LIMITER_COMPONENT = "rate_limiter"
+PAYMENT_RATE_COMPONENT = "payment_rate_manager"
+
+
 def get_wallet_config():
     wallet_type = GCS('wallet')
     if wallet_type == conf.LBRYCRD_WALLET:
@@ -334,40 +340,26 @@ class WalletComponent(Component):
         self.wallet = None
 
 
-class SessionComponent(Component):
-    component_name = SESSION_COMPONENT
-    depends_on = [DATABASE_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT]
+class BlobComponent(Component):
+    component_name = BLOB_COMPONENT
+    depends_on = [DATABASE_COMPONENT, DHT_COMPONENT]
 
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
-        self.session = None
+        self.blob_manager = None
 
     @property
     def component(self):
-        return self.session
+        return self.blob_manager
 
-    @defer.inlineCallbacks
     def start(self):
-        self.session = Session(
-            GCS('data_rate'),
-            db_dir=GCS('data_dir'),
-            node_id=CS.get_node_id(),
-            blob_dir=CS.get_blobfiles_dir(),
-            dht_node=self.component_manager.get_component(DHT_COMPONENT),
-            hash_announcer=self.component_manager.get_component(HASH_ANNOUNCER_COMPONENT),
-            dht_node_port=GCS('dht_node_port'),
-            known_dht_nodes=GCS('known_dht_nodes'),
-            peer_port=GCS('peer_port'),
-            wallet=self.component_manager.get_component(WALLET_COMPONENT),
-            external_ip=CS.get_external_ip(),
-            storage=self.component_manager.get_component(DATABASE_COMPONENT),
-            download_mirrors=GCS('download_mirrors')
-        )
-        yield self.session.setup()
+        storage = self.component_manager.get_component(DATABASE_COMPONENT)
+        dht_node = self.component_manager.get_component(DHT_COMPONENT)
+        self.blob_manager = DiskBlobManager(CS.get_blobfiles_dir(), storage, dht_node._dataStore)
+        return self.blob_manager.setup()
 
-    @defer.inlineCallbacks
     def stop(self):
-        yield self.session.shut_down()
+        return self.blob_manager.stop()
 
 
 class DHTComponent(Component):
@@ -383,6 +375,12 @@ class DHTComponent(Component):
     @property
     def component(self):
         return self.dht_node
+
+    def get_status(self):
+        return {
+            'node_id': CS.get_node_id().encode('hex'),
+            'peers_in_routing_table': 0 if not self.dht_node else len(self.dht_node.contacts)
+        }
 
     @defer.inlineCallbacks
     def start(self):
@@ -435,9 +433,29 @@ class HashAnnouncerComponent(Component):
         yield self.hash_announcer.stop()
 
 
+class RateLimiterComponent(Component):
+    component_name = RATE_LIMITER_COMPONENT
+
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
+        self.rate_limiter = RateLimiter()
+
+    @property
+    def component(self):
+        return self.rate_limiter
+
+    def start(self):
+        self.rate_limiter.start()
+        return defer.succeed(None)
+
+    def stop(self):
+        self.rate_limiter.stop()
+        return defer.succeed(None)
+
+
 class StreamIdentifierComponent(Component):
     component_name = STREAM_IDENTIFIER_COMPONENT
-    depends_on = [SESSION_COMPONENT]
+    depends_on = [DHT_COMPONENT, RATE_LIMITER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
 
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
@@ -449,14 +467,19 @@ class StreamIdentifierComponent(Component):
 
     @defer.inlineCallbacks
     def start(self):
-        session = self.component_manager.get_component(SESSION_COMPONENT)
+        dht_node = self.component_manager.get_component(DHT_COMPONENT)
+        rate_limiter = self.component_manager.get_component(RATE_LIMITER_COMPONENT)
+        blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
+        storage = self.component_manager.get_component(DATABASE_COMPONENT)
+        wallet = self.component_manager.get_component(WALLET_COMPONENT)
+
         add_lbry_file_to_sd_identifier(self.sd_identifier)
         file_saver_factory = EncryptedFileSaverFactory(
-            session.peer_finder,
-            session.rate_limiter,
-            session.blob_manager,
-            session.storage,
-            session.wallet,
+            dht_node.peer_finder,
+            rate_limiter,
+            blob_manager,
+            storage,
+            wallet,
             GCS('download_directory')
         )
         yield self.sd_identifier.add_stream_downloader_factory(EncryptedFileStreamType, file_saver_factory)
@@ -465,9 +488,28 @@ class StreamIdentifierComponent(Component):
         pass
 
 
+class PaymentRateComponent(Component):
+    component_name = PAYMENT_RATE_COMPONENT
+
+    def __init__(self, component_manager):
+        Component.__init__(self, component_manager)
+        self.payment_rate_manager = OnlyFreePaymentsManager()
+
+    @property
+    def component(self):
+        return self.payment_rate_manager
+
+    def start(self):
+        return defer.succeed(None)
+
+    def stop(self):
+        return defer.succeed(None)
+
+
 class FileManagerComponent(Component):
     component_name = FILE_MANAGER_COMPONENT
-    depends_on = [SESSION_COMPONENT, STREAM_IDENTIFIER_COMPONENT]
+    depends_on = [DHT_COMPONENT, RATE_LIMITER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT,
+                  STREAM_IDENTIFIER_COMPONENT, PAYMENT_RATE_COMPONENT]
 
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
@@ -477,12 +519,25 @@ class FileManagerComponent(Component):
     def component(self):
         return self.file_manager
 
+    def get_status(self):
+        if not self.file_manager:
+            return
+        return {
+            'managed_streams': len(self.file_manager.lbry_files)
+        }
+
     @defer.inlineCallbacks
     def start(self):
-        session = self.component_manager.get_component(SESSION_COMPONENT)
+        dht_node = self.component_manager.get_component(DHT_COMPONENT)
+        rate_limiter = self.component_manager.get_component(RATE_LIMITER_COMPONENT)
+        blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
+        storage = self.component_manager.get_component(DATABASE_COMPONENT)
+        wallet = self.component_manager.get_component(WALLET_COMPONENT)
         sd_identifier = self.component_manager.get_component(STREAM_IDENTIFIER_COMPONENT)
+        payment_rate_manager = self.component_manager.get_component(PAYMENT_RATE_COMPONENT)
         log.info('Starting the file manager')
-        self.file_manager = EncryptedFileManager(session, sd_identifier)
+        self.file_manager = EncryptedFileManager(dht_node.peer_finder, rate_limiter, blob_manager, wallet,
+                                                 payment_rate_manager, storage, sd_identifier)
         yield self.file_manager.setup()
         log.info('Done setting up file manager')
 
@@ -493,7 +548,8 @@ class FileManagerComponent(Component):
 
 class PeerProtocolServerComponent(Component):
     component_name = PEER_PROTOCOL_SERVER_COMPONENT
-    depends_on = [SESSION_COMPONENT, UPNP_COMPONENT]
+    depends_on = [UPNP_COMPONENT, DHT_COMPONENT, RATE_LIMITER_COMPONENT, BLOB_COMPONENT, WALLET_COMPONENT,
+                  PAYMENT_RATE_COMPONENT]
 
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
@@ -507,17 +563,22 @@ class PeerProtocolServerComponent(Component):
     def start(self):
         query_handlers = {}
         upnp_component = self.component_manager.get_component(UPNP_COMPONENT)
+        dht_node = self.component_manager.get_component(DHT_COMPONENT)
+        rate_limiter = self.component_manager.get_component(RATE_LIMITER_COMPONENT)
+        blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
+        wallet = self.component_manager.get_component(WALLET_COMPONENT)
+        payment_rate_manager = self.component_manager.get_component(PAYMENT_RATE_COMPONENT)
+
         peer_port, udp_port = upnp_component.get_redirects()
-        session = self.component_manager.get_component(SESSION_COMPONENT)
 
         handlers = [
             BlobRequestHandlerFactory(
-                session.blob_manager,
-                session.wallet,
-                session.payment_rate_manager,
+                blob_manager,
+                wallet,
+                payment_rate_manager,
                 self.component_manager.analytics_manager
             ),
-            session.wallet.get_wallet_info_query_handler_factory(),
+            wallet.get_wallet_info_query_handler_factory(),
         ]
 
         for handler in handlers:
@@ -525,7 +586,7 @@ class PeerProtocolServerComponent(Component):
             query_handlers[query_id] = handler
 
         if peer_port is not None:
-            server_factory = ServerProtocolFactory(session.rate_limiter, query_handlers, session.peer_manager)
+            server_factory = ServerProtocolFactory(rate_limiter, query_handlers, dht_node.peer_manager)
 
             try:
                 log.info("Peer protocol listening on TCP %d", peer_port)
@@ -547,7 +608,7 @@ class PeerProtocolServerComponent(Component):
 
 class ReflectorComponent(Component):
     component_name = REFLECTOR_COMPONENT
-    depends_on = [SESSION_COMPONENT, FILE_MANAGER_COMPONENT]
+    depends_on = [DHT_COMPONENT, BLOB_COMPONENT, FILE_MANAGER_COMPONENT]
 
     def __init__(self, component_manager):
         Component.__init__(self, component_manager)
@@ -561,11 +622,10 @@ class ReflectorComponent(Component):
     @defer.inlineCallbacks
     def start(self):
         log.info("Starting reflector server")
-
-        session = self.component_manager.get_component(SESSION_COMPONENT)
+        dht_node = self.component_manager.get_component(DHT_COMPONENT)
+        blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
-        reflector_factory = reflector_server_factory(session.peer_manager, session.blob_manager, file_manager)
-
+        reflector_factory = reflector_server_factory(dht_node.peer_manager, blob_manager, file_manager)
         try:
             self.reflector_server = yield reactor.listenTCP(self.reflector_server_port, reflector_factory)
             log.info('Started reflector on port %s', self.reflector_server_port)
