@@ -751,10 +751,23 @@
         "description": "Get peers for blob hash"
     }, 
     {
-        "arguments": [], 
+        "arguments": [
+            {
+                "is_required": false, 
+                "type": "str", 
+                "name": "address", 
+                "description": "ip address of the peer"
+            }, 
+            {
+                "is_required": false, 
+                "type": "int", 
+                "name": "port", 
+                "description": "udp port of the peer"
+            }
+        ], 
         "returns": "(str) pong, or {'error': <error message>} if an error is encountered", 
         "name": "peer_ping", 
-        "description": "Find and ping a peer by node id"
+        "description": "Send a kademlia ping to the specified peer. If address and port are provided the peer is directly pinged,\nif not provided the peer is located first."
     }, 
     {
         "arguments": [
@@ -1040,7 +1053,7 @@
                 "description": "include session status in results"
             }
         ], 
-        "returns": "(dict) lbrynet-daemon status\n    {\n        'lbry_id': lbry peer id, base58,\n        'installation_id': installation id, base58,\n        'is_running': bool,\n        'is_first_run': bool,\n        'startup_status': {\n            'code': status code,\n            'message': status message\n        },\n        'connection_status': {\n            'code': connection status code,\n            'message': connection status message\n        },\n        'blockchain_status': {\n            'blocks': local blockchain height,\n            'blocks_behind': remote_height - local_height,\n            'best_blockhash': block hash of most recent block,\n        },\n        'wallet_is_encrypted': bool,\n\n        If given the session status option:\n            'session_status': {\n                'managed_blobs': count of blobs in the blob manager,\n                'managed_streams': count of streams in the file manager\n                'announce_queue_size': number of blobs currently queued to be announced\n                'should_announce_blobs': number of blobs that should be announced\n            }\n    }", 
+        "returns": "(dict) lbrynet-daemon status\n    {\n        'installation_id': (str) installation id - base58,\n        'is_running': (bool),\n        'is_first_run': bool,\n        'skipped_components': (list) [names of skipped components (str)],\n        'startup_status': { Does not include components which have been skipped\n            'database': (bool),\n            'wallet': (bool),\n            'session': (bool),\n            'dht': (bool),\n            'hash_announcer': (bool),\n            'stream_identifier': (bool),\n            'file_manager': (bool),\n            'peer_protocol_server': (bool),\n            'reflector': (bool),\n            'upnp': (bool),\n            'exchange_rate_manager': (bool),\n        },\n        'connection_status': {\n            'code': (str) connection status code,\n            'message': (str) connection status message\n        },\n        'blockchain_status': {\n            'blocks': (int) local blockchain height,\n            'blocks_behind': (int) remote_height - local_height,\n            'best_blockhash': (str) block hash of most recent block,\n        },\n        'dht_node_status': {\n            'node_id': (str) lbry dht node id - hex encoded,\n            'peers_in_routing_table': (int) the number of peers in the routing table,\n        },\n        'wallet_is_encrypted': (bool),\n        If given the session status option:\n            'session_status': {\n                'managed_blobs': (int) count of blobs in the blob manager,\n                'managed_streams': (int) count of streams in the file manager,\n                'announce_queue_size': (int) number of blobs currently queued to be announced,\n                'should_announce_blobs': (int) number of blobs that should be announced,\n            }\n    }", 
         "name": "status", 
         "description": "Get daemon status"
     }, 
