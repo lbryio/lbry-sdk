@@ -3118,7 +3118,7 @@ class Daemon(AuthJSONRPCServer):
         response = yield self._render_response(out)
         defer.returnValue(response)
 
-    @AuthJSONRPCServer.requires("wallet")
+    @requires("wallet")
     def jsonrpc_account_balance(self, account_name=None, confirmations=6,
                                 include_reserved=False, include_claims=False):
         """
@@ -3160,6 +3160,28 @@ class Daemon(AuthJSONRPCServer):
             if include_claims:
                 raise Exception("'--include-claims' requires specifying an LBC account.")
             return self.wallet.get_balances(confirmations)
+
+    @requires("wallet")
+    def jsonrpc_account_max_gap(self, account_name):
+        """
+        Finds ranges of consecutive addresses that are unused and returns the length
+        of the longest such range: for change and receiving address chains. This is
+        useful to figure out ideal values to set for 'receiving_gap' and 'change_gap'
+        account settings.
+
+        Usage:
+            account_max_gap <account_name>
+
+        Options:
+            --account=<account_name>        : (str) account for which to get max gaps
+
+        Returns:
+            (map) maximum gap for change and receiving addresses
+        """
+        for account in self.wallet.accounts:
+            if account.name == account_name:
+                return account.get_max_gap()
+        raise Exception("Couldn't find an account named: '{}'.".format(account_name))
 
 
 def loggly_time_string(dt):
