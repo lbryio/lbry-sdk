@@ -24,6 +24,9 @@ class KeyManager(object):
             self.account, self.chain_number, limit, max_used_times, order_by
         )
 
+    def get_max_gap(self):  # type: () -> defer.Deferred
+        raise NotImplementedError
+
     def ensure_address_gap(self):  # type: () -> defer.Deferred
         raise NotImplementedError
 
@@ -66,6 +69,19 @@ class KeyChain(KeyManager):
         defer.returnValue([key[1].address for key in new_keys])
 
     @defer.inlineCallbacks
+    def get_max_gap(self):
+        addresses = yield self._query_addresses(order_by="position ASC")
+        max_gap = 0
+        current_gap = 0
+        for address in addresses:
+            if address['used_times'] == 0:
+                current_gap += 1
+            else:
+                max_gap = max(max_gap, current_gap)
+                current_gap = 0
+        defer.returnValue(max_gap)
+
+    @defer.inlineCallbacks
     def ensure_address_gap(self):
         addresses = yield self._query_addresses(self.gap, None, "position DESC")
 
@@ -99,6 +115,9 @@ class SingleKey(KeyManager):
     def __init__(self, account, root_public_key, chain_number):
         # type: ('BaseAccount', PubKey) -> None
         super(SingleKey, self).__init__(account, root_public_key, chain_number)
+
+    def get_max_gap(self):
+        return defer.succeed(0)
 
     @defer.inlineCallbacks
     def ensure_address_gap(self):
@@ -264,6 +283,15 @@ class BaseAccount(object):
             height = self.ledger.headers.height - (confirmations-1)
             constraints.update({'height__lte': height, 'height__gt': 0})
         return self.ledger.db.get_balance_for_account(self, **constraints)
+
+    @defer.inlineCallbacks
+    def get_max_gap(self):
+        change_gap = yield self.change.get_max_gap()
+        receiving_gap = yield self.receiving.get_max_gap()
+        defer.returnValue({
+            'max_change_gap': change_gap,
+            'max_receiving_gap': receiving_gap,
+        })
 
     def get_unspent_outputs(self, **constraints):
         return self.ledger.db.get_utxos_for_account(self, **constraints)
