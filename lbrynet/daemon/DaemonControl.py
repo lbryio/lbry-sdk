@@ -26,7 +26,7 @@ def test_internet_connection():
     return utils.check_connection()
 
 
-def start():
+def start(argv):
     """The primary entry point for launching the daemon."""
 
     # postpone loading the config file to after the CLI arguments
@@ -57,7 +57,7 @@ def start():
         help='Show daemon version and quit'
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     update_settings_from_args(args)
 
     conf.settings.load_conf_file_settings()
@@ -103,4 +103,4 @@ def update_settings_from_args(args):
 
 
 if __name__ == "__main__":
-    start()
+    start(sys.argv[1:])
