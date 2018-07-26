@@ -33,12 +33,15 @@ class DictDataStore(UserDict):
         return filter(lambda peer: self._getTime() - peer[3] < constants.dataExpireTimeout, self[key])
 
     def removeExpiredPeers(self):
+        expired_keys = []
         for key in self.keys():
-            unexpired_peers = self.filter_expired_peers(key)
+            unexpired_peers = list(self.filter_expired_peers(key))
             if not unexpired_peers:
-                del self[key]
+                expired_keys.append(key)
             else:
-                self[key] = list(unexpired_peers)
+                self[key] = unexpired_peers
+        for key in expired_keys:
+            del self[key]
 
     def hasPeersForBlob(self, key):
         return True if key in self and len(tuple(self.filter_bad_and_expired_peers(key))) else False

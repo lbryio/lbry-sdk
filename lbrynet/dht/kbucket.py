@@ -140,7 +140,6 @@ class KBucket:
                  if not.
         @rtype: bool
         """
-        assert type(key) in [long, bytes], "{} is {}".format(key, type(key))  # fixme: _maybe_ remove this after porting
         if isinstance(key, bytes):
             key = long(hexlify(key), 16)
         return self.rangeMin <= key < self.rangeMax
