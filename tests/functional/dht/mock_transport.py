@@ -143,7 +143,7 @@ def debug_kademlia_packet(data, source, destination, node):
             log.debug("request %s --> %s %s (node time %s)", source[0], destination[0], packet.request,
                       node.clock.seconds())
         elif isinstance(packet, ResponseMessage):
-            if isinstance(packet.response, (str, unicode)):
+            if isinstance(packet.response, bytes):
                 log.debug("response %s <-- %s %s (node time %s)", destination[0], source[0], packet.response,
                           node.clock.seconds())
             else:

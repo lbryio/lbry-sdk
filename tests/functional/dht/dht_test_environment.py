@@ -1,5 +1,4 @@
 import logging
-from binascii import hexlify
 
 from twisted.trial import unittest
 from twisted.internet import defer, task
@@ -25,9 +24,9 @@ class TestKademliaBase(unittest.TestCase):
         return node
 
     @defer.inlineCallbacks
-    def add_node(self):
+    def add_node(self, known_addresses):
         node = self._add_next_node()
-        yield node.start([(seed_name, 4444) for seed_name in sorted(self.seed_dns.keys())])
+        yield node.start(known_addresses)
         defer.returnValue(node)
 
     def get_node(self, node_id):
@@ -41,13 +40,24 @@ class TestKademliaBase(unittest.TestCase):
         node = self.nodes.pop()
         yield node.stop()
 
-    def pump_clock(self, n, step=0.1, tick_callback=None):
+    def pump_clock(self, n, step=None, tick_callback=None):
         """
         :param n: seconds to run the reactor for
         :param step: reactor tick rate (in seconds)
         """
-        for _ in range(int(n * (1.0 / float(step)))):
-            self.clock.advance(step)
+        advanced = 0.0
+        while advanced < n:
+            self.clock._sortCalls()
+            if step:
+                next_step = step
+            elif self.clock.getDelayedCalls():
+                next_call = self.clock.getDelayedCalls()[0].getTime()
+                next_step = min(n - advanced, max(next_call - self.clock.rightNow, .000000000001))
+            else:
+                next_step = n - advanced
+            assert next_step > 0
+            self.clock.advance(next_step)
+            advanced += float(next_step)
             if tick_callback and callable(tick_callback):
                 tick_callback(self.clock.seconds())
 
@@ -116,8 +126,10 @@ class TestKademliaBase(unittest.TestCase):
         yield self.run_reactor(constants.checkRefreshInterval+1, seed_dl)
         while len(self.nodes + self._seeds) < self.network_size:
             network_dl = []
-            for i in range(min(10, self.network_size - len(self._seeds) - len(self.nodes))):
-                network_dl.append(self.add_node())
+            # fixme: We are starting one by one to reduce flakiness on time advance.
+            # fixme: When that improves, get back to 10+!
+            for i in range(min(1, self.network_size - len(self._seeds) - len(self.nodes))):
+                network_dl.append(self.add_node(known_addresses))
             yield self.run_reactor(constants.checkRefreshInterval*2+1, network_dl)
         self.assertEqual(len(self.nodes + self._seeds), self.network_size)
         self.pump_clock(3600)
