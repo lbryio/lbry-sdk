@@ -10,28 +10,34 @@ import boto3
 
 
 def main():
-    upload_to_github_if_tagged('lbryio/lbry')
+    #upload_to_github_if_tagged('lbryio/lbry')
     upload_to_s3('daemon')
 
 
 def get_asset_filename():
-    this_dir = os.path.dirname(os.path.realpath(__file__))
-    return glob.glob(this_dir + '/dist/*.zip')[0]
+    root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    return glob.glob(os.path.join(root_dir, 'dist/*'))[0]
+
+
+def get_cli_output(command):
+    return subprocess.check_output(command.split()).decode().strip()
 
 
 def upload_to_s3(folder):
-    tag = subprocess.check_output(['git', 'describe', '--always', '--abbrev=8', 'HEAD']).strip()
-    commit_date = subprocess.check_output([
-        'git', 'show', '-s', '--format=%cd', '--date=format:%Y%m%d-%H%I%S', 'HEAD']).strip()
-
     asset_path = get_asset_filename()
-    bucket = 'releases.lbry.io'
-    key = folder + '/' + commit_date + '-' + tag + '/' + os.path.basename(asset_path)
+    branch = get_cli_output('git rev-parse --abbrev-ref HEAD')
+    if branch = 'master':
+        tag = get_cli_output('git describe --always --abbrev=8 HEAD')
+        commit = get_cli_output('git show -s --format=%cd --date=format:%Y%m%d-%H%I%S HEAD')
+        bucket = 'releases.lbry.io'
+        key = '{}/{}-{}/{}'.format(folder, commit, tag, os.path.basename(asset_path))
+    else:
+        key = '{}/{}-{}/{}'.format(folder, commit_date, tag, os.path.basename(asset_path))
 
-    print "Uploading " + asset_path + " to s3://" + bucket + '/' + key + ''
+    print("Uploading {} to s3://{}/{}".format(asset_path, bucket, key))
 
     if 'AWS_ACCESS_KEY_ID' not in os.environ or 'AWS_SECRET_ACCESS_KEY' not in os.environ:
-        print 'Must set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to publish assets to s3'
+        print('Must set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to publish assets to s3')
         return 1
 
     s3 = boto3.resource(
@@ -48,13 +54,13 @@ def upload_to_github_if_tagged(repo_name):
         current_tag = subprocess.check_output(
             ['git', 'describe', '--exact-match', 'HEAD']).strip()
     except subprocess.CalledProcessError:
-        print 'Not uploading to GitHub as we are not currently on a tag'
+        print('Not uploading to GitHub as we are not currently on a tag')
         return 1
 
-    print "Current tag: " + current_tag
+    print("Current tag: " + current_tag)
 
     if 'GH_TOKEN' not in os.environ:
-        print 'Must set GH_TOKEN in order to publish assets to a release'
+        print('Must set GH_TOKEN in order to publish assets to a release')
         return 1
 
     gh_token = os.environ['GH_TOKEN']
@@ -62,12 +68,12 @@ def upload_to_github_if_tagged(repo_name):
     repo = auth.get_repo(repo_name)
 
     if not check_repo_has_tag(repo, current_tag):
-        print 'Tag {} is not in repo {}'.format(current_tag, repo)
+        print('Tag {} is not in repo {}'.format(current_tag, repo))
         # TODO: maybe this should be an error
         return 1
 
     asset_path = get_asset_filename()
-    print "Uploading " + asset_path + " to Github tag " + current_tag
+    print("Uploading " + asset_path + " to Github tag " + current_tag)
     release = get_github_release(repo, current_tag)
     upload_asset_to_github(release, asset_path, gh_token)
 
@@ -91,7 +97,7 @@ def upload_asset_to_github(release, asset_to_upload, token):
     basename = os.path.basename(asset_to_upload)
     for asset in release.raw_data['assets']:
         if asset['name'] == basename:
-            print 'File {} has already been uploaded to {}'.format(basename, release.tag_name)
+            print('File {} has already been uploaded to {}'.format(basename, release.tag_name))
             return
 
     upload_uri = uritemplate.expand(release.upload_url, {'name': basename})
@@ -102,9 +108,9 @@ def upload_asset_to_github(release, asset_to_upload, token):
             if 'errors' in output:
                 raise Exception(output)
             else:
-                print 'Successfully uploaded to {}'.format(output['browser_download_url'])
+                print('Successfully uploaded to {}'.format(output['browser_download_url']))
         except Exception:
-            print 'Failed uploading on attempt {}'.format(count + 1)
+            print('Failed uploading on attempt {}'.format(count + 1))
             count += 1
 
 
@@ -113,7 +119,7 @@ def _curl_uploader(upload_uri, asset_to_upload, token):
     # half a day trying to debug before deciding to switch to curl.
     #
     # TODO: actually set the content type
-    print 'Using curl to upload {} to {}'.format(asset_to_upload, upload_uri)
+    print('Using curl to upload {} to {}'.format(asset_to_upload, upload_uri))
     cmd = [
         'curl',
         '-sS',
@@ -124,18 +130,18 @@ def _curl_uploader(upload_uri, asset_to_upload, token):
         upload_uri
     ]
     # '-d', '{"some_key": "some_value"}',
-    print 'Calling curl:'
-    print cmd
-    print
+    print('Calling curl:')
+    print(cmd)
+    print('')
     with open(asset_to_upload, 'rb') as fp:
         p = subprocess.Popen(cmd, stdin=fp, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     stdout, stderr = p.communicate()
-    print 'curl return code:', p.returncode
+    print('curl return code: {}'.format(p.returncode))
     if stderr:
-        print 'stderr output from curl:'
-        print stderr
-    print 'stdout from curl:'
-    print stdout
+        print('stderr output from curl:')
+        print(stderr)
+    print('stdout from curl:')
+    print(stdout)
     return json.loads(stdout)
 
 
