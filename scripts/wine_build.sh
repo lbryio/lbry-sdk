@@ -17,5 +17,5 @@ cd torba && pip install -e . && cd ..
 
 cd lbry
 pip install -e .
-pyinstaller lbrynet/daemon/DaemonControl.py
-wine dist/DaemonControl/DaemonControl.exe --version
+pyinstaller -F -n lbry lbrynet/cli.py
+wine dist/lbry.exe --version
