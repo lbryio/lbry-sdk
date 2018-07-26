@@ -1,5 +1,4 @@
 import os
-import six
 import json
 from binascii import hexlify
 from twisted.internet import defer
@@ -16,16 +15,14 @@ from .transaction import Transaction
 from .database import WalletDatabase  # pylint: disable=unused-import
 
 
-if six.PY3:
-    buffer = memoryview
-
-
 class BackwardsCompatibleNetwork:
     def __init__(self, manager):
         self.manager = manager
 
     def get_local_height(self):
-        return len(self.manager.ledgers.values()[0].headers)
+        for ledger in self.manager.ledgers.values():
+            assert isinstance(ledger, MainNetLedger)
+            return ledger.headers.height
 
     def get_server_height(self):
         return self.get_local_height()
@@ -173,7 +170,7 @@ class LbryWalletManager(BaseWalletManager):
         defer.returnValue(tx)
 
     def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
-        if isinstance(address, buffer):
+        if isinstance(address, memoryview):
             address = str(address)
         return {
             "claim_id": hexlify(tx.get_claim_id(txo.position)).decode(),
