@@ -182,13 +182,13 @@ class Base58(object):
     @classmethod
     def decode(cls, txt):
         """ Decodes txt into a big-endian bytearray. """
-        if six.PY2 and isinstance(txt, buffer):
+        if isinstance(txt, memoryview):
             txt = str(txt)
 
-        if isinstance(txt, six.binary_type):
+        if isinstance(txt, bytes):
             txt = txt.decode()
 
-        if not isinstance(txt, six.text_type):
+        if not isinstance(txt, str):
             raise TypeError('a string is required')
 
         if not txt:
