@@ -15,6 +15,7 @@ from setuptools import setup, find_packages
 # See https://packaging.python.org/requirements/  and
 # https://caremad.io/posts/2013/07/setup-vs-requirement/  for more details.
 requires = [
+    'aiohttp',
     'twisted[tls]',
     'appdirs',
     'distro',
