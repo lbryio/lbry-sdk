@@ -45,12 +45,34 @@ jobs:
       name: "Windows"
       services:
         - docker
-      before_install:
-        - docker pull cdrx/pyinstaller-windows:python3-32bit
       install:
-        - docker run -v "$(pwd):/src/lbry" cdrx/pyinstaller-windows:python3-32bit lbry/scripts/wine_build.sh
+        - docker pull cdrx/pyinstaller-windows:python3-32bit
       script:
-        - find dist/
+        - docker run -v "$(pwd):/src/lbry" cdrx/pyinstaller-windows:python3-32bit lbry/scripts/wine_build.sh
+      addons:
+        artifacts:
+          working_dir: dist
+          paths:
+            - lbry.exe
+          target_paths:
+            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/win
+
+    - name: "Linux"
+      install:
+        - pip install pyinstaller
+        - pip install git+https://github.com/lbryio/torba.git
+        - pip install git+https://github.com/lbryio/lbryschema.git
+        - pip install -e .
+      script:
+        - pyinstaller -F -n lbry lbrynet/cli.py
+        - ./dist/lbry --version
+      addons:
+        artifacts:
+          working_dir: dist
+          paths:
+            - lbry
+          target_paths:
+            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/linux
 
 cache:
   directories:
