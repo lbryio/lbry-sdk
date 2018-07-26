@@ -89,7 +89,6 @@ def main(argv):
             print_help_for_command(args[0])
         else:
             print_help()
-        return 0
 
     elif method in ['version', '--version', '-v']:
         print("@hackrush didn't implement this yet :-p")
