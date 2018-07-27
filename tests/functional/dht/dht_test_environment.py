@@ -108,6 +108,8 @@ class TestKademliaBase(unittest.TestCase):
 
     @defer.inlineCallbacks
     def setUp(self):
+        import random
+        random.seed(0)
         self.nodes = []
         self._seeds = []
         self.clock = task.Clock()
