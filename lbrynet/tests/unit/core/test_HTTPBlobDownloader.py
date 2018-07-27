@@ -37,6 +37,16 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.assertEqual(self.blob.writers, {})
 
     @defer.inlineCallbacks
+    def test_peer_finished_first_causing_a_write_on_closed_handle(self):
+        self.client.collect.side_effect = lambda response, write: defer.fail(IOError('I/O operation on closed file'))
+        yield self.downloader.start()
+        self.blob_manager.get_blob.assert_called_with(self.blob_hash)
+        self.client.get.assert_called_with('http://{}/{}'.format('server1', self.blob_hash))
+        self.client.collect.assert_called()
+        self.assertEqual(self.blob.get_length(), self.response.length)
+        self.assertEqual(self.blob.writers, {})
+
+    @defer.inlineCallbacks
     def test_download_transfer_failed(self):
         self.client.collect.side_effect = lambda response, write: defer.fail(Exception())
         yield self.downloader.start()

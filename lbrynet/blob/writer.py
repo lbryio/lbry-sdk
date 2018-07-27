@@ -27,7 +27,7 @@ class HashBlobWriter(object):
 
     def write(self, data):
         if self.write_handle is None:
-            log.exception("writer has already been closed")
+            log.warning("writer has already been closed")
             raise IOError('I/O operation on closed file')
 
         self._hashsum.update(data)
