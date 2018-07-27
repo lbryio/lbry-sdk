@@ -114,7 +114,7 @@ class _Contact:
             return True
 
     def __hash__(self):
-        return int(hexlify(self.id), 16) if self.id else -1
+        return int(hexlify(self.id), 16) if self.id else int(sum(int(x) for x in self.address.split('.')) + self.port)
 
     def compact_ip(self):
         compact_ip = reduce(
