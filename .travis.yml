@@ -53,7 +53,7 @@ jobs:
         artifacts:
           working_dir: dist
           paths:
-            - lbry.exe
+            - lbrynet.exe
           target_paths:
             - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/win
 
@@ -64,13 +64,13 @@ jobs:
         - pip install git+https://github.com/lbryio/lbryschema.git
         - pip install -e .
       script:
-        - pyinstaller -F -n lbry lbrynet/cli.py
-        - ./dist/lbry --version
+        - pyinstaller -F -n lbrynet lbrynet/cli.py
+        - ./dist/lbrynet --version
       addons:
         artifacts:
           working_dir: dist
           paths:
-            - lbry
+            - lbrynet
           target_paths:
             - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/linux
 
@@ -84,13 +84,13 @@ jobs:
         - pip3 install git+https://github.com/lbryio/lbryschema.git
         - pip3 install -e .
       script:
-        - pyinstaller -F -n lbry lbrynet/cli.py
-        - ./dist/lbry --version
+        - pyinstaller -F -n lbrynet lbrynet/cli.py
+        - ./dist/lbrynet --version
       addons:
         artifacts:
           working_dir: dist
           paths:
-            - lbry
+            - lbrynet
           target_paths:
             - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/mac
 
