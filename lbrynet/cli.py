@@ -42,10 +42,6 @@ def print_help_for_command(command):
         print("Invalid command name")
 
 
-def get_version():
-    print(json.dumps(get_platform(get_ip=False), sort_keys=True, indent=4, separators=(',', ': ')))
-
-
 def guess_type(x, key=None):
     if not isinstance(x, str):
         return x
@@ -102,7 +98,8 @@ def main(argv=None):
             print_help()
 
     elif method in ['version', '--version', '-v']:
-        get_version()
+        print(json.dumps(get_platform(get_ip=False), sort_keys=True, indent=4, separators=(',', ': ')))
+
 
     elif method == 'start':
         start(args)
