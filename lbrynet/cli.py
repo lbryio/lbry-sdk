@@ -5,6 +5,7 @@ import aiohttp
 from docopt import docopt
 from textwrap import dedent
 
+from lbrynet.core.system_info import get_platform
 from lbrynet.daemon.Daemon import Daemon
 from lbrynet.daemon.DaemonControl import start
 
@@ -34,7 +35,15 @@ def print_help():
 
 
 def print_help_for_command(command):
-    print("@hackrush didn't implement this yet :-p")
+    fn = Daemon.callable_methods.get(command)
+    if fn:
+        print(dedent(fn.__doc__))
+    else:
+        print("Invalid command name")
+
+
+def get_version():
+    print(json.dumps(get_platform(get_ip=False), sort_keys=True, indent=4, separators=(',', ': ')))
 
 
 def guess_type(x, key=None):
@@ -78,7 +87,8 @@ def set_kwargs(parsed_args):
     return kwargs
 
 
-def main(argv):
+def main():
+    argv = sys.argv[1:]
     if not argv:
         print_help()
         return 1
@@ -92,7 +102,7 @@ def main(argv):
             print_help()
 
     elif method in ['version', '--version', '-v']:
-        print("@hackrush didn't implement this yet :-p")
+        get_version()
 
     elif method == 'start':
         start(args)
@@ -112,4 +122,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())
