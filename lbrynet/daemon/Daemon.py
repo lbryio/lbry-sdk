@@ -1084,7 +1084,7 @@ class Daemon(AuthJSONRPCServer):
         Stop lbrynet-daemon
 
         Usage:
-            daemon_stop
+            stop
 
         Options:
             None
