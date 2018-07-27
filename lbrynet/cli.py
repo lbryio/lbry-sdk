@@ -1,4 +1,5 @@
 import sys
+import json
 import asyncio
 import aiohttp
 from docopt import docopt
@@ -12,7 +13,7 @@ async def execute_command(command, args):
     message = {'method': command, 'params': args}
     async with aiohttp.ClientSession() as session:
         async with session.get('http://localhost:5279/lbryapi', json=message) as resp:
-            print(await resp.json())
+            print(json.dumps(await resp.json(), indent=4))
 
 
 def print_help():
