@@ -3126,14 +3126,14 @@ class Daemon(AuthJSONRPCServer):
 
         Usage:
             account_balance [<account_name>] [--confirmations=<confirmations>]
-                            [--include-reserved] [--include-claims]
+                            [--include_reserved] [--include_claims]
 
         Options:
             --account=<account_name>        : (str) If provided only the balance for this
                                                     account will be given
             --confirmations=<confirmations> : (int) required confirmations (default: 6)
-            --include-reserved              : (bool) include reserved UTXOs (default: false)
-            --include-claims                : (bool) include claims, requires than a
+            --include_reserved              : (bool) include reserved UTXOs (default: false)
+            --include_claims                : (bool) include claims, requires than a
                                                      LBC account is specified (default: false)
 
         Returns:
