@@ -1068,7 +1068,7 @@ class Daemon(AuthJSONRPCServer):
         defer.returnValue(response)
 
     @defer.inlineCallbacks
-    def jsonrpc_daemon_stop(self):
+    def jsonrpc_stop(self):
         """
         Stop lbrynet-daemon
 
