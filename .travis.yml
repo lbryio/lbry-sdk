@@ -71,9 +71,9 @@ jobs:
           working_dir: dist
           paths:
             - lbrynet
+          # artifact uploader thinks lbrynet is a directory, https://github.com/travis-ci/artifacts/issues/78
           target_paths:
-            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/linux/
-          debug: true
+            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/linux/lbrynet
 
     - name: "Mac"
       os: osx
@@ -92,8 +92,9 @@ jobs:
           working_dir: dist
           paths:
             - lbrynet
+          # artifact uploader thinks lbrynet is a directory, https://github.com/travis-ci/artifacts/issues/78
           target_paths:
-            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/mac/
+            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/mac/lbrynet
 
 cache:
   directories:
