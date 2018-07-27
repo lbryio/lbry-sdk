@@ -87,8 +87,8 @@ def set_kwargs(parsed_args):
     return kwargs
 
 
-def main():
-    argv = sys.argv[1:]
+def main(argv=None):
+    argv = argv or sys.argv[1:]
     if not argv:
         print_help()
         return 1
