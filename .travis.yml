@@ -55,7 +55,7 @@ jobs:
           paths:
             - lbrynet.exe
           target_paths:
-            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/win
+            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/win/
 
     - name: "Linux"
       install:
@@ -72,7 +72,7 @@ jobs:
           paths:
             - lbrynet
           target_paths:
-            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/linux
+            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/linux/
 
     - name: "Mac"
       os: osx
@@ -92,7 +92,7 @@ jobs:
           paths:
             - lbrynet
           target_paths:
-            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/mac
+            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/mac/
 
 cache:
   directories:
