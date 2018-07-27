@@ -74,6 +74,18 @@ class HTTPBlobDownloaderTest(unittest.TestCase):
         self.assertEqual(self.blob.get_is_verified(), False)
         self.assertEqual(self.blob.writers, {})
 
+    @defer.inlineCallbacks
+    def test_stop(self):
+        self.client.collect.side_effect = lambda response, write: defer.Deferred()
+        self.downloader.start()  # hangs if yielded, as intended, to simulate a long ongoing write while we call stop
+        yield self.downloader.stop()
+        self.blob_manager.get_blob.assert_called_with(self.blob_hash)
+        self.client.get.assert_called_with('http://{}/{}'.format('server1', self.blob_hash))
+        self.client.collect.assert_called()
+        self.assertEqual(self.blob.get_length(), self.response.length)
+        self.assertEqual(self.blob.get_is_verified(), False)
+        self.assertEqual(self.blob.writers, {})
+
 
 def collect(response, write):
     write('f' * response.length)
