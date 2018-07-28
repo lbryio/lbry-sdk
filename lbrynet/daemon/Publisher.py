@@ -5,7 +5,6 @@ from binascii import hexlify
 
 from twisted.internet import defer
 
-from lbrynet.core import file_utils
 from lbrynet.file_manager.EncryptedFileCreator import create_lbry_file
 from lbrynet.wallet.account import get_certificate_lookup
 
@@ -30,7 +29,7 @@ class Publisher:
             raise Exception("Cannot publish empty file {}".format(file_path))
 
         file_name = os.path.basename(file_path)
-        with file_utils.get_read_handle(file_path) as read_handle:
+        with open(file_path, 'rb') as read_handle:
             self.lbry_file = yield create_lbry_file(self.session, self.lbry_file_manager, file_name,
                                                     read_handle)
 
