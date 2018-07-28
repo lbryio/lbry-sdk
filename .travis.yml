@@ -29,6 +29,7 @@ jobs:
         - bash <(curl -s https://codecov.io/bash)
 
     - name: "Integration Tests"
+      python: "3.7"
       install:
         - pip install tox-travis coverage
         - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
