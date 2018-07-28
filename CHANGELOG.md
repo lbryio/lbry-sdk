@@ -14,7 +14,7 @@ at anytime.
 
 ### Fixed
   * loggly error reporting not following `share_usage_data`
-  *
+  * improper error handling when data is not valid JSON
 
 ### Deprecated
   * automatic claim renew, this is no longer needed
