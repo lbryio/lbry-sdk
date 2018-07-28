@@ -83,12 +83,12 @@ class HTTPBlobDownloader(object):
     def _write_blob(self, writer, blob):
         response = yield self.client.get(url_for(choice(self.servers), blob.blob_hash))
         if response.code != 200:
-            log.debug('[Mirror] Missing a blob: %s', blob.blob_hash)
+            log.debug('Missing a blob: %s', blob.blob_hash)
             if blob.blob_hash in self.blob_hashes:
                 self.blob_hashes.remove(blob.blob_hash)
             defer.returnValue(False)
 
-        log.debug('[Mirror] Download started: %s', blob.blob_hash)
+        log.debug('Download started: %s', blob.blob_hash)
         blob.set_length(response.length)
         yield self.client.collect(response, writer.write)
         defer.returnValue(True)
