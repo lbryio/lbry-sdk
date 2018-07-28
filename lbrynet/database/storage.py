@@ -3,6 +3,7 @@ import os
 import sqlite3
 import traceback
 from decimal import Decimal
+from binascii import unhexlify, hexlify
 from twisted.internet import defer, task, threads
 from twisted.enterprise import adbapi
 
@@ -250,7 +251,7 @@ class SQLiteStorage(object):
         blob_hashes = yield self.run_and_return_list(
             "select blob_hash from blob where status='finished'"
         )
-        defer.returnValue([blob_hash.decode('hex') for blob_hash in blob_hashes])
+        defer.returnValue([unhexlify(blob_hash) for blob_hash in blob_hashes])
 
     def update_last_announced_blob(self, blob_hash, last_announced):
         return self.db.runOperation(
@@ -469,9 +470,9 @@ class SQLiteStorage(object):
     @defer.inlineCallbacks
     def save_downloaded_file(self, stream_hash, file_name, download_directory, data_payment_rate):
         # touch the closest available file to the file name
-        file_name = yield open_file_for_writing(download_directory.decode('hex'), file_name.decode('hex'))
+        file_name = yield open_file_for_writing(unhexlify(download_directory), unhexlify(file_name))
         result = yield self.save_published_file(
-            stream_hash, file_name.encode('hex'), download_directory, data_payment_rate
+            stream_hash, hexlify(file_name), download_directory, data_payment_rate
         )
         defer.returnValue(result)
 
@@ -595,7 +596,7 @@ class SQLiteStorage(object):
                         source_hash = None
                 except AttributeError:
                     source_hash = None
-                serialized = claim_info.get('hex') or smart_decode(claim_info['value']).serialized.encode('hex')
+                serialized = claim_info.get('hex') or hexlify(smart_decode(claim_info['value']).serialized)
                 transaction.execute(
                     "insert or replace into claim values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (outpoint, claim_id, name, amount, height, serialized, certificate_id, address, sequence)
@@ -653,7 +654,7 @@ class SQLiteStorage(object):
         ).fetchone()
         if not claim_info:
             raise Exception("claim not found")
-        new_claim_id, claim = claim_info[0], ClaimDict.deserialize(claim_info[1].decode('hex'))
+        new_claim_id, claim = claim_info[0], ClaimDict.deserialize(unhexlify(claim_info[1]))
 
         # certificate claims should not be in the content_claim table
         if not claim.is_stream:
@@ -850,7 +851,7 @@ def _format_claim_response(outpoint, claim_id, name, amount, height, serialized,
         "claim_id": claim_id,
         "address": address,
         "claim_sequence": claim_sequence,
-        "value": ClaimDict.deserialize(serialized.decode('hex')).claim_dict,
+        "value": ClaimDict.deserialize(unhexlify(serialized)).claim_dict,
         "height": height,
         "amount": float(Decimal(amount) / Decimal(COIN)),
         "nout": int(outpoint.split(":")[1]),
