@@ -11,7 +11,8 @@ jobs:
     - stage: code quality
       name: "pylint & mypy"
       install:
-        - pip install pylint mypy
+        - pip install git+https://github.com/PyCQA/pylint.git
+        - pip install mypy
         - pip install -e .
       script:
         - pylint --rcfile=setup.cfg torba
