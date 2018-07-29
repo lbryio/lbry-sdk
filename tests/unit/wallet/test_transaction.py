@@ -228,7 +228,7 @@ class TestTransactionSigning(unittest.TestCase):
         account = self.ledger.account_class.from_seed(
             self.ledger,
             u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            u"sent", u"lbryum"
+            u"sent", u"lbryum", {}
         )
 
         yield account.ensure_address_gap()
