@@ -90,13 +90,13 @@ class Headers(BaseHeaders):
 
         # Retarget
         bnPowLimit = _ArithUint256(self.ledger.max_target)
-        bnNew = _ArithUint256.SetCompact(last['bits'])
+        bnNew = _ArithUint256.set_compact(last['bits'])
         bnNew *= nModulatedTimespan
         bnNew //= nModulatedTimespan
         if bnNew > bnPowLimit:
             bnNew = bnPowLimit
 
-        return bnNew.GetCompact(), bnNew._value
+        return bnNew.get_compact(), bnNew._value
 
 
 class MainNetLedger(BaseLedger):

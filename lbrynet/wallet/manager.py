@@ -3,16 +3,16 @@ import json
 from binascii import hexlify
 from twisted.internet import defer
 
-from torba.manager import WalletManager as BaseWalletManager
+from torba.basemanager import BaseWalletManager
 
 from lbryschema.uri import parse_lbry_uri
 from lbryschema.error import URIParseError
 from lbryschema.claim import ClaimDict
 
-from .ledger import MainNetLedger  # pylint: disable=unused-import
+from .ledger import MainNetLedger
 from .account import generate_certificate
 from .transaction import Transaction
-from .database import WalletDatabase  # pylint: disable=unused-import
+from .database import WalletDatabase
 
 
 class BackwardsCompatibleNetwork:
@@ -31,11 +31,11 @@ class BackwardsCompatibleNetwork:
 class LbryWalletManager(BaseWalletManager):
 
     @property
-    def ledger(self):  # type: () -> MainNetLedger
+    def ledger(self) -> MainNetLedger:
         return self.default_account.ledger
 
     @property
-    def db(self):  # type: () -> WalletDatabase
+    def db(self) -> WalletDatabase:
         return self.ledger.db
 
     @property
