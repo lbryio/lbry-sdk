@@ -36,3 +36,8 @@ after_success:
   - pip install coverage
   - coverage combine tests/
   - bash <(curl -s https://codecov.io/bash)
+
+cache:
+  directories:
+    - $HOME/.cache/pip
+    - $TRAVIS_BUILD_DIR/.tox
