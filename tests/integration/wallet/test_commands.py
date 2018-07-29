@@ -1,12 +1,10 @@
 import six
-import asyncio
 import tempfile
+import logging
 from types import SimpleNamespace
-from binascii import hexlify
 
 from twisted.internet import defer
 from orchstr8.testcase import IntegrationTestCase, d2f
-from torba.constants import COIN
 from lbrynet.core.cryptoutils import get_lbry_hash_obj
 
 import lbryschema
@@ -18,6 +16,9 @@ from lbrynet.wallet.manager import LbryWalletManager
 from lbrynet.daemon.Components import WalletComponent, FileManagerComponent, SessionComponent, DatabaseComponent
 from lbrynet.daemon.ComponentManager import ComponentManager
 from lbrynet.file_manager.EncryptedFileManager import EncryptedFileManager
+
+
+log = logging.getLogger(__name__)
 
 
 class FakeAnalytics:
@@ -70,7 +71,6 @@ class FakeSession:
     peer_finder = None
     rate_limiter = None
 
-
     @property
     def payment_rate_manager(self):
         obj = SimpleNamespace()
@@ -84,6 +84,10 @@ class CommandTestCase(IntegrationTestCase):
 
     async def setUp(self):
         await super().setUp()
+
+        if self.VERBOSE:
+            log.setLevel(logging.DEBUG)
+            logging.getLogger('lbrynet.core').setLevel(logging.DEBUG)
 
         lbry_conf.settings = None
         lbry_conf.initialize_settings(load_conf_file=False)
@@ -99,10 +103,7 @@ class CommandTestCase(IntegrationTestCase):
         await d2f(self.account.ensure_address_gap())
         address = (await d2f(self.account.receiving.get_addresses(1, only_usable=True)))[0]
         sendtxid = await self.blockchain.send_to_address(address, 10)
-        await self.on_transaction_id(sendtxid)
-        await self.blockchain.generate(1)
-        await self.ledger.on_header.where(lambda n: n == 201)
-        await self.on_transaction_id(sendtxid)
+        await self.confirm_tx(sendtxid)
 
         analytics_manager = FakeAnalytics()
         self.daemon = Daemon(analytics_manager, ComponentManager(analytics_manager, skip_components=[
@@ -136,6 +137,41 @@ class CommandTestCase(IntegrationTestCase):
         self.daemon.file_manager = file_manager.file_manager
         self.daemon.component_manager.components.add(file_manager)
 
+    async def confirm_tx(self, txid):
+        """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
+        log.debug(
+            'Waiting on %s to be in mempool. (current height: %s, expected height: %s)',
+            txid, self.ledger.headers.height, self.blockchain._block_expected
+        )
+        await self.on_transaction_id(txid)
+        log.debug(
+            '%s is in mempool. (current height: %s, expected height: %s)',
+            txid, self.ledger.headers.height, self.blockchain._block_expected
+        )
+        await self.generate(1)
+        log.debug(
+            'Waiting on %s to be in block. (current height: %s, expected height: %s)',
+            txid, self.ledger.headers.height, self.blockchain._block_expected
+        )
+        await self.on_transaction_id(txid)
+        log.debug(
+            '%s is in a block. (current height: %s, expected height: %s)',
+            txid, self.ledger.headers.height, self.blockchain._block_expected
+        )
+
+    async def generate(self, blocks):
+        """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
+        log.info(
+            'Generating %s blocks. (current height: %s)',
+            blocks, self.ledger.headers.height
+        )
+        await self.blockchain.generate(blocks)
+        await self.ledger.on_header.where(self.blockchain.is_expected_block)
+        log.info(
+            "Headers up to date. (current height: %s, expected height: %s)",
+            self.ledger.headers.height, self.blockchain._block_expected
+        )
+
 
 class CommonWorkflowTests(CommandTestCase):
 
@@ -150,24 +186,20 @@ class CommonWorkflowTests(CommandTestCase):
         # Decides to get a cool new channel.
         channel = await d2f(self.daemon.jsonrpc_channel_new('@spam', 1))
         self.assertTrue(channel['success'])
-        await self.on_transaction_id(channel['txid'])
-        await self.blockchain.generate(1)
-        await self.ledger.on_header.where(lambda n: n == 202)
-        await self.on_transaction_id(channel['txid'])
+        await self.confirm_tx(channel['txid'])
 
-        # Check balance again.
+        # Check balance, include utxos with less than 6 confirmations (unconfirmed).
         result = await d2f(self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True))
         self.assertEqual(result, 8.99)
 
-        # Confirmed balance is 0.
+        # Check confirmed balance, only includes utxos with 6+ confirmations.
         result = await d2f(self.daemon.jsonrpc_wallet_balance())
         self.assertEqual(result, 0)
 
         # Add some confirmations (there is already 1 confirmation, so we add 5 to equal 6 total).
-        await self.blockchain.generate(5)
-        await self.ledger.on_header.where(lambda n: n == 207)
+        await self.generate(5)
 
-        # Check balance again after some confirmations.
+        # Check balance again after some confirmations, should be correct again.
         result = await d2f(self.daemon.jsonrpc_wallet_balance())
         self.assertEqual(result, 8.99)
 
@@ -175,9 +207,34 @@ class CommonWorkflowTests(CommandTestCase):
         with tempfile.NamedTemporaryFile() as file:
             file.write(b'hello world!')
             file.flush()
-            result = await d2f(self.daemon.jsonrpc_publish(
-                'foo', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
+            claim = await d2f(self.daemon.jsonrpc_publish(
+                'hovercraft', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
             ))
-            print(result)
-            # test fails to cleanup on travis
-            await asyncio.sleep(5)
+            self.assertTrue(claim['success'])
+            await self.confirm_tx(claim['txid'])
+
+        # Check unconfirmed balance.
+        result = await d2f(self.daemon.jsonrpc_wallet_balance(include_unconfirmed=True))
+        self.assertEqual(round(result, 2), 7.97)
+
+        # Resolve our claim.
+        response = await d2f(self.ledger.resolve(0, 10, 'lbry://@spam/hovercraft'))
+        self.assertIn('lbry://@spam/hovercraft', response)
+
+        # A few confirmations before trying to spend again.
+        await self.generate(5)
+
+        # Verify confirmed balance.
+        result = await d2f(self.daemon.jsonrpc_wallet_balance())
+        self.assertEqual(round(result, 2), 7.97)
+
+        # Now lets update an existing claim.
+        return
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hello world x2!')
+            file.flush()
+            claim = await d2f(self.daemon.jsonrpc_publish(
+                'hovercraft', 1, file_path=file.name, channel_name='@spam', channel_id=channel['claim_id']
+            ))
+            self.assertTrue(claim['success'])
+            await self.confirm_tx(claim['txid'])
