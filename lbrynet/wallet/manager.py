@@ -98,11 +98,11 @@ class LbryWalletManager(BaseWalletManager):
                         'private_key': json_dict['master_private_keys']['x/'],
                         'public_key': json_dict['master_public_keys']['x/'],
                         'certificates': json_dict.get('claim_certificates', {}),
-                        'receiving_gap': 20,
-                        'change_gap': 6,
-                        'receiving_maximum_uses_per_address': 2,
-                        'change_maximum_uses_per_address': 2,
-                        'is_hd': True
+                        'address_generator': {
+                            'name': 'deterministic-chain',
+                            'receiving': {'gap': 20, 'maximum_uses_per_address': 2},
+                            'change': {'gap': 6, 'maximum_uses_per_address': 2}
+                        }
                     }]
                 }, indent=4, sort_keys=True)
                 with open(wallet_file_path, 'w') as f:
