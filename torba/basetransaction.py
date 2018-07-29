@@ -328,9 +328,8 @@ class BaseTransaction:
             self.locktime = stream.read_uint32()
 
     @classmethod
-    def ensure_all_have_same_ledger(
-            cls, funding_accounts: Iterable[BaseAccount], change_account: BaseAccount = None)\
-            -> 'baseledger.BaseLedger':
+    def ensure_all_have_same_ledger(cls, funding_accounts: Iterable[BaseAccount],
+                                    change_account: BaseAccount = None) -> 'baseledger.BaseLedger':
         ledger = None
         for account in funding_accounts:
             if ledger is None:

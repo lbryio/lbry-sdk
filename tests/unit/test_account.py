@@ -3,10 +3,10 @@ from twisted.trial import unittest
 from twisted.internet import defer
 
 from torba.coin.bitcoinsegwit import MainNetLedger
-from torba.baseaccount import KeyChain, SingleKey
+from torba.baseaccount import HierarchicalDeterministic, SingleKey
 
 
-class TestKeyChainAccount(unittest.TestCase):
+class TestHierarchicalDeterministicAccount(unittest.TestCase):
 
     @defer.inlineCallbacks
     def setUp(self):
@@ -42,7 +42,7 @@ class TestKeyChainAccount(unittest.TestCase):
     def test_ensure_address_gap(self):
         account = self.account
 
-        self.assertIsInstance(account.receiving, KeyChain)
+        self.assertIsInstance(account.receiving, HierarchicalDeterministic)
 
         yield account.receiving.generate_keys(4, 7)
         yield account.receiving.generate_keys(0, 3)
@@ -95,7 +95,7 @@ class TestKeyChainAccount(unittest.TestCase):
         account = self.ledger.account_class.from_seed(
             self.ledger,
             "carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            "sent", "torba", receiving_gap=3, change_gap=2
+            "sent", "torba", {'name': 'deterministic-chain', 'receiving_gap': 3, 'change_gap': 2}
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
@@ -139,11 +139,11 @@ class TestKeyChainAccount(unittest.TestCase):
             'public_key':
                 'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
                 'iW44g14WF52fYC5J483wqQ5ZP',
-            'is_hd': True,
-            'receiving_gap': 5,
-            'receiving_maximum_uses_per_address': 2,
-            'change_gap': 5,
-            'change_maximum_uses_per_address': 2
+            'address_generator': {
+                'name': 'deterministic-chain',
+                'receiving': {'gap': 5, 'maximum_uses_per_address': 2},
+                'change': {'gap': 5, 'maximum_uses_per_address': 2}
+            }
         }
 
         account = self.ledger.account_class.from_dict(self.ledger, account_data)
@@ -166,7 +166,7 @@ class TestSingleKeyAccount(unittest.TestCase):
     def setUp(self):
         self.ledger = MainNetLedger({'db': MainNetLedger.database_class(':memory:')})
         yield self.ledger.db.start()
-        self.account = self.ledger.account_class.generate(self.ledger, u"torba", is_hd=False)
+        self.account = self.ledger.account_class.generate(self.ledger, u"torba", {'name': 'single-address'})
 
     @defer.inlineCallbacks
     def test_generate_account(self):
@@ -247,7 +247,7 @@ class TestSingleKeyAccount(unittest.TestCase):
         account = self.ledger.account_class.from_seed(
             self.ledger,
             "carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            "sent", "torba", is_hd=False
+            "sent", "torba", {'name': 'single-address'}
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
@@ -291,7 +291,7 @@ class TestSingleKeyAccount(unittest.TestCase):
             'public_key':
                 'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
                 'iW44g14WF52fYC5J483wqQ5ZP',
-            'is_hd': False
+            'address_generator': {'name': 'single-address'}
         }
 
         account = self.ledger.account_class.from_dict(self.ledger, account_data)

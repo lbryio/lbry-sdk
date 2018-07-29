@@ -24,7 +24,7 @@ class Wallet:
         self.storage = storage or WalletStorage()
 
     def generate_account(self, ledger: 'baseledger.BaseLedger') -> 'baseaccount.BaseAccount':
-        account = ledger.account_class.generate(ledger, u'torba')
+        account = ledger.account_class.generate(ledger, u'torba', {})
         self.accounts.append(account)
         return account
 

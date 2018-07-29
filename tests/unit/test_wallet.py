@@ -44,11 +44,11 @@ class TestWalletCreation(unittest.TestCase):
                     'public_key':
                         'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
                         'iW44g14WF52fYC5J483wqQ5ZP',
-                    'is_hd': True,
-                    'receiving_gap': 10,
-                    'receiving_maximum_uses_per_address': 2,
-                    'change_gap': 10,
-                    'change_maximum_uses_per_address': 2,
+                    'address_generator': {
+                        'name': 'deterministic-chain',
+                        'receiving': {'gap': 17, 'maximum_uses_per_address': 3},
+                        'change': {'gap': 10, 'maximum_uses_per_address': 3}
+                    }
                 }
             ]
         }
