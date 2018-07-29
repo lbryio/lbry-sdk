@@ -17,20 +17,20 @@ jobs:
         - mypy torba
       after_success: skip
 
-    - &unit-tests
-      stage: unit tests
+    - &tests
+      stage: tests
+      env: TESTTYPE=unit
       install:
         - pip install tox-travis
-      script: TESTTYPE=unit tox
-    - <<: *unit-tests
+      script: tox
+    - <<: *tests
       python: "3.6"
-
-    - stage: integration tests
+    - <<: *tests
+      env: TESTTYPE=integration
       install:
         - pip install tox-travis
         - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
         - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
-      script: TESTTYPE=integration tox
 
 after_success:
   - pip install coverage
