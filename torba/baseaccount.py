@@ -1,5 +1,5 @@
 import typing
-from typing import Tuple, Type
+from typing import Dict, Tuple, Type, Optional, Any
 from twisted.internet import defer
 
 from torba.mnemonic import Mnemonic
@@ -27,8 +27,18 @@ class AddressManager:
         raise NotImplementedError
 
     @classmethod
-    def to_dict(cls, receiving: 'AddressManager', change: 'AddressManager') -> dict:
-        return {'name': cls.name}
+    def to_dict(cls, receiving: 'AddressManager', change: 'AddressManager') -> Dict:
+        d: Dict[str, Any] = {'name': cls.name}
+        receiving_dict = receiving.to_dict_instance()
+        if receiving_dict:
+            d['receiving'] = receiving_dict
+        change_dict = change.to_dict_instance()
+        if change_dict:
+            d['change'] = change_dict
+        return d
+
+    def to_dict_instance(self) -> Optional[dict]:
+        raise NotImplementedError
 
     @property
     def db(self):
@@ -83,13 +93,6 @@ class HierarchicalDeterministic(AddressManager):
             cls(account, 0, **d.get('receiving', {'gap': 20, 'maximum_uses_per_address': 2})),
             cls(account, 1, **d.get('change', {'gap': 6, 'maximum_uses_per_address': 2}))
         )
-
-    @classmethod
-    def to_dict(cls, receiving: 'HierarchicalDeterministic', change: 'HierarchicalDeterministic') -> dict:
-        d = super().to_dict(receiving, change)
-        d['receiving'] = receiving.to_dict_instance()
-        d['change'] = change.to_dict_instance()
-        return d
 
     def to_dict_instance(self):
         return {'gap': self.gap, 'maximum_uses_per_address': self.maximum_uses_per_address}
@@ -159,6 +162,9 @@ class SingleKey(AddressManager):
         same_address_manager = cls(account, account.public_key, 0)
         return same_address_manager, same_address_manager
 
+    def to_dict_instance(self):
+        return None
+
     def get_private_key(self, index: int) -> PrivateKey:
         return self.account.private_key
 
@@ -184,7 +190,7 @@ class BaseAccount:
     mnemonic_class = Mnemonic
     private_key_class = PrivateKey
     public_key_class = PubKey
-    address_generators = {
+    address_generators: Dict[str, Type[AddressManager]] = {
         SingleKey.name: SingleKey,
         HierarchicalDeterministic.name: HierarchicalDeterministic,
     }
@@ -199,7 +205,7 @@ class BaseAccount:
         self.private_key = private_key
         self.public_key = public_key
         generator_name = address_generator.get('name', HierarchicalDeterministic.name)
-        self.address_generator: Type[AddressManager] = self.address_generators[generator_name]
+        self.address_generator = self.address_generators[generator_name]
         self.receiving, self.change = self.address_generator.from_dict(self, address_generator)
         self.address_managers = {self.receiving, self.change}
         ledger.add_account(self)
