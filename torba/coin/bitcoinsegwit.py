@@ -6,7 +6,6 @@ __node_url__ = (
 )
 __electrumx__ = 'electrumx.lib.coins.BitcoinSegwitRegtest'
 
-from six import int2byte
 from binascii import unhexlify
 from torba.baseledger import BaseLedger
 from torba.baseheader import BaseHeaders
@@ -17,8 +16,8 @@ class MainNetLedger(BaseLedger):
     symbol = 'BTC'
     network_name = 'mainnet'
 
-    pubkey_address_prefix = int2byte(0x00)
-    script_address_prefix = int2byte(0x05)
+    pubkey_address_prefix = bytes((0,))
+    script_address_prefix = bytes((5,))
     extended_public_key_prefix = unhexlify('0488b21e')
     extended_private_key_prefix = unhexlify('0488ade4')
 
@@ -33,8 +32,8 @@ class RegTestLedger(MainNetLedger):
     headers_class = UnverifiedHeaders
     network_name = 'regtest'
 
-    pubkey_address_prefix = int2byte(111)
-    script_address_prefix = int2byte(196)
+    pubkey_address_prefix = bytes((111,))
+    script_address_prefix = bytes((196,))
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
 

@@ -21,6 +21,7 @@ class StratumClientProtocol(LineOnlyReceiver):
         self.request_id = 0
         self.lookup_table = {}
         self.session = {}
+        self.network = None
 
         self.on_disconnected_controller = StreamController()
         self.on_disconnected = self.on_disconnected_controller.stream
@@ -52,7 +53,7 @@ class StratumClientProtocol(LineOnlyReceiver):
                 socket.SOL_TCP, socket.TCP_KEEPCNT, 5
                 # Failed keepalive probles before declaring other end dead
             )
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-except
             # Supported only by the socket transport,
             # but there's really no better place in code to trigger this.
             log.warning("Error setting up socket: %s", err)
@@ -61,7 +62,7 @@ class StratumClientProtocol(LineOnlyReceiver):
         self.on_disconnected_controller.add(True)
 
     def lineReceived(self, line):
-        log.debug('received: {}'.format(line))
+        log.debug('received: %s', line)
 
         try:
             message = json.loads(line)
@@ -82,7 +83,7 @@ class StratumClientProtocol(LineOnlyReceiver):
             controller = self.network.subscription_controllers[message['method']]
             controller.add(message.get('params'))
         else:
-            log.warning("Cannot handle message '%s'" % line)
+            log.warning("Cannot handle message '%s'", line)
 
     def rpc(self, method, *args):
         message_id = self._get_id()
@@ -91,7 +92,7 @@ class StratumClientProtocol(LineOnlyReceiver):
             'method': method,
             'params': args
         })
-        log.debug('sent: {}'.format(message))
+        log.debug('sent: %s', message)
         self.sendLine(message.encode('latin-1'))
         d = self.lookup_table[message_id] = defer.Deferred()
         return d
@@ -138,20 +139,21 @@ class BaseNetwork:
     @defer.inlineCallbacks
     def start(self):
         for server in cycle(self.config['default_servers']):
-            endpoint = clientFromString(reactor, 'tcp:{}:{}'.format(*server))
-            log.debug("Attempting connection to SPV wallet server: {}:{}".format(*server))
+            connection_string = 'tcp:{}:{}'.format(*server)
+            endpoint = clientFromString(reactor, connection_string)
+            log.debug("Attempting connection to SPV wallet server: %s", connection_string)
             self.service = ClientService(endpoint, StratumClientFactory(self))
             self.service.startService()
             try:
                 self.client = yield self.service.whenConnected(failAfterFailures=2)
                 yield self.ensure_server_version()
-                log.info("Successfully connected to SPV wallet server: {}:{}".format(*server))
+                log.info("Successfully connected to SPV wallet server: %s", connection_string)
                 self._on_connected_controller.add(True)
                 yield self.client.on_disconnected.first
             except CancelledError:
                 return
-            except Exception:
-                log.exception("Connecting to {}:{} raised an exception:".format(*server))
+            except Exception:  # pylint: disable=broad-except
+                log.exception("Connecting to %s raised an exception:", connection_string)
             finally:
                 self.client = None
             if not self.running:

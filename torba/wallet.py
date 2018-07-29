@@ -1,10 +1,13 @@
 import stat
 import json
 import os
-from typing import List
+import typing
+from typing import Sequence, MutableSequence
 
-import torba.baseaccount
-import torba.baseledger
+if typing.TYPE_CHECKING:
+    from torba import baseaccount
+    from torba import baseledger
+    from torba import basemanager
 
 
 class Wallet:
@@ -14,24 +17,24 @@ class Wallet:
         by physical files on the filesystem.
     """
 
-    def __init__(self, name='Wallet', accounts=None, storage=None):
-        # type: (str, List[torba.baseaccount.BaseAccount], WalletStorage) -> None
+    def __init__(self, name: str = 'Wallet', accounts: MutableSequence['baseaccount.BaseAccount'] = None,
+                 storage: 'WalletStorage' = None) -> None:
         self.name = name
-        self.accounts = accounts or []  # type: List[torba.baseaccount.BaseAccount]
+        self.accounts = accounts or []
         self.storage = storage or WalletStorage()
 
-    def generate_account(self, ledger):
-        # type: (torba.baseledger.BaseLedger) -> torba.baseaccount.BaseAccount
+    def generate_account(self, ledger: 'baseledger.BaseLedger') -> 'baseaccount.BaseAccount':
         account = ledger.account_class.generate(ledger, u'torba')
         self.accounts.append(account)
         return account
 
     @classmethod
-    def from_storage(cls, storage, manager):  # type: (WalletStorage, 'WalletManager') -> Wallet
+    def from_storage(cls, storage: 'WalletStorage', manager: 'basemanager.BaseWalletManager') -> 'Wallet':
         json_dict = storage.read()
 
         accounts = []
-        for account_dict in json_dict.get('accounts', []):
+        account_dicts: Sequence[dict] = json_dict.get('accounts', [])
+        for account_dict in account_dicts:
             ledger = manager.get_or_create_ledger(account_dict['ledger'])
             account = ledger.account_class.from_dict(ledger, account_dict)
             accounts.append(account)
@@ -110,7 +113,7 @@ class WalletStorage:
             mode = stat.S_IREAD | stat.S_IWRITE
         try:
             os.rename(temp_path, self.path)
-        except:
+        except Exception:  # pylint: disable=broad-except
             os.remove(self.path)
             os.rename(temp_path, self.path)
         os.chmod(self.path, mode)

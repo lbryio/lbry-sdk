@@ -1,18 +1,19 @@
-import six
 import logging
-from typing import List, Iterable
+import typing
+from typing import List, Iterable, Optional
 from binascii import hexlify
 
 from twisted.internet import defer
 
-import torba.baseaccount
-import torba.baseledger
 from torba.basescript import BaseInputScript, BaseOutputScript
-from torba.coinselection import CoinSelector
+from torba.baseaccount import BaseAccount
 from torba.constants import COIN, NULL_HASH32
 from torba.bcd_data_stream import BCDataStream
-from torba.hash import sha256, TXRef, TXRefImmutable, TXORef
+from torba.hash import sha256, TXRef, TXRefImmutable
 from torba.util import ReadOnlyList
+
+if typing.TYPE_CHECKING:
+    from torba import baseledger
 
 
 log = logging.getLogger()
@@ -20,10 +21,10 @@ log = logging.getLogger()
 
 class TXRefMutable(TXRef):
 
-    __slots__ = 'tx',
+    __slots__ = ('tx',)
 
-    def __init__(self, tx):
-        super(TXRefMutable, self).__init__()
+    def __init__(self, tx: 'BaseTransaction') -> None:
+        super().__init__()
         self.tx = tx
 
     @property
@@ -43,12 +44,35 @@ class TXRefMutable(TXRef):
         self._hash = None
 
 
+class TXORef:
+
+    __slots__ = 'tx_ref', 'position'
+
+    def __init__(self, tx_ref: TXRef, position: int) -> None:
+        self.tx_ref = tx_ref
+        self.position = position
+
+    @property
+    def id(self):
+        return '{}:{}'.format(self.tx_ref.id, self.position)
+
+    @property
+    def is_null(self):
+        return self.tx_ref.is_null
+
+    @property
+    def txo(self) -> Optional['BaseOutput']:
+        return None
+
+
 class TXORefResolvable(TXORef):
 
-    __slots__ = '_txo',
+    __slots__ = ('_txo',)
 
-    def __init__(self, txo):
-        super(TXORefResolvable, self).__init__(txo.tx_ref, txo.position)
+    def __init__(self, txo: 'BaseOutput') -> None:
+        assert txo.tx_ref is not None
+        assert txo.position is not None
+        super().__init__(txo.tx_ref, txo.position)
         self._txo = txo
 
     @property
@@ -56,23 +80,23 @@ class TXORefResolvable(TXORef):
         return self._txo
 
 
-class InputOutput(object):
+class InputOutput:
 
     __slots__ = 'tx_ref', 'position'
 
-    def __init__(self, tx_ref=None, position=None):
-        self.tx_ref = tx_ref  # type: TXRef
-        self.position = position  # type: int
+    def __init__(self, tx_ref: TXRef = None, position: int = None) -> None:
+        self.tx_ref = tx_ref
+        self.position = position
 
     @property
-    def size(self):
+    def size(self) -> int:
         """ Size of this input / output in bytes. """
         stream = BCDataStream()
         self.serialize_to(stream)
         return len(stream.get_bytes())
 
-    def serialize_to(self, stream):
-        raise NotImplemented
+    def serialize_to(self, stream, alternate_script=None):
+        raise NotImplementedError
 
 
 class BaseInput(InputOutput):
@@ -84,27 +108,27 @@ class BaseInput(InputOutput):
 
     __slots__ = 'txo_ref', 'sequence', 'coinbase', 'script'
 
-    def __init__(self, txo_ref, script, sequence=0xFFFFFFFF, tx_ref=None, position=None):
-        # type: (TXORef, BaseInputScript, int, TXRef, int) -> None
-        super(BaseInput, self).__init__(tx_ref, position)
+    def __init__(self, txo_ref: TXORef, script: BaseInputScript, sequence: int = 0xFFFFFFFF,
+                 tx_ref: TXRef = None, position: int = None) -> None:
+        super().__init__(tx_ref, position)
         self.txo_ref = txo_ref
         self.sequence = sequence
         self.coinbase = script if txo_ref.is_null else None
-        self.script = script if not txo_ref.is_null else None  # type: BaseInputScript
+        self.script = script if not txo_ref.is_null else None
 
     @property
     def is_coinbase(self):
         return self.coinbase is not None
 
     @classmethod
-    def spend(cls, txo):  # type: (BaseOutput) -> BaseInput
+    def spend(cls, txo: 'BaseOutput') -> 'BaseInput':
         """ Create an input to spend the output."""
         assert txo.script.is_pay_pubkey_hash, 'Attempting to spend unsupported output.'
         script = cls.script_class.redeem_pubkey_hash(cls.NULL_SIGNATURE, cls.NULL_PUBLIC_KEY)
         return cls(txo.ref, script)
 
     @property
-    def amount(self):
+    def amount(self) -> int:
         """ Amount this input adds to the transaction. """
         if self.txo_ref.txo is None:
             raise ValueError('Cannot resolve output to get amount.')
@@ -135,15 +159,15 @@ class BaseInput(InputOutput):
         stream.write_uint32(self.sequence)
 
 
-class BaseOutputEffectiveAmountEstimator(object):
+class BaseOutputEffectiveAmountEstimator:
 
     __slots__ = 'txo', 'txi', 'fee', 'effective_amount'
 
-    def __init__(self, ledger, txo):  # type: (torba.baseledger.BaseLedger, BaseOutput) -> None
+    def __init__(self, ledger: 'baseledger.BaseLedger', txo: 'BaseOutput') -> None:
         self.txo = txo
         self.txi = ledger.transaction_class.input_class.spend(txo)
-        self.fee = ledger.get_input_output_fee(self.txi)
-        self.effective_amount = txo.amount - self.fee
+        self.fee: int = ledger.get_input_output_fee(self.txi)
+        self.effective_amount: int = txo.amount - self.fee
 
     def __lt__(self, other):
         return self.effective_amount < other.effective_amount
@@ -156,9 +180,9 @@ class BaseOutput(InputOutput):
 
     __slots__ = 'amount', 'script'
 
-    def __init__(self, amount, script, tx_ref=None, position=None):
-        # type: (int, BaseOutputScript, TXRef, int) -> None
-        super(BaseOutput, self).__init__(tx_ref, position)
+    def __init__(self, amount: int, script: BaseOutputScript,
+                 tx_ref: TXRef = None, position: int = None) -> None:
+        super().__init__(tx_ref, position)
         self.amount = amount
         self.script = script
 
@@ -184,7 +208,7 @@ class BaseOutput(InputOutput):
             script=cls.script_class(stream.read_string())
         )
 
-    def serialize_to(self, stream):
+    def serialize_to(self, stream, alternate_script=None):
         stream.write_uint64(self.amount)
         stream.write_string(self.script.source)
 
@@ -194,7 +218,7 @@ class BaseTransaction:
     input_class = BaseInput
     output_class = BaseOutput
 
-    def __init__(self, raw=None, version=1, locktime=0):
+    def __init__(self, raw=None, version=1, locktime=0) -> None:
         self._raw = raw
         self.ref = TXRefMutable(self)
         self.version = version  # type: int
@@ -230,8 +254,7 @@ class BaseTransaction:
     def outputs(self):  # type: () -> ReadOnlyList[BaseOutput]
         return ReadOnlyList(self._outputs)
 
-    def _add(self, new_ios, existing_ios):
-        # type: (List[InputOutput], List[InputOutput]) -> BaseTransaction
+    def _add(self, new_ios: Iterable[InputOutput], existing_ios: List) -> 'BaseTransaction':
         for txio in new_ios:
             txio.tx_ref = self.ref
             txio.position = len(existing_ios)
@@ -239,28 +262,28 @@ class BaseTransaction:
         self._reset()
         return self
 
-    def add_inputs(self, inputs):  # type: (List[BaseInput]) -> BaseTransaction
+    def add_inputs(self, inputs: Iterable[BaseInput]) -> 'BaseTransaction':
         return self._add(inputs, self._inputs)
 
-    def add_outputs(self, outputs):  # type: (List[BaseOutput]) -> BaseTransaction
+    def add_outputs(self, outputs: Iterable[BaseOutput]) -> 'BaseTransaction':
         return self._add(outputs, self._outputs)
 
     @property
-    def fee(self):  # type: () -> int
+    def fee(self) -> int:
         """ Fee that will actually be paid."""
         return self.input_sum - self.output_sum
 
     @property
-    def size(self):  # type: () -> int
+    def size(self) -> int:
         """ Size in bytes of the entire transaction. """
         return len(self.raw)
 
     @property
-    def base_size(self):  # type: () -> int
+    def base_size(self) -> int:
         """ Size in bytes of transaction meta data and all outputs; without inputs. """
         return len(self._serialize(with_inputs=False))
 
-    def _serialize(self, with_inputs=True):  # type: (bool) -> bytes
+    def _serialize(self, with_inputs: bool = True) -> bytes:
         stream = BCDataStream()
         stream.write_uint32(self.version)
         if with_inputs:
@@ -273,12 +296,13 @@ class BaseTransaction:
         stream.write_uint32(self.locktime)
         return stream.get_bytes()
 
-    def _serialize_for_signature(self, signing_input):  # type: (int) -> bytes
+    def _serialize_for_signature(self, signing_input: int) -> bytes:
         stream = BCDataStream()
         stream.write_uint32(self.version)
         stream.write_compact_size(len(self._inputs))
         for i, txin in enumerate(self._inputs):
             if signing_input == i:
+                assert txin.txo_ref.txo is not None
                 txin.serialize_to(stream, txin.txo_ref.txo.script.source)
             else:
                 txin.serialize_to(stream, b'')
@@ -304,8 +328,9 @@ class BaseTransaction:
             self.locktime = stream.read_uint32()
 
     @classmethod
-    def ensure_all_have_same_ledger(cls, funding_accounts, change_account=None):
-        # type: (Iterable[torba.baseaccount.BaseAccount], torba.baseaccount.BaseAccount) -> torba.baseledger.BaseLedger
+    def ensure_all_have_same_ledger(
+            cls, funding_accounts: Iterable[BaseAccount], change_account: BaseAccount = None)\
+            -> 'baseledger.BaseLedger':
         ledger = None
         for account in funding_accounts:
             if ledger is None:
@@ -316,32 +341,23 @@ class BaseTransaction:
                 )
         if change_account is not None and change_account.ledger != ledger:
             raise ValueError('Change account must use same ledger as funding accounts.')
+        if ledger is None:
+            raise ValueError('No ledger found.')
         return ledger
 
     @classmethod
     @defer.inlineCallbacks
-    def pay(cls, outputs, funding_accounts, change_account, reserve_outputs=True):
-        # type: (List[BaseOutput], List[torba.baseaccount.BaseAccount], torba.baseaccount.BaseAccount) -> defer.Deferred
+    def pay(cls, outputs: Iterable[BaseOutput], funding_accounts: Iterable[BaseAccount],
+            change_account: BaseAccount):
         """ Efficiently spend utxos from funding_accounts to cover the new outputs. """
 
         tx = cls().add_outputs(outputs)
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
         amount = tx.output_sum + ledger.get_transaction_base_fee(tx)
-        txos = yield ledger.get_effective_amount_estimators(funding_accounts)
-        selector = CoinSelector(
-            txos, amount,
-            ledger.get_input_output_fee(
-                cls.output_class.pay_pubkey_hash(COIN, NULL_HASH32)
-            )
-        )
+        spendables = yield ledger.get_spendable_utxos(amount, funding_accounts)
 
-        spendables = selector.select()
         if not spendables:
             raise ValueError('Not enough funds to cover this transaction.')
-
-        reserved_outputs = [s.txo.id for s in spendables]
-        if reserve_outputs:
-            yield ledger.db.reserve_spent_outputs(reserved_outputs)
 
         try:
             spent_sum = sum(s.effective_amount for s in spendables)
@@ -351,30 +367,25 @@ class BaseTransaction:
                 change_amount = spent_sum - amount
                 tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
 
-            tx.add_inputs([s.txi for s in spendables])
+            tx.add_inputs(s.txi for s in spendables)
             yield tx.sign(funding_accounts)
 
-        except Exception:
-            if reserve_outputs:
-                yield ledger.db.release_reserved_outputs(reserved_outputs)
-            raise
+        except Exception as e:
+            log.exception('Failed to synchronize transaction:')
+            yield ledger.release_outputs(s.txo for s in spendables)
+            raise e
 
         defer.returnValue(tx)
 
     @classmethod
     @defer.inlineCallbacks
-    def liquidate(cls, assets, funding_accounts, change_account, reserve_outputs=True):
+    def liquidate(cls, assets, funding_accounts, change_account):
         """ Spend assets (utxos) supplementing with funding_accounts if fee is higher than asset value. """
-
         tx = cls().add_inputs([
             cls.input_class.spend(utxo) for utxo in assets
         ])
         ledger = cls.ensure_all_have_same_ledger(funding_accounts, change_account)
-
-        reserved_outputs = [utxo.id for utxo in assets]
-        if reserve_outputs:
-            yield ledger.db.reserve_spent_outputs(reserved_outputs)
-
+        yield ledger.reserve_outputs(assets)
         try:
             cost_of_change = (
                 ledger.get_transaction_base_fee(tx) +
@@ -386,40 +397,34 @@ class BaseTransaction:
                 change_hash160 = change_account.ledger.address_to_hash160(change_address)
                 change_amount = liquidated_total - cost_of_change
                 tx.add_outputs([cls.output_class.pay_pubkey_hash(change_amount, change_hash160)])
-
             yield tx.sign(funding_accounts)
-
         except Exception:
-            if reserve_outputs:
-                yield ledger.db.release_reserved_outputs(reserved_outputs)
+            yield ledger.release_outputs(assets)
             raise
-
         defer.returnValue(tx)
 
-    def signature_hash_type(self, hash_type):
+    @staticmethod
+    def signature_hash_type(hash_type):
         return hash_type
 
     @defer.inlineCallbacks
-    def sign(self, funding_accounts):  # type: (Iterable[torba.baseaccount.BaseAccount]) -> BaseTransaction
+    def sign(self, funding_accounts: Iterable[BaseAccount]) -> defer.Deferred:
         ledger = self.ensure_all_have_same_ledger(funding_accounts)
         for i, txi in enumerate(self._inputs):
+            assert txi.script is not None
+            assert txi.txo_ref.txo is not None
             txo_script = txi.txo_ref.txo.script
             if txo_script.is_pay_pubkey_hash:
                 address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
                 private_key = yield ledger.get_private_key_for_address(address)
                 tx = self._serialize_for_signature(i)
                 txi.script.values['signature'] = \
-                    private_key.sign(tx) + six.int2byte(self.signature_hash_type(1))
+                    private_key.sign(tx) + bytes((self.signature_hash_type(1),))
                 txi.script.values['pubkey'] = private_key.public_key.pubkey_bytes
                 txi.script.generate()
             else:
                 raise NotImplementedError("Don't know how to spend this output.")
         self._reset()
-
-    def sort(self):
-        # See https://github.com/kristovatlas/rfc/blob/master/bips/bip-li01.mediawiki
-        self._inputs.sort(key=lambda i: (i['prevout_hash'], i['prevout_n']))
-        self._outputs.sort(key=lambda o: (o[2], pay_script(o[0], o[1])))
 
     @property
     def input_sum(self):

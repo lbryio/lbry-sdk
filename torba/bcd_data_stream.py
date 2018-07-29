@@ -35,9 +35,9 @@ class BCDataStream:
             return size
         if size == 253:
             return self.read_uint16()
-        elif size == 254:
+        if size == 254:
             return self.read_uint32()
-        elif size == 255:
+        if size == 255:
             return self.read_uint64()
 
     def write_compact_size(self, size):
@@ -70,7 +70,7 @@ class BCDataStream:
 
     def _read_struct(self, fmt):
         value = self.read(fmt.size)
-        if len(value) > 0:
+        if value:
             return fmt.unpack(value)[0]
 
     def read_int8(self):

@@ -1,4 +1,4 @@
-from typing import List, Dict, Type
+from typing import Type, MutableSequence, MutableMapping
 from twisted.internet import defer
 
 from torba.baseledger import BaseLedger, LedgerRegistry
@@ -6,16 +6,16 @@ from torba.wallet import Wallet, WalletStorage
 from torba.constants import COIN
 
 
-class WalletManager(object):
+class BaseWalletManager:
 
-    def __init__(self, wallets=None, ledgers=None):
-        # type: (List[Wallet], Dict[Type[BaseLedger],BaseLedger]) -> None
+    def __init__(self, wallets: MutableSequence[Wallet] = None,
+                 ledgers: MutableMapping[Type[BaseLedger], BaseLedger] = None) -> None:
         self.wallets = wallets or []
         self.ledgers = ledgers or {}
         self.running = False
 
     @classmethod
-    def from_config(cls, config):  # type: (Dict) -> WalletManager
+    def from_config(cls, config: dict) -> 'BaseWalletManager':
         manager = cls()
         for ledger_id, ledger_config in config.get('ledgers', {}).items():
             manager.get_or_create_ledger(ledger_id, ledger_config)

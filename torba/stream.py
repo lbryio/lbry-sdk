@@ -1,26 +1,6 @@
-import six
-from twisted.internet.defer import Deferred, DeferredLock, maybeDeferred, inlineCallbacks
+import asyncio
+from twisted.internet.defer import Deferred
 from twisted.python.failure import Failure
-
-if six.PY3:
-    import asyncio
-
-
-def execute_serially(f):
-    _lock = DeferredLock()
-
-    @inlineCallbacks
-    def allow_only_one_at_a_time(*args, **kwargs):
-        yield _lock.acquire()
-        allow_only_one_at_a_time.is_running = True
-        try:
-            yield maybeDeferred(f, *args, **kwargs)
-        finally:
-            allow_only_one_at_a_time.is_running = False
-            _lock.release()
-
-    allow_only_one_at_a_time.is_running = False
-    return allow_only_one_at_a_time
 
 
 class BroadcastSubscription:
@@ -76,10 +56,10 @@ class StreamController:
 
     @property
     def _iterate_subscriptions(self):
-        next = self._first_subscription
-        while next is not None:
-            subscription = next
-            next = next._next
+        next_sub = self._first_subscription
+        while next_sub is not None:
+            subscription = next_sub
+            next_sub = next_sub._next
             yield subscription
 
     def add(self, event):
@@ -96,15 +76,15 @@ class StreamController:
 
     def _cancel(self, subscription):
         previous = subscription._previous
-        next = subscription._next
+        next_sub = subscription._next
         if previous is None:
-            self._first_subscription = next
+            self._first_subscription = next_sub
         else:
-            previous._next = next
-        if next is None:
+            previous._next = next_sub
+        if next_sub is None:
             self._last_subscription = previous
         else:
-            next._previous = previous
+            next_sub._previous = previous
         subscription._next = subscription._previous = subscription
 
     def _listen(self, on_data, on_error, on_done):

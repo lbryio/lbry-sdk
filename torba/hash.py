@@ -9,7 +9,6 @@
 """ Cryptography hash functions and related classes. """
 
 import os
-import six
 import base64
 import hashlib
 import hmac
@@ -22,13 +21,8 @@ from cryptography.hazmat.backends import default_backend
 from torba.util import bytes_to_int, int_to_bytes
 from torba.constants import NULL_HASH32
 
-_sha256 = hashlib.sha256
-_sha512 = hashlib.sha512
-_new_hash = hashlib.new
-_new_hmac = hmac.new
 
-
-class TXRef(object):
+class TXRef:
 
     __slots__ = '_id', '_hash'
 
@@ -68,50 +62,29 @@ class TXRefImmutable(TXRef):
         return ref
 
 
-class TXORef(object):
-
-    __slots__ = 'tx_ref', 'position'
-
-    def __init__(self, tx_ref, position):  # type: (TXRef, int) -> None
-        self.tx_ref = tx_ref
-        self.position = position
-
-    @property
-    def id(self):
-        return '{}:{}'.format(self.tx_ref.id, self.position)
-
-    @property
-    def is_null(self):
-        return self.tx_ref.is_null
-
-    @property
-    def txo(self):
-        return None
-
-
 def sha256(x):
     """ Simple wrapper of hashlib sha256. """
-    return _sha256(x).digest()
+    return hashlib.sha256(x).digest()
 
 
 def sha512(x):
     """ Simple wrapper of hashlib sha512. """
-    return _sha512(x).digest()
+    return hashlib.sha512(x).digest()
 
 
 def ripemd160(x):
     """ Simple wrapper of hashlib ripemd160. """
-    h = _new_hash('ripemd160')
+    h = hashlib.new('ripemd160')
     h.update(x)
     return h.digest()
 
 
 def pow_hash(x):
-    r = sha512(double_sha256(x))
-    r1 = ripemd160(r[:len(r) // 2])
-    r2 = ripemd160(r[len(r) // 2:])
-    r3 = double_sha256(r1 + r2)
-    return r3
+    h = sha512(double_sha256(x))
+    return double_sha256(
+        ripemd160(h[:len(h) // 2]) +
+        ripemd160(h[len(h) // 2:])
+    )
 
 
 def double_sha256(x):
@@ -121,7 +94,7 @@ def double_sha256(x):
 
 def hmac_sha512(key, msg):
     """ Use SHA-512 to provide an HMAC. """
-    return _new_hmac(key, msg, _sha512).digest()
+    return hmac.new(key, msg, hashlib.sha512).digest()
 
 
 def hash160(x):
@@ -165,7 +138,7 @@ class Base58Error(Exception):
     """ Exception used for Base58 errors. """
 
 
-class Base58(object):
+class Base58:
     """ Class providing base 58 functionality. """
 
     chars = u'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
@@ -207,7 +180,7 @@ class Base58(object):
                 break
             count += 1
         if count:
-            result = six.int2byte(0) * count + result
+            result = bytes((0,)) * count + result
 
         return result
 

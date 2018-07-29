@@ -32,8 +32,7 @@ setup(
         'twisted',
         'ecdsa',
         'pbkdf2',
-        'cryptography',
-        'typing'
+        'cryptography'
     ),
     extras_require={
         'test': (

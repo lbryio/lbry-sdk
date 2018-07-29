@@ -3,14 +3,14 @@ from twisted.trial import unittest
 
 from torba.coin.bitcoinsegwit import MainNetLedger as BTCLedger
 from torba.coin.bitcoincash import MainNetLedger as BCHLedger
-from torba.manager import WalletManager
+from torba.basemanager import BaseWalletManager
 from torba.wallet import Wallet, WalletStorage
 
 
 class TestWalletCreation(unittest.TestCase):
 
     def setUp(self):
-        self.manager = WalletManager()
+        self.manager = BaseWalletManager()
         config = {'data_path': '/tmp/wallet'}
         self.btc_ledger = self.manager.get_or_create_ledger(BTCLedger.get_id(), config)
         self.bch_ledger = self.manager.get_or_create_ledger(BCHLedger.get_id(), config)
@@ -63,7 +63,7 @@ class TestWalletCreation(unittest.TestCase):
         self.assertDictEqual(wallet_dict, wallet.to_dict())
 
     def test_read_write(self):
-        manager = WalletManager()
+        manager = BaseWalletManager()
         config = {'data_path': '/tmp/wallet'}
         ledger = manager.get_or_create_ledger(BTCLedger.get_id(), config)
 

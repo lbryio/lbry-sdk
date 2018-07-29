@@ -1,5 +1,5 @@
 import logging
-from typing import List, Union
+from typing import Tuple, List, Sequence
 from operator import itemgetter
 
 import sqlite3
@@ -11,13 +11,13 @@ from torba.hash import TXRefImmutable
 log = logging.getLogger(__name__)
 
 
-class SQLiteMixin(object):
+class SQLiteMixin:
 
-    CREATE_TABLES_QUERY = None
+    CREATE_TABLES_QUERY: Sequence[str] = ()
 
     def __init__(self, path):
         self._db_path = path
-        self.db = None
+        self.db: adbapi.ConnectionPool = None
 
     def start(self):
         log.info("connecting to database: %s", self._db_path)
@@ -32,8 +32,8 @@ class SQLiteMixin(object):
         self.db.close()
         return defer.succeed(True)
 
-    def _insert_sql(self, table, data):
-        # type: (str, dict) -> tuple[str, List]
+    @staticmethod
+    def _insert_sql(table: str, data: dict) -> Tuple[str, List]:
         columns, values = [], []
         for column, value in data.items():
             columns.append(column)
@@ -43,8 +43,8 @@ class SQLiteMixin(object):
         )
         return sql, values
 
-    def _update_sql(self, table, data, where, constraints):
-        # type: (str, dict) -> tuple[str, List]
+    @staticmethod
+    def _update_sql(table: str, data: dict, where: str, constraints: list) -> Tuple[str, list]:
         columns, values = [], []
         for column, value in data.items():
             columns.append("{} = ?".format(column))
@@ -146,7 +146,8 @@ class BaseDatabase(SQLiteMixin):
         CREATE_TXI_TABLE
     )
 
-    def txo_to_row(self, tx, address, txo):
+    @staticmethod
+    def txo_to_row(tx, address, txo):
         return {
             'txid': tx.id,
             'txoid': txo.id,
@@ -156,7 +157,7 @@ class BaseDatabase(SQLiteMixin):
             'script': sqlite3.Binary(txo.script.source)
         }
 
-    def save_transaction_io(self, save_tx, tx, height, is_verified, address, hash, history):
+    def save_transaction_io(self, save_tx, tx, height, is_verified, address, txhash, history):
 
         def _steps(t):
             if save_tx == 'insert':
@@ -168,9 +169,8 @@ class BaseDatabase(SQLiteMixin):
                 }))
             elif save_tx == 'update':
                 self.execute(t, *self._update_sql("tx", {
-                        'height': height, 'is_verified': is_verified
-                    }, 'txid = ?', (tx.id,)
-                ))
+                    'height': height, 'is_verified': is_verified
+                }, 'txid = ?', (tx.id,)))
 
             existing_txos = list(map(itemgetter(0), self.execute(
                 t, "SELECT position FROM txo WHERE txid = ?", (tx.id,)
@@ -179,7 +179,7 @@ class BaseDatabase(SQLiteMixin):
             for txo in tx.outputs:
                 if txo.position in existing_txos:
                     continue
-                if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == hash:
+                if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == txhash:
                     self.execute(t, *self._insert_sql("txo", self.txo_to_row(tx, address, txo)))
                 elif txo.script.is_pay_script_hash:
                     # TODO: implement script hash payments
@@ -202,15 +202,16 @@ class BaseDatabase(SQLiteMixin):
 
         return self.db.runInteraction(_steps)
 
-    def reserve_spent_outputs(self, txoids, is_reserved=True):
+    def reserve_outputs(self, txos, is_reserved=True):
+        txoids = [txo.id for txo in txos]
         return self.run_operation(
             "UPDATE txo SET is_reserved = ? WHERE txoid IN ({})".format(
                 ', '.join(['?']*len(txoids))
             ), [is_reserved]+txoids
         )
 
-    def release_reserved_outputs(self, txoids):
-        return self.reserve_spent_outputs(txoids, is_reserved=False)
+    def release_outputs(self, txos):
+        return self.reserve_outputs(txos, is_reserved=False)
 
     @defer.inlineCallbacks
     def get_transaction(self, txid):
@@ -226,7 +227,7 @@ class BaseDatabase(SQLiteMixin):
         extra_sql = ""
         if constraints:
             extras = []
-            for key in constraints.keys():
+            for key in constraints:
                 col, op = key, '='
                 if key.endswith('__not'):
                     col, op = key[:-len('__not')], '!='
@@ -257,7 +258,7 @@ class BaseDatabase(SQLiteMixin):
         extra_sql = ""
         if constraints:
             extra_sql = ' AND ' + ' AND '.join(
-                '{} = :{}'.format(c, c) for c in constraints.keys()
+                '{} = :{}'.format(c, c) for c in constraints
             )
         values = {'account': account.public_key.address}
         values.update(constraints)

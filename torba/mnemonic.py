@@ -56,7 +56,7 @@ CJK_INTERVALS = [
 
 def is_cjk(c):
     n = ord(c)
-    for start, end, name in CJK_INTERVALS:
+    for start, end, _ in CJK_INTERVALS:
         if start <= n <= end:
             return True
     return False
@@ -93,7 +93,7 @@ def load_words(filename):
     return words
 
 
-file_names = {
+FILE_NAMES = {
     'en': 'english.txt',
     'es': 'spanish.txt',
     'ja': 'japanese.txt',
@@ -102,20 +102,22 @@ file_names = {
 }
 
 
-class Mnemonic(object):
+class Mnemonic:
     # Seed derivation no longer follows BIP39
     # Mnemonic phrase uses a hash based checksum, instead of a words-dependent checksum
 
     def __init__(self, lang='en'):
-        filename = file_names.get(lang, 'english.txt')
+        filename = FILE_NAMES.get(lang, 'english.txt')
         self.words = load_words(filename)
 
-    @classmethod
-    def mnemonic_to_seed(self, mnemonic, passphrase=u''):
-        PBKDF2_ROUNDS = 2048
+    @staticmethod
+    def mnemonic_to_seed(mnemonic, passphrase=u''):
+        pbkdf2_rounds = 2048
         mnemonic = normalize_text(mnemonic)
         passphrase = normalize_text(passphrase)
-        return pbkdf2.PBKDF2(mnemonic, passphrase, iterations=PBKDF2_ROUNDS, macmodule=hmac, digestmodule=hashlib.sha512).read(64)
+        return pbkdf2.PBKDF2(
+            mnemonic, passphrase, iterations=pbkdf2_rounds, macmodule=hmac, digestmodule=hashlib.sha512
+        ).read(64)
 
     def mnemonic_encode(self, i):
         n = len(self.words)
@@ -131,8 +133,8 @@ class Mnemonic(object):
         words = seed.split()
         i = 0
         while words:
-            w = words.pop()
-            k = self.words.index(w)
+            word = words.pop()
+            k = self.words.index(word)
             i = i*n + k
         return i
 

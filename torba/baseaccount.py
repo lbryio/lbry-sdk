@@ -1,12 +1,16 @@
-from typing import Dict
+import typing
+from typing import Sequence
 from twisted.internet import defer
 
 from torba.mnemonic import Mnemonic
 from torba.bip32 import PrivateKey, PubKey, from_extended_key_string
 from torba.hash import double_sha256, aes_encrypt, aes_decrypt
 
+if typing.TYPE_CHECKING:
+    from torba import baseledger
 
-class KeyManager(object):
+
+class KeyManager:
 
     __slots__ = 'account', 'public_key', 'chain_number'
 
@@ -19,27 +23,27 @@ class KeyManager(object):
     def db(self):
         return self.account.ledger.db
 
-    def _query_addresses(self, limit=None, max_used_times=None, order_by=None):
+    def _query_addresses(self, limit: int = None, max_used_times: int = None, order_by=None):
         return self.db.get_addresses(
             self.account, self.chain_number, limit, max_used_times, order_by
         )
 
-    def get_max_gap(self):  # type: () -> defer.Deferred
+    def get_max_gap(self) -> defer.Deferred:
         raise NotImplementedError
 
-    def ensure_address_gap(self):  # type: () -> defer.Deferred
+    def ensure_address_gap(self) -> defer.Deferred:
         raise NotImplementedError
 
-    def get_address_records(self, limit=None, only_usable=False):  # type: (int, bool) -> defer.Deferred
+    def get_address_records(self, limit: int = None, only_usable: bool = False) -> defer.Deferred:
         raise NotImplementedError
 
     @defer.inlineCallbacks
-    def get_addresses(self, limit=None, only_usable=False):  # type: (int, bool) -> defer.Deferred
+    def get_addresses(self, limit: int = None, only_usable: bool = False) -> defer.Deferred:
         records = yield self.get_address_records(limit=limit, only_usable=only_usable)
         defer.returnValue([r['address'] for r in records])
 
     @defer.inlineCallbacks
-    def get_or_create_usable_address(self):  # type: () -> defer.Deferred
+    def get_or_create_usable_address(self) -> defer.Deferred:
         addresses = yield self.get_addresses(limit=1, only_usable=True)
         if addresses:
             defer.returnValue(addresses[0])
@@ -52,14 +56,14 @@ class KeyChain(KeyManager):
 
     __slots__ = 'gap', 'maximum_uses_per_address'
 
-    def __init__(self, account, root_public_key, chain_number, gap, maximum_uses_per_address):
-        # type: ('BaseAccount', PubKey, int, int, int) -> None
-        super(KeyChain, self).__init__(account, root_public_key.child(chain_number), chain_number)
+    def __init__(self, account: 'BaseAccount', root_public_key: PubKey,
+                 chain_number: int, gap: int, maximum_uses_per_address: int) -> None:
+        super().__init__(account, root_public_key.child(chain_number), chain_number)
         self.gap = gap
         self.maximum_uses_per_address = maximum_uses_per_address
 
     @defer.inlineCallbacks
-    def generate_keys(self, start, end):
+    def generate_keys(self, start: int, end: int) -> defer.Deferred:
         new_keys = []
         for index in range(start, end+1):
             new_keys.append((index, self.public_key.child(index)))
@@ -69,7 +73,7 @@ class KeyChain(KeyManager):
         defer.returnValue([key[1].address for key in new_keys])
 
     @defer.inlineCallbacks
-    def get_max_gap(self):
+    def get_max_gap(self) -> defer.Deferred:
         addresses = yield self._query_addresses(order_by="position ASC")
         max_gap = 0
         current_gap = 0
@@ -82,7 +86,7 @@ class KeyChain(KeyManager):
         defer.returnValue(max_gap)
 
     @defer.inlineCallbacks
-    def ensure_address_gap(self):
+    def ensure_address_gap(self) -> defer.Deferred:
         addresses = yield self._query_addresses(self.gap, None, "position DESC")
 
         existing_gap = 0
@@ -100,7 +104,7 @@ class KeyChain(KeyManager):
         new_keys = yield self.generate_keys(start, end-1)
         defer.returnValue(new_keys)
 
-    def get_address_records(self, limit=None, only_usable=False):
+    def get_address_records(self, limit: int = None, only_usable: bool = False):
         return self._query_addresses(
             limit, self.maximum_uses_per_address if only_usable else None,
             "used_times ASC, position ASC"
@@ -112,15 +116,11 @@ class SingleKey(KeyManager):
 
     __slots__ = ()
 
-    def __init__(self, account, root_public_key, chain_number):
-        # type: ('BaseAccount', PubKey) -> None
-        super(SingleKey, self).__init__(account, root_public_key, chain_number)
-
-    def get_max_gap(self):
+    def get_max_gap(self) -> defer.Deferred:
         return defer.succeed(0)
 
     @defer.inlineCallbacks
-    def ensure_address_gap(self):
+    def ensure_address_gap(self) -> defer.Deferred:
         exists = yield self.get_address_records()
         if not exists:
             yield self.db.add_keys(
@@ -129,20 +129,20 @@ class SingleKey(KeyManager):
             defer.returnValue([self.public_key.address])
         defer.returnValue([])
 
-    def get_address_records(self, **kwargs):
+    def get_address_records(self, limit: int = None, only_usable: bool = False) -> defer.Deferred:
         return self._query_addresses()
 
 
-class BaseAccount(object):
+class BaseAccount:
 
     mnemonic_class = Mnemonic
     private_key_class = PrivateKey
     public_key_class = PubKey
 
-    def __init__(self, ledger, name, seed, encrypted, is_hd, private_key,
-                 public_key, receiving_gap=20, change_gap=6,
-                 receiving_maximum_uses_per_address=2, change_maximum_uses_per_address=2):
-        # type: (torba.baseledger.BaseLedger, str, str, bool, bool, PrivateKey, PubKey, int, int, int, int) -> None
+    def __init__(self, ledger: 'baseledger.BaseLedger', name: str, seed: str, encrypted: bool, is_hd: bool,
+                 private_key: PrivateKey, public_key: PubKey, receiving_gap: int = 20, change_gap: int = 6,
+                 receiving_maximum_uses_per_address: int = 2, change_maximum_uses_per_address: int = 2
+                 ) -> None:
         self.ledger = ledger
         self.name = name
         self.seed = seed
@@ -150,25 +150,26 @@ class BaseAccount(object):
         self.private_key = private_key
         self.public_key = public_key
         if is_hd:
-            receiving, change = self.keychains = (
-                KeyChain(self, public_key, 0, receiving_gap, receiving_maximum_uses_per_address),
-                KeyChain(self, public_key, 1, change_gap, change_maximum_uses_per_address)
+            self.receiving: KeyManager = KeyChain(
+                self, public_key, 0, receiving_gap, receiving_maximum_uses_per_address
             )
+            self.change: KeyManager = KeyChain(
+                self, public_key, 1, change_gap, change_maximum_uses_per_address
+            )
+            self.keychains: Sequence[KeyManager] = (self.receiving, self.change)
         else:
-            self.keychains = SingleKey(self, public_key, 0),
-            receiving = change = self.keychains[0]
-        self.receiving = receiving  # type: KeyManager
-        self.change = change  # type: KeyManager
+            self.change = self.receiving = SingleKey(self, public_key, 0)
+            self.keychains = (self.receiving,)
         ledger.add_account(self)
 
     @classmethod
-    def generate(cls, ledger, password, **kwargs):  # type: (torba.baseledger.BaseLedger, str) -> BaseAccount
+    def generate(cls, ledger: 'baseledger.BaseLedger', password: str, **kwargs):
         seed = cls.mnemonic_class().make_seed()
         return cls.from_seed(ledger, seed, password, **kwargs)
 
     @classmethod
-    def from_seed(cls, ledger, seed, password, is_hd=True, **kwargs):
-        # type: (torba.baseledger.BaseLedger, str, str) -> BaseAccount
+    def from_seed(cls, ledger: 'baseledger.BaseLedger', seed: str, password: str,
+                  is_hd: bool = True, **kwargs):
         private_key = cls.get_private_key_from_seed(ledger, seed, password)
         return cls(
             ledger=ledger, name='Account #{}'.format(private_key.public_key.address),
@@ -179,14 +180,13 @@ class BaseAccount(object):
         )
 
     @classmethod
-    def get_private_key_from_seed(cls, ledger, seed, password):
-        # type: (torba.baseledger.BaseLedger, str, str) -> PrivateKey
+    def get_private_key_from_seed(cls, ledger: 'baseledger.BaseLedger', seed: str, password: str):
         return cls.private_key_class.from_seed(
             ledger, cls.mnemonic_class.mnemonic_to_seed(seed, password)
         )
 
     @classmethod
-    def from_dict(cls, ledger, d):  # type: (torba.baseledger.BaseLedger, Dict) -> BaseAccount
+    def from_dict(cls, ledger: 'baseledger.BaseLedger', d: dict):
         if not d['encrypted'] and d['private_key']:
             private_key = from_extended_key_string(ledger, d['private_key'])
             public_key = private_key.public_key
@@ -264,21 +264,20 @@ class BaseAccount(object):
         defer.returnValue(addresses)
 
     @defer.inlineCallbacks
-    def get_addresses(self, limit=None, max_used_times=None):  # type: (int, int) -> defer.Deferred
+    def get_addresses(self, limit: int = None, max_used_times: int = None) -> defer.Deferred:
         records = yield self.get_address_records(limit, max_used_times)
         defer.returnValue([r['address'] for r in records])
 
-    def get_address_records(self, limit=None, max_used_times=None):  # type: (int, int) -> defer.Deferred
+    def get_address_records(self, limit: int = None, max_used_times: int = None) -> defer.Deferred:
         return self.ledger.db.get_addresses(self, None, limit, max_used_times)
 
-    def get_private_key(self, chain, index):
+    def get_private_key(self, chain: int, index: int) -> PrivateKey:
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
         if isinstance(self.receiving, SingleKey):
             return self.private_key
-        else:
-            return self.private_key.child(chain).child(index)
+        return self.private_key.child(chain).child(index)
 
-    def get_balance(self, confirmations=6, **constraints):
+    def get_balance(self, confirmations: int = 6, **constraints):
         if confirmations > 0:
             height = self.ledger.headers.height - (confirmations-1)
             constraints.update({'height__lte': height, 'height__gt': 0})

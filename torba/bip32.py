@@ -10,7 +10,6 @@
 
 import struct
 import hashlib
-from six import int2byte, byte2int, indexbytes
 
 import ecdsa
 import ecdsa.ellipticcurve as EC
@@ -24,7 +23,7 @@ class DerivationError(Exception):
     """ Raised when an invalid derivation occurs. """
 
 
-class _KeyBase(object):
+class _KeyBase:
     """ A BIP32 Key, public or private. """
 
     CURVE = ecdsa.SECP256k1
@@ -63,9 +62,15 @@ class _KeyBase(object):
         if len(raw_serkey) != 33:
             raise ValueError('raw_serkey must have length 33')
 
-        return (ver_bytes + int2byte(self.depth)
+        return (ver_bytes + bytes((self.depth,))
                 + self.parent_fingerprint() + struct.pack('>I', self.n)
                 + self.chain_code + raw_serkey)
+
+    def identifier(self):
+        raise NotImplementedError
+
+    def extended_key(self):
+        raise NotImplementedError
 
     def fingerprint(self):
         """ Return the key's fingerprint as 4 bytes. """
@@ -73,7 +78,7 @@ class _KeyBase(object):
 
     def parent_fingerprint(self):
         """ Return the parent key's fingerprint as 4 bytes. """
-        return self.parent.fingerprint() if self.parent else int2byte(0)*4
+        return self.parent.fingerprint() if self.parent else bytes((0,)*4)
 
     def extended_key_string(self):
         """ Return an extended key as a base58 string. """
@@ -84,7 +89,7 @@ class PubKey(_KeyBase):
     """ A BIP32 public key. """
 
     def __init__(self, ledger, pubkey, chain_code, n, depth, parent=None):
-        super(PubKey, self).__init__(ledger, chain_code, n, depth, parent)
+        super().__init__(ledger, chain_code, n, depth, parent)
         if isinstance(pubkey, ecdsa.VerifyingKey):
             self.verifying_key = pubkey
         else:
@@ -97,16 +102,16 @@ class PubKey(_KeyBase):
             raise TypeError('pubkey must be raw bytes')
         if len(pubkey) != 33:
             raise ValueError('pubkey must be 33 bytes')
-        if indexbytes(pubkey, 0) not in (2, 3):
+        if pubkey[0] not in (2, 3):
             raise ValueError('invalid pubkey prefix byte')
         curve = cls.CURVE.curve
 
-        is_odd = indexbytes(pubkey, 0) == 3
+        is_odd = pubkey[0] == 3
         x = bytes_to_int(pubkey[1:])
 
         # p is the finite field order
-        a, b, p = curve.a(), curve.b(), curve.p()
-        y2 = pow(x, 3, p) + b
+        a, b, p = curve.a(), curve.b(), curve.p()  # pylint: disable=invalid-name
+        y2 = pow(x, 3, p) + b  # pylint: disable=invalid-name
         assert a == 0  # Otherwise y2 += a * pow(x, 2, p)
         y = NT.square_root_mod_prime(y2 % p, p)
         if bool(y & 1) != is_odd:
@@ -119,7 +124,7 @@ class PubKey(_KeyBase):
     def pubkey_bytes(self):
         """ Return the compressed public key as 33 bytes. """
         point = self.verifying_key.pubkey.point
-        prefix = int2byte(2 + (point.y() & 1))
+        prefix = bytes((2 + (point.y() & 1),))
         padded_bytes = _exponent_to_bytes(point.x())
         return prefix + padded_bytes
 
@@ -137,10 +142,10 @@ class PubKey(_KeyBase):
             raise ValueError('invalid BIP32 public key child number')
 
         msg = self.pubkey_bytes + struct.pack('>I', n)
-        L, R = self._hmac_sha512(msg)
+        L, R = self._hmac_sha512(msg)  # pylint: disable=invalid-name
 
         curve = self.CURVE
-        L = bytes_to_int(L)
+        L = bytes_to_int(L)  # pylint: disable=invalid-name
         if L >= curve.order:
             raise DerivationError
 
@@ -172,7 +177,7 @@ class LowSValueSigningKey(ecdsa.SigningKey):
 
     def sign_number(self, number, entropy=None, k=None):
         order = self.privkey.order
-        r, s = ecdsa.SigningKey.sign_number(self, number, entropy, k)
+        r, s = ecdsa.SigningKey.sign_number(self, number, entropy, k)  # pylint: disable=invalid-name
         if s > order / 2:
             s = order - s
         return r, s
@@ -184,7 +189,7 @@ class PrivateKey(_KeyBase):
     HARDENED = 1 << 31
 
     def __init__(self, ledger, privkey, chain_code, n, depth, parent=None):
-        super(PrivateKey, self).__init__(ledger, chain_code, n, depth, parent)
+        super().__init__(ledger, chain_code, n, depth, parent)
         if isinstance(privkey, ecdsa.SigningKey):
             self.signing_key = privkey
         else:
@@ -254,10 +259,10 @@ class PrivateKey(_KeyBase):
             serkey = self.public_key.pubkey_bytes
 
         msg = serkey + struct.pack('>I', n)
-        L, R = self._hmac_sha512(msg)
+        L, R = self._hmac_sha512(msg)  # pylint: disable=invalid-name
 
         curve = self.CURVE
-        L = bytes_to_int(L)
+        L = bytes_to_int(L)  # pylint: disable=invalid-name
         exponent = (L + bytes_to_int(self.private_key_bytes)) % curve.order
         if exponent == 0 or L >= curve.order:
             raise DerivationError
@@ -286,7 +291,7 @@ class PrivateKey(_KeyBase):
 
 def _exponent_to_bytes(exponent):
     """Convert an exponent to 32 big-endian bytes"""
-    return (int2byte(0)*32 + int_to_bytes(exponent))[-32:]
+    return (bytes((0,)*32) + int_to_bytes(exponent))[-32:]
 
 
 def _from_extended_key(ledger, ekey):
@@ -296,8 +301,8 @@ def _from_extended_key(ledger, ekey):
     if len(ekey) != 78:
         raise ValueError('extended key must have length 78')
 
-    depth = indexbytes(ekey, 4)
-    fingerprint = ekey[5:9]   # Not used
+    depth = ekey[4]
+    # fingerprint = ekey[5:9]
     n, = struct.unpack('>I', ekey[9:13])
     chain_code = ekey[13:45]
 
@@ -305,7 +310,7 @@ def _from_extended_key(ledger, ekey):
         pubkey = ekey[45:]
         key = PubKey(ledger, pubkey, chain_code, n, depth)
     elif ekey[:4] == ledger.extended_private_key_prefix:
-        if indexbytes(ekey, 45) != 0:
+        if ekey[45] != 0:
             raise ValueError('invalid extended private key prefix byte')
         privkey = ekey[46:]
         key = PrivateKey(ledger, privkey, chain_code, n, depth)

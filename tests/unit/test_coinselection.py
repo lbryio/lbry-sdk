@@ -30,13 +30,13 @@ class BaseSelectionTestCase(unittest.TestCase):
 class TestCoinSelectionTests(BaseSelectionTestCase):
 
     def test_empty_coins(self):
-        self.assertIsNone(CoinSelector([], 0, 0).select())
+        self.assertEqual(CoinSelector([], 0, 0).select(), [])
 
     def test_skip_binary_search_if_total_not_enough(self):
         fee = utxo(CENT).get_estimator(self.ledger).fee
         big_pool = self.estimates(utxo(CENT+fee) for _ in range(100))
         selector = CoinSelector(big_pool, 101 * CENT, 0)
-        self.assertIsNone(selector.select())
+        self.assertEqual(selector.select(), [])
         self.assertEqual(selector.tries, 0)  # Never tried.
         # check happy path
         selector = CoinSelector(big_pool, 100 * CENT, 0)
@@ -108,7 +108,7 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
         self.assertEqual([3 * CENT, 2 * CENT], search(utxo_pool, 5 * CENT, 0.5 * CENT))
 
         # Select 11 Cent, not possible
-        self.assertIsNone(search(utxo_pool, 11 * CENT, 0.5 * CENT))
+        self.assertEqual(search(utxo_pool, 11 * CENT, 0.5 * CENT), [])
 
         # Select 10 Cent
         utxo_pool += self.estimates(utxo(5 * CENT))
@@ -126,12 +126,12 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
         )
 
         # Select 0.25 Cent, not possible
-        self.assertIsNone(search(utxo_pool, 0.25 * CENT, 0.5 * CENT))
+        self.assertEqual(search(utxo_pool, 0.25 * CENT, 0.5 * CENT), [])
 
         # Iteration exhaustion test
         utxo_pool, target = self.make_hard_case(17)
         selector = CoinSelector(utxo_pool, target, 0)
-        self.assertIsNone(selector.branch_and_bound())
+        self.assertEqual(selector.branch_and_bound(), [])
         self.assertEqual(selector.tries, MAXIMUM_TRIES)  # Should exhaust
         utxo_pool, target = self.make_hard_case(14)
         self.assertIsNotNone(search(utxo_pool, target, 0))  # Should not exhaust
@@ -152,4 +152,4 @@ class TestOfficialBitcoinCoinSelectionTests(BaseSelectionTestCase):
         # Select 1 Cent with pool of only greater than 5 Cent
         utxo_pool = self.estimates(utxo(i * CENT) for i in range(5, 21))
         for _ in range(100):
-            self.assertIsNone(search(utxo_pool, 1 * CENT, 2 * CENT))
+            self.assertEqual(search(utxo_pool, 1 * CENT, 2 * CENT), [])

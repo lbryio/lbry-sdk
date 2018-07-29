@@ -5,13 +5,25 @@ language: python
 python:
   - "3.7"
 
-install:
-  - pip install tox-travis coverage
-  - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
-  - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
+jobs:
+  include:
 
-script: tox
+    - stage: code quality
+      name: "pylint & mypy"
+      install:
+        - pip install pylint mypy
+        - pip install -e .
+      script:
+        - pylint --rcfile=setup.cfg torba
+        - mypy torba
 
-after_success:
-  - coverage combine tests/
-  - bash <(curl -s https://codecov.io/bash)
+    - stage: test
+      name: "Unit Tests"
+      install:
+        - pip install tox-travis coverage
+        - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
+        - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
+      script: tox
+      after_success:
+        - coverage combine tests/
+        - bash <(curl -s https://codecov.io/bash)

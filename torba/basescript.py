@@ -1,6 +1,7 @@
 from itertools import chain
 from binascii import hexlify
 from collections import namedtuple
+from typing import List
 
 from torba.bcd_data_stream import BCDataStream
 from torba.util import subclass_tuple
@@ -25,17 +26,21 @@ OP_DROP = 0x75
 
 # template matching opcodes (not real opcodes)
 # base class for PUSH_DATA related opcodes
+# pylint: disable=invalid-name
 PUSH_DATA_OP = namedtuple('PUSH_DATA_OP', 'name')
 # opcode for variable length strings
+# pylint: disable=invalid-name
 PUSH_SINGLE = subclass_tuple('PUSH_SINGLE', PUSH_DATA_OP)
 # opcode for variable number of variable length strings
+# pylint: disable=invalid-name
 PUSH_MANY = subclass_tuple('PUSH_MANY', PUSH_DATA_OP)
 # opcode with embedded subscript parsing
+# pylint: disable=invalid-name
 PUSH_SUBSCRIPT = namedtuple('PUSH_SUBSCRIPT', 'name template')
 
 
 def is_push_data_opcode(opcode):
-    return isinstance(opcode, PUSH_DATA_OP) or isinstance(opcode, PUSH_SUBSCRIPT)
+    return isinstance(opcode, (PUSH_DATA_OP, PUSH_SUBSCRIPT))
 
 
 def is_push_data_token(token):
@@ -61,15 +66,15 @@ def push_data(data):
 def read_data(token, stream):
     if token < OP_PUSHDATA1:
         return stream.read(token)
-    elif token == OP_PUSHDATA1:
+    if token == OP_PUSHDATA1:
         return stream.read(stream.read_uint8())
-    elif token == OP_PUSHDATA2:
+    if token == OP_PUSHDATA2:
         return stream.read(stream.read_uint16())
-    else:
-        return stream.read(stream.read_uint32())
+    return stream.read(stream.read_uint32())
 
 
 # opcode for OP_1 - OP_16
+# pylint: disable=invalid-name
 SMALL_INTEGER = namedtuple('SMALL_INTEGER', 'name')
 
 
@@ -233,7 +238,7 @@ class Parser:
             raise ParseError("Not a push single or subscript: {}".format(opcode))
 
 
-class Template(object):
+class Template:
 
     __slots__ = 'name', 'opcodes'
 
@@ -264,11 +269,11 @@ class Template(object):
         return source.get_bytes()
 
 
-class Script(object):
+class Script:
 
     __slots__ = 'source', 'template', 'values'
 
-    templates = []
+    templates: List[Template] = []
 
     def __init__(self, source=None, template=None, values=None, template_hint=None):
         self.source = source

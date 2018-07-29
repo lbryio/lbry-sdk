@@ -1,4 +1,3 @@
-import six
 from binascii import hexlify
 from twisted.trial import unittest
 from twisted.internet import defer
@@ -6,9 +5,6 @@ from twisted.internet import defer
 from torba.coin.bitcoinsegwit import MainNetLedger
 
 from .test_transaction import get_transaction, get_output
-
-if six.PY3:
-    buffer = memoryview
 
 
 class MockNetwork:
@@ -50,9 +46,7 @@ class MainNetTestLedger(MainNetLedger):
     network_name = 'unittest'
 
     def __init__(self):
-        super(MainNetLedger, self).__init__({
-            'db': MainNetLedger.database_class(':memory:')
-        })
+        super().__init__({'db': MainNetLedger.database_class(':memory:')})
 
 
 class LedgerTestCase(unittest.TestCase):

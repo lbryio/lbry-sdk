@@ -1,6 +1,4 @@
 import os
-import six
-import hashlib
 import logging
 from binascii import hexlify, unhexlify
 from typing import Dict, Type, Iterable
@@ -14,17 +12,22 @@ from torba import basedatabase
 from torba import baseheader
 from torba import basenetwork
 from torba import basetransaction
-from torba.stream import StreamController, execute_serially
-from torba.hash import hash160, double_sha256, Base58
+from torba.coinselection import CoinSelector
+from torba.constants import COIN, NULL_HASH32
+from torba.stream import StreamController
+from torba.hash import hash160, double_sha256, sha256, Base58
 
 log = logging.getLogger(__name__)
 
+LedgerType = Type['BaseLedger']
+
 
 class LedgerRegistry(type):
-    ledgers = {}  # type: Dict[str, Type[BaseLedger]]
+
+    ledgers: Dict[str, LedgerType] = {}
 
     def __new__(mcs, name, bases, attrs):
-        cls = super(LedgerRegistry, mcs).__new__(mcs, name, bases, attrs)  # type: Type[BaseLedger]
+        cls: LedgerType = super().__new__(mcs, name, bases, attrs)
         if not (name == 'BaseLedger' and not bases):
             ledger_id = cls.get_id()
             assert ledger_id not in mcs.ledgers,\
@@ -33,7 +36,7 @@ class LedgerRegistry(type):
         return cls
 
     @classmethod
-    def get_ledger_class(mcs, ledger_id):  # type: (str) -> Type[BaseLedger]
+    def get_ledger_class(mcs, ledger_id: str) -> LedgerType:
         return mcs.ledgers[ledger_id]
 
 
@@ -41,11 +44,11 @@ class TransactionEvent(namedtuple('TransactionEvent', ('address', 'tx', 'height'
     pass
 
 
-class BaseLedger(six.with_metaclass(LedgerRegistry)):
+class BaseLedger(metaclass=LedgerRegistry):
 
-    name = None
-    symbol = None
-    network_name = None
+    name: str
+    symbol: str
+    network_name: str
 
     account_class = baseaccount.BaseAccount
     database_class = basedatabase.BaseDatabase
@@ -54,10 +57,10 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
     transaction_class = basetransaction.BaseTransaction
 
     secret_prefix = None
-    pubkey_address_prefix = None
-    script_address_prefix = None
-    extended_public_key_prefix = None
-    extended_private_key_prefix = None
+    pubkey_address_prefix: bytes
+    script_address_prefix: bytes
+    extended_public_key_prefix: bytes
+    extended_private_key_prefix: bytes
 
     default_fee_per_byte = 10
 
@@ -71,13 +74,14 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         self.network.on_status.listen(self.process_status)
         self.accounts = []
         self.headers = self.config.get('headers') or self.headers_class(self)
-        self.fee_per_byte = self.config.get('fee_per_byte', self.default_fee_per_byte)
+        self.fee_per_byte: int = self.config.get('fee_per_byte', self.default_fee_per_byte)
 
         self._on_transaction_controller = StreamController()
         self.on_transaction = self._on_transaction_controller.stream
         self.on_transaction.listen(
-            lambda e: log.info('({}) on_transaction: address={}, height={}, is_verified={}, tx.id={}'.format(
-                self.get_id(), e.address, e.height, e.is_verified, e.tx.id)
+            lambda e: log.info(
+                '(%s) on_transaction: address=%s, height=%s, is_verified=%s, tx.id=%s',
+                self.get_id(), e.address, e.height, e.is_verified, e.tx.id
             )
         )
 
@@ -85,6 +89,8 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         self.on_header = self._on_header_controller.stream
 
         self._transaction_processing_locks = {}
+        self._utxo_reservation_lock = defer.DeferredLock()
+        self._header_processing_lock = defer.DeferredLock()
 
     @classmethod
     def get_id(cls):
@@ -97,9 +103,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
     @staticmethod
     def address_to_hash160(address):
-        bytes = Base58.decode(address)
-        prefix, pubkey_bytes, addr_checksum = bytes[0], bytes[1:21], bytes[21:]
-        return pubkey_bytes
+        return Base58.decode(address)[1:21]
 
     @classmethod
     def public_key_to_address(cls, public_key):
@@ -113,7 +117,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
     def path(self):
         return os.path.join(self.config['data_path'], self.get_id())
 
-    def get_input_output_fee(self, io):
+    def get_input_output_fee(self, io: basetransaction.InputOutput) -> int:
         """ Fee based on size of the input / output. """
         return self.fee_per_byte * io.size
 
@@ -122,14 +126,14 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         return self.fee_per_byte * tx.base_size
 
     @defer.inlineCallbacks
-    def add_account(self, account):  # type: (baseaccount.BaseAccount) -> None
+    def add_account(self, account: baseaccount.BaseAccount) -> defer.Deferred:
         self.accounts.append(account)
         if self.network.is_connected:
             yield self.update_account(account)
 
     @defer.inlineCallbacks
     def get_transaction(self, txhash):
-        raw, height, is_verified = yield self.db.get_transaction(txhash)
+        raw, _, _ = yield self.db.get_transaction(txhash)
         if raw is not None:
             defer.returnValue(self.transaction_class(raw))
 
@@ -142,8 +146,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
                     defer.returnValue(account.get_private_key(match['chain'], match['position']))
 
     @defer.inlineCallbacks
-    def get_effective_amount_estimators(self, funding_accounts):
-        # type: (Iterable[baseaccount.BaseAccount]) -> defer.Deferred
+    def get_effective_amount_estimators(self, funding_accounts: Iterable[baseaccount.BaseAccount]):
         estimators = []
         for account in funding_accounts:
             utxos = yield account.get_unspent_outputs()
@@ -152,11 +155,38 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         defer.returnValue(estimators)
 
     @defer.inlineCallbacks
+    def get_spendable_utxos(self, amount: int, funding_accounts):
+        yield self._utxo_reservation_lock.acquire()
+        try:
+            txos = yield self.get_effective_amount_estimators(funding_accounts)
+            selector = CoinSelector(
+                txos, amount,
+                self.get_input_output_fee(
+                    self.transaction_class.output_class.pay_pubkey_hash(COIN, NULL_HASH32)
+                )
+            )
+            spendables = selector.select()
+            if spendables:
+                yield self.reserve_outputs(s.txo for s in spendables)
+        except Exception:
+            log.exception('Failed to get spendable utxos:')
+            raise
+        finally:
+            self._utxo_reservation_lock.release()
+        defer.returnValue(spendables)
+
+    def reserve_outputs(self, txos):
+        return self.db.reserve_outputs(txos)
+
+    def release_outputs(self, txos):
+        return self.db.release_outputs(txos)
+
+    @defer.inlineCallbacks
     def get_local_status(self, address):
         address_details = yield self.db.get_address(address)
         history = address_details['history'] or ''
-        hash = hashlib.sha256(history.encode()).digest()
-        defer.returnValue(hexlify(hash))
+        h = sha256(history.encode())
+        defer.returnValue(hexlify(h))
 
     @defer.inlineCallbacks
     def get_local_history(self, address):
@@ -203,7 +233,6 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
         yield self.network.stop()
         yield self.db.stop()
 
-    @execute_serially
     @defer.inlineCallbacks
     def update_headers(self):
         while True:
@@ -216,18 +245,19 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
 
     @defer.inlineCallbacks
     def process_header(self, response):
-        header = response[0]
-        if self.update_headers.is_running:
-            return
-        if header['height'] == len(self.headers):
-            # New header from network directly connects after the last local header.
-            yield self.headers.connect(len(self.headers), unhexlify(header['hex']))
-            self._on_header_controller.add(self.headers.height)
-        elif header['height'] > len(self.headers):
-            # New header is several heights ahead of local, do download instead.
-            yield self.update_headers()
+        yield self._header_processing_lock.acquire()
+        try:
+            header = response[0]
+            if header['height'] == len(self.headers):
+                # New header from network directly connects after the last local header.
+                yield self.headers.connect(len(self.headers), unhexlify(header['hex']))
+                self._on_header_controller.add(self.headers.height)
+            elif header['height'] > len(self.headers):
+                # New header is several heights ahead of local, do download instead.
+                yield self.update_headers()
+        finally:
+            self._header_processing_lock.release()
 
-    @execute_serially
     def update_accounts(self):
         return defer.DeferredList([
             self.update_account(a) for a in self.accounts
@@ -274,7 +304,7 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
             try:
 
                 # see if we have a local copy of transaction, otherwise fetch it from server
-                raw, local_height, is_verified = yield self.db.get_transaction(hex_id)
+                raw, _, is_verified = yield self.db.get_transaction(hex_id)
                 save_tx = None
                 if raw is None:
                     _raw = yield self.network.get_transaction(hex_id)
@@ -294,15 +324,16 @@ class BaseLedger(six.with_metaclass(LedgerRegistry)):
                     ''.join('{}:{}:'.format(tx_id, tx_height) for tx_id, tx_height in synced_history)
                 )
 
-                log.debug("{}: sync'ed tx {} for address: {}, height: {}, verified: {}".format(
+                log.debug(
+                    "%s: sync'ed tx %s for address: %s, height: %s, verified: %s",
                     self.get_id(), hex_id, address, remote_height, is_verified
-                ))
+                )
 
                 self._on_transaction_controller.add(TransactionEvent(address, tx, remote_height, is_verified))
 
-            except Exception as e:
+            except Exception:
                 log.exception('Failed to synchronize transaction:')
-                raise e
+                raise
 
             finally:
                 lock.release()

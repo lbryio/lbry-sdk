@@ -1,13 +1,16 @@
 import os
 import struct
 import logging
+import typing
 from binascii import unhexlify
 
 from twisted.internet import threads, defer
 
-from torba.stream import StreamController, execute_serially
+from torba.stream import StreamController
 from torba.util import int_to_hex, rev_hex, hash_encode
 from torba.hash import double_sha256, pow_hash
+if typing.TYPE_CHECKING:
+    from torba import baseledger
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +20,7 @@ class BaseHeaders:
     header_size = 80
     verify_bits_to_target = True
 
-    def __init__(self, ledger):  # type: (baseledger.BaseLedger) -> BaseHeaders
+    def __init__(self, ledger: 'baseledger.BaseLedger') -> None:
         self.ledger = ledger
         self._size = None
         self._on_change_controller = StreamController()
@@ -62,7 +65,6 @@ class BaseHeaders:
         header = self.sync_read_header(height)
         return self._deserialize(height, header)
 
-    @execute_serially
     @defer.inlineCallbacks
     def connect(self, start, headers):
         yield threads.deferToThread(self._sync_connect, start, headers)
@@ -84,8 +86,9 @@ class BaseHeaders:
         _old_size = self._size
         self._size = self.sync_read_length()
         change = self._size - _old_size
-        log.info('{}: added {} header blocks, final height {}'.format(
-            self.ledger.get_id(), change, self.height)
+        log.info(
+            '%s: added %s header blocks, final height %s',
+            self.ledger.get_id(), change, self.height
         )
         self._on_change_controller.add(change)
 
@@ -101,7 +104,7 @@ class BaseHeaders:
         assert previous_hash == header['prev_block_hash'], \
             "prev hash mismatch: {} vs {}".format(previous_hash, header['prev_block_hash'])
 
-        bits, target = self._calculate_next_work_required(height, previous_header, header)
+        bits, _ = self._calculate_next_work_required(height, previous_header, header)
         assert bits == header['bits'], \
             "bits mismatch: {} vs {} (hash: {})".format(
                 bits, header['bits'], self._hash_header(header))
@@ -154,37 +157,37 @@ class BaseHeaders:
 
         if self.verify_bits_to_target:
             bits = last['bits']
-            bitsN = (bits >> 24) & 0xff
-            assert 0x03 <= bitsN <= 0x1d, \
-                "First part of bits should be in [0x03, 0x1d], but it was {}".format(hex(bitsN))
-            bitsBase = bits & 0xffffff
-            assert 0x8000 <= bitsBase <= 0x7fffff, \
-                "Second part of bits should be in [0x8000, 0x7fffff] but it was {}".format(bitsBase)
+            bits_n = (bits >> 24) & 0xff
+            assert 0x03 <= bits_n <= 0x1d, \
+                "First part of bits should be in [0x03, 0x1d], but it was {}".format(hex(bits_n))
+            bits_base = bits & 0xffffff
+            assert 0x8000 <= bits_base <= 0x7fffff, \
+                "Second part of bits should be in [0x8000, 0x7fffff] but it was {}".format(bits_base)
 
         # new target
-        retargetTimespan = self.ledger.target_timespan
-        nActualTimespan = last['timestamp'] - first['timestamp']
+        retarget_timespan = self.ledger.target_timespan
+        n_actual_timespan = last['timestamp'] - first['timestamp']
 
-        nModulatedTimespan = retargetTimespan + (nActualTimespan - retargetTimespan) // 8
+        n_modulated_timespan = retarget_timespan + (n_actual_timespan - retarget_timespan) // 8
 
-        nMinTimespan = retargetTimespan - (retargetTimespan // 8)
-        nMaxTimespan = retargetTimespan + (retargetTimespan // 2)
+        n_min_timespan = retarget_timespan - (retarget_timespan // 8)
+        n_max_timespan = retarget_timespan + (retarget_timespan // 2)
 
         # Limit adjustment step
-        if nModulatedTimespan < nMinTimespan:
-            nModulatedTimespan = nMinTimespan
-        elif nModulatedTimespan > nMaxTimespan:
-            nModulatedTimespan = nMaxTimespan
+        if n_modulated_timespan < n_min_timespan:
+            n_modulated_timespan = n_min_timespan
+        elif n_modulated_timespan > n_max_timespan:
+            n_modulated_timespan = n_max_timespan
 
         # Retarget
-        bnPowLimit = _ArithUint256(self.ledger.max_target)
-        bnNew = _ArithUint256.SetCompact(last['bits'])
-        bnNew *= nModulatedTimespan
-        bnNew //= nModulatedTimespan
-        if bnNew > bnPowLimit:
-            bnNew = bnPowLimit
+        bn_pow_limit = _ArithUint256(self.ledger.max_target)
+        bn_new = _ArithUint256.set_compact(last['bits'])
+        bn_new *= n_modulated_timespan
+        bn_new //= n_modulated_timespan
+        if bn_new > bn_pow_limit:
+            bn_new = bn_pow_limit
 
-        return bnNew.GetCompact(), bnNew._value
+        return bn_new.get_compact(), bn_new._value
 
 
 class _ArithUint256:
@@ -197,49 +200,48 @@ class _ArithUint256:
         return hex(self._value)
 
     @staticmethod
-    def fromCompact(nCompact):
+    def from_compact(n_compact):
         """Convert a compact representation into its value"""
-        nSize = nCompact >> 24
+        n_size = n_compact >> 24
         # the lower 23 bits
-        nWord = nCompact & 0x007fffff
-        if nSize <= 3:
-            return nWord >> 8 * (3 - nSize)
+        n_word = n_compact & 0x007fffff
+        if n_size <= 3:
+            return n_word >> 8 * (3 - n_size)
         else:
-            return nWord << 8 * (nSize - 3)
+            return n_word << 8 * (n_size - 3)
 
     @classmethod
-    def SetCompact(cls, nCompact):
-        return cls(cls.fromCompact(nCompact))
+    def set_compact(cls, n_compact):
+        return cls(cls.from_compact(n_compact))
 
     def bits(self):
         """Returns the position of the highest bit set plus one."""
-        bn = bin(self._value)[2:]
-        for i, d in enumerate(bn):
+        bits = bin(self._value)[2:]
+        for i, d in enumerate(bits):
             if d:
-                return (len(bn) - i) + 1
+                return (len(bits) - i) + 1
         return 0
 
-    def GetLow64(self):
+    def get_low64(self):
         return self._value & 0xffffffffffffffff
 
-    def GetCompact(self):
+    def get_compact(self):
         """Convert a value into its compact representation"""
-        nSize = (self.bits() + 7) // 8
-        nCompact = 0
-        if nSize <= 3:
-            nCompact = self.GetLow64() << 8 * (3 - nSize)
+        n_size = (self.bits() + 7) // 8
+        if n_size <= 3:
+            n_compact = self.get_low64() << 8 * (3 - n_size)
         else:
-            bn = _ArithUint256(self._value >> 8 * (nSize - 3))
-            nCompact = bn.GetLow64()
+            n = _ArithUint256(self._value >> 8 * (n_size - 3))
+            n_compact = n.get_low64()
         # The 0x00800000 bit denotes the sign.
         # Thus, if it is already set, divide the mantissa by 256 and increase the exponent.
-        if nCompact & 0x00800000:
-            nCompact >>= 8
-            nSize += 1
-        assert (nCompact & ~0x007fffff) == 0
-        assert nSize < 256
-        nCompact |= nSize << 24
-        return nCompact
+        if n_compact & 0x00800000:
+            n_compact >>= 8
+            n_size += 1
+        assert (n_compact & ~0x007fffff) == 0
+        assert n_size < 256
+        n_compact |= n_size << 24
+        return n_compact
 
     def __mul__(self, x):
         # Take the mod because we are limited to an unsigned 256 bit number
