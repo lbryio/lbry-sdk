@@ -1,11 +1,12 @@
 # pylint: skip-file
 import os
 import json
-import urlparse
+import aiohttp
+from urllib.parse import urlparse
 import requests
 from requests.cookies import RequestsCookieJar
 import logging
-from jsonrpc.proxy import JSONRPCProxy
+# from jsonrpc.proxy import JSONRPCProxy
 from lbrynet import conf
 from lbrynet.daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
 
@@ -14,6 +15,7 @@ USER_AGENT = "AuthServiceProxy/0.1"
 TWISTED_SESSION = "TWISTED_SESSION"
 LBRY_SECRET = "LBRY_SECRET"
 HTTP_TIMEOUT = 30
+SCHEME = "http"
 
 
 def copy_cookies(cookies):
@@ -26,6 +28,32 @@ class JSONRPCException(Exception):
     def __init__(self, rpc_error):
         super().__init__()
         self.error = rpc_error
+
+
+class UnAuthAPIClient:
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+        self.scheme = SCHEME
+
+    def __getattr__(self, method):
+        async def f(*args, **kwargs):
+            return await self.call(method, [args, kwargs])
+
+        return f
+
+    @classmethod
+    def from_url(cls, url):
+        url_fragment = urlparse(url)
+        host = url_fragment.hostname
+        port = url_fragment.port
+        return cls(host, port)
+
+    async def call(self, method, params=None):
+        message = {'method': method, 'params': params}
+        async with aiohttp.ClientSession() as session:
+            async with session.get('{}://{}:{}'.format(self.scheme, self.host, self.port), json=message) as resp:
+                return await resp.json()
 
 
 class AuthAPIClient:
@@ -108,7 +136,7 @@ class AuthAPIClient:
 
         if auth is None and connection is None and cookies is None and url is None:
             # This is a new client instance, start an authenticated session
-            url = urlparse.urlparse(service_url)
+            url = urlparse(service_url)
             conn = requests.Session()
             req = requests.Request(method='POST',
                                    url=service_url,
@@ -137,4 +165,4 @@ class LBRYAPIClient:
         if not conf.settings:
             conf.initialize_settings()
         return AuthAPIClient.config() if conf.settings['use_auth_http'] else \
-            JSONRPCProxy.from_url(conf.settings.get_api_connection_string())
+            UnAuthAPIClient.from_url(conf.settings.get_api_connection_string())
