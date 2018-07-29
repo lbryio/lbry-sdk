@@ -58,28 +58,8 @@ jobs:
           target_paths:
             - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/win/
 
-    - name: "Linux"
-      install:
-        - pip install pyinstaller
-        - pip install git+https://github.com/lbryio/torba.git
-        - pip install git+https://github.com/lbryio/lbryschema.git
-        - pip install -e .
-      script:
-        - pyinstaller -F -n lbrynet lbrynet/cli.py
-        - ./dist/lbrynet --version
-      addons:
-        artifacts:
-          working_dir: dist
-          paths:
-            - lbrynet
-          # artifact uploader thinks lbrynet is a directory, https://github.com/travis-ci/artifacts/issues/78
-          target_paths:
-            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/linux/lbrynet
-
-    - name: "Mac"
-      os: osx
-      osx_image: xcode9.4
-      language: generic
+    - &build
+      name: "Linux"
       install:
         - pip3 install pyinstaller
         - pip3 install git+https://github.com/lbryio/torba.git
@@ -88,6 +68,7 @@ jobs:
       script:
         - pyinstaller -F -n lbrynet lbrynet/cli.py
         - ./dist/lbrynet --version
+      env: OS=linux
       addons:
         artifacts:
           working_dir: dist
@@ -95,7 +76,14 @@ jobs:
             - lbrynet
           # artifact uploader thinks lbrynet is a directory, https://github.com/travis-ci/artifacts/issues/78
           target_paths:
-            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/mac/lbrynet
+            - /daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})/${OS}/lbrynet
+
+    - <<: *build
+      name: "Mac"
+      os: osx
+      osx_image: xcode9.4
+      language: generic
+      env: OS=mac
 
 cache:
   directories:
