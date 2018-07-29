@@ -2,8 +2,7 @@ dist: xenial
 sudo: true
 language: python
 
-python:
-  - "3.7"
+python: "3.7"
 
 jobs:
   include:
@@ -19,12 +18,23 @@ jobs:
         - mypy torba
 
     - stage: test
+      python:
+        - "3.6"
+        - "3.7"
       name: "Unit Tests"
+      install:
+        - pip install tox-travis coverage
+      script: tox -e unit
+      after_success:
+        - coverage combine tests/
+        - bash <(curl -s https://codecov.io/bash)
+
+    - name: "Integration Tests"
       install:
         - pip install tox-travis coverage
         - pushd .. && git clone https://github.com/lbryio/electrumx.git --branch lbryumx && popd
         - pushd .. && git clone https://github.com/lbryio/orchstr8.git && popd
-      script: tox
+      script: tox -e integration
       after_success:
         - coverage combine tests/
         - bash <(curl -s https://codecov.io/bash)
