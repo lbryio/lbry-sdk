@@ -39,8 +39,7 @@ class TestAccount(unittest.TestCase):
         account = Account.from_seed(
             self.ledger,
             u"carbon smart garage balance margin twelve chest sword toast envelope bottom stomach ab"
-            u"sent",
-            u"lbryum"
+            u"sent", u"lbryum", {}
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
@@ -78,11 +77,11 @@ class TestAccount(unittest.TestCase):
                 'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EMmDgp66FxH'
                 'uDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9',
             'certificates': {},
-            'receiving_gap': 10,
-            'receiving_maximum_uses_per_address': 2,
-            'change_gap': 10,
-            'change_maximum_uses_per_address': 2,
-            'is_hd': True
+            'address_generator': {
+                'name': 'deterministic-chain',
+                'receiving': {'gap': 17, 'maximum_uses_per_address': 2},
+                'change': {'gap': 10, 'maximum_uses_per_address': 2}
+            }
         }
 
         account = Account.from_dict(self.ledger, account_data)
