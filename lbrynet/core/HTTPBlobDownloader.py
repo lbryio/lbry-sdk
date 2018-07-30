@@ -49,9 +49,11 @@ class HTTPBlobDownloader(object):
         for blob_hash in self.blob_hashes:
             blob = yield self.blob_manager.get_blob(blob_hash)
             if not blob.verified:
-                dl.append(self.semaphore.run(self.download_blob, blob))
+                d = self.semaphore.run(self.download_blob, blob)
+                d.addErrback(lambda err: err.check(defer.TimeoutError, defer.CancelledError))
+                dl.append(d)
         self.deferreds = dl
-        yield defer.DeferredList(dl, consumeErrors=True)
+        yield defer.DeferredList(dl)
 
     @defer.inlineCallbacks
     def download_blob(self, blob):
