@@ -1,3 +1,10 @@
+from lbrynet import error_code_map as ECM
+
+
+class RPCError(Exception):
+    code = 0
+
+
 class PriceDisagreementError(Exception):
     pass
 
@@ -41,8 +48,8 @@ class NullFundsError(Exception):
     pass
 
 
-class InsufficientFundsError(Exception):
-    pass
+class InsufficientFundsError(RPCError):
+    code = ECM.CODE_INSUFFICIENT_FUNDS_ERROR
 
 
 class ConnectionClosedBeforeResponseError(Exception):
@@ -77,10 +84,12 @@ class UnknownURI(Exception):
         super().__init__('URI {} cannot be resolved'.format(uri))
         self.name = uri
 
+
 class UnknownOutpoint(Exception):
     def __init__(self, outpoint):
         super().__init__('Outpoint {} cannot be resolved'.format(outpoint))
         self.outpoint = outpoint
+
 
 class InvalidName(Exception):
     def __init__(self, name, invalid_characters):

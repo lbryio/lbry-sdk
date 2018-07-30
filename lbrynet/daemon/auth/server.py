@@ -81,8 +81,8 @@ class JSONRPCError:
         }
 
     @classmethod
-    def create_from_exception(cls, exception, code=CODE_APPLICATION_ERROR, traceback=None):
-        return cls(exception.message, code=code, traceback=traceback)
+    def create_from_exception(cls, message, code=CODE_APPLICATION_ERROR, traceback=None):
+        return cls(message, code=code, traceback=traceback)
 
 
 def default_decimal(obj):
@@ -295,8 +295,12 @@ class AuthJSONRPCServer(AuthorizedBase):
             error = failure.check(JSONRPCError)
             if error is None:
                 # maybe its a twisted Failure with another type of error
-                error = JSONRPCError(failure.getErrorMessage() or failure.type.__name__,
-                                     traceback=failure.getTraceback())
+                error_code = failure.type.code if hasattr(failure.type, "code") else JSONRPCError.CODE_APPLICATION_ERROR
+                error = JSONRPCError.create_from_exception(
+                    failure.getErrorMessage() or failure.type.__name__,
+                    code=error_code,
+                    traceback=failure.getTraceback()
+                )
             if not failure.check(ComponentsNotStarted, ComponentStartConditionNotMet):
                 log.warning("error processing api request: %s\ntraceback: %s", error.message,
                             "\n".join(error.traceback))
@@ -320,7 +324,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             return self._render(request)
         except BaseException as e:
             log.error(e)
-            error = JSONRPCError.create_from_exception(e, traceback=format_exc())
+            error = JSONRPCError.create_from_exception(str(e), traceback=format_exc())
             self._render_error(error, request, None)
             return server.NOT_DONE_YET
 
@@ -356,7 +360,7 @@ class AuthJSONRPCServer(AuthorizedBase):
             parsed = jsonrpclib.loads(content)
         except json.JSONDecodeError:
             log.warning("Unable to decode request json")
-            self._render_error(JSONRPCError(None, JSONRPCError.CODE_PARSE_ERROR), request, None)
+            self._render_error(JSONRPCError(None, code=JSONRPCError.CODE_PARSE_ERROR), request, None)
             return server.NOT_DONE_YET
 
         request_id = None
@@ -380,7 +384,8 @@ class AuthJSONRPCServer(AuthorizedBase):
                 log.warning("API validation failed")
                 self._render_error(
                     JSONRPCError.create_from_exception(
-                        err, code=JSONRPCError.CODE_AUTHENTICATION_ERROR,
+                        str(err),
+                        code=JSONRPCError.CODE_AUTHENTICATION_ERROR,
                         traceback=format_exc()
                     ),
                     request, request_id
@@ -395,7 +400,7 @@ class AuthJSONRPCServer(AuthorizedBase):
         except UnknownAPIMethodError as err:
             log.warning('Failed to get function %s: %s', function_name, err)
             self._render_error(
-                JSONRPCError(None, JSONRPCError.CODE_METHOD_NOT_FOUND),
+                JSONRPCError(None, code=JSONRPCError.CODE_METHOD_NOT_FOUND),
                 request, request_id
             )
             return server.NOT_DONE_YET
