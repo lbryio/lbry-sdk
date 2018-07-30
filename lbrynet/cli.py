@@ -8,17 +8,20 @@ from textwrap import dedent
 from lbrynet.daemon.auth.client import LBRYAPIClient
 from lbrynet.core.system_info import get_platform
 from lbrynet.daemon.Daemon import Daemon
-from lbrynet.daemon.DaemonControl import start
+from lbrynet.daemon.DaemonControl import start as daemon_main
+from lbrynet.daemon.DaemonConsole import main as daemon_console
 
 
 async def execute_command(command, args):
     api = LBRYAPIClient.get_client()
+    # this check if the daemon is running or not
     try:
         await api.status()
     except client_exceptions.ClientConnectorError:
         print("Could not connect to daemon. Are you sure it's running?")
         return 1
 
+    # this actually executes the command
     try:
         resp = await api.call(command, args)
         print(json.dumps(resp["result"], indent=2))
@@ -110,10 +113,13 @@ def main(argv=None):
             print_help()
 
     elif method in ['version', '--version', '-v']:
-        print(json.dumps(get_platform(get_ip=False), sort_keys=True, indent=4, separators=(',', ': ')))
+        print(json.dumps(get_platform(get_ip=False), sort_keys=True, indent=2, separators=(',', ': ')))
 
     elif method == 'start':
-        sys.exit(start(args))
+        sys.exit(daemon_main(args))
+
+    elif method == 'console':
+        sys.exit(daemon_console())
 
     elif method not in Daemon.callable_methods:
         if method not in Daemon.deprecated_methods:

@@ -1,16 +1,17 @@
 import sys
 import code
 import argparse
+import asyncio
 import logging.handlers
 from twisted.internet import defer, reactor, threads
+from aiohttp import client_exceptions
+
 from lbrynet import analytics
 from lbrynet import conf
 from lbrynet.core import utils
 from lbrynet.core import log_support
 from lbrynet.daemon.auth.client import LBRYAPIClient
 from lbrynet.daemon.Daemon import Daemon
-
-get_client = LBRYAPIClient.get_client
 
 log = logging.getLogger(__name__)
 
@@ -114,7 +115,7 @@ def get_methods(daemon):
     locs = {}
 
     def wrapped(name, fn):
-        client = get_client()
+        client = LBRYAPIClient.get_client()
         _fn = getattr(client, name)
         _fn.__doc__ = fn.__doc__
         return {name: _fn}
@@ -181,18 +182,18 @@ def threaded_terminal(started_daemon, quiet):
     d.addErrback(log.exception)
 
 
-def start_lbrynet_console(quiet, use_existing_daemon, useauth):
+async def start_lbrynet_console(quiet, use_existing_daemon, useauth):
     if not utils.check_connection():
         print("Not connected to internet, unable to start")
         raise Exception("Not connected to internet, unable to start")
     if not quiet:
         print("Starting lbrynet-console...")
     try:
-        get_client().status()
+        await LBRYAPIClient.get_client().status()
         d = defer.succeed(False)
         if not quiet:
             print("lbrynet-daemon is already running, connecting to it...")
-    except:
+    except client_exceptions.ClientConnectorError:
         if not use_existing_daemon:
             if not quiet:
                 print("Starting lbrynet-daemon...")
@@ -222,7 +223,8 @@ def main():
         "--http-auth", dest="useauth", action="store_true", default=conf.settings['use_auth_http']
     )
     args = parser.parse_args()
-    start_lbrynet_console(args.quiet, args.use_existing_daemon, args.useauth)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(start_lbrynet_console(args.quiet, args.use_existing_daemon, args.useauth))
     reactor.run()
 
 
