@@ -298,12 +298,13 @@ class AuthJSONRPCServer(AuthorizedBase):
                 # maybe its a twisted Failure with another type of error
                 error = JSONRPCError(failure.getErrorMessage() or failure.type.__name__,
                                      traceback=failure.getTraceback())
+            if not failure.check(ComponentsNotStarted, ComponentStartConditionNotMet):
+                log.warning("error processing api request: %s\ntraceback: %s", error.message,
+                            "\n".join(error.traceback))
         else:
             # last resort, just cast it as a string
             error = JSONRPCError(str(failure))
-        if not failure.check(ComponentsNotStarted, ComponentStartConditionNotMet):
-            log.warning("error processing api request: %s\ntraceback: %s", error.message,
-                        "\n".join(error.traceback))
+
         response_content = jsonrpc_dumps_pretty(error, id=id_)
         self._set_headers(request, response_content)
         request.setResponseCode(200)
