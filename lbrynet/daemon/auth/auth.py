@@ -39,8 +39,12 @@ class PasswordChecker:
         return cls(passwords)
 
     def requestAvatarId(self, creds):
-        if creds.username in self.passwords:
-            pw = self.passwords.get(creds.username)
+        password_dict_bytes = {}
+        for api in self.passwords:
+            password_dict_bytes.update({bytes(api, 'UTF-8'): bytes(self.passwords[api], 'UTF-8')})
+
+        if creds.username in password_dict_bytes:
+            pw = password_dict_bytes.get(creds.username)
             pw_match = creds.checkPassword(pw)
             if pw_match:
                 return defer.succeed(creds.username)

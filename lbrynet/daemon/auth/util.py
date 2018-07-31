@@ -13,6 +13,8 @@ LBRY_SECRET = "LBRY_SECRET"
 
 
 def sha(x):
+    if isinstance(x, str):
+        x = bytes(x, 'UTF-8')
     h = hashlib.sha256(x).digest()
     return base58.b58encode(h)
 
@@ -41,7 +43,7 @@ class APIKey:
 
     def get_hmac(self, message):
         decoded_key = self._raw_key()
-        signature = hmac.new(decoded_key, message, hashlib.sha256)
+        signature = hmac.new(decoded_key, message.encode('UTF-8'), hashlib.sha256)
         return base58.b58encode(signature.digest())
 
     def compare_hmac(self, message, token):
@@ -66,7 +68,7 @@ def load_api_keys(path):
     keys_for_return = {}
     for key_name in data:
         key = data[key_name]
-        secret = key['secret']
+        secret = key['secret'].decode('UTF-8')
         expiration = key['expiration']
         keys_for_return.update({key_name: APIKey(secret, key_name, expiration)})
     return keys_for_return

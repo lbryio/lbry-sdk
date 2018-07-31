@@ -6,7 +6,6 @@ from urllib.parse import urlparse
 import requests
 from requests.cookies import RequestsCookieJar
 import logging
-# from jsonrpc.proxy import JSONRPCProxy
 from lbrynet import conf
 from lbrynet.daemon.auth.util import load_api_keys, APIKey, API_KEY_NAME, get_auth_message
 
@@ -74,7 +73,7 @@ class AuthAPIClient:
 
         return f
 
-    def call(self, method, params=None):
+    async def call(self, method, params=None):
         params = params or {}
         self.__id_count += 1
         pre_auth_post_data = {
@@ -84,9 +83,10 @@ class AuthAPIClient:
             'id': self.__id_count
         }
         to_auth = get_auth_message(pre_auth_post_data)
-        pre_auth_post_data.update({'hmac': self.__api_key.get_hmac(to_auth)})
+        pre_auth_post_data.update({'hmac': self.__api_key.get_hmac(to_auth).decode('UTF-8')})
         post_data = json.dumps(pre_auth_post_data)
         cookies = copy_cookies(self.__cookies)
+
         req = requests.Request(
             method='POST', url=self.__service_url, data=post_data, cookies=cookies,
             headers={
@@ -104,14 +104,7 @@ class AuthAPIClient:
         if next_secret:
             self.__api_key.secret = next_secret
             self.__cookies = copy_cookies(http_response.cookies)
-        response = http_response.json()
-        if response.get('error') is not None:
-            raise JSONRPCException(response['error'])
-        elif 'result' not in response:
-            raise JSONRPCException({
-                'code': -343, 'message': 'missing JSON-RPC result'})
-        else:
-            return response['result']
+        return http_response.json()
 
     @classmethod
     def config(cls, key_name=None, key=None, pw_path=None, timeout=HTTP_TIMEOUT, connection=None, count=0,
@@ -125,11 +118,10 @@ class AuthAPIClient:
         else:
             api_key = APIKey(name=api_key_name, secret=key)
         if login_url is None:
-            service_url = "http://%s:%s@%s:%i/%s" % (api_key_name,
-                                                     api_key.secret,
-                                                     conf.settings['api_host'],
-                                                     conf.settings['api_port'],
-                                                     conf.settings['API_ADDRESS'])
+            service_url = "http://%s:%s@%s:%i" % (api_key_name,
+                                                  api_key.secret,
+                                                  conf.settings['api_host'],
+                                                  conf.settings['api_port'])
         else:
             service_url = login_url
         id_count = count
@@ -161,7 +153,8 @@ class AuthAPIClient:
 
 class LBRYAPIClient:
     @staticmethod
-    def get_client():
+    def get_client(conf_path=None):
+        conf.conf_file = conf_path
         if not conf.settings:
             conf.initialize_settings()
         return AuthAPIClient.config() if conf.settings['use_auth_http'] else \

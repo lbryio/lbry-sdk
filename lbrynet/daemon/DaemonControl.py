@@ -13,7 +13,6 @@ import argparse
 import logging.handlers
 
 from twisted.internet import reactor
-#from jsonrpc.proxy import JSONRPCProxy
 
 from lbrynet import conf
 from lbrynet.core import utils, system_info
@@ -26,7 +25,8 @@ def test_internet_connection():
     return utils.check_connection()
 
 
-def start(argv):
+def start(argv=None):
+    argv = argv or sys.argv[1:]
     """The primary entry point for launching the daemon."""
 
     # postpone loading the config file to after the CLI arguments
@@ -103,4 +103,4 @@ def update_settings_from_args(args):
 
 
 if __name__ == "__main__":
-    start(sys.argv[1:])
+    start()

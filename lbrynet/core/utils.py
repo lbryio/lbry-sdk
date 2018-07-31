@@ -101,7 +101,7 @@ def obfuscate(plain):
     return rot13(base64.b64encode(plain).decode())
 
 
-def check_connection(server="lbry.io", port=80, timeout=2):
+def check_connection(server="lbry.io", port=80, timeout=5):
     """Attempts to open a socket to server:port and returns True if successful."""
     log.debug('Checking connection to %s:%s', server, port)
     try:

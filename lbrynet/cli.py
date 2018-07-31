@@ -12,8 +12,8 @@ from lbrynet.daemon.DaemonControl import start as daemon_main
 from lbrynet.daemon.DaemonConsole import main as daemon_console
 
 
-async def execute_command(command, args):
-    api = LBRYAPIClient.get_client()
+async def execute_command(method, params, conf_path=None):
+    api = LBRYAPIClient.get_client(conf_path)
     # this check if the daemon is running or not
     try:
         await api.status()
@@ -21,9 +21,9 @@ async def execute_command(command, args):
         print("Could not connect to daemon. Are you sure it's running?")
         return 1
 
-    # this actually executes the command
+    # this actually executes the method
     try:
-        resp = await api.call(command, args)
+        resp = await api.call(method, params)
         print(json.dumps(resp["result"], indent=2))
     except KeyError:
         if resp["error"]["code"] == -32500:
@@ -104,6 +104,16 @@ def main(argv=None):
         print_help()
         return 1
 
+    conf_path = None
+    if len(argv) and argv[0] == "--conf":
+        if len(argv) < 2:
+            print("No config file specified for --conf option")
+            print_help()
+            return 1
+
+        conf_path = argv[1]
+        argv = argv[2:]
+
     method, args = argv[0], argv[1:]
 
     if method in ['help', '--help', '-h']:
@@ -131,9 +141,9 @@ def main(argv=None):
 
     fn = Daemon.callable_methods[method]
     parsed = docopt(fn.__doc__, args)
-    kwargs = set_kwargs(parsed)
+    params = set_kwargs(parsed)
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(execute_command(method, kwargs))
+    loop.run_until_complete(execute_command(method, params, conf_path))
 
     return 0
 
