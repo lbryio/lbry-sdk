@@ -1,47 +1,50 @@
-#!/usr/bin/env python
-#
-# This library is free software, distributed under the terms of
-# the GNU Lesser General Public License Version 3, or any later version.
-# See the COPYING file included in this archive
-
 from twisted.trial import unittest
-import lbrynet.dht.encoding
+from lbrynet.dht.encoding import bencode, bdecode, DecodeError
 
 
-class BencodeTest(unittest.TestCase):
-    """ Basic tests case for the Bencode implementation """
-    def setUp(self):
-        self.encoding = lbrynet.dht.encoding.Bencode()
-        # Thanks goes to wikipedia for the initial test cases ;-)
-        self.cases = ((42, b'i42e'),
-                      (b'spam', b'4:spam'),
-                      ([b'spam', 42], b'l4:spami42ee'),
-                      ({b'foo': 42, b'bar': b'spam'}, b'd3:bar4:spam3:fooi42ee'),
-                      # ...and now the "real life" tests
-                      ([[b'abc', b'127.0.0.1', 1919], [b'def', b'127.0.0.1', 1921]],
-                       b'll3:abc9:127.0.0.1i1919eel3:def9:127.0.0.1i1921eee'))
-        # The following test cases are "bad"; i.e. sending rubbish into the decoder to test
-        # what exceptions get thrown
-        self.badDecoderCases = (b'abcdefghijklmnopqrstuvwxyz',
-                                b'')
+class EncodeDecodeTest(unittest.TestCase):
 
-    def testEncoder(self):
-        """ Tests the bencode encoder """
-        for value, encodedValue in self.cases:
-            result = self.encoding.encode(value)
-            self.assertEqual(
-                result, encodedValue,
-                'Value "%s" not correctly encoded! Expected "%s", got "%s"' %
-                (value, encodedValue, result))
+    def test_integer(self):
+        self.assertEqual(bencode(42), b'i42e')
 
-    def testDecoder(self):
-        """ Tests the bencode decoder """
-        for value, encodedValue in self.cases:
-            result = self.encoding.decode(encodedValue)
-            self.assertEqual(
-                result, value,
-                'Value "%s" not correctly decoded! Expected "%s", got "%s"' %
-                (encodedValue, value, result))
-        for encodedValue in self.badDecoderCases:
-            self.assertRaises(
-                lbrynet.dht.encoding.DecodeError, self.encoding.decode, encodedValue)
+        self.assertEqual(bdecode(b'i42e'), 42)
+
+    def test_bytes(self):
+        self.assertEqual(bencode(b''), b'0:')
+        self.assertEqual(bencode(b'spam'), b'4:spam')
+        self.assertEqual(bencode(b'4:spam'), b'6:4:spam')
+        self.assertEqual(bencode(bytearray(b'spam')), b'4:spam')
+
+        self.assertEqual(bdecode(b'0:'), b'')
+        self.assertEqual(bdecode(b'4:spam'), b'spam')
+        self.assertEqual(bdecode(b'6:4:spam'), b'4:spam')
+
+    def test_string(self):
+        self.assertEqual(bencode(''), b'0:')
+        self.assertEqual(bencode('spam'), b'4:spam')
+        self.assertEqual(bencode('4:spam'), b'6:4:spam')
+
+    def test_list(self):
+        self.assertEqual(bencode([b'spam', 42]), b'l4:spami42ee')
+
+        self.assertEqual(bdecode(b'l4:spami42ee'), [b'spam', 42])
+
+    def test_dict(self):
+        self.assertEqual(bencode({b'foo': 42, b'bar': b'spam'}), b'd3:bar4:spam3:fooi42ee')
+
+        self.assertEqual(bdecode(b'd3:bar4:spam3:fooi42ee'), {b'foo': 42, b'bar': b'spam'})
+
+    def test_mixed(self):
+        self.assertEqual(bencode(
+            [[b'abc', b'127.0.0.1', 1919], [b'def', b'127.0.0.1', 1921]]),
+            b'll3:abc9:127.0.0.1i1919eel3:def9:127.0.0.1i1921eee'
+        )
+
+        self.assertEqual(bdecode(
+            b'll3:abc9:127.0.0.1i1919eel3:def9:127.0.0.1i1921eee'),
+            [[b'abc', b'127.0.0.1', 1919], [b'def', b'127.0.0.1', 1921]]
+        )
+
+    def test_decode_error(self):
+        self.assertRaises(DecodeError, bdecode, b'abcdefghijklmnopqrstuvwxyz')
+        self.assertRaises(DecodeError, bdecode, b'')

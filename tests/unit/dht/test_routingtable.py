@@ -1,4 +1,3 @@
-import hashlib
 from binascii import hexlify, unhexlify
 
 from twisted.trial import unittest
@@ -7,9 +6,7 @@ from lbrynet.dht import constants
 from lbrynet.dht.routingtable import TreeRoutingTable
 from lbrynet.dht.contact import ContactManager
 from lbrynet.dht.distance import Distance
-import sys
-if sys.version_info > (3,):
-    long = int
+from lbrynet.core.utils import generate_id
 
 
 class FakeRPCProtocol(object):
@@ -21,76 +18,61 @@ class FakeRPCProtocol(object):
 class TreeRoutingTableTest(unittest.TestCase):
     """ Test case for the RoutingTable class """
     def setUp(self):
-        h = hashlib.sha384()
-        h.update(b'node1')
         self.contact_manager = ContactManager()
-        self.nodeID = h.digest()
+        self.nodeID = generate_id(b'node1')
         self.protocol = FakeRPCProtocol()
         self.routingTable = TreeRoutingTable(self.nodeID)
 
-    def testDistance(self):
+    def test_distance(self):
         """ Test to see if distance method returns correct result"""
-
-        # testList holds a couple 3-tuple (variable1, variable2, result)
-        basicTestList = [(bytes(b'\xaa' * 48), bytes(b'\x55' * 48), long(hexlify(bytes(b'\xff' * 48)), 16))]
-
-        for test in basicTestList:
-            result = Distance(test[0])(test[1])
-            self.assertFalse(result != test[2], 'Result of _distance() should be %s but %s returned' %
-                        (test[2], result))
+        d = Distance(bytes((170,) * 48))
+        result = d(bytes((85,) * 48))
+        expected = int(hexlify(bytes((255,) * 48)), 16)
+        self.assertEqual(result, expected)
 
     @defer.inlineCallbacks
-    def testAddContact(self):
+    def test_add_contact(self):
         """ Tests if a contact can be added and retrieved correctly """
         # Create the contact
-        h = hashlib.sha384()
-        h.update(b'node2')
-        contactID = h.digest()
-        contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.protocol)
+        contact_id = generate_id(b'node2')
+        contact = self.contact_manager.make_contact(contact_id, '127.0.0.1', 9182, self.protocol)
         # Now add it...
         yield self.routingTable.addContact(contact)
         # ...and request the closest nodes to it (will retrieve it)
-        closestNodes = self.routingTable.findCloseNodes(contactID)
-        self.assertEqual(len(closestNodes), 1, 'Wrong amount of contacts returned; expected 1,'
-                                                   ' got %d' % len(closestNodes))
-        self.assertTrue(contact in closestNodes, 'Added contact not found by issueing '
-                                                 '_findCloseNodes()')
+        closest_nodes = self.routingTable.findCloseNodes(contact_id)
+        self.assertEqual(len(closest_nodes), 1)
+        self.assertIn(contact, closest_nodes)
 
     @defer.inlineCallbacks
-    def testGetContact(self):
+    def test_get_contact(self):
         """ Tests if a specific existing contact can be retrieved correctly """
-        h = hashlib.sha384()
-        h.update(b'node2')
-        contactID = h.digest()
-        contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.protocol)
+        contact_id = generate_id(b'node2')
+        contact = self.contact_manager.make_contact(contact_id, '127.0.0.1', 9182, self.protocol)
         # Now add it...
         yield self.routingTable.addContact(contact)
         # ...and get it again
-        sameContact = self.routingTable.getContact(contactID)
-        self.assertEqual(contact, sameContact, 'getContact() should return the same contact')
+        same_contact = self.routingTable.getContact(contact_id)
+        self.assertEqual(contact, same_contact, 'getContact() should return the same contact')
 
     @defer.inlineCallbacks
-    def testAddParentNodeAsContact(self):
+    def test_add_parent_node_as_contact(self):
         """
         Tests the routing table's behaviour when attempting to add its parent node as a contact
         """
-
         # Create a contact with the same ID as the local node's ID
         contact = self.contact_manager.make_contact(self.nodeID, '127.0.0.1', 9182, self.protocol)
         # Now try to add it
         yield self.routingTable.addContact(contact)
         # ...and request the closest nodes to it using FIND_NODE
-        closestNodes = self.routingTable.findCloseNodes(self.nodeID, constants.k)
-        self.assertFalse(contact in closestNodes, 'Node added itself as a contact')
+        closest_nodes = self.routingTable.findCloseNodes(self.nodeID, constants.k)
+        self.assertNotIn(contact, closest_nodes, 'Node added itself as a contact')
 
     @defer.inlineCallbacks
-    def testRemoveContact(self):
+    def test_remove_contact(self):
         """ Tests contact removal """
         # Create the contact
-        h = hashlib.sha384()
-        h.update(b'node2')
-        contactID = h.digest()
-        contact = self.contact_manager.make_contact(contactID, '127.0.0.1', 9182, self.protocol)
+        contact_id = generate_id(b'node2')
+        contact = self.contact_manager.make_contact(contact_id, '127.0.0.1', 9182, self.protocol)
         # Now add it...
         yield self.routingTable.addContact(contact)
         # Verify addition
@@ -100,25 +82,22 @@ class TreeRoutingTableTest(unittest.TestCase):
         self.assertEqual(len(self.routingTable._buckets[0]), 0, 'Contact not removed properly')
 
     @defer.inlineCallbacks
-    def testSplitBucket(self):
+    def test_split_bucket(self):
         """ Tests if the the routing table correctly dynamically splits k-buckets """
         self.assertEqual(self.routingTable._buckets[0].rangeMax, 2**384,
                              'Initial k-bucket range should be 0 <= range < 2**384')
         # Add k contacts
         for i in range(constants.k):
-            h = hashlib.sha384()
-            h.update(b'remote node %d' % i)
-            nodeID = h.digest()
-            contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
+            node_id = generate_id(b'remote node %d' % i)
+            contact = self.contact_manager.make_contact(node_id, '127.0.0.1', 9182, self.protocol)
             yield self.routingTable.addContact(contact)
+
         self.assertEqual(len(self.routingTable._buckets), 1,
                              'Only k nodes have been added; the first k-bucket should now '
                              'be full, but should not yet be split')
         # Now add 1 more contact
-        h = hashlib.sha384()
-        h.update(b'yet another remote node')
-        nodeID = h.digest()
-        contact = self.contact_manager.make_contact(nodeID, '127.0.0.1', 9182, self.protocol)
+        node_id = generate_id(b'yet another remote node')
+        contact = self.contact_manager.make_contact(node_id, '127.0.0.1', 9182, self.protocol)
         yield self.routingTable.addContact(contact)
         self.assertEqual(len(self.routingTable._buckets), 2,
                              'k+1 nodes have been added; the first k-bucket should have been '
@@ -134,7 +113,7 @@ class TreeRoutingTableTest(unittest.TestCase):
                              'not divided properly')
 
     @defer.inlineCallbacks
-    def testFullSplit(self):
+    def test_full_split(self):
         """
         Test that a bucket is not split if it is full, but the new contact is not closer than the kth closest contact
         """
