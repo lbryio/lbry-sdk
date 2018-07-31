@@ -13,10 +13,10 @@ log = logging.getLogger(__name__)
 
 
 class JSONBytesEncoder(json.JSONEncoder):
-    def default(self, obj):
+    def default(self, obj):  # pylint: disable=E0202
         if isinstance(obj, bytes):
             return obj.decode()
-        return super().default(self, obj)
+        return super().default(obj)
 
 
 class StreamDescriptorReader:
