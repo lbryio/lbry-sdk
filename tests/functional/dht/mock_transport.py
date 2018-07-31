@@ -1,18 +1,14 @@
 import struct
 import hashlib
 import logging
-from binascii import unhexlify, hexlify
+from binascii import unhexlify
 
 from twisted.internet import defer, error
-from lbrynet.dht.encoding import Bencode
+from lbrynet.dht import encoding
 from lbrynet.dht.error import DecodeError
 from lbrynet.dht.msgformat import DefaultFormat
 from lbrynet.dht.msgtypes import ResponseMessage, RequestMessage, ErrorMessage
-import sys
-if sys.version_info > (3,):
-    unicode = str
 
-_encode = Bencode()
 _datagram_formatter = DefaultFormat()
 
 log = logging.getLogger()
@@ -138,7 +134,7 @@ def debug_kademlia_packet(data, source, destination, node):
     if log.level != logging.DEBUG:
         return
     try:
-        packet = _datagram_formatter.fromPrimitive(_encode.decode(data))
+        packet = _datagram_formatter.fromPrimitive(encoding.bdecode(data))
         if isinstance(packet, RequestMessage):
             log.debug("request %s --> %s %s (node time %s)", source[0], destination[0], packet.request,
                       node.clock.seconds())
