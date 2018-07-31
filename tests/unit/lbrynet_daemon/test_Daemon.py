@@ -43,10 +43,10 @@ def get_test_daemon(data_rate=None, generous=True, with_fee=False):
     }
     daemon = LBRYDaemon(None)
     daemon.session = mock.Mock(spec=Session.Session)
-    daemon.wallet = mock.Mock(spec=LbryWalletManager)
-    daemon.wallet.wallet = mock.Mock(spec=Wallet)
-    daemon.wallet.wallet.use_encryption = False
-    daemon.wallet.network = FakeNetwork()
+    daemon.session.wallet = mock.Mock(spec=LbryWalletManager)
+    daemon.session.wallet.wallet = mock.Mock(spec=Wallet)
+    daemon.session.wallet.wallet.use_encryption = False
+    daemon.session.wallet.network = FakeNetwork()
     daemon.session.storage = mock.Mock(spec=SQLiteStorage)
     market_feeds = [BTCLBCFeed(), USDBTCFeed()]
     daemon.exchange_rate_manager = DummyExchangeRateManager(market_feeds, rates)
