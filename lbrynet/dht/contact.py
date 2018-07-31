@@ -7,7 +7,7 @@ from lbrynet.dht import constants
 
 def is_valid_ipv4(address):
     try:
-        ip = ipaddress.ip_address(address.encode().decode())  # this needs to be unicode, thus re-encode-able
+        ip = ipaddress.ip_address(address)
         return ip.version == 4
     except ipaddress.AddressValueError:
         return False

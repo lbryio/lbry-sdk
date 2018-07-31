@@ -149,7 +149,7 @@ class BlobFile:
     def writer_finished(self, writer, err=None):
         def fire_finished_deferred():
             self._verified = True
-            for p, (w, finished_deferred) in self.writers.items():
+            for p, (w, finished_deferred) in list(self.writers.items()):
                 if w == writer:
                     del self.writers[p]
                     finished_deferred.callback(self)
