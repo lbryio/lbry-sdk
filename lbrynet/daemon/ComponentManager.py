@@ -130,7 +130,7 @@ class ComponentManager:
 
         stages = self.sort_components()
         for stage in stages:
-            yield defer.DeferredList([_setup(component) for component in stage])
+            yield defer.DeferredList([_setup(component) for component in stage if not component.running])
 
     @defer.inlineCallbacks
     def stop(self):

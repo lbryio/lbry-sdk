@@ -219,7 +219,7 @@ class Daemon(AuthJSONRPCServer):
         # TODO: delete these, get the components where needed
         self.storage = None
         self.dht_node = None
-        self.wallet = None
+        #self.wallet = None
         self.sd_identifier = None
         self.session = None
         self.file_manager = None
@@ -231,6 +231,10 @@ class Daemon(AuthJSONRPCServer):
     @property
     def ledger(self):
         return self.wallet.default_account.ledger
+
+    @property
+    def wallet(self):
+        return self.session.wallet
 
     @defer.inlineCallbacks
     def setup(self):
